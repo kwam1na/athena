@@ -4,8 +4,12 @@ import { mutation, query } from "../../_generated/server";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import type { Doc } from "../../_generated/dataModel";
 import { commandResultValidator } from "../../lib/commandResultValidators";
-import { admitPublicQuery } from "../../platform/operationAdmission";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../../platform/operationAdmission";
 import { listPosClientEventsReadDefinition } from "../../operationAdmission/readDefinitions";
+import { recordPosClientEventsOperationDefinition } from "../../operationAdmission/domains/u2_pos_definitions";
 import type {
   OperationMutationCtx,
   OperationQueryCtx,
@@ -127,99 +131,102 @@ export const recordClientEvents = mutation({
       duplicates: v.number(),
     }),
   ),
-  handler: async (ctx, args) => {
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      return userError({
-        code: "not_found",
-        message: "Store not found.",
-      });
-    }
-    if (!(await requirePosTelemetryAccess(ctx, store.organizationId))) {
-      return userError({
-        code: "authorization_failed",
-        message: "You do not have access to report POS telemetry.",
-      });
-    }
-    if (args.terminalId) {
-      const terminal = await ctx.db.get("posTerminal", args.terminalId);
-      if (!terminal || terminal.storeId !== args.storeId) {
+  handler: admitPublicMutation(
+    recordPosClientEventsOperationDefinition,
+    async (ctx, args) => {
+      const store = await ctx.db.get("store", args.storeId);
+      if (!store) {
         return userError({
-          code: "authorization_failed",
-          message: "Terminal does not belong to this store.",
+          code: "not_found",
+          message: "Store not found.",
         });
       }
-    }
-
-    const receivedAt = Date.now();
-    const events = (args.events as ClientEventInput[]).slice(
-      0,
-      POS_CLIENT_EVENT_MAX_BATCH,
-    );
-    // Read-optimized dedupe: the client drains its buffer as a FIFO prefix and
-    // only removes events after an acked commit, so a replayed batch always
-    // starts with the same first event. One index read on the first event
-    // covers the common path; only a detected replay (ack lost after commit)
-    // pays per-event reads. Concurrent tab drains serialize via OCC on the
-    // same index read, so the losing mutation retries into the replay path.
-    const isDuplicate = async (event: ClientEventInput) =>
-      (await ctx.db
-        .query("posClientEvent")
-        .withIndex("by_store_clientEvent", (q) =>
-          q
-            .eq("storeId", args.storeId)
-            .eq("clientEventId", event.clientEventId),
-        )
-        .unique()) !== null;
-    const replayedBatch =
-      events.length > 0 ? await isDuplicate(events[0]) : false;
-    let accepted = 0;
-    let duplicates = 0;
-    let checkedFirst = false;
-    for (const event of events) {
-      const knownDuplicate = !checkedFirst && replayedBatch;
-      checkedFirst = true;
-      if (knownDuplicate || (replayedBatch && (await isDuplicate(event)))) {
-        duplicates += 1;
-        continue;
+      if (!(await requirePosTelemetryAccess(ctx, store.organizationId))) {
+        return userError({
+          code: "authorization_failed",
+          message: "You do not have access to report POS telemetry.",
+        });
       }
-      await ctx.db.insert("posClientEvent", {
-        storeId: args.storeId,
-        terminalId: args.terminalId,
-        terminalFingerprint: args.terminalFingerprint
-          ? truncate(args.terminalFingerprint, 200)
-          : undefined,
-        localRegisterSessionId: event.localRegisterSessionId
-          ? truncate(event.localRegisterSessionId, 200)
-          : undefined,
-        clientEventId: truncate(event.clientEventId, 200),
-        level: event.level,
-        flow: event.flow,
-        message: cleanEventText(
-          event.message,
-          POS_CLIENT_EVENT_MAX_MESSAGE_LENGTH,
-        ),
-        errorName: cleanOptionalEventText(event.errorName, 200),
-        errorMessage: cleanOptionalEventText(
-          event.errorMessage,
-          POS_CLIENT_EVENT_MAX_MESSAGE_LENGTH,
-        ),
-        errorStack: cleanOptionalEventText(
-          event.errorStack,
-          POS_CLIENT_EVENT_MAX_STACK_LENGTH,
-        ),
-        appVersion: event.appVersion
-          ? truncate(event.appVersion, 100)
-          : undefined,
-        metadata: sanitizeClientEventMetadata(event.metadata),
-        occurredAt: event.occurredAt,
-        receivedAt,
-      });
-      accepted += 1;
-    }
+      if (args.terminalId) {
+        const terminal = await ctx.db.get("posTerminal", args.terminalId);
+        if (!terminal || terminal.storeId !== args.storeId) {
+          return userError({
+            code: "authorization_failed",
+            message: "Terminal does not belong to this store.",
+          });
+        }
+      }
 
-    return ok({ accepted, duplicates });
-  },
+      const receivedAt = Date.now();
+      const events = (args.events as ClientEventInput[]).slice(
+        0,
+        POS_CLIENT_EVENT_MAX_BATCH,
+      );
+      // Read-optimized dedupe: the client drains its buffer as a FIFO prefix and
+      // only removes events after an acked commit, so a replayed batch always
+      // starts with the same first event. One index read on the first event
+      // covers the common path; only a detected replay (ack lost after commit)
+      // pays per-event reads. Concurrent tab drains serialize via OCC on the
+      // same index read, so the losing mutation retries into the replay path.
+      const isDuplicate = async (event: ClientEventInput) =>
+        (await ctx.db
+          .query("posClientEvent")
+          .withIndex("by_store_clientEvent", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .eq("clientEventId", event.clientEventId),
+          )
+          .unique()) !== null;
+      const replayedBatch =
+        events.length > 0 ? await isDuplicate(events[0]) : false;
+      let accepted = 0;
+      let duplicates = 0;
+      let checkedFirst = false;
+      for (const event of events) {
+        const knownDuplicate = !checkedFirst && replayedBatch;
+        checkedFirst = true;
+        if (knownDuplicate || (replayedBatch && (await isDuplicate(event)))) {
+          duplicates += 1;
+          continue;
+        }
+        await ctx.db.insert("posClientEvent", {
+          storeId: args.storeId,
+          terminalId: args.terminalId,
+          terminalFingerprint: args.terminalFingerprint
+            ? truncate(args.terminalFingerprint, 200)
+            : undefined,
+          localRegisterSessionId: event.localRegisterSessionId
+            ? truncate(event.localRegisterSessionId, 200)
+            : undefined,
+          clientEventId: truncate(event.clientEventId, 200),
+          level: event.level,
+          flow: event.flow,
+          message: cleanEventText(
+            event.message,
+            POS_CLIENT_EVENT_MAX_MESSAGE_LENGTH,
+          ),
+          errorName: cleanOptionalEventText(event.errorName, 200),
+          errorMessage: cleanOptionalEventText(
+            event.errorMessage,
+            POS_CLIENT_EVENT_MAX_MESSAGE_LENGTH,
+          ),
+          errorStack: cleanOptionalEventText(
+            event.errorStack,
+            POS_CLIENT_EVENT_MAX_STACK_LENGTH,
+          ),
+          appVersion: event.appVersion
+            ? truncate(event.appVersion, 100)
+            : undefined,
+          metadata: sanitizeClientEventMetadata(event.metadata),
+          occurredAt: event.occurredAt,
+          receivedAt,
+        });
+        accepted += 1;
+      }
+
+      return ok({ accepted, duplicates });
+    },
+  ),
 });
 
 const clientEventReturnValidator = v.object({

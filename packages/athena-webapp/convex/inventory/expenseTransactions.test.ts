@@ -24,6 +24,15 @@ import {
   voidExpenseTransactionHandler,
 } from "./expenseTransactions";
 
+// Cuts the module cycle `platform/operationAdmission` ->
+// `sharedDemo/operationAdapter` -> `sharedDemo/restore` ->
+// `sharedDemo/openingBaseline` -> `inventory/storeSchedule` ->
+// `platform/operationAdmission`. Left intact, the composition root is observed
+// half-initialized from this test's module graph.
+vi.mock("../sharedDemo/restore", () => ({
+  requireReadySharedDemoWriteWithCtx: vi.fn(),
+}));
+
 beforeEach(() => {
   reportingMocks.resolveReportingOperatingPeriodWithCtx.mockResolvedValue({
     kind: "missing_schedule",

@@ -1,6 +1,13 @@
 /* eslint-disable @convex-dev/no-collect-in-query -- Reservation validation must inspect every active session and every item in those session-scoped sets; truncation could allow stock edits while a matching SKU is reserved. */
 import { query } from "../_generated/server";
 import { v } from "convex/values";
+import type { Id } from "../_generated/dataModel";
+import { admitPublicQuery } from "../platform/operationAdmission";
+import {
+  getSkusReservedInCheckoutReadDefinition,
+  getSkusReservedInPosSessionReadDefinition,
+} from "../operationAdmission/domains/u3_inventoryCatalog_readDefinitions";
+import type { OperationQueryCtx } from "../operationAdmission/types";
 
 const MAX_SKUS_PER_REQUEST = 50;
 const SESSION_AGE_LIMIT_HOURS = 24;
@@ -16,7 +23,12 @@ export const getSkusReservedInCheckout = query({
     storeId: v.id("store"),
   },
   returns: v.array(v.string()),
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getSkusReservedInCheckoutReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { skus: string[]; storeId: Id<"store"> },
+    ) => {
     // Early exit for empty arrays
     if (args.skus.length === 0) {
       return [];
@@ -74,7 +86,8 @@ export const getSkusReservedInCheckout = query({
     ];
 
     return reservedSkus;
-  },
+    },
+  ),
 });
 
 /**
@@ -88,7 +101,12 @@ export const getSkusReservedInPosSession = query({
     storeId: v.id("store"),
   },
   returns: v.array(v.string()),
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getSkusReservedInPosSessionReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { skus: string[]; storeId: Id<"store"> },
+    ) => {
     // Early exit for empty arrays
     if (args.skus.length === 0) {
       return [];
@@ -148,5 +166,6 @@ export const getSkusReservedInPosSession = query({
     const reservedSkus = [...new Set(posItems.map((item) => item.productSku))];
 
     return reservedSkus;
-  },
+    },
+  ),
 });

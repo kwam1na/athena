@@ -1520,6 +1520,9 @@ describe("stock ops adjustments", () => {
 
     expect(source).toContain("temporaryDeleteStockAdjustmentScopeSkus");
     expect(source).toContain('"delete-stock-adjustment-scope-skus"');
+    expect(source).toContain(
+      "handler: admitPublicMutation(\n    temporaryDeleteStockAdjustmentScopeSkusOperationDefinition,\n    temporaryDeleteStockAdjustmentScopeSkusWithCtx,\n  ),",
+    );
     expect(source).toContain('allowedRoles: ["full_admin"]');
     expect(source).toContain("args.dryRun !== false");
     expect(source).toContain('ctx.db.delete("productSku"');

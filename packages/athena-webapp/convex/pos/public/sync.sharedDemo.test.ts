@@ -4,9 +4,19 @@ const mocks = vi.hoisted(() => ({
   getSharedDemoActorWithCtx: vi.fn(),
   ingestLocalEventsWithCtx: vi.fn(),
   ingestRegisterSessionActivityWithCtx: vi.fn(),
+  requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
   requireReadySharedDemoWriteWithCtx: vi.fn(),
+  requireSharedDemoCapability: vi.fn(),
   requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
+}));
+
+// Only the capability gate is replaced; the rest of the demo policy (the
+// denial error the adapter raises, the gateway classification) stays real, so
+// this exercises the actual denial path rather than a stubbed one.
+vi.mock("../../sharedDemo/policy", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../sharedDemo/policy")>()),
+  requireSharedDemoCapability: mocks.requireSharedDemoCapability,
 }));
 
 vi.mock("../../sharedDemo/actor", () => ({
@@ -25,7 +35,8 @@ vi.mock("../application/sync/posRegisterSessionActivity", () => ({
     mocks.ingestRegisterSessionActivityWithCtx,
 }));
 vi.mock("../../lib/athenaUserAuth", () => ({
-  requireAuthenticatedAthenaUserWithCtx: vi.fn(),
+  requireAuthenticatedAthenaUserWithCtx:
+    mocks.requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx:
     mocks.requireOrganizationMemberRoleWithCtx,
 }));
@@ -70,6 +81,45 @@ describe("shared demo POS sync enforcement", () => {
       kind: "shared_demo",
       storeId: "store-1",
     });
+    mocks.requireSharedDemoCapability.mockReturnValue(undefined);
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
+      _id: "user-1",
+    });
+    mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue(undefined);
+  });
+
+  it("denies a mixed batch whole when one event capability is ungranted", async () => {
+    // All-of semantics: a batch that mixes a granted and an ungranted
+    // capability requires both, so the WHOLE call is denied before any write
+    // rather than partially applied — and the denial reaches the client in the
+    // module's `CommandResult` shape, not as a thrown mutation.
+    mocks.requireSharedDemoCapability.mockImplementation(
+      (capability: string) => {
+        if (capability === "expense.manage") {
+          throw new Error("shared_demo_action_denied");
+        }
+      },
+    );
+    const ctx = {
+      db: { get: vi.fn().mockResolvedValue({ organizationId: "org-1" }) },
+    };
+
+    const result = await invoke(ctx, {
+      ...baseArgs,
+      events: [
+        { eventType: "sale_completed" },
+        { eventType: "expense_recorded" },
+      ],
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "You do not have access to sync this POS terminal.",
+      },
+    });
+    expect(mocks.ingestLocalEventsWithCtx).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -112,18 +162,27 @@ describe("shared demo POS sync enforcement", () => {
       db: { get: vi.fn().mockResolvedValue({ organizationId: "org-1" }) },
     };
 
+    // The rail denies before the handler runs, and the sync boundary
+    // normalizes that denial to the module's `CommandResult` shape rather
+    // than throwing: the terminal scheduler retries a throw forever.
     await expect(
       invoke(ctx, {
         ...baseArgs,
         events: [{ eventType: "sale_completed" }],
       }),
-    ).rejects.toThrow("This action isn't allowed in the demo.");
-    expect(mocks.requireReadySharedDemoWriteWithCtx).toHaveBeenCalledWith(expect.objectContaining({
-      db: ctx.db,
-    }), {
-      expectedEpoch: 4,
-      storeId: "store-1",
+    ).resolves.toMatchObject({
+      error: { code: "authorization_failed" },
+      kind: "user_error",
     });
+    expect(mocks.requireReadySharedDemoWriteWithCtx).toHaveBeenCalledWith(
+      expect.objectContaining({
+        db: ctx.db,
+      }),
+      {
+        expectedEpoch: 4,
+        storeId: "store-1",
+      },
+    );
     expect(mocks.ingestLocalEventsWithCtx).not.toHaveBeenCalled();
   });
 
@@ -151,12 +210,15 @@ describe("shared demo POS sync enforcement", () => {
         terminalId: "terminal-1",
       }),
     ).rejects.toThrow("This action isn't allowed in the demo.");
-    expect(mocks.requireReadySharedDemoWriteWithCtx).toHaveBeenCalledWith(expect.objectContaining({
-      db: ctx.db,
-    }), {
-      expectedEpoch: 4,
-      storeId: "store-1",
-    });
+    expect(mocks.requireReadySharedDemoWriteWithCtx).toHaveBeenCalledWith(
+      expect.objectContaining({
+        db: ctx.db,
+      }),
+      {
+        expectedEpoch: 4,
+        storeId: "store-1",
+      },
+    );
     expect(mocks.ingestRegisterSessionActivityWithCtx).not.toHaveBeenCalled();
   });
 });

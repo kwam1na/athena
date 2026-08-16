@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
+import type { Id } from "../_generated/dataModel";
 import { resolveRegisterSessionForInStoreCollectionWithCtx } from "../cashControls/paymentAllocationAttribution";
 import { normalizeLookupValue, normalizePhoneNumber } from "./helpers/linking";
 import { recordInventoryMovementWithCtx } from "./inventoryMovements";
@@ -14,7 +15,15 @@ import {
 } from "../lib/athenaUserAuth";
 import { ok, userError } from "../../shared/commandResult";
 import { validateServiceIntakeInput } from "../../shared/serviceIntake";
-import { requireReadySharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
+import { createServiceIntakeOperationDefinition } from "../operationAdmission/domains/u5_operations_definitions";
+import {
+  listAssignableStaffReadDefinition,
+  searchServiceIntakeCustomersReadDefinition,
+} from "../operationAdmission/domains/u5_operations_readDefinitions";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 
 export { validateServiceIntakeInput } from "../../shared/serviceIntake";
 
@@ -130,65 +139,74 @@ export const searchCustomers = query({
     searchQuery: v.string(),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    if (!args.searchQuery.trim()) {
-      return [];
-    }
+  handler: admitPublicQuery(
+    searchServiceIntakeCustomersReadDefinition,
+    async (ctx, args: { searchQuery: string; storeId: Id<"store"> }) => {
+      if (!args.searchQuery.trim()) {
+        return [];
+      }
 
-    const normalizedSearch = args.searchQuery.trim().toLowerCase();
-    const customers = await ctx.db
-      .query("customerProfile")
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .take(MAX_CUSTOMER_SEARCH_RESULTS);
+      const normalizedSearch = args.searchQuery.trim().toLowerCase();
+      const customers = await ctx.db
+        .query("customerProfile")
+        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+        .take(MAX_CUSTOMER_SEARCH_RESULTS);
 
-    return customers
-      .filter((customer) => {
-        const nameMatch = customer.fullName.toLowerCase().includes(normalizedSearch);
-        const emailMatch =
-          customer.email?.toLowerCase().includes(normalizedSearch) ?? false;
-        const phoneMatch = customer.phoneNumber?.includes(normalizedSearch) ?? false;
-        return nameMatch || emailMatch || phoneMatch;
-      })
-      .map((customer) => ({
-        _id: customer._id,
-        email: customer.email,
-        fullName: customer.fullName,
-        phoneNumber: customer.phoneNumber,
-      }));
-  },
+      return customers
+        .filter((customer) => {
+          const nameMatch = customer.fullName
+            .toLowerCase()
+            .includes(normalizedSearch);
+          const emailMatch =
+            customer.email?.toLowerCase().includes(normalizedSearch) ?? false;
+          const phoneMatch =
+            customer.phoneNumber?.includes(normalizedSearch) ?? false;
+          return nameMatch || emailMatch || phoneMatch;
+        })
+        .map((customer) => ({
+          _id: customer._id,
+          email: customer.email,
+          fullName: customer.fullName,
+          phoneNumber: customer.phoneNumber,
+        }));
+    },
+  ),
 });
 
 export const listAssignableStaff = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    const [staffProfiles, roleAssignments] = await Promise.all([
-      ctx.db
-        .query("staffProfile")
-        .withIndex("by_storeId_status", (q) =>
-          q.eq("storeId", args.storeId).eq("status", "active")
-        )
-        .take(MAX_STAFF_RESULTS),
-      ctx.db
-        .query("staffRoleAssignment")
-        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-        .take(MAX_STAFF_RESULTS),
-    ]);
+  handler: admitPublicQuery(
+    listAssignableStaffReadDefinition,
+    async (ctx, args: { storeId: Id<"store"> }) => {
+      const [staffProfiles, roleAssignments] = await Promise.all([
+        ctx.db
+          .query("staffProfile")
+          .withIndex("by_storeId_status", (q) =>
+            q.eq("storeId", args.storeId).eq("status", "active"),
+          )
+          .take(MAX_STAFF_RESULTS),
+        ctx.db
+          .query("staffRoleAssignment")
+          .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+          .take(MAX_STAFF_RESULTS),
+      ]);
 
-    return staffProfiles.map((staffProfile) => ({
-      _id: staffProfile._id,
-      fullName: staffProfile.fullName,
-      phoneNumber: staffProfile.phoneNumber,
-      roles: roleAssignments
-        .filter(
-          (assignment) =>
-            assignment.staffProfileId === staffProfile._id &&
-            assignment.status === "active"
-        )
-        .map((assignment) => assignment.role),
-    }));
-  },
+      return staffProfiles.map((staffProfile) => ({
+        _id: staffProfile._id,
+        fullName: staffProfile.fullName,
+        phoneNumber: staffProfile.phoneNumber,
+        roles: roleAssignments
+          .filter(
+            (assignment) =>
+              assignment.staffProfileId === staffProfile._id &&
+              assignment.status === "active",
+          )
+          .map((assignment) => assignment.role),
+      }));
+    },
+  ),
 });
 
 export const createServiceIntake = mutation({
@@ -215,214 +233,233 @@ export const createServiceIntake = mutation({
     serviceTitle: v.string(),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    await requireReadySharedDemoStoreCapabilityIfApplicable(
+  handler: admitPublicMutation(
+    createServiceIntakeOperationDefinition,
+    async (
       ctx,
-      "service.intake.write",
-      args.storeId,
-    );
-    const validationErrors = validateServiceIntakeInput({
-      assignedStaffProfileId: args.assignedStaffProfileId,
-      customerFullName: args.customerFullName,
-      customerPhoneNumber: args.customerPhoneNumber,
-      customerProfileId: args.customerProfileId,
-      depositAmount: args.depositAmount,
-      depositMethod: args.depositMethod,
-      serviceTitle: args.serviceTitle,
-    });
-
-    if (validationErrors.length > 0) {
-      return userError({
-        code: "validation_failed",
-        message: validationErrors.join(" "),
-      });
-    }
-
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      return userError({
-        code: "not_found",
-        message: "Store not found.",
-      });
-    }
-
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin"],
-      failureMessage: "Only store admins can create service intake work.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
-    });
-    const actorUserId = athenaUser._id;
-
-    const assignedStaffProfile = await ctx.db.get(
-      "staffProfile",
-      args.assignedStaffProfileId
-    );
-
-    if (
-      !assignedStaffProfile ||
-      assignedStaffProfile.storeId !== args.storeId ||
-      assignedStaffProfile.status !== "active"
-    ) {
-      return userError({
-        code: "precondition_failed",
-        message: "Assigned staff member is not available for this store.",
-      });
-    }
-
-    const createdByStaffProfile = await ctx.db
-      .query("staffProfile")
-      .withIndex("by_storeId_linkedUserId", (q) =>
-        q.eq("storeId", args.storeId).eq("linkedUserId", actorUserId)
-      )
-      .first();
-
-    const customerProfileResult = await resolveServiceIntakeCustomerProfile(ctx, {
-      customerEmail: args.customerEmail,
-      customerFullName: args.customerFullName,
-      customerNotes: args.customerNotes,
-      customerPhoneNumber: args.customerPhoneNumber,
-      customerProfileId: args.customerProfileId,
-      organizationId: store.organizationId,
-      storeId: args.storeId,
-    });
-
-    if (customerProfileResult.kind === "user_error") {
-      return customerProfileResult;
-    }
-
-    const customerProfile = customerProfileResult.data;
-
-    if (!customerProfile) {
-      throw new Error("Unable to create or load the selected customer.");
-    }
-
-    const hasDeposit = args.depositAmount !== undefined && args.depositAmount > 0;
-    const collectedInStore = args.intakeChannel === "walk_in";
-    const resolvedRegisterSessionId = hasDeposit && collectedInStore
-      ? await resolveRegisterSessionForInStoreCollectionWithCtx(ctx, {
-          actorStaffProfileId: createdByStaffProfile?._id,
-          actorUserId,
-          registerSessionId: args.registerSessionId,
-          storeId: args.storeId,
-        })
-      : undefined;
-    const workItem = await createOperationalWorkItemWithCtx(ctx, {
-      approvalState: "not_required",
-      assignedToStaffProfileId: args.assignedStaffProfileId,
-      createdByStaffProfileId: createdByStaffProfile?._id,
-      createdByUserId: actorUserId,
-      customerProfileId: customerProfile._id,
-      dueAt: args.scheduledAt,
-      metadata: {
-        intakeChannel: args.intakeChannel,
-        itemDescription: trimOptional(args.itemDescription),
-        scheduledAt: args.scheduledAt ?? null,
-        serviceTitle: args.serviceTitle,
+      args: {
+        assignedStaffProfileId: Id<"staffProfile">;
+        createdByUserId?: Id<"athenaUser">;
+        customerEmail?: string;
+        customerFullName?: string;
+        customerNotes?: string;
+        customerPhoneNumber?: string;
+        customerProfileId?: Id<"customerProfile">;
+        depositAmount?: number;
+        depositMethod?: "cash" | "card" | "mobile_money";
+        intakeChannel: "walk_in" | "phone_booking";
+        itemDescription?: string;
+        notes?: string;
+        priority?: "normal" | "high" | "urgent";
+        registerSessionId?: Id<"registerSession">;
+        scheduledAt?: number;
+        serviceTitle: string;
+        storeId: Id<"store">;
       },
-      notes: trimOptional(args.notes),
-      organizationId: store.organizationId,
-      priority: args.priority ?? "normal",
-      status: "open",
-      storeId: args.storeId,
-      title: args.serviceTitle.trim(),
-      type: "service_intake",
-    });
+    ) => {
+      const validationErrors = validateServiceIntakeInput({
+        assignedStaffProfileId: args.assignedStaffProfileId,
+        customerFullName: args.customerFullName,
+        customerPhoneNumber: args.customerPhoneNumber,
+        customerProfileId: args.customerProfileId,
+        depositAmount: args.depositAmount,
+        depositMethod: args.depositMethod,
+        serviceTitle: args.serviceTitle,
+      });
 
-    if (!workItem) {
-      throw new Error("Unable to create the intake work item.");
-    }
+      if (validationErrors.length > 0) {
+        return userError({
+          code: "validation_failed",
+          message: validationErrors.join(" "),
+        });
+      }
 
-    const serviceCase = await createServiceCaseWithCtx(ctx, {
-      assignedStaffProfileId: args.assignedStaffProfileId,
-      createdByUserId: actorUserId,
-      customerProfileId: customerProfile._id,
-      notes: trimOptional(args.notes),
-      operationalWorkItemId: workItem._id,
-      organizationId: store.organizationId,
-      serviceMode: "same_day",
-      storeId: args.storeId,
-    });
-    if (serviceCase.kind === "user_error") {
-      return serviceCase;
-    }
+      const store = await ctx.db.get("store", args.storeId);
+      if (!store) {
+        return userError({
+          code: "not_found",
+          message: "Store not found.",
+        });
+      }
 
-    const createdServiceCase = serviceCase.data;
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin"],
+        failureMessage: "Only store admins can create service intake work.",
+        organizationId: store.organizationId,
+        userId: athenaUser._id,
+      });
+      const actorUserId = athenaUser._id;
 
-    const inventoryMovement = await recordInventoryMovementWithCtx(ctx, {
-      actorStaffProfileId: createdByStaffProfile?._id,
-      actorUserId,
-      customerProfileId: customerProfile._id,
-      movementType: "service_item_received",
-      notes: trimOptional(args.itemDescription) ?? args.serviceTitle.trim(),
-      organizationId: store.organizationId,
-      quantityDelta: 1,
-      reasonCode: "service_item_checkin",
-      sourceId: createdServiceCase._id,
-      sourceType: "service_case",
-      storeId: args.storeId,
-      workItemId: workItem._id,
-    });
+      const assignedStaffProfile = await ctx.db.get(
+        "staffProfile",
+        args.assignedStaffProfileId
+      );
 
-    const paymentAllocation =
-      hasDeposit && args.depositMethod
-        ? await recordPaymentAllocationWithCtx(ctx, {
+      if (
+        !assignedStaffProfile ||
+        assignedStaffProfile.storeId !== args.storeId ||
+        assignedStaffProfile.status !== "active"
+      ) {
+        return userError({
+          code: "precondition_failed",
+          message: "Assigned staff member is not available for this store.",
+        });
+      }
+
+      const createdByStaffProfile = await ctx.db
+        .query("staffProfile")
+        .withIndex("by_storeId_linkedUserId", (q) =>
+          q.eq("storeId", args.storeId).eq("linkedUserId", actorUserId)
+        )
+        .first();
+
+      const customerProfileResult = await resolveServiceIntakeCustomerProfile(ctx, {
+        customerEmail: args.customerEmail,
+        customerFullName: args.customerFullName,
+        customerNotes: args.customerNotes,
+        customerPhoneNumber: args.customerPhoneNumber,
+        customerProfileId: args.customerProfileId,
+        organizationId: store.organizationId,
+        storeId: args.storeId,
+      });
+
+      if (customerProfileResult.kind === "user_error") {
+        return customerProfileResult;
+      }
+
+      const customerProfile = customerProfileResult.data;
+
+      if (!customerProfile) {
+        throw new Error("Unable to create or load the selected customer.");
+      }
+
+      const hasDeposit = args.depositAmount !== undefined && args.depositAmount > 0;
+      const collectedInStore = args.intakeChannel === "walk_in";
+      const resolvedRegisterSessionId = hasDeposit && collectedInStore
+        ? await resolveRegisterSessionForInStoreCollectionWithCtx(ctx, {
             actorStaffProfileId: createdByStaffProfile?._id,
             actorUserId,
-            allocationType: "service_deposit",
-            amount: args.depositAmount!,
-            businessEventKey: `service:${createdServiceCase._id}:intake_deposit`,
-            collectedInStore,
-            customerProfileId: customerProfile._id,
-            method: args.depositMethod,
-            organizationId: store.organizationId,
-            registerSessionId: resolvedRegisterSessionId,
+            registerSessionId: args.registerSessionId,
             storeId: args.storeId,
-            targetId: createdServiceCase._id,
-            targetType: "service_case",
-            workItemId: workItem._id,
           })
-        : null;
+        : undefined;
+      const workItem = await createOperationalWorkItemWithCtx(ctx, {
+        approvalState: "not_required",
+        assignedToStaffProfileId: args.assignedStaffProfileId,
+        createdByStaffProfileId: createdByStaffProfile?._id,
+        createdByUserId: actorUserId,
+        customerProfileId: customerProfile._id,
+        dueAt: args.scheduledAt,
+        metadata: {
+          intakeChannel: args.intakeChannel,
+          itemDescription: trimOptional(args.itemDescription),
+          scheduledAt: args.scheduledAt ?? null,
+          serviceTitle: args.serviceTitle,
+        },
+        notes: trimOptional(args.notes),
+        organizationId: store.organizationId,
+        priority: args.priority ?? "normal",
+        status: "open",
+        storeId: args.storeId,
+        title: args.serviceTitle.trim(),
+        type: "service_intake",
+      });
 
-    await recordOperationalEventWithCtx(ctx, {
-      actorStaffProfileId: createdByStaffProfile?._id,
-      actorUserId,
-      customerProfileId: customerProfile._id,
-      eventType: "service_intake_created",
-      inventoryMovementId: inventoryMovement?._id,
-      metadata: {
-        depositAmount: args.depositAmount ?? null,
-        depositMethod: args.depositMethod ?? null,
-        intakeChannel: args.intakeChannel,
-      },
-      organizationId: store.organizationId,
-      paymentAllocationId: paymentAllocation?._id,
-      registerSessionId: resolvedRegisterSessionId,
-      storeId: args.storeId,
-      subjectId: createdServiceCase._id,
-      subjectLabel: workItem.title,
-      subjectType: "service_case",
-      workItemId: workItem._id,
-    });
+      if (!workItem) {
+        throw new Error("Unable to create the intake work item.");
+      }
 
-    await recordServiceCaseTraceBestEffort(ctx, {
-      actorStaffProfileId: createdByStaffProfile?._id,
-      actorUserId,
-      amount: args.depositAmount,
-      direction: hasDeposit ? "in" : undefined,
-      inventoryMovementId: inventoryMovement?._id,
-      method: args.depositMethod,
-      paymentAllocationId: paymentAllocation?._id,
-      registerSessionId: resolvedRegisterSessionId,
-      serviceCase: createdServiceCase,
-      stage: "intake_created",
-    });
+      const serviceCase = await createServiceCaseWithCtx(ctx, {
+        assignedStaffProfileId: args.assignedStaffProfileId,
+        createdByUserId: actorUserId,
+        customerProfileId: customerProfile._id,
+        notes: trimOptional(args.notes),
+        operationalWorkItemId: workItem._id,
+        organizationId: store.organizationId,
+        serviceMode: "same_day",
+        storeId: args.storeId,
+      });
+      if (serviceCase.kind === "user_error") {
+        return serviceCase;
+      }
 
-    return ok({
-      customerProfileId: customerProfile._id,
-      serviceCaseId: createdServiceCase._id,
-      workItemId: workItem._id,
-    });
-  },
+      const createdServiceCase = serviceCase.data;
+
+      const inventoryMovement = await recordInventoryMovementWithCtx(ctx, {
+        actorStaffProfileId: createdByStaffProfile?._id,
+        actorUserId,
+        customerProfileId: customerProfile._id,
+        movementType: "service_item_received",
+        notes: trimOptional(args.itemDescription) ?? args.serviceTitle.trim(),
+        organizationId: store.organizationId,
+        quantityDelta: 1,
+        reasonCode: "service_item_checkin",
+        sourceId: createdServiceCase._id,
+        sourceType: "service_case",
+        storeId: args.storeId,
+        workItemId: workItem._id,
+      });
+
+      const paymentAllocation =
+        hasDeposit && args.depositMethod
+          ? await recordPaymentAllocationWithCtx(ctx, {
+              actorStaffProfileId: createdByStaffProfile?._id,
+              actorUserId,
+              allocationType: "service_deposit",
+              amount: args.depositAmount!,
+              businessEventKey: `service:${createdServiceCase._id}:intake_deposit`,
+              collectedInStore,
+              customerProfileId: customerProfile._id,
+              method: args.depositMethod,
+              organizationId: store.organizationId,
+              registerSessionId: resolvedRegisterSessionId,
+              storeId: args.storeId,
+              targetId: createdServiceCase._id,
+              targetType: "service_case",
+              workItemId: workItem._id,
+            })
+          : null;
+
+      await recordOperationalEventWithCtx(ctx, {
+        actorStaffProfileId: createdByStaffProfile?._id,
+        actorUserId,
+        customerProfileId: customerProfile._id,
+        eventType: "service_intake_created",
+        inventoryMovementId: inventoryMovement?._id,
+        metadata: {
+          depositAmount: args.depositAmount ?? null,
+          depositMethod: args.depositMethod ?? null,
+          intakeChannel: args.intakeChannel,
+        },
+        organizationId: store.organizationId,
+        paymentAllocationId: paymentAllocation?._id,
+        registerSessionId: resolvedRegisterSessionId,
+        storeId: args.storeId,
+        subjectId: createdServiceCase._id,
+        subjectLabel: workItem.title,
+        subjectType: "service_case",
+        workItemId: workItem._id,
+      });
+
+      await recordServiceCaseTraceBestEffort(ctx, {
+        actorStaffProfileId: createdByStaffProfile?._id,
+        actorUserId,
+        amount: args.depositAmount,
+        direction: hasDeposit ? "in" : undefined,
+        inventoryMovementId: inventoryMovement?._id,
+        method: args.depositMethod,
+        paymentAllocationId: paymentAllocation?._id,
+        registerSessionId: resolvedRegisterSessionId,
+        serviceCase: createdServiceCase,
+        stage: "intake_created",
+      });
+
+      return ok({
+        customerProfileId: customerProfile._id,
+        serviceCaseId: createdServiceCase._id,
+        workItemId: workItem._id,
+      });
+    },
+  ),
 });

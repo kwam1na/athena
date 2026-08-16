@@ -1,13 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("@convex-dev/auth/server", () => ({
+  getAuthUserId: vi.fn().mockResolvedValue(null),
+}));
 
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import {
+  listProductOperationalTimeline,
   listProductOperationalTimelineWithCtx,
   recordOperationalEventWithCtx,
 } from "./operationalEvents";
 
 type TableName =
+  | "athenaUser"
   | "automationRun"
   | "operationalEvent"
   | "product"
@@ -17,6 +23,7 @@ type Row = Record<string, unknown> & { _id: string };
 
 function createCtx(seed: Partial<Record<TableName, Row[]>>) {
   const tables: Record<TableName, Map<string, Row>> = {
+    athenaUser: new Map(),
     operationalEvent: new Map(),
     automationRun: new Map(),
     product: new Map(),
@@ -74,6 +81,76 @@ function createCtx(seed: Partial<Record<TableName, Row[]>>) {
 
   return ctx;
 }
+
+function getHandler(definition: unknown) {
+  return (definition as { _handler: Function })._handler;
+}
+
+// Mirrors the admitted actor the rail injects for a signed-in Athena user.
+function asAdmitted(ctx: unknown, athenaUserId: string) {
+  return {
+    ...(ctx as Record<string, unknown>),
+    operationAdmission: {
+      actor: { kind: "normal_user" as const, athenaUserId },
+    },
+  } as never;
+}
+
+describe("product operational timeline admission", () => {
+  it("returns the timeline through the admitted public query", async () => {
+    const ctx = createCtx({
+      athenaUser: [{ _id: "athena-user-1" }],
+      product: [{ _id: "product-1", storeId: "store-1" }],
+      operationalEvent: [
+        {
+          _id: "event-product",
+          createdAt: 100,
+          eventType: "product_updated",
+          message: "Product updated.",
+          storeId: "store-1",
+          subjectId: "product-1",
+          subjectType: "product",
+        },
+      ],
+    });
+
+    const result = await getHandler(listProductOperationalTimeline)(
+      asAdmitted(ctx, "athena-user-1"),
+      {
+        productId: "product-1" as Id<"product">,
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result.map((event: { id: string }) => event.id)).toEqual([
+      "event-product",
+    ]);
+  });
+
+  it("denies an unauthenticated timeline read before touching event rows", async () => {
+    const ctx = createCtx({
+      product: [{ _id: "product-1", storeId: "store-1" }],
+      operationalEvent: [
+        {
+          _id: "event-product",
+          createdAt: 100,
+          eventType: "product_updated",
+          message: "Product updated.",
+          storeId: "store-1",
+          subjectId: "product-1",
+          subjectType: "product",
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(listProductOperationalTimeline)(ctx, {
+        productId: "product-1" as Id<"product">,
+        storeId: "store-1" as Id<"store">,
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+  });
+});
 
 describe("operational events", () => {
   it("lists product and SKU operational events in newest-first order", async () => {

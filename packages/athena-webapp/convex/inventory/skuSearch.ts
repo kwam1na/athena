@@ -9,9 +9,19 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
-import { admitPublicQuery } from "../platform/operationAdmission";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import { searchProductSkusReadDefinition } from "../operationAdmission/readDefinitions";
-import type { OperationQueryCtx } from "../operationAdmission/types";
+import {
+  removeStaleProductSkuSearchPageOperationDefinition,
+  repairProductSkuSearchPageOperationDefinition,
+} from "../operationAdmission/domains/u3_inventoryCatalog_definitions";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
 import { advanceRegisterCatalogRevision } from "../pos/application/sync/registerCatalogRevision";
 import {
   isProjectionProductPosCatalogVisible,
@@ -1027,7 +1037,15 @@ export const repairProductSkuSearchPage = mutation({
     storeId: v.id("store"),
   },
   returns: repairProductSkuSearchResultValidator,
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    repairProductSkuSearchPageOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        paginationOpts: { numItems: number; cursor: string | null };
+        storeId: Id<"store">;
+      },
+    ) => {
     await requireProductSkuSearchAdmin(
       ctx,
       args.storeId,
@@ -1076,7 +1094,8 @@ export const repairProductSkuSearchPage = mutation({
       continueCursor: page.continueCursor,
       isDone: page.isDone,
     };
-  },
+    },
+  ),
 });
 
 export const removeStaleProductSkuSearchPage = mutation({
@@ -1085,7 +1104,15 @@ export const removeStaleProductSkuSearchPage = mutation({
     storeId: v.id("store"),
   },
   returns: repairProductSkuSearchResultValidator,
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    removeStaleProductSkuSearchPageOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        paginationOpts: { numItems: number; cursor: string | null };
+        storeId: Id<"store">;
+      },
+    ) => {
     await requireProductSkuSearchAdmin(
       ctx,
       args.storeId,
@@ -1157,5 +1184,6 @@ export const removeStaleProductSkuSearchPage = mutation({
       continueCursor: page.continueCursor,
       isDone: page.isDone,
     };
-  },
+    },
+  ),
 });

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ok, userError } from "../../shared/commandResult";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 
@@ -11,6 +11,27 @@ vi.mock("./expenseTransactions", () => ({
   createExpenseTransactionFromSessionHandler:
     mocks.createExpenseTransactionFromSessionHandler,
 }));
+
+// These cases drive the EXPORTED handlers, which now run through the admission
+// rail. The rail resolves identity through the composition root's port, so the
+// port is stubbed to a normal Athena user; the assertions below are about the
+// domain behaviour behind admission, and the admission behaviour itself is
+// covered in `inventoryIdentityAdmission.test.ts`.
+// Cuts the module cycle `platform/operationAdmission` ->
+// `sharedDemo/operationAdapter` -> `sharedDemo/restore` ->
+// `sharedDemo/openingBaseline` -> `inventory/storeSchedule` ->
+// `platform/operationAdmission`. Left intact, the composition root captures
+// the real identity port before this file's mocks are registered.
+vi.mock("../sharedDemo/restore", () => ({
+  requireReadySharedDemoWriteWithCtx: vi.fn(),
+}));
+
+vi.mock("../lib/athenaUserAuth", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/athenaUserAuth")>()),
+  requireAuthenticatedAthenaUserWithCtx: vi.fn(),
+}));
+
+import * as athenaUserAuth from "../lib/athenaUserAuth";
 
 vi.mock("./helpers/inventoryHolds", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./helpers/inventoryHolds")>()),
@@ -32,6 +53,18 @@ import {
   updateExpenseSession,
   voidExpenseSession,
 } from "./expenseSessions";
+
+// `restoreAllMocks` below strips implementations set at module scope, so the
+// identity port is (re-)stubbed per test rather than once at mock time.
+beforeEach(() => {
+  vi.mocked(
+    athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+  ).mockResolvedValue({
+    _id: "athena-user-1",
+    _creationTime: 0,
+    email: "operator@test",
+  } as never);
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -365,9 +398,11 @@ describe("expense session command results", () => {
         completedAt: 123456789,
       },
     });
+    // The admitted handler receives an admission-carrying clone of the ctx, so
+    // identity match on `db` rather than object identity.
     expect(
       mocks.createExpenseTransactionFromSessionHandler,
-    ).toHaveBeenCalledWith(ctx, {
+    ).toHaveBeenCalledWith(expect.objectContaining({ db: ctx.db }), {
       notes: "Complete in test",
       sessionId: "expense-session-1",
     });
@@ -509,7 +544,7 @@ describe("expense session command results", () => {
       quantityAvailable: 9,
     });
     expect(mocks.releaseLegacyExpenseQuantityPatchHolds).toHaveBeenCalledWith(
-      ctx,
+      expect.objectContaining({ db: ctx.db }),
       [{ quantity: 5, skuId: "sku-1" }],
     );
   });

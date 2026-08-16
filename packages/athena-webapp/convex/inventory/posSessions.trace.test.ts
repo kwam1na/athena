@@ -75,6 +75,15 @@ import {
   voidSession,
 } from "./posSessions";
 
+// Cuts the module cycle `platform/operationAdmission` ->
+// `sharedDemo/operationAdapter` -> `sharedDemo/restore` ->
+// `sharedDemo/openingBaseline` -> `inventory/storeSchedule` ->
+// `platform/operationAdmission`. Left intact, the composition root is observed
+// half-initialized from this test's module graph.
+vi.mock("../sharedDemo/restore", () => ({
+  requireReadySharedDemoWriteWithCtx: vi.fn(),
+}));
+
 type SessionRecord = {
   _id: string;
   sessionNumber: string;
@@ -1189,8 +1198,10 @@ describe("pos session lifecycle trace handlers", () => {
           notes: "Stale hold",
         }),
       );
+      // The admitted handler receives an admission-carrying clone of the ctx,
+      // so match on the same `db` rather than on object identity.
       expect(mocks.recordOperationalEventWithCtx).toHaveBeenCalledWith(
-        ctx,
+        expect.objectContaining({ db: ctx.db }),
         expect.objectContaining({
           eventType: "pos_session.expired_by_operator",
           subjectType: "pos_session",
@@ -1261,11 +1272,11 @@ describe("pos session lifecycle trace handlers", () => {
       },
     });
     expect(mocks.requireStoreFullAdminAccess).toHaveBeenCalledWith(
-      ctx,
+      expect.objectContaining({ db: ctx.db }),
       "store-1",
     );
     expect(mocks.recordOperationalEventWithCtx).toHaveBeenCalledWith(
-      ctx,
+      expect.objectContaining({ db: ctx.db }),
       expect.objectContaining({
         actorStaffProfileId: undefined,
         actorUserId: "athena-user-1",
@@ -1519,7 +1530,7 @@ describe("pos session lifecycle trace handlers", () => {
       },
     });
     expect(mocks.createTransactionFromSessionHandler).toHaveBeenCalledWith(
-      ctx,
+      expect.objectContaining({ db: ctx.db }),
       expect.objectContaining({
         sessionId: "session-1",
         staffProfileId: "cashier-1",
@@ -1532,10 +1543,10 @@ describe("pos session lifecycle trace handlers", () => {
       }),
     );
     expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
-      ctx,
+      expect.objectContaining({ db: ctx.db }),
     );
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
-      ctx,
+      expect.objectContaining({ db: ctx.db }),
       {
         allowedRoles: ["full_admin", "pos_only"],
         failureMessage: "You cannot complete this POS sale.",

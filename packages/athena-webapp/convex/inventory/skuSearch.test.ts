@@ -55,6 +55,16 @@ type QueryFilter = {
   value: unknown;
 };
 
+/**
+ * `admitPublicMutation` hands the handler a CLONE of the caller's context (with
+ * `operationAdmission` attached), so helpers no longer receive the exact object
+ * the test constructed. Matching on the shared `db` keeps the assertion about
+ * "the same transaction" rather than about object identity.
+ */
+function admittedCtx(ctx: unknown) {
+  return expect.objectContaining({ db: (ctx as { db: unknown }).db });
+}
+
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
 }
@@ -1082,7 +1092,7 @@ describe("SKU search foundation", () => {
       assertConformsToExportedReturns(removeStaleProductSkuSearchPage, result),
     ).not.toThrow();
     expect(tables.productSkuSearch.size).toBe(0);
-    expect(mockedCatalogRevision.advance).toHaveBeenLastCalledWith(ctx, {
+    expect(mockedCatalogRevision.advance).toHaveBeenLastCalledWith(admittedCtx(ctx), {
       didChange: true,
       storeId,
     });
@@ -1115,7 +1125,7 @@ describe("SKU search foundation", () => {
       storeId,
     });
 
-    expect(mockedCatalogRevision.advance).toHaveBeenLastCalledWith(ctx, {
+    expect(mockedCatalogRevision.advance).toHaveBeenLastCalledWith(admittedCtx(ctx), {
       didChange: false,
       storeId,
     });
@@ -1150,7 +1160,7 @@ describe("SKU search foundation", () => {
       duplicatesCollapsed: 0,
     });
     expect(tables.productSkuSearch.size).toBe(1);
-    expect(mockedCatalogRevision.advance).toHaveBeenLastCalledWith(ctx, {
+    expect(mockedCatalogRevision.advance).toHaveBeenLastCalledWith(admittedCtx(ctx), {
       didChange: false,
       storeId,
     });

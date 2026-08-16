@@ -54,13 +54,24 @@ import {
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
 import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
-import { admitPublicQuery } from "../platform/operationAdmission";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+  resolveWriteAdmission,
+} from "../platform/operationAdmission";
 import {
   getCompletedDailyCloseHistoryDetailReadDefinition,
   getDailyCloseLifecycleGateReadDefinition,
   getDailyCloseSnapshotReadDefinition,
   listCompletedDailyCloseHistoryReadDefinition,
 } from "../operationAdmission/readDefinitions";
+import {
+  completeDailyCloseOperationDefinition,
+  reopenDailyCloseOperationDefinition,
+  resolveDailyCloseCarryForwardOperationDefinition,
+} from "../operationAdmission/domains/u5_operations_definitions";
+import { getDailyCloseOpeningContextReadDefinition } from "../operationAdmission/domains/u5_operations_readDefinitions";
+import type { OperationMutationCtx } from "../operationAdmission/types";
 import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
 import type { AutomationDecisionEvidence } from "../automation/runLedger";
 import { recordFacts } from "../reports/ingest";
@@ -5740,6 +5751,22 @@ export const getDailyCloseLifecycleGate = query({
   ),
 });
 
+/**
+ * These mutations answer an authorization failure with a `CommandResult`
+ * rather than a throw, so the admission rail's denials are translated into the
+ * same `userError` the handler-local `requireAuthenticatedAthenaUserWithCtx`
+ * catch already produced. Anything else propagates.
+ */
+function isDailyCloseAdmissionAuthorizationError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  return (
+    message === "Sign in again to continue." ||
+    message === "This operation is not available for the current actor." ||
+    message === "You do not have access to this operation." ||
+    message.includes("shared_demo_action_denied")
+  );
+}
+
 export const completeDailyClose = mutation({
   args: {
     actorStaffProfileId: v.optional(v.id("staffProfile")),
@@ -5767,22 +5794,46 @@ export const completeDailyClose = mutation({
   },
   returns: commandResultValidator(v.any()),
   handler: async (ctx, args) => {
-    let athenaUser: Awaited<
-      ReturnType<typeof requireAuthenticatedAthenaUserWithCtx>
-    >;
     try {
-      athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    } catch {
+      await resolveWriteAdmission(
+        ctx,
+        args,
+        completeDailyCloseOperationDefinition,
+      );
+    } catch (error) {
+      if (!isDailyCloseAdmissionAuthorizationError(error)) {
+        throw error;
+      }
       return userError({
         code: "authorization_failed",
         message: "Sign in again to continue.",
       });
     }
 
-    return completeDailyCloseWithCtx(ctx, {
-      ...args,
-      actorUserId: athenaUser._id,
-    });
+    return admitPublicMutation(
+      completeDailyCloseOperationDefinition,
+      async (
+        admittedCtx,
+        admittedArgs: Omit<CompleteDailyCloseArgs, "actorUserId">,
+      ): Promise<CompleteDailyCloseResult> => {
+        let athenaUser: Awaited<
+          ReturnType<typeof requireAuthenticatedAthenaUserWithCtx>
+        >;
+        try {
+          athenaUser = await requireAuthenticatedAthenaUserWithCtx(admittedCtx);
+        } catch {
+          return userError({
+            code: "authorization_failed",
+            message: "Sign in again to continue.",
+          });
+        }
+
+        return completeDailyCloseWithCtx(admittedCtx, {
+          ...admittedArgs,
+          actorUserId: athenaUser._id,
+        });
+      },
+    )(ctx, args);
   },
 });
 
@@ -5839,56 +5890,82 @@ export const resolveDailyCloseCarryForward = mutation({
   },
   returns: commandResultValidator(v.any()),
   handler: async (ctx, args) => {
-    let athenaUser: Awaited<
-      ReturnType<typeof requireAuthenticatedAthenaUserWithCtx>
-    >;
     try {
-      athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    } catch {
+      await resolveWriteAdmission(
+        ctx,
+        args,
+        resolveDailyCloseCarryForwardOperationDefinition,
+      );
+    } catch (error) {
+      if (!isDailyCloseAdmissionAuthorizationError(error)) {
+        throw error;
+      }
       return userError({
         code: "authorization_failed",
         message: "Sign in again to continue.",
       });
     }
 
-    const store = await ctx.db.get("store", args.storeId);
-
-    if (!store) {
-      return userError({
-        code: "not_found",
-        message: "Store not found.",
-      });
-    }
-
-    try {
-      await requireOrganizationMemberRoleWithCtx(ctx, {
-        allowedRoles: ["full_admin", "pos_only"],
-        failureMessage: "You cannot resolve carry-forward work for this store.",
-        organizationId: store.organizationId,
-        userId: athenaUser._id,
-      });
-    } catch {
-      return userError({
-        code: "authorization_failed",
-        message: "You cannot resolve carry-forward work for this store.",
-      });
-    }
-
-    const actorStaffProfile = await ctx.db
-      .query("staffProfile")
-      .withIndex("by_storeId_linkedUserId", (q) =>
-        q.eq("storeId", args.storeId).eq("linkedUserId", athenaUser._id),
-      )
-      .first();
-
-    return resolveDailyCloseCarryForwardWithCtx(ctx, {
-      ...args,
-      actorStaffProfileId: actorStaffProfile?._id,
-      actorUserId: athenaUser._id,
-      organizationId: args.organizationId ?? store.organizationId,
-    });
+    return admitPublicMutation(
+      resolveDailyCloseCarryForwardOperationDefinition,
+      resolveDailyCloseCarryForwardPublicHandler,
+    )(ctx, args);
   },
 });
+
+async function resolveDailyCloseCarryForwardPublicHandler(
+  ctx: OperationMutationCtx,
+  args: Omit<ResolveDailyCloseCarryForwardArgs, "actorUserId">,
+): Promise<ResolveDailyCloseCarryForwardResult> {
+  let athenaUser: Awaited<
+    ReturnType<typeof requireAuthenticatedAthenaUserWithCtx>
+  >;
+  try {
+    athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  } catch {
+    return userError({
+      code: "authorization_failed",
+      message: "Sign in again to continue.",
+    });
+  }
+
+  const store = await ctx.db.get("store", args.storeId);
+
+  if (!store) {
+    return userError({
+      code: "not_found",
+      message: "Store not found.",
+    });
+  }
+
+  try {
+    await requireOrganizationMemberRoleWithCtx(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You cannot resolve carry-forward work for this store.",
+      organizationId: store.organizationId,
+      userId: athenaUser._id,
+    });
+  } catch {
+    return userError({
+      code: "authorization_failed",
+      message: "You cannot resolve carry-forward work for this store.",
+    });
+  }
+
+  const actorStaffProfile = await ctx.db
+    .query("staffProfile")
+    .withIndex("by_storeId_linkedUserId", (q) =>
+      q.eq("storeId", args.storeId).eq("linkedUserId", athenaUser._id),
+    )
+    .first();
+
+  return resolveDailyCloseCarryForwardWithCtx(ctx, {
+    ...args,
+    actorStaffProfileId: actorStaffProfile?._id,
+    actorUserId: athenaUser._id,
+    organizationId: args.organizationId ?? store.organizationId,
+  });
+}
 
 export const reopenDailyClose = mutation({
   args: {
@@ -5901,22 +5978,46 @@ export const reopenDailyClose = mutation({
   },
   returns: commandResultValidator(v.any()),
   handler: async (ctx, args) => {
-    let athenaUser: Awaited<
-      ReturnType<typeof requireAuthenticatedAthenaUserWithCtx>
-    >;
     try {
-      athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    } catch {
+      await resolveWriteAdmission(
+        ctx,
+        args,
+        reopenDailyCloseOperationDefinition,
+      );
+    } catch (error) {
+      if (!isDailyCloseAdmissionAuthorizationError(error)) {
+        throw error;
+      }
       return userError({
         code: "authorization_failed",
         message: "Sign in again to continue.",
       });
     }
 
-    return reopenDailyCloseWithCtx(ctx, {
-      ...args,
-      actorUserId: athenaUser._id,
-    });
+    return admitPublicMutation(
+      reopenDailyCloseOperationDefinition,
+      async (
+        admittedCtx,
+        admittedArgs: Omit<ReopenDailyCloseArgs, "actorUserId">,
+      ): Promise<ReopenDailyCloseResult> => {
+        let athenaUser: Awaited<
+          ReturnType<typeof requireAuthenticatedAthenaUserWithCtx>
+        >;
+        try {
+          athenaUser = await requireAuthenticatedAthenaUserWithCtx(admittedCtx);
+        } catch {
+          return userError({
+            code: "authorization_failed",
+            message: "Sign in again to continue.",
+          });
+        }
+
+        return reopenDailyCloseWithCtx(admittedCtx, {
+          ...admittedArgs,
+          actorUserId: athenaUser._id,
+        });
+      },
+    )(ctx, args);
   },
 });
 
@@ -5925,10 +6026,19 @@ export const getDailyCloseOpeningContext = query({
     operatingDate: v.string(),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) =>
-    redactDailyCloseOpeningContextForBroadView(
-      await getDailyCloseOpeningContextWithCtx(ctx, args),
-    ),
+  handler: admitPublicQuery(
+    getDailyCloseOpeningContextReadDefinition,
+    async (
+      ctx,
+      args: {
+        operatingDate: string;
+        storeId: Id<"store">;
+      },
+    ) =>
+      redactDailyCloseOpeningContextForBroadView(
+        await getDailyCloseOpeningContextWithCtx(ctx, args),
+      ),
+  ),
 });
 
 export const listCompletedDailyCloseHistory = query({

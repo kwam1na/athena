@@ -7,6 +7,11 @@ const mocks = vi.hoisted(() => ({
   requireStoreMemberAccessWithCtx: vi.fn(),
   getRegisterState: vi.fn(),
   openDrawerCommand: vi.fn(),
+  requireReadySharedDemoWriteWithCtx: vi.fn(),
+}));
+
+vi.mock("../../sharedDemo/restore", () => ({
+  requireReadySharedDemoWriteWithCtx: mocks.requireReadySharedDemoWriteWithCtx,
 }));
 
 vi.mock("../../lib/athenaUserAuth", () => ({
@@ -32,6 +37,7 @@ vi.mock("../application/commands/register", () => ({
   openDrawer: mocks.openDrawerCommand,
 }));
 
+import { AthenaUnauthenticatedError } from "../../lib/athenaUnauthenticated";
 import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";
 import { getState, openDrawer } from "./register";
 
@@ -208,5 +214,105 @@ describe("pos public register.getState authorization", () => {
     );
     expect(mocks.requireStoreMemberAccessWithCtx).not.toHaveBeenCalled();
     expect(mocks.getRegisterState).not.toHaveBeenCalled();
+  });
+});
+
+describe("pos public register.openDrawer admission", () => {
+  const openDrawerArgs = {
+    openingFloat: 100,
+    staffProfileId: "staff-1",
+    storeId: "store-1",
+    terminalId: "terminal-1",
+  };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mocks.getSharedDemoActorWithCtx.mockResolvedValue(null);
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
+      _id: "athena-user-1",
+    });
+    mocks.requireReadySharedDemoWriteWithCtx.mockResolvedValue(undefined);
+    mocks.openDrawerCommand.mockResolvedValue({ kind: "ok", data: null });
+  });
+
+  it("runs the command for an admitted normal user", async () => {
+    const ctx = buildCtx();
+
+    const result = await getHandler(openDrawer)(ctx as never, openDrawerArgs);
+
+    expect(result).toEqual({ kind: "ok", data: null });
+    expect(mocks.openDrawerCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({ kind: "normal_user" }),
+        }),
+      }),
+      openDrawerArgs,
+    );
+  });
+
+  it("denies an unauthenticated caller before the command runs", async () => {
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
+      new AthenaUnauthenticatedError(),
+    );
+    const ctx = buildCtx();
+
+    await expect(
+      getHandler(openDrawer)(ctx as never, openDrawerArgs),
+    ).rejects.toThrow("Sign in again to continue.");
+    expect(mocks.openDrawerCommand).not.toHaveBeenCalled();
+  });
+
+  it("admits shared demo behind the restore fence for its own store", async () => {
+    mocks.getSharedDemoActorWithCtx.mockResolvedValue({
+      athenaUserId: "demo-user-1",
+      kind: "shared_demo",
+      organizationId: "org-1",
+      storeId: "store-1",
+    });
+    const ctx = buildCtx();
+
+    await getHandler(openDrawer)(ctx as never, openDrawerArgs);
+
+    // `cash.control.write` is a demo grant, so the fence — not the capability —
+    // is what stands between a demo visitor and this write.
+    expect(mocks.requireReadySharedDemoWriteWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ storeId: "store-1" }),
+    );
+    expect(mocks.openDrawerCommand).toHaveBeenCalled();
+  });
+
+  it("denies shared demo opening a drawer in another store", async () => {
+    mocks.getSharedDemoActorWithCtx.mockResolvedValue({
+      athenaUserId: "demo-user-1",
+      kind: "shared_demo",
+      organizationId: "org-1",
+      storeId: "other-store",
+    });
+    const ctx = buildCtx();
+
+    await expect(
+      getHandler(openDrawer)(ctx as never, openDrawerArgs),
+    ).rejects.toThrow("This action isn't allowed in the demo.");
+    expect(mocks.openDrawerCommand).not.toHaveBeenCalled();
+  });
+
+  it("denies shared demo while the store is restoring", async () => {
+    mocks.getSharedDemoActorWithCtx.mockResolvedValue({
+      athenaUserId: "demo-user-1",
+      kind: "shared_demo",
+      organizationId: "org-1",
+      storeId: "store-1",
+    });
+    mocks.requireReadySharedDemoWriteWithCtx.mockRejectedValue(
+      new Error("The demo is being restored. Try again shortly."),
+    );
+    const ctx = buildCtx();
+
+    await expect(
+      getHandler(openDrawer)(ctx as never, openDrawerArgs),
+    ).rejects.toThrow("This action isn't allowed in the demo.");
+    expect(mocks.openDrawerCommand).not.toHaveBeenCalled();
   });
 });

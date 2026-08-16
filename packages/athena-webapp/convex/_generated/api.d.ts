@@ -165,6 +165,7 @@ import type * as inventory_skuSearch from "../inventory/skuSearch.js";
 import type * as inventory_stockValidation from "../inventory/stockValidation.js";
 import type * as inventory_storeConfigV2 from "../inventory/storeConfigV2.js";
 import type * as inventory_storeSchedule from "../inventory/storeSchedule.js";
+import type * as inventory_storeScheduleCore from "../inventory/storeScheduleCore.js";
 import type * as inventory_stores from "../inventory/stores.js";
 import type * as inventory_storesTestSupport from "../inventory/storesTestSupport.js";
 import type * as inventory_subcategories from "../inventory/subcategories.js";
@@ -812,6 +813,7 @@ declare const fullApi: ApiFromModules<{
   "inventory/stockValidation": typeof inventory_stockValidation;
   "inventory/storeConfigV2": typeof inventory_storeConfigV2;
   "inventory/storeSchedule": typeof inventory_storeSchedule;
+  "inventory/storeScheduleCore": typeof inventory_storeScheduleCore;
   "inventory/stores": typeof inventory_stores;
   "inventory/storesTestSupport": typeof inventory_storesTestSupport;
   "inventory/subcategories": typeof inventory_subcategories;

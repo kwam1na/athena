@@ -17,6 +17,11 @@ import type {
   DailyManagerReportProps,
   DailyManagerReportTopItem,
 } from "../emails/DailyManagerReport";
+import { admitPublicAction } from "../platform/operationAdmission";
+import {
+  sendDailyManagerReportsForDateRangeOperationDefinition,
+  sendMostRecentDailyManagerReportOperationDefinition,
+} from "../operationAdmission/domains/u5_operations_definitions";
 import { readRangeSkuMixWithCtx } from "../reports/queries";
 import { managerReportTopItemsFromMix } from "./managerReportTopItems";
 
@@ -412,59 +417,25 @@ export const sendMostRecentDailyManagerReport = action({
     storeId: v.optional(v.id("store")),
     storeSlug: v.optional(v.string()),
   },
-  handler: async (ctx, args): Promise<SentDailyManagerReport> => {
-    const report: DailyManagerReportPayload = await ctx.runQuery(
-      internal.operations.dailyManagerReportEmail
-        .getMostRecentDailyManagerReportPayload,
-      {
-        storeId: args.storeId,
-        storeSlug: args.storeSlug,
+  handler: admitPublicAction(
+    sendMostRecentDailyManagerReportOperationDefinition,
+    async (
+      ctx,
+      args: {
+        recipientEmail: string;
+        recipientName?: string;
+        storeId?: Id<"store">;
+        storeSlug?: string;
       },
-    );
-    const response = await sendDailyManagerReportEmail({
-      ...report,
-      recipientEmail: args.recipientEmail,
-      recipientName: args.recipientName,
-      subject: `${report.storeName} daily report - ${report.operatingDate}`,
-    });
-
-    if (!response.ok) {
-      throw new Error(await response.text());
-    }
-
-    return {
-      dailyCloseId: report.dailyCloseId,
-      operatingDate: report.operatingDateValue,
-      recipientEmail: args.recipientEmail,
-      status: response.status,
-      storeName: report.storeName,
-    };
-  },
-});
-
-export const sendDailyManagerReportsForDateRange = action({
-  args: {
-    endOperatingDate: v.string(),
-    recipientEmail: v.string(),
-    recipientName: v.optional(v.string()),
-    startOperatingDate: v.string(),
-    storeId: v.optional(v.id("store")),
-    storeSlug: v.optional(v.string()),
-  },
-  handler: async (ctx, args): Promise<SentDailyManagerReport[]> => {
-    const reports: DailyManagerReportPayload[] = await ctx.runQuery(
-      internal.operations.dailyManagerReportEmail
-        .getDailyManagerReportPayloadsForDateRange,
-      {
-        endOperatingDate: args.endOperatingDate,
-        startOperatingDate: args.startOperatingDate,
-        storeId: args.storeId,
-        storeSlug: args.storeSlug,
-      },
-    );
-    const sentReports: SentDailyManagerReport[] = [];
-
-    for (const report of reports) {
+    ): Promise<SentDailyManagerReport> => {
+      const report: DailyManagerReportPayload = await ctx.runQuery(
+        internal.operations.dailyManagerReportEmail
+          .getMostRecentDailyManagerReportPayload,
+        {
+          storeId: args.storeId,
+          storeSlug: args.storeSlug,
+        },
+      );
       const response = await sendDailyManagerReportEmail({
         ...report,
         recipientEmail: args.recipientEmail,
@@ -476,17 +447,75 @@ export const sendDailyManagerReportsForDateRange = action({
         throw new Error(await response.text());
       }
 
-      sentReports.push({
+      return {
         dailyCloseId: report.dailyCloseId,
         operatingDate: report.operatingDateValue,
         recipientEmail: args.recipientEmail,
         status: response.status,
         storeName: report.storeName,
-      });
-    }
+      };
+    },
+  ),
+});
 
-    return sentReports;
+export const sendDailyManagerReportsForDateRange = action({
+  args: {
+    endOperatingDate: v.string(),
+    recipientEmail: v.string(),
+    recipientName: v.optional(v.string()),
+    startOperatingDate: v.string(),
+    storeId: v.optional(v.id("store")),
+    storeSlug: v.optional(v.string()),
   },
+  handler: admitPublicAction(
+    sendDailyManagerReportsForDateRangeOperationDefinition,
+    async (
+      ctx,
+      args: {
+        endOperatingDate: string;
+        recipientEmail: string;
+        recipientName?: string;
+        startOperatingDate: string;
+        storeId?: Id<"store">;
+        storeSlug?: string;
+      },
+    ): Promise<SentDailyManagerReport[]> => {
+      const reports: DailyManagerReportPayload[] = await ctx.runQuery(
+        internal.operations.dailyManagerReportEmail
+          .getDailyManagerReportPayloadsForDateRange,
+        {
+          endOperatingDate: args.endOperatingDate,
+          startOperatingDate: args.startOperatingDate,
+          storeId: args.storeId,
+          storeSlug: args.storeSlug,
+        },
+      );
+      const sentReports: SentDailyManagerReport[] = [];
+
+      for (const report of reports) {
+        const response = await sendDailyManagerReportEmail({
+          ...report,
+          recipientEmail: args.recipientEmail,
+          recipientName: args.recipientName,
+          subject: `${report.storeName} daily report - ${report.operatingDate}`,
+        });
+
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+
+        sentReports.push({
+          dailyCloseId: report.dailyCloseId,
+          operatingDate: report.operatingDateValue,
+          recipientEmail: args.recipientEmail,
+          status: response.status,
+          storeName: report.storeName,
+        });
+      }
+
+      return sentReports;
+    },
+  ),
 });
 
 async function resolveStore(

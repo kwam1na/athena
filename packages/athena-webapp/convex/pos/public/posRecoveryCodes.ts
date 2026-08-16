@@ -13,6 +13,16 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../../lib/athenaUserAuth";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../../platform/operationAdmission";
+import {
+  revokePosRecoveryCodeOperationDefinition,
+  rotatePosRecoveryCodeOperationDefinition,
+  unlockPosRecoveryCodeOperationDefinition,
+} from "../../operationAdmission/domains/u2_pos_definitions";
+import { getPosRecoveryCodeStatusReadDefinition } from "../../operationAdmission/domains/u2_pos_readDefinitions";
 
 const POS_RECOVERY_ACCOUNT_EMAIL = "pos@wigclub.store";
 const POS_RECOVERY_CODE_VERSION = 1;
@@ -117,8 +127,7 @@ const GENERIC_RECOVERY_FAILURE = "POS recovery sign-in failed.";
 type PosRecoveryCredential = Doc<"posRecoveryCredential">;
 type PosRecoveryCtx = Pick<QueryCtx, "db"> | Pick<MutationCtx, "db">;
 type PosRecoveryAccessCtx =
-  | Pick<QueryCtx, "auth" | "db">
-  | Pick<MutationCtx, "auth" | "db">;
+  Pick<QueryCtx, "auth" | "db"> | Pick<MutationCtx, "auth" | "db">;
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -600,110 +609,122 @@ export const getRecoveryCodeStatus = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    await requireFullAdminRecoveryAccess(ctx, args.storeId);
-    const account = await findAthenaUserByEmail(
-      ctx,
-      POS_RECOVERY_ACCOUNT_EMAIL,
-    );
-    if (!account) {
-      return null;
-    }
-    return publicCredentialStatus(
-      await getCredentialForStore(ctx, {
-        posAccountId: account._id,
-        storeId: args.storeId,
-      }),
-    );
-  },
+  handler: admitPublicQuery(
+    getPosRecoveryCodeStatusReadDefinition,
+    async (ctx, args: { storeId: Id<"store"> }) => {
+      await requireFullAdminRecoveryAccess(ctx, args.storeId);
+      const account = await findAthenaUserByEmail(
+        ctx,
+        POS_RECOVERY_ACCOUNT_EMAIL,
+      );
+      if (!account) {
+        return null;
+      }
+      return publicCredentialStatus(
+        await getCredentialForStore(ctx, {
+          posAccountId: account._id,
+          storeId: args.storeId,
+        }),
+      );
+    },
+  ),
 });
 
 export const rotateRecoveryCode = mutation({
   args: {
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    const { actor } = await requireFullAdminRecoveryAccess(ctx, args.storeId);
-    const { code, credential } = await rotateCredentialWithCtx(ctx, {
-      actorUserId: actor._id,
-      reason: "rotated",
-      storeId: args.storeId,
-    });
+  handler: admitPublicMutation(
+    rotatePosRecoveryCodeOperationDefinition,
+    async (ctx, args: { storeId: Id<"store"> }) => {
+      const { actor } = await requireFullAdminRecoveryAccess(ctx, args.storeId);
+      const { code, credential } = await rotateCredentialWithCtx(ctx, {
+        actorUserId: actor._id,
+        reason: "rotated",
+        storeId: args.storeId,
+      });
 
-    return { code, credential: publicCredentialStatus(credential) };
-  },
+      return { code, credential: publicCredentialStatus(credential) };
+    },
+  ),
 });
 
 export const revokeRecoveryCode = mutation({
   args: {
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    const { actor } = await requireFullAdminRecoveryAccess(ctx, args.storeId);
-    const account = await requirePosRecoveryAccount(ctx);
-    const credential = await getCredentialForStore(ctx, {
-      posAccountId: account._id,
-      storeId: args.storeId,
-    });
-    if (!credential) {
-      return null;
-    }
-    const now = Date.now();
-    await ctx.db.patch("posRecoveryCredential", credential._id, {
-      plaintextCode: undefined,
-      revokedAt: now,
-      revokedByUserId: actor._id,
-      status: "revoked",
-    });
-    const nextCredential = {
-      ...credential,
-      plaintextCode: undefined,
-      revokedAt: now,
-      status: "revoked" as const,
-    };
-    await recordRecoveryCodeEvent(ctx, {
-      actorUserId: actor._id,
-      credential: nextCredential,
-      eventType: "pos_recovery_code_revoked",
-      reason: "revoked",
-    });
+  handler: admitPublicMutation(
+    revokePosRecoveryCodeOperationDefinition,
+    async (ctx, args: { storeId: Id<"store"> }) => {
+      const { actor } = await requireFullAdminRecoveryAccess(ctx, args.storeId);
+      const account = await requirePosRecoveryAccount(ctx);
+      const credential = await getCredentialForStore(ctx, {
+        posAccountId: account._id,
+        storeId: args.storeId,
+      });
+      if (!credential) {
+        return null;
+      }
+      const now = Date.now();
+      await ctx.db.patch("posRecoveryCredential", credential._id, {
+        plaintextCode: undefined,
+        revokedAt: now,
+        revokedByUserId: actor._id,
+        status: "revoked",
+      });
+      const nextCredential = {
+        ...credential,
+        plaintextCode: undefined,
+        revokedAt: now,
+        status: "revoked" as const,
+      };
+      await recordRecoveryCodeEvent(ctx, {
+        actorUserId: actor._id,
+        credential: nextCredential,
+        eventType: "pos_recovery_code_revoked",
+        reason: "revoked",
+      });
 
-    return publicCredentialStatus(nextCredential);
-  },
+      return publicCredentialStatus(nextCredential);
+    },
+  ),
 });
 
 export const unlockRecoveryCode = mutation({
   args: {
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    const { actor } = await requireFullAdminRecoveryAccess(ctx, args.storeId);
-    const account = await requirePosRecoveryAccount(ctx);
-    const credential = await getCredentialForStore(ctx, {
-      posAccountId: account._id,
-      storeId: args.storeId,
-    });
-    if (!credential || credential.status === "revoked") {
-      return publicCredentialStatus(credential);
-    }
-    await ctx.db.patch("posRecoveryCredential", credential._id, {
-      failedAttemptCount: 0,
-      failureAuditBucket: undefined,
-      lastFailedAt: undefined,
-      lockedAt: undefined,
-      lockedUntil: undefined,
-      status: "active",
-    });
-    const nextCredential = { ...credential, status: "active" as const };
-    await recordRecoveryCodeEvent(ctx, {
-      actorUserId: actor._id,
-      credential: nextCredential,
-      eventType: "pos_recovery_code_unlocked",
-      reason: "unlocked",
-    });
+  handler: admitPublicMutation(
+    unlockPosRecoveryCodeOperationDefinition,
+    async (ctx, args: { storeId: Id<"store"> }) => {
+      const { actor } = await requireFullAdminRecoveryAccess(ctx, args.storeId);
+      const account = await requirePosRecoveryAccount(ctx);
+      const credential = await getCredentialForStore(ctx, {
+        posAccountId: account._id,
+        storeId: args.storeId,
+      });
+      if (!credential || credential.status === "revoked") {
+        return publicCredentialStatus(credential);
+      }
+      await ctx.db.patch("posRecoveryCredential", credential._id, {
+        failedAttemptCount: 0,
+        failureAuditBucket: undefined,
+        lastFailedAt: undefined,
+        lockedAt: undefined,
+        lockedUntil: undefined,
+        status: "active",
+      });
+      const nextCredential = { ...credential, status: "active" as const };
+      await recordRecoveryCodeEvent(ctx, {
+        actorUserId: actor._id,
+        credential: nextCredential,
+        eventType: "pos_recovery_code_unlocked",
+        reason: "unlocked",
+      });
 
-    return publicCredentialStatus(nextCredential);
-  },
+      return publicCredentialStatus(nextCredential);
+    },
+  ),
 });
 
 export const verifyRecoveryCodeForAuthProvider = internalMutation({

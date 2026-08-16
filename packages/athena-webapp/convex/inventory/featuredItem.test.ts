@@ -9,6 +9,16 @@ vi.mock("../lib/athenaUserAuth", () => ({
   requireOrganizationMemberRoleWithCtx: vi.fn(),
 }));
 
+/**
+ * `admitPublicMutation` hands the handler a CLONE of the caller's context (with
+ * `operationAdmission` attached), so helpers no longer receive the exact object
+ * the test constructed. Matching on the shared `db` keeps the assertion about
+ * "the same transaction" rather than about object identity.
+ */
+function admittedCtx(ctx: unknown) {
+  return expect.objectContaining({ db: (ctx as { db: unknown }).db });
+}
+
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
 }
@@ -117,7 +127,7 @@ describe("featured homepage placement writes", () => {
 
     expect(
       athenaUserAuth.requireOrganizationMemberRoleWithCtx,
-    ).toHaveBeenCalledWith(ctx, {
+    ).toHaveBeenCalledWith(admittedCtx(ctx), {
       allowedRoles: ["full_admin"],
       failureMessage: "You do not have access to manage homepage content.",
       organizationId: "org-1",
@@ -323,7 +333,7 @@ describe("featured homepage placement writes", () => {
     expect(ctx.db.delete).toHaveBeenCalledWith("featuredItem", "featured-1");
     expect(
       athenaUserAuth.requireOrganizationMemberRoleWithCtx,
-    ).toHaveBeenCalledWith(ctx, {
+    ).toHaveBeenCalledWith(admittedCtx(ctx), {
       allowedRoles: ["full_admin"],
       failureMessage: "You do not have access to manage homepage content.",
       organizationId: "org-1",
@@ -364,7 +374,7 @@ describe("featured homepage placement writes", () => {
     });
     expect(
       athenaUserAuth.requireOrganizationMemberRoleWithCtx,
-    ).toHaveBeenCalledWith(ctx, {
+    ).toHaveBeenCalledWith(admittedCtx(ctx), {
       allowedRoles: ["full_admin"],
       failureMessage: "You do not have access to manage homepage content.",
       organizationId: "org-1",

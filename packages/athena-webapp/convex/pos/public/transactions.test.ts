@@ -1308,16 +1308,21 @@ describe("legacy POS public checkout mutations", () => {
       quantityToSubtract: 2,
     });
 
+    const admittedCtx = expect.objectContaining({
+      operationAdmission: expect.objectContaining({
+        decision: expect.objectContaining({ outcome: "admitted" }),
+      }),
+    });
     expect(
       athenaUserAuth.requireOrganizationMemberRoleWithCtx,
-    ).toHaveBeenCalledWith(ctx, {
+    ).toHaveBeenCalledWith(admittedCtx, {
       allowedRoles: ["full_admin", "pos_only"],
       failureMessage: "You cannot update POS inventory for this store.",
       organizationId: "org-1",
       userId: "user-1",
     });
     expect(completeTransactionCommands.updateInventory).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx,
       {
         skuId: "sku-1",
         quantityToSubtract: 2,
@@ -1717,12 +1722,16 @@ describe("createTransactionFromSession public mutation", () => {
       transactionId: "txn-1",
     });
 
-    expect(
-      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
-    ).toHaveBeenCalledWith(ctx);
+    // The write wrapper hands the handler the caller's ctx extended with the
+    // resolved admission, so downstream helpers see the admitted context.
+    const admittedCtx = expect.objectContaining({
+      operationAdmission: expect.objectContaining({
+        decision: expect.objectContaining({ outcome: "admitted" }),
+      }),
+    });
     expect(
       athenaUserAuth.requireOrganizationMemberRoleWithCtx,
-    ).toHaveBeenCalledWith(ctx, {
+    ).toHaveBeenCalledWith(admittedCtx, {
       allowedRoles: ["full_admin", "pos_only"],
       failureMessage: "You cannot complete this POS sale.",
       organizationId: "org-1",
@@ -1731,7 +1740,7 @@ describe("createTransactionFromSession public mutation", () => {
     expect(
       completeTransactionCommands.createTransactionFromSessionHandler,
     ).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx,
       expect.objectContaining({ sessionId: "session-1" }),
     );
   });

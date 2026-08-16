@@ -88,6 +88,25 @@ type QueryFilter = {
   value: unknown;
 };
 
+// The admission rail resolves the normal-user actor through this port, and the
+// suite runs with `mockReset: true`, so every test re-arms it before the
+// exported handlers are invoked.
+beforeEach(() => {
+  mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
+    _id: "athena-user-1",
+  } as never);
+});
+
+/**
+ * `admitPublicMutation` hands the handler a CLONE of the caller's context (with
+ * `operationAdmission` attached), so helpers no longer receive the exact object
+ * the test constructed. Matching on the shared `db` keeps the assertion about
+ * "the same transaction" rather than about object identity.
+ */
+function admittedCtx(ctx: unknown) {
+  return expect.objectContaining({ db: (ctx as { db: unknown }).db });
+}
+
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
 }
@@ -431,7 +450,7 @@ describe("inventory SKU generation", () => {
     expect(result.sku).toMatch(/^[A-Z0-9]+-[A-Z0-9]+-[A-Z0-9]+$/);
     expect(result.sku).not.toBe("TEMP_SKU");
     expect(mocks.applyInventoryEffectWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       expect.objectContaining({
         businessEventKey: expect.stringMatching(
           /^product_sku:productSku\d+:opening_stock$/,
@@ -448,7 +467,7 @@ describe("inventory SKU generation", () => {
     expect(result.sku).not.toBe("   ");
     expect(Array.from(tables.productSku.values())[0].sku).toBe(result.sku);
     expect(mocks.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       result._id,
     );
     expect(Array.from(tables.catalogSummary.values())[0]).toMatchObject({
@@ -497,7 +516,7 @@ describe("inventory SKU generation", () => {
       expect.objectContaining({ sku: result.sku }),
     );
     expect(mocks.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       "productSku001",
     );
     expect(Array.from(tables.catalogSummary.values())[0]).toMatchObject({
@@ -531,7 +550,7 @@ describe("inventory SKU generation", () => {
     });
 
     expect(mocks.applyInventoryEffectWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       expect.objectContaining({
         physicalQuantityDelta: 2,
         valuation: expect.objectContaining({
@@ -601,7 +620,7 @@ describe("inventory SKU generation", () => {
     expect(result.success).toBe(true);
     assertConformsToExportedReturns(generateUniqueBarcode, result);
     expect(mocks.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       "productSku001",
     );
   });
@@ -633,7 +652,7 @@ describe("inventory SKU generation", () => {
     });
 
     expect(mocks.removeProductSkuSearchProjection).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       "productSku001",
       { advanceRevision: false },
     );
@@ -677,7 +696,7 @@ describe("inventory SKU generation", () => {
       id: "productSku001" as Id<"productSku">,
     });
 
-    expect(mocks.advanceRegisterCatalogRevision).toHaveBeenCalledWith(ctx, {
+    expect(mocks.advanceRegisterCatalogRevision).toHaveBeenCalledWith(admittedCtx(ctx), {
       didChange: true,
       storeId: "storezzzz",
     });
@@ -768,7 +787,7 @@ describe("inventory SKU generation", () => {
     });
 
     expect(mocks.removeProductSkuSearchProjections).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       ["sku001"],
       "storezzzz",
       { additionalEffectiveChange: true },
@@ -825,7 +844,7 @@ describe("product archiving", () => {
     });
 
     expect(mocks.requireStoreFullAdminAccess).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       "storezzzz",
     );
     expect(result).toMatchObject({
@@ -837,7 +856,7 @@ describe("product archiving", () => {
     });
     expect(deleteSpy).not.toHaveBeenCalled();
     expect(mocks.refreshProductSkuSearchForProduct).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       "product001",
     );
     expect(Array.from(tables.catalogSummary.values())[0]).toMatchObject({
@@ -962,7 +981,7 @@ describe("product archiving", () => {
     });
 
     expect(mocks.requireStoreFullAdminAccess).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       "storezzzz",
     );
     expect(result).toMatchObject({
@@ -973,7 +992,7 @@ describe("product archiving", () => {
       availability: "live",
     });
     expect(mocks.refreshProductSkuSearchForProduct).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       "product001",
     );
     expect(Array.from(tables.catalogSummary.values())[0]).toMatchObject({
@@ -1512,7 +1531,7 @@ describe("product archiving", () => {
     });
 
     expect(mocks.refreshProductSkuSearchForProduct).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       "product001",
     );
     expect(Array.from(tables.catalogSummary.values())[0]).toMatchObject({
@@ -1678,7 +1697,7 @@ describe("product archiving", () => {
       subcategoryId: "subcategory-protectant",
     });
     expect(mocks.refreshProductSkuSearchForProduct).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       "product001",
     );
   });
@@ -1747,7 +1766,7 @@ describe("product archiving", () => {
       subcategoryId: "subcategory-protectant",
     });
     expect(mocks.refreshProductSkuSearchForProduct).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       "product001",
     );
   });
@@ -2217,12 +2236,12 @@ describe("product archiving", () => {
 
     expect(mocks.upsertProductSkuSearchProjections).toHaveBeenCalledTimes(2);
     expect(mocks.upsertProductSkuSearchProjections).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       ["productSku001"],
       "storeaaaa",
     );
     expect(mocks.upsertProductSkuSearchProjections).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       ["productSku002"],
       "storebbbb",
     );

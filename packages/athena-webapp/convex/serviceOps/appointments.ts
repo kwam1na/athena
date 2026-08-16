@@ -15,7 +15,17 @@ import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { createServiceCaseWithCtx } from "./serviceCases";
 import { recordServiceCaseTraceBestEffort } from "./serviceCaseTracing";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
-import { requireReadySharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
+import {
+  cancelAppointmentOperationDefinition,
+  convertAppointmentToWalkInOperationDefinition,
+  createAppointmentOperationDefinition,
+  rescheduleAppointmentOperationDefinition,
+} from "../operationAdmission/domains/u5_operations_definitions";
+import { listAppointmentsReadDefinition } from "../operationAdmission/domains/u5_operations_readDefinitions";
 
 const NON_BLOCKING_APPOINTMENT_STATUSES = new Set([
   "cancelled",
@@ -168,18 +178,23 @@ export const listAppointments = query({
     status: v.optional(v.string()),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    const appointments = await ctx.db
-      .query("serviceAppointment")
-      .withIndex("by_storeId_startAt", (q) => q.eq("storeId", args.storeId))
-      .collect();
+  handler: admitPublicQuery(
+    listAppointmentsReadDefinition,
+    async (ctx, args: { status?: string; storeId: Id<"store"> }) => {
+      const appointments = await ctx.db
+        .query("serviceAppointment")
+        .withIndex("by_storeId_startAt", (q) => q.eq("storeId", args.storeId))
+        .collect();
 
-    if (!args.status) {
-      return appointments;
-    }
+      if (!args.status) {
+        return appointments;
+      }
 
-    return appointments.filter((appointment) => appointment.status === args.status);
-  },
+      return appointments.filter(
+        (appointment) => appointment.status === args.status,
+      );
+    },
+  ),
 });
 
 export const createAppointment = mutation({
@@ -192,83 +207,96 @@ export const createAppointment = mutation({
     startAt: v.number(),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    await requireReadySharedDemoStoreCapabilityIfApplicable(
+  handler: admitPublicMutation(
+    createAppointmentOperationDefinition,
+    async (
       ctx,
-      "appointments.manage",
-      args.storeId,
-    );
-    const [catalogItem, customerProfile, staffProfile] = await Promise.all([
-      ctx.db.get("serviceCatalog", args.serviceCatalogId),
-      ctx.db.get("customerProfile", args.customerProfileId),
-      ctx.db.get("staffProfile", args.assignedStaffProfileId),
-    ]);
+      args: {
+        assignedStaffProfileId: Id<"staffProfile">;
+        createdByUserId?: Id<"athenaUser">;
+        customerProfileId: Id<"customerProfile">;
+        notes?: string;
+        serviceCatalogId: Id<"serviceCatalog">;
+        startAt: number;
+        storeId: Id<"store">;
+      },
+    ) => {
+      const [catalogItem, customerProfile, staffProfile] = await Promise.all([
+        ctx.db.get("serviceCatalog", args.serviceCatalogId),
+        ctx.db.get("customerProfile", args.customerProfileId),
+        ctx.db.get("staffProfile", args.assignedStaffProfileId),
+      ]);
 
-    if (!catalogItem || catalogItem.storeId !== args.storeId) {
-      return userError({
-        code: "not_found",
-        message: "Service catalog item not found for this store.",
+      if (!catalogItem || catalogItem.storeId !== args.storeId) {
+        return userError({
+          code: "not_found",
+          message: "Service catalog item not found for this store.",
+        });
+      }
+
+      if (!customerProfile || customerProfile.storeId !== args.storeId) {
+        return userError({
+          code: "not_found",
+          message: "Customer profile not found for this store.",
+        });
+      }
+
+      if (
+        !staffProfile ||
+        staffProfile.storeId !== args.storeId ||
+        staffProfile.status !== "active"
+      ) {
+        return userError({
+          code: "precondition_failed",
+          message: "Assigned staff member is not available for this store.",
+        });
+      }
+
+      const appointmentResult = buildServiceAppointment({
+        ...args,
+        durationMinutes: catalogItem.durationMinutes,
+        organizationId: catalogItem.organizationId,
       });
-    }
+      if (appointmentResult.kind === "user_error") {
+        return appointmentResult;
+      }
 
-    if (!customerProfile || customerProfile.storeId !== args.storeId) {
-      return userError({
-        code: "not_found",
-        message: "Customer profile not found for this store.",
+      const appointment = appointmentResult.data;
+
+      const existingAppointments = await ctx.db
+        .query("serviceAppointment")
+        .withIndex("by_staffProfileId_startAt", (q) =>
+          q.eq("assignedStaffProfileId", args.assignedStaffProfileId)
+        )
+        .collect();
+
+      if (findOverlappingAppointment(existingAppointments, appointment)) {
+        return userError({
+          code: "conflict",
+          message:
+            "Assigned staff member already has an appointment in this slot.",
+        });
+      }
+
+      const appointmentId = await ctx.db.insert(
+        "serviceAppointment",
+        appointment,
+      );
+
+      await recordOperationalEventWithCtx(ctx, {
+        actorUserId: args.createdByUserId,
+        customerProfileId: args.customerProfileId,
+        eventType: "service_appointment_created",
+        organizationId: catalogItem.organizationId,
+        storeId: args.storeId,
+        subjectId: appointmentId,
+        subjectLabel: catalogItem.name,
+        subjectType: "service_appointment",
       });
-    }
 
-    if (
-      !staffProfile ||
-      staffProfile.storeId !== args.storeId ||
-      staffProfile.status !== "active"
-    ) {
-      return userError({
-        code: "precondition_failed",
-        message: "Assigned staff member is not available for this store.",
-      });
-    }
-
-    const appointmentResult = buildServiceAppointment({
-      ...args,
-      durationMinutes: catalogItem.durationMinutes,
-      organizationId: catalogItem.organizationId,
-    });
-    if (appointmentResult.kind === "user_error") {
-      return appointmentResult;
-    }
-
-    const appointment = appointmentResult.data;
-
-    const existingAppointments = await ctx.db
-      .query("serviceAppointment")
-      .withIndex("by_staffProfileId_startAt", (q) =>
-        q.eq("assignedStaffProfileId", args.assignedStaffProfileId)
-      )
-      .collect();
-
-    if (findOverlappingAppointment(existingAppointments, appointment)) {
-      return userError({
-        code: "conflict",
-        message: "Assigned staff member already has an appointment in this slot.",
-      });
-    }
-
-    const appointmentId = await ctx.db.insert("serviceAppointment", appointment);
-
-    await recordOperationalEventWithCtx(ctx, {
-      actorUserId: args.createdByUserId,
-      customerProfileId: args.customerProfileId,
-      eventType: "service_appointment_created",
-      organizationId: catalogItem.organizationId,
-      storeId: args.storeId,
-      subjectId: appointmentId,
-      subjectLabel: catalogItem.name,
-      subjectType: "service_appointment",
-    });
-
-    return ok(await ctx.db.get("serviceAppointment", appointmentId));
-  },
+      return ok(await ctx.db.get("serviceAppointment", appointmentId));
+    },
+  ),
 });
 
 export const rescheduleAppointment = mutation({
@@ -277,95 +305,106 @@ export const rescheduleAppointment = mutation({
     notes: v.optional(v.string()),
     startAt: v.number(),
   },
-  handler: async (ctx, args) => {
-    const appointment = await ctx.db.get("serviceAppointment", args.appointmentId);
-
-    if (!appointment) {
-      return userError({
-        code: "not_found",
-        message: "Appointment not found.",
-      });
-    }
-
-    await requireReadySharedDemoStoreCapabilityIfApplicable(
+  handler: admitPublicMutation(
+    rescheduleAppointmentOperationDefinition,
+    async (
       ctx,
-      "appointments.manage",
-      appointment.storeId,
-    );
+      args: {
+        appointmentId: Id<"serviceAppointment">;
+        notes?: string;
+        startAt: number;
+      },
+    ) => {
+      const appointment = await ctx.db.get(
+        "serviceAppointment",
+        args.appointmentId,
+      );
 
-    if (NON_BLOCKING_APPOINTMENT_STATUSES.has(appointment.status)) {
-      return userError({
-        code: "precondition_failed",
-        message: "This appointment can no longer be rescheduled.",
+      if (!appointment) {
+        return userError({
+          code: "not_found",
+          message: "Appointment not found.",
+        });
+      }
+
+      if (NON_BLOCKING_APPOINTMENT_STATUSES.has(appointment.status)) {
+        return userError({
+          code: "precondition_failed",
+          message: "This appointment can no longer be rescheduled.",
+        });
+      }
+
+      const catalogItem = await ctx.db.get(
+        "serviceCatalog",
+        appointment.serviceCatalogId,
+      );
+      if (!catalogItem) {
+        return userError({
+          code: "not_found",
+          message: "Service catalog item not found.",
+        });
+      }
+
+      const candidateAppointmentResult = buildServiceAppointment({
+        assignedStaffProfileId: appointment.assignedStaffProfileId,
+        createdByUserId: appointment.createdByUserId,
+        customerProfileId: appointment.customerProfileId,
+        durationMinutes: catalogItem.durationMinutes,
+        notes: args.notes ?? appointment.notes,
+        organizationId: appointment.organizationId,
+        serviceCatalogId: appointment.serviceCatalogId,
+        serviceCaseId: appointment.serviceCaseId,
+        startAt: args.startAt,
+        storeId: appointment.storeId,
       });
-    }
+      if (candidateAppointmentResult.kind === "user_error") {
+        return candidateAppointmentResult;
+      }
 
-    const catalogItem = await ctx.db.get("serviceCatalog", appointment.serviceCatalogId);
-    if (!catalogItem) {
-      return userError({
-        code: "not_found",
-        message: "Service catalog item not found.",
+      const candidateAppointment = candidateAppointmentResult.data;
+
+      const existingAppointments = await ctx.db
+        .query("serviceAppointment")
+        .withIndex("by_staffProfileId_startAt", (q) =>
+          q.eq("assignedStaffProfileId", appointment.assignedStaffProfileId)
+        )
+        .collect();
+
+      const overlappingAppointment = findOverlappingAppointment(
+        existingAppointments.filter(
+          (existingAppointment) => existingAppointment._id !== appointment._id
+        ),
+        candidateAppointment
+      );
+
+      if (overlappingAppointment) {
+        return userError({
+          code: "conflict",
+          message:
+            "Assigned staff member already has an appointment in this slot.",
+        });
+      }
+
+      await ctx.db.patch("serviceAppointment", appointment._id, {
+        endAt: candidateAppointment.endAt,
+        notes: candidateAppointment.notes,
+        startAt: candidateAppointment.startAt,
+        status: "rescheduled",
+        updatedAt: Date.now(),
       });
-    }
 
-    const candidateAppointmentResult = buildServiceAppointment({
-      assignedStaffProfileId: appointment.assignedStaffProfileId,
-      createdByUserId: appointment.createdByUserId,
-      customerProfileId: appointment.customerProfileId,
-      durationMinutes: catalogItem.durationMinutes,
-      notes: args.notes ?? appointment.notes,
-      organizationId: appointment.organizationId,
-      serviceCatalogId: appointment.serviceCatalogId,
-      serviceCaseId: appointment.serviceCaseId,
-      startAt: args.startAt,
-      storeId: appointment.storeId,
-    });
-    if (candidateAppointmentResult.kind === "user_error") {
-      return candidateAppointmentResult;
-    }
-
-    const candidateAppointment = candidateAppointmentResult.data;
-
-    const existingAppointments = await ctx.db
-      .query("serviceAppointment")
-      .withIndex("by_staffProfileId_startAt", (q) =>
-        q.eq("assignedStaffProfileId", appointment.assignedStaffProfileId)
-      )
-      .collect();
-
-    const overlappingAppointment = findOverlappingAppointment(
-      existingAppointments.filter(
-        (existingAppointment) => existingAppointment._id !== appointment._id
-      ),
-      candidateAppointment
-    );
-
-    if (overlappingAppointment) {
-      return userError({
-        code: "conflict",
-        message: "Assigned staff member already has an appointment in this slot.",
+      await recordOperationalEventWithCtx(ctx, {
+        customerProfileId: appointment.customerProfileId,
+        eventType: "service_appointment_rescheduled",
+        organizationId: appointment.organizationId,
+        storeId: appointment.storeId,
+        subjectId: appointment._id,
+        subjectType: "service_appointment",
       });
-    }
 
-    await ctx.db.patch("serviceAppointment", appointment._id, {
-      endAt: candidateAppointment.endAt,
-      notes: candidateAppointment.notes,
-      startAt: candidateAppointment.startAt,
-      status: "rescheduled",
-      updatedAt: Date.now(),
-    });
-
-    await recordOperationalEventWithCtx(ctx, {
-      customerProfileId: appointment.customerProfileId,
-      eventType: "service_appointment_rescheduled",
-      organizationId: appointment.organizationId,
-      storeId: appointment.storeId,
-      subjectId: appointment._id,
-      subjectType: "service_appointment",
-    });
-
-    return ok(await ctx.db.get("serviceAppointment", appointment._id));
-  },
+      return ok(await ctx.db.get("serviceAppointment", appointment._id));
+    },
+  ),
 });
 
 export const cancelAppointment = mutation({
@@ -373,92 +412,95 @@ export const cancelAppointment = mutation({
     appointmentId: v.id("serviceAppointment"),
     notes: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    const appointment = await ctx.db.get("serviceAppointment", args.appointmentId);
-
-    if (!appointment) {
-      return userError({
-        code: "not_found",
-        message: "Appointment not found.",
-      });
-    }
-
-    await requireReadySharedDemoStoreCapabilityIfApplicable(
+  handler: admitPublicMutation(
+    cancelAppointmentOperationDefinition,
+    async (
       ctx,
-      "appointments.manage",
-      appointment.storeId,
-    );
+      args: { appointmentId: Id<"serviceAppointment">; notes?: string },
+    ) => {
+      const appointment = await ctx.db.get(
+        "serviceAppointment",
+        args.appointmentId,
+      );
 
-    if (!appointment.organizationId) {
-      return userError({
-        code: "precondition_failed",
-        message: "Appointment is missing organization context.",
+      if (!appointment) {
+        return userError({
+          code: "not_found",
+          message: "Appointment not found.",
+        });
+      }
+
+      if (!appointment.organizationId) {
+        return userError({
+          code: "precondition_failed",
+          message: "Appointment is missing organization context.",
+        });
+      }
+
+      const store = await ctx.db.get("store", appointment.storeId);
+
+      if (!store) {
+        return userError({
+          code: "not_found",
+          message: "Store not found.",
+        });
+      }
+
+      if (store.organizationId !== appointment.organizationId) {
+        return userError({
+          code: "precondition_failed",
+          message: "Appointment store does not match its organization.",
+        });
+      }
+
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin"],
+        failureMessage: "Only store admins can cancel service appointments.",
+        organizationId: store.organizationId,
+        userId: athenaUser._id,
       });
-    }
 
-    const store = await ctx.db.get("store", appointment.storeId);
+      const actorUserId = athenaUser._id;
+      const actorStaffProfile = await ctx.db
+        .query("staffProfile")
+        .withIndex("by_storeId_linkedUserId", (q) =>
+          q.eq("storeId", appointment.storeId).eq("linkedUserId", actorUserId),
+        )
+        .first();
 
-    if (!store) {
-      return userError({
-        code: "not_found",
-        message: "Store not found.",
-      });
-    }
-
-    if (store.organizationId !== appointment.organizationId) {
-      return userError({
-        code: "precondition_failed",
-        message: "Appointment store does not match its organization.",
-      });
-    }
-
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin"],
-      failureMessage: "Only store admins can cancel service appointments.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
-    });
-
-    const actorUserId = athenaUser._id;
-    const actorStaffProfile = await ctx.db
-      .query("staffProfile")
-      .withIndex("by_storeId_linkedUserId", (q) =>
-        q.eq("storeId", appointment.storeId).eq("linkedUserId", actorUserId),
-      )
-      .first();
-
-    await ctx.db.patch("serviceAppointment", appointment._id, {
-      cancelledAt: Date.now(),
-      notes: args.notes ?? appointment.notes,
-      status: "cancelled",
-      updatedAt: Date.now(),
-    });
-    const closedWorkItemIds =
-      await closeCurrentServiceAppointmentWorkItemsWithCtx(ctx, {
-        appointmentId: appointment._id,
+      await ctx.db.patch("serviceAppointment", appointment._id, {
+        cancelledAt: Date.now(),
+        notes: args.notes ?? appointment.notes,
         status: "cancelled",
+        updatedAt: Date.now(),
+      });
+      const closedWorkItemIds =
+        await closeCurrentServiceAppointmentWorkItemsWithCtx(ctx, {
+          appointmentId: appointment._id,
+          status: "cancelled",
+          storeId: appointment.storeId,
+        });
+
+      await recordOperationalEventWithCtx(ctx, {
+        actorStaffProfileId: actorStaffProfile?._id,
+        actorUserId,
+        customerProfileId: appointment.customerProfileId,
+        eventType: "service_appointment_cancelled",
+        metadata: {
+          closedWorkItemIds,
+          nextWorkItemStatus: "cancelled",
+          previousStatus: appointment.status,
+        },
+        organizationId: appointment.organizationId,
         storeId: appointment.storeId,
+        subjectId: appointment._id,
+        subjectType: "service_appointment",
       });
 
-    await recordOperationalEventWithCtx(ctx, {
-      actorStaffProfileId: actorStaffProfile?._id,
-      actorUserId,
-      customerProfileId: appointment.customerProfileId,
-      eventType: "service_appointment_cancelled",
-      metadata: {
-        closedWorkItemIds,
-        nextWorkItemStatus: "cancelled",
-        previousStatus: appointment.status,
-      },
-      organizationId: appointment.organizationId,
-      storeId: appointment.storeId,
-      subjectId: appointment._id,
-      subjectType: "service_appointment",
-    });
-
-    return ok(await ctx.db.get("serviceAppointment", appointment._id));
-  },
+      return ok(await ctx.db.get("serviceAppointment", appointment._id));
+    },
+  ),
 });
 
 export const convertAppointmentToWalkIn = mutation({
@@ -466,185 +508,188 @@ export const convertAppointmentToWalkIn = mutation({
     appointmentId: v.id("serviceAppointment"),
     createdByUserId: v.optional(v.id("athenaUser")),
   },
-  handler: async (ctx, args) => {
-    const appointment = await ctx.db.get("serviceAppointment", args.appointmentId);
-
-    if (!appointment) {
-      return userError({
-        code: "not_found",
-        message: "Appointment not found.",
-      });
-    }
-
-    await requireReadySharedDemoStoreCapabilityIfApplicable(
+  handler: admitPublicMutation(
+    convertAppointmentToWalkInOperationDefinition,
+    async (
       ctx,
-      "appointments.manage",
-      appointment.storeId,
-    );
-
-    if (appointment.serviceCaseId) {
-      return userError({
-        code: "conflict",
-        message: "Appointment already has a service case.",
-      });
-    }
-
-    if (NON_BLOCKING_APPOINTMENT_STATUSES.has(appointment.status)) {
-      return userError({
-        code: "precondition_failed",
-        message: "This appointment can no longer be converted.",
-      });
-    }
-
-    if (!appointment.organizationId) {
-      return userError({
-        code: "precondition_failed",
-        message: "Appointment is missing organization context.",
-      });
-    }
-
-    const [catalogItem, customerProfile, store] = await Promise.all([
-      ctx.db.get("serviceCatalog", appointment.serviceCatalogId),
-      ctx.db.get("customerProfile", appointment.customerProfileId),
-      ctx.db.get("store", appointment.storeId),
-    ]);
-
-    if (!catalogItem) {
-      return userError({
-        code: "not_found",
-        message: "Service catalog item not found.",
-      });
-    }
-
-    if (!customerProfile) {
-      return userError({
-        code: "not_found",
-        message: "Customer profile not found.",
-      });
-    }
-
-    if (!store) {
-      return userError({
-        code: "not_found",
-        message: "Store not found.",
-      });
-    }
-
-    if (store.organizationId !== appointment.organizationId) {
-      return userError({
-        code: "precondition_failed",
-        message: "Appointment store does not match its organization.",
-      });
-    }
-
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin"],
-      failureMessage:
-        "Only store admins can convert service appointments to cases.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
-    });
-
-    const actorUserId = athenaUser._id;
-    const createdByStaffProfile = await ctx.db
-      .query("staffProfile")
-      .withIndex("by_storeId_linkedUserId", (q) =>
-        q.eq("storeId", appointment.storeId).eq("linkedUserId", actorUserId),
-      )
-      .first();
-
-    const workItem = await createOperationalWorkItemWithCtx(ctx, {
-      assignedToStaffProfileId: appointment.assignedStaffProfileId,
-      appointmentId: appointment._id,
-      createdByStaffProfileId: createdByStaffProfile?._id,
-      createdByUserId: actorUserId,
-      customerProfileId: appointment.customerProfileId,
-      metadata: {
-        appointmentId: appointment._id,
-        serviceCatalogId: appointment.serviceCatalogId,
-        startAt: appointment.startAt,
+      args: {
+        appointmentId: Id<"serviceAppointment">;
+        createdByUserId?: Id<"athenaUser">;
       },
-      notes: appointment.notes,
-      organizationId: store.organizationId,
-      priority: "normal",
-      status: "open",
-      storeId: appointment.storeId,
-      title: catalogItem.name,
-      type: "service_case",
-    });
+    ) => {
+      const appointment = await ctx.db.get("serviceAppointment", args.appointmentId);
 
-    if (!workItem) {
-      return userError({
-        code: "unavailable",
-        message: "Unable to create an operational work item for this appointment.",
+      if (!appointment) {
+        return userError({
+          code: "not_found",
+          message: "Appointment not found.",
+        });
+      }
+
+      if (appointment.serviceCaseId) {
+        return userError({
+          code: "conflict",
+          message: "Appointment already has a service case.",
+        });
+      }
+
+      if (NON_BLOCKING_APPOINTMENT_STATUSES.has(appointment.status)) {
+        return userError({
+          code: "precondition_failed",
+          message: "This appointment can no longer be converted.",
+        });
+      }
+
+      if (!appointment.organizationId) {
+        return userError({
+          code: "precondition_failed",
+          message: "Appointment is missing organization context.",
+        });
+      }
+
+      const [catalogItem, customerProfile, store] = await Promise.all([
+        ctx.db.get("serviceCatalog", appointment.serviceCatalogId),
+        ctx.db.get("customerProfile", appointment.customerProfileId),
+        ctx.db.get("store", appointment.storeId),
+      ]);
+
+      if (!catalogItem) {
+        return userError({
+          code: "not_found",
+          message: "Service catalog item not found.",
+        });
+      }
+
+      if (!customerProfile) {
+        return userError({
+          code: "not_found",
+          message: "Customer profile not found.",
+        });
+      }
+
+      if (!store) {
+        return userError({
+          code: "not_found",
+          message: "Store not found.",
+        });
+      }
+
+      if (store.organizationId !== appointment.organizationId) {
+        return userError({
+          code: "precondition_failed",
+          message: "Appointment store does not match its organization.",
+        });
+      }
+
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin"],
+        failureMessage:
+          "Only store admins can convert service appointments to cases.",
+        organizationId: store.organizationId,
+        userId: athenaUser._id,
       });
-    }
 
-    const serviceCase = await createServiceCaseWithCtx(ctx, {
-      appointmentId: appointment._id,
-      assignedStaffProfileId: appointment.assignedStaffProfileId,
-      createdByUserId: actorUserId,
-      customerProfileId: appointment.customerProfileId,
-      notes: appointment.notes,
-      operationalWorkItemId: workItem._id,
-      organizationId: store.organizationId,
-      quotedAmount: catalogItem.basePrice,
-      serviceCatalogId: appointment.serviceCatalogId,
-      serviceMode: catalogItem.serviceMode,
-      storeId: appointment.storeId,
-    });
-    if (serviceCase.kind === "user_error") {
-      return serviceCase;
-    }
+      const actorUserId = athenaUser._id;
+      const createdByStaffProfile = await ctx.db
+        .query("staffProfile")
+        .withIndex("by_storeId_linkedUserId", (q) =>
+          q.eq("storeId", appointment.storeId).eq("linkedUserId", actorUserId),
+        )
+        .first();
 
-    const createdServiceCase = serviceCase.data;
-
-    await ctx.db.patch("serviceAppointment", appointment._id, {
-      convertedAt: Date.now(),
-      serviceCaseId: createdServiceCase._id,
-      status: "converted_to_walk_in",
-      updatedAt: Date.now(),
-    });
-    const closedAppointmentWorkItemIds =
-      await closeCurrentServiceAppointmentWorkItemsWithCtx(ctx, {
+      const workItem = await createOperationalWorkItemWithCtx(ctx, {
+        assignedToStaffProfileId: appointment.assignedStaffProfileId,
         appointmentId: appointment._id,
-        status: "completed",
+        createdByStaffProfileId: createdByStaffProfile?._id,
+        createdByUserId: actorUserId,
+        customerProfileId: appointment.customerProfileId,
+        metadata: {
+          appointmentId: appointment._id,
+          serviceCatalogId: appointment.serviceCatalogId,
+          startAt: appointment.startAt,
+        },
+        notes: appointment.notes,
+        organizationId: store.organizationId,
+        priority: "normal",
+        status: "open",
+        storeId: appointment.storeId,
+        title: catalogItem.name,
+        type: "service_case",
+      });
+
+      if (!workItem) {
+        return userError({
+          code: "unavailable",
+          message: "Unable to create an operational work item for this appointment.",
+        });
+      }
+
+      const serviceCase = await createServiceCaseWithCtx(ctx, {
+        appointmentId: appointment._id,
+        assignedStaffProfileId: appointment.assignedStaffProfileId,
+        createdByUserId: actorUserId,
+        customerProfileId: appointment.customerProfileId,
+        notes: appointment.notes,
+        operationalWorkItemId: workItem._id,
+        organizationId: store.organizationId,
+        quotedAmount: catalogItem.basePrice,
+        serviceCatalogId: appointment.serviceCatalogId,
+        serviceMode: catalogItem.serviceMode,
         storeId: appointment.storeId,
       });
+      if (serviceCase.kind === "user_error") {
+        return serviceCase;
+      }
 
-    await recordOperationalEventWithCtx(ctx, {
-      actorStaffProfileId: createdByStaffProfile?._id,
-      actorUserId,
-      customerProfileId: customerProfile._id,
-      eventType: "service_appointment_converted_to_walk_in",
-      metadata: {
-        closedAppointmentWorkItemIds,
-        nextAppointmentWorkItemStatus: "completed",
-        previousStatus: appointment.status,
+      const createdServiceCase = serviceCase.data;
+
+      await ctx.db.patch("serviceAppointment", appointment._id, {
+        convertedAt: Date.now(),
         serviceCaseId: createdServiceCase._id,
-        serviceCaseWorkItemId: workItem._id,
-      },
-      organizationId: store.organizationId,
-      storeId: appointment.storeId,
-      subjectId: appointment._id,
-      subjectLabel: catalogItem.name,
-      subjectType: "service_appointment",
-      workItemId: workItem._id,
-    });
+        status: "converted_to_walk_in",
+        updatedAt: Date.now(),
+      });
+      const closedAppointmentWorkItemIds =
+        await closeCurrentServiceAppointmentWorkItemsWithCtx(ctx, {
+          appointmentId: appointment._id,
+          status: "completed",
+          storeId: appointment.storeId,
+        });
 
-    await recordServiceCaseTraceBestEffort(ctx, {
-      actorStaffProfileId: createdByStaffProfile?._id,
-      actorUserId,
-      appointmentId: appointment._id,
-      serviceCase: createdServiceCase,
-      stage: "appointment_converted",
-    });
+      await recordOperationalEventWithCtx(ctx, {
+        actorStaffProfileId: createdByStaffProfile?._id,
+        actorUserId,
+        customerProfileId: customerProfile._id,
+        eventType: "service_appointment_converted_to_walk_in",
+        metadata: {
+          closedAppointmentWorkItemIds,
+          nextAppointmentWorkItemStatus: "completed",
+          previousStatus: appointment.status,
+          serviceCaseId: createdServiceCase._id,
+          serviceCaseWorkItemId: workItem._id,
+        },
+        organizationId: store.organizationId,
+        storeId: appointment.storeId,
+        subjectId: appointment._id,
+        subjectLabel: catalogItem.name,
+        subjectType: "service_appointment",
+        workItemId: workItem._id,
+      });
 
-    return ok({
-      appointmentId: appointment._id,
-      serviceCaseId: createdServiceCase._id,
-      workItemId: workItem._id,
-    });
-  },
+      await recordServiceCaseTraceBestEffort(ctx, {
+        actorStaffProfileId: createdByStaffProfile?._id,
+        actorUserId,
+        appointmentId: appointment._id,
+        serviceCase: createdServiceCase,
+        stage: "appointment_converted",
+      });
+
+      return ok({
+        appointmentId: appointment._id,
+        serviceCaseId: createdServiceCase._id,
+        workItemId: workItem._id,
+      });
+    },
+  ),
 });

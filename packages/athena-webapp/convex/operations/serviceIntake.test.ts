@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import * as athenaUserAuth from "../lib/athenaUserAuth";
 import {
   createServiceIntake,
+  listAssignableStaff,
+  searchCustomers,
   validateServiceIntakeInput,
 } from "./serviceIntake";
 
@@ -277,9 +279,11 @@ describe("service intake validation", () => {
     expect(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
     ).toHaveBeenCalledWith(ctx);
+    // The admitted handler runs on the rail's cloned ctx, which carries the
+    // resolved actor alongside the original db handle.
     expect(
       athenaUserAuth.requireOrganizationMemberRoleWithCtx,
-    ).toHaveBeenCalledWith(ctx, {
+    ).toHaveBeenCalledWith(expect.objectContaining({ db: ctx.db }), {
       allowedRoles: ["full_admin"],
       failureMessage: "Only store admins can create service intake work.",
       organizationId: "org-1",
@@ -365,6 +369,53 @@ describe("service intake validation", () => {
         },
       ]),
     );
+  });
+
+  it("denies an unauthenticated createServiceIntake before any row is written", async () => {
+    const ctx = createMutationCtx();
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockRejectedValue(new Error("Sign in again to continue."));
+
+    await expect(
+      getHandler(createServiceIntake)(
+        ctx as never,
+        buildCreateServiceIntakeArgs() as never,
+      ),
+    ).rejects.toThrow("Sign in again to continue.");
+
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).not.toHaveBeenCalled();
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+  });
+
+  it("denies an unauthenticated searchCustomers read", async () => {
+    const ctx = createMutationCtx();
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockRejectedValue(new Error("Sign in again to continue."));
+
+    await expect(
+      getHandler(searchCustomers)(ctx as never, {
+        searchQuery: "ama",
+        storeId: "store-1",
+      } as never),
+    ).rejects.toThrow("Sign in again to continue.");
+  });
+
+  it("denies an unauthenticated listAssignableStaff read", async () => {
+    const ctx = createMutationCtx();
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockRejectedValue(new Error("Sign in again to continue."));
+
+    await expect(
+      getHandler(listAssignableStaff)(ctx as never, {
+        storeId: "store-1",
+      } as never),
+    ).rejects.toThrow("Sign in again to continue.");
   });
 
   it("writes through the shared operations rails", () => {

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Doc, Id } from "../../_generated/dataModel";
+import { AthenaUnauthenticatedError } from "../../lib/athenaUnauthenticated";
 import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";
 import {
   POS_CLIENT_EVENT_MAX_BATCH,
@@ -325,9 +326,24 @@ describe("recordClientEvents", () => {
     expect(result.kind).toBe("user_error");
   });
 
-  it("rejects unauthenticated callers", async () => {
+  it("denies unauthenticated callers at admission, before any write", async () => {
+    // The rail resolves identity before the handler runs, so "no Athena
+    // identity" is a terminal denial rather than a handler-shaped user_error:
+    // the definition declares `public: "deny"`, and the chain exhausts.
     authMocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
-      new Error("not signed in"),
+      new AthenaUnauthenticatedError(),
+    );
+    const { ctx, inserted } = createCtx();
+
+    await expect(
+      handler(ctx, { storeId: STORE_ID, events: [baseEvent()] }),
+    ).rejects.toThrow("Sign in again to continue.");
+    expect(inserted).toHaveLength(0);
+  });
+
+  it("returns a user_error for an authenticated caller without POS access", async () => {
+    authMocks.requireOrganizationMemberRoleWithCtx.mockRejectedValue(
+      new Error("You do not have access to POS telemetry."),
     );
     const { ctx, inserted } = createCtx();
 

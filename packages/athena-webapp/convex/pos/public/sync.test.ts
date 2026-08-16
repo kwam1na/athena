@@ -162,7 +162,8 @@ describe("admitted POS local sync public mutation", () => {
 
   it("accepts actor events without staff proof at the public sync boundary", async () => {
     const ctx = buildCtx();
-    const { staffProofToken: _staffProofToken, ...prooflessEvent } = buildEvent();
+    const { staffProofToken: _staffProofToken, ...prooflessEvent } =
+      buildEvent();
 
     await getHandler(ingestLocalEvents)(ctx as never, {
       storeId: "store-1",
@@ -282,7 +283,9 @@ describe("admitted POS local sync public mutation", () => {
   });
 
   it("exposes pending checkout definition and sale-line fields in the public args validator", () => {
-    const argsValidator = JSON.stringify((ingestLocalEvents as any).exportArgs());
+    const argsValidator = JSON.stringify(
+      (ingestLocalEvents as any).exportArgs(),
+    );
 
     expect(argsValidator).toContain("pending_checkout_item_defined");
     expect(argsValidator).toContain("localPendingCheckoutItemId");
@@ -349,8 +352,7 @@ describe("admitted POS local sync public mutation", () => {
       kind: "user_error",
       error: {
         code: "validation_failed",
-        message:
-          "Sync uploads can include at most 50 pending checkout items.",
+        message: "Sync uploads can include at most 50 pending checkout items.",
       },
     });
     expect(mocks.ingestLocalEventsWithCtx).not.toHaveBeenCalled();
@@ -715,7 +717,9 @@ describe("admitted POS local sync public mutation", () => {
   });
 
   it("exposes drawerless expense upload fields in the public args validator", () => {
-    const argsValidator = JSON.stringify((ingestLocalEvents as any).exportArgs());
+    const argsValidator = JSON.stringify(
+      (ingestLocalEvents as any).exportArgs(),
+    );
 
     expect(argsValidator).toContain("expense_recorded");
     expect(argsValidator).toContain("syncScope");
@@ -726,7 +730,9 @@ describe("admitted POS local sync public mutation", () => {
   });
 
   it("derives public upload validator event names from the shared sync contract", () => {
-    const argsValidator = JSON.stringify((ingestLocalEvents as any).exportArgs());
+    const argsValidator = JSON.stringify(
+      (ingestLocalEvents as any).exportArgs(),
+    );
 
     for (const { eventType } of POS_LOCAL_SYNC_EVENT_CONTRACT) {
       expect(argsValidator).toContain(eventType);
@@ -843,30 +849,33 @@ describe("admitted POS local sync public mutation", () => {
       },
     });
 
-    const result = await getHandler(ingestRegisterSessionActivity)(ctx as never, {
-      storeId: "store-1",
-      terminalId: "terminal-1",
-      syncSecretHash: "sync-secret-1",
-      localRegisterSessionId: "local-register-1",
-      registerNumber: "R1",
-      reportedThroughSequence: 2,
-      submittedAt: 123,
-      activities: [
-        {
-          localEventId: "event-activity-1",
-          sequence: 2,
-          occurredAt: 122,
-          staffProfileId: "staff-1",
-          eventType: "sale_completed",
-          category: "sale",
-          metadata: {
-            itemCount: 2,
-            receiptNumber: "R-100",
-            totalAmount: 5000,
+    const result = await getHandler(ingestRegisterSessionActivity)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        syncSecretHash: "sync-secret-1",
+        localRegisterSessionId: "local-register-1",
+        registerNumber: "R1",
+        reportedThroughSequence: 2,
+        submittedAt: 123,
+        activities: [
+          {
+            localEventId: "event-activity-1",
+            sequence: 2,
+            occurredAt: 122,
+            staffProfileId: "staff-1",
+            eventType: "sale_completed",
+            category: "sale",
+            metadata: {
+              itemCount: 2,
+              receiptNumber: "R-100",
+              totalAmount: 5000,
+            },
           },
-        },
-      ],
-    });
+        ],
+      },
+    );
 
     assertConformsToExportedReturns(ingestRegisterSessionActivity, result);
     expect(result).toMatchObject({
@@ -912,14 +921,17 @@ describe("admitted POS local sync public mutation", () => {
   it("rejects register-session activity without the provisioned terminal secret", async () => {
     const ctx = buildCtx();
 
-    const result = await getHandler(ingestRegisterSessionActivity)(ctx as never, {
-      storeId: "store-1",
-      terminalId: "terminal-1",
-      syncSecretHash: "wrong-secret",
-      localRegisterSessionId: "local-register-1",
-      reportedThroughSequence: 0,
-      activities: [],
-    });
+    const result = await getHandler(ingestRegisterSessionActivity)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        syncSecretHash: "wrong-secret",
+        localRegisterSessionId: "local-register-1",
+        reportedThroughSequence: 0,
+        activities: [],
+      },
+    );
 
     expect(result).toEqual({
       kind: "user_error",
@@ -943,14 +955,17 @@ describe("admitted POS local sync public mutation", () => {
       metadata: { itemCount: 1 },
     }));
 
-    const result = await getHandler(ingestRegisterSessionActivity)(ctx as never, {
-      storeId: "store-1",
-      terminalId: "terminal-1",
-      syncSecretHash: "sync-secret-1",
-      localRegisterSessionId: "local-register-1",
-      reportedThroughSequence: 251,
-      activities,
-    });
+    const result = await getHandler(ingestRegisterSessionActivity)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        syncSecretHash: "sync-secret-1",
+        localRegisterSessionId: "local-register-1",
+        reportedThroughSequence: 251,
+        activities,
+      },
+    );
 
     expect(result).toEqual({
       kind: "user_error",
@@ -1039,8 +1054,15 @@ describe("resolveLocalSyncReview public mutation", () => {
       submittedAt: 4_242,
     });
 
+    // The write wrapper hands the handler the caller's ctx extended with the
+    // resolved admission, so downstream helpers see the admitted context.
+    const admittedCtx = expect.objectContaining({
+      operationAdmission: expect.objectContaining({
+        decision: expect.objectContaining({ outcome: "admitted" }),
+      }),
+    });
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx,
       expect.objectContaining({
         allowedRoles: ["full_admin", "pos_only"],
         organizationId: "org-1",
@@ -1048,7 +1070,7 @@ describe("resolveLocalSyncReview public mutation", () => {
       }),
     );
     expect(mocks.resolveLocalSyncReviewWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx,
       expect.objectContaining({
         storeId: "store-1",
         terminalId: "terminal-1",
@@ -1184,9 +1206,7 @@ describe("register closeout notification intents", () => {
   }
 
   async function listIntents(t: ReturnType<typeof convexTest>) {
-    return t.run(async (ctx) =>
-      ctx.db.query("notificationIntent").take(10),
-    );
+    return t.run(async (ctx) => ctx.db.query("notificationIntent").take(10));
   }
 
   it("emits one register.closeout_variance intent for a fresh variance review without marker writes", async () => {
@@ -1409,8 +1429,7 @@ describe("register closeout notification intents", () => {
     );
     expect(
       skipEvents.filter(
-        (event) =>
-          event.eventType === "register_closeout_notification_skipped",
+        (event) => event.eventType === "register_closeout_notification_skipped",
       ),
     ).toHaveLength(0);
   });
@@ -1423,7 +1442,12 @@ describe("register closeout notification intents", () => {
     const t = convexTest(schema, modules);
     const world = await seedCloseoutWorld(t);
     await t.run(async (ctx) => {
-      const statuses = ["pending", "approved", "rejected", "cancelled"] as const;
+      const statuses = [
+        "pending",
+        "approved",
+        "rejected",
+        "cancelled",
+      ] as const;
       for (let index = 0; index < 11; index += 1) {
         await ctx.db.insert("approvalRequest", {
           storeId: world.storeId,
@@ -1452,8 +1476,7 @@ describe("register closeout notification intents", () => {
     );
     expect(
       events.filter(
-        (event) =>
-          event.eventType === "register_closeout_notification_skipped",
+        (event) => event.eventType === "register_closeout_notification_skipped",
       ),
     ).toHaveLength(0);
   });
@@ -1499,8 +1522,7 @@ describe("register closeout notification intents", () => {
     );
     expect(
       events.filter(
-        (event) =>
-          event.eventType === "register_closeout_notification_skipped",
+        (event) => event.eventType === "register_closeout_notification_skipped",
       ),
     ).toHaveLength(1);
   });
@@ -1648,9 +1670,9 @@ describe("register closeout notification intents", () => {
     expect(intents.map((intent) => intent.payload.localEventId).sort()).toEqual(
       ["event-closeout-1", "event-closeout-2"],
     );
-    expect(
-      new Set(intents.map((intent) => intent.kind)),
-    ).toEqual(new Set(["register.closeout_match"]));
+    expect(new Set(intents.map((intent) => intent.kind))).toEqual(
+      new Set(["register.closeout_match"]),
+    );
   });
 });
 
@@ -1760,7 +1782,11 @@ function buildCtx(
             null
           );
         }
-        if (tableName === "store" && id === "store-1" && !options.missingStore) {
+        if (
+          tableName === "store" &&
+          id === "store-1" &&
+          !options.missingStore
+        ) {
           return {
             _id: "store-1",
             organizationId: "org-1",

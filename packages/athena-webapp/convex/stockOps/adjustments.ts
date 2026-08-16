@@ -9,6 +9,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { submitStockAdjustmentBatchOperationDefinition } from "../operationAdmission/definitions";
+import { temporaryDeleteStockAdjustmentScopeSkusOperationDefinition } from "../operationAdmission/domains/u5_operations_definitions";
 import {
   admitPublicMutation,
   admitPublicQuery,
@@ -1437,7 +1438,10 @@ export const temporaryDeleteStockAdjustmentScopeSkus = mutation({
     scopeKey: v.string(),
     storeId: v.id("store"),
   },
-  handler: temporaryDeleteStockAdjustmentScopeSkusWithCtx,
+  handler: admitPublicMutation(
+    temporaryDeleteStockAdjustmentScopeSkusOperationDefinition,
+    temporaryDeleteStockAdjustmentScopeSkusWithCtx,
+  ),
 });
 
 type SubmitStockAdjustmentBatchArgs = {

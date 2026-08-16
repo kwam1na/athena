@@ -31,7 +31,20 @@ import {
   getCustomerTransactions as getCustomerTransactionsQuery,
   searchCustomers as searchCustomersQuery,
 } from "../application/queries/searchCustomers";
-import { admitPublicQuery } from "../../platform/operationAdmission";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../../platform/operationAdmission";
+import {
+  createPosCustomerOperationDefinition,
+  linkPosCustomerToGuestOperationDefinition,
+  linkPosCustomerToStoreFrontUserOperationDefinition,
+  resolvePosCustomerGuestMatchOperationDefinition,
+  resolvePosCustomerSelectionOperationDefinition,
+  resolvePosCustomerStoreFrontUserMatchOperationDefinition,
+  updatePosCustomerOperationDefinition,
+  updatePosCustomerStatsOperationDefinition,
+} from "../../operationAdmission/domains/u2_pos_definitions";
 import {
   findPotentialPosCustomerMatchesReadDefinition,
   findPosCustomerByStoreFrontUserReadDefinition,
@@ -270,17 +283,20 @@ export const createCustomer = mutation({
     notes: v.optional(v.string()),
   },
   returns: commandResultValidator(customerAttributionResultValidator),
-  handler: async (ctx, args) => {
-    const access = await requirePosCustomerStoreAccess(ctx, {
-      storeId: args.storeId,
-      failureMessage: "You cannot create customers for this store.",
-    });
-    if (!access.ok) {
-      return userError({ code: "not_found", message: "Store not found." });
-    }
+  handler: admitPublicMutation(
+    createPosCustomerOperationDefinition,
+    async (ctx, args) => {
+      const access = await requirePosCustomerStoreAccess(ctx, {
+        storeId: args.storeId,
+        failureMessage: "You cannot create customers for this store.",
+      });
+      if (!access.ok) {
+        return userError({ code: "not_found", message: "Store not found." });
+      }
 
-    return createCustomerCommand(ctx, args);
-  },
+      return createCustomerCommand(ctx, args);
+    },
+  ),
 });
 
 export const updateCustomer = mutation({
@@ -293,17 +309,20 @@ export const updateCustomer = mutation({
     notes: v.optional(v.string()),
   },
   returns: commandResultValidator(v.null()),
-  handler: async (ctx, args) => {
-    const access = await requirePosCustomerAccessById(ctx, {
-      customerId: args.customerId,
-      failureMessage: "You cannot update this customer.",
-    });
-    if (!access.ok) {
-      return userError({ code: "not_found", message: "Customer not found." });
-    }
+  handler: admitPublicMutation(
+    updatePosCustomerOperationDefinition,
+    async (ctx, args) => {
+      const access = await requirePosCustomerAccessById(ctx, {
+        customerId: args.customerId,
+        failureMessage: "You cannot update this customer.",
+      });
+      if (!access.ok) {
+        return userError({ code: "not_found", message: "Customer not found." });
+      }
 
-    return updateCustomerCommand(ctx, args);
-  },
+      return updateCustomerCommand(ctx, args);
+    },
+  ),
 });
 
 export const updateCustomerStats = mutation({
@@ -312,17 +331,20 @@ export const updateCustomerStats = mutation({
     transactionAmount: v.number(),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const access = await requirePosCustomerAccessById(ctx, {
-      customerId: args.customerId,
-      failureMessage: "You cannot update this customer.",
-    });
-    if (!access.ok) {
-      return null;
-    }
+  handler: admitPublicMutation(
+    updatePosCustomerStatsOperationDefinition,
+    async (ctx, args) => {
+      const access = await requirePosCustomerAccessById(ctx, {
+        customerId: args.customerId,
+        failureMessage: "You cannot update this customer.",
+      });
+      if (!access.ok) {
+        return null;
+      }
 
-    return updateCustomerStatsCommand(ctx, args);
-  },
+      return updateCustomerStatsCommand(ctx, args);
+    },
+  ),
 });
 
 export const resolvePosCustomerSelection = mutation({
@@ -330,17 +352,20 @@ export const resolvePosCustomerSelection = mutation({
     customerId: v.id("posCustomer"),
   },
   returns: commandResultValidator(customerAttributionResultValidator),
-  handler: async (ctx, args) => {
-    const access = await requirePosCustomerAccessById(ctx, {
-      customerId: args.customerId,
-      failureMessage: "You cannot resolve this customer.",
-    });
-    if (!access.ok) {
-      return userError({ code: "not_found", message: "Customer not found." });
-    }
+  handler: admitPublicMutation(
+    resolvePosCustomerSelectionOperationDefinition,
+    async (ctx, args) => {
+      const access = await requirePosCustomerAccessById(ctx, {
+        customerId: args.customerId,
+        failureMessage: "You cannot resolve this customer.",
+      });
+      if (!access.ok) {
+        return userError({ code: "not_found", message: "Customer not found." });
+      }
 
-    return resolvePosCustomerSelectionCommand(ctx, args);
-  },
+      return resolvePosCustomerSelectionCommand(ctx, args);
+    },
+  ),
 });
 
 export const getCustomerTransactions = query({
@@ -384,17 +409,20 @@ export const linkToStoreFrontUser = mutation({
     storeFrontUserId: v.id("storeFrontUser"),
   },
   returns: commandResultValidator(customerAttributionResultValidator),
-  handler: async (ctx, args) => {
-    const access = await requirePosCustomerAccessById(ctx, {
-      customerId: args.posCustomerId,
-      failureMessage: "You cannot update this customer.",
-    });
-    if (!access.ok) {
-      return userError({ code: "not_found", message: "Customer not found." });
-    }
+  handler: admitPublicMutation(
+    linkPosCustomerToStoreFrontUserOperationDefinition,
+    async (ctx, args) => {
+      const access = await requirePosCustomerAccessById(ctx, {
+        customerId: args.posCustomerId,
+        failureMessage: "You cannot update this customer.",
+      });
+      if (!access.ok) {
+        return userError({ code: "not_found", message: "Customer not found." });
+      }
 
-    return linkToStoreFrontUserCommand(ctx, args);
-  },
+      return linkToStoreFrontUserCommand(ctx, args);
+    },
+  ),
 });
 
 export const linkToGuest = mutation({
@@ -403,17 +431,20 @@ export const linkToGuest = mutation({
     guestId: v.id("guest"),
   },
   returns: commandResultValidator(customerAttributionResultValidator),
-  handler: async (ctx, args) => {
-    const access = await requirePosCustomerAccessById(ctx, {
-      customerId: args.posCustomerId,
-      failureMessage: "You cannot update this customer.",
-    });
-    if (!access.ok) {
-      return userError({ code: "not_found", message: "Customer not found." });
-    }
+  handler: admitPublicMutation(
+    linkPosCustomerToGuestOperationDefinition,
+    async (ctx, args) => {
+      const access = await requirePosCustomerAccessById(ctx, {
+        customerId: args.posCustomerId,
+        failureMessage: "You cannot update this customer.",
+      });
+      if (!access.ok) {
+        return userError({ code: "not_found", message: "Customer not found." });
+      }
 
-    return linkToGuestCommand(ctx, args);
-  },
+      return linkToGuestCommand(ctx, args);
+    },
+  ),
 });
 
 export const resolveStoreFrontUserMatch = mutation({
@@ -422,17 +453,20 @@ export const resolveStoreFrontUserMatch = mutation({
     storeFrontUserId: v.id("storeFrontUser"),
   },
   returns: commandResultValidator(customerAttributionResultValidator),
-  handler: async (ctx, args) => {
-    const access = await requirePosCustomerStoreAccess(ctx, {
-      storeId: args.storeId,
-      failureMessage: "You cannot resolve customers for this store.",
-    });
-    if (!access.ok) {
-      return userError({ code: "not_found", message: "Store not found." });
-    }
+  handler: admitPublicMutation(
+    resolvePosCustomerStoreFrontUserMatchOperationDefinition,
+    async (ctx, args) => {
+      const access = await requirePosCustomerStoreAccess(ctx, {
+        storeId: args.storeId,
+        failureMessage: "You cannot resolve customers for this store.",
+      });
+      if (!access.ok) {
+        return userError({ code: "not_found", message: "Store not found." });
+      }
 
-    return resolveStoreFrontUserMatchCommand(ctx, args);
-  },
+      return resolveStoreFrontUserMatchCommand(ctx, args);
+    },
+  ),
 });
 
 export const resolveGuestMatch = mutation({
@@ -441,17 +475,20 @@ export const resolveGuestMatch = mutation({
     guestId: v.id("guest"),
   },
   returns: commandResultValidator(customerAttributionResultValidator),
-  handler: async (ctx, args) => {
-    const access = await requirePosCustomerStoreAccess(ctx, {
-      storeId: args.storeId,
-      failureMessage: "You cannot resolve customers for this store.",
-    });
-    if (!access.ok) {
-      return userError({ code: "not_found", message: "Store not found." });
-    }
+  handler: admitPublicMutation(
+    resolvePosCustomerGuestMatchOperationDefinition,
+    async (ctx, args) => {
+      const access = await requirePosCustomerStoreAccess(ctx, {
+        storeId: args.storeId,
+        failureMessage: "You cannot resolve customers for this store.",
+      });
+      if (!access.ok) {
+        return userError({ code: "not_found", message: "Store not found." });
+      }
 
-    return resolveGuestMatchCommand(ctx, args);
-  },
+      return resolveGuestMatchCommand(ctx, args);
+    },
+  ),
 });
 
 export const findByStoreFrontUser = query({

@@ -2,10 +2,21 @@ import { v } from "convex/values";
 
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
-import { action, query } from "../_generated/server";
+import {
+  action,
+  internalQuery,
+  query,
+  type QueryCtx,
+} from "../_generated/server";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { ok, userError } from "../../shared/commandResult";
 import { getTransactionById as getTransactionByIdQuery } from "../pos/application/queries/getTransactions";
+import {
+  admitPublicAction,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
+import { sendPosReceiptLinkOperationDefinition } from "../operationAdmission/domains/u5_operations_definitions";
+import { getReceiptByShareTokenReadDefinition } from "../operationAdmission/domains/u5_operations_readDefinitions";
 import { buildReceiptShareUrl, getWhatsAppReceiptConfig } from "./whatsappConfig";
 import { sendWhatsAppReceiptTemplate } from "./whatsappClient";
 import { maskReceiptPhone, normalizeReceiptPhone } from "./domain";
@@ -89,22 +100,48 @@ function resolveRecipient(args: {
   return null;
 }
 
+/**
+ * The one body behind both the public share-link query and its internal
+ * sibling, so flipping the HTTP route from `api.*` to `internal.*` cannot
+ * change what a receipt link resolves to.
+ */
+async function readReceiptByShareTokenWithCtx(
+  ctx: QueryCtx,
+  args: { token: string },
+) {
+  const shareToken = await resolveReceiptShareToken(ctx, args);
+  if (!shareToken) {
+    return null;
+  }
+
+  const transaction = await getTransactionByIdQuery(ctx, {
+    transactionId: shareToken.transactionId,
+  });
+
+  return transaction ? toPublicReceiptTransaction(transaction) : null;
+}
+
 export const getReceiptByShareToken = query({
   args: {
     token: v.string(),
   },
-  handler: async (ctx, args) => {
-    const shareToken = await resolveReceiptShareToken(ctx, args);
-    if (!shareToken) {
-      return null;
-    }
+  handler: admitPublicQuery(
+    getReceiptByShareTokenReadDefinition,
+    async (ctx, args: { token: string }) =>
+      readReceiptByShareTokenWithCtx(ctx, args),
+  ),
+});
 
-    const transaction = await getTransactionByIdQuery(ctx, {
-      transactionId: shareToken.transactionId,
-    });
-
-    return transaction ? toPublicReceiptTransaction(transaction) : null;
+/**
+ * Internal sibling of `getReceiptByShareToken`, added ahead of the HTTP
+ * receipt route being flipped off `api.*`. Identical arguments and identical
+ * behaviour — the share token is still the whole authorization.
+ */
+export const getReceiptByShareTokenInternal = internalQuery({
+  args: {
+    token: v.string(),
   },
+  handler: async (ctx, args) => readReceiptByShareTokenWithCtx(ctx, args),
 });
 
 export const sendPosReceiptLink = action({
@@ -121,153 +158,163 @@ export const sendPosReceiptLink = action({
       providerMessageId: v.optional(v.string()),
     }),
   ),
-  handler: async (ctx, args) => {
-    const overrideRecipientPhone = args.recipientPhone?.trim()
-      ? args.recipientPhone
-      : undefined;
-    let context: PosReceiptMessagingContext | null;
-    try {
-      context = await ctx.runQuery(
-        customerMessagingInternal.getPosReceiptMessagingContext,
+  handler: admitPublicAction(
+    sendPosReceiptLinkOperationDefinition,
+    async (
+      ctx,
+      args: {
+        transactionId: Id<"posTransaction">;
+        recipientPhone?: string;
+        actorStaffProfileId?: Id<"staffProfile">;
+      },
+    ) => {
+      const overrideRecipientPhone = args.recipientPhone?.trim()
+        ? args.recipientPhone
+        : undefined;
+      let context: PosReceiptMessagingContext | null;
+      try {
+        context = await ctx.runQuery(
+          customerMessagingInternal.getPosReceiptMessagingContext,
+          {
+            transactionId: args.transactionId,
+            actorStaffProfileId: args.actorStaffProfileId,
+          },
+        ) as PosReceiptMessagingContext | null;
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "You cannot send this receipt.";
+        const authenticationFailed = message.includes("Sign in");
+
+        return userError({
+          code: authenticationFailed
+            ? "authentication_failed"
+            : "authorization_failed",
+          message,
+        });
+      }
+
+      if (!context) {
+        return userError({
+          code: "not_found",
+          message: "Transaction not found.",
+        });
+      }
+
+      if (context.status !== "completed") {
+        return userError({
+          code: "precondition_failed",
+          message: "Only completed transactions can have receipt links sent.",
+        });
+      }
+
+      const recipient = resolveRecipient({
+        overridePhone: overrideRecipientPhone,
+        customerProfilePhone: context.customerProfilePhone,
+        saleCustomerPhone: context.saleCustomerPhone,
+      });
+
+      if (!recipient) {
+        return userError({
+          code: "validation_failed",
+          message: "Add a WhatsApp number before sending this receipt.",
+        });
+      }
+
+      let config;
+      try {
+        config = getWhatsAppReceiptConfig();
+      } catch {
+        return userError({
+          code: "unavailable",
+          message: "WhatsApp receipt sending is not configured.",
+        });
+      }
+
+      const share = await ctx.runMutation(
+        customerMessagingInternal.createReceiptShare,
         {
-          transactionId: args.transactionId,
+          storeId: context.storeId,
+          transactionId: context.transactionId,
           actorStaffProfileId: args.actorStaffProfileId,
         },
-      ) as PosReceiptMessagingContext | null;
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "You cannot send this receipt.";
-      const authenticationFailed = message.includes("Sign in");
+      ) as {
+        token: string;
+        tokenId: Id<"receiptShareToken">;
+        reused: boolean;
+      };
 
-      return userError({
-        code: authenticationFailed
-          ? "authentication_failed"
-          : "authorization_failed",
-        message,
+      const deliveryId = await ctx.runMutation(
+        customerMessagingInternal.createDeliveryAttempt,
+        {
+          storeId: context.storeId,
+          transactionId: context.transactionId,
+          receiptShareTokenId: share.tokenId,
+          recipientSource: recipient.source,
+          recipientPhone: recipient.phone,
+          recipientDisplay: recipient.display,
+          actorStaffProfileId: args.actorStaffProfileId,
+        },
+      ) as Id<"customerMessageDelivery">;
+      const receiptUrl = buildReceiptShareUrl(config, share.token);
+      let providerResult;
+      try {
+        providerResult = await sendWhatsAppReceiptTemplate(config, {
+          to: recipient.phone,
+          storeName: context.storeName,
+          transactionNumber: context.transactionNumber,
+          receiptUrl,
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "WhatsApp receipt sending failed.";
+        await ctx.runMutation(
+          customerMessagingInternal.markDeliveryFailed,
+          {
+            deliveryId,
+            failureCategory: "provider",
+            failureMessage: message,
+          },
+        );
+
+        return userError({
+          code: "unavailable",
+          message,
+          retryable: true,
+        });
+      }
+
+      if (!providerResult.ok) {
+        await ctx.runMutation(
+          customerMessagingInternal.markDeliveryFailed,
+          {
+            deliveryId,
+            failureCategory: providerResult.category,
+            failureMessage: providerResult.message,
+          },
+        );
+
+        return userError({
+          code: providerResult.category === "rate_limited" ? "rate_limited" : "unavailable",
+          message: providerResult.message,
+          retryable:
+            providerResult.category === "rate_limited" ||
+            providerResult.category === "provider",
+        });
+      }
+
+      await ctx.runMutation(customerMessagingInternal.markDeliverySent, {
+        deliveryId,
+        providerMessageId: providerResult.providerMessageId,
       });
-    }
 
-    if (!context) {
-      return userError({
-        code: "not_found",
-        message: "Transaction not found.",
-      });
-    }
-
-    if (context.status !== "completed") {
-      return userError({
-        code: "precondition_failed",
-        message: "Only completed transactions can have receipt links sent.",
-      });
-    }
-
-    const recipient = resolveRecipient({
-      overridePhone: overrideRecipientPhone,
-      customerProfilePhone: context.customerProfilePhone,
-      saleCustomerPhone: context.saleCustomerPhone,
-    });
-
-    if (!recipient) {
-      return userError({
-        code: "validation_failed",
-        message: "Add a WhatsApp number before sending this receipt.",
-      });
-    }
-
-    let config;
-    try {
-      config = getWhatsAppReceiptConfig();
-    } catch {
-      return userError({
-        code: "unavailable",
-        message: "WhatsApp receipt sending is not configured.",
-      });
-    }
-
-    const share = await ctx.runMutation(
-      customerMessagingInternal.createReceiptShare,
-      {
-        storeId: context.storeId,
-        transactionId: context.transactionId,
-        actorStaffProfileId: args.actorStaffProfileId,
-      },
-    ) as {
-      token: string;
-      tokenId: Id<"receiptShareToken">;
-      reused: boolean;
-    };
-
-    const deliveryId = await ctx.runMutation(
-      customerMessagingInternal.createDeliveryAttempt,
-      {
-        storeId: context.storeId,
-        transactionId: context.transactionId,
+      return ok({
+        deliveryId,
         receiptShareTokenId: share.tokenId,
-        recipientSource: recipient.source,
-        recipientPhone: recipient.phone,
         recipientDisplay: recipient.display,
-        actorStaffProfileId: args.actorStaffProfileId,
-      },
-    ) as Id<"customerMessageDelivery">;
-    const receiptUrl = buildReceiptShareUrl(config, share.token);
-    let providerResult;
-    try {
-      providerResult = await sendWhatsAppReceiptTemplate(config, {
-        to: recipient.phone,
-        storeName: context.storeName,
-        transactionNumber: context.transactionNumber,
-        receiptUrl,
+        providerMessageId: providerResult.providerMessageId,
       });
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "WhatsApp receipt sending failed.";
-      await ctx.runMutation(
-        customerMessagingInternal.markDeliveryFailed,
-        {
-          deliveryId,
-          failureCategory: "provider",
-          failureMessage: message,
-        },
-      );
-
-      return userError({
-        code: "unavailable",
-        message,
-        retryable: true,
-      });
-    }
-
-    if (!providerResult.ok) {
-      await ctx.runMutation(
-        customerMessagingInternal.markDeliveryFailed,
-        {
-          deliveryId,
-          failureCategory: providerResult.category,
-          failureMessage: providerResult.message,
-        },
-      );
-
-      return userError({
-        code: providerResult.category === "rate_limited" ? "rate_limited" : "unavailable",
-        message: providerResult.message,
-        retryable:
-          providerResult.category === "rate_limited" ||
-          providerResult.category === "provider",
-      });
-    }
-
-    await ctx.runMutation(customerMessagingInternal.markDeliverySent, {
-      deliveryId,
-      providerMessageId: providerResult.providerMessageId,
-    });
-
-    return ok({
-      deliveryId,
-      receiptShareTokenId: share.tokenId,
-      recipientDisplay: recipient.display,
-      providerMessageId: providerResult.providerMessageId,
-    });
-  },
+    },
+  ),
 });

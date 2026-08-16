@@ -1,14 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import schema from "../schema";
 import { Id } from "../_generated/dataModel";
+import * as sharedDemoActor from "../sharedDemo/actor";
 import {
+  addServiceCaseLineItem,
   assertValidServiceCaseStatusTransition,
   buildServiceCase,
   buildServiceCaseLineItem,
   mapServiceCaseStatusToWorkItemStatus,
   recordServiceInventoryUsage,
+  recordServicePayment,
   updateServiceCaseStatus,
 } from "./serviceCases";
+
+// Only the demo-principal lookup is faked; the rest of the admission chain —
+// adapters, capability policy, scope resolution — runs for real, so what these
+// tests assert is the definition's own decision rather than a mocked guard.
+vi.mock("../sharedDemo/actor", () => ({
+  SharedDemoActorError: class SharedDemoActorError extends Error {},
+  getSharedDemoActorWithCtx: vi.fn(async () => null),
+  isSharedDemoActorError: () => false,
+  requireReadySharedDemoStoreCapabilityIfApplicable: vi.fn(),
+  requireSharedDemoActorWithCtx: vi.fn(),
+  requireSharedDemoCapabilityIfApplicable: vi.fn(),
+  requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
+}));
 
 const reportingMocks = vi.hoisted(() => ({
   applyInventoryEffectWithCtx: vi.fn(),
@@ -36,6 +52,7 @@ vi.mock("./serviceCaseTracing", () => ({
 }));
 
 beforeEach(() => {
+  vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue(null);
   reportingMocks.recordFacts.mockReset();
   reportingMocks.applyInventoryEffectWithCtx.mockReset();
   reportingMocks.applyInventoryEffectWithCtx.mockResolvedValue({
@@ -74,12 +91,44 @@ function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
 }
 
+const ADMITTED_ATHENA_USER_ID = "user-admin" as Id<"athenaUser">;
+
+// Simulates a signed-in Athena user for the admission rail: identity
+// resolution in lib/athenaUserAuth short-circuits on the admitted actor, so
+// injecting one is equivalent to a real session while every database-backed
+// check in the handler stays real.
+function asAdmitted<Ctx extends object>(
+  ctx: Ctx,
+  athenaUserId: Id<"athenaUser"> = ADMITTED_ATHENA_USER_ID,
+) {
+  return {
+    ...ctx,
+    operationAdmission: {
+      actor: { kind: "normal_user" as const, athenaUserId },
+    },
+  };
+}
+
+function asSharedDemoActor(storeId: string) {
+  vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue({
+    athenaUserId: "demo-owner" as Id<"athenaUser">,
+    authUserId: "auth-demo" as Id<"users">,
+    kind: "shared_demo",
+    organizationId: "org-1" as Id<"organization">,
+    storeId: storeId as Id<"store">,
+  });
+}
+
 function createInventoryUsageCtx(args?: {
   inventoryEffect?: Record<string, unknown>;
   inventoryMovement?: Record<string, unknown>;
   priorUsage?: Array<Record<string, unknown>>;
 }) {
   const rows: Record<string, Map<string, Record<string, unknown>>> = {
+    athenaUser: new Map([
+      [ADMITTED_ATHENA_USER_ID, { _id: ADMITTED_ATHENA_USER_ID }],
+      ["demo-owner", { _id: "demo-owner" }],
+    ]),
     inventoryMovement: new Map(
       args?.inventoryMovement
         ? [["prior-movement", args.inventoryMovement]]
@@ -212,7 +261,7 @@ describe("service ops schema foundations", () => {
   it("keeps planned service material usage out of physical inventory", async () => {
     const ctx = createInventoryUsageCtx();
 
-    await getHandler(recordServiceInventoryUsage)(ctx as never, {
+    await getHandler(recordServiceInventoryUsage)(asAdmitted(ctx) as never, {
       productSkuId: "sku-1",
       quantity: 1,
       serviceCaseId: "case-1",
@@ -232,7 +281,7 @@ describe("service ops schema foundations", () => {
   it("records consumed service material as a deficit-safe outbound effect", async () => {
     const ctx = createInventoryUsageCtx();
 
-    await getHandler(recordServiceInventoryUsage)(ctx as never, {
+    await getHandler(recordServiceInventoryUsage)(asAdmitted(ctx) as never, {
       productSkuId: "sku-1",
       quantity: 2,
       serviceCaseId: "case-1",
@@ -240,7 +289,7 @@ describe("service ops schema foundations", () => {
     });
 
     expect(reportingMocks.applyInventoryEffectWithCtx).toHaveBeenCalledWith(
-      ctx,
+      expect.objectContaining({ db: ctx.db }),
       expect.objectContaining({
         compatibilityBalance: {
           onHandQuantity: 0,
@@ -288,7 +337,7 @@ describe("service ops schema foundations", () => {
       ],
     });
 
-    await getHandler(recordServiceInventoryUsage)(ctx as never, {
+    await getHandler(recordServiceInventoryUsage)(asAdmitted(ctx) as never, {
       productSkuId: "sku-1",
       quantity: 1,
       serviceCaseId: "case-1",
@@ -296,7 +345,7 @@ describe("service ops schema foundations", () => {
     });
 
     expect(reportingMocks.applyInventoryEffectWithCtx).toHaveBeenCalledWith(
-      ctx,
+      expect.objectContaining({ db: ctx.db }),
       expect.objectContaining({
         effectType: "return",
         movementType: "service_material_returned",
@@ -334,7 +383,7 @@ describe("service ops schema foundations", () => {
       ],
     });
 
-    await getHandler(recordServiceInventoryUsage)(ctx as never, {
+    await getHandler(recordServiceInventoryUsage)(asAdmitted(ctx) as never, {
       productSkuId: "sku-1",
       quantity: 1,
       serviceCaseId: "case-1",
@@ -342,7 +391,7 @@ describe("service ops schema foundations", () => {
     });
 
     expect(reportingMocks.applyInventoryEffectWithCtx).toHaveBeenCalledWith(
-      ctx,
+      expect.objectContaining({ db: ctx.db }),
       expect.objectContaining({
         valuation: expect.objectContaining({
           originalBasis: expect.objectContaining({
@@ -392,7 +441,7 @@ describe("service ops schema foundations", () => {
     ctx.rows.approvalRequest = new Map();
     ctx.rows.posTransactionServiceLine = new Map();
 
-    const result = await getHandler(updateServiceCaseStatus)(ctx as never, {
+    const result = await getHandler(updateServiceCaseStatus)(asAdmitted(ctx) as never, {
       serviceCaseId: "case-1",
       status: "completed",
     });
@@ -403,7 +452,7 @@ describe("service ops schema foundations", () => {
     });
     expect(reportingMocks.applyInventoryEffectWithCtx).not.toHaveBeenCalled();
     const { recordFacts } = await import("../reports/ingest");
-    expect(recordFacts).toHaveBeenCalledWith(ctx, "store-1", [
+    expect(recordFacts).toHaveBeenCalledWith(expect.objectContaining({ db: ctx.db }), "store-1", [
       expect.objectContaining({
         sourceDomain: "service",
         sourceId: "case-1",
@@ -441,12 +490,120 @@ describe("service ops schema foundations", () => {
       ],
     ]);
 
-    await getHandler(updateServiceCaseStatus)(ctx as never, {
+    await getHandler(updateServiceCaseStatus)(asAdmitted(ctx) as never, {
       serviceCaseId: "case-1",
       status: "completed",
     });
 
     expect(reportingMocks.recordFacts).not.toHaveBeenCalled();
+  });
+
+  it("adds a service case line item for an admitted normal user", async () => {
+    const ctx = createInventoryUsageCtx();
+    ctx.rows.serviceCaseLineItem = new Map();
+    ctx.rows.paymentAllocation = new Map();
+    ctx.rows.approvalRequest = new Map();
+
+    const result = await getHandler(addServiceCaseLineItem)(
+      asAdmitted(ctx) as never,
+      {
+        description: "Closure repair mesh",
+        lineType: "material",
+        quantity: 2,
+        serviceCaseId: "case-1",
+        unitPrice: 150,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: { lineItem: expect.objectContaining({ amount: 300 }) },
+    });
+    expect(Array.from(ctx.rows.serviceCaseLineItem.values())).toContainEqual(
+      expect.objectContaining({ amount: 300, lineType: "material" }),
+    );
+  });
+
+  it("denies unauthenticated service case writes before any row changes", async () => {
+    for (const [fn, args] of [
+      [
+        addServiceCaseLineItem,
+        {
+          description: "Closure repair mesh",
+          lineType: "material",
+          quantity: 1,
+          serviceCaseId: "case-1",
+          unitPrice: 150,
+        },
+      ],
+      [
+        recordServiceInventoryUsage,
+        { productSkuId: "sku-1", quantity: 1, serviceCaseId: "case-1" },
+      ],
+      [
+        recordServicePayment,
+        { amount: 100, method: "cash", serviceCaseId: "case-1" },
+      ],
+      [
+        updateServiceCaseStatus,
+        { serviceCaseId: "case-1", status: "in_progress" },
+      ],
+    ] as const) {
+      const ctx = createInventoryUsageCtx();
+
+      await expect(
+        getHandler(fn)(
+          { ...ctx, auth: { getUserIdentity: async () => null } } as never,
+          args as never,
+        ),
+      ).rejects.toThrow("Sign in again to continue.");
+      expect(ctx.db.insert).not.toHaveBeenCalled();
+      expect(ctx.db.patch).not.toHaveBeenCalled();
+    }
+  });
+
+  it("denies shared-demo actors every retired service case gate, in and out of their store", async () => {
+    for (const demoStoreId of ["store-1", "store-2"]) {
+      for (const [fn, args] of [
+        [
+          addServiceCaseLineItem,
+          {
+            description: "Closure repair mesh",
+            lineType: "material",
+            quantity: 1,
+            serviceCaseId: "case-1",
+            unitPrice: 150,
+          },
+        ],
+        [
+          recordServiceInventoryUsage,
+          { productSkuId: "sku-1", quantity: 1, serviceCaseId: "case-1" },
+        ],
+        [
+          recordServicePayment,
+          { amount: 100, method: "cash", serviceCaseId: "case-1" },
+        ],
+        [
+          updateServiceCaseStatus,
+          { serviceCaseId: "case-1", status: "in_progress" },
+        ],
+      ] as const) {
+        const ctx = createInventoryUsageCtx();
+        asSharedDemoActor(demoStoreId);
+
+        await expect(
+          getHandler(fn)(
+            { ...ctx, auth: { getUserIdentity: async () => null } } as never,
+            args as never,
+          ),
+        ).rejects.toThrow("This action isn't allowed in the demo.");
+        expect(ctx.db.insert).not.toHaveBeenCalled();
+        expect(ctx.db.patch).not.toHaveBeenCalled();
+        expect(
+          reportingMocks.applyInventoryEffectWithCtx,
+        ).not.toHaveBeenCalled();
+      }
+    }
   });
 
   it("allows only supported service-case transitions", () => {

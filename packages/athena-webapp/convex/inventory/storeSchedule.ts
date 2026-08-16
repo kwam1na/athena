@@ -24,8 +24,53 @@ import {
   storeScheduleStatusSchema,
   storeScheduleWindowSchema,
 } from "../schemas/inventory";
+import {
+  findActiveScheduleForStoreAt,
+  getStoreScheduleContextForStoreAtWithCtx,
+  listActiveSchedulesForStore,
+  resolveStoreOperatingRangeForDateWithCtx,
+  STORE_SCHEDULE_VERSION_READ_LIMIT,
+} from "./storeScheduleCore";
+// Re-exported so the many non-ingress callers keep their import path; modules
+// that the composition root itself reaches (e.g. `sharedDemo/openingBaseline`)
+// must import from `./storeScheduleCore` instead, or they close a cycle.
+export {
+  getStoreScheduleContextForStoreAtWithCtx,
+  resolveStoreOperatingRangeForDateWithCtx,
+};
 import { requireStoreFullAdminAccess } from "../stockOps/access";
 import { ensureTimezoneAuthorityForScheduleWithCtx } from "../storeTime/ensureTimezoneAuthority";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+  resolveWriteAdmission,
+} from "../platform/operationAdmission";
+import { upsertStoreScheduleCommandOperationDefinition } from "../operationAdmission/domains/u3_inventoryCatalog_definitions";
+import {
+  getStoreDayContextReadDefinition,
+  getStoreScheduleForAdminReadDefinition,
+  getStoreScheduleSummaryReadDefinition,
+  listStoreScheduleVersionsReadDefinition,
+} from "../operationAdmission/domains/u3_inventoryCatalog_readDefinitions";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
+
+/**
+ * `upsertStoreScheduleCommand` answers with a `CommandResult`, and today an
+ * unauthorized caller gets `authorization_failed` rather than a throw. Admission
+ * is therefore resolved first so a recognized denial keeps that contract; every
+ * other failure still propagates.
+ */
+function isStoreScheduleAdmissionAuthorizationError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  return (
+    message === "Sign in again to continue." ||
+    message === "This operation is not available for the current actor." ||
+    message.includes("shared_demo_action_denied")
+  );
+}
 
 type StoreScheduleInput = {
   storeId: Id<"store">;
@@ -57,7 +102,6 @@ type StoreScheduleInput = {
 };
 
 const entity = "storeSchedule";
-const STORE_SCHEDULE_VERSION_READ_LIMIT = 100;
 
 const storeScheduleInputValidator = {
   storeId: v.id("store"),
@@ -347,81 +391,6 @@ function toAdminResult(
   };
 }
 
-async function listActiveSchedulesForStore(
-  ctx: Pick<QueryCtx, "db"> | Pick<MutationCtx, "db">,
-  storeId: Id<"store">,
-) {
-  return await ctx.db
-    .query(entity)
-    .withIndex("by_storeId_status_effectiveFrom", (schedule) =>
-      schedule.eq("storeId", storeId).eq("status", "active"),
-    )
-    .take(STORE_SCHEDULE_VERSION_READ_LIMIT);
-}
-
-async function findActiveScheduleForStoreAt(
-  ctx: Pick<QueryCtx, "db"> | Pick<MutationCtx, "db">,
-  args: { storeId: Id<"store">; at: number },
-) {
-  const schedules = await ctx.db
-    .query(entity)
-    .withIndex("by_storeId_status_effectiveFrom", (schedule) =>
-      schedule
-        .eq("storeId", args.storeId)
-        .eq("status", "active")
-        .lte("effectiveFrom", args.at),
-    )
-    .order("desc")
-    .take(STORE_SCHEDULE_VERSION_READ_LIMIT);
-
-  return (
-    schedules
-      .filter(
-        (schedule) =>
-          schedule.effectiveFrom <= args.at &&
-          (schedule.effectiveTo === undefined ||
-            args.at < schedule.effectiveTo),
-      )
-      .sort((left, right) => right.effectiveFrom - left.effectiveFrom)[0] ??
-    null
-  );
-}
-
-export async function getStoreScheduleContextForStoreAtWithCtx(
-  ctx: Pick<QueryCtx, "db"> | Pick<MutationCtx, "db">,
-  args: { storeId: Id<"store">; at: number },
-) {
-  const schedule = await findActiveScheduleForStoreAt(ctx, args);
-
-  return {
-    schedule,
-    context: schedule
-      ? resolveStoreScheduleContext({ schedule, at: args.at })
-      : getMissingStoreScheduleContext({ at: args.at }),
-  };
-}
-
-export async function resolveStoreOperatingRangeForDateWithCtx(
-  ctx: Pick<QueryCtx, "db"> | Pick<MutationCtx, "db">,
-  args: { storeId: Id<"store">; operatingDate: string },
-) {
-  const effectiveAt = Date.parse(`${args.operatingDate}T12:00:00.000Z`);
-  const schedule = Number.isFinite(effectiveAt)
-    ? await findActiveScheduleForStoreAt(ctx, {
-        storeId: args.storeId,
-        at: effectiveAt,
-      })
-    : null;
-
-  return {
-    schedule,
-    range: resolveStoreOperatingRangeForDate({
-      schedule,
-      operatingDate: args.operatingDate,
-    }),
-  };
-}
-
 function activeSchedulesOverlap(
   draft: StoreScheduleDraft,
   schedules: Array<Doc<"storeSchedule">>,
@@ -559,16 +528,37 @@ export async function upsertStoreScheduleCommandWithCtx(
 export const upsertStoreScheduleCommand = mutation({
   args: publicStoreScheduleInputValidator,
   returns: commandResultValidator(storeScheduleSummaryValidator),
-  handler: (ctx, args) =>
-    upsertStoreScheduleCommandWithCtx(
-      ctx,
-      {
-        ...args,
-        source: "admin",
-        status: "active",
-      },
-      { enforceFullAdminAccess: true },
-    ),
+  handler: async (ctx, args) => {
+    try {
+      await resolveWriteAdmission(
+        ctx,
+        args,
+        upsertStoreScheduleCommandOperationDefinition,
+      );
+    } catch (error) {
+      if (!isStoreScheduleAdmissionAuthorizationError(error)) {
+        throw error;
+      }
+      return userError({
+        code: "authorization_failed",
+        message: "You do not have access to manage store hours.",
+      });
+    }
+
+    return admitPublicMutation(
+      upsertStoreScheduleCommandOperationDefinition,
+      (admittedCtx: OperationMutationCtx, admittedArgs: typeof args) =>
+        upsertStoreScheduleCommandWithCtx(
+          admittedCtx,
+          {
+            ...admittedArgs,
+            source: "admin",
+            status: "active",
+          },
+          { enforceFullAdminAccess: true },
+        ),
+    )(ctx, args);
+  },
 });
 
 export const getStoreDayContext = query({
@@ -577,14 +567,20 @@ export const getStoreDayContext = query({
     at: v.optional(v.number()),
   },
   returns: storeScheduleContextValidator,
-  handler: async (ctx, args) => {
-    const at = args.at ?? Date.now();
-    const { context } = await getStoreScheduleContextForStoreAtWithCtx(ctx, {
-      storeId: args.storeId,
-      at,
-    });
-    return context;
-  },
+  handler: admitPublicQuery(
+    getStoreDayContextReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { storeId: Id<"store">; at?: number },
+    ) => {
+      const at = args.at ?? Date.now();
+      const { context } = await getStoreScheduleContextForStoreAtWithCtx(ctx, {
+        storeId: args.storeId,
+        at,
+      });
+      return context;
+    },
+  ),
 });
 
 export const getStoreScheduleSummary = query({
@@ -593,26 +589,32 @@ export const getStoreScheduleSummary = query({
     at: v.optional(v.number()),
   },
   returns: storeScheduleSummaryResultValidator,
-  handler: async (ctx, args) => {
-    const at = args.at ?? Date.now();
-    const { schedule, context } =
-      await getStoreScheduleContextForStoreAtWithCtx(ctx, {
-        storeId: args.storeId,
-        at,
-      });
+  handler: admitPublicQuery(
+    getStoreScheduleSummaryReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { storeId: Id<"store">; at?: number },
+    ) => {
+      const at = args.at ?? Date.now();
+      const { schedule, context } =
+        await getStoreScheduleContextForStoreAtWithCtx(ctx, {
+          storeId: args.storeId,
+          at,
+        });
 
-    if (!schedule) {
+      if (!schedule) {
+        return {
+          schedule: null,
+          context,
+        };
+      }
+
       return {
-        schedule: null,
+        schedule: toSummary(schedule),
         context,
       };
-    }
-
-    return {
-      schedule: toSummary(schedule),
-      context,
-    };
-  },
+    },
+  ),
 });
 
 export const listStoreScheduleVersions = query({
@@ -622,7 +624,16 @@ export const listStoreScheduleVersions = query({
     status: v.optional(storeScheduleStatusSchema),
   },
   returns: v.array(storeScheduleSummaryValidator),
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    listStoreScheduleVersionsReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: {
+        organizationId: Id<"organization">;
+        storeId: Id<"store">;
+        status?: "active" | "superseded" | "candidate";
+      },
+    ) => {
     const schedules = await ctx.db
       .query(entity)
       .withIndex("by_organizationId_storeId_status", (schedule) =>
@@ -640,7 +651,8 @@ export const listStoreScheduleVersions = query({
     return schedules
       .sort((left, right) => right.effectiveFrom - left.effectiveFrom)
       .map(toSummary);
-  },
+    },
+  ),
 });
 
 export const getStoreScheduleForAdmin = query({
@@ -649,15 +661,21 @@ export const getStoreScheduleForAdmin = query({
     at: v.optional(v.number()),
   },
   returns: storeScheduleAdminResultValidator,
-  handler: async (ctx, args) => {
-    await requireStoreFullAdminAccess(ctx, args.storeId);
-    const at = args.at ?? Date.now();
-    const { schedule, context } =
-      await getStoreScheduleContextForStoreAtWithCtx(ctx, {
-        storeId: args.storeId,
-        at,
-      });
+  handler: admitPublicQuery(
+    getStoreScheduleForAdminReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { storeId: Id<"store">; at?: number },
+    ) => {
+      await requireStoreFullAdminAccess(ctx, args.storeId);
+      const at = args.at ?? Date.now();
+      const { schedule, context } =
+        await getStoreScheduleContextForStoreAtWithCtx(ctx, {
+          storeId: args.storeId,
+          at,
+        });
 
-    return toAdminResult(schedule, context);
-  },
+      return toAdminResult(schedule, context);
+    },
+  ),
 });

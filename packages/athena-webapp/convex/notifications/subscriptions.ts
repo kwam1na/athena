@@ -23,7 +23,6 @@ import type {
   OperationMutationCtx,
   OperationQueryCtx,
 } from "../operationAdmission/types";
-import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
 import { isSharedDemoActionDeniedData } from "../../shared/sharedDemoActionError";
 import {
   notificationCategoryValidator,
@@ -266,7 +265,13 @@ export const listOrganizationMemberRecipientCandidates = query({
   ),
 });
 
-function mapSubscriptionCommandError(
+/**
+ * The demo-foundation denial, wherever it is raised. Since the guard moved to
+ * the admission rail it is thrown by the wrapper rather than by the handler,
+ * so the exported mutations catch it around the wrapper to keep returning the
+ * same `CommandResult` the webapp already renders.
+ */
+function mapSharedDemoFoundationDenial(
   error: unknown,
 ): CommandResult<never> | null {
   if (
@@ -280,6 +285,14 @@ function mapSubscriptionCommandError(
       message: (error as { data: { message: string } }).data.message,
     });
   }
+  return null;
+}
+
+function mapSubscriptionCommandError(
+  error: unknown,
+): CommandResult<never> | null {
+  const foundationDenial = mapSharedDemoFoundationDenial(error);
+  if (foundationDenial) return foundationDenial;
 
   const message = error instanceof Error ? error.message : "";
   if (message === SUBSCRIPTIONS_ACCESS_DENIED) {
@@ -306,8 +319,10 @@ async function addSubscriptionCommandWithCtx(
   CommandResult<{ subscriptionId: Id<"notificationSubscription"> }>
 > {
   try {
+    // The demo-foundation guard is declared on the operation definition
+    // (`target.protectDemoFoundation`) and runs on the rail before this
+    // handler, for every actor kind.
     await requireOrganizationFullAdminWithCtx(ctx, args.organizationId);
-    requireNonDemoFoundationMutation({ organizationId: args.organizationId });
   } catch (error) {
     const mapped = mapSubscriptionCommandError(error);
     if (mapped) return mapped;
@@ -382,10 +397,21 @@ export const addSubscription = mutation({
   returns: commandResultValidator(
     v.object({ subscriptionId: v.id("notificationSubscription") }),
   ),
-  handler: admitPublicMutation(
-    addNotificationSubscriptionOperationDefinition,
-    addSubscriptionCommandWithCtx,
-  ),
+  // The demo-foundation denial now throws out of the wrapper (the guard is
+  // declared on the definition), so it is re-shaped into the same
+  // `CommandResult` the webapp already renders. Every other throw propagates.
+  handler: async (ctx, args) => {
+    try {
+      return await admitPublicMutation(
+        addNotificationSubscriptionOperationDefinition,
+        addSubscriptionCommandWithCtx,
+      )(ctx, args);
+    } catch (error) {
+      const mapped = mapSharedDemoFoundationDenial(error);
+      if (mapped) return mapped;
+      throw error;
+    }
+  },
 });
 
 // Loads the target row and authorizes against the ROW'S organizationId. A
@@ -401,10 +427,10 @@ async function requireOwnedSubscriptionRowWithCtx(
   if (!subscription) {
     throw new Error(SUBSCRIPTIONS_ACCESS_DENIED);
   }
+  // The demo-foundation guard for the row's organization is declared on the
+  // operation definitions (`target.protectDemoFoundation: true` over the
+  // row-derived scope) and runs on the rail before this handler.
   await requireOrganizationFullAdminWithCtx(ctx, subscription.organizationId);
-  requireNonDemoFoundationMutation({
-    organizationId: subscription.organizationId,
-  });
   return subscription;
 }
 
@@ -437,10 +463,18 @@ export const setSubscriptionEnabled = mutation({
     enabled: v.boolean(),
   },
   returns: commandResultValidator(v.null()),
-  handler: admitPublicMutation(
-    setNotificationSubscriptionEnabledOperationDefinition,
-    setSubscriptionEnabledCommandWithCtx,
-  ),
+  handler: async (ctx, args) => {
+    try {
+      return await admitPublicMutation(
+        setNotificationSubscriptionEnabledOperationDefinition,
+        setSubscriptionEnabledCommandWithCtx,
+      )(ctx, args);
+    } catch (error) {
+      const mapped = mapSharedDemoFoundationDenial(error);
+      if (mapped) return mapped;
+      throw error;
+    }
+  },
 });
 
 async function removeSubscriptionCommandWithCtx(
@@ -466,8 +500,16 @@ async function removeSubscriptionCommandWithCtx(
 export const removeSubscription = mutation({
   args: { subscriptionId: v.id("notificationSubscription") },
   returns: commandResultValidator(v.null()),
-  handler: admitPublicMutation(
-    removeNotificationSubscriptionOperationDefinition,
-    removeSubscriptionCommandWithCtx,
-  ),
+  handler: async (ctx, args) => {
+    try {
+      return await admitPublicMutation(
+        removeNotificationSubscriptionOperationDefinition,
+        removeSubscriptionCommandWithCtx,
+      )(ctx, args);
+    } catch (error) {
+      const mapped = mapSharedDemoFoundationDenial(error);
+      if (mapped) return mapped;
+      throw error;
+    }
+  },
 });

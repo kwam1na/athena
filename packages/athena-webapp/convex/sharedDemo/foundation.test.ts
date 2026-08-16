@@ -65,6 +65,9 @@ describe("shared demo foundation guard", () => {
     const ctx = {
       auth: { getUserIdentity: vi.fn().mockResolvedValue(null) },
       runQuery: vi.fn().mockRejectedValue(new Error("Sign in again to continue.")),
+      // uploadImages/deleteImages now enter through the registered admission
+      // mutation, so the fixture must answer runMutation the same way.
+      runMutation: vi.fn().mockRejectedValue(new Error("Sign in again to continue.")),
       db: {
         get: vi.fn().mockImplementation((_table, id) =>
           id === "category-1" || id === "sku-1"

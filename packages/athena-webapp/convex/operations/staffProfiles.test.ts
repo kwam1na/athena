@@ -12,6 +12,7 @@ import {
   buildRoleAssignmentDrafts,
   createStaffProfile,
   createStaffProfileWithCtx,
+  getStaffProfileById,
   getStaffProfileByIdWithCtx,
   listStaffProfiles,
   listStaffProfilesWithCtx,
@@ -143,6 +144,25 @@ function createStaffProfilesMutationCtx(seed?: {
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
 }
+
+// Simulates an authenticated Athena user: the operation-admission actor
+// short-circuit in lib/athenaUserAuth resolves identity from the admitted
+// actor, so injecting one is equivalent to a signed-in session while keeping
+// every database-backed authorization check real.
+function asAdmitted(ctx: unknown, athenaUserId: string) {
+  return {
+    ...(ctx as Record<string, unknown>),
+    operationAdmission: {
+      actor: { kind: "normal_user" as const, athenaUserId },
+    },
+  } as never;
+}
+
+const ADMITTED_ATHENA_USER = {
+  _id: "athena-user-1",
+  email: "admin@example.com",
+  normalizedEmail: "admin@example.com",
+};
 
 describe("staff profile helpers", () => {
   afterEach(() => {
@@ -494,6 +514,7 @@ describe("staff profile helpers", () => {
 
   it("returns a user_error when a new staff profile would duplicate a store username", async () => {
     const { ctx } = createStaffProfilesMutationCtx({
+      athenaUsers: [ADMITTED_ATHENA_USER],
       profiles: [
         {
           _id: "staff_profile_1",
@@ -518,7 +539,7 @@ describe("staff profile helpers", () => {
     });
 
     await expect(
-      getHandler(createStaffProfile)(ctx, {
+      getHandler(createStaffProfile)(asAdmitted(ctx, "athena-user-1"), {
         firstName: "Ama",
         lastName: "Mensah",
         organizationId: "org_1" as Id<"organization">,
@@ -533,6 +554,147 @@ describe("staff profile helpers", () => {
         message: "Username is already in use for this store.",
       },
     });
+  });
+
+  it("denies an unauthenticated createStaffProfile before any row is written", async () => {
+    vi.mocked(getAuthUserId).mockResolvedValue(null as never);
+    const { ctx, tables } = createStaffProfilesMutationCtx();
+
+    await expect(
+      getHandler(createStaffProfile)(ctx, {
+        firstName: "Ama",
+        lastName: "Mensah",
+        organizationId: "org_1" as Id<"organization">,
+        requestedRoles: ["cashier"],
+        storeId: "store_1" as Id<"store">,
+        username: "amens",
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+    expect(tables.staffProfile.size).toBe(0);
+  });
+
+  it("denies an unauthenticated updateStaffProfile before any row is patched", async () => {
+    vi.mocked(getAuthUserId).mockResolvedValue(null as never);
+    const { ctx, tables } = createStaffProfilesMutationCtx({
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          firstName: "Adjoa",
+          fullName: "Adjoa Tetteh",
+          lastName: "Tetteh",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(updateStaffProfile)(ctx, {
+        organizationId: "org_1" as Id<"organization">,
+        staffProfileId: "staff_profile_1" as Id<"staffProfile">,
+        storeId: "store_1" as Id<"store">,
+        jobTitle: "Lead",
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+    expect(tables.staffProfile.get("staff_profile_1")).not.toHaveProperty(
+      "jobTitle",
+    );
+  });
+
+  it("denies an unauthenticated getStaffProfileById read", async () => {
+    vi.mocked(getAuthUserId).mockResolvedValue(null as never);
+    const { ctx } = createStaffProfilesMutationCtx({
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          firstName: "Adjoa",
+          lastName: "Tetteh",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(getStaffProfileById)(ctx, {
+        staffProfileId: "staff_profile_1" as Id<"staffProfile">,
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+  });
+
+  it("denies a shared-demo actor from creating a staff profile", async () => {
+    vi.stubEnv("ATHENA_SHARED_DEMO_ENABLED", "true");
+    vi.stubEnv("STAGE", "qa");
+    vi.mocked(getAuthUserId).mockResolvedValue("auth-demo" as never);
+    const { ctx, tables } = createStaffProfilesMutationCtx({
+      athenaUsers: [{ _id: "demo-owner" }],
+      sharedDemoPrincipals: [
+        {
+          _id: "principal-1",
+          admissionExpiresAt: Date.now() + 60_000,
+          athenaUserId: "demo-owner",
+          authUserId: "auth-demo",
+          organizationId: "org_1",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(createStaffProfile)(ctx, {
+        firstName: "Ama",
+        lastName: "Mensah",
+        organizationId: "org_1" as Id<"organization">,
+        requestedRoles: ["cashier"],
+        storeId: "store_1" as Id<"store">,
+        username: "amens",
+      }),
+    ).rejects.toThrow();
+    expect(tables.staffProfile.size).toBe(0);
+  });
+
+  it("denies a shared-demo actor from updating a staff profile", async () => {
+    vi.stubEnv("ATHENA_SHARED_DEMO_ENABLED", "true");
+    vi.stubEnv("STAGE", "qa");
+    vi.mocked(getAuthUserId).mockResolvedValue("auth-demo" as never);
+    const { ctx, tables } = createStaffProfilesMutationCtx({
+      athenaUsers: [{ _id: "demo-owner" }],
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          firstName: "Adjoa",
+          fullName: "Adjoa Tetteh",
+          lastName: "Tetteh",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      sharedDemoPrincipals: [
+        {
+          _id: "principal-1",
+          admissionExpiresAt: Date.now() + 60_000,
+          athenaUserId: "demo-owner",
+          authUserId: "auth-demo",
+          organizationId: "org_1",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(updateStaffProfile)(ctx, {
+        organizationId: "org_1" as Id<"organization">,
+        staffProfileId: "staff_profile_1" as Id<"staffProfile">,
+        storeId: "store_1" as Id<"store">,
+        jobTitle: "Lead",
+      }),
+    ).rejects.toThrow();
+    expect(tables.staffProfile.get("staff_profile_1")).not.toHaveProperty(
+      "jobTitle",
+    );
   });
 
   it("lists store staff with roster credential fields and active roles", async () => {

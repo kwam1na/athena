@@ -18,9 +18,38 @@ import {
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
 import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
-import { admitPublicQuery } from "../platform/operationAdmission";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
+import {
+  addOrUpdatePosSessionItemOperationDefinition,
+  removePosSessionItemOperationDefinition,
+} from "../operationAdmission/domains/u4_inventoryIdentity_definitions";
 import { getPosSessionItemsReadDefinition } from "../operationAdmission/readDefinitions";
-import type { OperationQueryCtx } from "../operationAdmission/types";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
+
+type UpsertPosSessionItemArgs = {
+  sessionId: Id<"posSession">;
+  productId: Id<"product">;
+  productSkuId: Id<"productSku">;
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
+  staffProfileId: Id<"staffProfile">;
+  productSku: string;
+  barcode?: string;
+  productName: string;
+  price: number;
+  quantity: number;
+  image?: string;
+  size?: string;
+  length?: number;
+  color?: string;
+  areProcessingFeesAbsorbed?: boolean;
+};
 
 const SESSION_ITEMS_PAGE_SIZE = 200;
 
@@ -191,23 +220,26 @@ export const addOrUpdateItem = mutation({
     areProcessingFeesAbsorbed: v.optional(v.boolean()),
   },
   returns: commandResultValidator(itemOperationDataValidator),
-  handler: async (ctx, args) => {
-    const accessError = await requireSessionItemStoreAccess(
-      ctx,
-      args.sessionId,
-    );
-    if (accessError) {
-      return accessError;
-    }
+  handler: admitPublicMutation(
+    addOrUpdatePosSessionItemOperationDefinition,
+    async (ctx: OperationMutationCtx, args: UpsertPosSessionItemArgs) => {
+      const accessError = await requireSessionItemStoreAccess(
+        ctx,
+        args.sessionId,
+      );
+      if (accessError) {
+        return accessError;
+      }
 
-    const result = await runUpsertSessionItemCommand(ctx, args);
+      const result = await runUpsertSessionItemCommand(ctx, args);
 
-    if (result.status === "ok") {
-      return ok(result.data);
-    }
+      if (result.status === "ok") {
+        return ok(result.data);
+      }
 
-    return userErrorFromSessionItemFailure(result);
-  },
+      return userErrorFromSessionItemFailure(result);
+    },
+  ),
 });
 
 // Remove an item from the session
@@ -218,21 +250,31 @@ export const removeItem = mutation({
     itemId: v.id("posSessionItem"),
   },
   returns: commandResultValidator(operationDataValidator),
-  handler: async (ctx, args) => {
-    const accessError = await requireSessionItemStoreAccess(
-      ctx,
-      args.sessionId,
-    );
-    if (accessError) {
-      return accessError;
-    }
+  handler: admitPublicMutation(
+    removePosSessionItemOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        sessionId: Id<"posSession">;
+        staffProfileId: Id<"staffProfile">;
+        itemId: Id<"posSessionItem">;
+      },
+    ) => {
+      const accessError = await requireSessionItemStoreAccess(
+        ctx,
+        args.sessionId,
+      );
+      if (accessError) {
+        return accessError;
+      }
 
-    const result = await runRemoveSessionItemCommand(ctx, args);
+      const result = await runRemoveSessionItemCommand(ctx, args);
 
-    if (result.status === "ok") {
-      return ok(result.data);
-    }
+      if (result.status === "ok") {
+        return ok(result.data);
+      }
 
-    return userErrorFromSessionItemFailure(result);
-  },
+      return userErrorFromSessionItemFailure(result);
+    },
+  ),
 });

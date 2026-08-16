@@ -6,6 +6,21 @@ import { createOperationalWorkItemWithCtx } from "../operations/operationalWorkI
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
+import {
+  advancePurchaseOrderToOrderedCommandOperationDefinition,
+  createPurchaseOrderCommandOperationDefinition,
+  createPurchaseOrderOperationDefinition,
+  updatePurchaseOrderStatusCommandOperationDefinition,
+  updatePurchaseOrderStatusOperationDefinition,
+} from "../operationAdmission/domains/u5_operations_definitions";
+import {
+  getPurchaseOrderReadDefinition,
+  listPurchaseOrdersReadDefinition,
+} from "../operationAdmission/domains/u5_operations_readDefinitions";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import { requireStoreFullAdminAccess } from "./access";
 import { bestEffortRecordPurchaseOrderStatusTraceWithCtx } from "./purchaseOrderTracing";
 import { getWorkflowTraceByLookupWithCtx } from "../workflowTraces/core";
@@ -257,81 +272,90 @@ export const listPurchaseOrders = query({
       ),
     ),
   },
-  handler: async (ctx, args) => {
-    await requireStoreFullAdminAccess(ctx, args.storeId);
+  handler: admitPublicQuery(
+    listPurchaseOrdersReadDefinition,
+    async (
+      ctx,
+      args: { storeId: Id<"store">; status?: PurchaseOrderStatus },
+    ) => {
+      await requireStoreFullAdminAccess(ctx, args.storeId);
 
-    const purchaseOrders = args.status
-      ? await ctx.db
-          .query("purchaseOrder")
-          .withIndex("by_storeId_status", (q) =>
-            q.eq("storeId", args.storeId).eq("status", args.status!),
-          )
-          .take(MAX_PURCHASE_ORDERS)
-      : await ctx.db
-          .query("purchaseOrder")
-          .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-          .take(MAX_PURCHASE_ORDERS);
+      const purchaseOrders = args.status
+        ? await ctx.db
+            .query("purchaseOrder")
+            .withIndex("by_storeId_status", (q) =>
+              q.eq("storeId", args.storeId).eq("status", args.status!),
+            )
+            .take(MAX_PURCHASE_ORDERS)
+        : await ctx.db
+            .query("purchaseOrder")
+            .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+            .take(MAX_PURCHASE_ORDERS);
 
-    const purchaseOrdersWithTraceIds = await Promise.all(
-      purchaseOrders.map(async (purchaseOrder) => {
-        const trace = await getWorkflowTraceByLookupWithCtx(ctx, {
-          storeId: purchaseOrder.storeId,
-          workflowType: PURCHASE_ORDER_WORKFLOW_TYPE,
-          lookupType: PURCHASE_ORDER_ID_LOOKUP_TYPE,
-          lookupValue: purchaseOrder._id,
-        });
+      const purchaseOrdersWithTraceIds = await Promise.all(
+        purchaseOrders.map(async (purchaseOrder) => {
+          const trace = await getWorkflowTraceByLookupWithCtx(ctx, {
+            storeId: purchaseOrder.storeId,
+            workflowType: PURCHASE_ORDER_WORKFLOW_TYPE,
+            lookupType: PURCHASE_ORDER_ID_LOOKUP_TYPE,
+            lookupValue: purchaseOrder._id,
+          });
 
-        return {
-          ...purchaseOrder,
-          workflowTraceId: trace?.traceId,
-        };
-      }),
-    );
+          return {
+            ...purchaseOrder,
+            workflowTraceId: trace?.traceId,
+          };
+        }),
+      );
 
-    return purchaseOrdersWithTraceIds.sort(
-      (left, right) => right.createdAt - left.createdAt,
-    );
-  },
+      return purchaseOrdersWithTraceIds.sort(
+        (left, right) => right.createdAt - left.createdAt,
+      );
+    },
+  ),
 });
 
 export const getPurchaseOrder = query({
   args: {
     purchaseOrderId: v.id("purchaseOrder"),
   },
-  handler: async (ctx, args) => {
-    const purchaseOrder = await ctx.db.get(
-      "purchaseOrder",
-      args.purchaseOrderId,
-    );
-    if (!purchaseOrder) {
-      return null;
-    }
+  handler: admitPublicQuery(
+    getPurchaseOrderReadDefinition,
+    async (ctx, args: { purchaseOrderId: Id<"purchaseOrder"> }) => {
+      const purchaseOrder = await ctx.db.get(
+        "purchaseOrder",
+        args.purchaseOrderId,
+      );
+      if (!purchaseOrder) {
+        return null;
+      }
 
-    await requireStoreFullAdminAccess(ctx, purchaseOrder.storeId);
+      await requireStoreFullAdminAccess(ctx, purchaseOrder.storeId);
 
-    const [lineItems, vendor, trace] = await Promise.all([
-      ctx.db
-        .query("purchaseOrderLineItem")
-        .withIndex("by_purchaseOrderId", (q) =>
-          q.eq("purchaseOrderId", args.purchaseOrderId),
-        )
-        .take(MAX_LINE_ITEMS),
-      ctx.db.get("vendor", purchaseOrder.vendorId),
-      getWorkflowTraceByLookupWithCtx(ctx, {
-        storeId: purchaseOrder.storeId,
-        workflowType: PURCHASE_ORDER_WORKFLOW_TYPE,
-        lookupType: PURCHASE_ORDER_ID_LOOKUP_TYPE,
-        lookupValue: purchaseOrder._id,
-      }),
-    ]);
+      const [lineItems, vendor, trace] = await Promise.all([
+        ctx.db
+          .query("purchaseOrderLineItem")
+          .withIndex("by_purchaseOrderId", (q) =>
+            q.eq("purchaseOrderId", args.purchaseOrderId),
+          )
+          .take(MAX_LINE_ITEMS),
+        ctx.db.get("vendor", purchaseOrder.vendorId),
+        getWorkflowTraceByLookupWithCtx(ctx, {
+          storeId: purchaseOrder.storeId,
+          workflowType: PURCHASE_ORDER_WORKFLOW_TYPE,
+          lookupType: PURCHASE_ORDER_ID_LOOKUP_TYPE,
+          lookupValue: purchaseOrder._id,
+        }),
+      ]);
 
-    return {
-      ...purchaseOrder,
-      lineItems,
-      vendor,
-      workflowTraceId: trace?.traceId,
-    };
-  },
+      return {
+        ...purchaseOrder,
+        lineItems,
+        vendor,
+        workflowTraceId: trace?.traceId,
+      };
+    },
+  ),
 });
 
 export async function createPurchaseOrderWithCtx(
@@ -488,13 +512,20 @@ export async function createPurchaseOrderCommandWithCtx(
 
 export const createPurchaseOrder = mutation({
   args: createPurchaseOrderArgs,
-  handler: createPurchaseOrderWithCtx,
+  handler: admitPublicMutation(
+    createPurchaseOrderOperationDefinition,
+    createPurchaseOrderWithCtx,
+  ),
 });
 
 export const createPurchaseOrderCommand = mutation({
   args: createPurchaseOrderArgs,
   returns: commandResultValidator(v.any()),
-  handler: async (ctx, args) => createPurchaseOrderCommandWithCtx(ctx, args),
+  handler: admitPublicMutation(
+    createPurchaseOrderCommandOperationDefinition,
+    async (ctx, args: CreatePurchaseOrderArgs) =>
+      createPurchaseOrderCommandWithCtx(ctx, args),
+  ),
 });
 
 export async function updatePurchaseOrderStatusWithCtx(
@@ -686,19 +717,28 @@ export async function advancePurchaseOrderToOrderedCommandWithCtx(
 
 export const updatePurchaseOrderStatus = mutation({
   args: updatePurchaseOrderStatusArgs,
-  handler: updatePurchaseOrderStatusWithCtx,
+  handler: admitPublicMutation(
+    updatePurchaseOrderStatusOperationDefinition,
+    updatePurchaseOrderStatusWithCtx,
+  ),
 });
 
 export const updatePurchaseOrderStatusCommand = mutation({
   args: updatePurchaseOrderStatusArgs,
   returns: commandResultValidator(v.any()),
-  handler: async (ctx, args) =>
-    updatePurchaseOrderStatusCommandWithCtx(ctx, args),
+  handler: admitPublicMutation(
+    updatePurchaseOrderStatusCommandOperationDefinition,
+    async (ctx, args: UpdatePurchaseOrderStatusArgs) =>
+      updatePurchaseOrderStatusCommandWithCtx(ctx, args),
+  ),
 });
 
 export const advancePurchaseOrderToOrderedCommand = mutation({
   args: advancePurchaseOrderToOrderedArgs,
   returns: commandResultValidator(v.any()),
-  handler: async (ctx, args) =>
-    advancePurchaseOrderToOrderedCommandWithCtx(ctx, args),
+  handler: admitPublicMutation(
+    advancePurchaseOrderToOrderedCommandOperationDefinition,
+    async (ctx, args: AdvancePurchaseOrderToOrderedArgs) =>
+      advancePurchaseOrderToOrderedCommandWithCtx(ctx, args),
+  ),
 });

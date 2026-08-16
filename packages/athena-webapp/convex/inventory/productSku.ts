@@ -4,13 +4,32 @@ import { action, internalQuery, mutation, query } from "../_generated/server";
 import { deleteFileInR2, uploadFileToR2 } from "../cloudflare/r2";
 import { refreshCatalogSummaryWithCtx } from "./catalogSummary";
 import { getProductName } from "../utils";
-import { internal } from "../_generated/api";
+import type { QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 import {
-  requireNonDemoFoundationExternalRefs,
-  requireNonDemoFoundationMutation,
-} from "../sharedDemo/foundation";
+  admitPublicAction,
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
+import {
+  backfillUndefinedSkuVisibilityOperationDefinition,
+  deleteProductSkuImagesOperationDefinition,
+  generateProductSkuUploadUrlOperationDefinition,
+  makeAllProductsVisibleOperationDefinition,
+  nukeProblematicImagesOperationDefinition,
+  updateProductSkuOperationDefinition,
+  uploadProductSkuImagesOperationDefinition,
+} from "../operationAdmission/domains/u3_inventoryCatalog_definitions";
+import {
+  getInventoryBySkuIdsReadDefinition,
+  getProductSkuByIdReadDefinition,
+} from "../operationAdmission/domains/u3_inventoryCatalog_readDefinitions";
+import type { OperationActionCtx } from "../operationAdmission/rail";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
 import {
   upsertProductSkuSearchProjection,
   upsertProductSkuSearchProjections,
@@ -34,15 +53,20 @@ async function syncProductSkuSearchProjectionsByStore(
 }
 export const generateUploadUrl = mutation({
   args: {},
-  handler: async (ctx) => {
-  await requireAuthenticatedAthenaUserWithCtx(ctx);
-  return await ctx.storage.generateUploadUrl();
-}
+  handler: admitPublicMutation(
+    generateProductSkuUploadUrlOperationDefinition,
+    async (ctx: OperationMutationCtx) => {
+      await requireAuthenticatedAthenaUserWithCtx(ctx);
+      return await ctx.storage.generateUploadUrl();
+    },
+  ),
 });
 
 export const getById = query({
   args: { id: v.id("productSku") },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getProductSkuByIdReadDefinition,
+    async (ctx: OperationQueryCtx, args: { id: Id<"productSku"> }) => {
     const s = await ctx.db.get("productSku", args.id);
     if (!s) return null;
 
@@ -70,7 +94,8 @@ export const getById = query({
       productCategory: category?.name,
       category,
     };
-  },
+    },
+  ),
 });
 
 export const retrieve = internalQuery({
@@ -102,48 +127,74 @@ export const retrieve = internalQuery({
   },
 });
 
+async function getInventoryBySkuIdsWithCtx(
+  ctx: QueryCtx,
+  args: { skuIds: Id<"productSku">[] },
+) {
+  // Fetch all SKUs in parallel
+  const skus = await Promise.all(
+    args.skuIds.map((skuId) => ctx.db.get("productSku", skuId))
+  );
+
+  // Filter out nulls and return only inventory fields
+  return skus
+    .filter((sku): sku is NonNullable<typeof sku> => sku !== null)
+    .map((sku) => ({
+      _id: sku._id,
+      inventoryCount: sku.inventoryCount,
+      quantityAvailable: sku.quantityAvailable,
+    }));
+}
+
+const inventoryBySkuIdsValidator = v.array(
+  v.object({
+    _id: v.id("productSku"),
+    inventoryCount: v.number(),
+    quantityAvailable: v.number(),
+  })
+);
+
 export const getInventoryBySkuIds = query({
   args: { skuIds: v.array(v.id("productSku")) },
-  returns: v.array(
-    v.object({
-      _id: v.id("productSku"),
-      inventoryCount: v.number(),
-      quantityAvailable: v.number(),
-    })
+  returns: inventoryBySkuIdsValidator,
+  handler: admitPublicQuery(
+    getInventoryBySkuIdsReadDefinition,
+    async (ctx: OperationQueryCtx, args: { skuIds: Id<"productSku">[] }) =>
+      getInventoryBySkuIdsWithCtx(ctx, args),
   ),
-  handler: async (ctx, args) => {
-    // Fetch all SKUs in parallel
-    const skus = await Promise.all(
-      args.skuIds.map((skuId) => ctx.db.get("productSku", skuId))
-    );
+});
 
-    // Filter out nulls and return only inventory fields
-    return skus
-      .filter((sku): sku is NonNullable<typeof sku> => sku !== null)
-      .map((sku) => ({
-        _id: sku._id,
-        inventoryCount: sku.inventoryCount,
-        quantityAvailable: sku.quantityAvailable,
-      }));
-  },
+/**
+ * Internal sibling for the anonymous `POST /storefront/inventory/batch` route.
+ * The public export stays until wave B2 flips the route to this reference.
+ */
+export const getInventoryBySkuIdsInternal = internalQuery({
+  args: { skuIds: v.array(v.id("productSku")) },
+  returns: inventoryBySkuIdsValidator,
+  handler: async (ctx, args) => getInventoryBySkuIdsWithCtx(ctx, args),
 });
 
 export const update = mutation({
   args: { id: v.id("productSku"), update: v.record(v.string(), v.any()) },
-  handler: async (ctx, args) => {
-    await requireAuthenticatedAthenaUserWithCtx(ctx);
-    if (args.update.images) {
-      const sku = await ctx.db.get("productSku", args.id);
-      if (!sku) return;
-      requireNonDemoFoundationMutation({ storeId: sku.storeId });
+  handler: admitPublicMutation(
+    updateProductSkuOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: { id: Id<"productSku">; update: Record<string, any> },
+    ) => {
+      await requireAuthenticatedAthenaUserWithCtx(ctx);
+      if (args.update.images) {
+        const sku = await ctx.db.get("productSku", args.id);
+        if (!sku) return;
 
-      await ctx.db.patch("productSku", args.id, {
-        images: args.update.images,
-      });
-      await upsertProductSkuSearchProjection(ctx, args.id);
-      await refreshCatalogSummaryWithCtx(ctx, sku.storeId);
-    }
-  },
+        await ctx.db.patch("productSku", args.id, {
+          images: args.update.images,
+        });
+        await upsertProductSkuSearchProjection(ctx, args.id);
+        await refreshCatalogSummaryWithCtx(ctx, sku.storeId);
+      }
+    },
+  ),
 });
 
 export const uploadImages = action({
@@ -152,49 +203,54 @@ export const uploadImages = action({
     storeId: v.id("store"),
     productId: v.id("product"),
   },
-  handler: async (ctx, args) => {
-    await ctx.runQuery(
-      (internal as any).sharedDemo.actor.requireAuthenticatedNonDemoEffect,
-      {},
-    );
-    requireNonDemoFoundationMutation({ storeId: args.storeId });
-    const uploadPromises = args.images.map(async (imgBuffer) => {
-      return uploadFileToR2(
-        imgBuffer,
-        `stores/${args.storeId}/products/${args.productId}/${crypto.randomUUID()}.webp`
+  handler: admitPublicAction(
+    uploadProductSkuImagesOperationDefinition,
+    async (
+      _ctx: OperationActionCtx,
+      args: {
+        images: ArrayBuffer[];
+        storeId: Id<"store">;
+        productId: Id<"product">;
+      },
+    ) => {
+      const uploadPromises = args.images.map(async (imgBuffer) => {
+        return uploadFileToR2(
+          imgBuffer,
+          `stores/${args.storeId}/products/${args.productId}/${crypto.randomUUID()}.webp`
+        );
+      });
+      const images = (await Promise.all(uploadPromises)).filter(
+        (url) => url !== undefined
       );
-    });
-    const images = (await Promise.all(uploadPromises)).filter(
-      (url) => url !== undefined
-    );
 
-    return { success: true, images };
-  },
+      return { success: true, images };
+    },
+  ),
 });
 
 export const deleteImages = action({
   args: {
     imageUrls: v.array(v.string()),
   },
-  handler: async (ctx, args) => {
-    await ctx.runQuery(
-      (internal as any).sharedDemo.actor.requireAuthenticatedNonDemoEffect,
-      {},
-    );
-    requireNonDemoFoundationExternalRefs(args.imageUrls);
-    const deletePromises = args.imageUrls.map(async (url) => {
-      return deleteFileInR2(url);
-    });
+  handler: admitPublicAction(
+    deleteProductSkuImagesOperationDefinition,
+    async (_ctx: OperationActionCtx, args: { imageUrls: string[] }) => {
+      const deletePromises = args.imageUrls.map(async (url) => {
+        return deleteFileInR2(url);
+      });
 
-    await Promise.all(deletePromises);
+      await Promise.all(deletePromises);
 
-    return { success: true };
-  },
+      return { success: true };
+    },
+  ),
 });
 
 export const nukeProblematicImages = mutation({
   args: {},
-  handler: async (ctx) => {
+  handler: admitPublicMutation(
+    nukeProblematicImagesOperationDefinition,
+    async (ctx: OperationMutationCtx) => {
     await requireAuthenticatedAthenaUserWithCtx(ctx);
     const productSkus = await ctx.db.query("productSku").collect();
     const publicUrl = process.env.R2_PUBLIC_URL;
@@ -233,12 +289,15 @@ export const nukeProblematicImages = mutation({
     );
 
     return { success: true };
-  },
+    },
+  ),
 });
 
 export const makeAllProductsVisible = mutation({
   args: {},
-  handler: async (ctx) => {
+  handler: admitPublicMutation(
+    makeAllProductsVisibleOperationDefinition,
+    async (ctx: OperationMutationCtx) => {
     await requireAuthenticatedAthenaUserWithCtx(ctx);
     const productSkus = await ctx.db.query("product").collect();
 
@@ -253,12 +312,15 @@ export const makeAllProductsVisible = mutation({
     await syncProductSkuSearchProjectionsByStore(ctx, skus);
 
     return { success: true, updatedCount: productSkus.length };
-  },
+    },
+  ),
 });
 
 export const backfillUndefinedSkuVisibilityFromProducts = mutation({
   args: {},
-  handler: async (ctx) => {
+  handler: admitPublicMutation(
+    backfillUndefinedSkuVisibilityOperationDefinition,
+    async (ctx: OperationMutationCtx) => {
     await requireAuthenticatedAthenaUserWithCtx(ctx);
     const productSkus = await ctx.db.query("productSku").collect();
     const updatedSkus: typeof productSkus = [];
@@ -297,5 +359,6 @@ export const backfillUndefinedSkuVisibilityFromProducts = mutation({
       skippedMissingProductCount,
       skippedParentWithoutVisibilityCount,
     };
-  },
+    },
+  ),
 });

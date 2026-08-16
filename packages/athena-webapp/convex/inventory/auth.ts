@@ -9,6 +9,16 @@ import {
 } from "../lib/athenaUserAuth";
 import { ok, userError } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
+import {
+  admitPublicAction,
+  admitPublicMutation,
+} from "../platform/operationAdmission";
+import {
+  sendVerificationCodeViaProviderOperationDefinition,
+  syncAuthenticatedAthenaUserOperationDefinition,
+  verifyCodeOperationDefinition,
+} from "../operationAdmission/domains/u4_inventoryIdentity_definitions";
+import type { OperationMutationCtx } from "../operationAdmission/types";
 
 const expirationTimeInMinutes = 10;
 
@@ -46,7 +56,11 @@ export const verifyCode = mutation({
     email: v.string(),
   },
   returns: commandResultValidator(v.any()),
-  handler: async (ctx, args) => {
+  // Pre-auth: `public: "admit"` on the definition, because the caller is
+  // proving an emailed code and has no Athena identity yet.
+  handler: admitPublicMutation(
+    verifyCodeOperationDefinition,
+    async (ctx: OperationMutationCtx, args: { code: string; email: string }) => {
     const verificationCode = await ctx.db
       .query("appVerificationCode")
       .filter((q) =>
@@ -108,7 +122,8 @@ export const verifyCode = mutation({
     }
 
     return ok(user);
-  },
+    },
+  ),
 });
 
 function mapAthenaAuthSyncError(error: unknown) {
@@ -135,19 +150,26 @@ function mapAthenaAuthSyncError(error: unknown) {
 export const syncAuthenticatedAthenaUser = mutation({
   args: {},
   returns: commandResultValidator(v.any()),
-  handler: async (ctx) => {
-    try {
-      const user = await syncAuthenticatedAthenaUserWithCtx(ctx);
-      return ok(user);
-    } catch (error) {
-      const mappedError = mapAthenaAuthSyncError(error);
-      if (mappedError) {
-        return mappedError;
-      }
+  // Pre-auth: this mutation MATERIALIZES the Athena user row from the auth
+  // session, so it runs before a normal-user identity exists. The handler
+  // still resolves the auth session itself and maps "no session" to a typed
+  // `authentication_failed` result exactly as before.
+  handler: admitPublicMutation(
+    syncAuthenticatedAthenaUserOperationDefinition,
+    async (ctx: OperationMutationCtx) => {
+      try {
+        const user = await syncAuthenticatedAthenaUserWithCtx(ctx);
+        return ok(user);
+      } catch (error) {
+        const mappedError = mapAthenaAuthSyncError(error);
+        if (mappedError) {
+          return mappedError;
+        }
 
-      throw error;
-    }
-  },
+        throw error;
+      }
+    },
+  ),
 });
 
 export const sendVerificationCodeViaProvider = action({
@@ -156,11 +178,15 @@ export const sendVerificationCodeViaProvider = action({
     firstName: v.optional(v.string()),
     lastName: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    await ctx.runQuery(
-      (internal as any).sharedDemo.actor.denySharedDemoEffectIfApplicable,
-      {},
-    );
+  // `denySharedDemoEffectIfApplicable` retired: the definition declares
+  // `sharedDemo: "deny"`, so a demo visitor is denied at admission rather than
+  // by a runQuery inside the body.
+  handler: admitPublicAction(
+    sendVerificationCodeViaProviderOperationDefinition,
+    async (
+      ctx,
+      args: { email: string; firstName?: string; lastName?: string },
+    ) => {
     const data: any = await ctx.runMutation(
       internal.inventory.auth.requestVerificationCode,
       {
@@ -199,5 +225,6 @@ export const sendVerificationCodeViaProvider = action({
         message: "Could not send verification code",
       };
     }
-  },
+    },
+  ),
 });

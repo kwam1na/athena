@@ -14,6 +14,19 @@ import { markCatalogSummaryNeedsRefresh } from "./catalogSummary";
 import { applyInventoryEffectWithCtx } from "../inventoryLedger/effects";
 import { uncostedBasis } from "../inventoryLedger/valuation";
 import { resolveReportingOperatingPeriodWithCtx } from "../storeTime/operatingPeriods";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
+import { voidExpenseTransactionOperationDefinition } from "../operationAdmission/domains/u4_inventoryIdentity_definitions";
+import {
+  getExpenseTransactionByIdReadDefinition,
+  listExpenseTransactionsReadDefinition,
+} from "../operationAdmission/domains/u4_inventoryIdentity_readDefinitions";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
 
 const expenseTransactionCreationValidator = v.object({
   transactionId: v.id("expenseTransaction"),
@@ -321,7 +334,17 @@ export const getExpenseTransactions = query({
       itemCount: v.number(),
     }),
   ),
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    listExpenseTransactionsReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: {
+        storeId: Id<"store">;
+        staffProfileId?: Id<"staffProfile">;
+        status?: string;
+        limit?: number;
+      },
+    ) => {
     const { storeId, status, limit = 50 } = args;
 
     let transactionsQuery = ctx.db
@@ -371,7 +394,8 @@ export const getExpenseTransactions = query({
     );
 
     return enrichedTransactions;
-  },
+    },
+  ),
 });
 
 // Get a specific expense transaction by ID
@@ -404,7 +428,12 @@ export const getExpenseTransactionById = query({
     }),
     v.null(),
   ),
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getExpenseTransactionByIdReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { transactionId: Id<"expenseTransaction"> },
+    ) => {
     const transaction = await ctx.db.get(
       "expenseTransaction",
       args.transactionId,
@@ -439,7 +468,8 @@ export const getExpenseTransactionById = query({
         : null,
       items,
     };
-  },
+    },
+  ),
 });
 
 // Void an expense transaction
@@ -620,5 +650,14 @@ export const voidExpenseTransaction = mutation({
     voidReason: v.optional(v.string()),
   },
   returns: commandResultValidator(expenseTransactionIdValidator),
-  handler: voidExpenseTransactionHandler,
+  handler: admitPublicMutation(
+    voidExpenseTransactionOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        transactionId: Id<"expenseTransaction">;
+        voidReason?: string;
+      },
+    ) => voidExpenseTransactionHandler(ctx, args),
+  ),
 });

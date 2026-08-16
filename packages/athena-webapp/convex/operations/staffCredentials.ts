@@ -13,7 +13,20 @@ import {
   refreshTerminalStaffAuthorityOperationDefinition,
   validateRestoredPosLocalStaffProofOperationDefinition,
 } from "../operationAdmission/definitions";
-import { admitPublicMutation } from "../platform/operationAdmission";
+import {
+  createStaffCredentialOperationDefinition,
+  updateStaffCredentialOperationDefinition,
+} from "../operationAdmission/domains/u5_operations_definitions";
+import {
+  getStaffCredentialUsernameAvailabilityReadDefinition,
+  listStaffCredentialsByStoreReadDefinition,
+} from "../operationAdmission/domains/u5_operations_readDefinitions";
+import type { OperationMutationCtx } from "../operationAdmission/types";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+  resolveWriteAdmission,
+} from "../platform/operationAdmission";
 import { operationalRoleValidator, type OperationalRole } from "./staffRoles";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
@@ -37,7 +50,21 @@ import {
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
 import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
-import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
+
+/**
+ * The admission denials that the staff-credential management mutations have
+ * always surfaced as a `userError` rather than a throw.
+ */
+function isStaffCredentialAdmissionAuthorizationError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  return (
+    message === "Sign in again to continue." ||
+    message === "This operation is not available for the current actor." ||
+    message === "You do not have access to this operation." ||
+    message === "You do not have access to manage staff credentials." ||
+    message.includes("shared_demo_action_denied")
+  );
+}
 
 export const STAFF_CREDENTIAL_STATUS = v.union(
   v.literal("pending"),
@@ -45,6 +72,14 @@ export const STAFF_CREDENTIAL_STATUS = v.union(
   v.literal("suspended"),
   v.literal("revoked"),
 );
+
+type LocalPinVerifierInput = {
+  algorithm: string;
+  hash: string;
+  iterations: number;
+  salt: string;
+  version: number;
+};
 
 const localPinVerifierValidator = v.object({
   algorithm: v.string(),
@@ -1119,30 +1154,36 @@ export const getStaffCredentialUsernameAvailability = query({
     storeId: v.id("store"),
     username: v.string(),
   },
-  handler: (ctx, args) =>
-    getStaffCredentialUsernameAvailabilityWithCtx(ctx, args),
+  handler: admitPublicQuery(
+    getStaffCredentialUsernameAvailabilityReadDefinition,
+    (ctx, args: { storeId: Id<"store">; username: string }) =>
+      getStaffCredentialUsernameAvailabilityWithCtx(ctx, args),
+  ),
 });
 
 export const listStaffCredentialsByStore = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: (ctx, args) => listStaffCredentialsByStoreWithCtx(ctx, args),
+  handler: admitPublicQuery(
+    listStaffCredentialsByStoreReadDefinition,
+    (ctx, args: { storeId: Id<"store"> }) =>
+      listStaffCredentialsByStoreWithCtx(ctx, args),
+  ),
 });
 
-export const createStaffCredential = mutation({
+const createStaffCredentialAdmittedHandler = async (
+  ctx: OperationMutationCtx,
   args: {
-    localPinVerifier: v.optional(localPinVerifierValidator),
-    organizationId: v.id("organization"),
-    pinHash: v.optional(v.string()),
-    staffProfileId: v.id("staffProfile"),
-    storeId: v.id("store"),
-    username: v.string(),
+    localPinVerifier?: LocalPinVerifierInput;
+    organizationId: Id<"organization">;
+    pinHash?: string;
+    staffProfileId: Id<"staffProfile">;
+    storeId: Id<"store">;
+    username: string;
   },
-  returns: commandResultValidator(v.any()),
-  handler: async (ctx, args) => {
+) => {
     try {
-      await requireSharedDemoCapabilityIfApplicable(ctx, "identity.manage");
       await requireStaffCredentialManagementAccessWithCtx(
         ctx,
         args.organizationId,
@@ -1193,22 +1234,55 @@ export const createStaffCredential = mutation({
 
       throw error;
     }
-  },
-});
+};
 
-export const updateStaffCredential = mutation({
+export const createStaffCredential = mutation({
   args: {
     localPinVerifier: v.optional(localPinVerifierValidator),
     organizationId: v.id("organization"),
     pinHash: v.optional(v.string()),
-    staffCredentialId: v.optional(v.id("staffCredential")),
-    staffProfileId: v.optional(v.id("staffProfile")),
-    status: v.optional(STAFF_CREDENTIAL_STATUS),
+    staffProfileId: v.id("staffProfile"),
     storeId: v.id("store"),
-    username: v.optional(v.string()),
+    username: v.string(),
   },
   returns: commandResultValidator(v.any()),
   handler: async (ctx, args) => {
+    try {
+      await resolveWriteAdmission(
+        ctx,
+        args,
+        createStaffCredentialOperationDefinition,
+      );
+    } catch (error) {
+      if (!isStaffCredentialAdmissionAuthorizationError(error)) {
+        throw error;
+      }
+      return userError({
+        code: "authorization_failed",
+        message: "You do not have access to manage staff credentials.",
+      });
+    }
+
+    return admitPublicMutation(
+      createStaffCredentialOperationDefinition,
+      createStaffCredentialAdmittedHandler,
+    )(ctx, args);
+  },
+});
+
+const updateStaffCredentialAdmittedHandler = async (
+  ctx: OperationMutationCtx,
+  args: {
+    localPinVerifier?: LocalPinVerifierInput;
+    organizationId: Id<"organization">;
+    pinHash?: string;
+    staffCredentialId?: Id<"staffCredential">;
+    staffProfileId?: Id<"staffProfile">;
+    status?: StaffCredentialStatus;
+    storeId: Id<"store">;
+    username?: string;
+  },
+) => {
     try {
       await requireStaffCredentialManagementAccessWithCtx(
         ctx,
@@ -1261,6 +1335,41 @@ export const updateStaffCredential = mutation({
 
       throw error;
     }
+};
+
+export const updateStaffCredential = mutation({
+  args: {
+    localPinVerifier: v.optional(localPinVerifierValidator),
+    organizationId: v.id("organization"),
+    pinHash: v.optional(v.string()),
+    staffCredentialId: v.optional(v.id("staffCredential")),
+    staffProfileId: v.optional(v.id("staffProfile")),
+    status: v.optional(STAFF_CREDENTIAL_STATUS),
+    storeId: v.id("store"),
+    username: v.optional(v.string()),
+  },
+  returns: commandResultValidator(v.any()),
+  handler: async (ctx, args) => {
+    try {
+      await resolveWriteAdmission(
+        ctx,
+        args,
+        updateStaffCredentialOperationDefinition,
+      );
+    } catch (error) {
+      if (!isStaffCredentialAdmissionAuthorizationError(error)) {
+        throw error;
+      }
+      return userError({
+        code: "authorization_failed",
+        message: "You do not have access to manage staff credentials.",
+      });
+    }
+
+    return admitPublicMutation(
+      updateStaffCredentialOperationDefinition,
+      updateStaffCredentialAdmittedHandler,
+    )(ctx, args);
   },
 });
 

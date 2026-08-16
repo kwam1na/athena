@@ -5,6 +5,8 @@ import { v } from "convex/values";
 import { markCatalogSummaryNeedsRefresh } from "../inventory/catalogSummary";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
+import { receivePurchaseOrderBatchOperationDefinition } from "../operationAdmission/domains/u5_operations_definitions";
+import { admitPublicMutation } from "../platform/operationAdmission";
 import { requireStoreFullAdminAccess } from "./access";
 import { bestEffortRecordPurchaseOrderReceivingTraceWithCtx } from "./purchaseOrderTracing";
 import { resolveReportingOperatingPeriodWithCtx } from "../storeTime/operatingPeriods";
@@ -620,6 +622,9 @@ export const receivePurchaseOrderBatch = mutation({
     ),
   },
   returns: commandResultValidator(v.any()),
-  handler: async (ctx, args) =>
-    receivePurchaseOrderBatchCommandWithCtx(ctx, args),
+  handler: admitPublicMutation(
+    receivePurchaseOrderBatchOperationDefinition,
+    async (ctx, args: ReceivePurchaseOrderBatchArgs) =>
+      receivePurchaseOrderBatchCommandWithCtx(ctx, args),
+  ),
 });

@@ -30,6 +30,12 @@ import {
   reopenDailyCloseWithCtx,
 } from "./dailyClose";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
+import {
+  completeDailyCloseOperationDefinition,
+  reopenDailyCloseOperationDefinition,
+  resolveDailyCloseCarryForwardOperationDefinition,
+} from "../operationAdmission/domains/u5_operations_definitions";
+import { getDailyCloseOpeningContextReadDefinition } from "../operationAdmission/domains/u5_operations_readDefinitions";
 
 vi.mock("../lib/athenaUserAuth", () => ({
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
@@ -8216,6 +8222,11 @@ describe("end-of-day review backend foundation", () => {
       }>
     >(getDailyCloseOpeningContext);
 
+    // The exported query runs behind `admitPublicQuery` now, so an identity has
+    // to resolve before the redaction under test is reached. The assertions
+    // below are unchanged: what is being checked is still the broad-view shape.
+    mockDailyCloseSnapshotAccess("pos_only");
+
     const context = await handler({ db } as unknown as QueryCtx, {
       operatingDate: "2026-05-08",
       storeId: "store-1" as Id<"store">,
@@ -8245,5 +8256,133 @@ describe("end-of-day review backend foundation", () => {
       "organizationId",
     );
     expect(context.carryForwardWorkItems[0]).not.toHaveProperty("storeId");
+  });
+});
+
+/**
+ * U5 admission contract for the exported EOD Review write/read boundary.
+ *
+ * The three mutations already converted an auth failure into a `userError`;
+ * the admission rail must produce the SAME `CommandResult`, not a throw. The
+ * opening-context query had no gate at all and is now store-scoped.
+ */
+describe("daily close exported handler admission", () => {
+  const ADMISSION_ARGS = {
+    completeDailyClose: {
+      operatingDate: "2026-05-07",
+      storeId: "store-1" as Id<"store">,
+    },
+    reopenDailyClose: {
+      dailyCloseId: "daily-close-1" as Id<"dailyClose">,
+      reason: "Late cash sale was missed.",
+      storeId: "store-1" as Id<"store">,
+    },
+    resolveDailyCloseCarryForward: {
+      businessDate: "2026-05-07",
+      dailyCloseId: "daily-close-1" as Id<"dailyClose">,
+      outcome: "completed" as const,
+      reason: "Handled the next morning.",
+      sourceId: "work-item-1",
+      storeId: "store-1" as Id<"store">,
+      workItemId: "work-item-1" as Id<"operationalWorkItem">,
+    },
+  };
+
+  beforeEach(() => {
+    vi.mocked(sharedDemoActor.getSharedDemoActorWithCtx).mockResolvedValue(null);
+    vi.mocked(
+      sharedDemoActor.requireSharedDemoStoreCapabilityIfApplicable,
+    ).mockResolvedValue(null);
+    // No Athena identity anywhere in this block: the rail must fall through
+    // every adapter and deny.
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue(null as never);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each([
+    [
+      "completeDailyClose",
+      completeDailyClose,
+      ADMISSION_ARGS.completeDailyClose,
+    ],
+    ["reopenDailyClose", reopenDailyClose, ADMISSION_ARGS.reopenDailyClose],
+    [
+      "resolveDailyCloseCarryForward",
+      resolveDailyCloseCarryForward,
+      ADMISSION_ARGS.resolveDailyCloseCarryForward,
+    ],
+  ])(
+    "answers an unadmitted caller on %s with the pre-existing userError and writes nothing",
+    async (_name, fn, args) => {
+      const { db, inserts, patches } = createDb({
+        dailyClose: [completedDailyCloseRow()],
+        store: [store],
+      });
+
+      await expect(
+        getHandler(fn)({ db } as unknown as MutationCtx, args as never),
+      ).resolves.toEqual({
+        kind: "user_error",
+        error: {
+          code: "authorization_failed",
+          message: "Sign in again to continue.",
+        },
+      });
+
+      // Denied at the boundary: the transaction never reached the domain body.
+      expect(inserts).toEqual([]);
+      expect(patches).toEqual([]);
+    },
+  );
+
+  it("denies an unadmitted caller on the opening context query", async () => {
+    const { db } = createDb({
+      dailyClose: [completedDailyCloseRow()],
+      store: [store],
+    });
+
+    await expect(
+      getHandler<
+        { operatingDate: string; storeId: Id<"store"> },
+        Promise<unknown>
+      >(getDailyCloseOpeningContext)({ db } as unknown as QueryCtx, {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+  });
+
+  it("keeps the shared demo admitted on EOD Review, clamped to its own store", async () => {
+    for (const definition of [
+      completeDailyCloseOperationDefinition,
+      reopenDailyCloseOperationDefinition,
+      resolveDailyCloseCarryForwardOperationDefinition,
+    ]) {
+      expect(definition.capability).toBe("daily_operations.write");
+      expect(definition.actors.normalUser).toBe("admit");
+      expect(definition.actors.sharedDemo).toBe("admit");
+      expect(definition.actors.public).toBe("deny");
+      expect(definition.scope).toEqual({ kind: "store", storeIdArg: "storeId" });
+      // A demo-admitted mutation must still fence on a writable store.
+      expect(definition.readiness).toEqual({ kind: "store_write" });
+    }
+
+    expect(getDailyCloseOpeningContextReadDefinition.access).toEqual({
+      kind: "read",
+      intent: "daily_close.view",
+    });
+    expect(getDailyCloseOpeningContextReadDefinition.actors.sharedDemo).toBe(
+      "admit",
+    );
+    expect(getDailyCloseOpeningContextReadDefinition.actors.public).toBe("deny");
+    expect(getDailyCloseOpeningContextReadDefinition.scope).toEqual({
+      kind: "store",
+      storeIdArg: "storeId",
+    });
   });
 });

@@ -304,6 +304,20 @@ function createReceivingMutationCtx(args?: {
 }
 
 describe("stock ops receiving", () => {
+  // Admission rail: the ingress resolves an actor before the handler body.
+  // `procurement.manage` is not demo-granted, so the definition denies shared
+  // demo and an anonymous caller never reaches the receiving write.
+  it("routes the receiving ingress through the admission rail", () => {
+    const source = getSource("./receiving.ts");
+
+    expect(source).toContain(
+      "handler: admitPublicMutation(\n    receivePurchaseOrderBatchOperationDefinition,",
+    );
+    expect(source).toContain(
+      "export const receivePurchaseOrderBatch = mutation({",
+    );
+  });
+
   it("accepts the representative receive command return contract", () => {
     assertConformsToExportedReturns(
       receivePurchaseOrderBatch,

@@ -18,16 +18,25 @@ import {
   calculatePurchaseOrderTotals,
   advancePurchaseOrderToOrderedCommand,
   buildPurchaseOrderCommitmentStatusDelta,
+  createPurchaseOrder,
   createPurchaseOrderCommand,
   createPurchaseOrderWithCtx,
+  getPurchaseOrder,
+  listPurchaseOrders,
   mapPurchaseOrderStatusToWorkItemStatus,
   mapPurchaseOrderCommandError,
+  updatePurchaseOrderStatus,
   updatePurchaseOrderStatusCommand,
   updatePurchaseOrderStatusWithCtx,
 } from "./purchaseOrders";
 
 function getSource(relativePath: string) {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
+}
+
+function getHandler(fn: unknown) {
+  return (fn as { _handler: (ctx: unknown, args: unknown) => Promise<unknown> })
+    ._handler;
 }
 
 function createPurchaseOrderMutationCtx() {
@@ -159,6 +168,25 @@ describe("stock ops purchase orders", () => {
       "export const advancePurchaseOrderToOrderedCommand = mutation({",
     );
     expect(source).toContain("commandResultValidator(v.any())");
+    for (const definitionConst of [
+      "createPurchaseOrderOperationDefinition",
+      "createPurchaseOrderCommandOperationDefinition",
+      "updatePurchaseOrderStatusOperationDefinition",
+      "updatePurchaseOrderStatusCommandOperationDefinition",
+      "advancePurchaseOrderToOrderedCommandOperationDefinition",
+    ]) {
+      expect(source).toContain(
+        `handler: admitPublicMutation(\n    ${definitionConst},`,
+      );
+    }
+    for (const definitionConst of [
+      "listPurchaseOrdersReadDefinition",
+      "getPurchaseOrderReadDefinition",
+    ]) {
+      expect(source).toContain(
+        `handler: admitPublicQuery(\n    ${definitionConst},`,
+      );
+    }
     expect(source).toContain(
       "return ok(await createPurchaseOrderWithCtx(ctx, args));",
     );
@@ -419,5 +447,80 @@ describe("stock ops purchase orders", () => {
         message: "Cannot change purchase order from received to ordered.",
       },
     });
+  });
+
+  // Admission rail: the exported ingress now resolves an actor BEFORE the
+  // handler body runs. `procurement.manage` is not demo-granted, so the
+  // definitions deny shared demo; an anonymous caller never reaches the
+  // handler at all.
+  it("denies unauthenticated callers at the ingress, before any write", async () => {
+    const { ctx, insert, patch } = createPurchaseOrderMutationCtx();
+
+    await expect(
+      getHandler(createPurchaseOrder)(ctx, {
+        lineItems: [
+          {
+            orderedQuantity: 2,
+            productSkuId: "sku-1" as Id<"productSku">,
+            unitCost: 1500,
+          },
+        ],
+        storeId: "store-1" as Id<"store">,
+        vendorId: "vendor-1" as Id<"vendor">,
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+
+    await expect(
+      getHandler(createPurchaseOrderCommand)(ctx, {
+        lineItems: [
+          {
+            orderedQuantity: 2,
+            productSkuId: "sku-1" as Id<"productSku">,
+            unitCost: 1500,
+          },
+        ],
+        storeId: "store-1" as Id<"store">,
+        vendorId: "vendor-1" as Id<"vendor">,
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+
+    await expect(
+      getHandler(updatePurchaseOrderStatus)(ctx, {
+        nextStatus: "submitted",
+        purchaseOrderId: "purchase-order-1" as Id<"purchaseOrder">,
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+
+    await expect(
+      getHandler(updatePurchaseOrderStatusCommand)(ctx, {
+        nextStatus: "submitted",
+        purchaseOrderId: "purchase-order-1" as Id<"purchaseOrder">,
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+
+    await expect(
+      getHandler(advancePurchaseOrderToOrderedCommand)(ctx, {
+        purchaseOrderId: "purchase-order-1" as Id<"purchaseOrder">,
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+
+    expect(insert).not.toHaveBeenCalled();
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it("denies unauthenticated purchase-order reads at the ingress", async () => {
+    const { ctx } = createPurchaseOrderMutationCtx();
+
+    await expect(
+      getHandler(listPurchaseOrders)(ctx, {
+        storeId: "store-1" as Id<"store">,
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+
+    await expect(
+      getHandler(getPurchaseOrder)(ctx, {
+        purchaseOrderId: "purchase-order-1" as Id<"purchaseOrder">,
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
   });
 });

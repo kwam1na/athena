@@ -587,5 +587,8 @@ describe("stock ops replenishment", () => {
     const source = getSource("./replenishment.ts");
 
     expect(source).toContain("requireStoreFullAdminAccess(ctx, args.storeId);");
+    expect(source).toContain(
+      "handler: admitPublicQuery(\n    listReplenishmentRecommendationsReadDefinition,",
+    );
   });
 });

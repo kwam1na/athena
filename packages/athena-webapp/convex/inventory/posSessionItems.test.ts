@@ -38,6 +38,15 @@ import {
 import { collectSessionItemsFromPages } from "../pos/infrastructure/repositories/sessionCommandRepository";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 
+// Cuts the module cycle `platform/operationAdmission` ->
+// `sharedDemo/operationAdapter` -> `sharedDemo/restore` ->
+// `sharedDemo/openingBaseline` -> `inventory/storeSchedule` ->
+// `platform/operationAdmission`. Left intact, the composition root is observed
+// half-initialized from this test's module graph.
+vi.mock("../sharedDemo/restore", () => ({
+  requireReadySharedDemoWriteWithCtx: vi.fn(),
+}));
+
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
 }
@@ -106,11 +115,14 @@ describe("posSessionItems public mutations", () => {
       kind: "ok",
     });
 
+    // The admitted handler receives an admission-carrying clone of the ctx, so
+    // these assert on the same `db` rather than on object identity.
+    const admittedCtx = expect.objectContaining({ db: ctx.db });
     expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx,
     );
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx,
       {
         allowedRoles: ["full_admin", "pos_only"],
         failureMessage: "You cannot change this POS sale.",
@@ -119,7 +131,7 @@ describe("posSessionItems public mutations", () => {
       },
     );
     expect(mocks.runUpsertSessionItemCommand).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx,
       expect.objectContaining({
         sessionId: "session-1",
       }),

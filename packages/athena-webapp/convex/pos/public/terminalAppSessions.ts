@@ -3,6 +3,8 @@ import { v } from "convex/values";
 import type { Id } from "../../_generated/dataModel";
 import { mutation, type MutationCtx } from "../../_generated/server";
 import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
+import { admitPublicMutation } from "../../platform/operationAdmission";
+import { validateTerminalAppSessionRecoveryOperationDefinition } from "../../operationAdmission/domains/u2_pos_definitions";
 import { hashPosTerminalSyncSecret } from "../application/sync/terminalSyncSecret";
 
 const ASSERTION_TTL_MS = 5 * 60 * 1000;
@@ -303,5 +305,8 @@ export const validateTerminalAppSessionRecovery = mutation({
     terminalProof: v.optional(v.string()),
   },
   returns: recoveryResultValidator,
-  handler: (ctx, args) => validateTerminalAppSessionRecoveryWithCtx(ctx, args),
+  handler: admitPublicMutation(
+    validateTerminalAppSessionRecoveryOperationDefinition,
+    (ctx, args) => validateTerminalAppSessionRecoveryWithCtx(ctx, args),
+  ),
 });

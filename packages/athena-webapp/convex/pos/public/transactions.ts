@@ -15,6 +15,10 @@ import {
   voidTransactionOperationDefinition,
 } from "../../operationAdmission/definitions";
 import {
+  createTransactionFromSessionOperationDefinition,
+  updatePosInventoryOperationDefinition,
+} from "../../operationAdmission/domains/u2_pos_definitions";
+import {
   getPosCompletedTransactionsReadDefinition,
   getPosRecentTransactionsWithCustomersReadDefinition,
   getPosTodaySummaryReadDefinition,
@@ -402,33 +406,36 @@ export const updateInventory = mutation({
     skuId: v.id("productSku"),
     quantityToSubtract: v.number(),
   },
-  handler: async (ctx, args) => {
-    const sku = await ctx.db.get("productSku", args.skuId);
-    if (!sku) {
-      return userError({
-        code: "not_found",
-        message: "SKU not found.",
+  handler: admitPublicMutation(
+    updatePosInventoryOperationDefinition,
+    async (ctx, args) => {
+      const sku = await ctx.db.get("productSku", args.skuId);
+      if (!sku) {
+        return userError({
+          code: "not_found",
+          message: "SKU not found.",
+        });
+      }
+
+      const store = await ctx.db.get("store", sku.storeId);
+      if (!store) {
+        return userError({
+          code: "not_found",
+          message: "Store not found.",
+        });
+      }
+
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage: "You cannot update POS inventory for this store.",
+        organizationId: store.organizationId,
+        userId: athenaUser._id,
       });
-    }
 
-    const store = await ctx.db.get("store", sku.storeId);
-    if (!store) {
-      return userError({
-        code: "not_found",
-        message: "Store not found.",
-      });
-    }
-
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "You cannot update POS inventory for this store.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
-    });
-
-    return updateInventoryCommand(ctx, args);
-  },
+      return updateInventoryCommand(ctx, args);
+    },
+  ),
 });
 
 export const completeTransaction = mutation({
@@ -929,33 +936,36 @@ export const createTransactionFromSession = mutation({
       transactionItems: v.array(v.id("posTransactionItem")),
     }),
   ),
-  handler: async (ctx, args) => {
-    const session = await ctx.db.get("posSession", args.sessionId);
-    if (!session) {
-      return userError({
-        code: "not_found",
-        message: "POS session not found.",
+  handler: admitPublicMutation(
+    createTransactionFromSessionOperationDefinition,
+    async (ctx, args) => {
+      const session = await ctx.db.get("posSession", args.sessionId);
+      if (!session) {
+        return userError({
+          code: "not_found",
+          message: "POS session not found.",
+        });
+      }
+
+      const store = await ctx.db.get("store", session.storeId);
+      if (!store) {
+        return userError({
+          code: "not_found",
+          message: "Store not found.",
+        });
+      }
+
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage: "You cannot complete this POS sale.",
+        organizationId: store.organizationId,
+        userId: athenaUser._id,
       });
-    }
 
-    const store = await ctx.db.get("store", session.storeId);
-    if (!store) {
-      return userError({
-        code: "not_found",
-        message: "Store not found.",
-      });
-    }
-
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "You cannot complete this POS sale.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
-    });
-
-    return createTransactionFromSessionHandler(ctx, args);
-  },
+      return createTransactionFromSessionHandler(ctx, args);
+    },
+  ),
 });
 
 export const correctTransactionCustomer = mutation({

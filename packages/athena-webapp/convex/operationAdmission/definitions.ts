@@ -1,3 +1,4 @@
+import type { Doc } from "../_generated/dataModel";
 import {
   ATHENA_CAPABILITY_CATALOG,
   type AthenaCapability,
@@ -197,11 +198,67 @@ export const repairCatalogSummaryOperationDefinition = storeWriteOperation({
   capability: "catalog.maintain",
 });
 
-export const ingestLocalEventsOperationDefinition = storeWriteOperation({
+/**
+ * The capability each local-sync event type requires.
+ *
+ * This is the single source of truth: `pos/public/sync.ts` re-exposes it as
+ * `sharedDemoCapabilityForSyncEvent`. It lives here rather than there because
+ * the definition must classify the batch at admission time, and a definitions
+ * module may not import a function module.
+ */
+export const POS_LOCAL_SYNC_EVENT_CAPABILITIES = {
+  register_opened: "cash.control.write",
+  register_closed: "cash.control.write",
+  register_reopened: "cash.control.write",
+  store_day_started: "daily_operations.write",
+  pending_checkout_item_defined: "pos.sale.complete",
+  sale_completed: "pos.sale.complete",
+  sale_cleared: "pos.sale.complete",
+  expense_recorded: "expense.manage",
+} as const satisfies Record<
+  Doc<"posLocalSyncEvent">["eventType"],
+  AthenaCapability
+>;
+
+/**
+ * Batch-valued capability with all-of semantics: an upload that mixes a
+ * granted and an ungranted event type requires both, so it is denied whole at
+ * admission rather than partially applied. An unrecognized event type resolves
+ * to `undefined`, which falls outside `candidates` and therefore denies.
+ */
+export const ingestLocalEventsOperationDefinition = defineOperation({
+  kind: "mutation" as const,
   functionName: "pos/public/sync:ingestLocalEvents",
   operationId: "pos/public/sync.ingestLocalEvents",
-  capability: "pos.sync.write",
-  expectedEpochArg: "expectedDemoEpoch",
+  capability: {
+    kind: "dynamic" as const,
+    candidates: [
+      "cash.control.write",
+      "daily_operations.write",
+      "pos.sale.complete",
+      "expense.manage",
+    ] as const,
+    resolve: (args: Record<string, unknown>) => [
+      ...new Set(
+        (
+          (args.events as
+            | readonly { eventType: Doc<"posLocalSyncEvent">["eventType"] }[]
+            | undefined) ?? []
+        ).map((event) => POS_LOCAL_SYNC_EVENT_CAPABILITIES[event.eventType]),
+      ),
+    ],
+  },
+  scope: { kind: "store" as const, storeIdArg: "storeId" },
+  readiness: {
+    kind: "store_write" as const,
+    expectedEpochArg: "expectedDemoEpoch",
+  },
+  effects: { mode: "none" as const },
+  actors: {
+    normalUser: "admit" as const,
+    sharedDemo: "admit" as const,
+    public: "deny" as const,
+  },
 });
 
 export const reportLocalSyncDeadLetterOperationDefinition =
@@ -606,6 +663,12 @@ export const addNotificationSubscriptionOperationDefinition = defineOperation({
   scope: { kind: "organization", organizationIdArg: "organizationId" },
   readiness: { kind: "none" },
   effects: { mode: "none" },
+  // Runs for EVERY actor, including a normal full admin: demo foundation rows
+  // are not editable from the product surface. Re-expresses the retired
+  // `requireNonDemoFoundationMutation({ organizationId: args.organizationId })`.
+  target: {
+    protectDemoFoundation: { organizationIdArg: "organizationId" },
+  },
   actors: {
     normalUser: "admit",
     sharedDemo: "deny",
@@ -637,6 +700,12 @@ function notificationSubscriptionRowWriteOperation(
     },
     readiness: { kind: "none" },
     effects: { mode: "none" },
+    // `true` guards the RESOLVED scope constraints, and the scope above
+    // resolves `organizationId` from the target row itself — so this is the
+    // row-derived org, never a caller-supplied one, and it costs no extra
+    // read. Re-expresses the retired `requireNonDemoFoundationMutation({
+    // organizationId: subscription.organizationId })`.
+    target: { protectDemoFoundation: true },
     actors: {
     normalUser: "admit",
     sharedDemo: "deny",
