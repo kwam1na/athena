@@ -408,8 +408,9 @@ GitHub-backed attestation crosses the CI boundary.
 
 The `telemetry.recorded` obligation asks a different question: did this delivery
 leave a durable record of how it ran? It is satisfied by a tracked
-`telemetry/delivery-runs/*.json` file whose `deliverableDiffFingerprint` matches
-the current deliverable diff. To satisfy it by hand:
+`telemetry/delivery-runs/<YYYY-MM-DD>/*.json` file whose
+`deliverableDiffFingerprint` matches the current deliverable diff. To satisfy it
+by hand:
 
 1. Run `bun run pr:athena` and let it pass. The gate writes its ledger at the end
    of the run, so the first run in a fresh worktree has nothing to record yet and
@@ -714,7 +715,7 @@ Tracked, freshness-gated graphify artifacts:
 
 Tracked delivery-run telemetry, written by `delivery:telemetry-record`:
 
-- `telemetry/delivery-runs/<timestamp>-<branch>.json`
+- `telemetry/delivery-runs/<YYYY-MM-DD>/<timestamp>-<branch>.json`
 
 This is machine-generated evidence that is deliberately tracked, unlike the
 `artifacts/harness-delivery-runs/` ledger it is promoted from. The ledger is

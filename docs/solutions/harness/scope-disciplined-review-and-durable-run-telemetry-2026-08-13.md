@@ -1,7 +1,7 @@
 ---
 title: "Review Findings Carry a Scope Axis, and Delivery Runs Leave a Durable Record"
 date: 2026-08-13
-last_updated: 2026-08-13
+last_updated: 2026-08-15
 category: harness
 module: harness
 problem_type: architecture_pattern
@@ -97,7 +97,7 @@ never converted between units. That neutrality is load-bearing in the summary,
 which withholds a delta when the last passing run metered a different unit and
 names the shift when the baseline came from another agent runtime.
 
-Durability is its own artifact: `telemetry/delivery-runs/<stamp>-<branch>.json`,
+Durability is its own artifact: `telemetry/delivery-runs/<YYYY-MM-DD>/<stamp>-<branch>.json`,
 tracked, one file per run so parallel ticket worktrees never conflict. It lives
 under `telemetry/` rather than `docs/` because `docs/` holds documents written to
 be read and this is a machine record written to be aggregated, and it is a
@@ -108,6 +108,12 @@ fingerprint-neutral, which breaks the otherwise-circular dependency: recording a
 run must not invalidate the review evidence it describes. The run summary prefers
 this tracked corpus over the worktree baseline, which is what makes the trend
 cross-delivery rather than confined to one ticket's worktree.
+
+The UTC day directory comes from the record's ISO `generatedAt` timestamp. It
+keeps the corpus browsable as deliveries accumulate without weakening the
+append-only filename identity. Readers recurse through day directories and
+continue to accept legacy flat records so branches created before the layout
+change remain comparable during migration.
 
 **Enforcement matched to the house pattern.** A `telemetry.recorded` obligation
 (live provider `delivery-run-telemetry-check`) plus a CI check demand a record —

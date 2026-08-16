@@ -100,9 +100,10 @@ export function deliveryRunTelemetryPath(
   record: DeliveryRunTelemetryRecord,
   telemetryDir = DELIVERY_RUN_TELEMETRY_DIR,
 ) {
+  const day = record.generatedAt.slice(0, 10);
   const stamp = record.generatedAt.replace(/[:.]/g, "-");
   const branch = slugify(record.branch) || "unknown-branch";
-  return path.join(telemetryDir, `${stamp}-${branch}.json`);
+  return path.join(telemetryDir, day, `${stamp}-${branch}.json`);
 }
 
 export async function writeDeliveryRunTelemetryRecord(
@@ -183,9 +184,10 @@ export async function readDeliveryRunTelemetryRecords(
   rootDir: string,
   telemetryDir = DELIVERY_RUN_TELEMETRY_DIR,
 ): Promise<DeliveryRunTelemetryRecord[]> {
+  const telemetryRoot = path.join(rootDir, telemetryDir);
   let entries: string[];
   try {
-    entries = await readdir(path.join(rootDir, telemetryDir));
+    entries = await collectJsonFiles(telemetryRoot);
   } catch (error) {
     if (
       error &&
@@ -199,10 +201,10 @@ export async function readDeliveryRunTelemetryRecords(
   }
 
   const records: DeliveryRunTelemetryRecord[] = [];
-  for (const entry of entries.filter((name) => name.endsWith(".json"))) {
+  for (const entry of entries) {
     try {
       const parsed = JSON.parse(
-        await readFile(path.join(rootDir, telemetryDir, entry), "utf8"),
+        await readFile(path.join(telemetryRoot, entry), "utf8"),
       );
       if (isTelemetryRecord(parsed)) records.push(parsed);
     } catch {
@@ -218,6 +220,24 @@ export async function readDeliveryRunTelemetryRecords(
       left.generatedAt.localeCompare(right.generatedAt) ||
       left.branch.localeCompare(right.branch),
   );
+}
+
+async function collectJsonFiles(rootDir: string, relativeDir = "") {
+  const entries = await readdir(path.join(rootDir, relativeDir), {
+    withFileTypes: true,
+  });
+  const files: string[] = [];
+
+  for (const entry of entries) {
+    const relativePath = path.join(relativeDir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await collectJsonFiles(rootDir, relativePath)));
+    } else if (entry.isFile() && entry.name.endsWith(".json")) {
+      files.push(relativePath);
+    }
+  }
+
+  return files;
 }
 
 export async function readLatestPassingDeliveryRunTelemetry(
