@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Complete backend migration onto the operation admission rail</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f6f7f9; --surface:#fff; --text:#1d2433; --muted:#667085; --line:#dfe3ea; --accent:#3f51b5; --soft:#eef1ff; --good:#eaf7ee; --warn:#fff6e5; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:16px/1.6 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(1080px,calc(100% - 32px)); margin:32px auto 64px; }
+    header,section { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:24px; margin-bottom:16px; }
+    h1 { margin:0 0 8px; font-size:clamp(1.8rem,4vw,2.6rem); line-height:1.1; letter-spacing:-.02em; }
+    h2 { margin:0 0 14px; font-size:1.3rem; }
+    h3 { margin:16px 0 6px; font-size:1rem; }
+    p,ul,ol { margin:8px 0 0; }
+    a { color:var(--accent); }
+    code { background:var(--soft); border-radius:4px; padding:1px 5px; font-size:.92em; }
+    .meta { color:var(--muted); display:flex; flex-wrap:wrap; gap:8px 18px; }
+    nav { display:flex; flex-wrap:wrap; gap:8px; margin-top:20px; }
+    nav a { background:var(--soft); border-radius:999px; padding:6px 11px; text-decoration:none; font-size:.9rem; }
+    .callout { background:var(--good); border-left:4px solid #27864a; border-radius:8px; padding:12px 14px; margin-top:12px; }
+    .warn { background:var(--warn); border-left-color:#c77700; }
+    table { width:100%; border-collapse:collapse; margin-top:10px; font-size:.95rem; }
+    th,td { border:1px solid var(--line); padding:8px 10px; text-align:left; vertical-align:top; }
+    th { background:var(--soft); }
+    .stat { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; margin-top:12px; }
+    .stat div { border:1px solid var(--line); border-radius:10px; padding:12px; }
+    .stat b { display:block; font-size:1.5rem; }
+    .overflow { overflow-x:auto; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#12151c; --surface:#1a1f29; --text:#e6e9ef; --muted:#9aa3b2; --line:#2b3240; --soft:#232a3d; --good:#1d3326; --warn:#3a2d14; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Complete backend migration onto the operation admission rail</h1>
+    <div class="meta"><span>Created 2026-08-16</span><span>Type: feat</span><span>Status: active</span><span>Depth: Deep</span><span>Source: <a href="2026-08-16-002-feat-complete-operation-admission-migration-plan.md">markdown plan</a></span></div>
+    <p><code>operationAdmission</code> becomes the single admission boundary for every backend ingress: all public Convex mutations, queries, actions <em>and</em> all Hono HTTP routes declare a definition and run through one canonical wrapper per ingress kind; actor policy lives only in adapters registered at a platform composition root (shared demo, normal user, storefront customer, public) so the rail core imports no policy; the checker covers every ingress kind with no exemption path and gates the merge; every legacy or transitional construct is deleted. One integration branch, finish line <code>bun run pr:athena</code> green, no PR.</p>
+    <nav><a href="#state">Current state</a><a href="#assumptions">Assumptions</a><a href="#requirements">Requirements</a><a href="#decisions">Decisions</a><a href="#units">Units</a><a href="#risks">Risks</a><a href="#delivery">Delivery</a></nav>
+  </header>
+
+  <section id="state">
+    <h2>Current state (origin/main 406d6777)</h2>
+    <div class="stat">
+      <div><b>189</b>raw public mutations</div>
+      <div><b>184</b>raw public queries</div>
+      <div><b>38</b>raw public actions</div>
+      <div><b>93</b>Hono routes (+ auth family), none admitted</div>
+    </div>
+    <ul>
+      <li>Storefront webapp reaches the backend only via HTTP routes that call <code>internal.storeFront.*</code>/<code>api.storeFront.*</code> with a bare cookie id as identity.</li>
+      <li>Checker only understands mutations, exits 1 today, not gate-wired; two wrapper names per kind; rail core imports <code>sharedDemo</code>; 192-entry exemption inventory; four hand-maintained registries duplicate definitions; ~50 handler-local demo checks and foundation guards.</li>
+    </ul>
+  </section>
+
+  <section id="assumptions">
+    <h2>Assumptions (headless)</h2>
+    <div class="callout warn">User direction: best long-term solution, no legacy behavior. Agent bets below.</div>
+    <ul>
+      <li>Scope = every ingress: public mutations/queries/actions + all Hono routes; internal functions stay behind those boundaries.</li>
+      <li><code>storefront_customer</code> actor kind (http kinds only) resolved from the claimed cookie id with <code>assurance: "bearer_id"</code>; store derived from the claim row, terminal on invalid/missing claim, no trust beyond id possession; customer write routes require <code>origin_allowlist</code> ingress verification (absent/null/unlisted Origin denies; <code>platform/storefrontOrigins.ts</code>) and exclude <code>public</code>; CORS becomes that fixed allowlist; ownership assertions established in owning B1 units from the U1 caller table, route inventory signed off by U10/U11. Session-proof upgrade tracked as a Linear follow-up.</li>
+      <li>Storefront public functions whose only callers are routes become internal; the route is the admitted boundary.</li>
+      <li>Shared-demo reach is policy-owned (capability grant set + new read-intent grant set) enforced by adapters regardless of definitions.</li>
+      <li>Action/HTTP admission is “admitted and started” in its own transaction; such definitions cannot declare <code>store_write</code> readiness; downstream demo writes go through admitted or readiness-checked functions with the admitted store id.</li>
+      <li>Gate obligations (solution note w/ discovery link, v2 landed report, telemetry) are satisfied in U12. Principal minting (<code>convex/auth.ts</code>) is the trust root outside the rail, named in <code>FRAMEWORK_ENTRY_POINTS</code>.</li>
+    </ul>
+  </section>
+
+  <section id="requirements">
+    <h2>Requirements</h2>
+    <ol>
+      <li>R1–R4 canonical <code>admitPublicMutation</code> / <code>admitPublicQuery</code> / <code>admitPublicAction</code> / <code>admitHttpRoute</code> (write) / <code>admitHttpRead</code> (read) on every ingress; aliases deleted; canonical gateway ids; webhooks declare <code>ingressVerification</code>.</li>
+      <li>R5 checker discovers all ingress kinds (every Hono registration form) + registrar exports, bans <code>api.*</code> self-calls, no exemptions (typed <code>FRAMEWORK_ENTRY_POINTS</code> incl. <code>auth.addHttpRoutes</code> family), gate-wired.</li>
+      <li>R6 rail contract: set-valued dynamic capability, action/HTTP wrappers with <code>store_ready</code> readiness, storefront-customer actor (http kinds only, bearer assurance), <code>AthenaReadIntent</code> + read grant set, typed outcomes, bound <code>target</code> resource guards, required actor fields, <code>domains/</code> modules.</li>
+      <li>R7 rail core allowlist imports only (<code>./*</code>, <code>_generated</code>, <code>platform/*</code>); adapters, guards, and the shared-demo capture port registered at <code>platform/operationAdmission.ts</code> · R8 normal-user parity · R9 terminal denials, fail-closed, customer-scoped reads bind to the admitted claim.</li>
+      <li>R10 delete: inventories, aliases, auth bridge, handler-local demo checks and foundation guards (re-expressed as <code>target</code>), <code>reports.read</code>, <code>classifyAthenaPublicWrite</code>, <code>SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY</code>, <code>SHARED_DEMO_GATEWAY_ENFORCEMENT_BINDINGS</code>, <code>classifySharedDemoPublicFunction</code>, hand-listed <code>sharedDemoCapabilityValidator</code>, message-sniffing.</li>
+      <li>R11 docs, supersession pointers, solution note, landed report.</li>
+    </ol>
+  </section>
+
+  <section id="decisions">
+    <h2>Key technical decisions</h2>
+    <ul>
+      <li>Composition root outside the rail core; <code>createAdmissionRail({adapters, resourceGuards, capture})</code>; allowlist import lint.</li>
+      <li>Chain shared demo → normal user → storefront customer → public; outcomes admitted/denied/unauthenticated/not_applicable; fall through only on unauthenticated/not_applicable; identity before scope; no message sniffing.</li>
+      <li><code>storefront_customer</code>: http kinds only, store derived from claim row, terminal denial (incl. storeless guests → backfill), bearer assurance, ownership assertions <em>established</em> per inventory.</li>
+      <li>Set-valued dynamic capability (pos sync) with <code>user_error</code> denial contract.</li>
+      <li>Bound <code>target</code> guards (scope / arg / resolver) evaluated for all actors and kinds after scope, mapped site-by-site.</li>
+      <li>Typed read-intent catalog + grant set fixed in U1; definitions are the only capability/gateway source with both-direction static invariants.</li>
+      <li>Action/HTTP semantics (<code>store_ready</code> fence; <code>http_read</code> via internal query); admitted bodies call only <code>internal.*</code> per the U1-generated caller table.</li>
+      <li>Checker: no exemptions, honest framework entry points, <code>--path</code>, <code>--partition</code>, cwd-independent, bare invocation in <code>audit:convex</code>.</li>
+      <li>U1 (U1a → U1b ∥ U1c) pre-creates per-unit domain modules, closes catalogs, seeds grants, owns <code>http/utils.ts</code>, runs codegen; strict file ownership; single-writer codegen; Phase B in two waves (B1 Convex modules → B2 routes).</li>
+    </ul>
+  </section>
+
+  <section id="units">
+    <h2>Implementation units and ownership</h2>
+    <div class="overflow"><table>
+      <tr><th>Unit</th><th>Owns</th><th>raw m/q/a</th><th>Depends</th></tr>
+      <tr><td>U1a/b/c</td><td>Rail end-state + composition root + scaffolds + codegen (U1a); checker rewrite + gate wiring (U1b); canonical rename + catalog sweep (U1c)</td><td>—</td><td>U1b,U1c ← U1a</td></tr>
+      <tr><td>U2</td><td>pos/public/{catalog,customers,posRecoveryCodes,register,sync,telemetry,terminalAppSessions,terminals,transactions}</td><td>29/12/0</td><td>U1</td></tr>
+      <tr><td>U3</td><td>inventory/{bannerMessage,bestSeller,catalogImport,categories,colors,complimentaryProduct,featuredItem,inventoryImportCostOverlay,productSku,productUtil,products,promoCode,skuSearch,stockValidation,storeSchedule,subcategories}</td><td>47/40/3</td><td>U1</td></tr>
+      <tr><td>U4</td><td>inventory/{auth,expenseSessionItems,expenseSessions,expenseTransactions,inviteCode,organizationMembers,organizations,posSessionItems,posSessions,stores}</td><td>39/18/5</td><td>U1</td></tr>
+      <tr><td>U5</td><td>operations/{dailyClose,dailyManagerReportEmail,dailyOperationsAutomation,managerElevations,operationalEvents,serviceIntake,staffCredentials,staffProfiles}, cashControls/closeouts, stockOps/{adjustments,purchaseOrders,receiving,replenishment,vendors}, inventoryLedger/corrections, serviceOps/{appointments,catalog,serviceCases}, customerMessaging/public, notifications/subscriptions, workflowTraces/public</td><td>36/18/3</td><td>U1</td></tr>
+      <tr><td>U6</td><td>storeFront/{auth,bag,bagItem,checkoutSession,customerBehaviorTimeline,guest,homepageSnapshot,offers,payment,paystackActions,rewards,savedBag,supportTicket,user,users}, schema.ts + guest backfill</td><td>11/37/9</td><td>U1</td></tr>
+      <tr><td>U7</td><td>storeFront/{analytics,onlineOrder,onlineOrderItem,onlineOrderUtilFns,reviews}, storeFront/helpers/orderUpdateEmails</td><td>14/30/0</td><td>U1</td></tr>
+      <tr><td>U8</td><td>reports/{access,customRange,liveDay,queries,skuMixRange,skuMovementRange}, inventory/athenaUser, lib/athenaUserAuth</td><td>5/19/0</td><td>U1</td></tr>
+      <tr><td>U9</td><td>app, cloudflare/stream, contextTracking/*, devPatchBadTransaction, harnessWaiver/*, intelligence/*, llm/*, otp/*, remoteAssist/*, sharedDemo/{admission,public}</td><td>7/10/18</td><td>U1</td></tr>
+      <tr><td>U10</td><td>http/domains/customerChannel/** (incl. paystack webhook + signature verification)</td><td>55 routes</td><td>B1 (U3,U4,U6,U7)</td></tr>
+      <tr><td>U11</td><td>http/domains/{core,customerMessaging,moneyMovement}/**, http.ts</td><td>38 routes</td><td>B1 (U3,U6,U7)</td></tr>
+      <tr><td>U12</td><td>Closure: derived invariants, registry deletions, docs, solution note, landed report, generated artifacts, graphify, prepare → review → gate → telemetry</td><td>—</td><td>U2–U11</td></tr>
+    </table></div>
+    <h3>Per-unit verification contract</h3>
+    <ul><li>Normal-user parity at exported handlers; anonymous denied unless <code>public</code>; storefront customer admitted only with valid same-store id and never beyond <code>public</code> trust; shared demo per grant sets with clamp/readiness; <code>target</code> guards preserved; contracts unchanged; <code>--path</code> zero findings.</li></ul>
+  </section>
+
+  <section id="risks">
+    <h2>Risks and mitigations</h2>
+    <div class="overflow"><table>
+      <tr><th>Risk</th><th>Mitigation</th></tr>
+      <tr><td>Normal-user regression</td><td>Characterization-first; parity evidence per unit; U12 blocked until recorded</td></tr>
+      <tr><td>Demo foundation rows mutable by normal users</td><td><code>target</code> guards for all actors; per-site tests</td></tr>
+      <tr><td>Storefront-customer provenance over-trusted</td><td>bearer assurance marker; ownership assertions mandatory; test that a valid id grants nothing beyond public</td></tr>
+      <tr><td>Customer channel breaks</td><td>Routes unchanged; route tests; internalization by caller table</td></tr>
+      <tr><td>Parallel unit conflicts</td><td>U1 pre-creation + strict ownership</td></tr>
+      <tr><td>Checker false negatives</td><td>AST discovery of all ingress kinds incl. registrar exports and Hono registrations</td></tr>
+      <tr><td>Gate obligations</td><td>U12 sequence: docs + report + fingerprints last → prepare → review → gate → telemetry</td></tr>
+    </table></div>
+  </section>
+
+  <section id="delivery">
+    <h2>Delivery and success</h2>
+    <p><strong>A</strong> U1a → U1b ∥ U1c → <strong>B1</strong> U2–U9 → <strong>B2</strong> U10–U11 → <strong>C</strong> U12. Success: checker exits 0 with zero findings across all ingress kinds and no exemption construct; rail core imports no policy; auth shared-demo-unaware; listed legacy constructs gone; parity evidence per unit; <code>audit:convex</code>, suites, and <code>bun run pr:athena</code> green with telemetry recorded.</p>
+    <div class="callout">Origin: <a href="../brainstorms/2026-07-21-operation-admission-rail-requirements.md">2026-07-21 requirements</a> · Prior plans: <a href="2026-07-21-001-feat-operation-admission-rail-plan.md">write rail</a>, <a href="2026-07-22-001-feat-shared-demo-read-admission-rail-plan.md">read rail</a>.</div>
+  </section>
+</main>
+</body>
+</html>
