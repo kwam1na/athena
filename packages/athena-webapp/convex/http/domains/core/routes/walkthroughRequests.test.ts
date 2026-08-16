@@ -6,6 +6,17 @@ import {
 } from "./walkthroughRequests";
 import { readBoundedBody } from "./boundedBody";
 
+/**
+ * Admission runs its own internal mutation before the handler, so "did the
+ * route persist anything" is now a question about the walkthrough mutation
+ * specifically rather than about `runMutation` being called at all. The
+ * acceptance call is the only one carrying a submission key.
+ */
+const acceptCalls = (runMutation: ReturnType<typeof vi.fn>) =>
+  runMutation.mock.calls.filter(
+    (call) => (call[1] as { submissionKey?: string })?.submissionKey,
+  );
+
 const validBody = {
   submissionKey: "01JABCDEFGHIJKLMNOPQRSTUVWX",
   name: "Ada Owner",
@@ -73,7 +84,7 @@ describe("walkthrough HTTP ingress", () => {
     );
 
     expect(response.status).toBe(status);
-    expect(runMutation).not.toHaveBeenCalled();
+    expect(acceptCalls(runMutation)).toHaveLength(0);
   });
 
   it("accepts an exact allowlisted JSON origin", () => {
@@ -105,7 +116,7 @@ describe("walkthrough HTTP ingress", () => {
 
     expect(response.status).toBe(202);
     await expect(response.json()).resolves.toEqual({ accepted: true });
-    expect(runMutation).not.toHaveBeenCalled();
+    expect(acceptCalls(runMutation)).toHaveLength(0);
   });
 
   it("returns only durable acceptance after the internal mutation accepts", async () => {
@@ -125,7 +136,7 @@ describe("walkthrough HTTP ingress", () => {
 
     expect(response.status).toBe(202);
     await expect(response.json()).resolves.toEqual({ accepted: true });
-    expect(runMutation).toHaveBeenCalledTimes(1);
+    expect(acceptCalls(runMutation)).toHaveLength(1);
   });
 
   it("keeps ingress closed until the privacy contact is configured", async () => {
@@ -148,7 +159,7 @@ describe("walkthrough HTTP ingress", () => {
     await expect(response.json()).resolves.toEqual({
       error: { code: "temporarily_unavailable" },
     });
-    expect(runMutation).not.toHaveBeenCalled();
+    expect(acceptCalls(runMutation)).toHaveLength(0);
   });
 
   it.each([
@@ -195,7 +206,15 @@ describe("walkthrough HTTP ingress", () => {
         body: JSON.stringify(validBody),
       },
       {
-        runMutation: vi.fn().mockRejectedValue(new Error("private detail")),
+        // Admission succeeds; only the persistence call fails, and its private
+        // detail must not reach the caller.
+        runMutation: vi
+          .fn()
+          .mockImplementation((_reference, args) =>
+            (args as { submissionKey?: string })?.submissionKey
+              ? Promise.reject(new Error("private detail"))
+              : Promise.resolve({}),
+          ),
       } as never,
     );
 
@@ -221,7 +240,7 @@ describe("walkthrough HTTP ingress", () => {
     );
 
     expect(response.status).toBe(400);
-    expect(runMutation).not.toHaveBeenCalled();
+    expect(acceptCalls(runMutation)).toHaveLength(0);
   });
 
   it("hashes the same canonical payload that persistence normalizes", async () => {
@@ -242,8 +261,10 @@ describe("walkthrough HTTP ingress", () => {
       expect(response.status).toBe(202);
     }
 
-    expect(runMutation.mock.calls[0][1].payloadDigest)
-      .toBe(runMutation.mock.calls[1][1].payloadDigest);
+    const digests = acceptCalls(runMutation).map(
+      (call) => (call[1] as { payloadDigest: string }).payloadDigest,
+    );
+    expect(digests[0]).toBe(digests[1]);
   });
 
   it("stops reading a body as soon as the streaming limit is exceeded", async () => {
@@ -265,5 +286,26 @@ describe("walkthrough HTTP ingress", () => {
 
     await expect(readBoundedBody(request, 1_024)).resolves.toBeNull();
     expect(cancelled).toBe(true);
+  });
+
+  it("admits nothing when the marketing origin is not allowlisted", async () => {
+    const runMutation = vi.fn();
+    const response = await walkthroughRequestRoutes.request(
+      "/",
+      {
+        method: "POST",
+        headers: {
+          origin: "https://evil.example",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(validBody),
+      },
+      { runMutation } as never,
+    );
+
+    expect(response.status).toBe(403);
+    // The declared verifier runs before the admission mutation, so a rejected
+    // request leaves no admission row and no capture behind it.
+    expect(runMutation).not.toHaveBeenCalled();
   });
 });

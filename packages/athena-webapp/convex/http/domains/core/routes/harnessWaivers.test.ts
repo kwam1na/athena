@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const generatedServer = vi.hoisted(() => ({
   env: {
@@ -9,7 +9,15 @@ const generatedServer = vi.hoisted(() => ({
   } as Record<string, string | undefined>,
 }));
 
-vi.mock("../../../../_generated/server", () => generatedServer);
+// Only `env` is overridden: the route now imports the admission composition
+// root, which pulls in the real Convex function builders, so replacing the
+// whole generated module would break at import time.
+vi.mock("../../../../_generated/server", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  get env() {
+    return generatedServer.env;
+  },
+}));
 
 import {
   harnessWaiverRoutes,
@@ -44,7 +52,29 @@ function brokerEnv() {
 
 beforeEach(() => {
   generatedServer.env.ATHENA_WAIVER_BROKER_SECRET = "broker-secret";
+  // The declared ingress verifier reads the same secret from the environment
+  // the Convex runtime exposes it through.
+  process.env.ATHENA_WAIVER_BROKER_SECRET = "broker-secret";
 });
+
+afterEach(() => {
+  delete process.env.ATHENA_WAIVER_BROKER_SECRET;
+});
+
+/**
+ * Admission runs its own internal mutation/query before each handler, so the
+ * "exactly one backend call" property is now about the harness calls: the
+ * admission entry points are the only other traffic on these bindings.
+ */
+const brokerCalls = (bindings: ReturnType<typeof brokerEnv>) =>
+  [
+    ...bindings.runAction.mock.calls,
+    ...bindings.runQuery.mock.calls,
+    ...bindings.runMutation.mock.calls,
+  ].filter((call) => {
+    const args = call[1] as { operationId?: string } | undefined;
+    return !args || args.operationId === undefined;
+  });
 
 describe("parseWaiverCandidate", () => {
   it("accepts the exact supported documentation findings", () => {
@@ -120,11 +150,7 @@ describe("harness waiver broker authorization", () => {
     );
 
     expect(response.status).toBe(method === "POST" && path === "/requests" ? 201 : 200);
-    expect(
-      bindings.runAction.mock.calls.length +
-        bindings.runQuery.mock.calls.length +
-        bindings.runMutation.mock.calls.length,
-    ).toBe(1);
+    expect(brokerCalls(bindings)).toHaveLength(1);
   });
 
   it("fails closed when the broker secret is not configured", async () => {

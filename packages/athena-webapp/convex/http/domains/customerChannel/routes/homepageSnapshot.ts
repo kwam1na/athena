@@ -2,14 +2,18 @@ import { Hono } from "hono";
 import { setCookie } from "hono/cookie";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
-import { api, internal } from "../../../../_generated/api";
+import { internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
 import { getStorefrontUserFromRequest } from "../../../utils";
+import { admitHttpRead } from "../../../../platform/operationAdmission";
+import { getHomepageSnapshotRouteReadDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
 
 const COOKIE_DOMAIN = "wigclub.store";
 const COOKIE_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
 const HOMEPAGE_MERCHANDISING_BUCKET_MS = 60_000;
-const homepageSnapshotQuery = api.storeFront.homepageSnapshot.get;
+// Anonymous browse read: the snapshot carries no shopper-scoped data, so the
+// internal sibling is called without an `owner`.
+const homepageSnapshotQuery = internal.storeFront.homepageSnapshot.getInternal;
 
 type CookieToSet = {
   name: string;
@@ -134,22 +138,25 @@ const setBootstrapCookie = (c: any, cookie: CookieToSet) => {
 
 const homepageSnapshotRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
-homepageSnapshotRoutes.get("/", async (c) => {
-  const result = await resolveHomepageSnapshotBootstrap({
-    runQuery: c.env.runQuery,
-    runMutation: c.env.runMutation,
-    storeName: c.req.query("storeName"),
-    marker: c.req.query("marker"),
-    asNewUser: c.req.query("asNewUser"),
-    currentUserId: getStorefrontUserFromRequest(c),
-    nowMs: Date.now(),
-  });
+homepageSnapshotRoutes.get(
+  "/",
+  admitHttpRead(getHomepageSnapshotRouteReadDefinition, async (c) => {
+    const result = await resolveHomepageSnapshotBootstrap({
+      runQuery: c.env.runQuery,
+      runMutation: c.env.runMutation,
+      storeName: c.req.query("storeName"),
+      marker: c.req.query("marker"),
+      asNewUser: c.req.query("asNewUser"),
+      currentUserId: getStorefrontUserFromRequest(c),
+      nowMs: Date.now(),
+    });
 
-  for (const cookie of result.cookies) {
-    setBootstrapCookie(c, cookie);
-  }
+    for (const cookie of result.cookies) {
+      setBootstrapCookie(c, cookie);
+    }
 
-  return c.json(result.body, result.status as 200 | 404);
-});
+    return c.json(result.body, result.status as 200 | 404);
+  }),
+);
 
 export { homepageSnapshotRoutes };

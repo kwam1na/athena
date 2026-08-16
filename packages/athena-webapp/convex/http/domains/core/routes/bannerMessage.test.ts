@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { api } from "../../../../_generated/api";
+import { internal } from "../../../../_generated/api";
 import { resolvePublicBannerMessage } from "./bannerMessage";
 
 describe("public banner message route", () => {
@@ -19,7 +19,7 @@ describe("public banner message route", () => {
       body: { bannerMessage: publicBanner },
     });
     expect(runQuery).toHaveBeenCalledWith(
-      api.inventory.bannerMessage.getPublicActive,
+      internal.inventory.bannerMessage.getPublicActiveInternal,
       {
         storeId: "store-1",
         nowMs: 1_000,

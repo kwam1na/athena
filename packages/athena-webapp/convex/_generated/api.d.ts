@@ -79,6 +79,7 @@ import type * as harnessWaiver_passkeys from "../harnessWaiver/passkeys.js";
 import type * as harnessWaiver_registrationAuthorization from "../harnessWaiver/registrationAuthorization.js";
 import type * as harnessWaiver_storage from "../harnessWaiver/storage.js";
 import type * as http from "../http.js";
+import type * as http_domains_core_routes_admittedOwner from "../http/domains/core/routes/admittedOwner.js";
 import type * as http_domains_core_routes_analytics from "../http/domains/core/routes/analytics.js";
 import type * as http_domains_core_routes_auth from "../http/domains/core/routes/auth.js";
 import type * as http_domains_core_routes_bannerMessage from "../http/domains/core/routes/bannerMessage.js";
@@ -94,6 +95,7 @@ import type * as http_domains_core_routes_stores from "../http/domains/core/rout
 import type * as http_domains_core_routes_subcategories from "../http/domains/core/routes/subcategories.js";
 import type * as http_domains_core_routes_trackingEvents from "../http/domains/core/routes/trackingEvents.js";
 import type * as http_domains_core_routes_walkthroughRequests from "../http/domains/core/routes/walkthroughRequests.js";
+import type * as http_domains_customerChannel_routes_admittedCustomer from "../http/domains/customerChannel/routes/admittedCustomer.js";
 import type * as http_domains_customerChannel_routes_bag from "../http/domains/customerChannel/routes/bag.js";
 import type * as http_domains_customerChannel_routes_checkout from "../http/domains/customerChannel/routes/checkout.js";
 import type * as http_domains_customerChannel_routes_guest from "../http/domains/customerChannel/routes/guest.js";
@@ -729,6 +731,7 @@ declare const fullApi: ApiFromModules<{
   "harnessWaiver/registrationAuthorization": typeof harnessWaiver_registrationAuthorization;
   "harnessWaiver/storage": typeof harnessWaiver_storage;
   http: typeof http;
+  "http/domains/core/routes/admittedOwner": typeof http_domains_core_routes_admittedOwner;
   "http/domains/core/routes/analytics": typeof http_domains_core_routes_analytics;
   "http/domains/core/routes/auth": typeof http_domains_core_routes_auth;
   "http/domains/core/routes/bannerMessage": typeof http_domains_core_routes_bannerMessage;
@@ -744,6 +747,7 @@ declare const fullApi: ApiFromModules<{
   "http/domains/core/routes/subcategories": typeof http_domains_core_routes_subcategories;
   "http/domains/core/routes/trackingEvents": typeof http_domains_core_routes_trackingEvents;
   "http/domains/core/routes/walkthroughRequests": typeof http_domains_core_routes_walkthroughRequests;
+  "http/domains/customerChannel/routes/admittedCustomer": typeof http_domains_customerChannel_routes_admittedCustomer;
   "http/domains/customerChannel/routes/bag": typeof http_domains_customerChannel_routes_bag;
   "http/domains/customerChannel/routes/checkout": typeof http_domains_customerChannel_routes_checkout;
   "http/domains/customerChannel/routes/guest": typeof http_domains_customerChannel_routes_guest;

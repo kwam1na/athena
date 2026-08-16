@@ -1,179 +1,255 @@
 import { Hono } from "hono";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
-import { api } from "../../../../_generated/api";
+import { internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
 import {
-  getStoreDataFromRequest,
-  getStorefrontUserFromRequest,
-} from "../../../utils";
+  admitHttpRead,
+  admitHttpRoute,
+} from "../../../../platform/operationAdmission";
+import {
+  awardGuestOrderPointsRouteOperationDefinition,
+  awardPastOrderPointsRouteOperationDefinition,
+  redeemRewardPointsRouteOperationDefinition,
+} from "../../../../operationAdmission/domains/u10_httpCustomer_definitions";
+import {
+  getEligiblePastOrdersRouteReadDefinition,
+  getOrderRewardPointsRouteReadDefinition,
+  getRewardHistoryRouteReadDefinition,
+  getRewardPointsRouteReadDefinition,
+  getRewardTiersRouteReadDefinition,
+} from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
+import {
+  parseIngressJson,
+  requireAdmittedCustomerOwner,
+} from "./admittedCustomer";
 
 const rewardsRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
+/**
+ * Rewards belong to a signed-in account, so every handler branches on
+ * `owner.storeFrontUserId`: present means an account, absent means the admitted
+ * shopper is still a guest. That replaces the old
+ * `userId.toString().startsWith("guest")` string sniff with the claim the rail
+ * actually resolved, and the store now comes from the claim row rather than the
+ * `store_id` cookie.
+ */
+
 // Get user's current points
-rewardsRoutes.get("/points", async (c) => {
-  const userId = getStorefrontUserFromRequest(c);
-  if (!userId || userId.toString().startsWith("guest")) {
-    return c.json({ points: 0 });
-  }
+rewardsRoutes.get(
+  "/points",
+  admitHttpRead(getRewardPointsRouteReadDefinition, async (c, admitted) => {
+    const owner = requireAdmittedCustomerOwner(admitted);
+    if (!owner.storeFrontUserId) {
+      return c.json({ points: 0 });
+    }
 
-  const { storeId } = getStoreDataFromRequest(c);
+    const points = await c.env.runQuery(
+      internal.storeFront.rewards.getUserPointsInternal,
+      {
+        storeFrontUserId: owner.storeFrontUserId,
+        storeId: owner.storeId,
+        owner,
+      },
+    );
 
-  if (!storeId) {
-    return c.json({ error: "Store ID is required" }, 400);
-  }
-
-  const points = await c.env.runQuery(api.storeFront.rewards.getUserPoints, {
-    storeFrontUserId: userId as Id<"storeFrontUser">,
-    storeId: storeId as Id<"store">,
-  });
-
-  return c.json({ points });
-});
+    return c.json({ points });
+  }),
+);
 
 // Get user's point history
-rewardsRoutes.get("/history", async (c) => {
-  const userId = getStorefrontUserFromRequest(c);
-  if (!userId || userId.toString().startsWith("guest")) {
-    return c.json({ transactions: [] });
-  }
-
-  const transactions = await c.env.runQuery(
-    api.storeFront.rewards.getPointHistory,
-    {
-      storeFrontUserId: userId as Id<"storeFrontUser">,
+rewardsRoutes.get(
+  "/history",
+  admitHttpRead(getRewardHistoryRouteReadDefinition, async (c, admitted) => {
+    const owner = requireAdmittedCustomerOwner(admitted);
+    if (!owner.storeFrontUserId) {
+      return c.json({ transactions: [] });
     }
-  );
 
-  return c.json({ transactions });
-});
+    const transactions = await c.env.runQuery(
+      internal.storeFront.rewards.getPointHistoryInternal,
+      {
+        storeFrontUserId: owner.storeFrontUserId,
+        owner,
+      },
+    );
+
+    return c.json({ transactions });
+  }),
+);
 
 // Get available reward tiers
-rewardsRoutes.get("/tiers", async (c) => {
-  const { storeId } = getStoreDataFromRequest(c);
-  if (!storeId) {
-    return c.json({ error: "Store ID is required" }, 400);
-  }
+rewardsRoutes.get(
+  "/tiers",
+  admitHttpRead(getRewardTiersRouteReadDefinition, async (c, admitted) => {
+    const owner = requireAdmittedCustomerOwner(admitted);
 
-  const tiers = await c.env.runQuery(api.storeFront.rewards.getTiers, {
-    storeId: storeId as Id<"store">,
-  });
+    const tiers = await c.env.runQuery(
+      internal.storeFront.rewards.getTiersInternal,
+      { storeId: owner.storeId, owner },
+    );
 
-  return c.json({ tiers });
-});
+    return c.json({ tiers });
+  }),
+);
 
 // Redeem points for a reward
-rewardsRoutes.post("/redeem", async (c) => {
-  const userId = getStorefrontUserFromRequest(c);
-  if (!userId || userId.toString().startsWith("guest")) {
-    return c.json({ error: "Must be logged in to redeem points" }, 401);
-  }
+rewardsRoutes.post(
+  "/redeem",
+  admitHttpRoute(
+    redeemRewardPointsRouteOperationDefinition,
+    async (c, admitted) => {
+      const owner = requireAdmittedCustomerOwner(admitted);
+      if (!owner.storeFrontUserId) {
+        return c.json({ error: "Must be logged in to redeem points" }, 401);
+      }
 
-  const { storeId } = getStoreDataFromRequest(c);
-  if (!storeId) {
-    return c.json({ error: "Store ID is required" }, 400);
-  }
+      const { rewardTierId } = parseIngressJson(admitted);
+      if (!rewardTierId) {
+        return c.json({ error: "Reward tier ID is required" }, 400);
+      }
 
-  const { rewardTierId } = await c.req.json();
-  if (!rewardTierId) {
-    return c.json({ error: "Reward tier ID is required" }, 400);
-  }
+      const result = await c.env.runMutation(
+        internal.storeFront.rewards.redeemPointsInternal,
+        {
+          storeFrontUserId: owner.storeFrontUserId,
+          storeId: owner.storeId,
+          rewardTierId: rewardTierId as Id<"rewardTiers">,
+          owner,
+        },
+      );
 
-  const result = await c.env.runMutation(api.storeFront.rewards.redeemPoints, {
-    storeFrontUserId: userId as Id<"storeFrontUser">,
-    storeId: storeId as Id<"store">,
-    rewardTierId: rewardTierId as Id<"rewardTiers">,
-  });
-
-  return c.json(result);
-});
+      return c.json(result);
+    },
+  ),
+);
 
 // Add endpoints for past eligible orders and awarding points for them
-rewardsRoutes.get("/eligible-past-orders", async (c) => {
-  const userId = getStorefrontUserFromRequest(c);
-  if (!userId || userId.toString().startsWith("guest")) {
-    return c.json({ error: "Must be logged in to view eligible orders" }, 401);
-  }
+rewardsRoutes.get(
+  "/eligible-past-orders",
+  admitHttpRead(
+    getEligiblePastOrdersRouteReadDefinition,
+    async (c, admitted) => {
+      const owner = requireAdmittedCustomerOwner(admitted);
+      if (!owner.storeFrontUserId) {
+        return c.json(
+          { error: "Must be logged in to view eligible orders" },
+          401,
+        );
+      }
 
-  const { email } = await c.req.query();
-  if (!email) {
-    return c.json({ error: "Email is required" }, 400);
-  }
+      const { email } = c.req.query();
+      if (!email) {
+        return c.json({ error: "Email is required" }, 400);
+      }
 
-  const orders = await c.env.runQuery(
-    api.storeFront.rewards.getPastEligibleOrders,
-    {
-      storeFrontUserId: userId as Id<"storeFrontUser">,
-      email,
-    }
-  );
+      const orders = await c.env.runQuery(
+        internal.storeFront.rewards.getPastEligibleOrdersInternal,
+        {
+          storeFrontUserId: owner.storeFrontUserId,
+          email,
+          owner,
+        },
+      );
 
-  return c.json({ orders });
-});
+      return c.json({ orders });
+    },
+  ),
+);
 
-rewardsRoutes.post("/award-past-order", async (c) => {
-  const userId = getStorefrontUserFromRequest(c);
-  if (!userId || userId.toString().startsWith("guest")) {
-    return c.json({ error: "Must be logged in to award points" }, 401);
-  }
+rewardsRoutes.post(
+  "/award-past-order",
+  admitHttpRoute(
+    awardPastOrderPointsRouteOperationDefinition,
+    async (c, admitted) => {
+      const owner = requireAdmittedCustomerOwner(admitted);
+      if (!owner.storeFrontUserId) {
+        return c.json({ error: "Must be logged in to award points" }, 401);
+      }
 
-  const { orderId } = await c.req.json();
-  if (!orderId) {
-    return c.json({ error: "Order ID is required" }, 400);
-  }
+      const { orderId } = parseIngressJson(admitted);
+      if (!orderId) {
+        return c.json({ error: "Order ID is required" }, 400);
+      }
 
-  const result = await c.env.runMutation(
-    api.storeFront.rewards.awardPointsForPastOrder,
-    {
-      storeFrontUserId: userId as Id<"storeFrontUser">,
-      orderId: orderId as Id<"onlineOrder">,
-    }
-  );
+      const result = await c.env.runMutation(
+        internal.storeFront.rewards.awardPointsForPastOrderInternal,
+        {
+          storeFrontUserId: owner.storeFrontUserId,
+          orderId: orderId as Id<"onlineOrder">,
+          owner,
+        },
+      );
 
-  return c.json(result);
-});
+      return c.json(result);
+    },
+  ),
+);
 
 // Add endpoint to get reward points for a specific order
-rewardsRoutes.get("/order-points", async (c) => {
-  const orderId = c.req.query("orderId");
+rewardsRoutes.get(
+  "/order-points",
+  admitHttpRead(
+    getOrderRewardPointsRouteReadDefinition,
+    async (c, admitted) => {
+      const orderId = c.req.query("orderId");
 
-  if (!orderId) {
-    return c.json({ error: "Order ID is required" }, 400);
-  }
+      if (!orderId) {
+        return c.json({ error: "Order ID is required" }, 400);
+      }
 
-  try {
-    const result = await c.env.runQuery(api.storeFront.rewards.getOrderPoints, {
-      orderId: orderId as Id<"onlineOrder">,
-    });
+      try {
+        // Previously any caller could read any order's points by id. The order
+        // is still named by the query string, but the callee now checks it
+        // against the admitted shopper.
+        const result = await c.env.runQuery(
+          internal.storeFront.rewards.getOrderPointsInternal,
+          {
+            orderId: orderId as Id<"onlineOrder">,
+            owner: requireAdmittedCustomerOwner(admitted),
+          },
+        );
 
-    return c.json(result);
-  } catch (error) {
-    console.error("Error fetching order points:", error);
-    return c.json({ error: "Failed to fetch order points", points: 0 }, 500);
-  }
-});
+        return c.json(result);
+      } catch (error) {
+        console.error("Error fetching order points:", error);
+        return c.json({ error: "Failed to fetch order points", points: 0 }, 500);
+      }
+    },
+  ),
+);
 
 // Add endpoint to award points for all orders associated with a guest ID
-rewardsRoutes.post("/award-guest-orders", async (c) => {
-  const { guestId, userId } = await c.req.json();
+rewardsRoutes.post(
+  "/award-guest-orders",
+  admitHttpRoute(
+    awardGuestOrderPointsRouteOperationDefinition,
+    async (c, admitted) => {
+      const { guestId } = parseIngressJson(admitted);
 
-  if (!userId) {
-    return c.json({ error: "User ID is required" }, 400);
-  }
+      // The account the points land on is the admitted shopper's, never the
+      // body's `userId` — that field is no longer read at all.
+      const owner = requireAdmittedCustomerOwner(admitted);
+      if (!owner.storeFrontUserId) {
+        return c.json({ error: "User ID is required" }, 400);
+      }
 
-  if (!guestId) {
-    return c.json({ error: "Guest ID is required" }, 400);
-  }
+      if (!guestId) {
+        return c.json({ error: "Guest ID is required" }, 400);
+      }
 
-  const result = await c.env.runMutation(
-    api.storeFront.rewards.awardPointsForGuestOrders,
-    {
-      storeFrontUserId: userId as Id<"storeFrontUser">,
-      guestId: guestId as Id<"guest">,
-    }
-  );
+      const result = await c.env.runMutation(
+        internal.storeFront.rewards.awardPointsForGuestOrdersInternal,
+        {
+          storeFrontUserId: owner.storeFrontUserId,
+          guestId: guestId as Id<"guest">,
+          owner,
+        },
+      );
 
-  return c.json(result);
-});
+      return c.json(result);
+    },
+  ),
+);
 
 export { rewardsRoutes };

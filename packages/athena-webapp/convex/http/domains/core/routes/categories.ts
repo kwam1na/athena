@@ -1,8 +1,10 @@
 import { Hono } from "hono";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
-import { api } from "../../../../_generated/api";
+import { internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
+import { listCategoriesRouteReadDefinition } from "../../../../operationAdmission/domains/u11_httpCore_readDefinitions";
+import { admitHttpRead } from "../../../../platform/operationAdmission";
 import { getStoreDataFromRequest } from "../../../utils";
 
 const categoryRoutes: HonoWithConvex<ActionCtx> = new Hono();
@@ -41,34 +43,44 @@ export function removeStorefrontHiddenSubcategories<
   }));
 }
 
-categoryRoutes.get("/", async (c) => {
-  const { storeId } = getStoreDataFromRequest(c);
+categoryRoutes.get(
+  "/",
+  admitHttpRead(listCategoriesRouteReadDefinition, async (c) => {
+    const { storeId } = getStoreDataFromRequest(c);
 
-  const queryParams = c.req.queries();
+    const queryParams = c.req.queries();
 
-  if (!storeId)
-    return c.json({ error: "Missing data to retrieve categories" }, 400);
+    if (!storeId)
+      return c.json({ error: "Missing data to retrieve categories" }, 400);
 
-  if (queryParams.withSubcategories) {
+    if (queryParams.withSubcategories) {
+      const categories: Array<{
+        showOnStorefront?: boolean;
+        slug?: string;
+        subcategories?: Array<{ slug?: string }>;
+      }> = await c.env.runQuery(
+        internal.inventory.categories.getCategoriesWithSubcategoriesInternal,
+        {
+          storeId: storeId as Id<"store">,
+        },
+      );
+
+      return c.json({
+        categories: removeStorefrontHiddenSubcategories(
+          removeStorefrontHiddenCategories(categories),
+        ),
+      });
+    }
+
     const categories = await c.env.runQuery(
-      api.inventory.categories.getCategoriesWithSubcategories,
+      internal.inventory.categories.getAllInternal,
       {
         storeId: storeId as Id<"store">,
-      }
+      },
     );
 
-    return c.json({
-      categories: removeStorefrontHiddenSubcategories(
-        removeStorefrontHiddenCategories(categories),
-      ),
-    });
-  }
-
-  const categories = await c.env.runQuery(api.inventory.categories.getAll, {
-    storeId: storeId as Id<"store">,
-  });
-
-  return c.json({ categories: removeStorefrontHiddenCategories(categories) });
-});
+    return c.json({ categories: removeStorefrontHiddenCategories(categories) });
+  }),
+);
 
 export { categoryRoutes };

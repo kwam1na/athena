@@ -1,44 +1,78 @@
 import { Hono } from "hono";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
-import { api, internal } from "../../../../_generated/api";
+import { internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
 import { setCookie } from "hono/cookie";
 import { getStorefrontUserFromRequest } from "../../../utils";
+import {
+  admitHttpRead,
+  admitHttpRoute,
+} from "../../../../platform/operationAdmission";
+import { storefrontInventoryBatchRouteOperationDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_definitions";
+import { getStorefrontRouteReadDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
+import { parseIngressJson } from "./admittedCustomer";
 
 const storefrontRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
-storefrontRoutes.get("/", async (c) => {
-  const storeName = c.req.query("storeName");
-  const marker = c.req.query("marker");
-  const asNewUser = c.req.query("asNewUser");
+storefrontRoutes.get(
+  "/",
+  admitHttpRead(getStorefrontRouteReadDefinition, async (c) => {
+    // Store bootstrap for an anonymous visitor: public by construction, since
+    // this is the request that hands out the store and guest cookies.
+    const storeName = c.req.query("storeName");
+    const marker = c.req.query("marker");
+    const asNewUser = c.req.query("asNewUser");
 
-  if (!storeName) {
-    return c.json({ error: "Store name missing" }, 404);
-  }
-
-  const store = await c.env.runQuery(internal.inventory.stores.findByName, {
-    name: storeName,
-  });
-
-  const userId = getStorefrontUserFromRequest(c);
-
-  if (!userId && asNewUser === "true") {
-    let guest = await c.env.runQuery(internal.storeFront.guest.getByMarker, {
-      marker,
-    });
-
-    if (!guest) {
-      guest = await c.env.runMutation(internal.storeFront.guest.create, {
-        marker,
-        creationOrigin: "storefront",
-        storeId: store?._id,
-        organizationId: store?.organizationId,
-      });
+    if (!storeName) {
+      return c.json({ error: "Store name missing" }, 404);
     }
 
-    if (guest) {
-      setCookie(c, "guest_id", guest._id, {
+    const store = await c.env.runQuery(internal.inventory.stores.findByName, {
+      name: storeName,
+    });
+
+    const userId = getStorefrontUserFromRequest(c);
+
+    if (!userId && asNewUser === "true") {
+      let guest = await c.env.runQuery(internal.storeFront.guest.getByMarker, {
+        marker,
+      });
+
+      // A guest is only minted once the store is known: `guest.create` requires
+      // a store, and a storeless guest can never be admitted by the rail.
+      if (!guest && store) {
+        guest = await c.env.runMutation(internal.storeFront.guest.create, {
+          marker,
+          creationOrigin: "storefront",
+          storeId: store._id,
+          organizationId: store.organizationId,
+        });
+      }
+
+      if (guest) {
+        setCookie(c, "guest_id", guest._id, {
+          path: "/",
+          secure: true,
+          domain: "wigclub.store",
+          httpOnly: true,
+          sameSite: "None",
+          maxAge: 90 * 24 * 60 * 60, // 90 days in seconds
+        });
+      }
+    }
+
+    if (store) {
+      setCookie(c, "organization_id", store.organizationId, {
+        path: "/",
+        secure: true,
+        domain: "wigclub.store",
+        httpOnly: true,
+        sameSite: "None",
+        maxAge: 90 * 24 * 60 * 60, // 90 days in seconds
+      });
+
+      setCookie(c, "store_id", store._id, {
         path: "/",
         secure: true,
         domain: "wigclub.store",
@@ -47,52 +81,38 @@ storefrontRoutes.get("/", async (c) => {
         maxAge: 90 * 24 * 60 * 60, // 90 days in seconds
       });
     }
-  }
 
-  if (store) {
-    setCookie(c, "organization_id", store.organizationId, {
-      path: "/",
-      secure: true,
-      domain: "wigclub.store",
-      httpOnly: true,
-      sameSite: "None",
-      maxAge: 90 * 24 * 60 * 60, // 90 days in seconds
-    });
+    return c.json(store);
+  }),
+);
 
-    setCookie(c, "store_id", store._id, {
-      path: "/",
-      secure: true,
-      domain: "wigclub.store",
-      httpOnly: true,
-      sameSite: "None",
-      maxAge: 90 * 24 * 60 * 60, // 90 days in seconds
-    });
-  }
+storefrontRoutes.post(
+  "/inventory/batch",
+  admitHttpRoute(
+    storefrontInventoryBatchRouteOperationDefinition,
+    async (c, admitted) => {
+      try {
+        const body = parseIngressJson(admitted);
+        const { skuIds } = body;
 
-  return c.json(store);
-});
+        if (!skuIds || !Array.isArray(skuIds)) {
+          return c.json({ error: "skuIds array is required" }, 400);
+        }
 
-storefrontRoutes.post("/inventory/batch", async (c) => {
-  try {
-    const body = await c.req.json();
-    const { skuIds } = body;
+        const inventory = await c.env.runQuery(
+          internal.inventory.productSku.getInventoryBySkuIdsInternal,
+          {
+            skuIds: skuIds as Array<Id<"productSku">>,
+          },
+        );
 
-    if (!skuIds || !Array.isArray(skuIds)) {
-      return c.json({ error: "skuIds array is required" }, 400);
-    }
-
-    const inventory = await c.env.runQuery(
-      api.inventory.productSku.getInventoryBySkuIds,
-      {
-        skuIds: skuIds as Array<Id<"productSku">>,
+        return c.json({ inventory });
+      } catch (error) {
+        console.error("Failed to fetch batch inventory:", error);
+        return c.json({ error: "Failed to fetch inventory data" }, 500);
       }
-    );
-
-    return c.json({ inventory });
-  } catch (error) {
-    console.error("Failed to fetch batch inventory:", error);
-    return c.json({ error: "Failed to fetch inventory data" }, 500);
-  }
-});
+    },
+  ),
+);
 
 export { storefrontRoutes };

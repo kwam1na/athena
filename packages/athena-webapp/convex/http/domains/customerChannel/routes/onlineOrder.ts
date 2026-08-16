@@ -1,64 +1,89 @@
 import { Hono } from "hono";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
-import { api } from "../../../../_generated/api";
+import { internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
-import { getStorefrontUserFromRequest } from "../../../utils";
-import { isAuthorizedResourceOwner } from "./security";
+import {
+  admitHttpRead,
+  admitHttpRoute,
+} from "../../../../platform/operationAdmission";
+import { updateOrderOwnerRouteOperationDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_definitions";
+import {
+  getOrderRouteReadDefinition,
+  getOrdersRouteReadDefinition,
+} from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
+import {
+  parseIngressJson,
+  requireAdmittedCustomerOwner,
+} from "./admittedCustomer";
 
 const onlineOrderRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
-onlineOrderRoutes.get("/", async (c) => {
-  const userId = getStorefrontUserFromRequest(c);
+onlineOrderRoutes.get(
+  "/",
+  admitHttpRead(getOrdersRouteReadDefinition, async (c, admitted) => {
+    // No `storeFrontUserId` argument exists any more: the shopper whose orders
+    // are listed is the admitted actor, full stop.
+    const orders = await c.env.runQuery(
+      internal.storeFront.onlineOrder.getAllForCustomerInternal,
+      { owner: requireAdmittedCustomerOwner(admitted) },
+    );
 
-  if (!userId) {
-    return c.json({ error: "User id missing" }, 404);
-  }
+    return c.json(orders);
+  }),
+);
 
-  const orders = await c.env.runQuery(api.storeFront.onlineOrder.getAll, {
-    storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
-  });
+onlineOrderRoutes.get(
+  "/:orderId",
+  admitHttpRead(getOrderRouteReadDefinition, async (c, admitted) => {
+    const { orderId } = c.req.param();
+    const owner = requireAdmittedCustomerOwner(admitted);
 
-  return c.json(orders);
-});
+    try {
+      // The route's own `isAuthorizedResourceOwner` check now lives inside the
+      // callee, which refuses a missing row and a foreign row with the same
+      // answer so the denial cannot be used to probe for order ids.
+      const order = await c.env.runQuery(
+        internal.storeFront.onlineOrder.getForCustomerInternal,
+        { identifier: orderId as Id<"onlineOrder">, owner },
+      );
 
-onlineOrderRoutes.get("/:orderId", async (c) => {
-  const { orderId } = c.req.param();
-  const userId = getStorefrontUserFromRequest(c);
+      if (!order) {
+        return c.json({ error: "Order not found" }, 404);
+      }
 
-  if (!userId) {
-    return c.json({ error: "User id missing" }, 404);
-  }
-
-  const order = await c.env.runQuery(api.storeFront.onlineOrder.get, {
-    identifier: orderId as Id<"onlineOrder">,
-  });
-
-  if (!order) {
-    return c.json({ error: "Order not found" }, 404);
-  }
-
-  if (!isAuthorizedResourceOwner(order.storeFrontUserId, userId)) {
-    return c.json({ error: "Forbidden" }, 403);
-  }
-
-  return c.json(order);
-});
+      return c.json(order);
+    } catch {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+  }),
+);
 
 // Update the owner of the bag
-onlineOrderRoutes.post("/owner", async (c) => {
-  try {
-    const { currentOwnerId, newOwnerId } = await c.req.json();
+onlineOrderRoutes.post(
+  "/owner",
+  admitHttpRoute(
+    updateOrderOwnerRouteOperationDefinition,
+    async (c, admitted) => {
+      try {
+        const { currentOwnerId } = parseIngressJson(admitted);
 
-    const b = await c.env.runMutation(api.storeFront.onlineOrder.updateOwner, {
-      currentOwner: currentOwnerId as Id<"guest">,
-      newOwner: newOwnerId as Id<"storeFrontUser">,
-    });
-    return c.json(b);
-  } catch (e) {
-    console.error(e);
-    return c.json({ error: "Internal server error" }, 400);
-  }
-});
+        // `newOwnerId` is gone from the call: the account the orders move TO is
+        // the admitted shopper, never a body-supplied id.
+        const b = await c.env.runMutation(
+          internal.storeFront.onlineOrder.updateOwnerInternal,
+          {
+            currentOwner: currentOwnerId as Id<"guest">,
+            owner: requireAdmittedCustomerOwner(admitted),
+          },
+        );
+        return c.json(b);
+      } catch (e) {
+        console.error(e);
+        return c.json({ error: "Internal server error" }, 400);
+      }
+    },
+  ),
+);
 
 export { onlineOrderRoutes };

@@ -11,7 +11,9 @@ import {
 } from "../../../../marketing/walkthroughConfig";
 import { getWalkthroughHmacVerificationKeys } from "../../../../marketing/walkthroughHmac";
 import { normalizeWalkthroughEmail, normalizeWalkthroughText } from "../../../../marketing/walkthroughNormalization";
-import { readBoundedBody } from "./boundedBody";
+import { acceptWalkthroughRequestRouteOperationDefinition } from "../../../../operationAdmission/domains/u11_httpCore_definitions";
+import { admitHttpRoute } from "../../../../platform/operationAdmission";
+import { boundRequestBody } from "./boundedBody";
 
 export function evaluateWalkthroughIngress(input: { origin?: string; contentType?: string; contentLength?: number; allowedOrigins: string[]; maxBytes: number }) {
   if (!input.origin || !input.allowedOrigins.includes(input.origin)) return { ok: false as const, status: 403 as const };
@@ -39,33 +41,45 @@ function isValidBody(body: Record<string, unknown>) {
 }
 
 const walkthroughRequestRoutes: HonoWithConvex<ActionCtx> = new Hono();
-walkthroughRequestRoutes.post("/", async (c) => {
-  let maxBytes: number;
-  let allowedOrigins: string[];
-  try {
-    maxBytes = walkthroughMaxBodyBytes();
-    allowedOrigins = walkthroughAllowedOrigins();
-    walkthroughDailyPerEmailLimit();
-    walkthroughHourlyGlobalLimit();
-    getWalkthroughHmacVerificationKeys();
-    walkthroughPrivacyContact();
-  } catch {
-    console.error("walkthrough_ingress_configuration_invalid");
-    return c.json({ error: { code: "temporarily_unavailable" } }, 503);
-  }
-  const contentLengthHeader = c.req.header("content-length");
-  const ingress = evaluateWalkthroughIngress({ origin: c.req.header("origin"), contentType: c.req.header("content-type"), contentLength: contentLengthHeader === undefined ? undefined : Number(contentLengthHeader), allowedOrigins, maxBytes });
-  if (!ingress.ok) return c.json({ error: { code: "request_rejected" } }, ingress.status);
-  const bytes = await readBoundedBody(c.req.raw, maxBytes);
-  if (!bytes) return c.json({ error: { code: "request_rejected" } }, 413);
-  let body: Record<string, unknown>;
-  try { const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes)); if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(); body = parsed as Record<string, unknown>; } catch { return c.json({ error: { code: "request_rejected" } }, 400); }
-  if (text(body.website).trim()) return c.json({ accepted: true }, 202);
-  if (!isValidBody(body)) return c.json({ error: { code: "request_rejected" } }, 400);
-  try {
-    const result = await c.env.runMutation(internal.marketing.walkthroughRequests.accept, { submissionKey: text(body.submissionKey), payloadDigest: await sha256(canonical(body)), name: text(body.name), workEmail: text(body.workEmail), businessName: text(body.businessName), phone: text(body.phone) || undefined, businessNeed: text(body.businessNeed), submittedAt: Date.now() });
-    if (result.accepted) return c.json({ accepted: true }, 202);
-    return c.json({ error: { code: result.reason === "retry" ? "retry_required" : "temporarily_unavailable" } }, 503);
-  } catch { return c.json({ error: { code: "temporarily_unavailable" } }, 503); }
-});
+
+/**
+ * Unauthenticated marketing ingress: a visitor to the marketing site has no
+ * claim and never will, so this route reads no cookie and clamps on nothing.
+ * Its boundary is the marketing origin allowlist, now declared on the
+ * definition so it runs before admission, plus the domain limits below.
+ */
+walkthroughRequestRoutes.use("*", boundRequestBody(walkthroughMaxBodyBytes));
+walkthroughRequestRoutes.post(
+  "/",
+  admitHttpRoute(
+    acceptWalkthroughRequestRouteOperationDefinition,
+    async (c, { ingress }) => {
+      let maxBytes: number;
+      let allowedOrigins: string[];
+      try {
+        maxBytes = walkthroughMaxBodyBytes();
+        allowedOrigins = walkthroughAllowedOrigins();
+        walkthroughDailyPerEmailLimit();
+        walkthroughHourlyGlobalLimit();
+        getWalkthroughHmacVerificationKeys();
+        walkthroughPrivacyContact();
+      } catch {
+        console.error("walkthrough_ingress_configuration_invalid");
+        return c.json({ error: { code: "temporarily_unavailable" } }, 503);
+      }
+      const contentLengthHeader = c.req.header("content-length");
+      const requestIngress = evaluateWalkthroughIngress({ origin: c.req.header("origin"), contentType: c.req.header("content-type"), contentLength: contentLengthHeader === undefined ? undefined : Number(contentLengthHeader), allowedOrigins, maxBytes });
+      if (!requestIngress.ok) return c.json({ error: { code: "request_rejected" } }, requestIngress.status);
+      let body: Record<string, unknown>;
+      try { const parsed: unknown = JSON.parse(ingress.rawBody); if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(); body = parsed as Record<string, unknown>; } catch { return c.json({ error: { code: "request_rejected" } }, 400); }
+      if (text(body.website).trim()) return c.json({ accepted: true }, 202);
+      if (!isValidBody(body)) return c.json({ error: { code: "request_rejected" } }, 400);
+      try {
+        const result = await c.env.runMutation(internal.marketing.walkthroughRequests.accept, { submissionKey: text(body.submissionKey), payloadDigest: await sha256(canonical(body)), name: text(body.name), workEmail: text(body.workEmail), businessName: text(body.businessName), phone: text(body.phone) || undefined, businessNeed: text(body.businessNeed), submittedAt: Date.now() });
+        if (result.accepted) return c.json({ accepted: true }, 202);
+        return c.json({ error: { code: result.reason === "retry" ? "retry_required" : "temporarily_unavailable" } }, 503);
+      } catch { return c.json({ error: { code: "temporarily_unavailable" } }, 503); }
+    },
+  ),
+);
 export { walkthroughRequestRoutes };

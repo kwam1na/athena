@@ -1,14 +1,20 @@
 import { Hono } from "hono";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
-import { api } from "../../../../_generated/api";
+import { internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
-import { getCookie } from "hono/cookie";
-import {
-  getStoreDataFromRequest,
-  getStorefrontUserFromRequest,
-} from "../../../utils";
 import { z } from "zod";
+import {
+  admitHttpRead,
+  admitHttpRoute,
+} from "../../../../platform/operationAdmission";
+import { createOfferRouteOperationDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_definitions";
+import { getOffersRouteReadDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
+import {
+  admittedCustomerId,
+  parseIngressJson,
+  requireAdmittedCustomerOwner,
+} from "./admittedCustomer";
 
 const offersRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
@@ -22,82 +28,79 @@ const emailSchema = z
  * Create a new offer request
  * POST /offers
  */
-offersRoutes.post("/", async (c) => {
-  try {
-    // Extract guest ID from cookie
-    const guestId = getStorefrontUserFromRequest(c);
-
-    if (!guestId) {
-      return c.json({ error: "Guest ID is required" }, 400);
-    }
-
-    // Get store data
-    const { storeId } = getStoreDataFromRequest(c);
-
-    if (!storeId) {
-      return c.json({ error: "Store ID is required" }, 400);
-    }
-
-    // Get request body
-    const body = await c.req.json();
-    const { email, promoCodeId } = body;
-
-    // Validate required fields
-    if (!email || !promoCodeId) {
-      return c.json({ error: "Email and promo code ID are required" }, 400);
-    }
-
-    // Validate email format
+offersRoutes.post(
+  "/",
+  admitHttpRoute(createOfferRouteOperationDefinition, async (c, admitted) => {
     try {
-      emailSchema.parse(email);
-    } catch (error) {
-      return c.json({ error: "Invalid email address" }, 400);
-    }
+      // Shopper and store are the admitted claim's, not the cookies' and not
+      // the body's.
+      const owner = requireAdmittedCustomerOwner(admitted);
 
-    // Get client IP address for rate limiting
-    const ipAddress =
-      c.req.header("x-forwarded-for") || c.req.header("x-real-ip");
+      // Get request body
+      const body = parseIngressJson(admitted);
+      const { email, promoCodeId } = body;
 
-    // Create the offer
-    const result = await c.env.runMutation(api.storeFront.offers.create, {
-      email,
-      promoCodeId: promoCodeId as Id<"promoCode">,
-      storeFrontUserId: guestId as Id<"guest"> | Id<"storeFrontUser">,
-      storeId: storeId as Id<"store">,
-      ipAddress,
-    });
-
-    if (!result.success) {
-      return c.json({ error: result.message }, 400);
-    }
-
-    return c.json(result);
-  } catch (error) {
-    console.error("Failed to create offer:", error);
-    return c.json({ error: "Failed to create offer" }, 500);
-  }
-});
-
-offersRoutes.get("/", async (c) => {
-  try {
-    const guestId = getStorefrontUserFromRequest(c);
-
-    if (!guestId) {
-      return c.json({ error: "Guest ID is required" }, 400);
-    }
-
-    const result = await c.env.runQuery(
-      api.storeFront.offers.getByStorefrontUserId,
-      {
-        storeFrontUserId: guestId as Id<"guest"> | Id<"storeFrontUser">,
+      // Validate required fields
+      if (!email || !promoCodeId) {
+        return c.json({ error: "Email and promo code ID are required" }, 400);
       }
-    );
 
-    return c.json(result);
-  } catch (error) {
-    console.error("Failed to get offers:", error);
-    return c.json({ error: "Failed to get offers" }, 500);
-  }
-});
+      // Validate email format
+      try {
+        emailSchema.parse(email);
+      } catch (error) {
+        return c.json({ error: "Invalid email address" }, 400);
+      }
+
+      // Get client IP address for rate limiting
+      const ipAddress =
+        c.req.header("x-forwarded-for") || c.req.header("x-real-ip");
+
+      // Create the offer
+      const result = await c.env.runMutation(
+        internal.storeFront.offers.createInternal,
+        {
+          email,
+          promoCodeId: promoCodeId as Id<"promoCode">,
+          storeFrontUserId: admittedCustomerId(owner),
+          storeId: owner.storeId,
+          ipAddress,
+          owner,
+        },
+      );
+
+      if (!result.success) {
+        return c.json({ error: result.message }, 400);
+      }
+
+      return c.json(result);
+    } catch (error) {
+      console.error("Failed to create offer:", error);
+      return c.json({ error: "Failed to create offer" }, 500);
+    }
+  }),
+);
+
+offersRoutes.get(
+  "/",
+  admitHttpRead(getOffersRouteReadDefinition, async (c, admitted) => {
+    try {
+      const owner = requireAdmittedCustomerOwner(admitted);
+
+      const result = await c.env.runQuery(
+        internal.storeFront.offers.getByStorefrontUserIdInternal,
+        {
+          storeFrontUserId: admittedCustomerId(owner),
+          owner,
+        },
+      );
+
+      return c.json(result);
+    } catch (error) {
+      console.error("Failed to get offers:", error);
+      return c.json({ error: "Failed to get offers" }, 500);
+    }
+  }),
+);
 
 export { offersRoutes };

@@ -7,6 +7,20 @@ import {
   createNormalUserOperationAdapter,
   createPublicOperationAdapter,
 } from "../operationAdmission/adapters";
+import {
+  HARNESS_WAIVER_BROKER_VERIFIER,
+  MARKETING_ORIGIN_VERIFIER,
+  MTN_MOMO_CALLBACK_VERIFIER,
+  PAYSTACK_SIGNATURE_VERIFIER,
+  STOREFRONT_TRACKING_ORIGIN_VERIFIER,
+  WHATSAPP_SIGNATURE_VERIFIER,
+  createHarnessWaiverBrokerVerifier,
+  createMarketingOriginVerifier,
+  createMtnMomoCallbackVerifier,
+  createPaystackSignatureVerifier,
+  createStorefrontTrackingOriginVerifier,
+  createWhatsAppSignatureVerifier,
+} from "../operationAdmission/ingressVerification";
 import { createAdmissionRail } from "../operationAdmission/rail";
 import {
   createNormalUserReadOperationAdapter,
@@ -89,7 +103,17 @@ export const operationAdmissionRail = createAdmissionRail({
   ],
   resourceGuards,
   capture: captureSharedDemoAdmittedActionWithCtx,
-  ingressVerifiers: {},
+  // Registered signature verifiers. Each one fails closed without its secret
+  // and compares in constant time; the rail core only sequences them.
+  ingressVerifiers: {
+    [HARNESS_WAIVER_BROKER_VERIFIER]: createHarnessWaiverBrokerVerifier(),
+    [MARKETING_ORIGIN_VERIFIER]: createMarketingOriginVerifier(),
+    [MTN_MOMO_CALLBACK_VERIFIER]: createMtnMomoCallbackVerifier(),
+    [PAYSTACK_SIGNATURE_VERIFIER]: createPaystackSignatureVerifier(),
+    [STOREFRONT_TRACKING_ORIGIN_VERIFIER]:
+      createStorefrontTrackingOriginVerifier(),
+    [WHATSAPP_SIGNATURE_VERIFIER]: createWhatsAppSignatureVerifier(),
+  },
   entrypoints: {
     admitOperation: internal.platform.admissionEntrypoints.admitOperation,
     admitReadOperation:

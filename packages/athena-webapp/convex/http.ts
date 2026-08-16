@@ -38,30 +38,52 @@ import { savedBagRoutes } from "./http/domains/customerChannel/routes/savedBag";
 import { mtnMomoRoutes } from "./http/domains/moneyMovement/routes";
 import { whatsappMessagingRoutes } from "./http/domains/customerMessaging/routes/whatsapp";
 import { harnessWaiverRoutes } from "./http/domains/core/routes/harnessWaivers";
+import { healthRouteReadDefinition } from "./operationAdmission/domains/u11_httpCore_readDefinitions";
+import { admitHttpRead } from "./platform/operationAdmission";
+import { readStorefrontOriginAllowlist } from "./platform/storefrontOrigins";
 
 const app: HonoWithConvex<ActionCtx> = new Hono();
 
 const http = new HttpRouterWithHono<ActionCtx>(app);
 
+// Convex Auth installs its own HTTP route family and is the trust root that
+// mints the principals the admission adapters later resolve, so it is not
+// admitted. It is registered here, exactly once, BEFORE the CORS middleware —
+// its routes are a framework surface that manages its own headers, and moving
+// it under the middleware would put the sign-in redirect chain behind an
+// allowlist meant for storefront XHR.
 auth.addHttpRoutes(http);
 
+/**
+ * Fixed origin allowlist, never a reflection of the request.
+ *
+ * The storefront claim cookies are `SameSite=None`, so reflecting whatever
+ * `Origin` arrives while also sending `Access-Control-Allow-Credentials: true`
+ * makes every customer route reachable from any site the visitor is browsing.
+ * The list is exact-string and fails closed: an unset environment value allows
+ * no origin at all, and an unlisted origin simply gets no
+ * `Access-Control-Allow-Origin` header rather than a wildcard. Hono appends
+ * `Vary: Origin` on every non-wildcard configuration, so a shared cache can
+ * never serve one origin's response to another.
+ */
 app.use(
   "*",
   cors({
-    origin: (origin) => {
-      return origin;
-    },
+    origin: [...readStorefrontOriginAllowlist()],
     allowMethods: ["OPTIONS", "GET", "POST", "PUT", "PATCH", "DELETE"],
     credentials: true,
   }),
 );
 
-app.get("/health", (c) => {
-  return c.json({
-    app: "athena-webapp-backend",
-    status: "ok",
-  });
-});
+app.get(
+  "/health",
+  admitHttpRead(healthRouteReadDefinition, (c) =>
+    c.json({
+      app: "athena-webapp-backend",
+      status: "ok",
+    }),
+  ),
+);
 
 app.route("/upsells", upsellRoutes);
 
