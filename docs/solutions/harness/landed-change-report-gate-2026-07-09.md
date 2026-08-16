@@ -1,14 +1,14 @@
 ---
 title: Landed Change Report Gate
 date: 2026-07-09
-last_updated: 2026-07-13
+last_updated: 2026-08-15
 category: harness
 module: repo
 problem_type: missing_handoff_guardrail
 component: landed-change-report-check
 resolution_type: guardrail
 severity: medium
-delivery_diff_fingerprint: dc61e75c9bca94a5fece01f5176195768095d7e1701acabe857c0592ecab8fae
+delivery_diff_fingerprint: 8e504f2d16636b473394cf897889401ffdf62c845dc3471137061d51d37e7c68
 tags:
   - delivery-handoff
   - reports
@@ -37,12 +37,16 @@ The check also verifies that changed report artifacts look like outputs from the
 `.agents/skills/ce-landed-change-report` workflow: they must carry the report marker, subagent
 evidence section, and pass-required quiz form.
 
-Run the composite policy in `pre-push:review` and CI as one documentation step so review-loop
-edits that stale either artifact are reported together before PR validation or merge.
+Run the composite sensor directly in CI. In `pre-push:review`, route its result
+through `delivery:documentation-admission` so an interactive human can exercise
+the registry-authorized, invocation-scoped waiver while agents and
+noninteractive automation remain fail-closed. Both paths still report solution
+and report findings together before PR validation or merge.
 
 ## Prevention
 
-Keep `delivery:documentation-check` in `pr:athena:validate-provider`, `pre-push:review`, and CI.
+Keep `delivery:documentation-check` as the deterministic provider and CI sensor,
+and keep `delivery:documentation-admission` at interactive pre-push boundaries.
 Update `scripts/delivery-documentation-check.test.ts` whenever either policy's aggregate reporting
 or remediation guidance changes, and retain the individual sensor tests for their own contracts.
 Use the repo-local `.agents/skills/ce-landed-change-report` skill for report creation so generated

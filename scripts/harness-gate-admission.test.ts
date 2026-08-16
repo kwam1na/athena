@@ -8,11 +8,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   defaultScenarios,
+  promptForHarnessWaiver,
   runHarnessGateAdmission,
   WAIVABLE_FINDING_CODES,
   writeHarnessGateDecisionEvent,
 } from "./harness-gate-admission";
 import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
+import { WAIVABLE_DOCUMENTATION_FINDING_POLICIES } from "./delivery-documentation-admission";
 import {
   ATHENA_PR_VALIDATION_GATE_ID,
   HARNESS_GATE_REGISTRY,
@@ -104,6 +106,36 @@ afterEach(async () => {
 });
 
 describe("harness gate admission", () => {
+  it("reads the default human waiver prompt from one controlling-terminal descriptor", async () => {
+    const writes: string[] = [];
+    const close = vi.fn();
+    const accepted = await promptForHarnessWaiver(
+      { remediation: { human: ["Review the candidate."] } } as never,
+      ["review.green"],
+      {
+        open: () => 42,
+        write: (descriptor, text) => {
+          expect(descriptor).toBe(42);
+          writes.push(text);
+        },
+        readLine: (descriptor) => {
+          expect(descriptor).toBe(42);
+          return "yes";
+        },
+        close,
+      },
+    );
+
+    expect(accepted).toBe(true);
+    expect(writes.join("")).toContain("Waive review.green");
+    expect(close).toHaveBeenCalledWith(42);
+  });
+
+  it("shares the documentation waiver allow-list with focused admission", () => {
+    expect(WAIVABLE_FINDING_CODES["documentation.current"]).toBe(
+      WAIVABLE_DOCUMENTATION_FINDING_POLICIES,
+    );
+  });
   it("gives every waivable obligation a non-empty finding-code allow-list", () => {
     // The registry invariant pairs humanWaiverAllowed with the waived
     // resolution kind; this is the third half of the same decision. Without it

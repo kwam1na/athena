@@ -100,7 +100,7 @@ describe("delivery run telemetry", () => {
     });
   });
 
-  it("names files by timestamp and branch so parallel ticket worktrees never collide", () => {
+  it("groups files by UTC day and names them by timestamp and branch", () => {
     const forBranch = (branch: string) =>
       deliveryRunTelemetryPath(
         buildDeliveryRunTelemetryRecord(ledger("2026-06-18T12:00:00.000Z"), {
@@ -111,7 +111,7 @@ describe("delivery run telemetry", () => {
       );
 
     expect(forBranch("codex/v26-1300-thing")).toBe(
-      "telemetry/delivery-runs/2026-06-18T12-00-00-000Z-codex-v26-1300-thing.json",
+      "telemetry/delivery-runs/2026-06-18/2026-06-18T12-00-00-000Z-codex-v26-1300-thing.json",
     );
     expect(forBranch("codex/v26-1301-other")).not.toBe(
       forBranch("codex/v26-1300-thing"),
@@ -140,6 +140,37 @@ describe("delivery run telemetry", () => {
       "2026-06-18T12:00:00.000Z",
       "2026-06-19T12:00:00.000Z",
       "2026-06-20T12:00:00.000Z",
+    ]);
+  });
+
+  it("reads legacy flat records alongside day-folder records", async () => {
+    const rootDir = await createTempRoot();
+    const telemetryDir = path.join(rootDir, "telemetry/delivery-runs");
+    await mkdir(telemetryDir, { recursive: true });
+    const legacyRecord = buildDeliveryRunTelemetryRecord(
+      ledger("2026-06-17T12:00:00.000Z"),
+      {
+        branch: "codex/legacy",
+        headSha: "abc123",
+        deliverableDiffFingerprint: "fingerprint-a",
+      },
+    );
+    await writeFile(
+      path.join(telemetryDir, "2026-06-17T12-00-00-000Z-codex-legacy.json"),
+      `${JSON.stringify(legacyRecord, null, 2)}\n`,
+    );
+    await writeDeliveryRunTelemetryRecord(
+      rootDir,
+      buildDeliveryRunTelemetryRecord(ledger("2026-06-18T12:00:00.000Z"), {
+        branch: "codex/day-folder",
+        headSha: "def456",
+        deliverableDiffFingerprint: "fingerprint-b",
+      }),
+    );
+
+    await expect(readDeliveryRunTelemetryRecords(rootDir)).resolves.toMatchObject([
+      { branch: "codex/legacy" },
+      { branch: "codex/day-folder" },
     ]);
   });
 

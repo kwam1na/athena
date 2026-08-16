@@ -114,4 +114,82 @@ describe("evaluateDeliveryDocumentationAdmission", () => {
       }),
     );
   });
+
+  it("offers an invocation waiver to an interactive human when no attestation exists", async () => {
+    const promptForWaiver = vi.fn(async () => true);
+    const captureCandidate = vi.fn(async () => ({
+      ok: true as const,
+      candidate,
+    }));
+
+    const result = await evaluateDeliveryDocumentationAdmission("/repo", {
+      evaluateDocumentation: () => documentationFailure,
+      captureCandidate,
+      classifyContext: () => ({ kind: "human", interactive: true }),
+      promptForWaiver,
+    });
+
+    expect(result).toEqual({
+      status: "pass",
+      resolution: "invocation-waived",
+    });
+    expect(promptForWaiver).toHaveBeenCalledWith(documentationFailure);
+    expect(captureCandidate).toHaveBeenCalledTimes(2);
+  });
+
+  it("recognizes the hook's controlling terminal even when captured output is not a TTY", async () => {
+    const result = await evaluateDeliveryDocumentationAdmission("/repo", {
+      evaluateDocumentation: () => documentationFailure,
+      captureCandidate: async () => ({ ok: true as const, candidate }),
+      classifyContext: () => ({
+        kind: "unknown",
+        reason: "noninteractive_unrecognized",
+      }),
+      hasControllingTerminal: () => true,
+      promptForWaiver: async () => true,
+    });
+
+    expect(result).toEqual({
+      status: "pass",
+      resolution: "invocation-waived",
+    });
+  });
+
+  it("never offers an invocation waiver to an agent", async () => {
+    const promptForWaiver = vi.fn(async () => true);
+
+    const result = await evaluateDeliveryDocumentationAdmission("/repo", {
+      evaluateDocumentation: () => documentationFailure,
+      captureCandidate: async () => ({ ok: true as const, candidate }),
+      classifyContext: () => ({ kind: "agent", signal: "CODEX_THREAD_ID" }),
+      promptForWaiver,
+    });
+
+    expect(result).toMatchObject({ status: "fail" });
+    expect(promptForWaiver).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invocation waiver when the candidate changes during the prompt", async () => {
+    const captureCandidate = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true as const, candidate })
+      .mockResolvedValueOnce({
+        ok: true as const,
+        candidate: { ...candidate, treeSha: "tree-2" },
+      });
+
+    const result = await evaluateDeliveryDocumentationAdmission("/repo", {
+      evaluateDocumentation: () => documentationFailure,
+      captureCandidate,
+      classifyContext: () => ({ kind: "human", interactive: true }),
+      promptForWaiver: async () => true,
+    });
+
+    expect(result).toMatchObject({
+      status: "fail",
+      reason: expect.stringContaining(
+        "changed while the waiver prompt was open",
+      ),
+    });
+  });
 });

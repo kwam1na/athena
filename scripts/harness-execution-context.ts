@@ -110,12 +110,39 @@ export function classifyCurrentHarnessExecutionContext(
   obligationId: string,
   ciPolicies?: readonly HarnessCiDelegationPolicy[],
 ) {
-  return classifyHarnessExecutionContext({
-    gateId,
-    obligationId,
-    env: process.env,
-    stdinIsTTY: process.stdin.isTTY === true,
-    stdoutIsTTY: process.stdout.isTTY === true,
-    ciPolicies,
-  });
+  return resolveHarnessExecutionContext(
+    classifyHarnessExecutionContext({
+      gateId,
+      obligationId,
+      env: process.env,
+      stdinIsTTY: process.stdin.isTTY === true,
+      stdoutIsTTY: process.stdout.isTTY === true,
+      ciPolicies,
+    }),
+  );
 }
+
+export function resolveHarnessExecutionContext(
+  context: HarnessExecutionContext,
+  hasControllingTerminal: () => boolean = defaultHasControllingTerminal,
+): HarnessExecutionContext {
+  if (
+    context.kind === "unknown" &&
+    context.reason === "noninteractive_unrecognized" &&
+    hasControllingTerminal()
+  ) {
+    return { kind: "human", interactive: true };
+  }
+  return context;
+}
+
+function defaultHasControllingTerminal() {
+  try {
+    const descriptor = openSync("/dev/tty", "r+");
+    closeSync(descriptor);
+    return true;
+  } catch {
+    return false;
+  }
+}
+import { closeSync, openSync } from "node:fs";

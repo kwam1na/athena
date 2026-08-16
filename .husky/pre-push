@@ -15,7 +15,7 @@ ATHENA_PRE_PUSH_LOG=$(mktemp "$ATHENA_PRE_PUSH_TMP_DIR/athena-pre-push.XXXXXX") 
 ATHENA_PRE_PUSH_HOOK_PID=$$
 
 echo "[pre-push] Full validation output is being captured in $ATHENA_PRE_PUSH_LOG"
-bun run pre-push:review >"$ATHENA_PRE_PUSH_LOG" 2>&1 &
+bun run pre-push:review --proof-only >"$ATHENA_PRE_PUSH_LOG" 2>&1 &
 ATHENA_PRE_PUSH_PID=$!
 
 terminate_pre_push_tree() {

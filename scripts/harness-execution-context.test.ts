@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { classifyHarnessExecutionContext } from "./harness-execution-context";
+import {
+  classifyHarnessExecutionContext,
+  resolveHarnessExecutionContext,
+} from "./harness-execution-context";
 
 const target = {
   gateId: "athena.pr-validation",
@@ -115,5 +118,29 @@ describe("harness execution context", () => {
         stdoutIsTTY: false,
       }),
     ).toEqual({ kind: "unknown", reason: "noninteractive_unrecognized" });
+  });
+
+  it("recognizes a controlling terminal when wrapper output is captured", () => {
+    expect(
+      resolveHarnessExecutionContext(
+        { kind: "unknown", reason: "noninteractive_unrecognized" },
+        () => true,
+      ),
+    ).toEqual({ kind: "human", interactive: true });
+  });
+
+  it("never promotes agents or unauthorized automation through a controlling terminal", () => {
+    expect(
+      resolveHarnessExecutionContext(
+        { kind: "agent", signal: "CODEX_THREAD_ID" },
+        () => true,
+      ),
+    ).toEqual({ kind: "agent", signal: "CODEX_THREAD_ID" });
+    expect(
+      resolveHarnessExecutionContext(
+        { kind: "unknown", reason: "unauthorized_automation" },
+        () => true,
+      ),
+    ).toEqual({ kind: "unknown", reason: "unauthorized_automation" });
   });
 });

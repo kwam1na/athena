@@ -58,7 +58,7 @@ describe("review-neutral path policy", () => {
     // invalidate the review evidence it reports on.
     expect(
       isReviewNeutralPath(
-        "telemetry/delivery-runs/2026-06-18T12-00-00-000Z-codex-thing.json",
+        "telemetry/delivery-runs/2026-06-18/2026-06-18T12-00-00-000Z-codex-thing.json",
       ),
     ).toBe(true);
   });
@@ -73,7 +73,7 @@ describe("review-neutral path policy", () => {
 
   it("keeps post-gate validation neutrality narrower than review neutrality", () => {
     expect(
-      isPostGateValidationNeutralPath("telemetry/delivery-runs/run.json"),
+      isPostGateValidationNeutralPath("telemetry/delivery-runs/2026-06-18/run.json"),
     ).toBe(true);
     expect(isPostGateValidationNeutralPath("telemetry/delivery-runs/README.md")).toBe(
       false,

@@ -6,6 +6,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  captureAndForwardProcessStream,
   consumeHarnessGateDecisionEvents,
   parseProviderSkippedEvents,
   resolveSummaryBaseline,
@@ -20,6 +21,33 @@ import {
   buildDeliveryRunTelemetryRecord,
   writeDeliveryRunTelemetryRecord,
 } from "./delivery-run-telemetry";
+
+it("forwards provider output before the provider stream completes", async () => {
+  const encoder = new TextEncoder();
+  let releaseSecondChunk: (() => void) | undefined;
+  const secondChunkReady = new Promise<void>((resolve) => {
+    releaseSecondChunk = resolve;
+  });
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      controller.enqueue(encoder.encode("coverage started\n"));
+      await secondChunkReady;
+      controller.enqueue(encoder.encode("coverage complete\n"));
+      controller.close();
+    },
+  });
+  const forwarded: string[] = [];
+  const capture = captureAndForwardProcessStream(stream, async (chunk) => {
+    forwarded.push(new TextDecoder().decode(chunk));
+  });
+
+  await Bun.sleep(0);
+  expect(forwarded).toEqual(["coverage started\n"]);
+
+  releaseSecondChunk?.();
+  await expect(capture).resolves.toBe("coverage started\ncoverage complete\n");
+  expect(forwarded).toEqual(["coverage started\n", "coverage complete\n"]);
+});
 
 const candidate = {
   treeSha: "tree-a",

@@ -44,7 +44,7 @@ type PrePushReviewOptions = {
     baseRef: string,
   ) => Promise<string[]>;
   getLocalChangedFiles?: (rootDir: string) => Promise<string[]>;
-  runDocumentationCheck?: (rootDir: string) => Promise<void>;
+  runDocumentationAdmission?: (rootDir: string) => Promise<void>;
   runGraphifyCheck?: (rootDir: string) => Promise<void>;
   runGraphifyRebuild?: (rootDir: string) => Promise<void>;
   runArchitectureCheck?: (rootDir: string) => Promise<void>;
@@ -165,15 +165,19 @@ export async function runHarnessImplementationTests(
   }
 }
 
-export async function runDocumentationCheck(rootDir: string): Promise<void> {
-  const proc = Bun.spawn(["bun", "run", "delivery:documentation-check"], {
+export async function runDocumentationAdmission(
+  rootDir: string,
+): Promise<void> {
+  const proc = Bun.spawn(["bun", "run", "delivery:documentation-admission"], {
     cwd: rootDir,
     stdout: "inherit",
     stderr: "inherit",
   });
   const exitCode = await proc.exited;
   if (exitCode !== 0) {
-    throw new Error(`delivery:documentation-check failed (exit ${exitCode})`);
+    throw new Error(
+      `delivery:documentation-admission failed (exit ${exitCode})`,
+    );
   }
 }
 
@@ -237,6 +241,30 @@ function isRepairableGraphifyDrift(error: unknown) {
   );
 }
 
+export async function requireReusablePrePushProof(
+  rootDir: string,
+  options: PrePushReviewOptions = {},
+) {
+  const logger = options.logger ?? console;
+  const evaluateValidationProof =
+    options.evaluatePrePushValidationProof ?? evaluatePrePushValidationProof;
+  const proofEvaluation = await evaluateValidationProof(rootDir);
+
+  if (!proofEvaluation.reusable) {
+    throw new Error(
+      `pr:athena proof not reusable (${proofEvaluation.status}): ${proofEvaluation.reason}. Run \`bun run pr:athena\`, commit the resulting candidate, then push again.`,
+    );
+  }
+
+  logger.log(
+    `[pre-push] Reusing current pr:athena validation proof for tree ${proofEvaluation.proof.validatedTreeSha}.`,
+  );
+  logger.log(
+    "[pre-push] Handoff: validation=skipped; proof=reusable; proofReason=reusable current pr:athena proof.",
+  );
+  logger.log("[pre-push] All checks passed.");
+}
+
 export async function runPrePushReview(
   rootDir: string,
   options: PrePushReviewOptions = {},
@@ -253,8 +281,8 @@ export async function runPrePushReview(
     ((nextRootDir: string) => getChangedFilesForHarnessReview(nextRootDir));
   const runGraphifyFreshnessCheck =
     options.runGraphifyCheck ?? runGraphifyCheck;
-  const runDocumentationPolicyCheck =
-    options.runDocumentationCheck ?? runDocumentationCheck;
+  const runDocumentationPolicyAdmission =
+    options.runDocumentationAdmission ?? runDocumentationAdmission;
   const runGraphifyRebuildStep =
     options.runGraphifyRebuild ?? runGraphifyRebuild;
   const runArchitecture = options.runArchitectureCheck ?? runArchitectureCheck;
@@ -398,8 +426,8 @@ export async function runPrePushReview(
     await runGraphifyFreshnessCheck(rootDir);
   }
 
-  logger.log("[pre-push] Step 2/7: delivery:documentation-check");
-  await runDocumentationPolicyCheck(rootDir);
+  logger.log("[pre-push] Step 2/7: delivery:documentation-admission");
+  await runDocumentationPolicyAdmission(rootDir);
 
   logger.log(`[pre-push] Step 3/7: harness:self-review (vs ${BASE_REF})`);
   let selfReviewResult = await runSelfReview(rootDir);
@@ -498,7 +526,10 @@ export async function runPrePushReview(
 }
 
 if (import.meta.main) {
-  runPrePushReview(ROOT_DIR).catch((error: unknown) => {
+  const run = process.argv.includes("--proof-only")
+    ? requireReusablePrePushProof
+    : runPrePushReview;
+  run(ROOT_DIR).catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`\n[pre-push] BLOCKED: ${message}`);
     process.exit(1);

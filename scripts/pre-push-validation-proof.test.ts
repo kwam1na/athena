@@ -318,7 +318,7 @@ describe("pre-push validation proof", () => {
         headSha: "head-before",
         headTreeSha: "tree-before",
         indexTreeSha: "tree-validated",
-        status: "A  telemetry/delivery-runs/run.json",
+        status: "A  telemetry/delivery-runs/2026-06-18/run.json",
       }),
       logger: { log() {}, warn() {} },
     });
@@ -330,7 +330,7 @@ describe("pre-push validation proof", () => {
           headSha: "head-after",
           headTreeSha: "tree-with-telemetry",
           indexTreeSha: "tree-with-telemetry",
-          changedTreeFiles: ["telemetry/delivery-runs/run.json"],
+          changedTreeFiles: ["telemetry/delivery-runs/2026-06-18/run.json"],
         }),
         validatePostGateNeutralChanges: async () => {
           telemetryChecked = true;

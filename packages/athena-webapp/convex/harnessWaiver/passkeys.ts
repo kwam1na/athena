@@ -58,6 +58,10 @@ export function verificationPolicy(challenge: string, origin: string, rpId: stri
   };
 }
 
+export function authenticationChallengeBytes(challenge: string) {
+  return new Uint8Array(Buffer.from(challenge, "base64url"));
+}
+
 export const beginRegistration = action({
   args: { authorizationToken: v.string() },
   handler: async (ctx, args) => {
@@ -181,7 +185,7 @@ export const getApprovalOptions = action({
       candidate: approval.candidate,
       options: await generateAuthenticationOptions({
         rpID: waiverPasskeyConfig().rpId,
-        challenge: approval.challenge,
+        challenge: authenticationChallengeBytes(approval.challenge),
         allowCredentials: [{
           id: credential.credentialId,
           transports: credential.transports as AuthenticatorTransportFuture[],

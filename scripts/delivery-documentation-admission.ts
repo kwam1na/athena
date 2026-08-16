@@ -1,6 +1,13 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
+import {
+  closeSync,
+  createReadStream,
+  createWriteStream,
+  openSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { createInterface } from "node:readline/promises";
 
 import {
   discoverDocumentationWaiverAttestation,
@@ -17,6 +24,14 @@ import {
   type HarnessCandidate,
   type HarnessCandidateCapture,
 } from "./harness-candidate";
+import {
+  classifyCurrentHarnessExecutionContext,
+  type HarnessExecutionContext,
+} from "./harness-execution-context";
+import {
+  ATHENA_PR_VALIDATION_GATE_ID,
+  HARNESS_GATE_REGISTRY,
+} from "./harness-gate-registry";
 import { computeDeliverableTreeIdentity } from "./harness-review-identity";
 
 type PullRequestEvent = {
@@ -36,11 +51,23 @@ type AdmissionOptions = {
   requestJson?: GitHubJsonRequest;
   loadWorkflowAttestation?: (runId: number) => Promise<unknown>;
   computeHeadDeliverableIdentity?: typeof computeDeliverableTreeIdentity;
-  computeHeadDiffBaseSha?: (rootDir: string, headSha: string) => Promise<string>;
+  computeHeadDiffBaseSha?: (
+    rootDir: string,
+    headSha: string,
+  ) => Promise<string>;
+  classifyContext?: () => HarnessExecutionContext;
+  hasControllingTerminal?: () => boolean;
+  promptForWaiver?: (
+    documentation: Extract<
+      DeliveryDocumentationCheckResult,
+      { status: "fail" }
+    >,
+  ) => Promise<boolean>;
 };
 
 export type DeliveryDocumentationAdmissionResult =
   | { status: "pass"; resolution: "live" }
+  | { status: "pass"; resolution: "invocation-waived" }
   | {
       status: "pass";
       resolution: "waived";
@@ -52,10 +79,17 @@ export type DeliveryDocumentationAdmissionResult =
       reason: string;
     };
 
+export const WAIVABLE_DOCUMENTATION_FINDING_POLICIES = [
+  "compound-solution",
+  "landed-change-report",
+] as const satisfies readonly DeliveryDocumentationCheckResult["findings"][number]["policy"][];
+
 async function readPullRequestEvent(eventPath: string | undefined) {
   if (!eventPath) return undefined;
   try {
-    const value = JSON.parse(await readFile(eventPath, "utf8")) as PullRequestEvent;
+    const value = JSON.parse(
+      await readFile(eventPath, "utf8"),
+    ) as PullRequestEvent;
     return value?.pull_request ? value : undefined;
   } catch {
     return undefined;
@@ -116,7 +150,9 @@ export async function loadGitHubWorkflowAttestation(
 ) {
   const response = (await requestJson(
     `/repos/${repository}/actions/runs/${runId}/artifacts`,
-  )) as { artifacts?: Array<{ id?: number; name?: string; expired?: boolean }> };
+  )) as {
+    artifacts?: Array<{ id?: number; name?: string; expired?: boolean }>;
+  };
   const artifact = response.artifacts?.find(
     (entry) =>
       entry.name === DOCUMENTATION_WAIVER_ARTIFACT_NAME &&
@@ -184,13 +220,109 @@ export async function evaluateDeliveryDocumentationAdmission(
     },
   );
   if (!waiver) {
+    const context = classifyDocumentationAdmissionContext(options);
+    const obligation =
+      HARNESS_GATE_REGISTRY.obligations["documentation.current"];
+    const findingsAreWaivable = documentation.findings.every((finding) =>
+      WAIVABLE_DOCUMENTATION_FINDING_POLICIES.includes(finding.policy),
+    );
+    if (
+      context.kind === "human" &&
+      obligation.humanWaiverAllowed &&
+      findingsAreWaivable &&
+      (await (options.promptForWaiver ?? promptForDocumentationWaiver)(
+        documentation,
+      ))
+    ) {
+      const promptCapture = await (
+        options.captureCandidate ?? captureStableHarnessCandidate
+      )(rootDir);
+      if (
+        !promptCapture.ok ||
+        !sameCandidate(capture.candidate, promptCapture.candidate)
+      ) {
+        return {
+          status: "fail",
+          documentation,
+          reason: "The candidate changed while the waiver prompt was open.",
+        };
+      }
+      return { status: "pass", resolution: "invocation-waived" };
+    }
     return {
       status: "fail",
       documentation,
-      reason: "No trusted documentation waiver matches this candidate and its live findings.",
+      reason:
+        "No trusted documentation waiver matches this candidate and its live findings.",
     };
   }
   return { status: "pass", resolution: "waived", waiver };
+}
+
+function classifyDocumentationAdmissionContext(options: AdmissionOptions) {
+  const context = (
+    options.classifyContext ??
+    (() =>
+      classifyCurrentHarnessExecutionContext(
+        ATHENA_PR_VALIDATION_GATE_ID,
+        "documentation.current",
+      ))
+  )();
+  if (
+    context.kind === "unknown" &&
+    context.reason === "noninteractive_unrecognized" &&
+    (options.hasControllingTerminal ?? hasControllingTerminal)()
+  ) {
+    return { kind: "human", interactive: true } as const;
+  }
+  return context;
+}
+
+function hasControllingTerminal() {
+  try {
+    const descriptor = openSync("/dev/tty", "r+");
+    closeSync(descriptor);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function promptForDocumentationWaiver(
+  documentation: Extract<DeliveryDocumentationCheckResult, { status: "fail" }>,
+) {
+  const input = createReadStream("/dev/tty");
+  const output = createWriteStream("/dev/tty");
+  const terminal = createInterface({ input, output });
+  try {
+    output.write("This candidate is blocked by documentation.current:\n");
+    for (const finding of documentation.findings) {
+      output.write(`- ${finding.label}: ${finding.message}\n`);
+    }
+    const answer = await terminal.question(
+      "Waive documentation.current for this pre-push invocation? Type 'yes' to continue: ",
+    );
+    return answer.trim().toLowerCase() === "yes";
+  } catch {
+    return false;
+  } finally {
+    terminal.close();
+    input.destroy();
+    output.end();
+  }
+}
+
+function sameCandidate(left: HarnessCandidate, right: HarnessCandidate) {
+  return (
+    left.treeSha === right.treeSha &&
+    left.baseRef === right.baseRef &&
+    left.baseTipSha === right.baseTipSha &&
+    left.diffBaseSha === right.diffBaseSha &&
+    left.headSha === right.headSha &&
+    left.mode === right.mode &&
+    left.status === right.status &&
+    JSON.stringify(left.untrackedFiles) === JSON.stringify(right.untrackedFiles)
+  );
 }
 
 export async function discoverCurrentDocumentationWaiver(
@@ -227,9 +359,7 @@ export async function discoverCurrentDocumentationWaiver(
     options.computeHeadDiffBaseSha ?? computeHeadDiffBaseSha
   )(rootDir, pullRequest.pull_request.head.sha);
 
-  return (
-    options.discoverWaiver ?? discoverDocumentationWaiverAttestation
-  )({
+  return (options.discoverWaiver ?? discoverDocumentationWaiverAttestation)({
     expected: {
       repository,
       prNumber: pullRequest.number,
@@ -294,8 +424,14 @@ if (import.meta.main) {
         console.log(
           `Delivery documentation waived by ${result.waiver.approvedBy} for this candidate (${result.waiver.attestationUrl}).`,
         );
+      } else if (result.resolution === "invocation-waived") {
+        console.log(
+          "Delivery documentation waived by an interactive human for this invocation.",
+        );
       } else {
-        console.log("Delivery documentation admission passed with live artifacts.");
+        console.log(
+          "Delivery documentation admission passed with live artifacts.",
+        );
       }
     })
     .catch((error) => {
