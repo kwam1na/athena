@@ -14,14 +14,34 @@ vi.mock("./restore", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./restore")>();
   return { ...actual, requireReadySharedDemoWriteWithCtx: vi.fn() };
 });
-vi.mock("../operationAdmission/publicMutation", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../operationAdmission/publicMutation")>();
+/**
+ * Most cases here assert a handler's OWN inner shared-demo guard, so the
+ * admission wrapper is bypassed for them and the handler is invoked directly.
+ * `decideApprovalRequest` is the exception: what that case asserts is the
+ * rail's store clamp and restore fence, so it runs through the real canonical
+ * wrapper. Before the canonical rename this split rode on two wrapper names;
+ * now that there is one name, it rides on the operation id.
+ */
+vi.mock("../platform/operationAdmission", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../platform/operationAdmission")>();
+  const admittedThroughTheRealRail = new Set([
+    "operations/approvalRequests.decideApprovalRequest",
+  ]);
   return {
     ...actual,
-    admitSharedDemoPublicMutation:
-      (_definition: unknown, handler: Function) => handler,
-    withOperationMutationAdmission:
-      (_definition: unknown, handler: Function) => handler,
+    admitPublicMutation: (
+      definition: { operationId: string },
+      handler: Function,
+      options?: unknown,
+    ) =>
+      admittedThroughTheRealRail.has(definition.operationId)
+        ? actual.admitPublicMutation(
+            definition as never,
+            handler as never,
+            options as never,
+          )
+        : handler,
   };
 });
 

@@ -8,7 +8,7 @@ import {
   reviewRegisterSessionCloseoutOperationDefinition,
   submitRegisterSessionCloseoutOperationDefinition,
 } from "../operationAdmission/definitions";
-import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
+import { admitPublicMutation } from "../platform/operationAdmission";
 import type { OperationMutationCtx } from "../operationAdmission/types";
 import { insertApprovalRequestWithCtx } from "../operations/approvalRequestHelpers";
 import {
@@ -870,7 +870,7 @@ export const submitRegisterSessionCloseout = mutation({
     terminalId: v.optional(v.id("posTerminal")),
   },
   returns: submitRegisterSessionCloseoutResultValidator,
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     submitRegisterSessionCloseoutOperationDefinition,
     async (
       ctx: OperationMutationCtx,
@@ -1835,7 +1835,7 @@ export const reopenRegisterSessionCloseout = mutation({
     storeId: v.id("store"),
   },
   returns: reopenRegisterSessionResultValidator,
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     reopenRegisterSessionCloseoutOperationDefinition,
     async (
       ctx: OperationMutationCtx,
@@ -2130,7 +2130,7 @@ export const correctRegisterSessionOpeningFloat = mutation({
     terminalId: v.optional(v.id("posTerminal")),
   },
   returns: correctRegisterSessionOpeningFloatResultValidator,
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     correctRegisterSessionOpeningFloatOperationDefinition,
     async (
       ctx: OperationMutationCtx,
@@ -2329,7 +2329,7 @@ export const reviewRegisterSessionCloseout = mutation({
     storeId: v.id("store"),
   },
   returns: reviewRegisterSessionCloseoutResultValidator,
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     reviewRegisterSessionCloseoutOperationDefinition,
     async (
       ctx: OperationMutationCtx,

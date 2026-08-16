@@ -1,7 +1,9 @@
 import { v } from "convex/values";
 import { action, internalAction } from "../_generated/server";
-import { internal } from "../_generated/api";
+import type { Id } from "../_generated/dataModel";
 import { commandResultValidator } from "../lib/commandResultValidators";
+import { sendOrderUpdateEmailOperationDefinition } from "../operationAdmission/definitions";
+import { admitPublicAction } from "../platform/operationAdmission";
 import {
   formatOrderItems,
   orderUpdateEmailArgs,
@@ -18,38 +20,39 @@ export const sendOrderUpdateEmail = action({
       message: v.string(),
     })
   ),
-  handler: async (ctx, args) => {
-    // Actions enter the admission rail through a mutation because they have no
-    // `db` of their own. This applies the same definition the mutation path
-    // uses, and records the admitted action for demo visibility.
-    const admission = await ctx.runMutation(
-      internal.operationAdmission.actionAdmission.admitOperationForAction,
-      {
-        operationId: "storeFront/onlineOrderUtilFns.sendOrderUpdateEmail",
-        operationArgs: { orderId: args.orderId },
-      },
-    );
-    const isSharedDemo = admission.actorKind === "shared_demo";
-    const result = await processOrderUpdateEmail(ctx, args, {
-      simulateExternalEffects: isSharedDemo,
-    });
+  // Actions enter the admission rail through the registered internal mutation
+  // because they have no `db` of their own; `admitPublicAction` owns that hop,
+  // so the definition — not a hand-written operationId string — is what this
+  // site names, and the full admission projection reaches the handler.
+  handler: admitPublicAction(
+    sendOrderUpdateEmailOperationDefinition,
+    async (
+      ctx,
+      args: { newStatus: string; orderId: Id<"onlineOrder"> },
+    ) => {
+      const isSharedDemo = ctx.operationAdmission.actor.kind === "shared_demo";
+      const result = await processOrderUpdateEmail(ctx, args, {
+        simulateExternalEffects: isSharedDemo,
+      });
 
-    if (!result.success) {
-      return userError({
-        code:
-          result.message === "Order not found" || result.message === "Store not found"
-            ? "not_found"
-            : result.message === "No email sent for this status"
-              ? "precondition_failed"
-              : "unavailable",
+      if (!result.success) {
+        return userError({
+          code:
+            result.message === "Order not found" ||
+            result.message === "Store not found"
+              ? "not_found"
+              : result.message === "No email sent for this status"
+                ? "precondition_failed"
+                : "unavailable",
+          message: result.message,
+        });
+      }
+
+      return ok({
         message: result.message,
       });
-    }
-
-    return ok({
-      message: result.message,
-    });
-  },
+    },
+  ),
 });
 
 export const sendOrderUpdateEmailInternal = internalAction({

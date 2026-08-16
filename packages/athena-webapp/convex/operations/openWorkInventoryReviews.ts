@@ -7,14 +7,9 @@ import {
   type MutationCtx,
 } from "../_generated/server";
 import { commandResultValidator } from "../lib/commandResultValidators";
-import {
-  createNormalUserOperationAdapter,
-  resolveOperationAdmission,
-} from "../operationAdmission/adapters";
 import { resolveSyncedSaleInventoryReviewGroupOperationDefinition } from "../operationAdmission/definitions";
-import { admitPublicMutation } from "../operationAdmission/publicMutation";
+import { admitPublicMutation } from "../platform/operationAdmission";
 import type { OperationMutationCtx } from "../operationAdmission/types";
-import { createSharedDemoOperationAdapter } from "../sharedDemo/operationAdapter";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
@@ -1032,17 +1027,14 @@ export const resolveSyncedSaleInventoryReview = internalMutation({
   handler: resolveSyncedSaleInventoryReviewWithCtx,
 });
 
+// The default chain (shared demo -> normal user -> storefront customer ->
+// public) is what this site used to hand-assemble; the definition denies
+// `public` and declares no storefront customer, so the two extra links are
+// inert and the admitted set is unchanged.
 const resolveSyncedSaleInventoryReviewGroupAdmittedHandler =
   admitPublicMutation(
     resolveSyncedSaleInventoryReviewGroupOperationDefinition,
     resolveSyncedSaleInventoryReviewGroupWithCtx,
-    {
-      resolveAdmission: (ctx, args, definition) =>
-        resolveOperationAdmission(ctx, args, definition, {
-          normalAdapter: createNormalUserOperationAdapter(),
-          sharedDemoAdapter: createSharedDemoOperationAdapter(),
-        }),
-    },
   );
 
 export const resolveSyncedSaleInventoryReviewGroup = mutation({

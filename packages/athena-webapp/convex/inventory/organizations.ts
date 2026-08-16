@@ -4,7 +4,7 @@ import type { MutationCtx } from "../_generated/server";
 import { v } from "convex/values";
 import { organizationSchema } from "../schemas/inventory";
 import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import { admitPublicQuery } from "../platform/operationAdmission";
 import {
   getOrganizationByIdOrSlugReadDefinition,
   listAthenaUserOrganizationsReadDefinition,
@@ -89,7 +89,7 @@ export const getAll = query({
   args: {
     userId: v.id("athenaUser"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listAthenaUserOrganizationsReadDefinition,
     async (ctx: OperationQueryCtx, args: { userId: Id<"athenaUser"> }) => {
       const admittedActor = ctx.operationAdmission.actor;
@@ -128,7 +128,7 @@ export const getByIdOrSlug = query({
   args: {
     identifier: v.union(v.id(entity), v.string()),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getOrganizationByIdOrSlugReadDefinition,
     async (
       ctx: OperationQueryCtx,

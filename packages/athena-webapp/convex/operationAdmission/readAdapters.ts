@@ -1,6 +1,5 @@
 import type { QueryCtx } from "../_generated/server";
 import {
-  requireAthenaIdentityPort,
   resolveAdmissionChain,
   type AthenaIdentityPort,
 } from "./adapters";
@@ -11,15 +10,13 @@ import type {
   OperationReadDefinition,
 } from "./types";
 
-export function createNormalUserReadOperationAdapter(options?: {
-  resolveAthenaUser?: AthenaIdentityPort;
+export function createNormalUserReadOperationAdapter(options: {
+  resolveAthenaUser: AthenaIdentityPort;
 }): OperationReadAdapter {
   return {
     kind: "normal_user",
     resolve: async (ctx, args, definition) => {
-      const athenaUser = await requireAthenaIdentityPort(
-        options?.resolveAthenaUser,
-      )(ctx);
+      const athenaUser = await options.resolveAthenaUser(ctx);
       if (!athenaUser) return { kind: "unauthenticated" };
       if (definition.actors.normalUser === "deny") {
         return {
@@ -68,27 +65,3 @@ export function createPublicReadOperationAdapter(): OperationReadAdapter {
   };
 }
 
-/** TRANSITIONAL adapter-set shape; deleted with its call sites in U1c. */
-export type LegacyOperationReadAdapterSet = {
-  normalAdapter?: OperationReadAdapter;
-  sharedDemoAdapter?: OperationReadAdapter;
-  publicAdapter?: OperationReadAdapter;
-};
-
-export function resolveReadOperationAdmission(
-  ctx: QueryCtx,
-  args: Record<string, unknown>,
-  definition: OperationReadDefinition,
-  adapters: readonly OperationReadAdapter[] | LegacyOperationReadAdapterSet,
-): Promise<OperationAdmissionContext> {
-  const chain = Array.isArray(adapters)
-    ? adapters
-    : ([
-        (adapters as LegacyOperationReadAdapterSet).sharedDemoAdapter,
-        (adapters as LegacyOperationReadAdapterSet).normalAdapter ??
-          createNormalUserReadOperationAdapter(),
-        (adapters as LegacyOperationReadAdapterSet).publicAdapter ??
-          createPublicReadOperationAdapter(),
-      ].filter(Boolean) as OperationReadAdapter[]);
-  return resolveAdmissionChain(ctx, args, definition, chain);
-}

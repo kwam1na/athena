@@ -28,9 +28,11 @@ import {
 } from "./catalogSummary";
 import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
 import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import { repairCatalogSummaryOperationDefinition } from "../operationAdmission/definitions";
-import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
 import { listInventoryProductsReadDefinition } from "../operationAdmission/readDefinitions";
 import type {
   OperationMutationCtx,
@@ -277,7 +279,7 @@ export const getAll = query({
       }),
     ),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listInventoryProductsReadDefinition,
     async (
       ctx: OperationQueryCtx,
@@ -525,7 +527,7 @@ export const repairCatalogSummary = mutation({
   args: {
     storeId: v.id("store"),
   },
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     repairCatalogSummaryOperationDefinition,
     async (ctx: OperationMutationCtx, args: { storeId: Id<"store"> }) => {
       const id = await refreshCatalogSummaryWithCtx(ctx, args.storeId);

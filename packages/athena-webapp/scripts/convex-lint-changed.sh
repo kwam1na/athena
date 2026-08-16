@@ -50,6 +50,12 @@ while IFS= read -r file; do
   if [[ "$file" == packages/athena-webapp/convex/_generated/* ]]; then
     continue
   fi
+  # A file added earlier on the branch and deleted in the working tree still
+  # shows up in the `MERGE_BASE...HEAD` half of the union. It no longer exists,
+  # so eslint aborts on the whole run rather than skipping it.
+  if [ ! -f "$REPO_ROOT/$file" ]; then
+    continue
+  fi
   repo_changed_files+=("$file")
   changed_files+=("${file#packages/athena-webapp/}")
 done < <(collect_changed_convex_files | grep -E '\.ts$' || true)

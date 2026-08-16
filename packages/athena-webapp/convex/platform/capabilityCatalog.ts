@@ -20,6 +20,13 @@ export const ATHENA_CAPABILITY_CATALOG = [
   { id: "intelligence.manage", label: "Athena intelligence management" },
   { id: "inventory.adjust", label: "Inventory adjustments and counts" },
   { id: "inventory.import", label: "Inventory import" },
+  // The two public marketing ingress routes (`/walkthrough-requests`,
+  // `/landing-funnel-events`) accept unauthenticated writes and are not backed
+  // by any Convex module, so `classifyAthenaPublicWrite` never sees them and
+  // they have no capability to inherit. Naming them here is what lets their
+  // Phase B route definitions declare one instead of coining a literal.
+  { id: "marketing.funnel.track", label: "Landing funnel tracking" },
+  { id: "marketing.walkthrough.request", label: "Walkthrough requests" },
   { id: "orders.create", label: "Order creation" },
   { id: "orders.fulfill", label: "Order fulfillment" },
   { id: "orders.manage", label: "Order management" },

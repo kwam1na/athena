@@ -6,10 +6,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 
 import { defineOperation } from "../operationAdmission/domains/_shapes";
 import type { OperationDefinition } from "../operationAdmission/types";
-import {
-  admitPublicMutation,
-  withOperationMutationAdmission,
-} from "./operationAdmission";
+import { admitPublicMutation } from "./operationAdmission";
 
 const demoDeniedDefinition = defineOperation({
   kind: "mutation" as const,
@@ -60,21 +57,6 @@ describe("composition root default adapter chain", () => {
         demoDeniedDefinition,
         handler,
       )(demoPrincipalCtx() as never, { storeId: "demo-store" }),
-    ).rejects.toThrow();
-    expect(handler).not.toHaveBeenCalled();
-  });
-
-  it("gives the legacy wrapper name the same full chain", async () => {
-    vi.mocked(getAuthUserId).mockResolvedValue("demo-auth-user" as never);
-    const handler = vi.fn();
-
-    // The old two-name surface used to register the demo adapter only at some
-    // call sites; as a thin alias it now cannot differ from the canonical one.
-    await expect(
-      withOperationMutationAdmission(
-        demoDeniedDefinition,
-        handler as never,
-      )(demoPrincipalCtx() as never, { storeId: "demo-store" } as never),
     ).rejects.toThrow();
     expect(handler).not.toHaveBeenCalled();
   });

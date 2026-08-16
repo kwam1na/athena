@@ -1,20 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { defineOperation } from "./definitions";
-import { admitPublicMutation } from "../platform/operationAdmission";
+import { defineReadOperation } from "../operationAdmission/readDefinitions";
+import { admitPublicQuery } from "./operationAdmission";
 
-const definition = defineOperation({
-  kind: "mutation" as const,
-  operationId: "test.operation",
-  capability: "daily_operations.write",
+const definition = defineReadOperation({
+  kind: "query" as const,
+  operationId: "test.read",
+  access: { kind: "read", intent: "pos.view" as const },
   scope: { kind: "store", storeIdArg: "storeId" },
-  readiness: { kind: "store_write" },
-  effects: { mode: "none" },
-  actors: { normalUser: "admit", sharedDemo: "deny", public: "deny" },
+  actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
 });
 
-describe("operation admission public mutation wrapper", () => {
-  it("resolves admission before invoking the domain handler and preserves output", async () => {
+describe("operation admission public query wrapper", () => {
+  it("resolves read admission before invoking the domain handler and preserves output", async () => {
     const domainHandler = vi.fn(async (_ctx, args) => ({
       kind: "ok",
       data: { storeId: args.storeId },
@@ -25,12 +23,15 @@ describe("operation admission public mutation wrapper", () => {
         organizationId: "org-1" as never,
         storeId: "store-1" as never,
       },
-      decision: { adapter: "normal_user" as const, outcome: "admitted" as const },
+      decision: {
+        adapter: "normal_user" as const,
+        outcome: "admitted" as const,
+      },
       operation: definition,
       provenance: { kind: "normal_user" },
     }));
 
-    const wrapped = admitPublicMutation(definition, domainHandler, {
+    const wrapped = admitPublicQuery(definition, domainHandler, {
       resolveAdmission,
     });
     await expect(
@@ -49,10 +50,10 @@ describe("operation admission public mutation wrapper", () => {
     );
   });
 
-  it("does not invoke the domain handler when admission metadata is invalid", async () => {
+  it("does not invoke the domain handler when read admission metadata is invalid", async () => {
     const domainHandler = vi.fn();
-    const wrapped = admitPublicMutation(
-      { ...definition, capability: "missing.capability" as never },
+    const wrapped = admitPublicQuery(
+      { ...definition, access: { kind: "read", intent: "" as never } },
       domainHandler,
       {
         resolveAdmission: vi.fn(),
@@ -61,7 +62,7 @@ describe("operation admission public mutation wrapper", () => {
 
     await expect(
       wrapped({ db: {} } as never, { storeId: "store-1" }),
-    ).rejects.toThrow("Invalid operation admission definition");
+    ).rejects.toThrow("Invalid operation read admission definition");
     expect(domainHandler).not.toHaveBeenCalled();
   });
 });

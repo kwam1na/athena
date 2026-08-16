@@ -37,44 +37,21 @@ export function isAdmittedOutcome(
 }
 
 /**
- * TRANSITIONAL default identity port.
- *
- * The composition root registers the real resolver at module init. It exists
- * only so the three pre-existing call sites that construct their own adapter
- * chain (`operations/approvalRequests.ts`,
- * `operations/openWorkInventoryReviews.ts`, `sharedDemo/public.ts`) keep
- * working until U1c folds them onto the canonical wrappers; after that every
- * adapter is constructed at the composition root with the port passed in.
+ * The identity port is a required construction argument: every adapter is
+ * built at the composition root, which is the only module that knows how to
+ * resolve an Athena identity. There is no registered default to fall back on,
+ * so a chain assembled without a port fails at construction rather than at the
+ * first request.
  */
-let defaultAthenaIdentityPort: AthenaIdentityPort | undefined;
-
-export function registerAthenaIdentityPort(port: AthenaIdentityPort) {
-  defaultAthenaIdentityPort = port;
-}
-
-export function requireAthenaIdentityPort(
-  port: AthenaIdentityPort | undefined,
-): AthenaIdentityPort {
-  const resolved = port ?? defaultAthenaIdentityPort;
-  if (!resolved) {
-    throw new Error(
-      "No Athena identity port is registered on the admission rail.",
-    );
-  }
-  return resolved;
-}
-
-export function createNormalUserOperationAdapter(options?: {
-  resolveAthenaUser?: AthenaIdentityPort;
+export function createNormalUserOperationAdapter(options: {
+  resolveAthenaUser: AthenaIdentityPort;
 }): OperationAdapter {
   return {
     kind: "normal_user",
     resolve: async (ctx, args, definition) => {
       // Identity before scope: a scope resolver that throws must never be able
       // to turn an authenticated caller into an anonymous one.
-      const athenaUser = await requireAthenaIdentityPort(
-        options?.resolveAthenaUser,
-      )(ctx);
+      const athenaUser = await options.resolveAthenaUser(ctx);
       if (!athenaUser) return { kind: "unauthenticated" };
       if (definition.actors.normalUser === "deny") {
         return {
@@ -155,32 +132,4 @@ export async function resolveAdmissionChain<
   }
 
   throw new Error("Sign in again to continue.");
-}
-
-/**
- * TRANSITIONAL adapter-set shape. U1c deletes it along with the call sites
- * that hand-assemble a chain.
- */
-export type LegacyOperationAdapterSet = {
-  normalAdapter?: OperationAdapter;
-  sharedDemoAdapter?: OperationAdapter;
-  publicAdapter?: OperationAdapter;
-};
-
-export function resolveOperationAdmission(
-  ctx: MutationCtx,
-  args: Record<string, unknown>,
-  definition: OperationDefinition,
-  adapters: readonly OperationAdapter[] | LegacyOperationAdapterSet,
-): Promise<OperationAdmissionContext> {
-  const chain = Array.isArray(adapters)
-    ? adapters
-    : ([
-        (adapters as LegacyOperationAdapterSet).sharedDemoAdapter,
-        (adapters as LegacyOperationAdapterSet).normalAdapter ??
-          createNormalUserOperationAdapter(),
-        (adapters as LegacyOperationAdapterSet).publicAdapter ??
-          createPublicOperationAdapter(),
-      ].filter(Boolean) as OperationAdapter[]);
-  return resolveAdmissionChain(ctx, args, definition, chain);
 }

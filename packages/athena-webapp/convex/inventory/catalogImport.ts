@@ -14,7 +14,7 @@ import {
   finalizeInventoryImportReviewVersionPayloadOperationDefinition,
   stageInventoryImportReviewVersionPayloadChunkOperationDefinition,
 } from "../operationAdmission/definitions";
-import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
+import { admitPublicMutation } from "../platform/operationAdmission";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
@@ -1103,7 +1103,7 @@ export const stageInventoryImportReviewVersionPayloadChunk = mutation({
   returns: commandResultValidator(
     stagedInventoryImportReviewPayloadChunkValidator,
   ),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     stageInventoryImportReviewVersionPayloadChunkOperationDefinition,
     stageInventoryImportReviewVersionPayloadChunkCommandWithCtx,
   ),
@@ -1435,7 +1435,7 @@ export const finalizeInventoryImportReviewVersionPayload = mutation({
     uploadKey: v.string(),
   },
   returns: commandResultValidator(inventoryImportReviewVersionSummaryValidator),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     finalizeInventoryImportReviewVersionPayloadOperationDefinition,
     finalizeInventoryImportReviewVersionPayloadCommandWithCtx,
   ),

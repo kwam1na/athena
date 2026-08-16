@@ -222,7 +222,6 @@ import type * as notifications_seed from "../notifications/seed.js";
 import type * as notifications_subscriptions from "../notifications/subscriptions.js";
 import type * as notifications_sweeper from "../notifications/sweeper.js";
 import type * as notifications_transport from "../notifications/transport.js";
-import type * as operationAdmission_actionAdmission from "../operationAdmission/actionAdmission.js";
 import type * as operationAdmission_actors from "../operationAdmission/actors.js";
 import type * as operationAdmission_adapters from "../operationAdmission/adapters.js";
 import type * as operationAdmission_capabilities from "../operationAdmission/capabilities.js";
@@ -250,9 +249,6 @@ import type * as operationAdmission_domains_u9_platform_definitions from "../ope
 import type * as operationAdmission_domains_u9_platform_readDefinitions from "../operationAdmission/domains/u9_platform_readDefinitions.js";
 import type * as operationAdmission_effects from "../operationAdmission/effects.js";
 import type * as operationAdmission_ingressVerification from "../operationAdmission/ingressVerification.js";
-import type * as operationAdmission_migrationInventory from "../operationAdmission/migrationInventory.js";
-import type * as operationAdmission_publicMutation from "../operationAdmission/publicMutation.js";
-import type * as operationAdmission_publicQuery from "../operationAdmission/publicQuery.js";
 import type * as operationAdmission_rail from "../operationAdmission/rail.js";
 import type * as operationAdmission_readAdapters from "../operationAdmission/readAdapters.js";
 import type * as operationAdmission_readDefinitions from "../operationAdmission/readDefinitions.js";
@@ -873,7 +869,6 @@ declare const fullApi: ApiFromModules<{
   "notifications/subscriptions": typeof notifications_subscriptions;
   "notifications/sweeper": typeof notifications_sweeper;
   "notifications/transport": typeof notifications_transport;
-  "operationAdmission/actionAdmission": typeof operationAdmission_actionAdmission;
   "operationAdmission/actors": typeof operationAdmission_actors;
   "operationAdmission/adapters": typeof operationAdmission_adapters;
   "operationAdmission/capabilities": typeof operationAdmission_capabilities;
@@ -901,9 +896,6 @@ declare const fullApi: ApiFromModules<{
   "operationAdmission/domains/u9_platform_readDefinitions": typeof operationAdmission_domains_u9_platform_readDefinitions;
   "operationAdmission/effects": typeof operationAdmission_effects;
   "operationAdmission/ingressVerification": typeof operationAdmission_ingressVerification;
-  "operationAdmission/migrationInventory": typeof operationAdmission_migrationInventory;
-  "operationAdmission/publicMutation": typeof operationAdmission_publicMutation;
-  "operationAdmission/publicQuery": typeof operationAdmission_publicQuery;
   "operationAdmission/rail": typeof operationAdmission_rail;
   "operationAdmission/readAdapters": typeof operationAdmission_readAdapters;
   "operationAdmission/readDefinitions": typeof operationAdmission_readDefinitions;

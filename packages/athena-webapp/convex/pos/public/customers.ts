@@ -31,7 +31,7 @@ import {
   getCustomerTransactions as getCustomerTransactionsQuery,
   searchCustomers as searchCustomersQuery,
 } from "../application/queries/searchCustomers";
-import { withOperationReadAdmission } from "../../operationAdmission/publicQuery";
+import { admitPublicQuery } from "../../platform/operationAdmission";
 import {
   findPotentialPosCustomerMatchesReadDefinition,
   findPosCustomerByStoreFrontUserReadDefinition,
@@ -201,7 +201,7 @@ export const searchCustomers = query({
     searchQuery: v.string(),
   },
   returns: v.array(customerSummaryValidator),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     searchPosCustomersReadDefinition,
     async (
       ctx: OperationQueryCtx,
@@ -244,7 +244,7 @@ export const getCustomerById = query({
     }),
     v.null(),
   ),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPosCustomerByIdReadDefinition,
     async (ctx: OperationQueryCtx, args: { customerId: Id<"posCustomer"> }) => {
       const access = await requirePosCustomerReadAccessById(ctx, {
@@ -359,7 +359,7 @@ export const getCustomerTransactions = query({
       completedAt: v.number(),
     }),
   ),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPosCustomerTransactionsReadDefinition,
     async (
       ctx: OperationQueryCtx,
@@ -471,7 +471,7 @@ export const findByStoreFrontUser = query({
     }),
     v.null(),
   ),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     findPosCustomerByStoreFrontUserReadDefinition,
     async (
       ctx: OperationQueryCtx,
@@ -524,7 +524,7 @@ export const findPotentialMatches = query({
       }),
     ),
   }),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     findPotentialPosCustomerMatchesReadDefinition,
     async (
       ctx: OperationQueryCtx,

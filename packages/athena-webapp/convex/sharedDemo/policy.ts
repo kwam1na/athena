@@ -59,18 +59,33 @@ export const SHARED_DEMO_EFFECT_CLASSIFICATIONS = [
  * Read intents are not write capabilities, so demo read reach gets its own
  * list rather than being inferred from `SHARED_DEMO_ALLOWED_CAPABILITIES`.
  * Seeded in U1a from the intents of every read definition that is currently
- * `sharedDemo: "admit"`; `readIntentGrants.test.ts` asserts that derivation,
- * so a demo read can neither widen nor narrow silently.
+ * `sharedDemo: "admit"`. `readIntentGrants.test.ts` asserts seed ⊇ derived: a
+ * demo-admitted read whose intent is missing here is a failure, so demo reach
+ * can never widen silently. The set may run AHEAD of the migrated definitions
+ * only for a surface the demo demonstrably shows today — every entry below
+ * that is not yet derivable names its evidence.
+ *
+ * Every addition to this list is a deliberate widening of what a demo visitor
+ * can observe. The default answer for a Phase B unit is "do not add"; adding
+ * requires that the demo already renders the surface.
  */
 export const SHARED_DEMO_ALLOWED_READ_INTENTS = [
   "cash_controls.view",
   "daily_close.view",
   "daily_operations.view",
+  // The demo runtime reads its own context and register bootstrap
+  // (`sharedDemo/public:getContext`, `:getRegisterBootstrap`) on every demo
+  // page; without this grant the demo cannot render at all.
+  "demo.context.view",
   "inventory.catalog.view",
   "online_orders.view",
   "operations.workItems.view",
   "organization.view",
   "pos.view",
+  // `reports.read` is already in `SHARED_DEMO_ALLOWED_CAPABILITIES`, so the
+  // Reports surface is demo-visible today; the read intent follows the
+  // capability rather than widening anything new.
+  "reports.view",
   "stock_adjustments.view",
 ] as const satisfies readonly AthenaReadIntent[];
 

@@ -9,6 +9,8 @@ import { v } from "convex/values";
 import { Id } from "../_generated/dataModel";
 import { api, internal } from "../_generated/api";
 import { commandResultValidator } from "../lib/commandResultValidators";
+import { sendFeedbackRequestOperationDefinition } from "../operationAdmission/definitions";
+import { admitPublicAction } from "../platform/operationAdmission";
 import { sendFeedbackRequestEmail } from "../mailersend";
 import { getProductName } from "../utils";
 import { ok, userError } from "../../shared/commandResult";
@@ -602,6 +604,15 @@ export const markHelpful = mutation({
   },
 });
 
+type SendFeedbackRequestArgs = {
+  customerEmail: string;
+  customerName: string;
+  orderId: Id<"onlineOrder">;
+  orderItemId: Id<"onlineOrderItem">;
+  productSkuId: Id<"productSku">;
+  signedInAthenaUser?: { email: string; id: Id<"athenaUser"> };
+};
+
 export const sendFeedbackRequest = action({
   args: {
     productSkuId: v.id("productSku"),
@@ -617,89 +628,87 @@ export const sendFeedbackRequest = action({
     ),
   },
   returns: commandResultValidator(v.null()),
-  handler: async (ctx, args) => {
-    // Actions enter the admission rail through a mutation because they have no
-    // `db` of their own. Scope resolves from the named order, so the store
-    // clamp that used to need a second explicit check is applied here.
-    const admission = await ctx.runMutation(
-      internal.operationAdmission.actionAdmission.admitOperationForAction,
-      {
-        operationId: "storeFront/reviews.sendFeedbackRequest",
-        operationArgs: { orderId: args.orderId },
-      },
-    );
-    const isSharedDemo = admission.actorKind === "shared_demo";
+  // Actions enter the admission rail through the registered internal mutation
+  // because they have no `db` of their own; `admitPublicAction` owns that hop,
+  // so this site names the definition rather than an operationId string, and
+  // the store clamp resolves from the named order at admission time.
+  handler: admitPublicAction(
+    sendFeedbackRequestOperationDefinition,
+    async (ctx, args: SendFeedbackRequestArgs) => {
+      const isSharedDemo =
+        ctx.operationAdmission.actor.kind === "shared_demo";
 
-    // Get the order item
-    const orderItem = await ctx.runQuery(internal.storeFront.onlineOrderItem.get, {
-      id: args.orderItemId,
-    });
-
-    if (!orderItem) {
-      return userError({
-        code: "not_found",
-        message: "Order item not found.",
+      // Get the order item
+      const orderItem = await ctx.runQuery(internal.storeFront.onlineOrderItem.get, {
+        id: args.orderItemId,
       });
-    }
 
-    if (orderItem.feedbackRequested) {
-      return userError({
-        code: "precondition_failed",
-        message: "Feedback has already been requested for this item.",
-      });
-    }
-
-    if (orderItem.orderId !== args.orderId) {
-      return userError({
-        code: "validation_failed",
-        message: "Order item does not belong to this order.",
-      });
-    }
-
-    // Get product SKU details
-    const productSku = await ctx.runQuery(internal.inventory.productSku.retrieve, {
-      id: args.productSkuId,
-    });
-
-    if (!productSku) {
-      return userError({
-        code: "not_found",
-        message: "Product SKU not found.",
-      });
-    }
-
-    const review_url = `${process.env.STORE_URL}/shop/orders/${args.orderId}/${args.orderItemId}/review`;
-
-    // Send feedback request email
-    const response = isSharedDemo
-      ? { ok: true }
-      : await sendFeedbackRequestEmail({
-          customerEmail: args.customerEmail,
-          customer_name: args.customerName,
-          product_name: getProductName(productSku) || "Product",
-          product_image_url: productSku.images?.[0] || "",
-          review_url,
+      if (!orderItem) {
+        return userError({
+          code: "not_found",
+          message: "Order item not found.",
         });
+      }
 
-    if (!response.ok) {
-      return userError({
-        code: "unavailable",
-        message: "Failed to send feedback request email.",
+      if (orderItem.feedbackRequested) {
+        return userError({
+          code: "precondition_failed",
+          message: "Feedback has already been requested for this item.",
+        });
+      }
+
+      if (orderItem.orderId !== args.orderId) {
+        return userError({
+          code: "validation_failed",
+          message: "Order item does not belong to this order.",
+        });
+      }
+
+      // Get product SKU details
+      const productSku = await ctx.runQuery(internal.inventory.productSku.retrieve, {
+        id: args.productSkuId,
       });
-    }
 
-    // Mark the order item as having feedback requested
-    await ctx.runMutation(internal.storeFront.onlineOrderItem.updateInternal, {
-      id: args.orderItemId,
-      updates: {
-        feedbackRequested: true,
-        feedbackRequestedAt: new Date().getTime(),
-        feedbackRequestedBy: args.signedInAthenaUser,
-      },
-    });
+      if (!productSku) {
+        return userError({
+          code: "not_found",
+          message: "Product SKU not found.",
+        });
+      }
 
-    return ok(null);
-  },
+      const review_url = `${process.env.STORE_URL}/shop/orders/${args.orderId}/${args.orderItemId}/review`;
+
+      // Send feedback request email
+      const response = isSharedDemo
+        ? { ok: true }
+        : await sendFeedbackRequestEmail({
+            customerEmail: args.customerEmail,
+            customer_name: args.customerName,
+            product_name: getProductName(productSku) || "Product",
+            product_image_url: productSku.images?.[0] || "",
+            review_url,
+          });
+
+      if (!response.ok) {
+        return userError({
+          code: "unavailable",
+          message: "Failed to send feedback request email.",
+        });
+      }
+
+      // Mark the order item as having feedback requested
+      await ctx.runMutation(internal.storeFront.onlineOrderItem.updateInternal, {
+        id: args.orderItemId,
+        updates: {
+          feedbackRequested: true,
+          feedbackRequestedAt: new Date().getTime(),
+          feedbackRequestedBy: args.signedInAthenaUser,
+        },
+      });
+
+      return ok(null);
+    },
+  ),
 });
 
 export const getUnapprovedReviewsCount = query({

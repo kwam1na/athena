@@ -7,15 +7,13 @@ import {
 
 import type { Id } from "../_generated/dataModel";
 import { mutation, query } from "../_generated/server";
-import { resolveOperationAdmission } from "../operationAdmission/adapters";
 import {
   bindRegisterBaselineToTerminalOperationDefinition,
   requestManualRestoreOperationDefinition,
   resetBrowserExperienceOperationDefinition,
 } from "../operationAdmission/definitions";
-import { admitPublicMutation } from "../operationAdmission/publicMutation";
+import { admitPublicMutation } from "../platform/operationAdmission";
 import { resolveStoreTimezone } from "../reports/operatingDay";
-import { createSharedDemoOperationAdapter } from "./operationAdapter";
 import { requireSharedDemoActorWithCtx } from "./actor";
 import {
   assertSharedDemoWriteEpoch,
@@ -106,15 +104,6 @@ type BindRegisterBaselineToTerminalArgs = {
   expectedEpoch: number;
   terminalId: Id<"posTerminal">;
 };
-
-const resolveSharedDemoLifecycleAdmission = (
-  ctx: Parameters<typeof resolveOperationAdmission>[0],
-  args: Record<string, unknown>,
-  definition: Parameters<typeof resolveOperationAdmission>[2],
-) =>
-  resolveOperationAdmission(ctx, args, definition, {
-    sharedDemoAdapter: createSharedDemoOperationAdapter(),
-  });
 
 export const getContext = query({
   args: {},
@@ -282,7 +271,6 @@ export const requestManualRestore = mutation({
             : ("already_running" as const),
       };
     },
-    { resolveAdmission: resolveSharedDemoLifecycleAdmission },
   ),
 });
 
@@ -338,7 +326,6 @@ export const resetBrowserExperience = mutation({
         terminalDeleted: false,
       };
     },
-    { resolveAdmission: resolveSharedDemoLifecycleAdmission },
   ),
 });
 
@@ -388,6 +375,5 @@ export const bindRegisterBaselineToTerminal = mutation({
         terminal,
       });
     },
-    { resolveAdmission: resolveSharedDemoLifecycleAdmission },
   ),
 });

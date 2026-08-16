@@ -10,7 +10,7 @@ import { getActiveManagerElevationWithCtx } from "../operations/managerElevation
 import { listWorkflowTraceEventsWithCtx } from "./core";
 import { buildWorkflowTraceViewModel } from "./presentation";
 import { denySharedDemoAction } from "../sharedDemo/policy";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import { admitPublicQuery } from "../platform/operationAdmission";
 import {
   getWorkflowTraceByLookupReadDefinition,
   getWorkflowTraceViewByIdReadDefinition,
@@ -251,7 +251,7 @@ export const getWorkflowTraceViewById = query({
     terminalId: v.optional(v.id("posTerminal")),
     traceId: v.string(),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getWorkflowTraceViewByIdReadDefinition,
     async (
       ctx: OperationQueryCtx,
@@ -318,7 +318,7 @@ export const getWorkflowTraceByLookup = query({
     lookupType: v.string(),
     lookupValue: v.string(),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getWorkflowTraceByLookupReadDefinition,
     async (
       ctx: OperationQueryCtx,

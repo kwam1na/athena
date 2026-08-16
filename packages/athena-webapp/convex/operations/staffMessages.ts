@@ -3,8 +3,10 @@ import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { postStaffMessageOperationDefinition } from "../operationAdmission/definitions";
-import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import { listStaffMessagesReadDefinition } from "../operationAdmission/readDefinitions";
 import type {
   OperationMutationCtx,
@@ -35,7 +37,7 @@ async function requireStoreMember(ctx: any, storeId: any) {
 
 export const listStaffMessages = query({
   args: { storeId: v.id("store") },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listStaffMessagesReadDefinition,
     async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) => {
       await requireStoreMember(ctx, args.storeId);
@@ -54,7 +56,7 @@ export const postStaffMessage = mutation({
     expectedDemoRestoreEpoch: v.optional(v.number()),
     storeId: v.id("store"),
   },
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     postStaffMessageOperationDefinition,
     async (ctx: OperationMutationCtx, args) => {
       const body = args.body.trim();

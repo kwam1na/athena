@@ -15,8 +15,10 @@ import {
   listNotificationSubscriptionsReadDefinition,
   listOrganizationMemberRecipientCandidatesReadDefinition,
 } from "../operationAdmission/readDefinitions";
-import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import type {
   OperationMutationCtx,
   OperationQueryCtx,
@@ -118,7 +120,7 @@ const listSubscriptionsReturns = v.object({
 export const listSubscriptionsForOrganization = query({
   args: { organizationId: v.id("organization") },
   returns: listSubscriptionsReturns,
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listNotificationSubscriptionsReadDefinition,
     async (
       ctx: OperationQueryCtx,
@@ -217,7 +219,7 @@ function memberDisplayName(user: {
 export const listOrganizationMemberRecipientCandidates = query({
   args: { organizationId: v.id("organization") },
   returns: listOrganizationMemberRecipientCandidatesReturns,
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listOrganizationMemberRecipientCandidatesReadDefinition,
     async (
       ctx: OperationQueryCtx,
@@ -380,7 +382,7 @@ export const addSubscription = mutation({
   returns: commandResultValidator(
     v.object({ subscriptionId: v.id("notificationSubscription") }),
   ),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     addNotificationSubscriptionOperationDefinition,
     addSubscriptionCommandWithCtx,
   ),
@@ -435,7 +437,7 @@ export const setSubscriptionEnabled = mutation({
     enabled: v.boolean(),
   },
   returns: commandResultValidator(v.null()),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     setNotificationSubscriptionEnabledOperationDefinition,
     setSubscriptionEnabledCommandWithCtx,
   ),
@@ -464,7 +466,7 @@ async function removeSubscriptionCommandWithCtx(
 export const removeSubscription = mutation({
   args: { subscriptionId: v.id("notificationSubscription") },
   returns: commandResultValidator(v.null()),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     removeNotificationSubscriptionOperationDefinition,
     removeSubscriptionCommandWithCtx,
   ),

@@ -26,7 +26,7 @@ import { normalizeCurrencyCode } from "../../shared/reportsContract";
 import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import { admitPublicQuery } from "../platform/operationAdmission";
 import { listOrganizationStoresReadDefinition } from "../operationAdmission/readDefinitions";
 import type { OperationQueryCtx } from "../operationAdmission/types";
 import type { MutationCtx } from "../_generated/server";
@@ -121,7 +121,7 @@ export const getAll = query({
   args: {
     organizationId: v.id("organization"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listOrganizationStoresReadDefinition,
     async (
       ctx: OperationQueryCtx,

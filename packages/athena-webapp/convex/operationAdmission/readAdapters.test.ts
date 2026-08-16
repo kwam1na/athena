@@ -1,10 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { defineReadOperation } from "./readDefinitions";
-import {
-  createPublicReadOperationAdapter,
-  resolveReadOperationAdmission,
-} from "./readAdapters";
+import { resolveAdmissionChain } from "./adapters";
+import { createPublicReadOperationAdapter } from "./readAdapters";
 import { createSharedDemoReadOperationAdapter } from "../sharedDemo/readOperationAdapter";
 import type { OperationReadAdapter } from "./types";
 
@@ -37,7 +35,7 @@ describe("operation read admission adapters", () => {
     };
 
     await expect(
-      resolveReadOperationAdmission(
+      resolveAdmissionChain(
         demoCtx({
           principal: {
             admissionExpiresAt: Date.now() - 1,
@@ -64,7 +62,7 @@ describe("operation read admission adapters", () => {
     };
 
     await expect(
-      resolveReadOperationAdmission(
+      resolveAdmissionChain(
         demoCtx({
           principal: {
             admissionExpiresAt: Date.now() + 60_000,
@@ -97,7 +95,7 @@ describe("operation read admission adapters", () => {
     });
 
     await expect(
-      resolveReadOperationAdmission(
+      resolveAdmissionChain(
         demoCtx({ principal: null }) as never,
         { storeId: "store-1" },
         publicDefinition,
@@ -120,7 +118,7 @@ describe("operation read admission adapters", () => {
     };
 
     await expect(
-      resolveReadOperationAdmission(
+      resolveAdmissionChain(
         demoCtx({ principal: null }) as never,
         { storeId: "store-1" },
         definition,

@@ -404,7 +404,7 @@ describe("HARNESS_APP_REGISTRY", () => {
         "convex/contextTracking",
         "convex/crons.ts",
         "convex/http.ts",
-        "convex/operationAdmission/publicMutation.ts",
+        "convex/operationAdmission",
         "src/components/shared-demo",
         "src/lib/errors/sharedDemoDenialObserver.ts",
         "src/routes/demo.tsx",

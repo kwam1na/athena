@@ -45,6 +45,26 @@ function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
 }
 
+/**
+ * What the registered internal admission mutation returns to an action wrapped
+ * by `admitPublicAction`: the full admission projection, not the narrow
+ * `{ actorKind, storeId }` shape the retired `admitOperationForAction` used.
+ */
+const normalUserAdmission = {
+  actor: { kind: "normal_user" as const, athenaUserId: "athena-user-1" },
+  constraints: { storeId: "store-1" },
+  decision: { adapter: "normal_user" as const, outcome: "admitted" as const },
+  operationId: "storeFront/reviews.sendFeedbackRequest",
+  provenance: { kind: "normal_user" },
+};
+
+const sharedDemoAdmission = {
+  ...normalUserAdmission,
+  actor: { kind: "shared_demo" as const, storeId: "store-1" },
+  decision: { adapter: "shared_demo" as const, outcome: "admitted" as const },
+  provenance: { kind: "shared_demo" },
+};
+
 describe("storefront error foundation", () => {
   beforeEach(() => {
     mocks.processOrderUpdateEmail.mockReset();
@@ -130,7 +150,7 @@ describe("storefront error foundation", () => {
 
   it("returns a precondition_failed user_error when feedback has already been requested", async () => {
     const ctx = {
-      runMutation: vi.fn(async () => ({ actorKind: "normal_user" })),
+      runMutation: vi.fn(async () => normalUserAdmission),
       runQuery: vi.fn().mockResolvedValueOnce({
         _id: "order-item-1",
         feedbackRequested: true,
@@ -161,7 +181,7 @@ describe("storefront error foundation", () => {
     });
 
     const result = await getHandler(sendOrderUpdateEmail)({
-      runMutation: vi.fn(async () => ({ actorKind: "normal_user" })),
+      runMutation: vi.fn(async () => normalUserAdmission),
     } as never, {
       newStatus: "completed",
       orderId: "order-1",
@@ -186,7 +206,7 @@ describe("storefront error foundation", () => {
     // the store clamp the handler used to re-check through a second query.
     const runMutation = vi
       .fn()
-      .mockResolvedValueOnce({ actorKind: "shared_demo", storeId: "store-1" })
+      .mockResolvedValueOnce(sharedDemoAdmission)
       .mockResolvedValue(null);
     const ctx = {
       runMutation,

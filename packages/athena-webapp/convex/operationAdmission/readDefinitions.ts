@@ -707,6 +707,7 @@ const OPERATION_READ_ADMISSION_BASE_DEFINITIONS = [
   getActiveCycleCountDraftReadDefinition,
   getActiveCycleCountDraftSummaryReadDefinition,
   listInventoryProductsReadDefinition,
+  searchProductSkusReadDefinition,
   listInventorySnapshotReadDefinition,
   listInventorySnapshotForProductSkusReadDefinition,
   getInventoryUnitSummaryReadDefinition,

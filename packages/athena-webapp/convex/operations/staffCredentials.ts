@@ -13,7 +13,7 @@ import {
   refreshTerminalStaffAuthorityOperationDefinition,
   validateRestoredPosLocalStaffProofOperationDefinition,
 } from "../operationAdmission/definitions";
-import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
+import { admitPublicMutation } from "../platform/operationAdmission";
 import { operationalRoleValidator, type OperationalRole } from "./staffRoles";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
@@ -1265,7 +1265,7 @@ export const updateStaffCredential = mutation({
 });
 
 const authenticateStaffCredentialAdmittedHandler =
-  withOperationMutationAdmission(
+  admitPublicMutation(
     authenticateStaffCredentialOperationDefinition,
     async (ctx, args) => {
       try {
@@ -1303,7 +1303,7 @@ export const authenticateStaffCredentialForTerminal = mutation({
     terminalId: v.id("posTerminal"),
     username: v.string(),
   },
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     authenticateStaffCredentialForTerminalOperationDefinition,
     async (ctx, args) => {
       const terminalAuthority = await requirePosTerminalAuthorityWithCtx(ctx, {
@@ -1327,7 +1327,7 @@ export const validateRestoredPosLocalStaffProof = mutation({
     terminalId: v.id("posTerminal"),
     token: v.string(),
   },
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     validateRestoredPosLocalStaffProofOperationDefinition,
     async (ctx, args) => {
       const terminalAuthority = await requirePosTerminalAuthorityWithCtx(ctx, {
@@ -1349,7 +1349,7 @@ export const refreshTerminalStaffAuthority = mutation({
     terminalId: v.id("posTerminal"),
   },
   returns: commandResultValidator(v.array(localStaffAuthorityRecordValidator)),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     refreshTerminalStaffAuthorityOperationDefinition,
     async (ctx, args) => {
       const terminalAuthority = await requirePosTerminalAuthorityWithCtx(ctx, {
@@ -1490,7 +1490,7 @@ export const authenticateStaffCredentialForApproval = mutation({
       requestedByStaffProfileId: v.optional(v.id("staffProfile")),
     }),
   ),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     authenticateStaffCredentialForApprovalOperationDefinition,
     async (ctx, args) => {
       try {

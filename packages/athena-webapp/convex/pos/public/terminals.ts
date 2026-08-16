@@ -9,8 +9,10 @@ import {
 import type { Id } from "../../_generated/dataModel";
 import { commandResultValidator } from "../../lib/commandResultValidators";
 import { registerTerminalOperationDefinition } from "../../operationAdmission/definitions";
-import { withOperationMutationAdmission } from "../../operationAdmission/publicMutation";
-import { withOperationReadAdmission } from "../../operationAdmission/publicQuery";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../../platform/operationAdmission";
 import {
   getPosTerminalByFingerprintReadDefinition,
   getPosTerminalHealthReadDefinition,
@@ -988,7 +990,7 @@ export const listTerminals = query({
     storeId: v.id("store"),
   },
   returns: v.array(terminalReturnValidator),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listPosTerminalsReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
       await requireStoreMemberAccessWithCtx(ctx, {
@@ -1009,7 +1011,7 @@ export const getTerminalByFingerprint = query({
     fingerprintHash: v.string(),
   },
   returns: v.union(terminalReturnValidator, v.null()),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPosTerminalByFingerprintReadDefinition,
     async (ctx, args: { fingerprintHash: string; storeId: Id<"store"> }) => {
       await requireStoreMemberAccessWithCtx(ctx, {
@@ -1029,7 +1031,7 @@ export const listTerminalHealthSummaries = query({
     storeId: v.id("store"),
   },
   returns: v.array(terminalHealthSummaryReturnValidator),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listPosTerminalHealthReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
       await requireStoreMemberAccessWithCtx(ctx, {
@@ -1049,7 +1051,7 @@ export const getTerminalHealthSummary = query({
     terminalId: v.id("posTerminal"),
   },
   returns: v.union(terminalHealthSummaryReturnValidator, v.null()),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPosTerminalHealthReadDefinition,
     async (
       ctx,
@@ -1398,7 +1400,7 @@ export const registerTerminal = mutation({
     browserInfo: browserInfoValidator,
   },
   returns: commandResultValidator(terminalProvisioningReturnValidator),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     registerTerminalOperationDefinition,
     async (ctx, args) => {
       try {

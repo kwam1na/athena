@@ -18,7 +18,7 @@ import {
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
 import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import { admitPublicQuery } from "../platform/operationAdmission";
 import { getPosSessionItemsReadDefinition } from "../operationAdmission/readDefinitions";
 import type { OperationQueryCtx } from "../operationAdmission/types";
 
@@ -142,7 +142,7 @@ export const getSessionItems = query({
       updatedAt: v.number(),
     }),
   ),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPosSessionItemsReadDefinition,
     async (ctx: OperationQueryCtx, args: { sessionId: Id<"posSession"> }) => {
       const accessError = await requireSessionItemReadAccess(

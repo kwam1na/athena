@@ -1351,7 +1351,7 @@ async function createFixtureRepo() {
     rootDir,
   );
   await write(
-    "packages/athena-webapp/convex/operationAdmission/publicMutation.ts",
+    "packages/athena-webapp/convex/operationAdmission/rail.ts",
     "export {};\n",
     rootDir,
   );

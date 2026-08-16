@@ -9,7 +9,7 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import { admitPublicQuery } from "../platform/operationAdmission";
 import { searchProductSkusReadDefinition } from "../operationAdmission/readDefinitions";
 import type { OperationQueryCtx } from "../operationAdmission/types";
 import { advanceRegisterCatalogRevision } from "../pos/application/sync/registerCatalogRevision";
@@ -823,7 +823,7 @@ export const searchProductSkus = query({
     storeId: v.id("store"),
   },
   returns: productSkuSearchResponseValidator,
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     searchProductSkusReadDefinition,
     async (
       ctx: OperationQueryCtx,

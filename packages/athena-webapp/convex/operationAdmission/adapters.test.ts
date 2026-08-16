@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { defineOperation } from "./definitions";
 import {
   createPublicOperationAdapter,
-  resolveOperationAdmission,
+  resolveAdmissionChain,
 } from "./adapters";
 import type { OperationAdapter } from "./types";
 
@@ -34,7 +34,7 @@ describe("operation admission adapters", () => {
     };
 
     await expect(
-      resolveOperationAdmission(
+      resolveAdmissionChain(
         { db: {} } as never,
         { storeId: "store-1" },
         definition,
@@ -63,7 +63,7 @@ describe("operation admission adapters", () => {
     };
 
     await expect(
-      resolveOperationAdmission(
+      resolveAdmissionChain(
         { db: {} } as never,
         { storeId: "store-1" },
         definition,
@@ -91,7 +91,7 @@ describe("operation admission adapters", () => {
     });
 
     await expect(
-      resolveOperationAdmission(
+      resolveAdmissionChain(
         { db: {} } as never,
         { storeId: "store-1" },
         publicDefinition,
@@ -110,7 +110,7 @@ describe("operation admission adapters", () => {
     };
 
     await expect(
-      resolveOperationAdmission(
+      resolveAdmissionChain(
         { db: {} } as never,
         { storeId: "store-1" },
         definition,

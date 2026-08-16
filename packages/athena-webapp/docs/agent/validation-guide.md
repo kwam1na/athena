@@ -6,7 +6,7 @@ Use this decision guide to answer “what should I run for this change?” based
 
 ## Shared demo admission, restore, and orientation edits
 
-Touched surfaces: `assets/shared-demo-products`, `docs/shared-demo-backend-coverage.md`, `convex/sharedDemo`, `convex/auth.ts`, `convex/auth/SharedDemoTicket.ts`, `convex/contextTracking`, `convex/crons.ts`, `convex/http.ts`, `convex/operationAdmission/publicMutation.ts`, `src/components/shared-demo`, `src/lib/errors/sharedDemoDenialObserver.ts`, `src/routes/demo.tsx`, `src/routes/_authed.tsx`
+Touched surfaces: `assets/shared-demo-products`, `docs/shared-demo-backend-coverage.md`, `convex/sharedDemo`, `convex/auth.ts`, `convex/auth/SharedDemoTicket.ts`, `convex/contextTracking`, `convex/crons.ts`, `convex/http.ts`, `convex/operationAdmission`, `src/components/shared-demo`, `src/lib/errors/sharedDemoDenialObserver.ts`, `src/routes/demo.tsx`, `src/routes/_authed.tsx`
 
 Run:
 

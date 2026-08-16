@@ -6,7 +6,6 @@ import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 import {
   createNormalUserOperationAdapter,
   createPublicOperationAdapter,
-  registerAthenaIdentityPort,
 } from "../operationAdmission/adapters";
 import { createAdmissionRail } from "../operationAdmission/rail";
 import {
@@ -66,8 +65,6 @@ const resolveAthenaUser = async (
   }
 };
 
-registerAthenaIdentityPort(resolveAthenaUser);
-
 const resourceGuards: OperationResourceGuards = {
   protectDemoFoundation: (target) => {
     requireNonDemoFoundationMutation(target);
@@ -116,36 +113,9 @@ export const admitReadOperationWithCtx =
 export type { OperationScopeConstraints };
 
 /**
- * Transitional aliases.
- *
- * `withOperationMutationAdmission` / `withOperationReadAdmission` are the old
- * two-name-per-kind surface. They are now thin aliases of the canonical
- * wrappers with the FULL default adapter chain — the difference the old names
- * used to carry (shared demo registered or not) no longer exists, so a demo
- * principal is evaluated by the demo adapter on every definition. U1c renames
- * the 134 call sites and deletes these.
+ * Full-chain admission resolution for the handful of handlers that must catch
+ * the denial and translate it into a `CommandResult` rather than let it
+ * propagate. Same chain and same guards as `admitPublicMutation` — it just
+ * hands back the admission instead of invoking a handler with it.
  */
-type LegacyMutationHandler = (
-  ctx: OperationMutationCtx,
-  args: any,
-) => Promise<any>;
-
-export function withOperationMutationAdmission<
-  Handler extends LegacyMutationHandler,
->(definition: OperationDefinition, handler: Handler) {
-  return operationAdmissionRail.admitPublicMutation(
-    definition,
-    handler as never,
-  ) as (ctx: MutationCtx, args: Parameters<Handler>[1]) => ReturnType<Handler>;
-}
-
-export const withOperationReadAdmission =
-  operationAdmissionRail.admitPublicQuery;
-
-/**
- * Full-chain admission resolution for handlers that must catch the denial and
- * translate it (rather than let it propagate). Successor of the old
- * `resolveSharedDemoOperationAdmission`; U1c folds the remaining call site in.
- */
-export const resolveSharedDemoOperationAdmission =
-  operationAdmissionRail.resolveWriteAdmission;
+export const resolveWriteAdmission = operationAdmissionRail.resolveWriteAdmission;

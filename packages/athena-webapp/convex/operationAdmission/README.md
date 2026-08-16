@@ -128,17 +128,19 @@ Phase B unit (underscored — Convex module path components allow only alphanume
 into `definitions.ts` / `readDefinitions.ts`. A Phase B unit fills its own pair
 and edits neither composing file.
 
-## Transitional debt (deleted by U1c)
+## One import path per wrapper
 
-Three rail-core modules are exempt from the import allowlist and exist only so
-pre-existing call sites keep their current import paths for one more step:
-`publicMutation.ts` and `publicQuery.ts` (the legacy
-`withOperationMutationAdmission` / `withOperationReadAdmission` names, now thin
-aliases of the canonical wrappers with the full default chain) and
-`actionAdmission.ts` (the narrow `admitOperationForAction` entry point).
-`adapters.ts` additionally keeps a registered default identity port and a legacy
-adapter-set argument shape for the three call sites that hand-assemble a chain.
-`migrationInventory.ts` is retired by U1b's checker coverage test.
+Every call site imports its wrapper from the composition root
+(`convex/platform/operationAdmission`). The transitional re-export modules
+(`publicMutation.ts`, `publicQuery.ts`, `actionAdmission.ts`) and the legacy
+`withOperationMutationAdmission` / `withOperationReadAdmission` names are gone,
+so the import-allowlist exemption list is empty and stays empty. `adapters.ts`
+no longer carries a registered default identity port or a hand-assembled
+adapter-set argument: the identity port is a required construction argument and
+every adapter is built once, here, at the composition root. Handlers that must
+catch a denial and translate it into a `CommandResult` use
+`resolveWriteAdmission` — the same chain and guards, without invoking a
+handler.
 
 ## Validation
 

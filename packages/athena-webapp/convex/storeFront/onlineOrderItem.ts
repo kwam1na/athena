@@ -12,7 +12,7 @@ import {
   outboundBasisFromEffect,
 } from "../inventoryLedger/commerceEffects";
 import { updateOnlineOrderItemOperationDefinition } from "../operationAdmission/definitions";
-import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
+import { admitPublicMutation } from "../platform/operationAdmission";
 import type { OperationMutationCtx } from "../operationAdmission/types";
 
 const entity = "onlineOrderItem";
@@ -174,7 +174,7 @@ export const update = mutation({
   // Admission resolves the store from the item's own order and applies the
   // demo capability, store clamp, and restore fence before the handler runs.
   // The internal twin below stays unadmitted: it is server-invoked only.
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     updateOnlineOrderItemOperationDefinition,
     async (
       ctx: OperationMutationCtx,

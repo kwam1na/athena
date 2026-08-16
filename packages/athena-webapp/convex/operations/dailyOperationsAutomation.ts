@@ -38,7 +38,7 @@ import {
   isToleratedIncompleteDailyCloseCompletionSource,
 } from "./dailyClose";
 import { requireStoreFullAdminAccess } from "../stockOps/access";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import { admitPublicQuery } from "../platform/operationAdmission";
 import {
   getEodAutoCompletePolicyReadDefinition,
   getOpeningAutoStartPolicyReadDefinition,
@@ -2346,7 +2346,7 @@ export const getOpeningAutoStartPolicy = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getOpeningAutoStartPolicyReadDefinition,
     async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) =>
       getOpeningAutoStartPolicyForApi(ctx, args),
@@ -2357,7 +2357,7 @@ export const getEodAutoCompletePolicy = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getEodAutoCompletePolicyReadDefinition,
     async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) =>
       getEodAutoCompletePolicyForApi(ctx, args),
@@ -2481,7 +2481,7 @@ export const getRegisterCloseoutApprovalPolicy = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getRegisterCloseoutApprovalPolicyReadDefinition,
     async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) => {
       const { store } = await requireAutomationPolicyReadAccess(

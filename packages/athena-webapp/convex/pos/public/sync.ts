@@ -9,7 +9,7 @@ import {
   reportLocalSyncDeadLetterOperationDefinition,
 } from "../../operationAdmission/definitions";
 import { recordLocalSyncDeadLetter } from "../application/sync/deadLetter";
-import { withOperationMutationAdmission } from "../../operationAdmission/publicMutation";
+import { admitPublicMutation } from "../../platform/operationAdmission";
 import type { OperationMutationCtx } from "../../operationAdmission/types";
 import { commandResultValidator } from "../../lib/commandResultValidators";
 import {
@@ -181,7 +181,7 @@ export const ingestLocalEvents = mutation({
     events: v.array(posLocalSyncUploadEventValidator),
   },
   returns: localSyncResultValidator,
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     ingestLocalEventsOperationDefinition,
     async (ctx, args) => {
       if (args.events.length > MAX_LOCAL_SYNC_EVENTS_PER_REQUEST) {
@@ -498,7 +498,7 @@ export const reportLocalSyncDeadLetter = mutation({
   returns: commandResultValidator(
     v.object({ conflictId: v.string(), alreadyReported: v.boolean() }),
   ),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     reportLocalSyncDeadLetterOperationDefinition,
     async (ctx, args) => {
       const store = await ctx.db.get("store", args.storeId);
@@ -576,7 +576,7 @@ export const ingestRegisterSessionActivity = mutation({
     activities: v.array(registerSessionActivityUploadValidator),
   },
   returns: registerSessionActivityResultValidator,
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     ingestRegisterSessionActivityOperationDefinition,
     async (ctx, args) => {
       if (args.activities.length > MAX_REGISTER_SESSION_ACTIVITY_PER_REQUEST) {

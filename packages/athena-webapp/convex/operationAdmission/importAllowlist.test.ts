@@ -23,16 +23,12 @@ const ALLOWED_FILES = [
 ] as const;
 
 /**
- * Transitional modules retired by U1c together with the legacy wrapper names
- * and the narrow `admitOperationForAction` entry point. They exist only so the
- * 134 pre-existing call sites keep their current import paths for one more
- * step; nothing else in the rail core may reach outside the allowlist.
+ * Empty, and it stays empty. The transitional re-export modules
+ * (`publicMutation.ts`, `publicQuery.ts`, `actionAdmission.ts`) were deleted
+ * once every call site imported the canonical wrappers from the composition
+ * root, so no rail-core file reaches outside the allowlist for any reason.
  */
-const TRANSITIONAL_EXEMPTIONS = [
-  "actionAdmission.ts",
-  "publicMutation.ts",
-  "publicQuery.ts",
-] as const;
+const TRANSITIONAL_EXEMPTIONS: readonly string[] = [];
 
 const IMPORT_PATTERN = /(?:from|import)\s+["'](\.[^"']+)["']/g;
 
@@ -79,7 +75,7 @@ function collectRailCoreSources(dir = RAIL_CORE_DIR): {
       .relative(RAIL_CORE_DIR, absolute)
       .split(path.sep)
       .join("/");
-    if (TRANSITIONAL_EXEMPTIONS.includes(relative as never)) continue;
+    if (TRANSITIONAL_EXEMPTIONS.includes(relative)) continue;
     entries.push({ path: relative, source: readFileSync(absolute, "utf8") });
   }
   return entries;
@@ -116,11 +112,7 @@ describe("rail core import allowlist", () => {
     ).toHaveLength(2);
   });
 
-  it("keeps the transitional exemption list to the three modules U1c deletes", () => {
-    expect([...TRANSITIONAL_EXEMPTIONS]).toEqual([
-      "actionAdmission.ts",
-      "publicMutation.ts",
-      "publicQuery.ts",
-    ]);
+  it("has no exempt modules left", () => {
+    expect([...TRANSITIONAL_EXEMPTIONS]).toEqual([]);
   });
 });

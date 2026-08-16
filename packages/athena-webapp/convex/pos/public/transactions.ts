@@ -22,8 +22,10 @@ import {
   getPosTransactionByIdReadDefinition,
   getPosTransactionsByStoreReadDefinition,
 } from "../../operationAdmission/readDefinitions";
-import { withOperationMutationAdmission } from "../../operationAdmission/publicMutation";
-import { withOperationReadAdmission } from "../../operationAdmission/publicQuery";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../../platform/operationAdmission";
 import type {
   OperationMutationCtx,
   OperationQueryCtx,
@@ -466,7 +468,7 @@ export const completeTransaction = mutation({
       transactionItems: v.array(v.id("posTransactionItem")),
     }),
   ),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     completeTransactionOperationDefinition,
     async (ctx: OperationMutationCtx, args) => {
       const store = await ctx.db.get("store", args.storeId);
@@ -503,7 +505,7 @@ export const getTransaction = query({
   args: {
     transactionId: v.id("posTransaction"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPosTransactionReadDefinition,
     async (ctx, args: { transactionId: Id<"posTransaction"> }) => {
       const access = await requirePosTransactionAccess(ctx, {
@@ -524,7 +526,7 @@ export const getTransactionsByStore = query({
     storeId: v.id("store"),
     limit: v.optional(v.number()),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPosTransactionsByStoreReadDefinition,
     async (
       ctx,
@@ -583,7 +585,7 @@ export const getCompletedTransactions = query({
       servicePaymentTotal: v.number(),
     }),
   ),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPosCompletedTransactionsReadDefinition,
     async (
       ctx,
@@ -740,7 +742,7 @@ export const getTransactionById = query({
       ),
     }),
   ),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPosTransactionByIdReadDefinition,
     async (ctx, args: { transactionId: Id<"posTransaction"> }) => {
       const access = await requirePosTransactionAccess(ctx, {
@@ -767,7 +769,7 @@ export const voidTransaction = mutation({
     staffProofToken: v.string(),
   },
   returns: voidTransactionResultValidator,
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     voidTransactionOperationDefinition,
     async (ctx: OperationMutationCtx, args) => {
       const actorStaffProfileId =
@@ -886,7 +888,7 @@ export const markReceiptPrinted = mutation({
     transactionId: v.id("posTransaction"),
   },
   returns: commandResultValidator(v.null()),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     markReceiptPrintedOperationDefinition,
     async (ctx, args) => {
       const access = await requirePosTransactionAccess(ctx, {
@@ -972,7 +974,7 @@ export const correctTransactionCustomer = mutation({
       operationalEventId: v.optional(v.id("operationalEvent")),
     }),
   ),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     correctTransactionCustomerOperationDefinition,
     async (ctx, args) => {
       if (!args.actorStaffProfileId) {
@@ -1066,7 +1068,7 @@ export const correctTransactionPaymentMethod = mutation({
     staffProofToken: v.optional(v.string()),
   },
   returns: correctTransactionPaymentMethodResultValidator,
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     correctTransactionPaymentMethodOperationDefinition,
     async (ctx, args) => {
       if (!args.reason.trim()) {
@@ -1204,7 +1206,7 @@ export const adjustTransactionItems = mutation({
     staffProofToken: v.string(),
   },
   returns: adjustTransactionItemsResultValidator,
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     adjustTransactionItemsOperationDefinition,
     async (ctx: OperationMutationCtx, args) => {
       if (!args.actorStaffProfileId) {
@@ -1330,7 +1332,7 @@ export const getRecentTransactionsWithCustomers = query({
       hasCustomerLink: v.boolean(),
     }),
   ),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPosRecentTransactionsWithCustomersReadDefinition,
     async (ctx, args: { limit?: number; storeId: Id<"store"> }) => {
       const access = await requirePosTransactionStoreAccess(ctx, {
@@ -1369,7 +1371,7 @@ export const getTodaySummary = query({
     date: v.string(),
     operatorSnapshot: posOperatorSnapshotValidator,
   }),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPosTodaySummaryReadDefinition,
     async (
       ctx,

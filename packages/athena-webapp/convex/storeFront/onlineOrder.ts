@@ -6,8 +6,10 @@ import {
   returnItemsToStockOperationDefinition,
   updateOnlineOrderOperationDefinition,
 } from "../operationAdmission/definitions";
-import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import {
   getNewestOnlineOrderReadDefinition,
   getOnlineOrderMetricsReadDefinition,
@@ -757,7 +759,7 @@ export const getForOperations = query({
   args: {
     identifier: v.union(v.id("onlineOrder"), v.string()),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getOnlineOrderReadDefinition,
     getOnlineOrderWithCtx,
   ),
@@ -980,7 +982,7 @@ export const getByCheckoutSessionId = query({
 
 export const getAllOnlineOrders = query({
   args: { storeId: v.id("store") },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listOnlineOrdersReadDefinition,
     async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) => {
       const orders = await ctx.db
@@ -1033,7 +1035,7 @@ export const update = mutation({
     ),
   },
   returns: commandResultValidator(v.null()),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     updateOnlineOrderOperationDefinition,
     async (ctx: OperationMutationCtx, args) => {
       try {
@@ -1607,7 +1609,7 @@ export const processReturnExchange = mutation({
       success: v.boolean(),
     }),
   ),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     processReturnExchangeOperationDefinition,
     async (ctx: OperationMutationCtx, args) => {
       try {
@@ -2175,7 +2177,7 @@ export const returnItemsToStock = mutation({
     externalTransactionId: v.string(),
     onlineOrderItemIds: v.optional(v.array(v.id("onlineOrderItem"))),
   },
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     returnItemsToStockOperationDefinition,
     async (
       ctx: OperationMutationCtx,
@@ -2273,7 +2275,7 @@ export const updateOrderItemsInternal = internalMutation({
 
 export const returnAllItemsToStock = mutation({
   args: { orderId: v.id("onlineOrder") },
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     returnAllItemsToStockOperationDefinition,
     async (ctx: OperationMutationCtx, args: { orderId: Id<"onlineOrder"> }) => {
       const order = await ctx.db.get("onlineOrder", args.orderId);
@@ -2294,7 +2296,7 @@ export const returnAllItemsToStockInternal = internalMutation({
 
 export const newOrder = query({
   args: { storeId: v.id("store") },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getNewestOnlineOrderReadDefinition,
     async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) => {
       const order = await ctx.db
@@ -2401,7 +2403,7 @@ export const getOrderMetrics = query({
     totalDiscounts: v.number(),
     netRevenue: v.number(),
   }),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getOnlineOrderMetricsReadDefinition,
     async (
       ctx: OperationQueryCtx,

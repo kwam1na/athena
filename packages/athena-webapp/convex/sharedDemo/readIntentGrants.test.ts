@@ -8,7 +8,7 @@ import {
 } from "./policy";
 
 describe("shared demo read intent grants", () => {
-  it("matches the intents of the currently demo-admitted read definitions", () => {
+  it("covers the intents of every currently demo-admitted read definition", () => {
     const derived = [
       ...new Set(
         OPERATION_READ_ADMISSION_DEFINITIONS.filter(
@@ -17,10 +17,22 @@ describe("shared demo read intent grants", () => {
       ),
     ].sort();
 
-    // Both directions on purpose: a new demo-admitted read must add its intent
-    // here (no silent widening), and dropping a grant must drop the read (no
-    // silent narrowing).
-    expect(derived).toEqual([...SHARED_DEMO_ALLOWED_READ_INTENTS].sort());
+    // Seed ⊇ derived. The strict direction is the one that matters: a demo
+    // read whose intent is not granted must fail here rather than admit, so
+    // demo reach cannot widen silently. The seed is allowed to run ahead of
+    // the migrated definitions for a surface the demo already shows (see the
+    // per-entry evidence in `policy.ts`); it may not run behind them.
+    const granted = new Set<string>(SHARED_DEMO_ALLOWED_READ_INTENTS);
+    expect(derived.filter((intent) => !granted.has(intent))).toEqual([]);
+  });
+
+  it("grants only intents that exist in the closed catalog", () => {
+    const catalog = new Set<string>(
+      ATHENA_READ_INTENT_CATALOG.map(({ id }) => id),
+    );
+    for (const intent of SHARED_DEMO_ALLOWED_READ_INTENTS) {
+      expect(catalog.has(intent), intent).toBe(true);
+    }
   });
 
   it("denies every intent outside the grant set", () => {

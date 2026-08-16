@@ -70,24 +70,43 @@ export type AdmissionRailConfig = {
   extractIngressClaim?: (c: Context) => OperationIngressClaim | undefined;
 };
 
-type DomainMutationHandler<Args extends Record<string, unknown>, Result> = (
+/**
+ * Handler shapes.
+ *
+ * The wrappers are generic over the HANDLER rather than over its argument
+ * type, so a handler that annotates its `args` keeps that exact type through
+ * the wrapper while a handler that leaves `args` to the surrounding
+ * `mutation({ args })` validator is contextually typed instead of being
+ * clamped to `Record<string, unknown>`. `ctx` is always contextually typed to
+ * the admitted context, which is what puts `ctx.operationAdmission` in scope.
+ */
+type DomainMutationHandler = (
   ctx: OperationMutationCtx,
-  args: Args,
-) => Promise<Result>;
+  args: any,
+) => Promise<any>;
 
-type DomainQueryHandler<Args extends Record<string, unknown>, Result> = (
+type DomainQueryHandler = (
   ctx: OperationQueryCtx,
-  args: Args,
-) => Promise<Result>;
+  args: any,
+) => Promise<any>;
 
 export type OperationActionCtx = ActionCtx & {
   operationAdmission: OperationAdmissionProjection;
 };
 
-type DomainActionHandler<Args extends Record<string, unknown>, Result> = (
+type DomainActionHandler = (
   ctx: OperationActionCtx,
-  args: Args,
-) => Promise<Result>;
+  args: any,
+) => Promise<any>;
+
+/**
+ * The handler's declared argument type, or the open record when it declares
+ * none (a test double, or a handler that ignores its arguments).
+ */
+type HandlerArgs<Handler extends (...args: never[]) => unknown> =
+  Parameters<Handler> extends [unknown, infer Args]
+    ? Args
+    : Record<string, unknown>;
 
 export type AdmittedHttpContext = {
   admission: OperationAdmissionProjection;
@@ -191,17 +210,19 @@ export function createAdmissionRail(config: AdmissionRailConfig) {
     return resolveAdmissionChain(ctx, args, definition, config.readAdapters);
   }
 
-  function admitPublicMutation<Args extends Record<string, unknown>, Result>(
+  function admitPublicMutation<Handler extends DomainMutationHandler>(
     definition: OperationDefinition,
-    handler: DomainMutationHandler<Args, Result>,
+    handler: Handler,
     options: {
       resolveAdmission?: (
         ctx: MutationCtx,
-        args: Args,
+        args: HandlerArgs<Handler>,
         definition: OperationDefinition,
       ) => Promise<OperationAdmissionContext>;
     } = {},
   ) {
+    type Args = HandlerArgs<Handler>;
+    type Result = Awaited<ReturnType<Handler>>;
     return async (ctx: MutationCtx, args: Args): Promise<Result> => {
       requireValidWriteDefinition(definition);
 
@@ -225,17 +246,19 @@ export function createAdmissionRail(config: AdmissionRailConfig) {
     };
   }
 
-  function admitPublicQuery<Args extends Record<string, unknown>, Result>(
+  function admitPublicQuery<Handler extends DomainQueryHandler>(
     definition: OperationReadDefinition,
-    handler: DomainQueryHandler<Args, Result>,
+    handler: Handler,
     options: {
       resolveAdmission?: (
         ctx: QueryCtx,
-        args: Args,
+        args: HandlerArgs<Handler>,
         definition: OperationReadDefinition,
       ) => Promise<OperationAdmissionContext>;
     } = {},
   ) {
+    type Args = HandlerArgs<Handler>;
+    type Result = Awaited<ReturnType<Handler>>;
     return async (ctx: QueryCtx, args: Args): Promise<Result> => {
       requireValidReadDefinition(definition);
       const operationAdmission = await (options.resolveAdmission
@@ -264,10 +287,12 @@ export function createAdmissionRail(config: AdmissionRailConfig) {
    * "committed". Denials still stop the action, because a denied admission
    * throws out of the mutation.
    */
-  function admitPublicAction<Args extends Record<string, unknown>, Result>(
+  function admitPublicAction<Handler extends DomainActionHandler>(
     definition: OperationDefinition,
-    handler: DomainActionHandler<Args, Result>,
+    handler: Handler,
   ) {
+    type Args = HandlerArgs<Handler>;
+    type Result = Awaited<ReturnType<Handler>>;
     return async (ctx: ActionCtx, args: Args): Promise<Result> => {
       requireValidWriteDefinition(definition);
       const entrypoints = requireEntrypoints();

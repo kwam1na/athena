@@ -11,10 +11,10 @@ import {
   resolveRegisterSessionSyncReviewOperationDefinition,
 } from "../operationAdmission/definitions";
 import {
-  withOperationMutationAdmission,
-  resolveSharedDemoOperationAdmission,
-} from "../operationAdmission/publicMutation";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+  admitPublicMutation,
+  admitPublicQuery,
+  resolveWriteAdmission,
+} from "../platform/operationAdmission";
 import {
   getCashControlsDashboardSnapshotReadDefinition,
   getRegisterSessionSnapshotReadDefinition,
@@ -1170,7 +1170,7 @@ export const getDashboardSnapshot = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getCashControlsDashboardSnapshotReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
       await requireCashControlsStoreAccess(ctx, args.storeId);
@@ -1302,7 +1302,7 @@ export const getRegisterSessionSnapshot = query({
     registerSessionId: v.id("registerSession"),
     storeId: v.id("store"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getRegisterSessionSnapshotReadDefinition,
     async (
       ctx,
@@ -1559,7 +1559,7 @@ export const recordRegisterSessionDeposit = mutation({
   returns: registerSessionDepositResultValidator,
   handler: async (ctx, args) => {
     try {
-      await resolveSharedDemoOperationAdmission(
+      await resolveWriteAdmission(
         ctx,
         args,
         recordRegisterSessionDepositOperationDefinition,
@@ -1574,7 +1574,7 @@ export const recordRegisterSessionDeposit = mutation({
       });
     }
 
-    return withOperationMutationAdmission(
+    return admitPublicMutation(
       recordRegisterSessionDepositOperationDefinition,
       async (
         admittedCtx,
@@ -1798,7 +1798,7 @@ export const resolveRegisterSessionSyncReview = mutation({
     storeId: v.id("store"),
   },
   returns: registerSessionSyncReviewResultValidator,
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     resolveRegisterSessionSyncReviewOperationDefinition,
     async (
       ctx: OperationMutationCtx,
