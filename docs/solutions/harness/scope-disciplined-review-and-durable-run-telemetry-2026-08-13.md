@@ -23,7 +23,7 @@ tags:
   - github-actions
   - passkey-approval
   - job-summary
-delivery_diff_fingerprint: d43bd9f405d855c71d1936edb47eb7ef0d40db03a0d903f5438781fa89335b62
+delivery_diff_fingerprint: 8e504f2d16636b473394cf897889401ffdf62c845dc3471137061d51d37e7c68
 ---
 
 # Review Findings Carry a Scope Axis, and Delivery Runs Leave a Durable Record
@@ -35,7 +35,7 @@ Two independent problems, joined because the second is how you measure the first
 **1. The review loop had no way to say "valid, but not this ticket."** Findings
 carried severity (P0-P3) and routing (`autofix_class`), plus exactly one escape
 hatch for out-of-scope work: `pre_existing`, which only covers untouched code.
-Nothing classified a finding that is *in* the diff, genuinely good, and whose fix
+Nothing classified a finding that is _in_ the diff, genuinely good, and whose fix
 grows the delivery — "also handle X", "make this configurable", "extract and
 generalize this". That gap met a merge gate requiring "zero blocking or
 unresolved actionable findings" (`execute` step 6, and `harness-review-evidence`
@@ -120,7 +120,7 @@ change remain comparable during migration.
 but only at or above 150 changed source lines, the same threshold `compound:check` uses,
 and only for a record whose `deliverableDiffFingerprint` matches the current
 deliverable diff, so telemetry recorded before later fix rounds counts as stale
-exactly as a stale report does. Locally the check stays quiet until a *passing*
+exactly as a stale report does. Locally the check stays quiet until a _passing_
 gate run has completed against the current deliverable — the ledger records the
 fingerprint it validated — because until then no honest record can exist; CI,
 the merge authority, has no such leniency.
@@ -135,7 +135,7 @@ deferral cannot degrade into silence.
 
 **Match a new obligation's cost to the house pattern, and give humans a path.**
 The first cut of `telemetry.recorded` fired on any deliverable change and set
-`humanWaiverAllowed: false`, which made it *stricter than the review obligation*:
+`humanWaiverAllowed: false`, which made it _stricter than the review obligation_:
 a human fixing one line would have had to run a 15-minute merge gate purely to
 emit a bookkeeping record, with no waiver and no way for CI to produce one. Any
 obligation whose remedy is expensive needs a size threshold and a human escape
@@ -148,7 +148,7 @@ evaluated at gate admission, the gate refused to run the very run that would
 produce a fresh record. The only escape was recording a stale ledger under the
 current fingerprint, i.e. fabricating exactly the misreported telemetry the rule
 existed to prevent. The fix is to key the local leniency on whether a run has
-completed *for this deliverable* (the ledger now carries the fingerprint it
+completed _for this deliverable_ (the ledger now carries the fingerprint it
 validated), keeping CI as the unconditional authority. Before adding a
 precondition to a gate, trace the loop that clears it.
 
@@ -169,7 +169,7 @@ agree with `allowedResolutionKinds.includes("waived")` (catches future
 misdeclaration in both directions), and **behavioral coverage of the
 cross-product** — obligation kind × waiver-allowed × human/agent — which is what
 actually catches an evaluator gap. Single-instance coverage hides path-specific
-holes; when a flag is honored by code selected by *another* field, test the
+holes; when a flag is honored by code selected by _another_ field, test the
 combination, not the flag.
 
 **An approval link must outlive the job that publishes it.** GitHub does not
@@ -180,3 +180,12 @@ a short producer job that creates the approval request, publishes its link, and
 uploads the request identity; make the polling job depend on and download that
 artifact. Test the job boundary itself, not merely that summary output appears
 textually before the polling step.
+
+**Every blocking entrypoint must cross the admission boundary.** A pre-push
+wrapper that calls the deterministic documentation sensor directly makes the
+registry's human waiver unreachable even when `humanWaiverAllowed` is correct.
+Route interactive pre-push checks through `delivery:documentation-admission`,
+keep the raw sensor for CI, and test that agents never receive the prompt. When
+the hook captures validator output in a background process, detect and prompt on
+the controlling terminal explicitly; `stdout.isTTY` is false by construction in
+that wrapper and cannot identify the invoking human.

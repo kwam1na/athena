@@ -18,6 +18,7 @@ import {
 } from "./delivery-documentation-check";
 import {
   discoverCurrentDocumentationWaiver,
+  WAIVABLE_DOCUMENTATION_FINDING_POLICIES,
 } from "./delivery-documentation-admission";
 import type { DiscoveredDocumentationWaiver } from "./documentation-waiver-attestation";
 import {
@@ -61,9 +62,7 @@ type PreparationEvaluation = Awaited<
 type DocumentationEvaluation = ReturnType<
   typeof evaluateDeliveryDocumentationCheck
 >;
-type TelemetryEvaluation = ReturnType<
-  typeof evaluateDeliveryRunTelemetryCheck
->;
+type TelemetryEvaluation = ReturnType<typeof evaluateDeliveryRunTelemetryCheck>;
 type ActivationProjection = Awaited<
   ReturnType<typeof evaluateCandidateReviewActivation>
 >;
@@ -263,7 +262,7 @@ export const WAIVABLE_FINDING_CODES: {
     "unknown_provider",
     "evidence_not_green",
   ],
-  "documentation.current": ["compound-solution", "landed-change-report"],
+  "documentation.current": WAIVABLE_DOCUMENTATION_FINDING_POLICIES,
   "telemetry.recorded": ["telemetry_record_missing"],
 };
 
@@ -326,12 +325,9 @@ async function defaultPrompt(
   decision: GateObligationDecision,
   obligationIds: readonly string[] = [],
 ) {
-  const named = obligationIds.length > 0
-    ? obligationIds.join(", ")
-    : "review.green";
-  console.log(
-    `This prepared candidate is blocked by: ${named}.`,
-  );
+  const named =
+    obligationIds.length > 0 ? obligationIds.join(", ") : "review.green";
+  console.log(`This prepared candidate is blocked by: ${named}.`);
   for (const remediation of decision.remediation.human)
     console.log(`- ${remediation}`);
   const terminal = createInterface({
@@ -803,7 +799,7 @@ export async function runHarnessGateAdmission(
     const durableWaivers = waivedObligationIds.filter(
       (obligationId) =>
         HARNESS_GATE_REGISTRY.obligations[obligationId]?.freshness.kind !==
-          "live",
+        "live",
     );
     for (const obligationId of durableWaivers) {
       await (

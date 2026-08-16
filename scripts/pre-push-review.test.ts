@@ -30,7 +30,7 @@ const EXPIRED_PROOF_OPTIONS = {
     status: "stale" as const,
     reason: "test proof disabled",
   }),
-  runDocumentationCheck: async () => {},
+  runDocumentationAdmission: async () => {},
 };
 
 async function createBlockedPublicGateFixture() {
@@ -52,8 +52,7 @@ async function createBlockedPublicGateFixture() {
         "pr:athena:prepare": "bun scripts/noop.ts",
         "pr:athena:preflight": "bun scripts/noop.ts",
         "pr:athena:validate": scripts["pr:athena:validate"],
-        "pr:athena:validate-provider":
-          scripts["pr:athena:validate-provider"],
+        "pr:athena:validate-provider": scripts["pr:athena:validate-provider"],
         "pr:athena:validate-review": "bun scripts/sentinel-heavy.ts",
         "sentinel:heavy": "bun scripts/sentinel-heavy.ts",
       },
@@ -92,7 +91,7 @@ async function createBlockedPublicGateFixture() {
 describe("pre-push review wiring", () => {
   it("exports testable helpers for pre-push orchestration", () => {
     expect(typeof prePushReview.getChangedFilesVsOriginMain).toBe("function");
-    expect(typeof prePushReview.runDocumentationCheck).toBe("function");
+    expect(typeof prePushReview.runDocumentationAdmission).toBe("function");
     expect(typeof prePushReview.runPrePushReview).toBe("function");
   });
 
@@ -175,7 +174,7 @@ describe("pre-push review wiring", () => {
     ]);
   });
 
-  it("runs the combined documentation check before self-review, architecture checks, harness review, and inferential review", async () => {
+  it("runs waiver-aware documentation admission before self-review, architecture checks, harness review, and inferential review", async () => {
     const steps: string[] = [];
 
     await prePushReview.runPrePushReview(ROOT_DIR, {
@@ -187,8 +186,8 @@ describe("pre-push review wiring", () => {
       runGraphifyCheck: async () => {
         steps.push("graphify:check");
       },
-      runDocumentationCheck: async () => {
-        steps.push("delivery:documentation-check");
+      runDocumentationAdmission: async () => {
+        steps.push("delivery:documentation-admission");
       },
       runHarnessSelfReview: async () => {
         steps.push("harness:self-review:origin/main");
@@ -212,7 +211,7 @@ describe("pre-push review wiring", () => {
 
     expect(steps).toEqual([
       "graphify:check",
-      "delivery:documentation-check",
+      "delivery:documentation-admission",
       "harness:self-review:origin/main",
       "architecture:check",
       "changed-files",
@@ -1015,11 +1014,7 @@ describe("pre-push review wiring", () => {
 });
 
 describe("repo harness ergonomics", () => {
-  it.each([
-    "pr:athena",
-    "pr:athena:validate",
-    "pr:athena:validate-provider",
-  ])(
+  it.each(["pr:athena", "pr:athena:validate", "pr:athena:validate-provider"])(
     "blocks %s at admission before sentinel heavy work starts",
     async (publicGate) => {
       const fixtureRoot = await createBlockedPublicGateFixture();
@@ -1157,11 +1152,7 @@ describe("repo harness ergonomics", () => {
       "-p",
       "packages/athena-webapp/tsconfig.json",
     ]);
-    expect(providerCommands).toContainEqual([
-      "bun",
-      "run",
-      "test:coverage",
-    ]);
+    expect(providerCommands).toContainEqual(["bun", "run", "test:coverage"]);
     expect(packageJson.scripts?.["pr:athena:validate-provider"]).not.toContain(
       "bun run harness:test",
     );

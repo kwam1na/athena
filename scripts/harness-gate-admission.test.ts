@@ -13,6 +13,7 @@ import {
   writeHarnessGateDecisionEvent,
 } from "./harness-gate-admission";
 import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
+import { WAIVABLE_DOCUMENTATION_FINDING_POLICIES } from "./delivery-documentation-admission";
 import {
   ATHENA_PR_VALIDATION_GATE_ID,
   HARNESS_GATE_REGISTRY,
@@ -104,6 +105,11 @@ afterEach(async () => {
 });
 
 describe("harness gate admission", () => {
+  it("shares the documentation waiver allow-list with focused admission", () => {
+    expect(WAIVABLE_FINDING_CODES["documentation.current"]).toBe(
+      WAIVABLE_DOCUMENTATION_FINDING_POLICIES,
+    );
+  });
   it("gives every waivable obligation a non-empty finding-code allow-list", () => {
     // The registry invariant pairs humanWaiverAllowed with the waived
     // resolution kind; this is the third half of the same decision. Without it
