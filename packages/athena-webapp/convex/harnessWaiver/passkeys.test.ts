@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { registrationCeremonyPolicy, verificationPolicy } from "./passkeys";
+import {
+  authenticationChallengeBytes,
+  registrationCeremonyPolicy,
+  verificationPolicy,
+} from "./passkeys";
 
 describe("waiver passkey ceremony policy", () => {
   it("requires a local platform credential with resident storage and user verification", () => {
@@ -26,5 +30,12 @@ describe("waiver passkey ceremony policy", () => {
         expectedRPID: "athena-os.app",
         requireUserVerification: true,
       });
+  });
+
+  it("decodes a stored Base64URL challenge before regenerating browser options", () => {
+    const challengeBytes = Uint8Array.from([0, 1, 2, 127, 128, 254, 255]);
+    const storedChallenge = Buffer.from(challengeBytes).toString("base64url");
+
+    expect(authenticationChallengeBytes(storedChallenge)).toEqual(challengeBytes);
   });
 });
