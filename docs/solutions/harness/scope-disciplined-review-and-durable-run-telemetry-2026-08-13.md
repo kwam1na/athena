@@ -20,7 +20,10 @@ tags:
   - gate-obligations
   - delivery-telemetry
   - scope-discipline
-delivery_diff_fingerprint: f9c497ca959ee789750c22885f8e5d300514eeb0536dbfaf9c7c4c7bf957906e
+  - github-actions
+  - passkey-approval
+  - job-summary
+delivery_diff_fingerprint: d43bd9f405d855c71d1936edb47eb7ef0d40db03a0d903f5438781fa89335b62
 ---
 
 # Review Findings Carry a Scope Axis, and Delivery Runs Leave a Durable Record
@@ -162,3 +165,12 @@ cross-product** — obligation kind × waiver-allowed × human/agent — which i
 actually catches an evaluator gap. Single-instance coverage hides path-specific
 holes; when a flag is honored by code selected by *another* field, test the
 combination, not the flag.
+
+**An approval link must outlive the job that publishes it.** GitHub does not
+surface a job summary while that job is still running. Publishing a passkey URL
+to `$GITHUB_STEP_SUMMARY` and then polling for that approval in the same job
+creates a UI deadlock: the human cannot see the link until the wait is over. Use
+a short producer job that creates the approval request, publishes its link, and
+uploads the request identity; make the polling job depend on and download that
+artifact. Test the job boundary itself, not merely that summary output appears
+textually before the polling step.
