@@ -771,15 +771,16 @@ tracked `.husky` directory avoids the missing generated shim problem that a
 - `pre-commit:generated-artifacts` runs `harness:generate` and
   `graphify:rebuild`, then stages the tracked generated outputs so the commit
   includes refreshed artifacts.
-- `pre-push:review` starts with `graphify:check`, then the waiver-aware
-  `delivery:documentation-admission`, then the rest of the local suite. The hook
-  keeps validation output bounded, but admission opens the controlling terminal
-  for an interactive-human prompt; recognized agents and noninteractive jobs
-  still fail closed. If tracked
-  graphify artifacts are stale it rebuilds once, rechecks, and stops so the
-  repaired artifacts can be reviewed and committed. If `harness:self-review` or
-  `harness:review` is blocked by stale generated docs, it runs `harness:generate`
-  once, retries, and then blocks for the same reason.
+- The pre-push hook performs proof-only admission. It accepts a current reusable
+  `pr:athena` proof and otherwise stops immediately with instructions to run
+  `bun run pr:athena`, commit the resulting candidate, and push again. Expensive
+  validation therefore completes before Git opens the remote transport instead
+  of leaving an idle SSH connection open for the duration of the suite.
+- `pre-push:review`, when run directly without `--proof-only`, retains the full
+  local diagnostic suite: `graphify:check`, waiver-aware
+  `delivery:documentation-admission`, self-review, architecture checks, harness
+  review, and inferential review. Its interactive-human waiver remains
+  invocation-scoped; recognized agents and noninteractive jobs fail closed.
 
 For repo-harness edits such as `scripts/harness-app-registry.ts`, keep
 `bun run harness:review --base origin/main` and

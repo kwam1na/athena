@@ -241,6 +241,30 @@ function isRepairableGraphifyDrift(error: unknown) {
   );
 }
 
+export async function requireReusablePrePushProof(
+  rootDir: string,
+  options: PrePushReviewOptions = {},
+) {
+  const logger = options.logger ?? console;
+  const evaluateValidationProof =
+    options.evaluatePrePushValidationProof ?? evaluatePrePushValidationProof;
+  const proofEvaluation = await evaluateValidationProof(rootDir);
+
+  if (!proofEvaluation.reusable) {
+    throw new Error(
+      `pr:athena proof not reusable (${proofEvaluation.status}): ${proofEvaluation.reason}. Run \`bun run pr:athena\`, commit the resulting candidate, then push again.`,
+    );
+  }
+
+  logger.log(
+    `[pre-push] Reusing current pr:athena validation proof for tree ${proofEvaluation.proof.validatedTreeSha}.`,
+  );
+  logger.log(
+    "[pre-push] Handoff: validation=skipped; proof=reusable; proofReason=reusable current pr:athena proof.",
+  );
+  logger.log("[pre-push] All checks passed.");
+}
+
 export async function runPrePushReview(
   rootDir: string,
   options: PrePushReviewOptions = {},
@@ -502,7 +526,10 @@ export async function runPrePushReview(
 }
 
 if (import.meta.main) {
-  runPrePushReview(ROOT_DIR).catch((error: unknown) => {
+  const run = process.argv.includes("--proof-only")
+    ? requireReusablePrePushProof
+    : runPrePushReview;
+  run(ROOT_DIR).catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`\n[pre-push] BLOCKED: ${message}`);
     process.exit(1);

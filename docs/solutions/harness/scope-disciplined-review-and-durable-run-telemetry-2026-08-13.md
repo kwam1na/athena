@@ -23,7 +23,7 @@ tags:
   - github-actions
   - passkey-approval
   - job-summary
-delivery_diff_fingerprint: 8e504f2d16636b473394cf897889401ffdf62c845dc3471137061d51d37e7c68
+delivery_diff_fingerprint: 00b2b887b6de5b7be71ec6c718c886042d78775e04e4665cdfeb3510f2d8ae35
 ---
 
 # Review Findings Carry a Scope Axis, and Delivery Runs Leave a Durable Record
@@ -189,3 +189,10 @@ keep the raw sensor for CI, and test that agents never receive the prompt. When
 the hook captures validator output in a background process, detect and prompt on
 the controlling terminal explicitly; `stdout.isTTY` is false by construction in
 that wrapper and cannot identify the invoking human.
+
+**Do not hold a remote transport open while proving a local candidate.** Git
+opens the SSH connection before invoking `pre-push`, so a merge-grade local
+suite can finish successfully after the remote has already closed an idle
+connection. Terminal heartbeats do not keep that transport alive. Run
+`pr:athena` before push and make the hook proof-only: it should admit an exact,
+reusable candidate proof or fail immediately with the preparation command.

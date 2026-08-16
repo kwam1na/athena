@@ -274,6 +274,27 @@ describe("pre-push review wiring", () => {
     );
   });
 
+  it("blocks proof-only push admission before any expensive validation when proof is stale", async () => {
+    const steps: string[] = [];
+
+    await expect(
+      prePushReview.requireReusablePrePushProof(ROOT_DIR, {
+        evaluatePrePushValidationProof: async () => ({
+          reusable: false,
+          status: "stale",
+          reason: "HEAD changed after validation",
+        }),
+        runGraphifyCheck: async () => {
+          steps.push("graphify:check");
+        },
+      } as any),
+    ).rejects.toThrow(
+      "Run `bun run pr:athena`, commit the resulting candidate, then push again.",
+    );
+
+    expect(steps).toEqual([]);
+  });
+
   it("reports validation success separately from stale proof status", async () => {
     const logs: string[] = [];
 
@@ -930,7 +951,7 @@ describe("pre-push review wiring", () => {
       "utf8",
     );
 
-    expect(hookContents).toContain("bun run pre-push:review");
+    expect(hookContents).toContain("bun run pre-push:review --proof-only");
     expect(hookContents).toContain('>"$ATHENA_PRE_PUSH_LOG" 2>&1 &');
     expect(hookContents).toContain('kill -0 "$ATHENA_PRE_PUSH_PID"');
     expect(hookContents).toContain('wait "$ATHENA_PRE_PUSH_PID"');
