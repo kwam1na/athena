@@ -13,7 +13,7 @@ applies_when:
   - "A check enumerates bad shapes rather than accepting a closed set of good ones"
   - "A checker walks files, imports, or references with globs, suffix regexes, or name comparison"
   - "Someone argues a new predicate is safe because it accepts everything the old one accepted"
-delivery_diff_fingerprint: 071c752a3664cc3f69ca7a5e8a78601aaa98bf14713637dfafc7158dc2b50707
+delivery_diff_fingerprint: 8f04b35867d87155d65498b1193e6fe2dfad5865843e06d5d237c64e72f40f1a
 tags: [static-analysis, security, ast, fail-closed, code-review, tooling]
 ---
 
@@ -91,6 +91,25 @@ visible work:
 
 Each is a *high* finding. A checker that skips what it cannot parse reports
 success on exactly the code most likely to be wrong.
+
+### 4. Guard the value's references, not the syntax of one call on it
+
+The subtle way to reintroduce a blacklist under a whitelist is to accept a
+closed grammar over the *call* while the guarded thing is a *value* that can
+travel anywhere. Three rounds after the wrapper grammar landed, the route walk
+still keyed on `<receiver>.<verb>(...)` and the `api.*` ban on
+`<ctx>.runMutation(...)`, so `sub["get"](…)`, `sub.get.call(sub, …)`,
+`pick().get("evil", h)`, `{ get r() { return sub } }`, `ctx["runMutation"](api.x)`
+and `const { example } = internal; runMutation(example.x.write)` each passed
+— each a new ring outside the previous ring's enumeration. The part of the
+checker that never had this problem was builder discovery, which flags **any
+value reference to a builder outside an accepted position**: the value cannot
+be obtained without being referenced. The fix was to give routers and `api`
+roots the same treatment (a short list of accepted positions; every other
+reference is a finding), make receivers unresolvable *by default*, and match
+run sites by callee name in every shape. Ask of every guarded thing: is it a
+value? Then the reference set, not a call pattern, is what the check must
+close over.
 
 ## Why This Matters
 

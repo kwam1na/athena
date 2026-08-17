@@ -53,6 +53,19 @@
  * `require()` / `import x = require()` of the builder modules or `hono/cors`
  * fail closed.
  *
+ * Round 7 replaced the two remaining CALL grammars with VALUE rules, the
+ * design that has kept surviving review (it is how builder discovery has
+ * worked since round 4): the router reference sweep flags any value reference
+ * to a router (local or import-resolved) outside the accepted positions;
+ * `isUnresolvableReceiver` defaults to unresolvable; any value reference to
+ * an `api` root anywhere is a site; `internal` is widened like `api` but fails
+ * closed on loss of path; run sites are matched by callee NAME in every shape
+ * (bracket, `.call` / `.apply` / `Reflect.apply`, a bound identifier); the
+ * CORS assertion fails on an opaque dynamic specifier or a tsconfig-alias
+ * import in a router module; tsconfig `paths` aliases are resolved AND
+ * reported; and definition modules may not read the environment
+ * (`definition-module-reads-environment`).
+ *
  * Flags:
  *   --path <prefix...>    restrict findings to convex-relative path prefixes
  *   --partition           print the per-unit ownership table; fail on orphans
@@ -712,11 +725,55 @@ function collectImportBindings(sourceFile: ts.SourceFile): ImportBinding[] {
  * `index`. Without a known set, or when nothing matches, the `.ts` spelling is
  * returned so callers can still compare it against a contract path.
  */
+/**
+ * The `paths` aliases `packages/athena-webapp/tsconfig.json` declares:
+ * `~/*` -> `./*` (the webapp root), `@/*` -> `./src/*`, `@cvx/*` ->
+ * `./convex/*`. `convex/tsconfig.json` declares none, and the Convex bundler
+ * does not resolve them inside convex/** — so an alias import in a convex
+ * module is a spelling the RUNTIME cannot follow. The checker resolves it
+ * anyway (so `@cvx/_generated/api` still names the api root and
+ * `~/convex/_generated/server` the builders) AND discovery / the CORS
+ * assertion fail closed on the import itself (round 7).
+ */
+const TSCONFIG_PATH_ALIASES: readonly { prefix: string; target: string }[] = [
+  { prefix: "@cvx/", target: "" },
+  { prefix: "~/", target: "../" },
+  { prefix: "@/", target: "../src/" },
+];
+
+function isTsconfigAliasSpecifier(specifier: string) {
+  return TSCONFIG_PATH_ALIASES.some((alias) => specifier.startsWith(alias.prefix));
+}
+
+/** An alias specifier rewritten to a convex-root-relative path, else `undefined`. */
+function resolveTsconfigAlias(specifier: string) {
+  for (const alias of TSCONFIG_PATH_ALIASES) {
+    if (specifier.startsWith(alias.prefix)) {
+      return path.posix.normalize(
+        `${alias.target}${specifier.slice(alias.prefix.length)}`,
+      );
+    }
+  }
+  return undefined;
+}
+
 function resolveModuleSpecifier(
   fromConvexPath: string,
   specifier: string,
   knownConvexPaths?: ReadonlySet<string>,
 ) {
+  const aliased = resolveTsconfigAlias(specifier);
+  if (aliased !== undefined) {
+    // `~/convex/x` is `x`; `~/src/x` and `@/x` leave the tree.
+    const rebased = aliased.startsWith("../convex/")
+      ? aliased.slice("../convex/".length)
+      : aliased;
+    return resolveModuleSpecifier(
+      "index.ts",
+      rebased.startsWith(".") ? rebased : `./${rebased}`,
+      knownConvexPaths,
+    );
+  }
   if (!specifier.startsWith(".")) return undefined;
   const resolved = stripSourceExtension(
     path.posix.normalize(
@@ -2318,7 +2375,8 @@ export function collectConvexIngressFromSource(
     const namesBuilders =
       specifier === undefined ||
       specifier === "convex/server" ||
-      isGeneratedServerSpecifier(convexPath, specifier);
+      isGeneratedServerSpecifier(convexPath, specifier) ||
+      isTsconfigAliasSpecifier(specifier);
     if (!namesBuilders) continue;
     consume(node);
     pushUnresolvable(
@@ -2327,8 +2385,33 @@ export function collectConvexIngressFromSource(
       "mutation",
       specifier === undefined
         ? `the module reference \`${node.getText(sourceFile).slice(0, 60)}\` has a non-literal specifier, so it may load \`_generated/server\` or \`convex/server\` and hand the registration builders to a binding discovery cannot follow`
-        : `the module reference \`${node.getText(sourceFile).slice(0, 60)}\` loads the registration builders outside an \`import\` declaration, so they reach a binding discovery cannot follow`,
+        : isTsconfigAliasSpecifier(specifier)
+          ? `the module reference \`${node.getText(sourceFile).slice(0, 60)}\` uses a tsconfig \`paths\` alias (\`~/\`, \`@/\`, \`@cvx/\`) that the Convex bundler does not resolve inside convex/**, so what it loads is not statically resolvable`
+          : `the module reference \`${node.getText(sourceFile).slice(0, 60)}\` loads the registration builders outside an \`import\` declaration, so they reach a binding discovery cannot follow`,
     );
+  }
+  // A tsconfig `paths` alias in an `import` declaration (round 7): the
+  // webapp tsconfig declares `~/*`, `@/*`, `@cvx/*`, but convex/tsconfig.json
+  // declares none and the bundler resolves none of them inside convex/**, so
+  // an alias import is a module reference the runtime cannot follow — and it
+  // may name `_generated/server` (`@cvx/_generated/server`,
+  // `~/convex/_generated/server`). Fail closed on the declaration itself.
+  for (const statement of sourceFile.statements) {
+    if (
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteral(statement.moduleSpecifier) &&
+      isTsconfigAliasSpecifier(statement.moduleSpecifier.text) &&
+      statement.importClause &&
+      !statement.importClause.isTypeOnly
+    ) {
+      consume(statement);
+      pushUnresolvable(
+        enclosingName(statement),
+        statement,
+        "mutation",
+        `the import \`${statement.moduleSpecifier.text}\` uses a tsconfig \`paths\` alias (\`~/\`, \`@/\`, \`@cvx/\`); convex/tsconfig.json declares no \`paths\` and the Convex bundler does not resolve them inside convex/**, so the module it names — possibly \`_generated/server\` — is not statically resolvable; spell it as a relative import`,
+      );
+    }
   }
 
   const orphan = (node: ts.Node) => {
@@ -2427,6 +2510,8 @@ export type UnresolvableRouteRegistration = {
   line: number;
   method: string;
   reason: string;
+  /** Finding label when the site is not a `.method(...)` call (round 7: a router reference). */
+  label?: string;
 };
 
 type RouterMount = {
@@ -2447,7 +2532,130 @@ type RouteModuleFacts = {
   namedReexports: Map<string, { convexPath: string; imported: string }>;
   addHttpRoutesCalls: { line: number }[];
   unresolvable: UnresolvableRouteRegistration[];
+  /**
+   * Every top-level name that IS a router in this module: the Hono router
+   * variables and candidates (`routers`), plus the Convex `HttpRouterWithHono`
+   * wrapper (`const http = new HttpRouterWithHono(app)`), which carries the
+   * Hono app and a raw `.route({...})` registrar of its own. The router
+   * reference sweep (round 7) treats a value reference to any of these
+   * outside the accepted shapes as unresolvable.
+   */
+  routerLikeLocals: Set<string>;
 };
+
+/**
+ * `new Map()` / `new Set()` / `new Headers()` and friends: constructor results
+ * whose `get` / `delete` share the verb names but that are not routers. A
+ * receiver bound to one is judged as the plain object it is (round 6 positive
+ * control); any other `new` / call result is unresolvable (round 7).
+ */
+const RESOLVABLE_CONSTRUCTORS = new Set([
+  "Map",
+  "Set",
+  "WeakMap",
+  "WeakSet",
+  "Headers",
+  "URLSearchParams",
+  "URL",
+  "Date",
+  "FormData",
+]);
+
+/**
+ * Global value roots a plain property chain may hang off (`Reflect.get(o, k)`,
+ * `Object.entries(x)`, `Promise.all([...])`, `crypto.subtle`, ...). A chain
+ * rooted at any OTHER undeclared identifier — `globalThis`, `self`, `window`,
+ * a name the module never declares — is unresolvable (round 7).
+ */
+const RESOLVABLE_GLOBAL_ROOTS = new Set([
+  "Object",
+  "Array",
+  "Promise",
+  "JSON",
+  "Math",
+  "Date",
+  "Number",
+  "String",
+  "Boolean",
+  "Symbol",
+  "Reflect",
+  "Map",
+  "Set",
+  "console",
+  "crypto",
+  "Buffer",
+  "Response",
+  "Request",
+  "Headers",
+  "URL",
+  "URLSearchParams",
+  "TextEncoder",
+  "TextDecoder",
+  "Error",
+  "Intl",
+  "BigInt",
+  "Uint8Array",
+  "process",
+  "Deno",
+]);
+
+function isResolvableConstruction(node: ts.NewExpression) {
+  return (
+    ts.isIdentifier(node.expression) &&
+    RESOLVABLE_CONSTRUCTORS.has(node.expression.text)
+  );
+}
+
+/**
+ * The router a receiver denotes among `routerNames`: the identifier itself,
+ * or a chained registration call on one (`app.get('/a', h1).get('/b', h2)` —
+ * every Hono registration method returns the router, so the receiver of the
+ * second `.get` is still `app`). `(sub)`, `sub!`, `(sub as Hono)` are the same
+ * router.
+ */
+function resolveRouterReceiverAmong(
+  expression: ts.Expression,
+  routerNames: ReadonlySet<string>,
+): string | undefined {
+  const receiver = unwrapTypeOnly(expression);
+  if (ts.isIdentifier(receiver)) {
+    return routerNames.has(receiver.text) ? receiver.text : undefined;
+  }
+  if (
+    ts.isCallExpression(receiver) &&
+    ts.isPropertyAccessExpression(receiver.expression) &&
+    ROUTER_METHODS.has(receiver.expression.name.text) &&
+    receiver.expression.name.text !== "mount"
+  ) {
+    return resolveRouterReceiverAmong(
+      receiver.expression.expression,
+      routerNames,
+    );
+  }
+  return undefined;
+}
+
+/**
+ * The method a call's callee names, by property access OR element access
+ * (`x.get(...)` and `x["get"](...)` are the same call; round 7), with the
+ * receiver. A computed index (`x[verb](...)`) yields `method: undefined`.
+ */
+function calleeMember(
+  callee: ts.Expression,
+): { method: string | undefined; receiver: ts.Expression; computed: boolean } | undefined {
+  if (ts.isPropertyAccessExpression(callee)) {
+    return { method: callee.name.text, receiver: callee.expression, computed: false };
+  }
+  if (ts.isElementAccessExpression(callee)) {
+    const literal = stringLiteralText(callee.argumentExpression);
+    return {
+      method: literal,
+      receiver: callee.expression,
+      computed: literal === undefined,
+    };
+  }
+  return undefined;
+}
 
 function isHonoRouterDeclaration(declaration: ts.VariableDeclaration) {
   const typeName = declaration.type
@@ -2534,18 +2742,44 @@ function collectRouteModuleFacts(
   // Every top-level binding, destructured ones included (`const { r } = ...`
   // is a module-scoped name a router may be bound to; round 6).
   const topLevelNames = new Set<string>();
+  // Top-level class / function / enum / namespace names: a chain rooted at one
+  // (`Holder.r.get(...)`, `N.r.get(...)`) is a receiver the checker cannot see
+  // into (round 7).
+  const topLevelNonVariableNames = new Set<string>();
   for (const statement of sourceFile.statements) {
-    if (!ts.isVariableStatement(statement)) continue;
-    for (const declaration of statement.declarationList.declarations) {
-      bindingNameTexts(declaration.name, topLevelNames);
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        bindingNameTexts(declaration.name, topLevelNames);
+      }
+    } else if (
+      (ts.isClassDeclaration(statement) ||
+        ts.isFunctionDeclaration(statement) ||
+        ts.isEnumDeclaration(statement) ||
+        ts.isModuleDeclaration(statement)) &&
+      statement.name &&
+      ts.isIdentifier(statement.name)
+    ) {
+      topLevelNonVariableNames.add(statement.name.text);
     }
   }
   const candidateNames = collectRouterCandidateNames(sourceFile, topLevelNames);
+  const routerLikeLocals = new Set<string>();
 
   for (const statement of sourceFile.statements) {
     if (ts.isVariableStatement(statement)) {
       for (const declaration of statement.declarationList.declarations) {
         if (!ts.isIdentifier(declaration.name)) continue;
+        const initializer = declaration.initializer
+          ? unwrapTypeOnly(declaration.initializer)
+          : undefined;
+        if (
+          initializer &&
+          ts.isNewExpression(initializer) &&
+          ts.isIdentifier(initializer.expression) &&
+          initializer.expression.text === "HttpRouterWithHono"
+        ) {
+          routerLikeLocals.add(declaration.name.text);
+        }
         if (
           !isHonoRouterDeclaration(declaration) &&
           !candidateNames.has(declaration.name.text)
@@ -2553,6 +2787,7 @@ function collectRouteModuleFacts(
           continue;
         }
         routerVariables.add(declaration.name.text);
+        routerLikeLocals.add(declaration.name.text);
         routers.push({
           key: `${convexPath}#${declaration.name.text}`,
           convexPath,
@@ -2562,6 +2797,17 @@ function collectRouteModuleFacts(
           exportedRouters.set(declaration.name.text, declaration.name.text);
         }
       }
+      continue;
+    }
+
+    if (
+      ts.isExportAssignment(statement) &&
+      !statement.isExportEquals &&
+      ts.isIdentifier(unwrapTypeOnly(statement.expression))
+    ) {
+      // `export default http` — the root router module's own spelling.
+      const name = (unwrapTypeOnly(statement.expression) as ts.Identifier).text;
+      if (routerVariables.has(name)) exportedRouters.set("default", name);
       continue;
     }
 
@@ -2609,24 +2855,8 @@ function collectRouteModuleFacts(
    * (`app.get('/a', h1).get('/b', h2)` — every Hono registration method returns
    * the router, so the receiver of the second `.get` is still `app`).
    */
-  const resolveRouterReceiver = (
-    expression: ts.Expression,
-  ): string | undefined => {
-    // `(sub)`, `sub!`, `(sub as Hono)` are the same router.
-    const receiver = unwrapTypeOnly(expression);
-    if (ts.isIdentifier(receiver)) {
-      return routerVariables.has(receiver.text) ? receiver.text : undefined;
-    }
-    if (
-      ts.isCallExpression(receiver) &&
-      ts.isPropertyAccessExpression(receiver.expression) &&
-      ROUTER_METHODS.has(receiver.expression.name.text) &&
-      receiver.expression.name.text !== "mount"
-    ) {
-      return resolveRouterReceiver(receiver.expression.expression);
-    }
-    return undefined;
-  };
+  const resolveRouterReceiver = (expression: ts.Expression) =>
+    resolveRouterReceiverAmong(expression, routerVariables);
 
   /**
    * Does this call LOOK like a route registration or composition even though
@@ -2723,12 +2953,38 @@ function collectRouteModuleFacts(
     for (const statement of sourceFile.statements) {
       if (!ts.isVariableStatement(statement)) continue;
       for (const declaration of statement.declarationList.declarations) {
-        if (ts.isIdentifier(declaration.name) && declaration.name.text === name) {
-          return declaration;
-        }
+        // A destructured top-level binding (`const { cache } = make()`) is
+        // judged by the same initializer as a plain one (round 7).
+        const bound = new Set<string>();
+        bindingNameTexts(declaration.name, bound);
+        if (bound.has(name)) return declaration;
       }
     }
     return undefined;
+  };
+  /**
+   * Names bound INSIDE a function-like node (its parameters and every
+   * declaration in its body), so a walk into it can tell a free variable —
+   * one that reaches in from outside — from a local.
+   */
+  const namesBoundWithin = (fn: ts.Node): Set<string> => {
+    const names = new Set<string>();
+    const collect = (node: ts.Node) => {
+      if (ts.isParameter(node) || ts.isVariableDeclaration(node)) {
+        bindingNameTexts(node.name, names);
+      } else if (
+        (ts.isFunctionDeclaration(node) ||
+          ts.isClassDeclaration(node) ||
+          ts.isFunctionExpression(node) ||
+          ts.isClassExpression(node)) &&
+        node.name
+      ) {
+        names.add(node.name.text);
+      }
+      ts.forEachChild(node, collect);
+    };
+    collect(fn);
+    return names;
   };
   /**
    * Is a declaration INITIALIZER something a router may reach the receiver
@@ -2738,9 +2994,13 @@ function collectRouteModuleFacts(
    * otherwise unresolvable router to a top-level name that is NOT itself a
    * router candidate — and `routers.sub.get('evil', h)` then registers a live
    * route the checker would otherwise judge under the slash-only rule. An
-   * element access or a call is unresolvable outright; any other expression
-   * is unresolvable when it MENTIONS (outside nested functions and type
-   * positions) an identifier that is itself an unresolvable receiver.
+   * element access, a call, an `await`, or a `new` of anything but a plain
+   * container (`Map`, `Set`, `Headers`, ...) is unresolvable outright; any
+   * other expression is unresolvable when it MENTIONS (outside type positions)
+   * an identifier that is itself an unresolvable receiver. Inside a nested
+   * function — an object-literal getter / method / arrow property — only FREE
+   * variables count (round 7: `{ get r() { return sub } }` reaches `sub`;
+   * `{ get(table, id) { ... } }` reaches nothing).
    */
   const isUnresolvableInitializer = (
     initializer: ts.Expression,
@@ -2748,10 +3008,10 @@ function collectRouteModuleFacts(
   ): boolean => {
     const value = unwrapTypeOnly(initializer);
     if (ts.isIdentifier(value)) return isUnresolvableReceiver(value, visiting);
+    if (ts.isNewExpression(value)) return !isResolvableConstruction(value);
     if (
       ts.isElementAccessExpression(value) ||
       ts.isCallExpression(value) ||
-      ts.isNewExpression(value) ||
       ts.isAwaitExpression(value)
     ) {
       return true;
@@ -2760,9 +3020,16 @@ function collectRouteModuleFacts(
       return isUnresolvableReceiver(value, visiting);
     }
     let unresolvable = false;
-    const walk = (node: ts.Node) => {
-      if (unresolvable || ts.isTypeNode(node) || ts.isFunctionLike(node)) return;
+    const walk = (node: ts.Node, bound: ReadonlySet<string>) => {
+      if (unresolvable || ts.isTypeNode(node)) return;
+      if (ts.isFunctionLike(node)) {
+        // Descend, but only free variables can reach a router in here.
+        const inner = new Set([...bound, ...namesBoundWithin(node)]);
+        ts.forEachChild(node, (child) => walk(child, inner));
+        return;
+      }
       if (ts.isIdentifier(node)) {
+        if (bound.has(node.text)) return;
         // A shorthand property (`{ sub }`) is a value reference to `sub`.
         const shorthand =
           ts.isShorthandPropertyAssignment(node.parent) &&
@@ -2776,23 +3043,66 @@ function collectRouteModuleFacts(
         return;
       }
       if (ts.isPropertyAccessExpression(node)) {
+        let root: ts.Expression = node;
+        while (ts.isPropertyAccessExpression(root)) {
+          root = unwrapTypeOnly(root.expression);
+        }
+        if (ts.isIdentifier(root) && bound.has(root.text)) return;
+        // `this.cache[...]` inside a method reads the literal itself.
+        if (root.kind === ts.SyntaxKind.ThisKeyword) return;
         if (isUnresolvableReceiver(node, visiting)) unresolvable = true;
+        return;
+      }
+      if (ts.isNewExpression(node)) {
+        if (!isResolvableConstruction(node)) unresolvable = true;
         return;
       }
       if (
         ts.isElementAccessExpression(node) ||
         ts.isCallExpression(node) ||
-        ts.isNewExpression(node) ||
         ts.isAwaitExpression(node)
       ) {
         unresolvable = true;
         return;
       }
-      ts.forEachChild(node, walk);
+      ts.forEachChild(node, (child) => walk(child, bound));
     };
-    walk(value);
+    walk(value, new Set());
     return unresolvable;
   };
+  /**
+   * The root identifier of a property chain, or `undefined` when the chain is
+   * rooted at something else (a call, a `new`, a conditional, ...).
+   */
+  const chainRootIdentifier = (
+    expression: ts.Expression,
+  ): ts.Identifier | undefined => {
+    let root: ts.Expression = unwrapTypeOnly(expression);
+    while (ts.isPropertyAccessExpression(root)) {
+      root = unwrapTypeOnly(root.expression);
+    }
+    return ts.isIdentifier(root) ? root : undefined;
+  };
+  /**
+   * Can this receiver be a router the checker was handed but cannot walk?
+   *
+   * The DEFAULT is yes (round 7): a receiver is resolvable only when it is a
+   * shape the checker positively understands —
+   *   - a router variable of this module (then it IS walked);
+   *   - a top-level binding whose declaration initializer resolves (round 6);
+   *   - a parameter typed `DatabaseReader` / `DatabaseWriter`, or the
+   *     `<param>.db` chain of an untyped context parameter — the one documented
+   *     disambiguation, because `ctx.db.get("table", id)` /
+   *     `ctx.db.patch("table", id, ...)` share the verb names;
+   *   - a nested local whose initializer resolves the same way;
+   *   - a property chain rooted at a known global value (`Reflect`, `Object`,
+   *     `Promise`, ...).
+   * Everything else — an import binding, an element access, a call / `new` /
+   * `await` / conditional / comma result, a chain rooted at a class, function,
+   * enum, namespace, `globalThis`, or an undeclared name, an untyped
+   * parameter, a top-level binding whose initializer is unresolvable — is
+   * unresolvable, and a registration on it fails closed.
+   */
   const isUnresolvableReceiver = (
     receiver: ts.Expression,
     visiting = new Set<ts.Node>(),
@@ -2803,6 +3113,11 @@ function collectRouteModuleFacts(
         return true;
       }
       if (routerVariables.has(base.text)) return false;
+      if (routerLikeLocals.has(base.text)) return true;
+      if (isShadowedReference(base)) {
+        // A nested declaration wins over any top-level name.
+        return isUnresolvableNestedReference(base, visiting);
+      }
       if (topLevelNames.has(base.text)) {
         // A top-level local that is not a router candidate: resolvable only
         // through its declaration's initializer (round 6 — an alias or a
@@ -2815,20 +3130,11 @@ function collectRouteModuleFacts(
           ? isUnresolvableInitializer(declaration.initializer, visiting)
           : true;
       }
-      // A parameter or nested local a router may have been handed through.
-      // One declared as a Convex database (`db: DatabaseReader`, or a local
-      // bound to `ctx.db` however cast) is judged like the property chain it
-      // is; anything else is a router the checker cannot see into.
-      const declaration = nestedDeclarationOf(base);
-      if (!declaration || visiting.has(declaration)) return true;
-      visiting.add(declaration);
-      if (ts.isParameter(declaration)) {
-        const typeText = declaration.type?.getText(sourceFile) ?? "";
-        return !/\bDatabase(?:Reader|Writer)\b|\bGenericDatabase/.test(typeText);
-      }
-      return declaration.initializer
-        ? isUnresolvableReceiver(unwrapTypeOnly(declaration.initializer), visiting)
-        : true;
+      if (topLevelNonVariableNames.has(base.text)) return true;
+      const nested = nestedDeclarationOf(base);
+      if (nested) return isUnresolvableNestedReference(base, visiting);
+      // Undeclared: a global. Only the known value roots are plain objects.
+      return !RESOLVABLE_GLOBAL_ROOTS.has(base.text);
     }
     if (
       ts.isParenthesizedExpression(base) ||
@@ -2841,68 +3147,165 @@ function collectRouteModuleFacts(
       return isUnresolvableReceiver(unwrapTypeOnly(base), visiting);
     }
     if (ts.isElementAccessExpression(base)) return true;
+    if (ts.isNewExpression(base)) return !isResolvableConstruction(base);
     if (ts.isPropertyAccessExpression(base)) {
-      // `mod.routers.sub` — a chain rooted at an import is still an import;
-      // `routers.sub` rooted at a top-level container is judged by the
-      // container's initializer (round 6). A chain rooted at anything else
-      // (`ctx.db`, a global) is the property chain it looks like.
-      let root: ts.Expression = base;
-      while (ts.isPropertyAccessExpression(root)) {
-        root = unwrapTypeOnly(root.expression);
-      }
-      if (!ts.isIdentifier(root)) return false;
+      const root = chainRootIdentifier(base);
+      if (!root) return true;
       if (importBindings.some((binding) => binding.local === root.text)) {
         return true;
       }
       if (routerVariables.has(root.text)) return false;
+      if (routerLikeLocals.has(root.text)) return true;
+      if (isShadowedReference(root)) {
+        return isUnresolvableNestedChain(base, root, visiting);
+      }
       if (topLevelNames.has(root.text)) {
         return isUnresolvableReceiver(root, visiting);
       }
-      return false;
+      if (topLevelNonVariableNames.has(root.text)) return true;
+      if (nestedDeclarationOf(root)) {
+        return isUnresolvableNestedChain(base, root, visiting);
+      }
+      return !RESOLVABLE_GLOBAL_ROOTS.has(root.text);
     }
-    return false;
+    return true;
   };
-  const looksLikeRegistration = (method: string, node: ts.CallExpression) => {
-    const receiver = (node.expression as ts.PropertyAccessExpression).expression;
-    const arity = HTTP_VERBS.has(method)
-      ? node.arguments.length >= 2
-      : method === "on"
-        ? node.arguments.length >= 3
-        : method === "route" || method === "mount"
-          ? node.arguments.length === 2
-          : false;
+  /** A bare identifier bound in a nested scope: parameter or local. */
+  const isUnresolvableNestedReference = (
+    reference: ts.Identifier,
+    visiting: Set<ts.Node>,
+  ): boolean => {
+    const declaration = nestedDeclarationOf(reference);
+    if (!declaration || visiting.has(declaration)) return true;
+    visiting.add(declaration);
+    if (ts.isParameter(declaration)) {
+      // A parameter declared as a Convex database is the property chain it
+      // is; any other parameter is a router the checker cannot see into.
+      const typeText = declaration.type?.getText(sourceFile) ?? "";
+      return !/\bDatabase(?:Reader|Writer)\b|\bGenericDatabase/.test(typeText);
+    }
+    return declaration.initializer
+      ? isUnresolvableInitializer(declaration.initializer, visiting)
+      : true;
+  };
+  /**
+   * The parameter a nested-scope identifier ultimately aliases: itself, or —
+   * through `const ctx = admittedCtx`, `const mutationCtx = ctx as
+   * MutationCtx` — the parameter its initializer names. `undefined` when the
+   * chain of aliases ends anywhere else.
+   */
+  const aliasedParameterOf = (
+    reference: ts.Identifier,
+    seen = new Set<ts.Node>(),
+  ): ts.ParameterDeclaration | undefined => {
+    const declaration = nestedDeclarationOf(reference);
+    if (!declaration || seen.has(declaration)) return undefined;
+    seen.add(declaration);
+    if (ts.isParameter(declaration)) return declaration;
+    if (!ts.isIdentifier(declaration.name) || !declaration.initializer) {
+      return undefined;
+    }
+    const value = unwrapTypeOnly(declaration.initializer);
+    return ts.isIdentifier(value) ? aliasedParameterOf(value, seen) : undefined;
+  };
+  /**
+   * A property chain rooted at a nested-scope binding. Off a parameter (or a
+   * local that aliases one — `const ctx = admittedCtx`), a chain that passes
+   * through a `db` segment (`ctx.db`, `args.ctx.db.system`) is the documented
+   * Convex database disambiguation and a chain off a `Database*`-typed
+   * parameter is too; any other chain off a parameter (`holder.r`) is
+   * unresolvable — a router the checker cannot see into. A chain off a nested
+   * local that aliases no parameter is judged by that local's initializer.
+   */
+  const isUnresolvableNestedChain = (
+    chain: ts.PropertyAccessExpression,
+    root: ts.Identifier,
+    visiting: Set<ts.Node>,
+  ): boolean => {
+    const declaration = nestedDeclarationOf(root);
+    if (!declaration) return true;
+    const parameter = aliasedParameterOf(root);
+    if (parameter) {
+      const typeText = parameter.type?.getText(sourceFile) ?? "";
+      if (/\bDatabase(?:Reader|Writer)\b|\bGenericDatabase/.test(typeText)) {
+        return false;
+      }
+      let current: ts.Expression = chain;
+      while (ts.isPropertyAccessExpression(current)) {
+        if (current.name.text === "db") return false;
+        current = unwrapTypeOnly(current.expression);
+      }
+      return true;
+    }
+    return isUnresolvableReceiver(root, visiting);
+  };
+  /**
+   * Does this call LOOK like a route registration or composition even though
+   * its receiver did not resolve? A verb / `.route` / `.mount` with (path,
+   * handler) arity, `.on` with (methods, path, handler) arity, or a computed
+   * method (`x[verb](...)`, round 7) with at least (path, handler). On a
+   * module-scoped unresolvable receiver — an import binding, a top-level
+   * alias / container that resolves to one, a class / namespace / global root
+   * — EVERY registration-shaped call is a route, whatever the path expression
+   * is (`alias.get(P, h)` with `const P = "evil"` serves `GET /evil`; round
+   * 6). A parameter or nested local keeps the string / template rule.
+   */
+  const looksLikeRegistration = (
+    method: string | undefined,
+    node: ts.CallExpression,
+    receiver: ts.Expression,
+  ) => {
+    const arity =
+      method === undefined || HTTP_VERBS.has(method)
+        ? node.arguments.length >= 2
+        : method === "on"
+          ? node.arguments.length >= 3
+          : method === "route" || method === "mount"
+            ? node.arguments.length === 2
+            : false;
     if (!arity) return false;
     const pathArgument = node.arguments[method === "on" ? 1 : 0];
     if (!isUnresolvableReceiver(receiver)) {
       return isSlashRoutePathLiteral(pathArgument);
     }
-    // A module-scoped unresolvable receiver — an import binding, or a
-    // top-level alias / container that resolves to one — is a router the
-    // checker was handed and cannot walk; on it EVERY registration-shaped
-    // call is a route, whatever the path expression is (`alias.get(P, h)`
-    // with `const P = "evil"` serves `GET /evil`; round 6). A parameter or
-    // nested local keeps the string / template rule.
     return isModuleScopedReceiver(receiver) || isRoutePathLiteral(pathArgument);
   };
-  /** Is the receiver's base an import binding or a top-level binding? */
+  /**
+   * Is the receiver's base an import binding, a top-level binding, a
+   * top-level class / function / enum / namespace, or a global object root
+   * (`globalThis`, `self`, `window`)?
+   */
   const isModuleScopedReceiver = (receiver: ts.Expression): boolean => {
-    let root: ts.Expression = unwrapTypeOnly(baseOfReceiver(receiver));
-    while (ts.isPropertyAccessExpression(root)) {
-      root = unwrapTypeOnly(root.expression);
-    }
+    const root = chainRootIdentifier(baseOfReceiver(receiver));
+    if (!root || isShadowedReference(root)) return false;
     return (
-      ts.isIdentifier(root) &&
-      (importBindings.some((binding) => binding.local === root.text) ||
-        topLevelNames.has(root.text))
+      importBindings.some((binding) => binding.local === root.text) ||
+      topLevelNames.has(root.text) ||
+      topLevelNonVariableNames.has(root.text) ||
+      root.text === "globalThis" ||
+      root.text === "self" ||
+      root.text === "window"
     );
   };
 
-  const flag = (node: ts.CallExpression, method: string, reason: string) => {
+  const flaggedLines = new Set<number>();
+  const flag = (
+    node: ts.Node,
+    method: string,
+    reason: string,
+    label?: string,
+  ) => {
+    const line = lineOf(sourceFile, node);
+    // One finding per line: a router escaping through a spread AND a computed
+    // method on the same statement is one site to fix.
+    if (flaggedLines.has(line)) return;
+    flaggedLines.add(line);
     unresolvable.push({
       filePath,
-      line: lineOf(sourceFile, node),
+      line,
       method,
       reason,
+      label,
     });
   };
 
@@ -2940,23 +3343,64 @@ function collectRouteModuleFacts(
     }
   };
 
+  // A router method READ that is not the callee of a call (`sub.get.call(sub,
+  // ...)`, `sub.get.bind(sub)`, `Reflect.apply(sub.get, ...)`, `const g =
+  // sub.get`) is caught by the router reference sweep: the router value in
+  // receiver position of a member that is not a registration call is not an
+  // accepted use. It is NOT judged here by receiver shape — `.get` / `.route`
+  // / `.all` are ordinary property names (`definition.route`,
+  // `internal.a.b.get`, `flags.all`), so a member read is a router escape
+  // only when the receiver IS a router.
   const visit = (node: ts.Node) => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression)
-    ) {
-      const method = node.expression.name.text;
-      const receiver = node.expression.expression;
+    if (ts.isTypeNode(node)) return;
+    const member = ts.isCallExpression(node)
+      ? calleeMember(unwrapTypeOnly(node.expression))
+      : undefined;
+    if (ts.isCallExpression(node) && member) {
+      const { method, receiver, computed } = member;
 
       if (method === "addHttpRoutes") {
         addHttpRoutesCalls.push({ line: lineOf(sourceFile, node) });
       }
 
-      const routerName = ROUTER_METHODS.has(method)
-        ? resolveRouterReceiver(receiver)
-        : undefined;
+      const routerName =
+        method !== undefined && ROUTER_METHODS.has(method)
+          ? resolveRouterReceiver(receiver)
+          : undefined;
+      const receiverIsRouter =
+        routerName !== undefined ||
+        resolveRouterReceiver(receiver) !== undefined;
+      const spread = node.arguments.some((argument) =>
+        ts.isSpreadElement(argument),
+      );
 
-      if (routerName === undefined) {
+      if (computed) {
+        // `x[verb](...)`: the method is not statically known. On a router, or
+        // on any unresolvable receiver with a registration-shaped argument
+        // list, it may be a registration (round 7).
+        if (
+          receiverIsRouter ||
+          (isUnresolvableReceiver(receiver) &&
+            looksLikeRegistration(undefined, node, receiver))
+        ) {
+          flag(
+            node,
+            "[computed]",
+            `a computed method \`${receiver.getText(sourceFile).slice(0, 40)}[${(node.expression as ts.ElementAccessExpression).argumentExpression.getText(sourceFile).slice(0, 30)}](...)\` is called on a router-like receiver; the checker cannot tell which registrar it names, so it is a route it cannot walk`,
+          );
+        }
+      } else if (
+        method !== undefined &&
+        ROUTER_METHODS.has(method) &&
+        spread &&
+        (receiverIsRouter || isUnresolvableReceiver(receiver))
+      ) {
+        flag(
+          node,
+          method,
+          `\`.${method}(...)\` is called with a spread argument, so neither the path nor the handler can be positioned; a registration the checker cannot position is a route it cannot walk`,
+        );
+      } else if (routerName === undefined) {
         if (
           method === "route" &&
           node.arguments.length === 1 &&
@@ -2972,14 +3416,18 @@ function collectRouteModuleFacts(
             method,
             `\`.route(...)\` is called with a single non-string argument (\`${node.arguments[0].getText(sourceFile).slice(0, 60)}\`), the shape of Convex's \`HttpRouter.route({ path, method, handler })\`; a raw httpAction route registered beside the Hono app is an ingress the router walk never sees, so every HTTP route must be a Hono route under \`admitHttpRoute\` / \`admitHttpRead\``,
           );
-        } else if (ROUTER_METHODS.has(method) && looksLikeRegistration(method, node)) {
+        } else if (
+          method !== undefined &&
+          ROUTER_METHODS.has(method) &&
+          looksLikeRegistration(method, node, receiver)
+        ) {
           flag(
             node,
             method,
             `\`.${method}(...)\` is called on a receiver the checker cannot resolve to a router declared at the top level of this module (\`${receiver.getText(sourceFile).slice(0, 60)}\`); a route registered on an unknown router is never walked, so it must be spelled on a top-level router binding`,
           );
         }
-      } else {
+      } else if (method !== undefined) {
         const routerKey = `${convexPath}#${routerName}`;
 
         if (method === "route") {
@@ -3087,18 +3535,17 @@ function collectRouteModuleFacts(
     namedReexports,
     addHttpRoutesCalls,
     unresolvable,
+    routerLikeLocals,
   };
 }
 
 /**
- * Resolve every route registration to its full mounted path by walking the
- * router graph from `convex/http.ts`'s root router.
+ * Exported router name resolution across modules — `${convexPath}::${name}`
+ * -> routerKey — with `export *` and `export { a } from` forwarding taken to
+ * a fixpoint. (`export *` never forwards `default`.)
  */
-function resolveRouteRegistrations(
-  facts: Map<string, RouteModuleFacts>,
-): { routes: IngressRegistration[]; registrations: Map<string, RawRouteRegistration> } {
-  // exported name resolution, with re-export forwarding to a fixpoint.
-  const exportIndex = new Map<string, string>(); // `${convexPath}::${name}` -> routerKey
+function buildRouterExportIndex(facts: Map<string, RouteModuleFacts>) {
+  const exportIndex = new Map<string, string>();
   for (const [convexPath, moduleFacts] of facts) {
     for (const [exportName, local] of moduleFacts.exportedRouters) {
       exportIndex.set(`${convexPath}::${exportName}`, `${convexPath}#${local}`);
@@ -3110,7 +3557,7 @@ function resolveRouteRegistrations(
       for (const target of moduleFacts.starReexports) {
         for (const [key, routerKey] of [...exportIndex]) {
           const [owner, name] = key.split("::");
-          if (owner !== target) continue;
+          if (owner !== target || name === "default") continue;
           const forwarded = `${convexPath}::${name}`;
           if (!exportIndex.has(forwarded)) {
             exportIndex.set(forwarded, routerKey);
@@ -3129,6 +3576,163 @@ function resolveRouteRegistrations(
     }
     if (!changed) break;
   }
+  return exportIndex;
+}
+
+/**
+ * The router reference sweep (round 7) — the router-side mirror of the
+ * consumed-builder orphan sweep. Seven review rounds each found the "next
+ * ring" of registration spellings because the route walk keyed on ONE call
+ * grammar (`<receiver>.<verb>(...)`) while a router VALUE can travel anywhere:
+ * `sub["get"](...)`, `sub.get.call(sub, ...)`, `Reflect.apply(sub.get, ...)`,
+ * `return sub`, `static r = sub`, `{ get r() { return sub } }`,
+ * `globalThis.r = sub`, `helper(sub)`. So the rule is inverted: for every
+ * import binding that resolves to an exported router of a convex module (or
+ * a namespace import of a router-exporting module) and every router-like
+ * local of this module, ANY value reference outside the accepted shapes is
+ * `route-registration-not-statically-resolvable`. The accepted shapes are:
+ *
+ *   - the receiver of a `<router>.<verb | on | route | use | mount>(...)`
+ *     call (the call itself is then judged by the walk);
+ *   - the child argument of `.route(<prefix>, child)` on a router receiver;
+ *   - the argument of `new HttpRouterWithHono(app)`;
+ *   - the argument of `<registrar>.addHttpRoutes(http)`;
+ *   - `export { x }` / `export default x` (not value references).
+ *
+ * A router that only ever appears in those positions is fully walked; one
+ * that appears anywhere else has escaped into a spelling the walk cannot
+ * follow, and the site fails closed.
+ */
+function sweepRouterReferences(
+  module: ConvexModule,
+  facts: RouteModuleFacts,
+  exportIndex: ReadonlyMap<string, string>,
+  knownConvexPaths: ReadonlySet<string>,
+) {
+  const { sourceFile, convexPath, filePath } = module;
+  const routerish = new Set(facts.routerLikeLocals);
+  const importDescriptions = new Map<string, string>();
+  for (const binding of collectImportBindings(sourceFile)) {
+    const target = resolveModuleSpecifier(
+      convexPath,
+      binding.moduleSpecifier,
+      knownConvexPaths,
+    );
+    if (!target || !knownConvexPaths.has(target)) continue;
+    const isRouter =
+      binding.imported === "*"
+        ? [...exportIndex.keys()].some((key) => key.startsWith(`${target}::`))
+        : exportIndex.has(`${target}::${binding.imported}`);
+    if (!isRouter) continue;
+    routerish.add(binding.local);
+    importDescriptions.set(
+      binding.local,
+      binding.imported === "*"
+        ? `the namespace import of router module \`${target}\``
+        : `the router \`${binding.imported}\` imported from \`${target}\``,
+    );
+  }
+  if (routerish.size === 0) return;
+
+  const routerNames = facts.routerLikeLocals;
+  const isAcceptedUse = (identifier: ts.Identifier): boolean => {
+    let expression: ts.Node = identifier;
+    let parent: ts.Node = identifier.parent;
+    while (
+      ts.isParenthesizedExpression(parent) ||
+      ts.isNonNullExpression(parent) ||
+      ts.isAsExpression(parent) ||
+      ts.isSatisfiesExpression(parent) ||
+      ts.isTypeAssertionExpression(parent)
+    ) {
+      expression = parent;
+      parent = parent.parent;
+    }
+    // Receiver of a router-method call.
+    if (
+      ts.isPropertyAccessExpression(parent) &&
+      parent.expression === expression &&
+      ROUTER_METHODS.has(parent.name.text) &&
+      ts.isCallExpression(parent.parent) &&
+      parent.parent.expression === parent
+    ) {
+      return true;
+    }
+    if (ts.isCallExpression(parent)) {
+      const callee = unwrapTypeOnly(parent.expression);
+      // Child of `.route(prefix, child)` on a router receiver.
+      if (
+        ts.isPropertyAccessExpression(callee) &&
+        callee.name.text === "route" &&
+        parent.arguments.length === 2 &&
+        parent.arguments[1] === expression &&
+        resolveRouterReceiverAmong(callee.expression, routerNames) !== undefined
+      ) {
+        return true;
+      }
+      // `auth.addHttpRoutes(http)`.
+      if (
+        ts.isPropertyAccessExpression(callee) &&
+        callee.name.text === "addHttpRoutes" &&
+        parent.arguments.length === 1 &&
+        parent.arguments[0] === expression
+      ) {
+        return true;
+      }
+    }
+    // `new HttpRouterWithHono(app)`.
+    if (
+      ts.isNewExpression(parent) &&
+      ts.isIdentifier(parent.expression) &&
+      parent.expression.text === "HttpRouterWithHono" &&
+      parent.arguments?.length === 1 &&
+      parent.arguments[0] === expression
+    ) {
+      return true;
+    }
+    // `export default app`.
+    if (ts.isExportAssignment(parent)) return true;
+    return false;
+  };
+
+  const flaggedLines = new Set(facts.unresolvable.map((site) => site.line));
+  const walk = (node: ts.Node) => {
+    if (ts.isTypeNode(node)) return;
+    if (
+      ts.isIdentifier(node) &&
+      routerish.has(node.text) &&
+      isValueReference(node) &&
+      !isShadowedReference(node) &&
+      !isAcceptedUse(node)
+    ) {
+      const line = lineOf(sourceFile, node);
+      if (!flaggedLines.has(line)) {
+        flaggedLines.add(line);
+        const what =
+          importDescriptions.get(node.text) ??
+          `the router \`${node.text}\` declared in this module`;
+        facts.unresolvable.push({
+          filePath,
+          line,
+          method: "reference",
+          label: `\`${node.text}\``,
+          reason: `${what} is referenced as a value (\`${node.parent.getText(sourceFile).slice(0, 60)}\`) other than as the receiver of a registration, the child of \`.route(prefix, child)\`, the argument of \`new HttpRouterWithHono(...)\` / \`addHttpRoutes(...)\`, or an export; a router handed to any other spelling — a bracket callee, \`.call\` / \`.apply\`, a container, a getter, a return value, a global — can register routes the walk never sees`,
+        });
+      }
+    }
+    ts.forEachChild(node, walk);
+  };
+  walk(sourceFile);
+}
+
+/**
+ * Resolve every route registration to its full mounted path by walking the
+ * router graph from `convex/http.ts`'s root router.
+ */
+function resolveRouteRegistrations(
+  facts: Map<string, RouteModuleFacts>,
+): { routes: IngressRegistration[]; registrations: Map<string, RawRouteRegistration> } {
+  const exportIndex = buildRouterExportIndex(facts);
 
   const mountsByParent = new Map<string, RouterMount[]>();
   for (const moduleFacts of facts.values()) {
@@ -3455,53 +4059,66 @@ export function collectApiSelfCallSites(
       name.expression.getText(sourceFile),
     );
 
-  /** Any property of this object literal (recursively) resolves to a root. */
-  const objectLiteralHoldsReference = (
-    node: ts.ObjectLiteralExpression,
-  ): boolean =>
-    node.properties.some((property): boolean => {
+  /**
+   * Any element of this object / array literal (recursively, spreads
+   * included) resolves to a root. A container holding a reference widens to
+   * the whole container: any member read off it may be that reference.
+   */
+  const literalHoldsReference = (
+    node: ts.ObjectLiteralExpression | ts.ArrayLiteralExpression,
+  ): boolean => {
+    const holds = (value: ts.Expression): boolean => {
+      const inner = unwrapTypeOnly(value);
+      if (referenceText(inner) !== undefined) return true;
+      if (
+        ts.isObjectLiteralExpression(inner) ||
+        ts.isArrayLiteralExpression(inner)
+      ) {
+        return literalHoldsReference(inner);
+      }
+      return false;
+    };
+    if (ts.isArrayLiteralExpression(node)) {
+      return node.elements.some((element) =>
+        ts.isSpreadElement(element) ? holds(element.expression) : holds(element),
+      );
+    }
+    return node.properties.some((property): boolean => {
       if (ts.isPropertyAssignment(property)) {
         return (
-          isFunctionNameSymbolKey(property.name) ||
-          referenceText(property.initializer) !== undefined ||
-          (ts.isObjectLiteralExpression(property.initializer) &&
-            objectLiteralHoldsReference(property.initializer))
+          isFunctionNameSymbolKey(property.name) || holds(property.initializer)
         );
       }
       if (ts.isShorthandPropertyAssignment(property)) {
         return apiRoots.has(property.name.text);
       }
       if (ts.isSpreadAssignment(property)) {
-        return referenceText(property.expression) !== undefined;
+        return holds(property.expression);
       }
       return false;
     });
+  };
 
-  // Widen the root set through local bindings until it stops growing. An
-  // object literal holding a reference widens to the whole object: any member
-  // read off it may be that reference.
+  // Widen the root set through local bindings until it stops growing.
   for (let pass = 0; pass < 6; pass += 1) {
     let changed = false;
     const visitBindings = (node: ts.Node) => {
       if (ts.isVariableDeclaration(node) && node.initializer) {
-        const initializer = node.initializer;
+        const initializer = unwrapTypeOnly(node.initializer);
         const resolved =
           referenceText(initializer) !== undefined ||
-          (ts.isObjectLiteralExpression(initializer) &&
-            objectLiteralHoldsReference(initializer));
+          ((ts.isObjectLiteralExpression(initializer) ||
+            ts.isArrayLiteralExpression(initializer)) &&
+            literalHoldsReference(initializer));
         if (resolved) {
-          if (ts.isIdentifier(node.name) && !apiRoots.has(node.name.text)) {
-            apiRoots.add(node.name.text);
-            changed = true;
-          } else if (ts.isObjectBindingPattern(node.name)) {
-            for (const element of node.name.elements) {
-              if (
-                ts.isIdentifier(element.name) &&
-                !apiRoots.has(element.name.text)
-              ) {
-                apiRoots.add(element.name.text);
-                changed = true;
-              }
+          // A plain name, or every name a binding pattern (object OR array,
+          // round 7) takes off a resolved initializer, is a root.
+          const bound = new Set<string>();
+          bindingNameTexts(node.name, bound);
+          for (const name of bound) {
+            if (!apiRoots.has(name)) {
+              apiRoots.add(name);
+              changed = true;
             }
           }
         }
@@ -3529,17 +4146,44 @@ export function collectApiSelfCallSites(
   };
 
   /**
-   * The dotted segments AFTER an `internal` root, when the chain is rooted at
-   * `internal` from `_generated/api` (or `<ns>.internal`), possibly through a
-   * local `const` bound to a prefix of it (`const ex = (internal as any).a;
-   * ex.b.fn` → `["a", "b", "fn"]`). A segment is `undefined` when it is a
-   * computed / non-literal index. `undefined` overall when the chain is not
-   * internal-rooted.
+   * How many times a name is declared anywhere in the file (variables,
+   * binding elements, parameters). A name declared more than once is not one
+   * value, so a widened `internal` local under that name is `unknown`.
    */
-  const internalChainSegments = (
+  const declarationCounts = new Map<string, number>();
+  const countDeclarations = (node: ts.Node) => {
+    if (ts.isVariableDeclaration(node) || ts.isParameter(node)) {
+      const bound = new Set<string>();
+      bindingNameTexts(node.name, bound);
+      for (const name of bound) {
+        declarationCounts.set(name, (declarationCounts.get(name) ?? 0) + 1);
+      }
+    }
+    ts.forEachChild(node, countDeclarations);
+  };
+  countDeclarations(sourceFile);
+
+  /**
+   * `internal` widened through local bindings, the way `api` is — but FAILING
+   * CLOSED on loss of path (round 7). Each local bound to something rooted at
+   * `internal` records either the dotted segment prefix it denotes (`const ex
+   * = internal.a.b` -> `["a", "b"]`; a computed segment is `undefined`) or
+   * `"unknown"`: a destructure (`const { example } = internal`), an object /
+   * array / spread container (`{ w: internal.a.b }`, `[internal.a.b]`), a
+   * conditional, a call, an `await`, any other expression that merely
+   * mentions an internal root, or a name declared more than once in the
+   * file. A run-call argument rooted at an `unknown` local is a site — the
+   * checker cannot enumerate it against the public set — while a prefix local
+   * is enumerated exactly like the import.
+   */
+  type InternalPrefix = (string | undefined)[] | "unknown";
+  const internalLocals = new Map<string, InternalPrefix>();
+  const isInternalRootName = (name: string) =>
+    internalRoots.has(name) || namespaceRoots.has(name) || internalLocals.has(name);
+  /** Segments after the internal root for a chain, or `undefined` / `unknown`. */
+  const internalChainOf = (
     expression: ts.Expression,
-    visiting: Set<string>,
-  ): (string | undefined)[] | undefined => {
+  ): InternalPrefix | undefined => {
     const segments: (string | undefined)[] = [];
     let current: ts.Expression = unwrapTypeOnly(expression);
     for (;;) {
@@ -3563,27 +4207,62 @@ export function collectApiSelfCallSites(
       }
       return undefined;
     }
-    if (visiting.has(current.text)) return undefined;
-    const declarations: ts.VariableDeclaration[] = [];
-    const collect = (node: ts.Node) => {
-      if (
-        ts.isVariableDeclaration(node) &&
-        ts.isIdentifier(node.name) &&
-        node.name.text === current.text
-      ) {
-        declarations.push(node);
-      }
-      ts.forEachChild(node, collect);
-    };
-    collect(sourceFile);
-    if (declarations.length !== 1 || !declarations[0].initializer) {
-      return undefined;
-    }
-    const nested = new Set(visiting);
-    nested.add(current.text);
-    const prefix = internalChainSegments(declarations[0].initializer, nested);
-    return prefix ? [...prefix, ...segments] : undefined;
+    const local = internalLocals.get(current.text);
+    if (local === undefined) return undefined;
+    if (local === "unknown") return "unknown";
+    return [...local, ...segments];
   };
+  /** Does this expression mention an internal root anywhere (type positions aside)? */
+  const mentionsInternalRoot = (node: ts.Node): boolean => {
+    let found = false;
+    const walk = (current: ts.Node) => {
+      if (found || ts.isTypeNode(current)) return;
+      if (ts.isIdentifier(current)) {
+        const shorthand =
+          ts.isShorthandPropertyAssignment(current.parent) &&
+          current.parent.name === current;
+        if (
+          (shorthand || isValueReference(current)) &&
+          isInternalRootName(current.text)
+        ) {
+          found = true;
+        }
+        return;
+      }
+      ts.forEachChild(current, walk);
+    };
+    walk(node);
+    return found;
+  };
+  for (let pass = 0; pass < 8; pass += 1) {
+    let changed = false;
+    const record = (name: string, value: InternalPrefix) => {
+      const previous = internalLocals.get(name);
+      if (previous === undefined || (previous !== "unknown" && value === "unknown")) {
+        internalLocals.set(name, value);
+        changed = true;
+      }
+    };
+    const widen = (node: ts.Node) => {
+      if (ts.isVariableDeclaration(node) && node.initializer) {
+        const chain = internalChainOf(node.initializer);
+        const bound = new Set<string>();
+        bindingNameTexts(node.name, bound);
+        if (chain !== undefined) {
+          const precise =
+            ts.isIdentifier(node.name) &&
+            chain !== "unknown" &&
+            (declarationCounts.get(node.name.text) ?? 0) <= 1;
+          for (const name of bound) record(name, precise ? chain : "unknown");
+        } else if (mentionsInternalRoot(node.initializer)) {
+          for (const name of bound) record(name, "unknown");
+        }
+      }
+      ts.forEachChild(node, widen);
+    };
+    widen(sourceFile);
+    if (!changed) break;
+  }
 
   /**
    * Why a function-reference argument that is NOT an `api` root is still a
@@ -3594,10 +4273,16 @@ export function collectApiSelfCallSites(
    *    site when any value it can take names a public function, and when the
    *    checker cannot enumerate its values at all;
    *  - an object literal is a hand-built reference — a site;
+   *  - a conditional is judged on both branches (round 7);
    *  - a chain rooted at an IMPORT binding must be rooted at `internal` from
    *    `_generated/api` (or a namespace import's `.internal`); any other
    *    imported root is a reference table the checker cannot see into;
-   *  - a local `const` bound to one of the above is resolved through it.
+   *  - an `internal`-rooted chain, through the import or a widened local, is
+   *    enumerated against the public set; a widened local that lost its path
+   *    (`unknown`) is a site;
+   *  - a local `const` bound to one of the above is resolved through it;
+   *  - any other non-call expression the checker cannot root (a comma, an
+   *    `await`, a `??`, a chain off a call result) is a site (round 7).
    *
    * A parameter, a call result, or a local of unknown provenance is left to
    * the caller-table pass: the rail's own core forwards injected internal
@@ -3624,15 +4309,30 @@ export function collectApiSelfCallSites(
     if (ts.isObjectLiteralExpression(node)) {
       return "hand-built function reference object literal";
     }
+    if (ts.isConditionalExpression(node)) {
+      for (const branch of [node.whenTrue, node.whenFalse]) {
+        const reference = referenceText(branch);
+        if (reference) return `conditional function reference selects ${reference}`;
+        const reason = unresolvedReferenceReason(branch, visiting);
+        if (reason) return `conditional function reference: ${reason}`;
+      }
+      return undefined;
+    }
     if (ts.isCallExpression(node)) return undefined;
     const root = chainRoot(node);
-    if (!root) return undefined;
+    if (!root) {
+      return `function reference \`${node.getText(sourceFile).slice(0, 60)}\` has a shape the checker cannot root (not an identifier, dotted chain, string, or conditional)`;
+    }
     // `internal` is `anyApi` at runtime — the SAME proxy as `api` — so a
     // chain rooted at it resolves whatever function its dotted path names,
     // public or internal (round 6). The path is enumerated to `a/b:c` and is a
     // site when it names a discovered public function; a computed segment
-    // could name any of them and fails closed.
-    const internalPath = internalChainSegments(node, visiting);
+    // could name any of them and fails closed; a widened local that lost the
+    // path (round 7) fails closed.
+    const internalPath = internalChainOf(node);
+    if (internalPath === "unknown") {
+      return `internal-rooted reference \`${node.getText(sourceFile).slice(0, 60)}\` reaches \`internal\` through a destructure, container, conditional, call, or redeclared local, so its path cannot be enumerated against the public set`;
+    }
     if (internalPath) {
       const spelled = node.getText(sourceFile).slice(0, 60);
       if (internalPath.some((segment) => segment === undefined)) {
@@ -3692,31 +4392,165 @@ export function collectApiSelfCallSites(
     return undefined;
   };
 
-  const sites: ApiSelfCallSite[] = [];
-  const visit = (node: ts.Node) => {
+  /**
+   * The RUN site a call is, matched by the callee's NAME regardless of shape
+   * (round 7): `ctx.runMutation(ref)`, `ctx["runMutation"](ref)`,
+   * `<anything>.scheduler.runAfter(0, ref)` / `.runAt(t, ref)`,
+   * `ctx.runMutation.call(ctx, ref)`, `ctx.runMutation.apply(ctx, [ref])`,
+   * `Reflect.apply(ctx.runMutation, ctx, [ref])`, and a bare identifier
+   * callee bound to a run method — a destructured parameter
+   * (`({ runMutation }) => runMutation(ref)`), `const { runMutation } = ctx`,
+   * `const r = ctx.runMutation` / `.bind(ctx)`. Returns the method, the
+   * function-reference argument (when it can be positioned) and a fail-closed
+   * reason when it cannot (`.apply(ctx, argsVar)`).
+   */
+  const memberName = (node: ts.Expression): string | undefined => {
+    const value = unwrapTypeOnly(node);
+    if (ts.isPropertyAccessExpression(value)) return value.name.text;
+    if (ts.isElementAccessExpression(value)) {
+      return stringLiteralText(value.argumentExpression);
+    }
+    return undefined;
+  };
+  const isRunName = (name: string | undefined): name is string =>
+    name !== undefined && (RUN_METHODS.has(name) || SCHEDULER_METHODS.has(name));
+  const argumentIndexFor = (method: string) =>
+    SCHEDULER_METHODS.has(method) ? 1 : 0;
+  /** A bare identifier bound to a run method anywhere in the file. */
+  const runMethodBoundTo = (name: string): string | undefined => {
+    let found: string | undefined;
+    const search = (node: ts.Node) => {
+      if (found) return;
+      if (ts.isBindingElement(node) && ts.isIdentifier(node.name) && node.name.text === name) {
+        const property = node.propertyName
+          ? ts.isIdentifier(node.propertyName)
+            ? node.propertyName.text
+            : stringLiteralText(node.propertyName)
+          : node.name.text;
+        if (isRunName(property)) found = property;
+      } else if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.name.text === name &&
+        node.initializer
+      ) {
+        const value = unwrapTypeOnly(node.initializer);
+        const direct = memberName(value);
+        if (isRunName(direct)) found = direct;
+        else if (
+          ts.isCallExpression(value) &&
+          memberName(value.expression) === "bind"
+        ) {
+          const bound = memberName(
+            (unwrapTypeOnly(value.expression) as ts.PropertyAccessExpression | ts.ElementAccessExpression).expression,
+          );
+          if (isRunName(bound)) found = bound;
+        }
+      }
+      ts.forEachChild(node, search);
+    };
+    search(sourceFile);
+    return found;
+  };
+  const runCallShape = (
+    node: ts.CallExpression,
+  ): { method: string; argument?: ts.Expression; reason?: string } | undefined => {
+    const callee = unwrapTypeOnly(node.expression);
+    const name = memberName(callee);
+    if (isRunName(name)) {
+      return { method: name, argument: node.arguments[argumentIndexFor(name)] };
+    }
     if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression)
+      (name === "call" || name === "apply") &&
+      (ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee))
     ) {
-      const method = node.expression.name.text;
-      const isRun = RUN_METHODS.has(method);
-      const isScheduler =
-        SCHEDULER_METHODS.has(method) &&
-        ts.isPropertyAccessExpression(node.expression.expression) &&
-        node.expression.expression.name.text === "scheduler";
-      if (isRun || isScheduler) {
-        const argument = node.arguments[isScheduler ? 1 : 0];
+      const target = memberName(callee.expression);
+      if (isRunName(target)) {
+        if (name === "call") {
+          return {
+            method: target,
+            argument: node.arguments[argumentIndexFor(target) + 1],
+          };
+        }
+        const list = node.arguments[1] ? unwrapTypeOnly(node.arguments[1]) : undefined;
+        if (list && ts.isArrayLiteralExpression(list)) {
+          const element = list.elements[argumentIndexFor(target)];
+          return {
+            method: target,
+            argument: element && !ts.isSpreadElement(element) ? element : undefined,
+            reason: element && ts.isSpreadElement(element)
+              ? "`.apply` argument list spreads a value the checker cannot position"
+              : undefined,
+          };
+        }
+        return {
+          method: target,
+          reason: "`.apply` is handed an argument list the checker cannot see into",
+        };
+      }
+    }
+    if (
+      ts.isPropertyAccessExpression(callee) &&
+      ts.isIdentifier(callee.expression) &&
+      callee.expression.text === "Reflect" &&
+      callee.name.text === "apply"
+    ) {
+      const target = node.arguments[0] ? memberName(node.arguments[0]) : undefined;
+      if (isRunName(target)) {
+        const list = node.arguments[2] ? unwrapTypeOnly(node.arguments[2]) : undefined;
+        if (list && ts.isArrayLiteralExpression(list)) {
+          const element = list.elements[argumentIndexFor(target)];
+          return {
+            method: target,
+            argument: element && !ts.isSpreadElement(element) ? element : undefined,
+            reason: element && ts.isSpreadElement(element)
+              ? "`Reflect.apply` argument list spreads a value the checker cannot position"
+              : undefined,
+          };
+        }
+        return {
+          method: target,
+          reason: "`Reflect.apply` is handed an argument list the checker cannot see into",
+        };
+      }
+    }
+    if (ts.isIdentifier(callee)) {
+      const bound = runMethodBoundTo(callee.text);
+      if (bound) {
+        return { method: bound, argument: node.arguments[argumentIndexFor(bound)] };
+      }
+    }
+    return undefined;
+  };
+
+  const sites: ApiSelfCallSite[] = [];
+  /** Run-call arguments already reported, so the reference sweep skips them. */
+  const reportedArguments = new Set<ts.Node>();
+  const visit = (node: ts.Node) => {
+    if (ts.isCallExpression(node)) {
+      const shape = runCallShape(node);
+      if (shape) {
+        const { method, argument } = shape;
         const reference = argument ? referenceText(argument) : undefined;
         if (reference) {
+          reportedArguments.add(argument!);
           sites.push({
             filePath: normalizeRepoPath(filePath),
             line: lineOf(sourceFile, node),
             reference,
             via: method,
           });
+        } else if (shape.reason) {
+          sites.push({
+            filePath: normalizeRepoPath(filePath),
+            line: lineOf(sourceFile, node),
+            reference: `${node.getText(sourceFile).slice(0, 80)} (${shape.reason})`,
+            via: method,
+          });
         } else if (argument) {
           const reason = unresolvedReferenceReason(argument);
           if (reason) {
+            reportedArguments.add(argument);
             sites.push({
               filePath: normalizeRepoPath(filePath),
               line: lineOf(sourceFile, node),
@@ -3730,6 +4564,62 @@ export function collectApiSelfCallSites(
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
+
+  // Round 7: ANY value reference to an `api` root — the import binding,
+  // `anyApi`, `<ns>.api` off a `_generated/api` namespace import, a computed
+  // member off that namespace, or a widened local — anywhere in the module is
+  // a site, not only as a run-call argument. The real tree references `api`
+  // nowhere under convex/**, so this costs nothing there and closes every
+  // bracket / rebound / `.call` / destructured-context spelling for `api` in
+  // one rule: the value cannot be obtained without being referenced.
+  const isInsideReportedArgument = (node: ts.Node) => {
+    let current: ts.Node | undefined = node;
+    while (current && !ts.isSourceFile(current)) {
+      if (reportedArguments.has(current)) return true;
+      current = current.parent;
+    }
+    return false;
+  };
+  const sweep = (node: ts.Node) => {
+    if (ts.isTypeNode(node)) return;
+    if (ts.isIdentifier(node) && isValueReference(node)) {
+      const parent = node.parent;
+      let spelled: string | undefined;
+      if (apiRoots.has(node.text)) {
+        spelled = node.text;
+      } else if (namespaceRoots.has(node.text)) {
+        // A plain `.internal` read is the accepted use of the namespace; a
+        // `.api` read, a computed member, or the namespace value itself
+        // escaping (`pick(generated)`, `const g = generated`) is not.
+        const memberRead =
+          (ts.isPropertyAccessExpression(parent) && parent.expression === node)
+            ? parent.name.text
+            : ts.isElementAccessExpression(parent) && parent.expression === node
+              ? stringLiteralText(parent.argumentExpression) ?? "[computed]"
+              : undefined;
+        if (memberRead !== "internal") {
+          spelled = memberRead === undefined ? node.text : `${node.text}.${memberRead}`;
+        }
+      } else if (
+        convexServerNamespaces.has(node.text) &&
+        ts.isPropertyAccessExpression(parent) &&
+        parent.expression === node &&
+        parent.name.text === "anyApi"
+      ) {
+        spelled = `${node.text}.anyApi`;
+      }
+      if (spelled !== undefined && !isInsideReportedArgument(node)) {
+        sites.push({
+          filePath: normalizeRepoPath(filePath),
+          line: lineOf(sourceFile, node),
+          reference: `${spelled} (api root referenced as a value: \`${(parent.parent && !ts.isSourceFile(parent.parent) ? parent.parent : parent).getText(sourceFile).slice(0, 60)}\`)`,
+          via: "reference",
+        });
+      }
+    }
+    ts.forEachChild(node, sweep);
+  };
+  sweep(sourceFile);
   return sites;
 }
 
@@ -3808,7 +4698,8 @@ export function assertCorsAllowlist(
   // `await import("hono/cors")` / `require("hono/cors")` / `import c =
   // require("hono/cors")` obtain the factory under a binding this assertion
   // cannot follow (round 6): found, never allowlisted.
-  const dynamicCors = collectDynamicModuleReferences(sourceFile).find(
+  const dynamicReferences = collectDynamicModuleReferences(sourceFile);
+  const dynamicCors = dynamicReferences.find(
     (reference) => reference.specifier === "hono/cors",
   );
   if (dynamicCors) {
@@ -3816,6 +4707,45 @@ export function assertCorsAllowlist(
       lineOf(sourceFile, dynamicCors.node),
       "`hono/cors` is loaded through `import()` / `require()` / `import x = require()` rather than an `import` declaration, so the CORS factory reaches a binding the checker cannot follow.",
     );
+  }
+  // In a router-declaring module (round 7), a dynamic reference with a
+  // NON-LITERAL specifier may be `hono/cors` under a name the checker cannot
+  // see (`const spec = "hono/" + "cors"; (await import(spec)).cors({ origin:
+  // (o) => o })`), and a tsconfig `paths` alias (`~/node_modules/hono/cors`)
+  // is a specifier the bundler does not resolve; both fail the assertion the
+  // way they fail discovery.
+  const declaresRouter =
+    convexPath === "http.ts" ||
+    sourceFile.statements.some(
+      (statement) =>
+        ts.isVariableStatement(statement) &&
+        statement.declarationList.declarations.some(
+          (declaration) =>
+            ts.isIdentifier(declaration.name) &&
+            isHonoRouterDeclaration(declaration),
+        ),
+    );
+  if (declaresRouter) {
+    const opaque = dynamicReferences.find(
+      (reference) =>
+        reference.specifier === undefined ||
+        isTsconfigAliasSpecifier(reference.specifier),
+    );
+    if (opaque) {
+      return failed(
+        lineOf(sourceFile, opaque.node),
+        `the router module loads a module through \`${opaque.node.getText(sourceFile).slice(0, 60)}\`, whose specifier is ${opaque.specifier === undefined ? "not a string literal" : "a tsconfig `paths` alias the Convex bundler does not resolve"}; it may be \`hono/cors\` under a binding the checker cannot follow, so the CORS middleware is not statically an allowlist.`,
+      );
+    }
+    const aliasImport = bindings.find((binding) =>
+      isTsconfigAliasSpecifier(binding.moduleSpecifier),
+    );
+    if (aliasImport) {
+      return failed(
+        undefined,
+        `the router module imports \`${aliasImport.moduleSpecifier}\` through a tsconfig \`paths\` alias the Convex bundler does not resolve; it may be \`hono/cors\` under a binding the checker cannot follow, so the CORS middleware is not statically an allowlist.`,
+      );
+    }
   }
 
   /** Does this expression denote the hono/cors middleware factory? */
@@ -4568,6 +5498,15 @@ export async function collectOperationAdmissionCheckResult(
       ),
     );
   }
+  // Round 7: the router reference sweep needs every module's exported routers
+  // resolved first, so it runs once all facts are in.
+  const routerExportIndex = buildRouterExportIndex(routeFacts);
+  for (const module of modules) {
+    const facts = routeFacts.get(module.convexPath);
+    if (facts) {
+      sweepRouterReferences(module, facts, routerExportIndex, knownConvexPaths);
+    }
+  }
   const { routes, registrations: routeRegistrations } =
     resolveRouteRegistrations(routeFacts);
 
@@ -4734,17 +5673,20 @@ export async function collectOperationAdmissionCheckResult(
 
   // --- route registrations the checker could not resolve ------------------
   for (const convexPath of [...routeFacts.keys()].sort()) {
-    for (const site of routeFacts.get(convexPath)?.unresolvable ?? []) {
+    const sites = [...(routeFacts.get(convexPath)?.unresolvable ?? [])].sort(
+      (left, right) => left.line - right.line,
+    );
+    for (const site of sites) {
       push({
         id: `route-registration-not-statically-resolvable-${slugifyForFindingId(`${site.filePath}-${site.line}`)}`,
         severity: "high",
         title: "Route registration is not statically resolvable",
         filePath: site.filePath,
         line: site.line,
-        functionName: `.${site.method}(...)`,
+        functionName: site.label ?? `.${site.method}(...)`,
         rationale: `${site.reason}. A registration the checker cannot follow is not "no route", it is a route with unknown admission, so it fails closed.`,
         remediation:
-          "Register the route on a top-level router binding with a string-literal path (or `.on` with literal methods and path) and the admitted handler as the last argument; mount child routers only with `.route(<literal prefix>, <router identifier>)`; do not use `.mount`.",
+          "Register the route on a top-level router binding with a string-literal path (or `.on` with literal methods and path) and the admitted handler as the last argument; mount child routers only with `.route(<literal prefix>, <router identifier>)`; do not use `.mount`; and reference a router ONLY as the receiver of a registration, the child of `.route`, the argument of `new HttpRouterWithHono` / `addHttpRoutes`, or an export.",
       });
     }
   }
@@ -5058,6 +6000,51 @@ export async function collectOperationAdmissionCheckResult(
         rationale:
           "An admitted body may call only internal.*. Re-entering through api.* runs a second admission with the backend's own context, which is how a route can launder a client-supplied id past the boundary.",
         remediation: `Call the internal sibling of ${site.reference} instead (see ${CALLER_TABLE_RELATIVE_PATH}); the ${site.via} reference must be internal.*.`,
+      });
+    }
+  }
+
+  // --- definition modules read no environment --------------------------------
+  // The checker evaluates definition modules in ITS Node process and proves
+  // identity against what it loaded; a definition whose field depends on the
+  // environment (`actors: { public: process.env.X ? "admit" : "deny" }`) is
+  // "registered" and "identical" here while the Convex runtime evaluates it
+  // differently. So a definition module (`definitions.ts`, `readDefinitions.ts`,
+  // `domains/**`) may not reference an environment reader at all (round 7).
+  for (const module of modules) {
+    if (!isDefinitionModulePath(module.convexPath)) continue;
+    const envSites: { line: number; spelled: string }[] = [];
+    const scan = (node: ts.Node) => {
+      if (ts.isTypeNode(node)) return;
+      if (
+        ts.isIdentifier(node) &&
+        isValueReference(node) &&
+        ["process", "Deno", "globalThis", "self", "window"].includes(node.text) &&
+        !isShadowedReference(node)
+      ) {
+        envSites.push({
+          line: lineOf(module.sourceFile, node),
+          spelled: node.parent.getText(module.sourceFile).slice(0, 60),
+        });
+      } else if (ts.isMetaProperty(node)) {
+        envSites.push({
+          line: lineOf(module.sourceFile, node),
+          spelled: node.parent.getText(module.sourceFile).slice(0, 60),
+        });
+      }
+      ts.forEachChild(node, scan);
+    };
+    scan(module.sourceFile);
+    for (const site of envSites) {
+      push({
+        id: `definition-module-reads-environment-${slugifyForFindingId(`${module.convexPath}-${site.line}`)}`,
+        severity: "high",
+        title: "Definition module reads the environment",
+        filePath: module.filePath,
+        line: site.line,
+        rationale: `${module.convexPath} references an environment reader (\`${site.spelled}\`). The checker evaluates definition modules in its own process and proves the wrapper receives the registered instance, so a definition whose fields depend on the environment is verified under one environment and enforced under another.`,
+        remediation:
+          "Keep definitions static: no `process.env` / `import.meta` / `globalThis` in definitions.ts, readDefinitions.ts, or domains/**. Environment-dependent policy belongs in the composition root or an adapter, where it is a runtime input, not a declared definition.",
       });
     }
   }

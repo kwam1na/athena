@@ -7,7 +7,7 @@
   <body>
     <article
       data-athena-landed-change-report="v2"
-      data-athena-report-diff-fingerprint="071c752a3664cc3f69ca7a5e8a78601aaa98bf14713637dfafc7158dc2b50707"
+      data-athena-report-diff-fingerprint="8f04b35867d87155d65498b1193e6fe2dfad5865843e06d5d237c64e72f40f1a"
     >
       <header data-report-section="header">
         <h1>Closing the Admission Rail</h1>
@@ -800,10 +800,16 @@ handler: admitPublicMutation(createOrganizationOperationDefinition, ...)</code><
             misread as stronger than it is.
           </li>
           <li>
-            <code>GET /guests</code> stays a public bootstrap read: any caller
-            presenting an arbitrary <code>guest_id</code> cookie can read that
-            guest row. Accepted so cookie recovery keeps working, and now named
-            in code rather than described as safe.
+            <strong>The legacy-cookie upgrade window.</strong> The bootstrap
+            routes no longer trust an arbitrary <code>guest_id</code> — unsigned
+            or tampered cookies are treated as absent, and a bad signature is
+            refused rather than read as legacy. What remains is the migration
+            path: a pre-signing cookie naming a real guest row in that store is
+            re-minted signed so existing carts survive the deploy, and while it
+            exists someone who knows another shopper's guest id can present it
+            unsigned at bootstrap. Confined to the two bootstrap routes.
+            <strong>Delete once legacy cookies age out — 90 days.</strong>
+            Tracked as <strong>V26-1240</strong>.
           </li>
           <li>
             Convex Auth's HTTP route family is unadmitted by design; registration

@@ -1,6 +1,6 @@
 /* eslint-disable @convex-dev/no-collect-in-query -- V26-168 adds the missing commerce indexes and refactors the main storefront session access paths first; remaining legacy scans in this large module will be reduced in follow-up passes. */
 import { CheckoutSession, CheckoutSessionItem, ProductSku } from "../../types";
-import { api, internal } from "../_generated/api";
+import { internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
 import {
   ActionCtx,

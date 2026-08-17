@@ -22,7 +22,12 @@ import type {
  * in some later-loaded module). Frozen definitions make that a TypeError in
  * strict-mode ESM instead of a silent policy change. Functions (resolvers,
  * guards, verifiers) are left as they are; only plain objects and arrays
- * reachable from the definition are frozen.
+ * reachable from the definition are frozen. A `Map` / `Set` / class-instance
+ * field would NOT be frozen — no definition carries one, and none of the
+ * shapes below produces one; keep it that way (a definition is plain data plus
+ * resolver functions). Definition modules also read no environment: the
+ * checker evaluates them in its own process and proves identity against what
+ * it loaded (`definition-module-reads-environment`).
  */
 function deepFreezeDefinition<T>(value: T): T {
   const seen = new Set<unknown>();

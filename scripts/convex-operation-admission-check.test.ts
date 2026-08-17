@@ -1186,12 +1186,19 @@ describe("collectApiSelfCallSites", () => {
       `,
     );
 
-    expect(sites.map((site) => site.via)).toEqual([
+    // Run-call sites, in source order …
+    expect(sites.filter((site) => site.via !== "reference").map((site) => site.via)).toEqual([
       "runQuery",
       "runMutation",
       "runAction",
       "runAfter",
       "runAt",
+    ]);
+    // … plus (round 7) every OTHER value reference to an api root: the two
+    // widening initializers `publicApi.storeFront.bag` and `generated.api`.
+    expect(sites.filter((site) => site.via === "reference").map((site) => site.reference)).toEqual([
+      expect.stringContaining("publicApi (api root referenced as a value"),
+      expect.stringContaining("generated.api (api root referenced as a value"),
     ]);
     expect(sites.every((site) => site.reference.includes("."))).toBe(true);
   });
@@ -1263,7 +1270,7 @@ describe("collectApiSelfCallSites", () => {
           const refs = { m: api.a.b, other: 1 };
           export async function run(ctx) { await ctx.runMutation(refs.m, {}); }
         `).map((site) => site.reference),
-      ).toEqual(["refs.m"]);
+      ).toEqual(["refs.m", expect.stringContaining("api (api root referenced as a value")]);
     });
 
     describe("makeFunctionReference", () => {
@@ -2027,8 +2034,14 @@ describe("collectOperationAdmissionCheckResult", () => {
     const selfCall = result.findings.filter((finding) =>
       finding.id.startsWith("api-self-call-"),
     );
-    expect(selfCall).toHaveLength(1);
-    expect(selfCall[0].functionName).toBe("bagApi.getByUserId");
+    // The run call through the alias, and (round 7) the alias's own
+    // `api.storeFront.bag` value reference: two sites, both high.
+    expect(selfCall).toHaveLength(2);
+    expect(selfCall.map((finding) => finding.functionName)).toEqual([
+      "bagApi.getByUserId",
+      expect.stringContaining("api (api root referenced as a value"),
+    ]);
+    expect(selfCall.every((finding) => finding.severity === "high")).toBe(true);
   });
 
   it("flags a reflect-any-origin CORS middleware on the router", async () => {
@@ -2716,10 +2729,12 @@ describe("round 5: routes on unresolved receivers fail closed regardless of path
         export function install(r) { r.get(\`\${""}evil3\`, async (c) => c.json({})); }
       `,
     });
+    // Round 7: the router escaping into the array container is its own site.
     expect(unresolvable(result).map((finding) => finding.functionName).sort()).toEqual([
       ".get(...)",
       ".get(...)",
       ".post(...)",
+      "`sub`",
     ]);
   });
 
@@ -3142,13 +3157,17 @@ describe("round 6: routes on a top-level alias or container of an imported route
       alias.get(\`\${""}evil2\`, async (c) => c.json({}));
       alias.get(P, async (c) => c.json({}));
     `);
+    // Round 7: the container (`{ sub }`) and the alias (`= sub`) are router
+    // escapes in their own right, before any registration on them.
     expect(unresolvable(result).map((finding) => finding.functionName)).toEqual([
+      "`sub`",
+      "`sub`",
       ".get(...)",
       ".get(...)",
       ".get(...)",
     ]);
     expect(unresolvable(result).every((finding) => finding.severity === "high")).toBe(true);
-    expect(result.findings).toHaveLength(3);
+    expect(result.findings).toHaveLength(5);
     // The evil routes are never mistaken for discovered ingress.
     expect(result.ingress.filter((entry) => entry.route).map((entry) => entry.id).sort()).toEqual([
       "GET /health",
@@ -3174,11 +3193,18 @@ describe("round 6: routes on a top-level alias or container of an imported route
       r.post(P + "4", async (c) => c.json({}));
       function makeRouter() { return sub; }
     `);
+    // Round 7: `[sub]`, `? sub`, `{ r: sub }`, and `return sub` are each a
+    // router escape (the sweep runs before the registrations are judged, so
+    // the escapes are reported first, in source order).
     expect(unresolvable(result).map((finding) => finding.functionName)).toEqual([
+      "`sub`",
+      "`sub`",
+      "`sub`",
       ".post(...)",
       ".post(...)",
       ".post(...)",
       ".post(...)",
+      "`sub`",
     ]);
   });
 
@@ -3528,5 +3554,579 @@ describe("round 6: builders and hono/cors obtained outside an import declaration
     expect(assertion.found).toBe(true);
     expect(assertion.allowlisted).toBe(false);
     expect(assertion.detail).toContain("import()");
+  });
+});
+
+describe("round 7: the router reference sweep — a router value outside the accepted shapes is a finding", () => {
+  const SUB_ROUTER = `
+    import { Hono } from "hono";
+    import { admitHttpRead } from "../../../../platform/operationAdmission";
+    import { subHealth } from "../../../../operationAdmission/readDefinitions";
+    export const sub = new Hono();
+    sub.get("/health", admitHttpRead(subHealth, async (c) => c.json({})));
+  `;
+  const check = async (late: string, httpTail = "") => {
+    const rootDir = await createFixtureRoot();
+    await writeBaselineTree(rootDir, {
+      reads: {
+        subHealth: {
+          kind: "http_read",
+          route: { method: "GET", path: "/sub/health" },
+          operationId: "http.sub.health",
+          access: { kind: "read", intent: "platform.health.view" },
+        },
+      },
+    });
+    await convexFixture(rootDir, "http/domains/core/routes/sub.ts", SUB_ROUTER);
+    await convexFixture(rootDir, "http/domains/core/routes/late.ts", late);
+    await convexFixture(
+      rootDir,
+      "http.ts",
+      `${ADMITTED_ROUTER}
+        import { sub } from "./http/domains/core/routes/sub";
+        import "./http/domains/core/routes/late";
+        app.route("/sub", sub);
+        ${httpTail}
+      `,
+    );
+    return collectOperationAdmissionCheckResult(rootDir);
+  };
+  const unresolvable = (result: Awaited<ReturnType<typeof check>>) =>
+    result.findings.filter((finding) =>
+      finding.id.startsWith("route-registration-not-statically-resolvable-"),
+    );
+  const routes = (result: Awaited<ReturnType<typeof check>>) =>
+    result.ingress.filter((entry) => entry.route).map((entry) => entry.id).sort();
+
+  it("flags a bracket callee, .call / .apply / .bind / Reflect.apply on a verb, and a spread argument list on an imported router", async () => {
+    const result = await check(`
+      import { sub } from "./sub";
+      const h = async (c) => c.json({});
+      const args = ["evil", h];
+      sub["get"]("evil2", h);
+      sub["get"]("/evil2b", h);
+      sub.get.call(sub, "evil7", h);
+      Reflect.apply(sub.get, sub, ["evil7b", h]);
+      const g = sub.get.bind(sub); g("evil8", h);
+      sub.get.apply(sub, ["evil8b", h]);
+      sub.get(...args);
+    `);
+    // One high finding per line: lines 5-11 of the fixture (the two `sub`
+    // reads on the `.call` line collapse to one site).
+    expect(unresolvable(result).map((finding) => finding.line)).toEqual([5, 6, 7, 8, 9, 10, 11]);
+    expect(unresolvable(result).every((finding) => finding.severity === "high")).toBe(true);
+    // A bracket callee with a literal index is the same call as `.get(...)`
+    // and is judged by the walk (import receiver, any path); the `.call` /
+    // `Reflect.apply` / `.bind` / `.apply` spellings are router escapes caught
+    // by the sweep; the spread is a positioning failure.
+    expect(unresolvable(result).map((finding) => finding.functionName)).toEqual([
+      ".get(...)",
+      ".get(...)",
+      "`sub`",
+      "`sub`",
+      "`sub`",
+      "`sub`",
+      ".get(...)",
+    ]);
+    expect(unresolvable(result)[0].rationale).toContain("cannot resolve to a router");
+    expect(unresolvable(result)[2].rationale).toContain("referenced as a value");
+    expect(unresolvable(result)[6].rationale).toContain("spread argument");
+    expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
+  });
+
+  it("flags http[\"route\"](spec) and a spread registration on the root router in http.ts", async () => {
+    const result = await check(
+      `export {};`,
+      `const spec = { path: "/evil", method: "GET", handler: undefined as any };
+       http["route"](spec);
+       const rest = ["/evil2", async (c) => c.json({})] as const;
+       app.get(...rest);`,
+    );
+    // `http["route"](spec)` IS `.route(spec)`: the single-non-string rule
+    // fires exactly as for the dotted spelling.
+    expect(unresolvable(result).map((finding) => finding.functionName)).toEqual([
+      ".route(...)",
+      ".get(...)",
+    ]);
+    expect(unresolvable(result)[0].rationale).toContain("single non-string argument");
+    expect(unresolvable(result)[1].rationale).toContain("spread argument");
+    expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
+  });
+
+  it("flags slash-less routes on a call-result, comma, conditional, class-static, namespace, getter, and method receiver", async () => {
+    const result = await check(`
+      import { sub } from "./sub";
+      const h = async (c) => c.json({});
+      function pick() { return sub; }
+      pick().get("evil1", h);
+      (0, sub).get("evil3", h);
+      (process.env.X ? sub : sub).get("evil3b", h);
+      class Holder { static r = sub }
+      Holder.r.get("evil9", h);
+      namespace N { export const r = sub }
+      N.r.get("evil9b", h);
+      const box = { get r() { return sub } };
+      box.r.get("evil10", h);
+      const box2 = { r() { return sub } };
+      box2.r().get("evil11", h);
+    `);
+    // Every escape (`return sub`, `(0, sub)`, `? sub : sub`, `static r = sub`,
+    // `export const r = sub`, `return sub` in the getter and the method) AND
+    // every registration on the derived receiver is a site, one per line.
+    expect(unresolvable(result).map((finding) => finding.line)).toEqual([
+      4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    ]);
+    expect(unresolvable(result).every((finding) => finding.severity === "high")).toBe(true);
+    expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
+  });
+
+  it("flags a router stored on globalThis or on a container mutated after declaration", async () => {
+    const result = await check(`
+      import { sub } from "./sub";
+      const h = async (c) => c.json({});
+      (globalThis as any).r = sub;
+      (globalThis as any).r.get("evil", h);
+      const holder: any = {};
+      holder.r = sub;
+      holder.r.get("evil2", h);
+    `);
+    // The two assignments are escapes; the two registrations are on
+    // module-scoped receivers (`globalThis`, the top-level `holder`, whose
+    // initializer `{}` proves nothing about what it holds later — but the
+    // `holder.r = sub` escape already fails the module).
+    expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual([
+      [4, "`sub`"],
+      [5, ".get(...)"],
+      [7, "`sub`"],
+    ]);
+  });
+
+  it("flags a router that escapes into a helper call, a return, an object property, or an assignment even with no registration in sight", async () => {
+    const result = await check(`
+      import { sub } from "./sub";
+      import * as mod from "./sub";
+      export function expose() { return sub; }
+      export const table = { router: sub };
+      register(sub);
+      let alias; alias = sub;
+      const viaNamespace = mod;
+    `);
+    expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual([
+      [4, "`sub`"],
+      [5, "`sub`"],
+      [6, "`sub`"],
+      [7, "`sub`"],
+      [8, "`mod`"],
+    ]);
+    expect(unresolvable(result)[4].rationale).toContain("namespace import of router module");
+  });
+
+  it("flags a bracket or computed method and a spread on a router handed in as a parameter", async () => {
+    const result = await check(`
+      const h = async (c) => c.json({});
+      export function install(r, m, args) {
+        r["get"]("evil", h);
+        r[m]("evil2", h);
+        r.post(...args);
+      }
+    `);
+    expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual([
+      [4, ".get(...)"],
+      [5, ".[computed](...)"],
+      [6, ".post(...)"],
+    ]);
+    expect(unresolvable(result)[1].rationale).toContain("computed method");
+  });
+
+  it("does not flag the accepted shapes: registrations, .route mounts, new HttpRouterWithHono, addHttpRoutes, exports, and a router-free helper", async () => {
+    const result = await check(`
+      import { sub } from "./sub";
+      import { admitHttpRead } from "../../../../platform/operationAdmission";
+      import { subHealth } from "../../../../operationAdmission/readDefinitions";
+      // A second registration on the imported router is a REAL route (walked
+      // from its declaration), so it is judged as ingress, not as an escape.
+      export function noop() { return 1; }
+      export { sub as reexported };
+    `);
+    expect(unresolvable(result)).toEqual([]);
+    expect(result.findings).toEqual([]);
+  });
+
+  it("pins the destructured-top-level-binding rule: a call-result destructure is unresolvable (fail closed), an object-literal destructure without a router mention is not", async () => {
+    const flagged = await check(`
+      const { cache } = makeCache();
+      cache.get("k", 1);
+      function makeCache() { return new Map<string, number>(); }
+    `);
+    // `const { cache } = makeCache()` is judged by its initializer exactly like
+    // `const cache = makeCache()` (round 6): a call result is unresolvable, so
+    // a two-argument \`.get("k", 1)\` on it is a registration-shaped call on a
+    // module-scoped unresolvable receiver — a finding. Spell such a helper as
+    // \`new Map()\` at the top level, or call it under a name that is not a
+    // Hono verb.
+    expect(unresolvable(flagged).map((finding) => [finding.line, finding.functionName])).toEqual([
+      [3, ".get(...)"],
+    ]);
+
+    const clean = await check(`
+      const { helpers } = { helpers: { get: (table: string, id: string) => \`\${table}:\${id}\` } };
+      const methodStyle = { get(table: string, id: string) { return this.prefix + table + id; }, prefix: "x" };
+      const TABLE = "expenseSession";
+      export function read(id: string) { return helpers.get(TABLE, id) + methodStyle.get(TABLE, id); }
+      export function cached(store: Map<string, string>, key: string) { return store.get(key); }
+    `);
+    expect(unresolvable(clean)).toEqual([]);
+    expect(clean.findings).toEqual([]);
+  });
+
+  it("keeps the database disambiguation through aliases of the context parameter", async () => {
+    const result = await check(`
+      import { DatabaseWriter, MutationCtx } from "../../../../_generated/server";
+      export async function a(admittedCtx: MutationCtx, id) {
+        const ctx = admittedCtx;
+        await ctx.db.patch("t", id, {});
+        const mutationCtx = ctx as MutationCtx;
+        await mutationCtx.db.get("t", id);
+      }
+      export async function b(args: { ctx: MutationCtx; id: string }) {
+        return args.ctx.db.get("t", args.id);
+      }
+      export async function c(db: DatabaseWriter, id) { await db.patch("t", id, {}); }
+    `);
+    expect(unresolvable(result)).toEqual([]);
+    expect(result.findings).toEqual([]);
+  });
+
+  it("does not follow a router module through a namespace member as a .route child, and flags it", async () => {
+    const result = await check(
+      `export {};`,
+      `import * as routes from "./http/domains/core/routes/sub";
+       app.route("/sub2", routes.sub);`,
+    );
+    // The mount rule rejects a non-identifier child; the same line is also a
+    // namespace-import escape for the sweep (one finding per line).
+    expect(unresolvable(result).map((finding) => finding.functionName)).toEqual([".route(...)"]);
+    expect(unresolvable(result)[0].rationale).toContain("child router identifier");
+  });
+});
+
+describe("round 7: the api.* ban is a reference ban, matched by name at every run-site shape", () => {
+  const sites = (source: string, publicFunctionNames?: Set<string>) =>
+    collectApiSelfCallSites(
+      "packages/athena-webapp/convex/example/refs.ts",
+      source,
+      publicFunctionNames ? { publicFunctionNames } : {},
+    );
+  const PUBLIC = new Set(["example/x:write", "example/x:read"]);
+
+  it("is a site for internal threaded through a destructure, an object / array / spread container, an array destructure, or a shadowed local", () => {
+    const found = sites(
+      `import { internal } from "../_generated/api";
+       const { example } = internal as any;
+       const refs = { w: (internal as any).example.x.write };
+       const ex = { ...(internal as any).example };
+       const [w] = [(internal as any).example.x.write];
+       const list = [(internal as any).example.x.write];
+       const shadowed = (internal as any).example.x;
+       export async function run(ctx, args) {
+         await ctx.runMutation(example.x.write, args);
+         await ctx.runMutation(refs.w, args);
+         await ctx.runMutation(ex.x.write, args);
+         await ctx.runMutation(w, args);
+         await ctx.runMutation(list[0], args);
+         { const shadowed = { write: null }; await ctx.runMutation(shadowed.write, args); }
+       }`,
+      PUBLIC,
+    );
+    expect(found.map((site) => site.via)).toEqual([
+      "runMutation",
+      "runMutation",
+      "runMutation",
+      "runMutation",
+      "runMutation",
+      "runMutation",
+    ]);
+    expect(found.every((site) => site.reference.includes("cannot be enumerated"))).toBe(true);
+  });
+
+  it("still enumerates a plain internal prefix local, and accepts a non-public internal path through it", () => {
+    expect(
+      sites(
+        `import { internal } from "../_generated/api";
+         const ex = (internal as any).example.x;
+         export async function run(ctx) {
+           await ctx.runMutation(ex.write, {});
+           await ctx.runMutation(ex.internalWrite, {});
+         }`,
+        PUBLIC,
+      ).map((site) => site.reference),
+    ).toEqual([expect.stringContaining("names public example/x:write")]);
+  });
+
+  it("is a site for an api reference held in an array container", () => {
+    expect(
+      sites(
+        `import { api } from "../_generated/api";
+         const list = [api.example.x.write];
+         export async function run(ctx, args) { await ctx.runMutation(list[0], args); }`,
+      ).map((site) => [site.via, site.reference]),
+    ).toEqual([
+      ["runMutation", "list[0]"],
+      ["reference", expect.stringContaining("api (api root referenced as a value")],
+    ]);
+  });
+
+  it("judges a conditional function reference on both branches, and fails closed on a shape it cannot root", () => {
+    expect(
+      sites(
+        `import { api, internal } from "../_generated/api";
+         export async function run(ctx, flag, args) {
+           await ctx.runMutation(flag ? api.example.x.write : internal.example.x.internalWrite, args);
+           await ctx.runMutation(flag ? internal.example.x.other : internal.example.x.write, args);
+           await ctx.runMutation(flag ? internal.example.x.other : internal.example.x.internalWrite, args);
+           await ctx.runMutation((0, internal.example.x.other), args);
+           await ctx.runMutation(pick().write, args);
+           await ctx.runMutation(pick(), args);
+         }`,
+        PUBLIC,
+      ).map((site) => [site.via, site.reference]),
+    ).toEqual([
+      ["runMutation", expect.stringContaining("conditional function reference selects api.example.x.write")],
+      ["runMutation", expect.stringContaining("names public example/x:write")],
+      ["runMutation", expect.stringContaining("shape the checker cannot root")],
+      ["runMutation", expect.stringContaining("shape the checker cannot root")],
+    ]);
+  });
+
+  it.each([
+    ["a bracket callee", `ctx["runMutation"](api.example.x.write, args)`],
+    ["a rebound run method", `const r = ctx.runMutation; await r(api.example.x.write, args)`],
+    ["a bound run method", `const r = ctx.runMutation.bind(ctx); await r(api.example.x.write, args)`],
+    [".call", `await ctx.runMutation.call(ctx, api.example.x.write, args)`],
+    [".apply with a literal list", `await ctx.runMutation.apply(ctx, [api.example.x.write, args])`],
+    ["Reflect.apply", `await Reflect.apply(ctx.runMutation, ctx, [api.example.x.write, args])`],
+    ["a destructured context local", `const { runMutation } = ctx; await runMutation(api.example.x.write, args)`],
+    ["a scheduler on any receiver", `const s = ctx.scheduler; await s.runAfter(0, api.example.x.write, args)`],
+    ["a bracket scheduler", `await ctx["scheduler"]["runAt"](0, api.example.x.write, args)`],
+  ])("reports %s as a run-call site (and not twice)", (_label, body) => {
+    const found = sites(
+      `import { api } from "../_generated/api";
+       export async function run(ctx, args) { ${body}; }`,
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0].reference).toBe("api.example.x.write");
+    expect(found[0].via).toMatch(/^run/);
+  });
+
+  it("reports a destructured context PARAMETER run call, by internal enumeration too", () => {
+    expect(
+      sites(
+        `import { api, internal } from "../_generated/api";
+         export async function run({ runMutation, scheduler }, args) {
+           await runMutation(api.example.x.write, args);
+           await runMutation(internal.example.x.write, args);
+           await runMutation(internal.example.x.internalWrite, args);
+           await scheduler.runAfter(0, internal.example.x.read, args);
+         }`,
+        PUBLIC,
+      ).map((site) => [site.via, site.reference]),
+    ).toEqual([
+      ["runMutation", "api.example.x.write"],
+      ["runMutation", expect.stringContaining("names public example/x:write")],
+      ["runAfter", expect.stringContaining("names public example/x:read")],
+    ]);
+  });
+
+  it("fails closed on .apply / Reflect.apply with an argument list it cannot see into", () => {
+    expect(
+      sites(
+        `import { internal } from "../_generated/api";
+         export async function run(ctx, argv) {
+           await ctx.runMutation.apply(ctx, argv);
+           await Reflect.apply(ctx.runMutation, ctx, argv);
+           await ctx.runMutation.apply(ctx, [...argv]);
+         }`,
+      ).map((site) => site.reference),
+    ).toEqual([
+      expect.stringContaining("cannot see into"),
+      expect.stringContaining("cannot see into"),
+      expect.stringContaining("cannot position"),
+    ]);
+  });
+
+  it("is a site for ANY value reference to an api root, not only a run-call argument", () => {
+    const found = sites(
+      `import { api } from "../_generated/api";
+       import * as generated from "../_generated/api";
+       import * as convexServer from "convex/server";
+       export const table = { w: api.example.x.write };
+       helper(api);
+       const g = generated;
+       const viaNs = generated.api.example.x.write;
+       const computed = generated["api"];
+       const any = convexServer.anyApi.example.x.write;
+       export async function run(ctx, args) { await ctx.runQuery(generated.internal.example.x.read, {}); }`,
+    );
+    expect(found.map((site) => site.via)).toEqual(["reference", "reference", "reference", "reference", "reference", "reference"]);
+    expect(found.map((site) => site.reference.split(" ")[0])).toEqual([
+      "api",
+      "api",
+      "generated",
+      "generated.api",
+      "generated.api",
+      "convexServer.anyApi",
+    ]);
+  });
+
+  it("stays silent on internal-only modules whatever the run-site spelling", () => {
+    expect(
+      sites(
+        `import { internal } from "../_generated/api";
+         import * as generated from "../_generated/api";
+         export async function run({ runMutation }, ctx, args) {
+           await runMutation(internal.example.x.internalWrite, args);
+           await ctx["runQuery"](internal.example.x.other, {});
+           await ctx.runMutation.call(ctx, generated.internal.example.x.other, args);
+           const s = ctx.scheduler; await s.runAfter(0, internal.example.x.other, args);
+         }`,
+        PUBLIC,
+      ),
+    ).toEqual([]);
+  });
+
+  it("resolves an api root imported through the @cvx/ tsconfig alias", () => {
+    expect(
+      sites(
+        `import { api } from "@cvx/_generated/api";
+         export async function run(ctx, args) { await ctx.runMutation(api.example.x.write, args); }`,
+      ).map((site) => site.reference),
+    ).toEqual(["api.example.x.write"]);
+  });
+
+  it("reports the reference-sweep sites as api-self-call findings in a full tree", async () => {
+    const rootDir = await createFixtureRoot();
+    await writeBaselineTree(rootDir);
+    await convexFixture(
+      rootDir,
+      "example/x.ts",
+      `import { api } from "../_generated/api";
+       export const refs = { w: api.example.x.write };
+       export async function run({ runMutation }, args) { await runMutation(refs.w, args); }`,
+    );
+    const result = await collectOperationAdmissionCheckResult(rootDir);
+    expect(result.findings.map((finding) => finding.id)).toEqual([
+      expect.stringMatching(/^api-self-call-packages-athena-webapp-convex-example-x-ts-3-/),
+      expect.stringMatching(/^api-self-call-packages-athena-webapp-convex-example-x-ts-2-/),
+    ]);
+    expect(result.findings.every((finding) => finding.severity === "high")).toBe(true);
+  });
+});
+
+describe("round 7: CORS, tsconfig aliases, and environment-free definition modules", () => {
+  it("fails the CORS assertion on a non-literal dynamic import specifier in http.ts beside a legitimate cors()", () => {
+    const assertion = assertCorsAllowlist(
+      "packages/athena-webapp/convex/http.ts",
+      `${CORS_PROLOGUE}
+       app.use("*", cors({ origin: STOREFRONT_ALLOWED_ORIGINS, credentials: true }));
+       const spec = "hono/" + "cors";
+       const c2 = await import(spec);
+       app.use("*", c2.cors({ origin: (o) => o }));`,
+    );
+    expect(assertion.found).toBe(true);
+    expect(assertion.allowlisted).toBe(false);
+    expect(assertion.detail).toContain("not a string literal");
+  });
+
+  it("fails the CORS assertion on a tsconfig-alias import or dynamic reference in a router-declaring module", () => {
+    for (const source of [
+      `${CORS_PROLOGUE}
+       import { helper } from "~/node_modules/hono/cors";
+       app.use("*", cors({ origin: STOREFRONT_ALLOWED_ORIGINS }));`,
+      `${CORS_PROLOGUE}
+       const c2 = await import("@cvx/../node_modules/hono/cors");
+       app.use("*", cors({ origin: STOREFRONT_ALLOWED_ORIGINS }));`,
+    ]) {
+      const assertion = assertCorsAllowlist("packages/athena-webapp/convex/http.ts", source);
+      expect(assertion.allowlisted).toBe(false);
+      expect(assertion.detail).toContain("paths` alias");
+    }
+  });
+
+  it("does not treat a non-literal dynamic import in a router-free module as a CORS registration (discovery reports it)", () => {
+    const assertion = assertCorsAllowlist(
+      "packages/athena-webapp/convex/example/x.ts",
+      `export async function load(spec) { const m = await import(spec); return m.x; }`,
+    );
+    expect(assertion.found).toBe(false);
+    const ingress = collectConvexIngressFromSource(
+      "packages/athena-webapp/convex/example/x.ts",
+      `export async function load(spec) { const m = await import(spec); return m.x; }`,
+    );
+    expect(ingress.some((entry) => entry.notStaticallyResolvable?.includes("non-literal specifier"))).toBe(true);
+  });
+
+  it.each([
+    ["@cvx/_generated/server", `import { mutation } from "@cvx/_generated/server";`],
+    ["~/convex/_generated/server", `import { mutation } from "~/convex/_generated/server";`],
+    ["@/lib/anything", `import { mutation } from "@/lib/anything";`],
+    ["a dynamic alias reference", `const { mutation } = await import("@cvx/_generated/server");`],
+  ])("reports an import through the tsconfig alias %s as ingress-not-statically-resolvable, and still resolves the builder", (_label, header) => {
+    const ingress = collectConvexIngressFromSource(
+      "packages/athena-webapp/convex/example/x.ts",
+      `${header}\nexport const drop = mutation({ args: {}, handler: async () => null });`,
+    );
+    expect(ingress.some((entry) => entry.notStaticallyResolvable?.includes("paths` alias"))).toBe(true);
+    expect(ingress.every((entry) => !entry.admitted)).toBe(true);
+  });
+
+  it("does not report a plain package or relative import as an alias", () => {
+    expect(
+      collectConvexIngressFromSource(
+        "packages/athena-webapp/convex/example/x.ts",
+        `import path from "node:path";\nimport { z } from "../helpers/z";\nexport const noop = () => path.sep + z;`,
+      ),
+    ).toEqual([]);
+  });
+
+  it("flags a definition module that reads the environment, in a full tree", async () => {
+    const rootDir = await createFixtureRoot();
+    await writeBaselineTree(rootDir);
+    await convexFixture(
+      rootDir,
+      "operationAdmission/domains/u1_example_definitions.ts",
+      `export const writeDefinition = {
+         kind: "mutation",
+         functionName: "example/x:write",
+         operationId: "example.x.write",
+         capability: "catalog.manage",
+         actors: { normalUser: "admit", sharedDemo: "deny", public: process.env.ADMIT_PUBLIC ? "admit" : "deny" },
+       };
+       export const flag = import.meta.env?.MODE;
+       export const U1_DEFINITIONS = [writeDefinition];`,
+    );
+    const result = await collectOperationAdmissionCheckResult(rootDir);
+    expect(result.findings.map((finding) => finding.id)).toEqual([
+      expect.stringMatching(/^definition-module-reads-environment-operationadmission-domains-u1-example-definitions-ts-6/),
+      expect.stringMatching(/^definition-module-reads-environment-operationadmission-domains-u1-example-definitions-ts-8/),
+    ]);
+    expect(result.findings.every((finding) => finding.severity === "high")).toBe(true);
+  });
+
+  it("does not flag the real definition modules", async () => {
+    // The real tree's definitions.ts / readDefinitions.ts / domains/** read no
+    // environment; the whole-tree run in coverage.test.ts pins zero findings,
+    // and this pins the rule against the checked-in domain shapes module.
+    const rootDir = await createFixtureRoot();
+    await writeBaselineTree(rootDir);
+    await convexFixture(
+      rootDir,
+      "operationAdmission/domains/_shapes.ts",
+      await readFile(
+        path.join(process.cwd(), "packages/athena-webapp/convex/operationAdmission/domains/_shapes.ts"),
+        "utf8",
+      ),
+    );
+    const result = await collectOperationAdmissionCheckResult(rootDir);
+    expect(result.findings.filter((finding) => finding.id.startsWith("definition-module-reads-environment-"))).toEqual([]);
   });
 });

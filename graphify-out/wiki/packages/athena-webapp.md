@@ -19,9 +19,9 @@ Landing page for packages/athena-webapp. Use this page to orient around graph ho
 ## Graph Hotspots
 - `dailyClose.ts` (104 edges, Community 0) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../../packages/athena-webapp/convex/operations/dailyClose.ts)
 - `posLocalStore.ts` (87 edges, Community 1) - [`packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts`](../../../packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts)
-- `dailyOperations.ts` (76 edges, Community 3) - [`packages/athena-webapp/convex/operations/dailyOperations.ts`](../../../packages/athena-webapp/convex/operations/dailyOperations.ts)
-- `terminalHealthPresentation.ts` (76 edges, Community 4) - [`packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts`](../../../packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts)
-- `catalogImport.ts` (75 edges, Community 5) - [`packages/athena-webapp/convex/inventory/catalogImport.ts`](../../../packages/athena-webapp/convex/inventory/catalogImport.ts)
+- `dailyOperations.ts` (76 edges, Community 4) - [`packages/athena-webapp/convex/operations/dailyOperations.ts`](../../../packages/athena-webapp/convex/operations/dailyOperations.ts)
+- `terminalHealthPresentation.ts` (76 edges, Community 5) - [`packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts`](../../../packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts)
+- `catalogImport.ts` (75 edges, Community 6) - [`packages/athena-webapp/convex/inventory/catalogImport.ts`](../../../packages/athena-webapp/convex/inventory/catalogImport.ts)
 
 ## Navigation
 - [wiki index](../index.md) - back to the wiki index

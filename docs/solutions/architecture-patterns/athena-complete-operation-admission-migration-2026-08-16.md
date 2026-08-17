@@ -14,7 +14,7 @@ applies_when:
   - "HTTP routes authenticate from a cookie id read directly out of the request"
   - "A migration must move ~400 call sites without changing normal-user behavior"
 tags: [athena, convex, operation-admission, shared-demo, authz, static-checker, http-ingress, derived-invariants]
-delivery_diff_fingerprint: 071c752a3664cc3f69ca7a5e8a78601aaa98bf14713637dfafc7158dc2b50707
+delivery_diff_fingerprint: 8f04b35867d87155d65498b1193e6fe2dfad5865843e06d5d237c64e72f40f1a
 ---
 
 # Completing an Admission Rail — Deriving Invariants Instead of Listing Them
@@ -291,6 +291,23 @@ naming the accepted form. A novel shape now fails closed instead of slipping
 through, and the repo's own call sites were adjusted to fit — the grammar is the
 contract.
 
+**A grammar over the CALL is still a blacklist over the VALUE.** Rounds 4–6
+closed each ring of registration and self-call spellings the previous round
+enumerated, and each subsequent review found the ring outside it: the route
+walk and the `api.*` ban keyed on one call grammar (`<receiver>.<name>(...)`),
+so `sub["get"](…)`, `sub.get.call(sub, …)`, `pick().get("evil", h)`,
+`{ get r() { return sub } }`, `ctx["runMutation"](api.x)`, `const { example }
+= internal; runMutation(example.x.write)` all served or re-entered with zero
+findings. Ingress discovery had never had this problem, because it keys on
+*any value reference to the builder* — the value cannot be obtained without
+being referenced. Round 7 gave the router and the `api` root the same
+treatment: any value reference outside a short list of accepted positions is
+a finding, receivers are unresolvable by default, `internal` locals fail
+closed on loss of path, and run sites are matched by callee name in every
+shape. The generalisable rule: when the thing you are guarding is a *value*
+(a builder, a router, a function reference), guard the value's references,
+not the syntax of one call on it.
+
 **A wrapper "somewhere in the handler" is not admission.** The checker
 originally accepted an inline handler as admitted if a wrapper call appeared
 anywhere in its body and no public `ctx.db` write came first. That let nine
@@ -511,13 +528,25 @@ Not fixed here — recorded so they are decisions rather than oversights.
    `/organizations` operator stubs, whose handlers return `{}` and read nothing
    — so there is no live exposure, but the property is easy to misread as
    stronger than it is.
-2. **`GET /guests` remains a public bootstrap read**: any caller presenting an
-   arbitrary `guest_id` cookie can read that guest row. Accepted so cookie
-   recovery keeps working; now named in code rather than described as safe.
-   (The route previously carried a comment claiming "the id is read from the
-   cookie, never from the request, so no supplied id can select another
-   shopper's row" — a cookie *is* caller-supplied, so the comment asserted
-   safety the code did not have.)
+2. **The legacy-cookie upgrade window on the bootstrap routes.** `GET /guests`
+   and `GET /storefront` no longer trust an arbitrary `guest_id`: an unsigned
+   or tampered cookie is treated as absent, and a bad signature is refused
+   outright rather than read as legacy. What remains is the migration path —
+   a pre-signing cookie naming a real guest row in that store is re-minted
+   signed, so existing carts survive the deploy, and while that path exists
+   someone who knows another shopper's guest id can present it unsigned at
+   bootstrap and be handed a signed cookie for it. Confined to the two
+   bootstrap routes (never at `/auth/verify`, never at a merge).
+   **Delete once legacy cookies have aged out — 90 days, the cookie's own
+   max-age.** Tracked in **V26-1240**.
+
+   Worth recording how this one read at each stage: the route once carried a
+   comment claiming "the id is read from the cookie, never from the request,
+   so no supplied id can select another shopper's row" — a cookie *is*
+   caller-supplied. That single wrong sentence survived several rounds, and
+   the chain of fixes behind it (body field → cookie vs itself → cookie the
+   mint trusted → signed cookie → hashed recovery marker) is the delivery's
+   most expensive lesson.
 3. **Convex Auth's HTTP route family is not admitted.** It is the trust root,
    registered once ahead of the CORS middleware, and `routerComposition.test.ts`
    pins registration order and single registration by source inspection. A
@@ -548,6 +577,25 @@ Not fixed here — recorded so they are decisions rather than oversights.
    measurably worse. Accepted for now because the fix — branching on a cheap
    identity claim before touching `ctx.db` — depends on a design call about
    what the auth identity payload can carry. Deferred to **V26-1243**.
+
+8. **Checker residuals after round 7**, all documented in the README table:
+   a function reference produced by a *call* (`ctx.runMutation(pick(), …)`),
+   a bare parameter, or a bare local of unknown provenance is still left to
+   the caller table (the rail core forwards injected internal references that
+   way); a router declared *outside* `convex/**` and imported through a
+   relative path is caught only when registered on (`.verb(…)` on an import
+   binding), not when its value escapes; `.use('*')` middleware other than
+   CORS is invisible by design; and the tsconfig `paths` aliases
+   (`packages/athena-webapp/tsconfig.json` declares `~/*`, `@/*`, `@cvx/*`;
+   `convex/tsconfig.json` declares none, the Convex bundler resolves none
+   inside `convex/**`, and no convex module uses one) are both resolved by the
+   checker and reported as unresolvable imports, so an aliased builder or
+   `api` import cannot pass — an earlier note that "no such config" existed
+   was wrong and is corrected here. Definition modules are additionally
+   forbidden from referencing an environment reader (`process`, `import.meta`,
+   `globalThis`), because the checker evaluates them in its own process; a
+   `Map` / `Set` / class-instance field inside a definition would not be
+   deep-frozen (none exists today).
 
 The 41 deleted public functions are enumerated in the U10/U11 hand-off comments
 on V26-1237 / V26-1238 and reflected in the regenerated caller table at

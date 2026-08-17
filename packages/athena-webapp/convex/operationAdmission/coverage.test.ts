@@ -159,4 +159,35 @@ describe("operation admission registry is frozen", () => {
       (definition as unknown as { capability: string }).capability = "x";
     }).toThrow(TypeError);
   });
+
+  /**
+   * Round 7: the registry ARRAYS themselves. The hole the round-6 freeze
+   * targets is a module pushing an operation into the registry at import time
+   * so the checker's identity comparison treats it as declared; `readonly` on
+   * the type is compile-time only, so this pins the runtime `Object.freeze` on
+   * both arrays and that every array mutator throws.
+   */
+  it("freezes both registry arrays so nothing can be pushed in at import time", () => {
+    expect(Object.isFrozen(OPERATION_ADMISSION_DEFINITIONS)).toBe(true);
+    expect(Object.isFrozen(OPERATION_READ_ADMISSION_DEFINITIONS)).toBe(true);
+
+    const writes = OPERATION_ADMISSION_DEFINITIONS as unknown as unknown[];
+    const reads = OPERATION_READ_ADMISSION_DEFINITIONS as unknown as unknown[];
+    const writeCount = writes.length;
+    const readCount = reads.length;
+
+    expect(() => writes.push(writes[0])).toThrow(TypeError);
+    expect(() => reads.push(reads[0])).toThrow(TypeError);
+    expect(() => writes.unshift(writes[0])).toThrow(TypeError);
+    expect(() => reads.splice(0, 1)).toThrow(TypeError);
+    expect(() => {
+      writes[writeCount] = writes[0];
+    }).toThrow(TypeError);
+    expect(() => {
+      reads.length = 0;
+    }).toThrow(TypeError);
+
+    expect(writes).toHaveLength(writeCount);
+    expect(reads).toHaveLength(readCount);
+  });
 });
