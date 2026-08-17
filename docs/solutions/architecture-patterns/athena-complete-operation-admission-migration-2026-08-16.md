@@ -14,7 +14,7 @@ applies_when:
   - "HTTP routes authenticate from a cookie id read directly out of the request"
   - "A migration must move ~400 call sites without changing normal-user behavior"
 tags: [athena, convex, operation-admission, shared-demo, authz, static-checker, http-ingress, derived-invariants]
-delivery_diff_fingerprint: 8f04b35867d87155d65498b1193e6fe2dfad5865843e06d5d237c64e72f40f1a
+delivery_diff_fingerprint: 54f53863706e600a4652228a8ff38d3c141346dbc42ae5f2cfac5f30ed7ed827
 ---
 
 # Completing an Admission Rail — Deriving Invariants Instead of Listing Them
@@ -267,6 +267,35 @@ SHA-256) so a database read cannot hand over live session credentials.
 points instead of three. The pattern worth carrying: when one link in an
 identity chain is attacker-controlled, fixing it does not end the review — ask
 what the *next* input to that flow is, and who chooses it.
+
+**The last qualification on the central claim, closed in round 9.** Through round 8,
+router-level middleware was invisible to the route walk except for the
+single allowlisted `cors(...)` registration, so a path-scoped `.use` whose
+handler never calls `next()` — `sub.use("/evil", async (c) => c.json({
+pwned: true }))` — was a terminal responder for every method under that
+path with zero findings. The earlier claim that "`.use` carries only
+`cors(...)` today" was also wrong: the tree carries five non-CORS `.use`
+sites (`whatsapp.ts:53`, `mtnMomo.ts:37`, `harnessWaivers.ts:140` —
+inline signature / bearer verifiers — and `walkthroughRequests.ts:51`,
+`landingFunnelEvents.ts:21` — `boundRequestBody(...)` from
+`boundedBody.ts`). Round 9 walks `.use` like every other registration and
+judges its handler against a closed pass-through-or-deny grammar: an
+inline `(c, next) => {…}` that ends in `await next()` / `return next()`,
+returns only `next()` or a `return c.json(<body>, <literal 4xx/5xx>)`
+denial, touches `c` only as `c.req…` or that denial, and never `c.env` /
+`c.res` / a 2xx / a bare `return` / `next()` twice or from a nested
+function; or a factory imported by name from a convex module under
+`http/` whose export is exactly one returned function passing the same
+grammar; or the `hono/cors` factory, judged by `assertCorsAllowlist`.
+Everything else is `router-middleware-not-statically-resolvable` (high).
+All five real sites pass the grammar unchanged (a probe that mutates each
+one to answer 2xx / set `c.res` / drop the trailing `next()` produces one
+finding per site); the pinned residual test now asserts the finding. The
+qualification on the central claim — an ingress is either admitted or
+flagged — is gone. Note the grammar proves the middleware cannot
+*respond* except with a denial and cannot *reach* the ActionCtx; it does
+not (and does not claim to) prove what an imported verifier does with the
+bytes it is handed.
 
 **Freeze what the checker trusts.** A static check that compares definition
 IDENTITY against a registry is only as good as the registry's immutability: a
@@ -584,8 +613,10 @@ Not fixed here — recorded so they are decisions rather than oversights.
    the caller table (the rail core forwards injected internal references that
    way); a router declared *outside* `convex/**` and imported through a
    relative path is caught only when registered on (`.verb(…)` on an import
-   binding), not when its value escapes; `.use('*')` middleware other than
-   CORS is invisible by design; and the tsconfig `paths` aliases
+   binding), not when its value escapes; (`.use('*')` middleware other than
+   CORS was invisible by design until round 9 closed it — see "The last
+   qualification on the central claim" above); and
+   the tsconfig `paths` aliases
    (`packages/athena-webapp/tsconfig.json` declares `~/*`, `@/*`, `@cvx/*`;
    `convex/tsconfig.json` declares none, the Convex bundler resolves none
    inside `convex/**`, and no convex module uses one) are both resolved by the

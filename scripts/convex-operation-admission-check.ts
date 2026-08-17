@@ -66,6 +66,16 @@
  * reported; and definition modules may not read the environment
  * (`definition-module-reads-environment`).
  *
+ * Round 9 closed the one documented residual: `<router>.use(...)` was
+ * invisible to the walk except for the CORS registration, so a path-scoped
+ * `.use` whose handler never called `next()` was a terminal unadmitted
+ * responder with zero findings — and the tree carried five non-CORS `.use`
+ * middlewares (webhook verifiers, `boundRequestBody`). `.use` is now walked
+ * like every registration and its handler judged by a closed
+ * pass-through-or-deny grammar (`middlewareGrammarViolation`); a factory
+ * imported by name from `http/**` is opened and its returned function judged
+ * the same way; anything else is `router-middleware-not-statically-resolvable`.
+ *
  * Flags:
  *   --path <prefix...>    restrict findings to convex-relative path prefixes
  *   --partition           print the per-unit ownership table; fail on orphans
@@ -74,6 +84,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { readdir, readFile, writeFile } from "node:fs/promises";
+import { builtinModules } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import ts from "typescript";
@@ -1509,6 +1520,60 @@ function isShadowedReference(node: ts.Identifier): boolean {
   return false;
 }
 
+/**
+ * The declaration a nested-scope identifier reference resolves to: the
+ * nearest enclosing scope's parameter or variable of that name. `undefined`
+ * for a top-level binding, an import, or an undeclared name.
+ */
+function nestedDeclarationOf(
+  reference: ts.Identifier,
+): ts.ParameterDeclaration | ts.VariableDeclaration | undefined {
+  let current: ts.Node | undefined = reference.parent;
+  while (current && !ts.isSourceFile(current)) {
+    if (ts.isFunctionLike(current)) {
+      for (const parameter of current.parameters) {
+        const bound = new Set<string>();
+        bindingNameTexts(parameter.name, bound);
+        if (bound.has(reference.text)) return parameter;
+      }
+    }
+    if (ts.isBlock(current) || ts.isCaseBlock(current) || ts.isModuleBlock(current)) {
+      const statements = ts.isCaseBlock(current)
+        ? current.clauses.flatMap((clause) => [...clause.statements])
+        : [...current.statements];
+      for (const statement of statements) {
+        if (!ts.isVariableStatement(statement)) continue;
+        for (const declaration of statement.declarationList.declarations) {
+          const bound = new Set<string>();
+          bindingNameTexts(declaration.name, bound);
+          if (bound.has(reference.text)) return declaration;
+        }
+      }
+    }
+    current = current.parent;
+  }
+  return undefined;
+}
+
+/**
+ * Is a nested-scope declaration's initializer a router the checker cannot see
+ * into — a `new` of anything outside the plain containers, a call result, or
+ * an `await` result (round 8)? A factory builds its router exactly this way
+ * (`function make() { const r = new Hono(); ... return r }`), so a
+ * registration on such a local is judged like one on a module-scoped
+ * unresolvable receiver: ANY path expression is a route.
+ */
+function isOpaqueNestedDeclaration(
+  declaration: ts.ParameterDeclaration | ts.VariableDeclaration | undefined,
+): boolean {
+  if (!declaration || ts.isParameter(declaration) || !declaration.initializer) {
+    return false;
+  }
+  const value = unwrapTypeOnly(declaration.initializer);
+  if (ts.isNewExpression(value)) return !isResolvableConstruction(value);
+  return ts.isCallExpression(value) || ts.isAwaitExpression(value);
+}
+
 /** The kind a builder REFERENCE denotes (`mutation`, `server.query`, ...). */
 function builderReferenceKind(
   expression: ts.Expression,
@@ -2541,7 +2606,262 @@ type RouteModuleFacts = {
    * outside the accepted shapes as unresolvable.
    */
   routerLikeLocals: Set<string>;
+  /**
+   * Every NESTED-scope `const r = new Hono()` / `Hono`-typed / `new
+   * HttpRouterWithHono(...)` declaration (round 8): a router built inside a
+   * factory or a block. It is never walked (no top-level binding names it), so
+   * the router reference sweep treats any value reference resolving to one of
+   * these declarations outside the accepted shapes — `return r`, `helper(r)`,
+   * `{ r }` — as an escape.
+   */
+  nestedRouterDeclarations: ts.VariableDeclaration[];
+  /**
+   * Every `<router>.use(...)` on a router declared in this module (round 9).
+   * Each site is judged by the middleware grammar; a `factory` site is judged
+   * once every module is parsed (`judgeRouterMiddleware`), because the
+   * factory's returned middleware lives in another module.
+   */
+  middleware: RouterMiddlewareSite[];
 };
+
+/**
+ * A `<router>.use(...)` site (round 9). `.use` middleware runs for EVERY
+ * request under its path, before the admitted handler, with the full
+ * `ActionCtx` on `c.env` — a `.use("/evil", async (c) => c.json({...}))`
+ * that never calls `next()` is a terminal, unadmitted responder for every
+ * method under `/evil`. So `.use` is a route the checker must walk, and its
+ * handler is judged against a CLOSED grammar (`middlewareGrammarViolation`):
+ * pass-through-or-deny only.
+ */
+export type RouterMiddlewareSite = {
+  filePath: string;
+  line: number;
+  routerKey: string;
+  /** Why the site fails, when it does; `undefined` when accepted. */
+  reason?: string;
+  /**
+   * The handler is a call to a middleware FACTORY imported from a convex
+   * module (`boundRequestBody(...)`); the factory's returned function is
+   * judged in that module by `judgeRouterMiddleware`.
+   */
+  factory?: { local: string; imported: string; targetConvexPath: string };
+};
+
+/** Response statuses a middleware may answer with itself: a denial only. */
+function isDenialStatusLiteral(node: ts.Expression | undefined) {
+  if (!node || !ts.isNumericLiteral(node)) return false;
+  const status = Number(node.text);
+  return Number.isInteger(status) && status >= 400 && status <= 599;
+}
+
+/**
+ * The closed grammar for a router-level middleware handler (round 9). The
+ * question is not "is this middleware well written" but "can this function
+ * answer a request under its path with anything other than a denial, or
+ * reach the ActionCtx, without the admitted handler running". A function
+ * that cannot is pass-through-or-deny, and that is the whole allowance:
+ *
+ *   - exactly two plain identifier parameters `(c, next)` — no defaults, no
+ *     rest, no destructuring — and a block body;
+ *   - the LAST statement of the body is `await next();`, `return next();` or
+ *     `return await next();`, so a request that is not denied earlier always
+ *     reaches the next handler;
+ *   - `next` appears ONLY as the callee of a zero-argument call in one of
+ *     those three positions — never stored, passed, called twice, called
+ *     inside a `try`, or called and then overridden;
+ *   - `c` appears ONLY as the receiver of `c.req` (read the request, replace
+ *     `c.req.raw` with re-bodied bytes) or as the callee of a
+ *     `return c.json(<any>, <literal 4xx/5xx>)` / `return c.text(...)`
+ *     denial; `c.env` (the ActionCtx), `c.res`, `c.set`, `c.header`,
+ *     `c.body`, `c.newResponse`, `c.redirect`, `c` passed as a value, `c`
+ *     under a cast or computed member — all fail;
+ *   - every `return` belongs to the middleware itself (none inside a nested
+ *     function) and returns exactly `next()`, `await next()`, or a denial
+ *     `c.json` / `c.text` with a literal 4xx/5xx status — no bare `return`,
+ *     no other value;
+ *   - no `this`, `arguments`, `eval`, `Function`, and neither parameter name
+ *     is redeclared anywhere inside the body.
+ *
+ * `throw` is allowed: a thrown error is a fault, not a response.
+ */
+export function middlewareGrammarViolation(
+  fn: ts.ArrowFunction | ts.FunctionExpression,
+  sourceFile: ts.SourceFile,
+): string | undefined {
+  const text = (node: ts.Node) => node.getText(sourceFile).slice(0, 60);
+  if (fn.parameters.length !== 2) {
+    return `the middleware declares ${fn.parameters.length} parameter(s); the accepted shape is exactly \`(c, next)\``;
+  }
+  const names: string[] = [];
+  for (const parameter of fn.parameters) {
+    if (
+      !ts.isIdentifier(parameter.name) ||
+      parameter.initializer ||
+      parameter.dotDotDotToken ||
+      parameter.questionToken
+    ) {
+      return `the middleware parameter \`${text(parameter)}\` is not a plain identifier; the accepted shape is exactly \`(c, next)\``;
+    }
+    names.push(parameter.name.text);
+  }
+  const [ctxName, nextName] = names;
+  if (ctxName === nextName) {
+    return "the middleware's two parameters share a name";
+  }
+  if (!ts.isBlock(fn.body)) {
+    return `the middleware is expression-bodied (\`${text(fn.body)}\`); it must be a block whose last statement is \`await next()\``;
+  }
+  const body = fn.body;
+  const last = body.statements[body.statements.length - 1];
+
+  const isNextCall = (node: ts.Node | undefined): node is ts.CallExpression =>
+    Boolean(
+      node &&
+        ts.isCallExpression(node) &&
+        !node.questionDotToken &&
+        node.arguments.length === 0 &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === nextName,
+    );
+  const isNextOrAwaitNext = (node: ts.Node | undefined) =>
+    isNextCall(node) ||
+    Boolean(node && ts.isAwaitExpression(node) && isNextCall(node.expression));
+  const isPassThroughStatement = (statement: ts.Statement | undefined) =>
+    Boolean(
+      statement &&
+        ((ts.isExpressionStatement(statement) &&
+          ts.isAwaitExpression(statement.expression) &&
+          isNextCall(statement.expression.expression)) ||
+          (ts.isReturnStatement(statement) &&
+            isNextOrAwaitNext(statement.expression))),
+    );
+  if (!isPassThroughStatement(last)) {
+    return `the middleware's last statement is ${last ? `\`${text(last)}\`` : "missing"}; it must be \`await next()\` / \`return next()\` so every request that is not denied reaches the admitted handler`;
+  }
+  const isDenialResponse = (node: ts.Expression | undefined) =>
+    Boolean(
+      node &&
+        ts.isCallExpression(node) &&
+        !node.questionDotToken &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        ts.isIdentifier(node.expression.expression) &&
+        node.expression.expression.text === ctxName &&
+        (node.expression.name.text === "json" ||
+          node.expression.name.text === "text") &&
+        node.arguments.length === 2 &&
+        isDenialStatusLiteral(node.arguments[1]),
+    );
+  const isFunctionLike = (node: ts.Node) =>
+    ts.isArrowFunction(node) ||
+    ts.isFunctionExpression(node) ||
+    ts.isFunctionDeclaration(node) ||
+    ts.isMethodDeclaration(node) ||
+    ts.isGetAccessorDeclaration(node) ||
+    ts.isSetAccessorDeclaration(node) ||
+    ts.isConstructorDeclaration(node);
+  const enclosingFunction = (node: ts.Node) => {
+    let current: ts.Node | undefined = node.parent;
+    while (current && !isFunctionLike(current)) current = current.parent;
+    return current;
+  };
+
+  let violation: string | undefined;
+  const visit = (node: ts.Node) => {
+    if (violation || ts.isTypeNode(node)) return;
+    if (node.kind === ts.SyntaxKind.ThisKeyword) {
+      violation = "the middleware reads `this`";
+      return;
+    }
+    if (ts.isIdentifier(node)) {
+      const parent = node.parent;
+      const declaresName =
+        (ts.isVariableDeclaration(parent) ||
+          ts.isParameter(parent) ||
+          ts.isBindingElement(parent) ||
+          ts.isFunctionDeclaration(parent) ||
+          ts.isFunctionExpression(parent) ||
+          ts.isClassDeclaration(parent) ||
+          ts.isClassExpression(parent) ||
+          ts.isImportSpecifier(parent) ||
+          ts.isImportClause(parent) ||
+          ts.isNamespaceImport(parent)) &&
+        (parent as { name?: ts.Node }).name === node;
+      if (declaresName && (node.text === ctxName || node.text === nextName)) {
+        violation = `the middleware redeclares its \`${node.text}\` parameter inside the body (\`${text(parent)}\`)`;
+        return;
+      }
+      if (!isValueReference(node)) return;
+      if (node.text === "arguments" || node.text === "eval" || node.text === "Function") {
+        violation = `the middleware references \`${node.text}\``;
+        return;
+      }
+      if (node.text === nextName) {
+        const call = parent;
+        if (!isNextCall(call) || call.expression !== node) {
+          violation = `\`${nextName}\` is used other than as the callee of a zero-argument \`${nextName}()\` (\`${text(parent)}\`)`;
+          return;
+        }
+        const holder = ts.isAwaitExpression(call.parent) ? call.parent : call;
+        const site = holder.parent;
+        const inReturn = ts.isReturnStatement(site);
+        const isFinalAwait =
+          ts.isExpressionStatement(site) &&
+          site === last &&
+          holder !== call;
+        if (!inReturn && !isFinalAwait) {
+          violation = `\`${nextName}()\` is called at \`${text(site)}\`; it may only be \`return next()\`, \`return await next()\`, or the final \`await next();\``;
+          return;
+        }
+        if (enclosingFunction(call) !== fn) {
+          violation = `\`${nextName}()\` is called from a nested function`;
+          return;
+        }
+        return;
+      }
+      if (node.text === ctxName) {
+        if (
+          !ts.isPropertyAccessExpression(parent) ||
+          parent.expression !== node ||
+          parent.questionDotToken
+        ) {
+          violation = `\`${ctxName}\` is used other than as \`${ctxName}.req\` or a \`return ${ctxName}.json(..., 4xx)\` denial (\`${text(parent)}\`)`;
+          return;
+        }
+        const member = parent.name.text;
+        if (member === "req") return;
+        if (member === "json" || member === "text") {
+          const call = parent.parent;
+          if (
+            ts.isCallExpression(call) &&
+            call.expression === parent &&
+            isDenialResponse(call) &&
+            ts.isReturnStatement(call.parent)
+          ) {
+            return;
+          }
+          violation = `\`${ctxName}.${member}\` is used other than as \`return ${ctxName}.${member}(<body>, <literal 4xx/5xx>)\` (\`${text(call)}\`)`;
+          return;
+        }
+        violation = `\`${ctxName}.${member}\` is not an accepted member; only \`${ctxName}.req\` and a \`return ${ctxName}.json(..., 4xx)\` denial are`;
+        return;
+      }
+      return;
+    }
+    if (ts.isReturnStatement(node)) {
+      if (enclosingFunction(node) !== fn) {
+        violation = `a \`return\` inside a nested function (\`${text(node)}\`); the middleware may not delegate its response to a nested function`;
+        return;
+      }
+      if (!isNextOrAwaitNext(node.expression) && !isDenialResponse(node.expression)) {
+        violation = `\`${text(node)}\` returns something other than \`next()\` / \`await next()\` or a \`${ctxName}.json(..., <literal 4xx/5xx>)\` denial`;
+        return;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(body);
+  return violation;
+}
 
 /**
  * `new Map()` / `new Set()` / `new Headers()` and friends: constructor results
@@ -2657,6 +2977,20 @@ function calleeMember(
   return undefined;
 }
 
+/** `new <name>(...)` behind any type-only wrapper. */
+function isConstructionOf(
+  initializer: ts.Expression | undefined,
+  name: string,
+): boolean {
+  if (!initializer) return false;
+  const value = unwrapTypeOnly(initializer);
+  return (
+    ts.isNewExpression(value) &&
+    ts.isIdentifier(value.expression) &&
+    value.expression.text === name
+  );
+}
+
 function isHonoRouterDeclaration(declaration: ts.VariableDeclaration) {
   const typeName = declaration.type
     ? declaration.type.getText()
@@ -2737,7 +3071,12 @@ function collectRouteModuleFacts(
   >();
   const addHttpRoutesCalls: { line: number }[] = [];
   const unresolvable: UnresolvableRouteRegistration[] = [];
+  const middleware: RouterMiddlewareSite[] = [];
   const importBindings = collectImportBindings(sourceFile);
+  const { isCorsFactory } = resolveCorsFactoryBindings(
+    sourceFile,
+    importBindings,
+  );
 
   // Every top-level binding, destructured ones included (`const { r } = ...`
   // is a module-scoped name a router may be bound to; round 6).
@@ -2764,21 +3103,35 @@ function collectRouteModuleFacts(
   }
   const candidateNames = collectRouterCandidateNames(sourceFile, topLevelNames);
   const routerLikeLocals = new Set<string>();
+  const nestedRouterDeclarations: ts.VariableDeclaration[] = [];
+  const collectNestedRouters = (node: ts.Node, nested: boolean) => {
+    if (
+      nested &&
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      (isHonoRouterDeclaration(node) ||
+        isConstructionOf(node.initializer, "HttpRouterWithHono"))
+    ) {
+      nestedRouterDeclarations.push(node);
+    }
+    ts.forEachChild(node, (child) =>
+      collectNestedRouters(
+        child,
+        nested || ts.isFunctionLike(node) || ts.isBlock(node) || ts.isModuleBlock(node),
+      ),
+    );
+  };
+  collectNestedRouters(sourceFile, false);
 
   for (const statement of sourceFile.statements) {
     if (ts.isVariableStatement(statement)) {
       for (const declaration of statement.declarationList.declarations) {
         if (!ts.isIdentifier(declaration.name)) continue;
-        const initializer = declaration.initializer
-          ? unwrapTypeOnly(declaration.initializer)
-          : undefined;
-        if (
-          initializer &&
-          ts.isNewExpression(initializer) &&
-          ts.isIdentifier(initializer.expression) &&
-          initializer.expression.text === "HttpRouterWithHono"
-        ) {
+        if (isConstructionOf(declaration.initializer, "HttpRouterWithHono")) {
           routerLikeLocals.add(declaration.name.text);
+          if (hasExportModifier(statement)) {
+            exportedRouters.set(declaration.name.text, declaration.name.text);
+          }
         }
         if (
           !isHonoRouterDeclaration(declaration) &&
@@ -2807,7 +3160,10 @@ function collectRouteModuleFacts(
     ) {
       // `export default http` — the root router module's own spelling.
       const name = (unwrapTypeOnly(statement.expression) as ts.Identifier).text;
-      if (routerVariables.has(name)) exportedRouters.set("default", name);
+      // The `HttpRouterWithHono` wrapper is exported the same way, and an
+      // import of it elsewhere is a router-like value the sweep must see
+      // (round 8); its key falls back to itself in the mount walk.
+      if (routerLikeLocals.has(name)) exportedRouters.set("default", name);
       continue;
     }
 
@@ -2842,7 +3198,7 @@ function collectRouteModuleFacts(
                 imported,
               });
             }
-          } else if (routerVariables.has(imported)) {
+          } else if (routerLikeLocals.has(imported)) {
             exportedRouters.set(element.name.text, imported);
           }
         }
@@ -2911,39 +3267,6 @@ function collectRouteModuleFacts(
    * walked from ITS declaration, and `(sub)` / `sub!` / `routers[0]` are the
    * same router behind a wrapper the resolver does not peel on purpose.
    */
-  /**
-   * The declaration a nested-scope identifier reference resolves to: the
-   * nearest enclosing scope's parameter or variable of that name.
-   */
-  const nestedDeclarationOf = (
-    reference: ts.Identifier,
-  ): ts.ParameterDeclaration | ts.VariableDeclaration | undefined => {
-    let current: ts.Node | undefined = reference.parent;
-    while (current && !ts.isSourceFile(current)) {
-      if (ts.isFunctionLike(current)) {
-        for (const parameter of current.parameters) {
-          const bound = new Set<string>();
-          bindingNameTexts(parameter.name, bound);
-          if (bound.has(reference.text)) return parameter;
-        }
-      }
-      if (ts.isBlock(current) || ts.isCaseBlock(current) || ts.isModuleBlock(current)) {
-        const statements = ts.isCaseBlock(current)
-          ? current.clauses.flatMap((clause) => [...clause.statements])
-          : [...current.statements];
-        for (const statement of statements) {
-          if (!ts.isVariableStatement(statement)) continue;
-          for (const declaration of statement.declarationList.declarations) {
-            const bound = new Set<string>();
-            bindingNameTexts(declaration.name, bound);
-            if (bound.has(reference.text)) return declaration;
-          }
-        }
-      }
-      current = current.parent;
-    }
-    return undefined;
-  };
   /**
    * The top-level `VariableDeclaration` an identifier names, if any.
    */
@@ -3248,7 +3571,12 @@ function collectRouteModuleFacts(
    * alias / container that resolves to one, a class / namespace / global root
    * — EVERY registration-shaped call is a route, whatever the path expression
    * is (`alias.get(P, h)` with `const P = "evil"` serves `GET /evil`; round
-   * 6). A parameter or nested local keeps the string / template rule.
+   * 6). So is a nested local whose declaration initializer is a `new` outside
+   * the plain containers, a call, or an `await` — a factory's own `const r =
+   * new Hono()` / `const r = make()` (round 8): a router the checker cannot
+   * see into, registered on with a `const P` / parameter path. A parameter,
+   * or a nested local whose initializer is any other expression, keeps the
+   * string / template rule.
    */
   const looksLikeRegistration = (
     method: string | undefined,
@@ -3262,13 +3590,31 @@ function collectRouteModuleFacts(
           ? node.arguments.length >= 3
           : method === "route" || method === "mount"
             ? node.arguments.length === 2
-            : false;
+            : method === "use"
+              ? // `.use(handler)` and `.use(path, handler)` are both Hono
+                // middleware registrations (round 9).
+                node.arguments.length >= 1
+              : false;
     if (!arity) return false;
     const pathArgument = node.arguments[method === "on" ? 1 : 0];
     if (!isUnresolvableReceiver(receiver)) {
       return isSlashRoutePathLiteral(pathArgument);
     }
-    return isModuleScopedReceiver(receiver) || isRoutePathLiteral(pathArgument);
+    return (
+      isModuleScopedReceiver(receiver) ||
+      isOpaqueNestedReceiver(receiver) ||
+      isRoutePathLiteral(pathArgument)
+    );
+  };
+  /**
+   * Is the receiver's base rooted at a nested-scope local whose initializer
+   * is a router the checker cannot see into (`new Hono()`, a call, an
+   * `await`; round 8)?
+   */
+  const isOpaqueNestedReceiver = (receiver: ts.Expression): boolean => {
+    const root = chainRootIdentifier(baseOfReceiver(receiver));
+    if (!root) return false;
+    return isOpaqueNestedDeclaration(nestedDeclarationOf(root));
   };
   /**
    * Is the receiver's base an import binding, a top-level binding, a
@@ -3353,9 +3699,13 @@ function collectRouteModuleFacts(
   // only when the receiver IS a router.
   const visit = (node: ts.Node) => {
     if (ts.isTypeNode(node)) return;
-    const member = ts.isCallExpression(node)
-      ? calleeMember(unwrapTypeOnly(node.expression))
+    // Peel `((sub)[verb])(...)`, `(sub as Hono)[verb]!(...)` once, and judge
+    // AND describe the same unwrapped callee (round 8: the message builder
+    // read `.argumentExpression` off the still-wrapped callee and threw).
+    const calleeExpression = ts.isCallExpression(node)
+      ? unwrapTypeOnly(node.expression)
       : undefined;
+    const member = calleeExpression ? calleeMember(calleeExpression) : undefined;
     if (ts.isCallExpression(node) && member) {
       const { method, receiver, computed } = member;
 
@@ -3386,7 +3736,7 @@ function collectRouteModuleFacts(
           flag(
             node,
             "[computed]",
-            `a computed method \`${receiver.getText(sourceFile).slice(0, 40)}[${(node.expression as ts.ElementAccessExpression).argumentExpression.getText(sourceFile).slice(0, 30)}](...)\` is called on a router-like receiver; the checker cannot tell which registrar it names, so it is a route it cannot walk`,
+            `a computed method \`${receiver.getText(sourceFile).slice(0, 40)}[${(calleeExpression as ts.ElementAccessExpression).argumentExpression.getText(sourceFile).slice(0, 30)}](...)\` is called on a router-like receiver; the checker cannot tell which registrar it names, so it is a route it cannot walk`,
           );
         }
       } else if (
@@ -3517,13 +3867,99 @@ function collectRouteModuleFacts(
           } else {
             register(routerKey, node, methods, localPath, 2);
           }
+        } else if (method === "use") {
+          judgeMiddleware(routerKey, node);
         }
-        // `.use` on a known router is router-level middleware; only the CORS
-        // registration is inspected, by `assertCorsAllowlist`.
       }
     }
     ts.forEachChild(node, visit);
   };
+
+  /**
+   * `<router>.use(...)` on a known router (round 9). Accepted shapes, and
+   * nothing else:
+   *
+   *   - `.use(<string literal>, cors(<...>))` where the callee resolves to
+   *     `hono/cors` — the CORS registration `assertCorsAllowlist` judges;
+   *   - `.use(<string literal>, <inline arrow / function expression>)` whose
+   *     body passes `middlewareGrammarViolation` (pass-through-or-deny);
+   *   - `.use(<string literal>, <factory>(...))` where `<factory>` is a named
+   *     import from a convex module under `http/`; the factory's returned
+   *     function is judged by the same grammar in `judgeRouterMiddleware`.
+   *
+   * A `.use(handler)` with no path, a non-literal path, a third argument, an
+   * identifier handler, a call the checker cannot follow — every one is a
+   * middleware it cannot see into, so it fails closed.
+   */
+  function judgeMiddleware(routerKey: string, node: ts.CallExpression) {
+    const line = lineOf(sourceFile, node);
+    const site: RouterMiddlewareSite = { filePath, line, routerKey };
+    middleware.push(site);
+    const reject = (reason: string) => {
+      site.reason = reason;
+    };
+    if (node.arguments.length !== 2) {
+      return reject(
+        `\`.use(...)\` is called with ${node.arguments.length} argument(s); the accepted shape is \`.use(<string-literal path>, <handler>)\``,
+      );
+    }
+    const [pathArgument, handlerArgument] = node.arguments;
+    if (stringLiteralText(pathArgument) === undefined) {
+      return reject(
+        `\`.use(...)\` takes the path \`${pathArgument.getText(sourceFile).slice(0, 40)}\`, which is not a string literal; a middleware whose path the checker cannot read is a middleware it cannot walk`,
+      );
+    }
+    const handler = unwrapTypeOnly(handlerArgument);
+    if (ts.isArrowFunction(handler) || ts.isFunctionExpression(handler)) {
+      const violation = middlewareGrammarViolation(handler, sourceFile);
+      if (violation) reject(violation);
+      return;
+    }
+    if (ts.isCallExpression(handler) && !handler.questionDotToken) {
+      const callee = unwrapTypeOnly(handler.expression);
+      if (isCorsFactory(callee)) {
+        // The one accepted library middleware; `assertCorsAllowlist` judges
+        // the call itself (exactly once, in `http.ts`, fixed allowlist).
+        return;
+      }
+      if (ts.isIdentifier(callee)) {
+        const binding = importBindings.find(
+          (candidate) => candidate.local === callee.text,
+        );
+        const targetConvexPath = binding
+          ? resolveModuleSpecifier(
+              convexPath,
+              binding.moduleSpecifier,
+              knownConvexPaths,
+            )
+          : undefined;
+        if (
+          binding &&
+          binding.imported !== "*" &&
+          binding.imported !== "default" &&
+          targetConvexPath &&
+          targetConvexPath.startsWith("http/") &&
+          knownConvexPaths?.has(targetConvexPath)
+        ) {
+          site.factory = {
+            local: callee.text,
+            imported: binding.imported,
+            targetConvexPath,
+          };
+          return;
+        }
+        return reject(
+          `the middleware is the result of \`${handler.getText(sourceFile).slice(0, 60)}\`, whose callee is not a named import of a convex module under \`http/\`; a factory the checker cannot open is a middleware it cannot judge`,
+        );
+      }
+      return reject(
+        `the middleware is the result of \`${handler.getText(sourceFile).slice(0, 60)}\`; only the \`hono/cors\` factory or a named-import factory from a convex module under \`http/\` is accepted`,
+      );
+    }
+    reject(
+      `the middleware is \`${handler.getText(sourceFile).slice(0, 60)}\`; only an inline \`(c, next) => {...}\`, the \`hono/cors\` factory call, or a named-import factory call is accepted, because anything else is a handler the checker cannot see into`,
+    );
+  }
   visit(sourceFile);
 
   return {
@@ -3536,6 +3972,8 @@ function collectRouteModuleFacts(
     addHttpRoutesCalls,
     unresolvable,
     routerLikeLocals,
+    nestedRouterDeclarations,
+    middleware,
   };
 }
 
@@ -3577,6 +4015,126 @@ function buildRouterExportIndex(facts: Map<string, RouteModuleFacts>) {
     if (!changed) break;
   }
   return exportIndex;
+}
+
+/**
+ * Judge every `<router>.use(...)` site once all modules are parsed (round 9):
+ * inline sites carry their verdict from the walk; a FACTORY site is judged
+ * here by opening the factory's module. The factory must be a named export —
+ * `export function f(...) { return (c, next) => {...} }`, or `export const f
+ * = (...) => (c, next) => {...}` / `= (...) => { return (c, next) => {...} }`
+ * — whose body is EXACTLY one returned function that passes
+ * `middlewareGrammarViolation`. Anything else (a re-export, an aliased export,
+ * a factory with more than the one return, a missing module) fails closed.
+ * Returned in module order, then line order, one entry per failing site.
+ */
+function judgeRouterMiddleware(
+  modules: readonly ConvexModule[],
+  routeFacts: ReadonlyMap<string, RouteModuleFacts>,
+): { filePath: string; line: number; reason: string }[] {
+  const failures: { filePath: string; line: number; reason: string }[] = [];
+  const modulesByPath = new Map(modules.map((entry) => [entry.convexPath, entry]));
+
+  const returnedMiddleware = (
+    factory: ts.Node,
+  ): ts.ArrowFunction | ts.FunctionExpression | undefined => {
+    if (ts.isFunctionDeclaration(factory) || ts.isFunctionExpression(factory) || ts.isArrowFunction(factory)) {
+      const body = factory.body;
+      if (!body) return undefined;
+      if (!ts.isBlock(body)) {
+        const value = unwrapTypeOnly(body);
+        return ts.isArrowFunction(value) || ts.isFunctionExpression(value)
+          ? value
+          : undefined;
+      }
+      if (body.statements.length !== 1) return undefined;
+      const [only] = body.statements;
+      if (!ts.isReturnStatement(only) || !only.expression) return undefined;
+      const value = unwrapTypeOnly(only.expression);
+      return ts.isArrowFunction(value) || ts.isFunctionExpression(value)
+        ? value
+        : undefined;
+    }
+    return undefined;
+  };
+
+  const exportedFactory = (
+    sourceFile: ts.SourceFile,
+    name: string,
+  ): ts.Node | undefined => {
+    for (const statement of sourceFile.statements) {
+      if (
+        ts.isFunctionDeclaration(statement) &&
+        hasExportModifier(statement) &&
+        statement.name?.text === name
+      ) {
+        return statement;
+      }
+      if (ts.isVariableStatement(statement) && hasExportModifier(statement)) {
+        for (const declaration of statement.declarationList.declarations) {
+          if (
+            ts.isIdentifier(declaration.name) &&
+            declaration.name.text === name &&
+            declaration.initializer
+          ) {
+            return unwrapTypeOnly(declaration.initializer);
+          }
+        }
+      }
+    }
+    return undefined;
+  };
+
+  for (const convexPath of [...routeFacts.keys()].sort()) {
+    const sites = [...(routeFacts.get(convexPath)?.middleware ?? [])].sort(
+      (left, right) => left.line - right.line,
+    );
+    for (const site of sites) {
+      if (site.reason) {
+        failures.push({ filePath: site.filePath, line: site.line, reason: site.reason });
+        continue;
+      }
+      if (!site.factory) continue;
+      const { imported, targetConvexPath, local } = site.factory;
+      const target = modulesByPath.get(targetConvexPath);
+      const spelled = local === imported ? imported : `${imported} as ${local}`;
+      if (!target) {
+        failures.push({
+          filePath: site.filePath,
+          line: site.line,
+          reason: `the middleware factory \`${spelled}\` is imported from \`${targetConvexPath}\`, which is not a discovered convex module`,
+        });
+        continue;
+      }
+      const factory = exportedFactory(target.sourceFile, imported);
+      if (!factory) {
+        failures.push({
+          filePath: site.filePath,
+          line: site.line,
+          reason: `the middleware factory \`${spelled}\` is not an \`export function\` / \`export const\` declared in \`${targetConvexPath}\` (a re-export or an aliased export is a factory the checker cannot open)`,
+        });
+        continue;
+      }
+      const inner = returnedMiddleware(factory);
+      if (!inner) {
+        failures.push({
+          filePath: site.filePath,
+          line: site.line,
+          reason: `the middleware factory \`${imported}\` in \`${targetConvexPath}\` does not consist of exactly one returned \`(c, next) => {...}\`; a factory that does anything else builds a middleware the checker cannot judge`,
+        });
+        continue;
+      }
+      const violation = middlewareGrammarViolation(inner, target.sourceFile);
+      if (violation) {
+        failures.push({
+          filePath: site.filePath,
+          line: site.line,
+          reason: `the middleware returned by \`${imported}\` (\`${targetConvexPath}:${lineOf(target.sourceFile, inner)}\`) fails the middleware grammar: ${violation}`,
+        });
+      }
+    }
+  }
+  return failures;
 }
 
 /**
@@ -3632,7 +4190,43 @@ function sweepRouterReferences(
         : `the router \`${binding.imported}\` imported from \`${target}\``,
     );
   }
-  if (routerish.size === 0) return;
+
+  const flaggedLines = new Set(facts.unresolvable.map((site) => site.line));
+  const escape = (node: ts.Node, label: string, reason: string) => {
+    const line = lineOf(sourceFile, node);
+    if (flaggedLines.has(line)) return;
+    flaggedLines.add(line);
+    facts.unresolvable.push({ filePath, line, method: "reference", label, reason });
+  };
+
+  // A router module loaded through `import()` / `require()` / `import x =
+  // require()` (round 8): its routers reach a binding — the awaited namespace,
+  // the `.then((m) => ...)` parameter — that no import binding names, so the
+  // walk cannot follow them. Any dynamic reference to a router-exporting
+  // convex module, or one whose specifier is not a literal (it may name one),
+  // fails closed at the reference.
+  for (const reference of collectDynamicModuleReferences(sourceFile)) {
+    const target =
+      reference.specifier === undefined
+        ? undefined
+        : resolveModuleSpecifier(convexPath, reference.specifier, knownConvexPaths);
+    const exportsRouter =
+      target !== undefined &&
+      knownConvexPaths.has(target) &&
+      [...exportIndex.keys()].some((key) => key.startsWith(`${target}::`));
+    if (reference.specifier !== undefined && !exportsRouter) continue;
+    const spelled = reference.node.getText(sourceFile).slice(0, 60);
+    escape(
+      reference.node,
+      `\`${spelled}\``,
+      reference.specifier === undefined
+        ? `a module is loaded through a non-literal specifier (\`${spelled}\`); it may be a router module, and a router obtained that way reaches a binding the walk cannot follow, so it can register routes the walk never sees`
+        : `the router module \`${target}\` is loaded through \`import()\` / \`require()\` (\`${spelled}\`), so its routers reach a binding the walk cannot follow and can register routes the walk never sees`,
+    );
+  }
+
+  const nestedRouters = facts.nestedRouterDeclarations;
+  if (routerish.size === 0 && nestedRouters.length === 0) return;
 
   const routerNames = facts.routerLikeLocals;
   const isAcceptedUse = (identifier: ts.Identifier): boolean => {
@@ -3695,29 +4289,38 @@ function sweepRouterReferences(
     return false;
   };
 
-  const flaggedLines = new Set(facts.unresolvable.map((site) => site.line));
+  const nestedRouterNames = new Set(
+    nestedRouters.map((declaration) => (declaration.name as ts.Identifier).text),
+  );
+  const escapeReason = (node: ts.Identifier, what: string) =>
+    `${what} is referenced as a value (\`${node.parent.getText(sourceFile).slice(0, 60)}\`) other than as the receiver of a registration, the child of \`.route(prefix, child)\`, the argument of \`new HttpRouterWithHono(...)\` / \`addHttpRoutes(...)\`, or an export; a router handed to any other spelling — a bracket callee, \`.call\` / \`.apply\`, a container, a getter, a return value, a global — can register routes the walk never sees`;
   const walk = (node: ts.Node) => {
     if (ts.isTypeNode(node)) return;
-    if (
-      ts.isIdentifier(node) &&
-      routerish.has(node.text) &&
-      isValueReference(node) &&
-      !isShadowedReference(node) &&
-      !isAcceptedUse(node)
-    ) {
-      const line = lineOf(sourceFile, node);
-      if (!flaggedLines.has(line)) {
-        flaggedLines.add(line);
-        const what =
-          importDescriptions.get(node.text) ??
-          `the router \`${node.text}\` declared in this module`;
-        facts.unresolvable.push({
-          filePath,
-          line,
-          method: "reference",
-          label: `\`${node.text}\``,
-          reason: `${what} is referenced as a value (\`${node.parent.getText(sourceFile).slice(0, 60)}\`) other than as the receiver of a registration, the child of \`.route(prefix, child)\`, the argument of \`new HttpRouterWithHono(...)\` / \`addHttpRoutes(...)\`, or an export; a router handed to any other spelling — a bracket callee, \`.call\` / \`.apply\`, a container, a getter, a return value, a global — can register routes the walk never sees`,
-        });
+    if (ts.isIdentifier(node) && isValueReference(node) && !isAcceptedUse(node)) {
+      if (routerish.has(node.text) && !isShadowedReference(node)) {
+        escape(
+          node,
+          `\`${node.text}\``,
+          escapeReason(
+            node,
+            importDescriptions.get(node.text) ??
+              `the router \`${node.text}\` declared in this module`,
+          ),
+        );
+      } else if (nestedRouterNames.has(node.text)) {
+        // A nested `const r = new Hono()`: the reference is an escape when the
+        // nearest binding of that name IS one of those declarations (round 8).
+        const declaration = nestedDeclarationOf(node);
+        if (declaration && nestedRouters.includes(declaration as ts.VariableDeclaration)) {
+          escape(
+            node,
+            `\`${node.text}\``,
+            escapeReason(
+              node,
+              `the router \`${node.text}\` built inside a function or block of this module (never walked: no top-level binding names it)`,
+            ),
+          );
+        }
       }
     }
     ts.forEachChild(node, walk);
@@ -4636,6 +5239,92 @@ export type CorsAssertion = {
 };
 
 /**
+ * Every local name that denotes the `hono/cors` middleware factory: the named
+ * import under any local, a namespace import (whose `.cors` member is the
+ * factory), and every local `const` rebound to either (`const c2 = cors`,
+ * `const { cors: c3 } = honoCors`), widened to a fixpoint. Shared by
+ * `assertCorsAllowlist` (which judges the ONE accepted `cors({...})` call) and
+ * the router-middleware rule (which accepts `<router>.use(<path>, cors(...))`
+ * ONLY when the callee resolves here — every other `.use` handler is judged
+ * by the middleware grammar), so the two never disagree about what "the
+ * allowlisted cors call" is.
+ */
+function resolveCorsFactoryBindings(
+  sourceFile: ts.SourceFile,
+  bindings: ImportBinding[] = collectImportBindings(sourceFile),
+) {
+  const corsLocals = new Set(
+    bindings
+      .filter(
+        (binding) =>
+          binding.moduleSpecifier === "hono/cors" && binding.imported === "cors",
+      )
+      .map((binding) => binding.local),
+  );
+  const corsNamespaces = new Set(
+    bindings
+      .filter(
+        (binding) =>
+          binding.moduleSpecifier === "hono/cors" && binding.imported === "*",
+      )
+      .map((binding) => binding.local),
+  );
+
+  /** Does this expression denote the hono/cors middleware factory? */
+  const isCorsFactory = (node: ts.Expression): boolean => {
+    const value = unwrapTypeOnly(node);
+    if (ts.isIdentifier(value)) return corsLocals.has(value.text);
+    if (
+      ts.isPropertyAccessExpression(value) &&
+      ts.isIdentifier(value.expression) &&
+      corsNamespaces.has(value.expression.text)
+    ) {
+      return value.name.text === "cors";
+    }
+    if (
+      ts.isElementAccessExpression(value) &&
+      ts.isIdentifier(value.expression) &&
+      corsNamespaces.has(value.expression.text)
+    ) {
+      // A computed member off the namespace may be `cors`; fail closed.
+      return true;
+    }
+    return false;
+  };
+
+  // Widen through local rebindings until the set stops growing.
+  for (let pass = 0; pass < 6; pass += 1) {
+    let changed = false;
+    const widen = (node: ts.Node) => {
+      if (ts.isVariableDeclaration(node) && node.initializer) {
+        const initializer = unwrapTypeOnly(node.initializer);
+        if (ts.isIdentifier(node.name) && isCorsFactory(initializer)) {
+          if (!corsLocals.has(node.name.text)) {
+            corsLocals.add(node.name.text);
+            changed = true;
+          }
+        } else if (
+          ts.isObjectBindingPattern(node.name) &&
+          ts.isIdentifier(initializer) &&
+          corsNamespaces.has(initializer.text)
+        ) {
+          for (const element of node.name.elements) {
+            if (ts.isIdentifier(element.name) && !corsLocals.has(element.name.text)) {
+              corsLocals.add(element.name.text);
+              changed = true;
+            }
+          }
+        }
+      }
+      ts.forEachChild(node, widen);
+    };
+    widen(sourceFile);
+    if (!changed) break;
+  }
+  return { corsLocals, corsNamespaces, isCorsFactory };
+}
+
+/**
  * The router's CORS middleware is the ONLY `.use` the checker inspects: a
  * `SameSite=None` claim cookie plus a reflect-any-origin callback is a
  * cross-origin write primitive, so the origin must be a fixed allowlist.
@@ -4676,22 +5365,8 @@ export function assertCorsAllowlist(
   });
 
   const bindings = collectImportBindings(sourceFile);
-  const corsLocals = new Set(
-    bindings
-      .filter(
-        (binding) =>
-          binding.moduleSpecifier === "hono/cors" && binding.imported === "cors",
-      )
-      .map((binding) => binding.local),
-  );
-  const corsNamespaces = new Set(
-    bindings
-      .filter(
-        (binding) =>
-          binding.moduleSpecifier === "hono/cors" && binding.imported === "*",
-      )
-      .map((binding) => binding.local),
-  );
+  const { corsLocals, corsNamespaces, isCorsFactory } =
+    resolveCorsFactoryBindings(sourceFile, bindings);
   const importsHonoCors = bindings.some(
     (binding) => binding.moduleSpecifier === "hono/cors",
   );
@@ -4748,57 +5423,6 @@ export function assertCorsAllowlist(
     }
   }
 
-  /** Does this expression denote the hono/cors middleware factory? */
-  const isCorsFactory = (node: ts.Expression): boolean => {
-    const value = unwrapTypeOnly(node);
-    if (ts.isIdentifier(value)) return corsLocals.has(value.text);
-    if (
-      ts.isPropertyAccessExpression(value) &&
-      ts.isIdentifier(value.expression) &&
-      corsNamespaces.has(value.expression.text)
-    ) {
-      return value.name.text === "cors";
-    }
-    if (
-      ts.isElementAccessExpression(value) &&
-      ts.isIdentifier(value.expression) &&
-      corsNamespaces.has(value.expression.text)
-    ) {
-      // A computed member off the namespace may be `cors`; fail closed.
-      return true;
-    }
-    return false;
-  };
-
-  // Widen through local rebindings until the set stops growing.
-  for (let pass = 0; pass < 6; pass += 1) {
-    let changed = false;
-    const widen = (node: ts.Node) => {
-      if (ts.isVariableDeclaration(node) && node.initializer) {
-        const initializer = unwrapTypeOnly(node.initializer);
-        if (ts.isIdentifier(node.name) && isCorsFactory(initializer)) {
-          if (!corsLocals.has(node.name.text)) {
-            corsLocals.add(node.name.text);
-            changed = true;
-          }
-        } else if (
-          ts.isObjectBindingPattern(node.name) &&
-          ts.isIdentifier(initializer) &&
-          corsNamespaces.has(initializer.text)
-        ) {
-          for (const element of node.name.elements) {
-            if (ts.isIdentifier(element.name) && !corsLocals.has(element.name.text)) {
-              corsLocals.add(element.name.text);
-              changed = true;
-            }
-          }
-        }
-      }
-      ts.forEachChild(node, widen);
-    };
-    widen(sourceFile);
-    if (!changed) break;
-  }
   const allowlistLocals = new Set(
     bindings
       .filter(
@@ -4982,6 +5606,38 @@ function isDefinitionModulePath(convexPath: string) {
     convexPath === "operationAdmission/readDefinitions.ts" ||
     convexPath.startsWith("operationAdmission/domains/")
   );
+}
+
+/**
+ * Value identifiers a definition module may not reference (round 7 + 8): the
+ * environment roots, and the dynamic-code spellings that reach them by name
+ * (`new Function("return process.env.X")()`, `eval("Bun.env.X")`).
+ */
+const ENVIRONMENT_READER_IDENTIFIERS = new Set([
+  "process",
+  "Deno",
+  "Bun",
+  "globalThis",
+  "self",
+  "window",
+  "Function",
+  "eval",
+]);
+
+/**
+ * A module specifier that is the environment: `process`, `node:process`, or
+ * any Node builtin (`node:os`, `fs`, `child_process`, ...) — every one of them
+ * is a way to read the host the checker runs on (round 8).
+ */
+const NODE_BUILTIN_MODULES = new Set([
+  ...builtinModules.map((name) => name.replace(/^node:/, "")),
+  "process",
+]);
+
+function isEnvironmentModuleSpecifier(specifier: string | undefined) {
+  if (specifier === undefined) return false;
+  if (specifier.startsWith("node:")) return true;
+  return NODE_BUILTIN_MODULES.has(specifier);
 }
 
 /**
@@ -5691,6 +6347,21 @@ export async function collectOperationAdmissionCheckResult(
     }
   }
 
+  // --- router middleware (round 9): every `.use` is pass-through-or-deny --
+  for (const site of judgeRouterMiddleware(modules, routeFacts)) {
+    push({
+      id: `router-middleware-not-statically-resolvable-${slugifyForFindingId(`${site.filePath}-${site.line}`)}`,
+      severity: "high",
+      title: "Router middleware is not statically pass-through-or-deny",
+      filePath: site.filePath,
+      line: site.line,
+      functionName: ".use(...)",
+      rationale: `${site.reason}. \`.use\` middleware runs for every request under its path, before the admitted handler and with the full ActionCtx on \`c.env\`; a middleware the checker cannot prove pass-through-or-deny is a terminal, unadmitted responder for every method under that path, so it fails closed.`,
+      remediation:
+        "Spell the middleware as `<router>.use(<string-literal path>, async (c, next) => { ... })` whose body only reads `c.req`, may replace `c.req.raw`, denies with `return c.json(<body>, <literal 4xx/5xx>)`, and ends with `await next()` (or `return next()`); or call a middleware factory that is a named export of a convex module under `http/` and returns exactly such a function; or move the verification into the route definition's `ingressVerification`. `cors(...)` from `hono/cors` is accepted only as the single registration `assertCorsAllowlist` judges.",
+    });
+  }
+
   // --- definition identity: the wrapper must be handed THIS ingress's
   //     definition ------------------------------------------------------------
   const definitionModuleCache = new Map<
@@ -6011,31 +6682,59 @@ export async function collectOperationAdmissionCheckResult(
   // "registered" and "identical" here while the Convex runtime evaluates it
   // differently. So a definition module (`definitions.ts`, `readDefinitions.ts`,
   // `domains/**`) may not reference an environment reader at all (round 7).
+  // The readers: the global roots (`process`, `Deno`, `Bun`, `globalThis`,
+  // `self`, `window`), `import.meta`, dynamic code (`Function` / `eval`, which
+  // reach any of them by name), and any import — static, `import()`,
+  // `require()`, `import x = require()` — of `process` or a Node builtin
+  // (`node:process`, `node:os`, ...; a definition module is plain data plus
+  // resolvers and needs none). A non-literal dynamic specifier may name one,
+  // so it fails closed too (round 8).
   for (const module of modules) {
     if (!isDefinitionModulePath(module.convexPath)) continue;
     const envSites: { line: number; spelled: string }[] = [];
+    const record = (node: ts.Node, spelled: ts.Node = node.parent) => {
+      envSites.push({
+        line: lineOf(module.sourceFile, node),
+        spelled: spelled.getText(module.sourceFile).slice(0, 60),
+      });
+    };
+    for (const statement of module.sourceFile.statements) {
+      if (
+        ts.isImportDeclaration(statement) &&
+        !statement.importClause?.isTypeOnly &&
+        isEnvironmentModuleSpecifier(stringLiteralText(statement.moduleSpecifier))
+      ) {
+        record(statement, statement);
+      }
+    }
+    for (const reference of collectDynamicModuleReferences(module.sourceFile)) {
+      if (
+        reference.specifier === undefined ||
+        isEnvironmentModuleSpecifier(reference.specifier)
+      ) {
+        record(reference.node, reference.node);
+      }
+    }
     const scan = (node: ts.Node) => {
       if (ts.isTypeNode(node)) return;
       if (
         ts.isIdentifier(node) &&
         isValueReference(node) &&
-        ["process", "Deno", "globalThis", "self", "window"].includes(node.text) &&
+        ENVIRONMENT_READER_IDENTIFIERS.has(node.text) &&
         !isShadowedReference(node)
       ) {
-        envSites.push({
-          line: lineOf(module.sourceFile, node),
-          spelled: node.parent.getText(module.sourceFile).slice(0, 60),
-        });
+        record(node);
       } else if (ts.isMetaProperty(node)) {
-        envSites.push({
-          line: lineOf(module.sourceFile, node),
-          spelled: node.parent.getText(module.sourceFile).slice(0, 60),
-        });
+        record(node);
       }
       ts.forEachChild(node, scan);
     };
     scan(module.sourceFile);
+    envSites.sort((a, b) => a.line - b.line);
+    const seenLines = new Set<number>();
     for (const site of envSites) {
+      if (seenLines.has(site.line)) continue;
+      seenLines.add(site.line);
       push({
         id: `definition-module-reads-environment-${slugifyForFindingId(`${module.convexPath}-${site.line}`)}`,
         severity: "high",
@@ -6044,7 +6743,7 @@ export async function collectOperationAdmissionCheckResult(
         line: site.line,
         rationale: `${module.convexPath} references an environment reader (\`${site.spelled}\`). The checker evaluates definition modules in its own process and proves the wrapper receives the registered instance, so a definition whose fields depend on the environment is verified under one environment and enforced under another.`,
         remediation:
-          "Keep definitions static: no `process.env` / `import.meta` / `globalThis` in definitions.ts, readDefinitions.ts, or domains/**. Environment-dependent policy belongs in the composition root or an adapter, where it is a runtime input, not a declared definition.",
+          "Keep definitions static: no `process.env` / `import.meta` / `globalThis` / `Bun` / `Function` / `eval`, and no import of `process` or a `node:` builtin, in definitions.ts, readDefinitions.ts, or domains/**. Environment-dependent policy belongs in the composition root or an adapter, where it is a runtime input, not a declared definition.",
       });
     }
   }

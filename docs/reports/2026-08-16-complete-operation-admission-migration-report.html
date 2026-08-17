@@ -7,7 +7,7 @@
   <body>
     <article
       data-athena-landed-change-report="v2"
-      data-athena-report-diff-fingerprint="8f04b35867d87155d65498b1193e6fe2dfad5865843e06d5d237c64e72f40f1a"
+      data-athena-report-diff-fingerprint="54f53863706e600a4652228a8ff38d3c141346dbc42ae5f2cfac5f30ed7ed827"
     >
       <header data-report-section="header">
         <h1>Closing the Admission Rail</h1>
@@ -785,6 +785,31 @@ handler: admitPublicMutation(createOrganizationOperationDefinition, ...)</code><
           remove, reproduced while removing it. Reverting the fix and watching
           the test go red is cheap, and it is the only thing that establishes a
           test actually pins its bug.
+        </p>
+
+        <p>
+          <strong>The last qualification on the central claim, closed in round 9.</strong> Through round 8, router-level middleware was
+            invisible to the route walk except for the single allowlisted
+            <code>cors(...)</code> registration, so a path-scoped
+            <code>.use</code> whose handler never calls <code>next()</code>
+            responded terminally for every method under that path with zero
+            findings — and, contrary to the earlier note, the tree carries five
+            non-CORS <code>.use</code> sites (the WhatsApp, MTN MoMo and
+            harness-waiver verifiers, and <code>boundRequestBody(...)</code> on
+            the two marketing routes). Round 9 walks <code>.use</code> like
+            every registration and judges the handler against a closed
+            pass-through-or-deny grammar: an inline <code>(c, next) =&gt;
+            {…}</code> that ends in <code>await next()</code>, returns only
+            <code>next()</code> or a <code>c.json(…, &lt;literal 4xx/5xx&gt;)</code>
+            denial, and touches <code>c</code> only as <code>c.req</code>; or a
+            factory imported by name from <code>http/**</code> whose export is
+            exactly one such returned function; or the <code>hono/cors</code>
+            factory. Anything else is
+            <code>router-middleware-not-statically-resolvable</code>. All five
+            real sites pass unchanged; mutating any one to answer 2xx produces
+            a finding; the pinned residual test now asserts the finding. The
+            qualification on the claim that an ingress is either admitted or
+            flagged is gone.
         </p>
 
         <h3>Residual risks, ranked</h3>

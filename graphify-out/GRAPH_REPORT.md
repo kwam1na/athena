@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 12898 nodes · 15930 edges · 2911 communities detected
+- 12907 nodes · 15953 edges · 2911 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -2927,8 +2927,8 @@
 2. `buildDailyCloseSnapshotWithCtx()` - 37 edges
 3. `collectConvexQueryWriteBoundaryFindings()` - 28 edges
 4. `projectLocalRegisterReadModel()` - 27 edges
-5. `applyInventoryEffectWithCtx()` - 22 edges
-6. `collectOperationAdmissionCheckResult()` - 22 edges
+5. `collectOperationAdmissionCheckResult()` - 26 edges
+6. `applyInventoryEffectWithCtx()` - 22 edges
 7. `submitTerminalRuntimeStatus()` - 21 edges
 8. `collectConvexIngressFromSource()` - 21 edges
 9. `buildDailyOpeningSnapshotWithCtx()` - 20 edges
@@ -2958,11 +2958,11 @@ Nodes (41): asRecord(), assertCanClearIndexedDbPosLocalStore(), buildEffectiveDr
 
 ### Community 2 - "Community 2"
 Cohesion: 0.06
-Nodes (85): buildFinding(), buildHumanReport(), buildSemanticPrompt(), buildShadowSummary(), buildShellCommandPattern(), collectConvexQueryWriteBoundaryFindings(), collectConvexReturnValidatorContractFindings(), collectHandlerDbAliases() (+77 more)
+Nodes (84): assertCorsAllowlist(), bindingNameTexts(), builderReferenceKind(), buildPartition(), buildRouterExportIndex(), calleeMember(), collectApiSelfCallSites(), collectBackendCalls() (+76 more)
 
 ### Community 3 - "Community 3"
 Cohesion: 0.06
-Nodes (76): assertCorsAllowlist(), bindingNameTexts(), builderReferenceKind(), buildPartition(), buildRouterExportIndex(), calleeMember(), collectApiSelfCallSites(), collectBackendCalls() (+68 more)
+Nodes (85): buildFinding(), buildHumanReport(), buildSemanticPrompt(), buildShadowSummary(), buildShellCommandPattern(), collectConvexQueryWriteBoundaryFindings(), collectConvexReturnValidatorContractFindings(), collectHandlerDbAliases() (+77 more)
 
 ### Community 4 - "Community 4"
 Cohesion: 0.05
@@ -3377,32 +3377,32 @@ Cohesion: 0.14
 Nodes (8): asCloudOperableSession(), countPendingSyncableLocalEventsForStaff(), hasSyncedSaleLocalEventsForStaff(), hasUploadedLocalEventsForStaff(), isCloudOperableSession(), isEmptyLocalSaleShell(), trimOptional(), useRegisterViewModel()
 
 ### Community 107 - "Community 107"
+Cohesion: 0.15
+Nodes (10): check(), convexFixture(), createFixtureRoot(), discover(), flagged(), handler(), module(), writeBaselineTree() (+2 more)
+
+### Community 108 - "Community 108"
 Cohesion: 0.22
 Nodes (18): assertLandedChangeReportCheck(), collectChangedFiles(), collectExistingFiles(), collectLandedChangeReportFindings(), collectReportContents(), collectReportsExistingAtBase(), collectSourceLineChanges(), countFileLines() (+10 more)
 
-### Community 108 - "Community 108"
+### Community 109 - "Community 109"
 Cohesion: 0.2
 Nodes (18): assertPrAthenaProofReady(), classifySnapshotError(), collectFilesUnder(), collectProofSnapshot(), collectTreeChangedPaths(), collectUnstagedFiles(), collectUntrackedFiles(), collectValidationFingerprintPaths() (+10 more)
 
-### Community 109 - "Community 109"
+### Community 110 - "Community 110"
 Cohesion: 0.21
 Nodes (16): commandForPort(), defaultCommand(), isProcessAlive(), isReachable(), listPreviews(), optionsFromEnv(), pruneState(), readState() (+8 more)
 
-### Community 110 - "Community 110"
+### Community 111 - "Community 111"
 Cohesion: 0.27
 Nodes (18): assertConformsToExportedReturns(), collectReturnValidatorIssues(), decodeSerializedFloat64(), decodeSerializedInt64(), decodeSerializedLiteralValue(), describeValue(), formatReturnValidatorIssues(), isConvexValue() (+10 more)
 
-### Community 111 - "Community 111"
+### Community 112 - "Community 112"
 Cohesion: 0.15
 Nodes (12): hasPendingWeeklyDirtyMarks(), isReverifyTick(), isVerificationAlertEmailEnabled(), logSwallowed(), maybeEmitVerificationAlert(), normalizeMissingDayResult(), recordErrorOutcome(), runVerificationSweepWithCtx() (+4 more)
 
-### Community 112 - "Community 112"
+### Community 113 - "Community 113"
 Cohesion: 0.17
 Nodes (13): buildSkuContinuityContextById(), deriveContinuityStatus(), getPlannedActionAt(), getStartOfCurrentDay(), hasLateInbound(), hasRelatedPurchaseOrderContext(), hasStalePlannedAction(), isInboundStatus() (+5 more)
-
-### Community 113 - "Community 113"
-Cohesion: 0.16
-Nodes (10): check(), convexFixture(), createFixtureRoot(), discover(), flagged(), handler(), module(), writeBaselineTree() (+2 more)
 
 ### Community 114 - "Community 114"
 Cohesion: 0.13
@@ -3725,48 +3725,48 @@ Cohesion: 0.19
 Nodes (5): adjustSkuAvailabilityForActiveHolds(), calculateTotalInventoryCount(), getProductByIdOrSlugWithCtx(), productHasPendingCheckoutRegisterCatalogDependency(), removeProductAndRefreshCatalog()
 
 ### Community 194 - "Community 194"
-Cohesion: 0.23
-Nodes (7): formatDeliveryAddress(), getAmountPaidForOrder(), getDiscountValue(), getOrderAmount(), getOrderState(), getPickupActionState(), getPotentialPoints()
-
-### Community 195 - "Community 195"
 Cohesion: 0.31
 Nodes (12): backfillStoreSchedulesFromLegacyPolicyWithCtx(), buildBackfillRow(), buildCandidateWeeklyWindows(), compatibilityMetadata(), compatibilityOnlyRow(), findExistingScheduleToSkip(), firstPolicy(), isValidMinute() (+4 more)
 
-### Community 196 - "Community 196"
+### Community 195 - "Community 195"
 Cohesion: 0.23
 Nodes (9): asOperationAdmissionDenial(), isAdmittedOutcome(), isRailRaisedDenial(), markAsRailDenial(), operationAdmissionDenial(), operationAdmissionDenialData(), operationDenialError(), OperationUnauthenticatedError (+1 more)
 
-### Community 197 - "Community 197"
+### Community 196 - "Community 196"
 Cohesion: 0.15
 Nodes (0):
 
-### Community 198 - "Community 198"
+### Community 197 - "Community 197"
 Cohesion: 0.33
 Nodes (11): closeCandidateOperatingRange(), emptyCloseSummary(), exactStatuses(), frozenFinancialSourceCounts(), frozenWeekMetricForDate(), matchesRequestedOperatingRange(), normalizeFrozenPaymentTotals(), recordValue() (+3 more)
 
-### Community 199 - "Community 199"
+### Community 198 - "Community 198"
 Cohesion: 0.29
 Nodes (12): buildCtx(), buildInventoryMovement(), buildMapping(), buildProductSku(), buildRegisterSession(), buildStaffProfile(), buildStore(), buildTerminal() (+4 more)
 
-### Community 200 - "Community 200"
+### Community 199 - "Community 199"
 Cohesion: 0.26
 Nodes (10): createCustomer(), fullNameFromParts(), guestResult(), linkToGuest(), linkToStoreFrontUser(), posCustomerResult(), resolveGuestMatch(), resolvePosCustomerSelection() (+2 more)
 
-### Community 201 - "Community 201"
+### Community 200 - "Community 200"
 Cohesion: 0.18
 Nodes (4): findActivePendingCheckoutLookupAliasByCode(), listProductSkusByProductId(), normalizeLookupCode(), readAllQueryResults()
 
-### Community 202 - "Community 202"
+### Community 201 - "Community 201"
 Cohesion: 0.23
 Nodes (7): admitOne(), allow(), ensure(), headerByKey(), seedSkus(), seedStore(), twoDayFixture()
 
-### Community 203 - "Community 203"
+### Community 202 - "Community 202"
 Cohesion: 0.17
 Nodes (3): AnalyticsOwnershipError, createAnalyticsWithCtx(), extractPromoCodeId()
 
-### Community 204 - "Community 204"
+### Community 203 - "Community 203"
 Cohesion: 0.26
 Nodes (10): archivedProductNestedOrigin(), buildVariantSkuMoneyPayload(), createVariantSku(), decodeOriginValue(), deleteActiveProduct(), getArchivedProductRedirect(), modifyProduct(), onSubmit() (+2 more)
+
+### Community 204 - "Community 204"
+Cohesion: 0.23
+Nodes (7): formatDeliveryAddress(), getAmountPaidForOrder(), getDiscountValue(), getOrderAmount(), getOrderState(), getPickupActionState(), getPotentialPoints()
 
 ### Community 205 - "Community 205"
 Cohesion: 0.17
@@ -4294,15 +4294,15 @@ Nodes (0):
 
 ### Community 336 - "Community 336"
 Cohesion: 0.31
-Nodes (5): createVersionChecker(), getInitialDeployBuildId(), readDocumentScriptSources(), readEntryHtmlScripts(), readScriptSources()
-
-### Community 337 - "Community 337"
-Cohesion: 0.31
 Nodes (5): getPreferredSku(), getProductName(), sortProduct(), sortSkusByAvailabilityThenLength(), sortSkusByLength()
 
-### Community 338 - "Community 338"
+### Community 337 - "Community 337"
 Cohesion: 0.39
 Nodes (8): createStorefrontObservabilityContext(), createStorefrontObservabilityPayload(), getOrCreateStorefrontObservabilitySessionId(), isBrowserAutomationContext(), isSyntheticMonitorOrigin(), resolveStorefrontAnalyticsOrigin(), resolveViewportBucket(), trackStorefrontEvent()
+
+### Community 338 - "Community 338"
+Cohesion: 0.31
+Nodes (5): createVersionChecker(), getInitialDeployBuildId(), readDocumentScriptSources(), readEntryHtmlScripts(), readScriptSources()
 
 ### Community 339 - "Community 339"
 Cohesion: 0.22

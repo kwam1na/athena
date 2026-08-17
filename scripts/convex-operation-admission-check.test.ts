@@ -4130,3 +4130,559 @@ describe("round 7: CORS, tsconfig aliases, and environment-free definition modul
     expect(result.findings.filter((finding) => finding.id.startsWith("definition-module-reads-environment-"))).toEqual([]);
   });
 });
+
+describe("round 8: factory-built routers, dynamically imported router modules, wrapped computed callees, and environment imports", () => {
+  const SUB_ROUTER = `
+    import { Hono } from "hono";
+    import { admitHttpRead } from "../../../../platform/operationAdmission";
+    import { subHealth } from "../../../../operationAdmission/readDefinitions";
+    export const sub = new Hono();
+    sub.get("/health", admitHttpRead(subHealth, async (c) => c.json({})));
+  `;
+  const check = async (
+    late: string,
+    httpTail = "",
+    options: { subRouter?: string; extraModules?: Record<string, string> } = {},
+  ) => {
+    const rootDir = await createFixtureRoot();
+    await writeBaselineTree(rootDir, {
+      reads: {
+        subHealth: {
+          kind: "http_read",
+          route: { method: "GET", path: "/sub/health" },
+          operationId: "http.sub.health",
+          access: { kind: "read", intent: "platform.health.view" },
+        },
+      },
+    });
+    await convexFixture(
+      rootDir,
+      "http/domains/core/routes/sub.ts",
+      options.subRouter ?? SUB_ROUTER,
+    );
+    await convexFixture(rootDir, "http/domains/core/routes/late.ts", late);
+    for (const [convexPath, source] of Object.entries(options.extraModules ?? {})) {
+      await convexFixture(rootDir, convexPath, source);
+    }
+    await convexFixture(
+      rootDir,
+      "http.ts",
+      `${ADMITTED_ROUTER}
+        import { sub } from "./http/domains/core/routes/sub";
+        import "./http/domains/core/routes/late";
+        app.route("/sub", sub);
+        ${httpTail}
+      `,
+    );
+    return collectOperationAdmissionCheckResult(rootDir);
+  };
+  const unresolvable = (result: Awaited<ReturnType<typeof check>>) =>
+    result.findings.filter((finding) =>
+      finding.id.startsWith("route-registration-not-statically-resolvable-"),
+    );
+  const routes = (result: Awaited<ReturnType<typeof check>>) =>
+    result.ingress.filter((entry) => entry.route).map((entry) => entry.id).sort();
+
+  it("flags a factory-built router registering a const path on its nested `new Hono()` before it is mounted", async () => {
+    // (a) `const P = "/evil"` on a nested-scope receiver: served as
+    // `GET /sub/evil` with no admission; the nested `new Hono()` local is a
+    // router the checker cannot see into, so ANY path expression is a route,
+    // and `return r` is an escape of a router the walk never reaches.
+    const result = await check(`export {};`, "", {
+      subRouter: `
+        import { Hono } from "hono";
+        import { admitHttpRead } from "../../../../platform/operationAdmission";
+        import { subHealth } from "../../../../operationAdmission/readDefinitions";
+        const h = async (c) => c.json({});
+        function make() {
+          const r = new Hono();
+          const P = "/evil";
+          r.get(P, h);
+          return r;
+        }
+        export const sub = make();
+        sub.get("/health", admitHttpRead(subHealth, async (c) => c.json({})));
+      `,
+    });
+    expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual([
+      [9, ".get(...)"],
+      [10, "`r`"],
+    ]);
+    expect(unresolvable(result)[0].rationale).toContain("cannot resolve to a router");
+    expect(unresolvable(result)[1].rationale).toContain("built inside a function or block");
+    expect(unresolvable(result).every((finding) => finding.severity === "high")).toBe(true);
+    expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
+  });
+
+  it("flags a factory-built router registering a parameter path, whatever the factory is called with", async () => {
+    // (b) the path is the factory's parameter: `make("evil")` serves
+    // `GET /sub/evil`.
+    const result = await check(`export {};`, "", {
+      subRouter: `
+        import { Hono } from "hono";
+        import { admitHttpRead } from "../../../../platform/operationAdmission";
+        import { subHealth } from "../../../../operationAdmission/readDefinitions";
+        const h = async (c) => c.json({});
+        function make(p: string) {
+          const r = new Hono();
+          r.get(p, h);
+          return r;
+        }
+        export const sub = make("evil");
+        sub.get("/health", admitHttpRead(subHealth, async (c) => c.json({})));
+      `,
+    });
+    expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual([
+      [8, ".get(...)"],
+      [9, "`r`"],
+    ]);
+  });
+
+  it("flags a factory in http.ts whose result is mounted with .route", async () => {
+    // (c) the factory lives beside the root router; `child` is a top-level
+    // candidate (it is mounted), but the routes it carries were registered
+    // inside `make` on the nested local.
+    const result = await check(
+      `export {};`,
+      `function make() {
+         const r = new Hono();
+         const P = "/evil";
+         r.get(P, async (c) => c.json({}));
+         return r;
+       }
+       const child = make();
+       app.route("/c", child);`,
+    );
+    expect(unresolvable(result).map((finding) => finding.functionName)).toEqual([
+      ".get(...)",
+      "`r`",
+    ]);
+    expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
+  });
+
+  it("flags a nested call-result / awaited receiver with a non-literal path, and keeps a parameter receiver on the string rule", async () => {
+    const result = await check(`
+      import { Hono } from "hono";
+      const h = async (c) => c.json({});
+      const P = "/evil";
+      export function a() { const r = makeRouter(); r.get(P, h); }
+      export async function b() { const r = await loadRouter(); r.post(P, h); }
+      export function c(r) { r.get(P, h); }
+      export function d(r) { r.get("evil", h); }
+      export function e() { const r = new Hono(); helper(r); }
+      export function f() { const cache = new Map(); cache.set(P, h); return cache.get(P, h); }
+      declare function makeRouter(): any; declare function loadRouter(): Promise<any>; declare function helper(x: any): void;
+    `);
+    // `a` / `b`: nested opaque initializers, any path (round 8). `c`: a
+    // parameter receiver keeps the string / template rule (a `const P` on it
+    // is the documented caller-table residual — the router must be handed in
+    // as a value somewhere, and THAT reference is the sweep's site). `d`: the
+    // string rule. `e`: a nested `new Hono()` handed to a helper is an escape.
+    // `f`: `new Map()` is a plain container.
+    expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual([
+      [5, ".get(...)"],
+      [6, ".post(...)"],
+      [8, ".get(...)"],
+      [9, "`r`"],
+    ]);
+  });
+
+  it("flags a router module loaded through import() / require(), and not a router-free one", async () => {
+    const result = await check(`
+      const h = async (c) => c.json({});
+      const P = "/evil";
+      void import("./sub").then((m) => m.sub.get(P, h));
+      export async function later() { const m = await import("./sub"); m.sub.get(P, h); }
+      const viaRequire = require("./sub");
+      export async function other() { const m = await import("./helpers"); return m.x; }
+      export async function unknownSpecifier(spec: string) { const m = await import(spec); return m; }
+    `, "", {
+      extraModules: {
+        "http/domains/core/routes/helpers.ts": `export const x = 1;`,
+      },
+    });
+    // Line 4: the `.then((m) => ...)` parameter keeps the string rule, so the
+    // `import("./sub")` itself is the escape. Line 5: `m` is an awaited nested
+    // local — an opaque receiver, any path — so the walk flags the
+    // registration first (one finding per line). Line 6: `require("./sub")`.
+    // Line 7: the router-free `./helpers` is not a finding. Line 8: the
+    // non-literal specifier fails closed (it may name a router module).
+    expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual([
+      [4, "`import(\"./sub\")`"],
+      [5, ".get(...)"],
+      [6, "`require(\"./sub\")`"],
+      [8, "`import(spec)`"],
+    ]);
+    expect(unresolvable(result)[0].rationale).toContain("loaded through `import()` / `require()`");
+    expect(unresolvable(result)[2].rationale).toContain("loaded through `import()` / `require()`");
+    expect(unresolvable(result)[3].rationale).toContain("non-literal specifier");
+    expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
+  });
+
+  it("flags a default-imported router referenced as a value, in a module with no router-ish binding of its own", async () => {
+    const result = await check(`
+      import http from "../../../../http";
+      export const keep = http;
+    `);
+    expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual([
+      [3, "`http`"],
+    ]);
+    expect(unresolvable(result)[0].rationale).toContain("imported from `http.ts`");
+  });
+
+  it("reports (does not crash on) a computed router-method callee wrapped in parens, `as`, or a non-null assertion", async () => {
+    const result = await check(`
+      import { Hono } from "hono";
+      import { sub } from "./sub";
+      const h = async (c) => c.json({});
+      const verb = "get";
+      ((sub)[verb])("evil", h);
+      (sub as Hono)[verb]!("evil2", h);
+      export function install(r, m) { ((r as Hono)[m])!("evil3", h); }
+    `);
+    expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual([
+      [6, ".[computed](...)"],
+      [7, ".[computed](...)"],
+      [8, ".[computed](...)"],
+    ]);
+    expect(unresolvable(result)[0].rationale).toContain("computed method `(sub)[verb](...)`");
+    expect(unresolvable(result)[1].rationale).toContain("computed method `(sub as Hono)[verb](...)`");
+    expect(unresolvable(result)[2].rationale).toContain("computed method `(r as Hono)[m](...)`");
+  });
+
+  it("flags `.use(<path>, <non-cors handler>)` on an imported router as a registration on a receiver it cannot resolve (round 9 closed the residual)", async () => {
+    // A path-scoped `.use` whose handler never calls `next()` is a terminal
+    // responder for every method under the path. Through round 8 this was
+    // the one pinned residual (`.use` was invisible to the walk); round 9
+    // walks `.use` like every other registration. On an IMPORTED router the
+    // receiver itself is unresolvable in this module, so the site fails as a
+    // route registration; on a router declared in the module it is judged by
+    // the middleware grammar (see the round-9 block).
+    const result = await check(`
+      import { sub } from "./sub";
+      sub.use("/evil", async (c) => c.json({ pwned: true }));
+    `);
+    expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual([
+      [3, ".use(...)"],
+    ]);
+    expect(unresolvable(result)[0].rationale).toContain("`.use(...)` is called on a receiver the checker cannot resolve");
+    expect(result.findings.map((finding) => finding.id)).toEqual([
+      "route-registration-not-statically-resolvable-packages-athena-webapp-convex-http-domains-core-routes-late-ts-3",
+    ]);
+    expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
+  });
+
+  it("flags a definition module that imports process / a node: builtin, reads Bun.env, or builds dynamic code", async () => {
+    const rootDir = await createFixtureRoot();
+    await writeBaselineTree(rootDir);
+    await convexFixture(
+      rootDir,
+      "operationAdmission/domains/u1_example_definitions.ts",
+      `import { env } from "node:process";
+       import os from "os";
+       import type { Env } from "node:process";
+       const lax = env.LAX === "1";
+       const bun = Bun.env.LAX === "1";
+       const dyn = new Function("return process.env.LAX")();
+       const ev = eval("1");
+       const late = await import("node:os");
+       const req = require("child_process");
+       export const writeDefinition = {
+         kind: "mutation",
+         functionName: "example/x:write",
+         operationId: "example.x.write",
+         capability: "catalog.manage",
+         actors: { normalUser: "admit", sharedDemo: "deny", public: lax || bun || dyn || ev || late || req || os ? "admit" : "deny" },
+       };
+       export const U1_DEFINITIONS = [writeDefinition];`,
+    );
+    const result = await collectOperationAdmissionCheckResult(rootDir);
+    const env = result.findings.filter((finding) =>
+      finding.id.startsWith("definition-module-reads-environment-"),
+    );
+    // Lines 1, 2 (imports; the type-only import on line 3 reads nothing),
+    // 5 (`Bun`), 6 (`Function`), 7 (`eval`), 8 (`import("node:os")`),
+    // 9 (`require("child_process")`).
+    expect(env.map((finding) => finding.line)).toEqual([1, 2, 5, 6, 7, 8, 9]);
+    expect(env.every((finding) => finding.severity === "high")).toBe(true);
+    expect(env[0].remediation).toContain("no import of `process` or a `node:` builtin");
+  });
+});
+
+describe("round 9: router middleware is pass-through-or-deny", () => {
+  const SUB_ROUTER_HEAD = `
+    import { Hono } from "hono";
+    import { admitHttpRead } from "../../../../platform/operationAdmission";
+    import { subHealth } from "../../../../operationAdmission/readDefinitions";
+    export const sub = new Hono();
+  `;
+  const SUB_ROUTER_TAIL = `
+    sub.get("/health", admitHttpRead(subHealth, async (c) => c.json({})));
+  `;
+  const check = async (
+    middleware: string,
+    options: { extraModules?: Record<string, string>; httpTail?: string; subHead?: string } = {},
+  ) => {
+    const rootDir = await createFixtureRoot();
+    await writeBaselineTree(rootDir, {
+      reads: {
+        subHealth: {
+          kind: "http_read",
+          route: { method: "GET", path: "/sub/health" },
+          operationId: "http.sub.health",
+          access: { kind: "read", intent: "platform.health.view" },
+        },
+      },
+    });
+    await convexFixture(
+      rootDir,
+      "http/domains/core/routes/sub.ts",
+      `${options.subHead ?? SUB_ROUTER_HEAD}\n${middleware}\n${SUB_ROUTER_TAIL}`,
+    );
+    for (const [convexPath, source] of Object.entries(options.extraModules ?? {})) {
+      await convexFixture(rootDir, convexPath, source);
+    }
+    await convexFixture(
+      rootDir,
+      "http.ts",
+      `${ADMITTED_ROUTER}
+        import { sub } from "./http/domains/core/routes/sub";
+        app.route("/sub", sub);
+        ${options.httpTail ?? ""}
+      `,
+    );
+    return collectOperationAdmissionCheckResult(rootDir);
+  };
+  const middlewareFindings = (result: Awaited<ReturnType<typeof check>>) =>
+    result.findings.filter((finding) =>
+      finding.id.startsWith("router-middleware-not-statically-resolvable-"),
+    );
+  const SUB_ID = "router-middleware-not-statically-resolvable-packages-athena-webapp-convex-http-domains-core-routes-sub-ts-";
+  // The real tree's verifier middleware shape (whatsapp / mtn-momo / harness
+  // waivers): bounded read, verifier, 4xx denials, re-bodied request, then
+  // `await next()`.
+  const VERIFIER_MIDDLEWARE = `
+    import { readBoundedRequestBody, requestWithBody } from "../../../../operationAdmission/ingressBody";
+    import { verify } from "./verify";
+    sub.use("*", async (c, next) => {
+      if (c.req.method !== "POST") return next();
+      let secret;
+      try {
+        secret = process.env.SECRET;
+      } catch {
+        return c.json({ error: "not configured" }, 503);
+      }
+      const bounded = await readBoundedRequestBody(c.req.raw, 1024);
+      if (bounded.kind === "too_large") {
+        return c.json({ error: "Request body too large." }, 413);
+      }
+      const rawBody = new TextDecoder().decode(bounded.bytes);
+      const verified = await verify({ secret, rawBody, signatureHeader: c.req.header("x-sig") });
+      if (!verified) {
+        return c.json({ error: "Webhook verification failed" }, 401);
+      }
+      c.req.raw = requestWithBody(c.req.raw, bounded.bytes);
+      await next();
+    });
+  `;
+  // The real tree's factory (`http/domains/core/routes/boundedBody.ts`).
+  const BOUNDED_BODY_FACTORY = `
+    import type { Context, Next } from "hono";
+    import { readBoundedRequestBody, requestWithBody } from "../../../../operationAdmission/ingressBody";
+    export async function readBoundedBody(request: Request, maxBytes: number) {
+      const result = await readBoundedRequestBody(request, maxBytes);
+      return result.kind === "too_large" ? null : result.bytes;
+    }
+    export function boundRequestBody(resolveMaxBytes: () => number) {
+      return async (c: Context, next: Next) => {
+        let maxBytes: number;
+        try {
+          maxBytes = resolveMaxBytes();
+        } catch {
+          return next();
+        }
+        const bytes = await readBoundedBody(c.req.raw, maxBytes);
+        if (bytes === null) {
+          return c.json({ error: { code: "request_rejected" } }, 413);
+        }
+        c.req.raw = requestWithBody(c.req.raw, bytes);
+        return next();
+      };
+    }
+  `;
+
+  it("passes the baseline: `app.use(\"*\", cors(...))` in http.ts and no other middleware", async () => {
+    const result = await check("");
+    expect(result.findings).toEqual([]);
+  });
+
+  it("flags a path-scoped `.use` whose handler never calls next() — the closed round-8 residual", async () => {
+    const result = await check(`sub.use("/evil", async (c) => c.json({ pwned: true }));`);
+    expect(result.findings.map((finding) => finding.id)).toEqual([`${SUB_ID}7`]);
+    const [finding] = middlewareFindings(result);
+    expect(finding.severity).toBe("high");
+    expect(finding.functionName).toBe(".use(...)");
+    expect(finding.rationale).toContain("declares 1 parameter(s)");
+    expect(finding.rationale).toContain("terminal, unadmitted responder");
+    expect(finding.remediation).toContain("ends with `await next()`");
+  });
+
+  it.each([
+    ["an identifier handler", `const h = async (c, next) => { await next(); };\nsub.use("*", h);`, "only an inline"],
+    ["a handler-only `.use(fn)`", `sub.use(async (c, next) => { await next(); });`, "called with 1 argument(s)"],
+    ["a third argument", `sub.use("*", async (c, next) => { await next(); }, async (c, next) => { await next(); });`, "called with 3 argument(s)"],
+    ["a non-literal path", `const P = "/evil";\nsub.use(P, async (c, next) => { await next(); });`, "not a string literal"],
+    ["a 2xx response", `sub.use("*", async (c, next) => { if (c.req.method === "GET") return c.json({ pwned: true }, 200); await next(); });`, "returns something other than"],
+    ["a non-literal status", `const ok = 200;\nsub.use("*", async (c, next) => { if (c.req.method === "GET") return c.json({}, ok); await next(); });`, "returns something other than"],
+    ["a bare return", `sub.use("*", async (c, next) => { if (c.req.method === "GET") return; await next(); });`, "returns something other than"],
+    ["a body that does not end in next()", `sub.use("*", async (c, next) => { await next(); c.req.raw = c.req.raw; });`, "last statement is"],
+    ["an expression body", `sub.use("*", async (c, next) => next());`, "expression-bodied"],
+    ["reading c.env before admission", `sub.use("*", async (c, next) => { await c.env.runMutation("x"); await next(); });`, "`c.env` is not an accepted member"],
+    ["writing c.res", `sub.use("*", async (c, next) => { c.res = new Response("pwned"); await next(); });`, "`c.res` is not an accepted member"],
+    ["c.json outside a return", `sub.use("*", async (c, next) => { c.json({ pwned: true }, 401); await next(); });`, "used other than as `return c.json"],
+    ["c passed as a value", `import { respond } from "./respond";\nsub.use("*", async (c, next) => { respond(c); await next(); });`, "`c` is used other than as"],
+    ["c under a cast", `sub.use("*", async (c, next) => { (c as any).env; await next(); });`, "`c` is used other than as"],
+    ["c through a computed member", `sub.use("*", async (c, next) => { c["env"]; await next(); });`, "`c` is used other than as"],
+    ["next() inside a try", `sub.use("*", async (c, next) => { try { await next(); } catch {} return next(); });`, "may only be `return next()`"],
+    ["next() called twice", `sub.use("*", async (c, next) => { await next(); await next(); });`, "may only be `return next()`"],
+    ["next stored", `sub.use("*", async (c, next) => { const n = next; await n(); await next(); });`, "used other than as the callee"],
+    ["next with an argument", `sub.use("*", async (c, next) => { await next(c); await next(); });`, "used other than as the callee"],
+    ["next() as the last statement with an argument", `sub.use("*", async (c, next) => { await next(c); });`, "last statement is"],
+    ["next() from a nested expression-bodied function", `sub.use("*", async (c, next) => { const go = () => next(); await go(); return next(); });`, "may only be `return next()`"],
+    ["next() from a nested block function", `sub.use("*", async (c, next) => { const go = () => { return next(); }; await go(); return next(); });`, "nested function"],
+    ["a return inside a nested function", `sub.use("*", async (c, next) => { [1].map((x) => { return x; }); await next(); });`, "inside a nested function"],
+    ["a destructured parameter", `sub.use("*", async ({ req }, next) => { await next(); });`, "not a plain identifier"],
+    ["a rest parameter", `sub.use("*", async (c, ...rest) => { await rest[0](); });`, "not a plain identifier"],
+    ["a redeclared parameter", `sub.use("*", async (c, next) => { { const c = 1; } await next(); });`, "redeclares its `c` parameter"],
+    ["`arguments`", `sub.use("*", async function (c, next) { arguments[0].env; await next(); });`, "references `arguments`"],
+    ["`this`", `sub.use("*", async function (c, next) { this.x; await next(); });`, "reads `this`"],
+    ["a factory the checker cannot open", `import { mw } from "../../../../lib/mw";\nsub.use("*", mw());`, "not a named import of a convex module under `http/`"],
+    ["a factory reached through a member", `import * as mws from "./mws";\nsub.use("*", mws.mw());`, "only the `hono/cors` factory or a named-import factory"],
+    ["a factory called optionally", `import { mw } from "./mws";\nsub.use("*", mw?.());`, "only an inline"],
+  ])("flags %s", async (_label, middleware, reason) => {
+    const result = await check(middleware);
+    const findings = middlewareFindings(result);
+    expect(findings.map((finding) => finding.severity)).toEqual(["high"]);
+    expect(findings[0].rationale).toContain(reason);
+  });
+
+  it("accepts the real tree's verifier middleware shape (bounded read, verifier, 4xx denials, re-bodied request, await next())", async () => {
+    const result = await check(VERIFIER_MIDDLEWARE, {
+      extraModules: {
+        "http/domains/core/routes/verify.ts": `export async function verify() { return true; }`,
+        "operationAdmission/ingressBody.ts": `export async function readBoundedRequestBody() { return { kind: "ok", bytes: new Uint8Array() }; }\nexport function requestWithBody(r) { return r; }`,
+      },
+    });
+    expect(result.findings).toEqual([]);
+  });
+
+  it("accepts a function-expression middleware and `return await next()`", async () => {
+    const result = await check(`
+      sub.use("*", async function (c, next) {
+        if (!c.req.header("authorization")) return c.text("unauthorized", 401);
+        return await next();
+      });
+    `);
+    expect(result.findings).toEqual([]);
+  });
+
+  it("accepts the real tree's `boundRequestBody(...)` factory from a convex module under http/ and judges its returned middleware", async () => {
+    const accepted = await check(
+      `import { boundRequestBody } from "./boundedBody";\nsub.use("*", boundRequestBody(() => 1024));`,
+      {
+        extraModules: {
+          "http/domains/core/routes/boundedBody.ts": BOUNDED_BODY_FACTORY,
+          "operationAdmission/ingressBody.ts": `export async function readBoundedRequestBody() { return { kind: "ok", bytes: new Uint8Array() }; }\nexport function requestWithBody(r) { return r; }`,
+        },
+      },
+    );
+    expect(accepted.findings).toEqual([]);
+
+    // The same factory whose returned middleware answers 200 fails at the
+    // `.use` site, naming the factory and the line of the offending function.
+    const leaking = await check(
+      `import { boundRequestBody } from "./boundedBody";\nsub.use("*", boundRequestBody(() => 1024));`,
+      {
+        extraModules: {
+          "http/domains/core/routes/boundedBody.ts": BOUNDED_BODY_FACTORY.replace(
+            `return c.json({ error: { code: "request_rejected" } }, 413);`,
+            `return c.json({ pwned: true }, 200);`,
+          ),
+          "operationAdmission/ingressBody.ts": `export async function readBoundedRequestBody() { return { kind: "ok", bytes: new Uint8Array() }; }\nexport function requestWithBody(r) { return r; }`,
+        },
+      },
+    );
+    expect(middlewareFindings(leaking).map((finding) => finding.id)).toEqual([`${SUB_ID}8`]);
+    expect(middlewareFindings(leaking)[0].rationale).toContain("the middleware returned by `boundRequestBody` (`http/domains/core/routes/boundedBody.ts:");
+    expect(middlewareFindings(leaking)[0].rationale).toContain("returns something other than");
+  });
+
+  it.each([
+    ["a factory that is not exactly one returned function", `export function mw(n) { const x = n; return async (c, next) => { await next(); }; }`, "does not consist of exactly one returned"],
+    ["a factory that returns a call", `export function mw(n) { return other(n); }`, "does not consist of exactly one returned"],
+    ["a factory re-exported under another name", `const inner = (n) => async (c, next) => { await next(); };\nexport { inner as mw };`, "not an `export function` / `export const`"],
+    ["a factory that is missing", `export const other = 1;`, "not an `export function` / `export const`"],
+  ])("flags %s", async (_label, factoryModule, reason) => {
+    const result = await check(
+      `import { mw } from "./mws";\nsub.use("*", mw(1));`,
+      { extraModules: { "http/domains/core/routes/mws.ts": factoryModule } },
+    );
+    expect(middlewareFindings(result).map((finding) => finding.line)).toEqual([8]);
+    expect(middlewareFindings(result)[0].rationale).toContain(reason);
+  });
+
+  it("accepts an expression-bodied `export const` factory whose returned middleware passes", async () => {
+    const result = await check(
+      `import { mw } from "./mws";\nsub.use("*", mw(1));`,
+      { extraModules: { "http/domains/core/routes/mws.ts": `export const mw = (n: number) => async (c, next) => { if (n < 0) return c.json({}, 400); await next(); };` } },
+    );
+    expect(result.findings).toEqual([]);
+  });
+
+  it("accepts `cors(...)` as the `.use` handler only through the CORS assertion — outside http.ts it is the existing cors-outside-router finding, not a middleware finding", async () => {
+    const result = await check(
+      `import { cors } from "hono/cors";\nimport { STOREFRONT_ALLOWED_ORIGINS } from "../../../../platform/storefrontOrigins";\nsub.use("*", cors({ origin: STOREFRONT_ALLOWED_ORIGINS }));`,
+    );
+    expect(middlewareFindings(result)).toEqual([]);
+    expect(result.findings.map((finding) => finding.id)).toEqual([
+      "cors-middleware-outside-router-module-http-domains-core-routes-sub-ts",
+    ]);
+  });
+
+  it("does not accept a local function named `cors` as the CORS middleware", async () => {
+    const result = await check(`const cors = () => async (c) => c.json({ pwned: true });\nsub.use("*", cors());`);
+    expect(middlewareFindings(result).map((finding) => finding.line)).toEqual([8]);
+    expect(middlewareFindings(result)[0].rationale).toContain("not a named import of a convex module under `http/`");
+  });
+
+  it("judges `.use` reached through a literal element access, and fails `.call` / computed spellings as router escapes", async () => {
+    // A literal bracket callee is the same call to the walk (judged by the
+    // grammar) AND a router escape to the reference sweep (round 7), exactly
+    // as `sub["get"](...)` is.
+    const bracket = await check(`sub["use"]("/evil", async (c) => c.json({ pwned: true }));`);
+    expect(bracket.findings.map((finding) => finding.id)).toEqual([
+      "route-registration-not-statically-resolvable-packages-athena-webapp-convex-http-domains-core-routes-sub-ts-7",
+      `${SUB_ID}7`,
+    ]);
+
+    const call = await check(`sub.use.call(sub, "/evil", async (c) => c.json({ pwned: true }));`);
+    expect(call.findings.map((finding) => finding.id)).toEqual([
+      "route-registration-not-statically-resolvable-packages-athena-webapp-convex-http-domains-core-routes-sub-ts-7",
+    ]);
+    expect(call.findings[0].rationale).toContain("`.call` / `.apply`");
+
+    const computed = await check(`const m = "use";\nsub[m]("/evil", async (c) => c.json({ pwned: true }));`);
+    expect(computed.findings.map((finding) => finding.id)).toEqual([
+      "route-registration-not-statically-resolvable-packages-athena-webapp-convex-http-domains-core-routes-sub-ts-8",
+    ]);
+  });
+
+  it("flags a second `.use` in http.ts beside the accepted cors() registration", async () => {
+    const result = await check("", {
+      httpTail: `app.use("/evil", async (c) => c.json({ pwned: true }));`,
+    });
+    expect(middlewareFindings(result).map((finding) => finding.filePath)).toEqual([
+      "packages/athena-webapp/convex/http.ts",
+    ]);
+  });
+});
