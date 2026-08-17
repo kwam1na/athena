@@ -789,7 +789,17 @@ const OPERATION_ADMISSION_BASE_DEFINITIONS = [
  * edits this file: an owning unit fills its own `domains/uN-*.definitions.ts`
  * array and nothing else.
  */
-export const OPERATION_ADMISSION_DEFINITIONS: readonly OperationDefinition[] = [
+/**
+ * The write registry. Frozen, like the definitions inside it.
+ *
+ * `defineOperation` deep-freezes each definition so a handler cannot mutate the
+ * policy it was admitted under; freezing the array closes the matching hole one
+ * level up, where a module could otherwise `push` an operation into the
+ * registry at import time and have it treated as declared. The checker compares
+ * definition IDENTITY against this array, so an entry appended after discovery
+ * would be a definition nobody reviewed.
+ */
+export const OPERATION_ADMISSION_DEFINITIONS: readonly OperationDefinition[] = Object.freeze([
   ...OPERATION_ADMISSION_BASE_DEFINITIONS,
   ...U2_POS_OPERATION_DEFINITIONS,
   ...U3_INVENTORY_CATALOG_OPERATION_DEFINITIONS,
@@ -801,7 +811,7 @@ export const OPERATION_ADMISSION_DEFINITIONS: readonly OperationDefinition[] = [
   ...U9_PLATFORM_OPERATION_DEFINITIONS,
   ...U10_HTTP_CUSTOMER_OPERATION_DEFINITIONS,
   ...U11_HTTP_CORE_OPERATION_DEFINITIONS,
-];
+] as const);
 
 export function validateOperationDefinition(
   definition: OperationDefinition,

@@ -14,7 +14,7 @@ applies_when:
   - "HTTP routes authenticate from a cookie id read directly out of the request"
   - "A migration must move ~400 call sites without changing normal-user behavior"
 tags: [athena, convex, operation-admission, shared-demo, authz, static-checker, http-ingress, derived-invariants]
-delivery_diff_fingerprint: 5167c7723d2b8601fcecba71a88c44d0fe5815019da794f0763120af1db5d05d
+delivery_diff_fingerprint: 071c752a3664cc3f69ca7a5e8a78601aaa98bf14713637dfafc7158dc2b50707
 ---
 
 # Completing an Admission Rail — Deriving Invariants Instead of Listing Them
@@ -267,6 +267,15 @@ SHA-256) so a database read cannot hand over live session credentials.
 points instead of three. The pattern worth carrying: when one link in an
 identity chain is attacker-controlled, fixing it does not end the review — ask
 what the *next* input to that flow is, and who chooses it.
+
+**Freeze what the checker trusts.** A static check that compares definition
+IDENTITY against a registry is only as good as the registry's immutability: a
+module that pushes an entry in at import time gets a definition treated as
+declared that no reviewer ever saw. `defineOperation` / `defineReadOperation`
+deep-freeze each definition so an admitted handler cannot mutate the policy it
+was admitted under, and both registry arrays are frozen so nothing can be
+appended. Cheap, and it closes the gap between "the checker verified this
+object" and "this object is what runs".
 
 **A blacklist of bad shapes cannot win; a whitelist of one good shape can.**
 The structural checker was defeated in three consecutive review rounds, each

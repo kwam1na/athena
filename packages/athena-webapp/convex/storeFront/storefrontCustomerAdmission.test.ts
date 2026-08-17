@@ -304,6 +304,50 @@ describe("U6 exported handler admission", () => {
   });
 
   /**
+   * `getAll` used to run unscoped (`scope: none`, a bare `take(MAX_GUESTS)`),
+   * so any signed-in Athena account could list every store's guests. It now
+   * requires `storeId` and filters `by_storeId` (see the comment on the
+   * handler in `storeFront/guest.ts`). This is the regression test for that
+   * fix: a second store's guest must never appear in the first store's
+   * listing, no matter which store row is older.
+   */
+  it("scopes getAll to the caller's store and excludes another store's guests", async () => {
+    const t = convexTest(schema, modules);
+    const seed = await seedStore(t);
+    const other = await t.run(async (ctx) => {
+      const storeId = await ctx.db.insert("store", {
+        createdByUserId: seed.athenaUserId,
+        currency: "GHS",
+        name: "other-store",
+        organizationId: seed.organizationId,
+        slug: "other-store",
+      });
+      const guestId = await ctx.db.insert("guest", {
+        marker: "other-store-guest-marker",
+        organizationId: seed.organizationId,
+        storeId,
+      });
+      return { guestId, storeId };
+    });
+    const as = t.withIdentity({ subject: `${seed.authUserId}|session` });
+
+    const guestsInStoreA = await as.query(api.storeFront.guest.getAll, {
+      storeId: seed.storeId,
+    });
+    expect(guestsInStoreA.map((guest) => guest._id)).toEqual([seed.guestId]);
+    expect(
+      guestsInStoreA.some((guest) => guest._id === other.guestId),
+    ).toBe(false);
+
+    const guestsInStoreB = await as.query(api.storeFront.guest.getAll, {
+      storeId: other.storeId,
+    });
+    expect(guestsInStoreB.map((guest) => guest._id)).toEqual([
+      other.guestId,
+    ]);
+  });
+
+  /**
    * The two-step internalization contract: an internal sibling must return the
    * same thing as the public original for the same inputs, so wave B2 can flip
    * a route to it without changing a payload.

@@ -7,7 +7,7 @@
   <body>
     <article
       data-athena-landed-change-report="v2"
-      data-athena-report-diff-fingerprint="5167c7723d2b8601fcecba71a88c44d0fe5815019da794f0763120af1db5d05d"
+      data-athena-report-diff-fingerprint="071c752a3664cc3f69ca7a5e8a78601aaa98bf14713637dfafc7158dc2b50707"
     >
       <header data-report-section="header">
         <h1>Closing the Admission Rail</h1>
@@ -643,6 +643,16 @@ handler: admitPublicMutation(createOrganizationOperationDefinition, ...)</code><
             reports anything it cannot follow as
             <code>ingress-not-statically-resolvable</code> instead of skipping
             it. A name is a coincidence; a resolution is a fact.
+          </li>
+          <li>
+            <strong>And the objects the checker trusts are frozen.</strong>
+            Comparing definition <em>identity</em> against a registry is only as
+            strong as that registry's immutability — a module pushing an entry
+            in at import time would get a definition treated as declared that no
+            reviewer saw. Definitions are deep-frozen at construction, so an
+            admitted handler cannot mutate the policy it was admitted under, and
+            both registry arrays are frozen too. It closes the gap between "the
+            checker verified this object" and "this object is what runs".
           </li>
           <li>
             <strong>P1 — a hole in the new checker rule.</strong> It accepted

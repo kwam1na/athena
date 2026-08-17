@@ -13,16 +13,49 @@ import type {
  * `_generated/dataModel`. Scope/target resolvers use `ctx.db` directly.
  */
 
+/**
+ * Deep-freeze a definition at construction. The admission wrappers admit with
+ * whatever definition object they are handed, and the checker proves that
+ * object IS the registered instance — so the remaining way to run an ingress
+ * under a policy the registry never declared is to MUTATE the registered
+ * instance at import time (`(writeDefinition as any).actors.public = "admit"`
+ * in some later-loaded module). Frozen definitions make that a TypeError in
+ * strict-mode ESM instead of a silent policy change. Functions (resolvers,
+ * guards, verifiers) are left as they are; only plain objects and arrays
+ * reachable from the definition are frozen.
+ */
+function deepFreezeDefinition<T>(value: T): T {
+  const seen = new Set<unknown>();
+  const freeze = (input: unknown) => {
+    if (input === null || typeof input !== "object" || seen.has(input)) return;
+    seen.add(input);
+    const prototype = Object.getPrototypeOf(input);
+    if (
+      prototype !== Object.prototype &&
+      prototype !== Array.prototype &&
+      prototype !== null
+    ) {
+      return;
+    }
+    Object.freeze(input);
+    for (const key of Object.keys(input as Record<string, unknown>)) {
+      freeze((input as Record<string, unknown>)[key]);
+    }
+  };
+  freeze(value);
+  return value;
+}
+
 export function defineOperation<T extends OperationDefinition>(
   definition: T,
 ): T {
-  return definition;
+  return deepFreezeDefinition(definition);
 }
 
 export function defineReadOperation<T extends OperationReadDefinition>(
   definition: T,
 ): T {
-  return definition;
+  return deepFreezeDefinition(definition);
 }
 
 export function storeWriteOperation(args: {

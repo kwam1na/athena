@@ -770,8 +770,9 @@ const OPERATION_READ_ADMISSION_BASE_DEFINITIONS = [
  * Composed once in U1a from the per-unit domain modules so no Phase B unit
  * edits this file.
  */
+/** The read registry. Frozen for the same reason as its write sibling. */
 export const OPERATION_READ_ADMISSION_DEFINITIONS: readonly OperationReadDefinition[] =
-  [
+  Object.freeze([
     ...OPERATION_READ_ADMISSION_BASE_DEFINITIONS,
     ...U2_POS_READ_OPERATION_DEFINITIONS,
     ...U3_INVENTORY_CATALOG_READ_OPERATION_DEFINITIONS,
@@ -783,7 +784,7 @@ export const OPERATION_READ_ADMISSION_DEFINITIONS: readonly OperationReadDefinit
     ...U9_PLATFORM_READ_OPERATION_DEFINITIONS,
     ...U10_HTTP_CUSTOMER_READ_OPERATION_DEFINITIONS,
     ...U11_HTTP_CORE_READ_OPERATION_DEFINITIONS,
-  ];
+  ] as const);
 
 export function validateReadOperationDefinition(
   definition: OperationReadDefinition,

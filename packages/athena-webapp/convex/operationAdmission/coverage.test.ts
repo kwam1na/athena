@@ -1,6 +1,8 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { OPERATION_ADMISSION_DEFINITIONS } from "./definitions";
+import { OPERATION_READ_ADMISSION_DEFINITIONS } from "./readDefinitions";
 
 /**
  * End-state admission coverage.
@@ -96,4 +98,65 @@ describe("operation admission coverage", () => {
       ),
     ).resolves.toBe(formatDownstreamWrites(result.downstreamWrites));
   }, 120_000);
+});
+
+/**
+ * Registry integrity (round 6). The checker proves the object handed to each
+ * wrapper IS the registered instance; freezing closes the remaining hole — a
+ * later-loaded module mutating the registered instance at import time so the
+ * registry array, the handed object, and the runtime policy are all the same
+ * now-lax object. `defineOperation` / `defineReadOperation` deep-freeze at
+ * construction, so this pins that every registered definition (and every
+ * plain object reachable from it) is frozen and that a mutation throws.
+ */
+describe("operation admission registry is frozen", () => {
+  const plainObjectsWithin = (root: unknown) => {
+    const found: unknown[] = [];
+    const seen = new Set<unknown>();
+    const walk = (value: unknown) => {
+      if (value === null || typeof value !== "object" || seen.has(value)) return;
+      seen.add(value);
+      const prototype = Object.getPrototypeOf(value);
+      if (
+        prototype !== Object.prototype &&
+        prototype !== Array.prototype &&
+        prototype !== null
+      ) {
+        return;
+      }
+      found.push(value);
+      for (const key of Object.keys(value as Record<string, unknown>)) {
+        walk((value as Record<string, unknown>)[key]);
+      }
+    };
+    walk(root);
+    return found;
+  };
+
+  it("deep-freezes every write/action/http definition", () => {
+    expect(OPERATION_ADMISSION_DEFINITIONS.length).toBeGreaterThan(0);
+    const unfrozen = OPERATION_ADMISSION_DEFINITIONS.filter((definition) =>
+      plainObjectsWithin(definition).some((value) => !Object.isFrozen(value)),
+    ).map((definition) => definition.operationId);
+    expect(unfrozen).toEqual([]);
+  });
+
+  it("deep-freezes every read definition", () => {
+    expect(OPERATION_READ_ADMISSION_DEFINITIONS.length).toBeGreaterThan(0);
+    const unfrozen = OPERATION_READ_ADMISSION_DEFINITIONS.filter((definition) =>
+      plainObjectsWithin(definition).some((value) => !Object.isFrozen(value)),
+    ).map((definition) => definition.operationId);
+    expect(unfrozen).toEqual([]);
+  });
+
+  it("throws on an import-time style mutation of a registered definition", () => {
+    const [definition] = OPERATION_ADMISSION_DEFINITIONS;
+    expect(() => {
+      (definition as unknown as { actors: { public: string } }).actors.public =
+        "admit";
+    }).toThrow(TypeError);
+    expect(() => {
+      (definition as unknown as { capability: string }).capability = "x";
+    }).toThrow(TypeError);
+  });
 });

@@ -1200,6 +1200,53 @@ describe("the guest marker is a session-recovery secret, or nothing", () => {
       expect(issuedGuestId(viaGuests)).toBe(mine);
     });
   });
+
+  /**
+   * The bootstrap route's own dedup, isolated from any cross-store noise:
+   * `guest.create`'s per-(store, marker) uniqueness (asserted directly below)
+   * means a SECOND `GET /storefront?asNewUser=true&marker=<same>` for a
+   * marker that hasn't resolved yet must mint the row once and then hand back
+   * a signed cookie for that SAME row on every later hit, not a fresh guest.
+   */
+  it("GET /storefront?asNewUser=true with the same marker twice mints once and re-signs the same guest", async () => {
+    await withOrigin(async () => {
+      const s = await seed();
+
+      const first = await storefrontRoutes.fetch(
+        getRequest(`/?storeName=store&asNewUser=true&marker=${RECOVERABLE_MARKER}`),
+        envFor(s.t),
+      );
+      expect(first.status).toBe(200);
+      const mine = issuedGuestId(first);
+      expect(mine).toBeDefined();
+
+      const second = await storefrontRoutes.fetch(
+        getRequest(`/?storeName=store&asNewUser=true&marker=${RECOVERABLE_MARKER}`),
+        envFor(s.t),
+      );
+      expect(second.status).toBe(200);
+      // Same guest id, and the cookie on the second response VERIFIES (it is
+      // a fresh, correctly signed value for that id, not a copy of the first
+      // response's Set-Cookie header).
+      expect(issuedGuestId(second)).toBe(mine);
+
+      // Index-bounded, matching `findGuestByMarkerHash` in storeFront/guest.ts:
+      // seek the digest on `by_marker`, filter to the store, and take TWO — one
+      // row proves the dedup held, two would prove it did not. A full
+      // `.collect()` over the store would answer the same question by reading
+      // every guest in it.
+      const digest = await hashGuestMarker(RECOVERABLE_MARKER);
+      const matching = await s.t.run((ctx) =>
+        ctx.db
+          .query("guest")
+          .withIndex("by_marker", (q) => q.eq("marker", digest))
+          .filter((q) => q.eq(q.field("storeId"), s.storeId))
+          .take(2),
+      );
+      expect(matching).toHaveLength(1);
+    });
+  });
+
   /**
    * The write half of the same rule, at the callee. A route is not the only
    * thing that can hand `guest.create` a marker, so the gate, the digest and
