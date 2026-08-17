@@ -88,6 +88,17 @@ export const readLegacyUnsignedGuestCookieForBootstrap = (
  * `storeFront/guest:getByMarker` enforces the same rule server-side, so a
  * route cannot forget it, and additionally scopes the lookup to the store
  * being bootstrapped so a marker never resolves across stores.
+ *
+ * AT REST THE MARKER IS A HASH. Being a session secret, the raw marker is
+ * never persisted: `guest.create` stores {@link hashGuestMarker} of it in the
+ * `marker` column and `getByMarker` hashes the presented value before the
+ * `by_marker` lookup. A guest document is read back whole by operator
+ * surfaces (`storeFront/guest:getAll`, `storeFront/users:getByIds`, the
+ * public `GET /guests`), and with only the digest on the row none of those
+ * reads hands out anything a bootstrap route will resolve — presenting the
+ * digest itself is hashed again and misses. Same shape as the shared-demo
+ * ticket and the receipt-share token: mint raw, store SHA-256, compare
+ * digests.
  */
 export const GUEST_MARKER_MIN_LENGTH = 22;
 const GUEST_MARKER_MAX_LENGTH = 128;
@@ -100,6 +111,22 @@ export const isRecoverableGuestMarker = (
   marker.length >= GUEST_MARKER_MIN_LENGTH &&
   marker.length <= GUEST_MARKER_MAX_LENGTH &&
   GUEST_MARKER_SHAPE.test(marker);
+
+/**
+ * The value the `guest.marker` column holds for a raw marker: lowercase hex
+ * SHA-256 (64 characters). Async because it goes through `crypto.subtle`,
+ * which the Convex query/mutation runtime provides (see
+ * `customerMessaging/token.ts`, used the same way from a `QueryCtx`).
+ */
+export async function hashGuestMarker(marker: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(marker),
+  );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
 
 const STOREFRONT_COOKIE_OPTIONS = {
   path: "/",

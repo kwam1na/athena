@@ -14,7 +14,7 @@ applies_when:
   - "HTTP routes authenticate from a cookie id read directly out of the request"
   - "A migration must move ~400 call sites without changing normal-user behavior"
 tags: [athena, convex, operation-admission, shared-demo, authz, static-checker, http-ingress, derived-invariants]
-delivery_diff_fingerprint: 61f8ea5d8c4d0d5e342f33165025b95ce408039ace09c115d3dac666b4e3d17d
+delivery_diff_fingerprint: 5167c7723d2b8601fcecba71a88c44d0fe5815019da794f0763120af1db5d05d
 ---
 
 # Completing an Admission Rail — Deriving Invariants Instead of Listing Them
@@ -255,6 +255,19 @@ resolves, so guest rows without `storeId` cannot be re-owned afterwards.
 Worth recording, because all four were invisible to the units that introduced
 them and only surfaced when the closure unit went looking.
 
+**The guest identity chain had five links, and each round found the next one.**
+Body field → cookie compared against itself → cookie the mint trusted → signed
+cookie → the recovery **marker**, which was caller-chosen and only five base-36
+characters, with a marker-less lookup that resolved the oldest marker-less row.
+The marker is now treated as what it always was — a session-recovery secret:
+minted client-side with `crypto.randomUUID()`, required to be high-entropy,
+scoped to the store being bootstrapped, and **hashed at rest** (`hashGuestMarker`,
+SHA-256) so a database read cannot hand over live session credentials.
+`GET /homepage-snapshot` no longer mints guests at all, leaving exactly two mint
+points instead of three. The pattern worth carrying: when one link in an
+identity chain is attacker-controlled, fixing it does not end the review — ask
+what the *next* input to that flow is, and who chooses it.
+
 **A blacklist of bad shapes cannot win; a whitelist of one good shape can.**
 The structural checker was defeated in three consecutive review rounds, each
 time by an expression form its blacklist did not enumerate: a const-bound
@@ -394,6 +407,29 @@ The route tests drive the round-4 attack end to end — cookie-less bootstrap wi
 the victim's marker, sign in as another shopper, run the five merges — and it
 fails at the first step.
 
+Round 5 closed the disclosure side of the same secret. A marker stored in the
+clear on the guest row is handed out by every surface that returns a guest
+document — `storeFront/guest:getAll` was `scope: none` and listed every
+tenant's guests to any signed-in Athena account, `storeFront/users:getByIds`
+returns the same document, and so does the public `GET /guests` — so the row now
+holds only `hashGuestMarker(marker)` (SHA-256 hex, `http/utils.ts`; the same
+mint-raw/store-digest shape as the shared-demo ticket and the receipt-share
+token). `guest.create` applies the recoverability gate before storing anything,
+writes the digest, and returns the existing row for a repeated
+`(store, marker)` instead of minting a second one — which also closes the
+two-bootstraps-race that used to leave two rows behind one marker.
+`getByMarker` hashes before the `by_marker` lookup, so a digest lifted from a
+document is hashed again and misses. `guest:getAll` is now store-scoped
+(`storeId` required, `by_storeId`); it had no webapp caller. No backfill: the
+branch is undeployed and legacy short markers were already unresolvable. Not
+done, on purpose: the marker still travels as `?marker=` on the two bootstrap
+GETs — moving it to a header would add a CORS preflight to the store-bootstrap
+critical path for a log-exposure benefit that hashing at rest already halves,
+so it stays a documented residual rather than a silent widening; and
+`storeFront/users:getByIds` remains `scope: none` (outside this change's files,
+harmless for the marker now that the column is a digest, still a cross-store
+listing worth scoping in its own change).
+
 A hand-rolled synchronous HMAC rather than `hono/cookie`'s signed helpers,
 because verification also happens inside `getStorefrontClaimFromRequest`, which
 the rail calls **synchronously** — and widening the rail's signature was outside
@@ -512,6 +548,7 @@ on V26-1237 / V26-1238 and reflected in the regenerated caller table at
 
 - [Athena Operation Admission Rail (2026-07-21)](./athena-operation-admission-rail-2026-07-21.md) — established the write rail; superseded in scope by this note.
 - [Athena Shared Demo Read Admission Rail (2026-07-22)](./athena-shared-demo-read-admission-rail-2026-07-22.md) — established the read rail; superseded in scope by this note.
+- [A static check must resolve what the runtime resolves, and fail closed on the rest](../workflow-issues/static-checks-must-resolve-not-pattern-match-2026-08-17.md) — the checker lesson, extracted for anyone building a merge-gating static check.
 - [Verify the Fix — three rounds where the previous round's fix was the defect](../workflow-issues/verifying-a-fix-actually-fixes-2026-08-17.md) — the workflow learning this delivery produced, extracted so it is findable by someone who is not reading about admission rails.
 - [Athena Public Operation Admission (2026-07-24)](./athena-public-operation-admission-2026-07-24.md)
 - [Reconciling divergent WIP read contracts, not deletions (2026-07-23)](../workflow-issues/reconciling-divergent-wip-read-contracts-not-deletions-2026-07-23.md) — the test this delivery had to pass. That note's lesson is **"intent is recorded somewhere; inference is a last resort"**: its own episode ended in a deletion, and what it argues against is inferring deletion-intent from a diff rather than checking the actual record. This delivery has that record — a written contract (R10 in the plan, restated in the ticket) names every construct to delete and requires each one's invariants to be re-derived rather than dropped. The deletions here are executions of a recorded decision, not inferences from a diff. (A secondary and weaker point: the deleted constructs were duplicates of facts the definitions already carried, so nothing was lost that was not stated elsewhere. The recorded-intent test is the one that actually governs.)

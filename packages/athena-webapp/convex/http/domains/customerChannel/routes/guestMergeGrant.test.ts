@@ -27,6 +27,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, it, vi } from "vitest";
 
+import { internal } from "../../../../_generated/api";
 import type { Id } from "../../../../_generated/dataModel";
 import schema from "../../../../schema";
 
@@ -37,6 +38,7 @@ import {
   verifyStorefrontCookieValue,
 } from "../../../../platform/storefrontCookieSignature";
 
+import { hashGuestMarker } from "../../../utils";
 import { analyticsRoutes } from "../../core/routes/analytics";
 import { authRoutes } from "../../core/routes/auth";
 import { bagRoutes } from "./bag";
@@ -995,16 +997,17 @@ describe("the guest marker is a session-recovery secret, or nothing", () => {
   it("recovers a session from a high-entropy marker in THIS store, and only this store", async () => {
     await withOrigin(async () => {
       const s = await seed();
+      // Rows hold the marker's DIGEST, exactly as `guest.create` writes it.
       const { mine, foreign } = await s.t.run(async (ctx) => ({
         mine: await ctx.db.insert("guest", {
-          marker: RECOVERABLE_MARKER,
+          marker: await hashGuestMarker(RECOVERABLE_MARKER),
           organizationId: s.organizationId,
           storeId: s.storeId,
         }),
         // The SAME marker in another store: a marker is a per-browser secret,
         // not a global handle, and must never resolve across stores.
         foreign: await ctx.db.insert("guest", {
-          marker: `${RECOVERABLE_MARKER}-other`,
+          marker: await hashGuestMarker(`${RECOVERABLE_MARKER}-other`),
           organizationId: s.organizationId,
           storeId: s.otherStoreId,
         }),
@@ -1093,6 +1096,149 @@ describe("the guest marker is a session-recovery secret, or nothing", () => {
         });
       }
       expect(await ownership(s)).toEqual(before);
+    });
+  });
+  /**
+   * The marker at REST. Round 5 made the marker a session secret, and a
+   * secret stored in plaintext on a row that operator surfaces read back whole
+   * (`storeFront/guest:getAll`, `storeFront/users:getByIds`, and the public
+   * `GET /guests` itself) is a secret disclosed to everyone who can read a
+   * guest document. So the row holds only its digest, and nothing a document
+   * contains is a value the bootstrap routes will resolve.
+   */
+  it("persists only a digest, and a marker lifted from a guest document does not resolve", async () => {
+    await withOrigin(async () => {
+      const s = await seed();
+
+      // Mint through the real route, as the storefront does.
+      const minted = await storefrontRoutes.fetch(
+        getRequest(`/?storeName=store&asNewUser=true&marker=${RECOVERABLE_MARKER}`),
+        envFor(s.t),
+      );
+      const mine = issuedGuestId(minted) as Id<"guest">;
+      expect(mine).toBeDefined();
+
+      // What every reader of the guest document sees, via the public
+      // recovery route itself and via a raw read of the row.
+      const document = await (
+        await guestRoutes.fetch(
+          getRequest("/", `${signedGuest(mine)}; store_id=${s.storeId}`),
+          envFor(s.t),
+        )
+      ).json();
+      const row = await s.t.run((ctx) => ctx.db.get("guest", mine));
+      expect(String(document._id)).toBe(String(mine));
+      expect(row?.marker).toBe(await hashGuestMarker(RECOVERABLE_MARKER));
+      expect(document.marker).toBe(row?.marker);
+      expect(JSON.stringify(document)).not.toContain(RECOVERABLE_MARKER);
+
+      // The digest is itself a well-formed marker (64 hex chars); presenting
+      // it must NOT resolve the row it was lifted from, on either route.
+      const stolen = document.marker as string;
+      const viaStorefront = await storefrontRoutes.fetch(
+        getRequest(`/?storeName=store&asNewUser=true&marker=${stolen}`),
+        envFor(s.t),
+      );
+      const viaGuests = await guestRoutes.fetch(
+        getRequest(
+          `/?marker=${stolen}`,
+          `guest_id=garbage; store_id=${s.storeId}; organization_id=${s.organizationId}`,
+        ),
+        envFor(s.t),
+      );
+      for (const issued of [issuedGuestId(viaStorefront), issuedGuestId(viaGuests)]) {
+        expect(issued).toBeDefined();
+        expect(issued).not.toBe(String(mine));
+      }
+
+      // Positive control: the browser that holds the RAW marker still recovers.
+      const recovered = await storefrontRoutes.fetch(
+        getRequest(`/?storeName=store&asNewUser=true&marker=${RECOVERABLE_MARKER}`),
+        envFor(s.t),
+      );
+      expect(issuedGuestId(recovered)).toBe(String(mine));
+    });
+  });
+
+  it("does not resolve the same marker held by an OLDER row in another store", async () => {
+    await withOrigin(async () => {
+      const s = await seed();
+      // The foreign row is inserted FIRST, so a lookup that forgot the store
+      // (`by_marker … .first()`) would answer it.
+      const foreign = await s.t.run(async (ctx) =>
+        ctx.db.insert("guest", {
+          marker: await hashGuestMarker(RECOVERABLE_MARKER),
+          organizationId: s.organizationId,
+          storeId: s.otherStoreId,
+        }),
+      );
+
+      const first = await storefrontRoutes.fetch(
+        getRequest(`/?storeName=store&asNewUser=true&marker=${RECOVERABLE_MARKER}`),
+        envFor(s.t),
+      );
+      const mine = issuedGuestId(first);
+      expect(mine).toBeDefined();
+      expect(mine).not.toBe(String(foreign));
+      const row = await s.t.run((ctx) => ctx.db.get("guest", mine as Id<"guest">));
+      expect(String(row?.storeId)).toBe(String(s.storeId));
+
+      // And the row minted for THIS store is the one this store recovers,
+      // even though the foreign row with the same digest is older.
+      const again = await storefrontRoutes.fetch(
+        getRequest(`/?storeName=store&asNewUser=true&marker=${RECOVERABLE_MARKER}`),
+        envFor(s.t),
+      );
+      expect(issuedGuestId(again)).toBe(mine);
+      const viaGuests = await guestRoutes.fetch(
+        getRequest(
+          `/?marker=${RECOVERABLE_MARKER}`,
+          `guest_id=garbage; store_id=${s.storeId}; organization_id=${s.organizationId}`,
+        ),
+        envFor(s.t),
+      );
+      expect(issuedGuestId(viaGuests)).toBe(mine);
+    });
+  });
+  /**
+   * The write half of the same rule, at the callee. A route is not the only
+   * thing that can hand `guest.create` a marker, so the gate, the digest and
+   * the per-(store, marker) uniqueness live in the mutation itself.
+   */
+  it("`guest.create` refuses to persist an unrecoverable marker, stores a digest, and never mints a second row for the same marker in a store", async () => {
+    await withOrigin(async () => {
+      const s = await seed();
+      const create = (marker: string | undefined, storeId = s.storeId) =>
+        s.t.mutation(internal.storeFront.guest.create, {
+          creationOrigin: "test",
+          marker,
+          organizationId: s.organizationId,
+          storeId,
+        });
+
+      // A marker `getByMarker` would never resolve is not stored at all.
+      for (const marker of ["victim", "", undefined]) {
+        const row = await create(marker);
+        expect({ marker, stored: row?.marker }).toEqual({ marker, stored: undefined });
+      }
+
+      // A recoverable one is stored as its digest, once per store …
+      const first = await create(RECOVERABLE_MARKER);
+      expect(first?.marker).toBe(await hashGuestMarker(RECOVERABLE_MARKER));
+      const second = await create(RECOVERABLE_MARKER);
+      expect(String(second?._id)).toBe(String(first?._id));
+      const rows = await s.t.run((ctx) =>
+        ctx.db
+          .query("guest")
+          .withIndex("by_marker", (q) => q.eq("marker", first?.marker))
+          .take(10),
+      );
+      expect(rows).toHaveLength(1);
+
+      // … and a different store gets its own row.
+      const foreign = await create(RECOVERABLE_MARKER, s.otherStoreId);
+      expect(String(foreign?._id)).not.toBe(String(first?._id));
+      expect(String(foreign?.storeId)).toBe(String(s.otherStoreId));
     });
   });
 });

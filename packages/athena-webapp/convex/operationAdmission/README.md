@@ -168,7 +168,13 @@ id. `admitPublicMutation(publicPingDefinition, …)` on `deleteStore` is
 cannot follow to a registry export (declared inline, imported from a module
 that does not resolve, or a member that does not exist) is
 `admission-definition-not-statically-resolvable`. Import the definition const
-by name from `definitions.ts`, `readDefinitions.ts`, or a `domains/` module.
+by name from `definitions.ts`, `readDefinitions.ts`, or a `domains/` module —
+those three locations are the **only** ones the checker accepts as a
+definition source, and the resolved object must **be** the one the registry
+array holds for this ingress (same ESM instance, or field-for-field equal). A
+same-named shadow with a laxer `actors` policy — even one placed under
+`domains/` but never composed into the registry — is
+`admission-definition-not-registered`.
 
 #### Why a whitelist
 
@@ -199,6 +205,21 @@ bad shapes it knew about, and each round a review found one it did not:
    CORS assertion accepted any `origin` that was not a callback or `"*"`; and
    nothing checked that the definition handed to the wrapper was the
    ingress's own. Round 4 inverted every one of those.
+5. The whitelists' **inputs**. Discovery walked only `*.ts` and pruned every
+   `_generated/` at any depth, while the bundler registers `.tsx` / `.js` /
+   `.mts` / … and skips only the top-level `_generated/`; the builder import
+   was a suffix regex, so `../_generated/./server`, a one-line shim, `const m
+   = mutation`, or `const { mutation } = server` hid a public function; the
+   definition check compared names only, so a same-named shadow with
+   `public: "admit"` passed; an unresolved router receiver was flagged only
+   for a `/`-prefixed path though Hono prepends the slash itself; the CORS
+   count saw only the identifier `cors`, so `honoCors.cors(...)` or a
+   sub-router `cors()` reflected origins behind an allowlisted call; the
+   `api.*` ban never scanned a module without an `api` import, so a string
+   function reference or a `Symbol.for("functionName")` object walked past
+   it; and `export let`, a later assignment, or a re-export from outside
+   `convex/` was invisible. Round 5 resolves every one of those inputs the way
+   the bundler and the runtime do, and fails closed on the rest.
 
 The argument each time was "the new predicate accepts everything the old one
 accepted". That reasons about the predicate's extension rather than about the
@@ -239,11 +260,14 @@ unknown admission — never skipped.
 
 | surface | resolved | otherwise |
 |---|---|---|
-| exported Convex function | `export const x = <builder>({…})` after peeling `as` / `satisfies` / `!` / parentheses; a top-level `const` re-exported with `export { x }` / `export { x as y }` / `export default x`; `export default <builder>({…})`; `export const { a, b: c } = { a: <builder>({…}), b: <builder>({…}) }`; builders are `mutation` / `query` / `action` from `_generated/server` (any extension) or `mutationGeneric` / `queryGeneric` / `actionGeneric` from `convex/server`, named, aliased, or namespaced | any exported binding that mentions a builder in another shape (a conditional, a wrapping call, `x || <builder>(…)`) — `ingress-not-statically-resolvable` |
-| Hono route | a verb / `.on` on a **top-level router binding** (`Hono` / `HonoWithConvex` typed, `new Hono()`, mounted with `.route`, or carrying a registration — so a factory-built router counts), through chained calls, with a string-literal path (and literal method list) and the handler as the **last and only** argument after it | more arguments than (path, handler) — per-route middleware — is a `wrapper-shape` rejection; a non-literal path or method list, `.route` with a non-literal prefix or non-identifier child, `.mount` anywhere, or any registration on a receiver that is not a top-level router — `route-registration-not-statically-resolvable` |
-| definition argument | an import binding (named, aliased, or namespace member) that resolves to a convex module whose export evaluates to a definition naming this ingress | `admission-definition-does-not-name-this-ingress` / `admission-definition-not-statically-resolvable` |
-| `api.*` self-call | roots are `api` from `_generated/api` (any extension), `anyApi` and `makeFunctionReference` from `convex/server`, widened through aliases, consts, destructuring, and object literals; `makeFunctionReference("m:f")` is a site when any statically enumerable value of its argument (literal, template, conditional, once-declared const) names a discovered public function; a computed index on a root is always a site | — the reference IS the finding |
-| router CORS | exactly one `cors(...)` (imported from `hono/cors`) passed directly to `<router>.use(...)`, whose `origin` is an array literal of string literals / spreads of a `platform/storefrontOrigins.ts` export, or such an export (or a zero-argument call to one) directly | any other value — an identifier bound to a callback, a member, a call with arguments — fails; a later passing call never masks an earlier failing one |
+| module set | exactly the bundler's entry points under `convex/`: any of `.js` / `.mjs` / `.cjs` / `.ts` / `.tsx` / `.mts` / `.cts` / `.jsx`, skipping only the **top-level** `_generated/`, dotfiles, and multi-dot basenames (`x.test.ts`, `x.d.ts`, `convex.config.ts`); a nested `foo/_generated/evil.ts` IS scanned | — a file the bundler registers is a file discovery reads |
+| builder import | `mutation` / `query` / `action` whose specifier **resolves** (normalized, extension-stripped) to `_generated/server`, named, aliased, or namespaced; `mutationGeneric` / `queryGeneric` / `actionGeneric` from `convex/server` | a builder rebound (`const m = mutation`), a namespace escaping a plain property read (`const { mutation } = server`, `server["mutation"]`, `const s = server`), a builder called inside a helper or passed to one, a shim (`export { mutation } from "./_generated/server"`, `export * from …`, import-then-`export { mutation }`) — `ingress-not-statically-resolvable`; a handler-local that shadows the builder name (`const query = ctx.db.query(…)`) is scope-resolved and is not the builder |
+| exported Convex function | `export const x = <builder>({…})` after peeling `as` / `satisfies` / `!` / parentheses; a top-level `const` re-exported with `export { x }` / `export { x as y }` / `export default x`; `export default <builder>({…})`; `export const { a, b: c } = { a: <builder>({…}), b: <builder>({…}) }` | any exported binding that mentions a builder in another shape (a conditional, a wrapping call, `x \|\| <builder>(…)`); an exported `let` / `var`; any assignment to an exported top-level binding anywhere in the module — `ingress-not-statically-resolvable` |
+| re-export | `export { x } from`, `export *`, an import re-exported by name or as default, `export const y = importedX` — resolved with the same resolver: a known convex module is skipped (its own discovery covers it), a bare package is skipped, anything else is **read from disk** through its own re-exports and skipped only when it imports no builder (`operations/serviceIntake.ts` → `shared/serviceIntake.ts` is the real-tree positive control) | a target that resolves to `_generated/server` / a `convex/server` builder, cannot be located, or imports a builder — `ingress-not-statically-resolvable` |
+| Hono route | a verb / `.on` on a **top-level router binding** (`Hono` / `HonoWithConvex` typed, `new Hono()`, mounted with `.route`, or carrying a registration — so a factory-built router counts), through chained calls and through `(sub)` / `sub!` / `(sub as X)`, with a string-literal path (slash-less accepted: Hono prepends it) and literal method list, and the handler as the **last and only** argument after it | more arguments than (path, handler) — per-route middleware — is a `wrapper-shape` rejection; a non-literal path or method list, `.route` with a non-literal prefix or non-identifier child, `.mount` anywhere — `route-registration-not-statically-resolvable`; a registration on an **import binding**, a chain rooted at one, an element access, a parameter, or a nested local with **any** string / template path is `route-registration-not-statically-resolvable` (only a plain property chain such as `ctx.db`, or a parameter typed `DatabaseReader` / `DatabaseWriter`, still needs a `/`-shaped path to count) |
+| definition argument | an import binding (named, aliased, or namespace member) from `definitions.ts`, `readDefinitions.ts`, or `domains/**` whose export evaluates to the **registered** definition (same instance or field-equal) for this ingress | wrong ingress — `admission-definition-does-not-name-this-ingress`; right name, wrong object — `admission-definition-not-registered`; any other module or an unresolvable member — `admission-definition-not-statically-resolvable` |
+| `api.*` self-call | roots are `api` from `_generated/api` (resolved), `anyApi` and `makeFunctionReference` from `convex/server`, widened through aliases, consts, destructuring, and object literals; `makeFunctionReference("m:f")` is a site when any statically enumerable value of its argument names a discovered public function; a computed index on a root is always a site. Scanned in **every** module, `api` import or not: a string / template function reference is a site when a value it can take names a public function or when it cannot be enumerated; an object literal (`{ [Symbol.for("functionName")]: … }`) is a site; a chain rooted at an **import** must be `internal` from `_generated/api` (or `<ns>.internal`), any other imported root is a site | a parameter or a local of unknown provenance is left to the caller table (the rail core forwards injected internal references that way) |
+| router CORS | in `http.ts`, exactly one call resolving to `hono/cors` — the named import under any local, `<ns>.cors`, or a local rebound to either — passed directly to `<router>.use(...)`, whose `origin` is an array literal of string literals / spreads of a `platform/storefrontOrigins.ts` export, or such an export (or a zero-argument call to one) directly | any other value fails; a second resolving call by any spelling fails; a `hono/cors` binding used other than as that call's callee fails; a later passing call never masks an earlier failing one; **any other module** that imports or calls `hono/cors` — `cors-middleware-outside-router-module` |
 
 ### The four things that are not obvious
 
@@ -274,7 +298,15 @@ unknown admission — never skipped.
   high-entropy marker (`isRecoverableGuestMarker` in `http/utils.ts`, ≥22
   chars; the storefront mints a UUID) and only within the store being
   bootstrapped. Absent, empty, short or foreign-store markers mint a fresh
-  guest — "no marker" must never mean "the oldest marker-less guest".
+  guest — "no marker" must never mean "the oldest marker-less guest". And
+  because a marker IS a session, it is never at rest in the clear: `guest.create`
+  stores only `hashGuestMarker(marker)` (SHA-256 hex) in the `marker` column,
+  applies the same recoverability gate before storing anything, and returns the
+  existing row for a repeated `(store, marker)` rather than minting a second
+  one; `getByMarker` hashes before the `by_marker` lookup. A guest document
+  read back whole — `storeFront/guest:getAll` (now store-scoped),
+  `storeFront/users:getByIds`, the public `GET /guests` — therefore carries
+  nothing a bootstrap route will resolve.
 
   **(b) A merge authorizes on a SERVER-ISSUED GRANT, not on the cookie.** A
   callee that absorbs one identity into another (cart claim, order re-owner,

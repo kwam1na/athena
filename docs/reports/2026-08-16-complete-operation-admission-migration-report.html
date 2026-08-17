@@ -7,7 +7,7 @@
   <body>
     <article
       data-athena-landed-change-report="v2"
-      data-athena-report-diff-fingerprint="61f8ea5d8c4d0d5e342f33165025b95ce408039ace09c115d3dac666b4e3d17d"
+      data-athena-report-diff-fingerprint="5167c7723d2b8601fcecba71a88c44d0fe5815019da794f0763120af1db5d05d"
     >
       <header data-report-section="header">
         <h1>Closing the Admission Rail</h1>
@@ -605,7 +605,23 @@ handler: admitPublicMutation(createOrganizationOperationDefinition, ...)</code><
             guarantee.
           </li>
           <li>
-            <strong>The checker was defeated three rounds running, so it stopped
+            <strong>The guest identity chain had five links.</strong> Body field
+            → cookie compared against itself → cookie the mint trusted → signed
+            cookie → the recovery <strong>marker</strong>, which was
+            caller-chosen, five base-36 characters, and whose marker-less lookup
+            resolved the oldest marker-less row. The marker is now treated as
+            what it always was — a session-recovery secret: minted with
+            <code>crypto.randomUUID()</code>, required to be high-entropy,
+            scoped to the store being bootstrapped, and <strong>hashed at
+            rest</strong> (SHA-256) so a database read cannot hand over live
+            session credentials. <code>GET /homepage-snapshot</code> no longer
+            mints guests at all, leaving two mint points instead of three.
+            <em>When one link in an identity chain is attacker-controlled,
+            fixing it does not end the review — ask what the next input is, and
+            who chooses it.</em>
+          </li>
+          <li>
+            <strong>The checker was defeated five rounds running, so it stopped
             being a blacklist.</strong> Each round found an expression form the
             previous rule did not enumerate: a const-bound wrapper, work hidden
             in the invocation's arguments, an IIFE argument, and a
@@ -619,7 +635,14 @@ handler: admitPublicMutation(createOrganizationOperationDefinition, ...)</code><
             raises <code>wrapper-shape</code>. A novel shape fails closed
             instead of slipping through, and the repo's own call sites were
             adjusted to fit — the grammar is the contract, not a description of
-            what happened to be there.
+            what happened to be there. Round 5 went further and fixed the
+            grammar's <em>inputs</em>: discovery now enumerates what the bundler
+            registers rather than globbing <code>*.ts</code>, resolves import
+            specifiers by path rather than by suffix, compares definition
+            <em>identity</em> against the registry rather than by name, and
+            reports anything it cannot follow as
+            <code>ingress-not-statically-resolvable</code> instead of skipping
+            it. A name is a coincidence; a resolution is a fact.
           </li>
           <li>
             <strong>P1 — a hole in the new checker rule.</strong> It accepted
@@ -693,6 +716,16 @@ handler: admitPublicMutation(createOrganizationOperationDefinition, ...)</code><
           mints it with <code>crypto.randomUUID()</code>, and anything else
           mints a fresh guest. The route tests drive the round-4 attack —
           bootstrap with the victim's marker, sign in, merge — end to end.
+          And a secret is not left in the clear on a row that operator reads
+          and the public <code>GET /guests</code> hand back whole: the guest
+          row now stores only the marker's <strong>SHA-256 digest</strong>
+          (<code>hashGuestMarker</code>), <code>guest.create</code> gates and
+          hashes before writing and returns the existing row for a repeated
+          <code>(store, marker)</code>, <code>getByMarker</code> hashes before
+          the lookup, and <code>guest:getAll</code> — previously every tenant's
+          guests to any signed-in account — is store-scoped. A digest lifted
+          from a document does not resolve; the tests present one and get a
+          fresh guest.
         </p>
         <ul>
           <li>

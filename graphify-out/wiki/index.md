@@ -8,8 +8,8 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 
 ## Repo Summary
 - Code files discovered: 2987
-- Graph nodes: 12865
-- Graph edges: 15852
+- Graph nodes: 12886
+- Graph edges: 15900
 - Communities: 2911
 
 ## Graph Hotspots
@@ -19,8 +19,8 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - `dailyOperations.ts` (76 edges, Community 3) - [`packages/athena-webapp/convex/operations/dailyOperations.ts`](../../packages/athena-webapp/convex/operations/dailyOperations.ts)
 - `terminalHealthPresentation.ts` (76 edges, Community 4) - [`packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts`](../../packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts)
 - `catalogImport.ts` (75 edges, Community 5) - [`packages/athena-webapp/convex/inventory/catalogImport.ts`](../../packages/athena-webapp/convex/inventory/catalogImport.ts)
-- `DailyCloseView.tsx` (71 edges, Community 6) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
-- `usePosLocalSyncRuntime.ts` (69 edges, Community 7) - [`packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts`](../../packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts)
+- `convex-operation-admission-check.ts` (74 edges, Community 6) - [`scripts/convex-operation-admission-check.ts`](../../scripts/convex-operation-admission-check.ts)
+- `DailyCloseView.tsx` (71 edges, Community 7) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
 
 ## Registered Packages
 - [Athena Webapp](packages/athena-webapp.md)

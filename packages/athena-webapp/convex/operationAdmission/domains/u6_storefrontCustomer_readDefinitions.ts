@@ -188,11 +188,13 @@ export const getCustomerObservabilityTimelineReadDefinition =
 
 // --- storeFront/guest -----------------------------------------------------
 
+// Store-scoped (default `storeIdArg: "storeId"`): a guest is a per-store row
+// and the listing names the store it is about; `scope: none` here used to
+// answer every tenant's guests to any signed-in Athena account.
 export const getAllGuestsReadDefinition = storefrontRead({
   functionName: "storeFront/guest:getAll",
   intent: "storefront.account.view",
   operationId: "storeFront/guest.getAll.read",
-  scope: { kind: "none" },
 });
 
 export const getUniqueVisitorsForDayReadDefinition = storefrontRead({

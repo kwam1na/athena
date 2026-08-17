@@ -2326,3 +2326,770 @@ describe("runCli", () => {
     expect(await runCli(rootDir, ["--partition"])).toBe(1);
   });
 });
+
+/**
+ * Round 5. Every probe the adversarial and correctness reviewers used to
+ * produce a silent pass at HEAD 3bf3eb80 is pinned here as a negative, next to
+ * a positive control for the real-tree spelling that sits closest to it.
+ */
+describe("round 5: discovery follows the bundler's entry-point rules", () => {
+  const RAW_MUTATION = `
+    import { mutation } from "../_generated/server";
+    export const drop = mutation({ args: {}, handler: async (ctx, args) => ctx.db.insert("t", args) });
+  `;
+
+  it.each([
+    ["example/view.tsx", "example/view:drop"],
+    ["example/evil.js", "example/evil:drop"],
+    ["example/evil.mjs", "example/evil:drop"],
+    ["example/evil.cjs", "example/evil:drop"],
+    ["example/evil.mts", "example/evil:drop"],
+    ["example/evil.cts", "example/evil:drop"],
+    ["example/evil.jsx", "example/evil:drop"],
+  ])("discovers a public function in %s", (convexPath, id) => {
+    const ingress = collectConvexIngressFromSource(
+      `packages/athena-webapp/convex/${convexPath}`,
+      RAW_MUTATION,
+    );
+    expect(ingress.map((entry) => [entry.id, entry.kind, entry.admitted])).toEqual([
+      [id, "mutation", false],
+    ]);
+  });
+
+  it("discovers a nested _generated/ module but skips the top-level one and multi-dot basenames", () => {
+    expect(
+      collectConvexIngressFromSource(
+        "packages/athena-webapp/convex/example/_generated/evil.ts",
+        RAW_MUTATION.replace("../_generated/server", "../../_generated/server"),
+      ).map((entry) => entry.id),
+    ).toEqual(["example/_generated/evil:drop"]);
+    for (const skipped of [
+      "packages/athena-webapp/convex/_generated/server.ts",
+      "packages/athena-webapp/convex/example/x.helper.ts",
+      "packages/athena-webapp/convex/convex.config.ts",
+      "packages/athena-webapp/convex/example/x.d.ts",
+      "packages/athena-webapp/convex/example/.hidden.ts",
+      "packages/athena-webapp/convex/example/x.json",
+    ]) {
+      expect(collectConvexIngressFromSource(skipped, RAW_MUTATION)).toEqual([]);
+    }
+  });
+
+  it("walks .tsx and nested _generated/ modules on disk and reports their raw ingress", async () => {
+    const rootDir = await createFixtureRoot();
+    await writeBaselineTree(rootDir);
+    await convexFixture(rootDir, "inventory/view.tsx", RAW_MUTATION);
+    await convexFixture(
+      rootDir,
+      "inventory/_generated/evil.ts",
+      RAW_MUTATION.replace("../_generated/server", "../../_generated/server"),
+    );
+    await convexFixture(rootDir, "_generated/server.ts", RAW_MUTATION);
+    await convexFixture(rootDir, "inventory/products.helper.ts", RAW_MUTATION);
+
+    const result = await collectOperationAdmissionCheckResult(rootDir);
+    expect(result.findings.map((finding) => finding.id).sort()).toEqual([
+      "unadmitted-mutation-inventory-generated-evil-drop",
+      "unadmitted-mutation-inventory-view-drop",
+    ]);
+  });
+
+  it("resolves a mounted sub-router whose module carries a non-.ts extension", async () => {
+    const rootDir = await createFixtureRoot();
+    await writeBaselineTree(rootDir);
+    await convexFixture(
+      rootDir,
+      "http/domains/core/routes/sub.mts",
+      `
+        import { Hono } from "hono";
+        export const sub = new Hono();
+        sub.post("/x", async (c) => c.json({}));
+      `,
+    );
+    await convexFixture(
+      rootDir,
+      "http.ts",
+      `${ADMITTED_ROUTER}
+        import { sub } from "./http/domains/core/routes/sub";
+        app.route("/sub", sub);
+      `,
+    );
+    const result = await collectOperationAdmissionCheckResult(rootDir);
+    expect(result.findings.map((finding) => finding.functionName)).toEqual(["POST /sub/x"]);
+  });
+});
+
+describe("round 5: the builder import is matched by resolution", () => {
+  const discover = (imports: string, body: string, convexPath = "example/x.ts") =>
+    collectConvexIngressFromSource(
+      `packages/athena-webapp/convex/${convexPath}`,
+      `${imports}\n${body}`,
+    );
+  const RAW = `export const drop = mutation({ args: {}, handler: async () => null });`;
+
+  it.each([
+    [`import { mutation } from "../_generated/./server";`],
+    [`import { mutation } from "../_generated/server/../server";`],
+    [`import { mutation } from "./../_generated/server.mjs";`],
+  ])("discovers a builder imported through %s", (imports) => {
+    expect(discover(imports, RAW).map((entry) => [entry.id, entry.notStaticallyResolvable])).toEqual([
+      ["example/x:drop", undefined],
+    ]);
+  });
+
+  it("does not treat a same-named module elsewhere as the builder module", () => {
+    // `example/_generated/server.ts` is NOT `_generated/server.ts`.
+    expect(
+      discover(`import { mutation } from "./_generated/server";`, RAW).map((entry) => entry.id),
+    ).toEqual([]);
+  });
+
+  it.each([
+    [
+      "a shim re-exporting the builder by name",
+      `export { mutation } from "./_generated/server";`,
+      "shim.ts",
+      "shim:mutation",
+    ],
+    [
+      "a shim star-re-exporting the builder module",
+      `export * from "../_generated/server";`,
+      "example/shim.ts",
+      "example/shim:*",
+    ],
+    [
+      "a builder imported then re-exported by name",
+      `import { mutation } from "../_generated/server";\nexport { mutation };`,
+      "example/shim.ts",
+      "example/shim:mutation",
+    ],
+    [
+      "a builder imported then re-exported as default",
+      `import { mutation } from "../_generated/server";\nexport default mutation;`,
+      "example/shim.ts",
+      "example/shim:default",
+    ],
+    [
+      "a builder rebound to a top-level const",
+      `import { mutation } from "../_generated/server";\nconst m = mutation;\nexport const x = m({ args: {}, handler: async () => null });`,
+      "example/x.ts",
+      "example/x:m",
+    ],
+    [
+      "a builder destructured off the server namespace",
+      `import * as server from "../_generated/server";\nconst { mutation } = server;\nexport const x = mutation({ args: {}, handler: async () => null });`,
+      "example/x.ts",
+      "example/x:mutation",
+    ],
+    [
+      "a builder read off the server namespace by computed key",
+      `import * as server from "../_generated/server";\nexport const x = server["mutation"]({ args: {}, handler: async () => null });`,
+      "example/x.ts",
+      "example/x:x",
+    ],
+    [
+      "the server namespace aliased to a local",
+      `import * as server from "../_generated/server";\nconst s = server;\nexport const x = s.mutation({ args: {}, handler: async () => null });`,
+      "example/x.ts",
+      "example/x:s",
+    ],
+    [
+      "a builder called inside a helper the export invokes",
+      `import { mutation } from "../_generated/server";\nfunction make() { return mutation({ args: {}, handler: async () => null }); }\nexport const x = make();`,
+      "example/x.ts",
+      "example/x:make",
+    ],
+    [
+      "a builder passed to a helper",
+      `import { mutation } from "../_generated/server";\nregister(mutation);`,
+      "example/x.ts",
+      "example/x:line-2",
+    ],
+    [
+      "a generic builder re-exported from convex/server",
+      `export { mutationGeneric } from "convex/server";`,
+      "example/shim.ts",
+      "example/shim:mutationGeneric",
+    ],
+  ])("reports %s as not statically resolvable", (_label, source, convexPath, id) => {
+    const ingress = collectConvexIngressFromSource(
+      `packages/athena-webapp/convex/${convexPath}`,
+      source,
+    );
+    const flagged = ingress.filter((entry) => entry.notStaticallyResolvable);
+    expect(flagged.map((entry) => entry.id)).toContain(id);
+    expect(flagged.every((entry) => !entry.admitted)).toBe(true);
+  });
+
+  it("does not mistake a handler-local shadowing the builder name for the builder", () => {
+    // The real shape in cashControls/registerSessionActivity.ts.
+    const ingress = discover(
+      `import { query } from "../_generated/server";
+       import { admitPublicQuery } from "../platform/operationAdmission";
+       import { definition } from "../operationAdmission/definitions";`,
+      `export const list = query({
+         args: {},
+         handler: admitPublicQuery(definition, async (ctx) => {
+           const query = ctx.db.query("t").withIndex("by_x");
+           return query.collect();
+         }),
+       });
+       async function helper(ctx) { const query = ctx.db.query("t"); return query.take(1); }`,
+    );
+    expect(ingress.map((entry) => [entry.id, entry.admitted, entry.notStaticallyResolvable])).toEqual([
+      ["example/x:list", true, undefined],
+    ]);
+  });
+
+  it("flags a shim in a full tree even though its consumer is invisible", async () => {
+    const rootDir = await createFixtureRoot();
+    await writeBaselineTree(rootDir);
+    await convexFixture(rootDir, "shim.ts", `export { mutation } from "./_generated/server";`);
+    await convexFixture(
+      rootDir,
+      "inventory/products.ts",
+      `import { mutation } from "../shim";\nexport const drop = mutation({ args: {}, handler: async () => null });`,
+    );
+    const result = await collectOperationAdmissionCheckResult(rootDir);
+    expect(result.findings.map((finding) => finding.id)).toEqual([
+      "ingress-not-statically-resolvable-shim-mutation",
+    ]);
+    expect(result.findings[0].severity).toBe("high");
+  });
+});
+
+describe("round 5: the definition handed to the wrapper must be the registered one", () => {
+  const registered = {
+    kind: "mutation",
+    functionName: "example/x:write",
+    operationId: "example.x.write",
+    capability: "catalog.manage",
+    actors: { normalUser: "admit", sharedDemo: "deny", public: "deny" },
+  };
+  const shadow = { ...registered, actors: { normalUser: "admit", sharedDemo: "admit", public: "admit" } };
+  const INGRESS = (definitionImport: string) => `
+    import { mutation } from "../_generated/server";
+    import { admitPublicMutation } from "../platform/operationAdmission";
+    ${definitionImport}
+    export const write = mutation({ args: {}, handler: admitPublicMutation(writeDefinition, async () => null) });
+  `;
+
+  it("flags a same-named shadow definition declared outside the definition modules", async () => {
+    const rootDir = await createFixtureRoot();
+    await writeBaselineTree(rootDir, { writes: { writeDefinition: registered } });
+    await convexFixture(
+      rootDir,
+      "example/shadowDefs.ts",
+      `export const writeDefinition = ${JSON.stringify(shadow)};`,
+    );
+    await convexFixture(
+      rootDir,
+      "example/x.ts",
+      INGRESS(`import { writeDefinition } from "./shadowDefs";`),
+    );
+    const result = await collectOperationAdmissionCheckResult(rootDir);
+    expect(result.findings.map((finding) => finding.id)).toEqual([
+      "admission-definition-not-statically-resolvable-example-x-write",
+    ]);
+    expect(result.findings[0].rationale).toContain("not one of the definition modules");
+  });
+
+  it("flags a same-named shadow inside domains/ that the registry does not compose", async () => {
+    const rootDir = await createFixtureRoot();
+    await writeBaselineTree(rootDir, { writes: { writeDefinition: registered } });
+    await convexFixture(
+      rootDir,
+      "operationAdmission/domains/shadow.ts",
+      `export const writeDefinition = ${JSON.stringify(shadow)};`,
+    );
+    await convexFixture(
+      rootDir,
+      "example/x.ts",
+      INGRESS(`import { writeDefinition } from "../operationAdmission/domains/shadow";`),
+    );
+    const result = await collectOperationAdmissionCheckResult(rootDir);
+    expect(result.findings.map((finding) => finding.id)).toEqual([
+      "admission-definition-not-registered-example-x-write",
+    ]);
+    expect(result.findings[0].severity).toBe("high");
+    expect(result.findings[0].rationale).toContain("differs from the registered definition");
+  });
+
+  it("passes the real shape: a domains/ const composed into the registry array", async () => {
+    const rootDir = await createFixtureRoot();
+    await convexFixture(rootDir, "auth.ts", AUTH_MODULE);
+    await convexFixture(rootDir, "http.ts", ADMITTED_ROUTER);
+    await convexFixture(
+      rootDir,
+      "operationAdmission/domains/u1_example_definitions.ts",
+      `export const writeDefinition = ${JSON.stringify(registered)};\nexport const U1_DEFINITIONS = [writeDefinition];`,
+    );
+    await convexFixture(
+      rootDir,
+      "operationAdmission/definitions.ts",
+      `import { U1_DEFINITIONS } from "./domains/u1_example_definitions";\nexport const OPERATION_ADMISSION_DEFINITIONS = [...U1_DEFINITIONS];`,
+    );
+    await convexFixture(
+      rootDir,
+      "operationAdmission/readDefinitions.ts",
+      `export const healthReadDefinition = ${JSON.stringify(HEALTH_READ_DEFINITION)};\nexport const OPERATION_READ_ADMISSION_DEFINITIONS = [healthReadDefinition];`,
+    );
+    await convexFixture(
+      rootDir,
+      "example/x.ts",
+      INGRESS(`import { writeDefinition } from "../operationAdmission/domains/u1_example_definitions";`),
+    );
+    const result = await collectOperationAdmissionCheckResult(rootDir);
+    expect(result.findings).toEqual([]);
+  });
+});
+
+describe("round 5: routes on unresolved receivers fail closed regardless of path shape", () => {
+  const SUB_ROUTER = `
+    import { Hono } from "hono";
+    export const sub = new Hono();
+    sub.get("/health", async (c) => c.json({}));
+  `;
+  const check = async (extraModules: Record<string, string>, httpTail = "") => {
+    const rootDir = await createFixtureRoot();
+    await writeBaselineTree(rootDir, {
+      reads: {
+        subHealth: {
+          kind: "http_read",
+          route: { method: "GET", path: "/sub/health" },
+          operationId: "http.sub.health",
+          access: { kind: "read", intent: "platform.health.view" },
+        },
+      },
+    });
+    await convexFixture(
+      rootDir,
+      "http/domains/core/routes/sub.ts",
+      SUB_ROUTER.replace(
+        `sub.get("/health", async (c) => c.json({}));`,
+        `import { admitHttpRead } from "../../../../platform/operationAdmission";
+         import { subHealth } from "../../../../operationAdmission/readDefinitions";
+         sub.get("/health", admitHttpRead(subHealth, async (c) => c.json({})));`,
+      ),
+    );
+    for (const [convexPath, source] of Object.entries(extraModules)) {
+      await convexFixture(rootDir, convexPath, source);
+    }
+    await convexFixture(
+      rootDir,
+      "http.ts",
+      `${ADMITTED_ROUTER}
+        import { sub } from "./http/domains/core/routes/sub";
+        ${httpTail}
+        app.route("/sub", sub);
+      `,
+    );
+    return collectOperationAdmissionCheckResult(rootDir);
+  };
+  const unresolvable = (result: Awaited<ReturnType<typeof check>>) =>
+    result.findings.filter((finding) =>
+      finding.id.startsWith("route-registration-not-statically-resolvable-"),
+    );
+
+  it("flags a slash-less registration on an imported router in a side-effect module", async () => {
+    const result = await check(
+      {
+        "http/domains/core/routes/late.ts": `
+          import { sub } from "./sub";
+          sub.get("evil", async (c) => c.json(await c.env.runQuery(internal.a.b, {})));
+        `,
+      },
+      `import "./http/domains/core/routes/late";`,
+    );
+    expect(unresolvable(result).map((finding) => finding.functionName)).toEqual([".get(...)"]);
+    expect(unresolvable(result)[0].rationale).toContain("cannot resolve to a router");
+  });
+
+  it("flags element-access, parameter, and import-chain receivers with any string path", async () => {
+    const result = await check({
+      "http/domains/core/routes/late.ts": `
+        import * as mod from "./sub";
+        import { sub } from "./sub";
+        const routers = [sub];
+        routers[0].get("evil", async (c) => c.json({}));
+        mod.sub.post("evil2", async (c) => c.json({}));
+        export function install(r) { r.get(\`\${""}evil3\`, async (c) => c.json({})); }
+      `,
+    });
+    expect(unresolvable(result).map((finding) => finding.functionName).sort()).toEqual([
+      ".get(...)",
+      ".get(...)",
+      ".post(...)",
+    ]);
+  });
+
+  it("resolves a parenthesized router receiver: a slash-less path is a real route, a template is unresolvable", async () => {
+    const result = await check({
+      "http/domains/core/routes/sub.ts": `
+        import { Hono } from "hono";
+        import { admitHttpRead } from "../../../../platform/operationAdmission";
+        import { subHealth } from "../../../../operationAdmission/readDefinitions";
+        export const sub = new Hono();
+        sub.get("/health", admitHttpRead(subHealth, async (c) => c.json({})));
+        (sub).get("evil", async (c) => c.json({}));
+        (sub as any).get(\`\${""}/evil2\`, async (c) => c.json({}));
+      `,
+    });
+    expect(result.ingress.filter((entry) => entry.route).map((entry) => entry.id).sort()).toEqual([
+      "GET /health",
+      "GET /sub/evil",
+      "GET /sub/health",
+    ]);
+    expect(result.findings.map((finding) => finding.id).sort()).toEqual([
+      expect.stringMatching(/^route-registration-not-statically-resolvable-/),
+      "unadmitted-http_read-get-sub-evil",
+    ]);
+  });
+
+  it("does not mistake Convex database calls for route registrations", async () => {
+    const result = await check({
+      "inventory/helpers/db.ts": `
+        import { DatabaseReader, DatabaseWriter } from "../../_generated/server";
+        export async function readOne(db: DatabaseReader, id) { return db.get("expenseSession", id); }
+        export async function patchOne(ctx, id) {
+          await (ctx.db as any).patch("posTransaction", id, { closed: true });
+          await ctx.db.delete("posTransaction", id);
+          const db = ctx.db as unknown as { get(table: "x", id: string): Promise<null> };
+          return db.get("x", id);
+        }
+        export async function writeOne(db: DatabaseWriter, id) { await db.patch("t", id, {}); }
+      `,
+    });
+    expect(unresolvable(result)).toEqual([]);
+    expect(result.findings).toEqual([]);
+  });
+});
+
+describe("round 5: the CORS assertion counts every spelling that resolves to hono/cors", () => {
+  it.each([
+    [
+      "a namespaced hono/cors call after the allowlisted one",
+      `import * as honoCors from "hono/cors";
+       app.use("*", cors({ origin: STOREFRONT_ALLOWED_ORIGINS, credentials: true }));
+       app.use("*", honoCors.cors({ origin: (o) => o, credentials: true }));`,
+    ],
+    [
+      "a rebound cors local",
+      `app.use("*", cors({ origin: STOREFRONT_ALLOWED_ORIGINS, credentials: true }));
+       const c2 = cors;
+       app.use("*", c2({ origin: (o) => o, credentials: true }));`,
+    ],
+    [
+      "a cors destructured off the namespace",
+      `import * as honoCors from "hono/cors";
+       const { cors: c3 } = honoCors;
+       app.use("*", cors({ origin: STOREFRONT_ALLOWED_ORIGINS, credentials: true }));
+       app.use("*", c3({ origin: (o) => o, credentials: true }));`,
+    ],
+    [
+      "a cors rebound from a namespace member",
+      `import * as honoCors from "hono/cors";
+       const c4 = honoCors.cors;
+       app.use("*", cors({ origin: STOREFRONT_ALLOWED_ORIGINS, credentials: true }));
+       app.use("*", c4({ origin: (o) => o, credentials: true }));`,
+    ],
+  ])("fails %s as a second cors() call", (_label, body) => {
+    const assertion = assertCorsAllowlist(
+      "packages/athena-webapp/convex/http.ts",
+      `${CORS_PROLOGUE}\n${body}`,
+    );
+    expect(assertion.allowlisted).toBe(false);
+    expect(assertion.detail).toContain("called 2 times");
+  });
+
+  it("fails a hono/cors binding used other than as the one accepted call", () => {
+    const assertion = assertCorsAllowlist(
+      "packages/athena-webapp/convex/http.ts",
+      `${CORS_PROLOGUE}
+       app.use("*", cors({ origin: STOREFRONT_ALLOWED_ORIGINS, credentials: true }));
+       registerElsewhere(cors);`,
+    );
+    expect(assertion.allowlisted).toBe(false);
+    expect(assertion.detail).toContain("other than as the direct callee");
+  });
+
+  it("fails a hono/cors import that is never called on the router", () => {
+    const assertion = assertCorsAllowlist(
+      "packages/athena-webapp/convex/http/domains/core/routes/sub.ts",
+      `import { cors } from "hono/cors";\nexport const middleware = cors;`,
+    );
+    expect(assertion.found).toBe(true);
+    expect(assertion.allowlisted).toBe(false);
+  });
+
+  it("flags any module other than http.ts that imports or calls hono/cors", async () => {
+    const rootDir = await createFixtureRoot();
+    await writeBaselineTree(rootDir);
+    await convexFixture(
+      rootDir,
+      "http/domains/core/routes/sub.ts",
+      `
+        import { Hono } from "hono";
+        import { cors } from "hono/cors";
+        const reflect = (o) => o;
+        export const sub = new Hono();
+        sub.use("*", cors({ origin: reflect, credentials: true }));
+      `,
+    );
+    await convexFixture(
+      rootDir,
+      "http/domains/core/routes/other.ts",
+      `import * as honoCors from "hono/cors";\nexport const factory = honoCors;`,
+    );
+    await convexFixture(
+      rootDir,
+      "http.ts",
+      `${ADMITTED_ROUTER}
+        import { sub } from "./http/domains/core/routes/sub";
+        app.route("/sub", sub);
+      `,
+    );
+    const result = await collectOperationAdmissionCheckResult(rootDir);
+    expect(result.findings.map((finding) => finding.id).sort()).toEqual([
+      "cors-middleware-outside-router-module-http-domains-core-routes-other-ts",
+      "cors-middleware-outside-router-module-http-domains-core-routes-sub-ts",
+    ]);
+    expect(result.findings.every((finding) => finding.severity === "high")).toBe(true);
+  });
+
+  it("still passes the real router: exactly one allowlisted cors() in http.ts", async () => {
+    const rootDir = await createFixtureRoot();
+    await writeBaselineTree(rootDir);
+    const result = await collectOperationAdmissionCheckResult(rootDir);
+    expect(result.findings).toEqual([]);
+  });
+});
+
+describe("round 5: the api.* ban covers string, symbol, and import-rooted references", () => {
+  const sites = (source: string, publicFunctionNames?: Set<string>) =>
+    collectApiSelfCallSites(
+      "packages/athena-webapp/convex/example/refs.ts",
+      source,
+      publicFunctionNames ? { publicFunctionNames } : {},
+    );
+  const PUBLIC = new Set(["example/x:write", "example/x:read"]);
+
+  it("is a site for a string function reference naming a public function, with no api import at all", () => {
+    expect(
+      sites(
+        `export async function run(ctx, args) {
+           await ctx.runMutation("example/x:write" as any, args);
+           await ctx.scheduler.runAfter(0, "example/x:read" as any, args);
+           await ctx.runMutation("example/x:internalWrite" as any, args);
+         }
+         export async function route(c) { return c.env.runQuery("example/x:read" as any, {}); }`,
+        PUBLIC,
+      ).map((site) => [site.via, site.reference]),
+    ).toEqual([
+      ["runMutation", expect.stringContaining("names public example/x:write")],
+      ["runAfter", expect.stringContaining("names public example/x:read")],
+      ["runQuery", expect.stringContaining("names public example/x:read")],
+    ]);
+  });
+
+  it("is a site for a string the checker cannot enumerate, and for a const bound to a public name", () => {
+    expect(
+      sites(
+        `const REF = "example/x:write";
+         export async function run(ctx, name) {
+           await ctx.runMutation(REF as any, {});
+           await ctx.runQuery(\`example/x:\${name}\` as any, {});
+         }`,
+        PUBLIC,
+      ).map((site) => site.via),
+    ).toEqual(["runMutation", "runQuery"]);
+  });
+
+  it("is a site for a hand-built Symbol.for('functionName') reference, inline and through a const", () => {
+    expect(
+      sites(
+        `const ref = { [Symbol.for("functionName")]: "example/x:write" };
+         export async function run(ctx) {
+           await ctx.runMutation(ref, {});
+           await ctx.runAction({ [Symbol.for('functionName')]: "example/x:read" } as any, {});
+         }`,
+        PUBLIC,
+      ).map((site) => site.via),
+    ).toEqual(["runMutation", "runAction"]);
+  });
+
+  it("resolves the api root through a normalized specifier", () => {
+    expect(
+      sites(
+        `import { api } from "../_generated/./api";
+         export async function run(ctx) { await ctx.runMutation(api.example.x.write, {}); }`,
+        PUBLIC,
+      ).map((site) => site.reference),
+    ).toEqual(["api.example.x.write"]);
+  });
+
+  it("is a site for a reference rooted at an import that is not internal from _generated/api", () => {
+    expect(
+      sites(
+        `import { internal } from "../_generated/api";
+         import * as generated from "../_generated/api";
+         import { refs } from "./refs";
+         import { REF } from "./constants";
+         const messagingInternal = (internal as any).customerMessaging.internal;
+         export async function run(ctx, config, repairFunction) {
+           await ctx.runMutation(internal.a.b, {});
+           await ctx.runMutation(generated.internal.a.b, {});
+           await ctx.runMutation(messagingInternal.markSent, {});
+           await ctx.scheduler.runAfter(0, config.workerRef, {});
+           await ctx.scheduler.runAfter(0, repairFunction, {});
+           await ctx.runMutation(refs.x, {});
+           await ctx.runQuery(REF, {});
+           await ctx.runQuery(generated.other.x, {});
+         }`,
+        PUBLIC,
+      ).map((site) => site.reference),
+    ).toEqual([
+      expect.stringContaining("rooted at the import `refs`"),
+      expect.stringContaining("rooted at the import `REF`"),
+      expect.stringContaining("rooted at the generated namespace `generated`"),
+    ]);
+  });
+
+  it("reports the string and symbol references as api-self-call findings in a full tree", async () => {
+    const rootDir = await createFixtureRoot();
+    await writeBaselineTree(rootDir, {
+      writes: {
+        def: {
+          kind: "mutation",
+          functionName: "example/x:write",
+          operationId: "example.x.write",
+          capability: "catalog.manage",
+        },
+      },
+    });
+    await convexFixture(
+      rootDir,
+      "example/x.ts",
+      `import { mutation, internalMutation } from "../_generated/server";
+       import { admitPublicMutation } from "../platform/operationAdmission";
+       import { def } from "../operationAdmission/definitions";
+       export const write = mutation({ args: {}, handler: admitPublicMutation(def, async () => null) });
+       export const relay = internalMutation({ args: {}, handler: async (ctx, args) => ctx.runMutation("example/x:write" as any, args) });`,
+    );
+    const result = await collectOperationAdmissionCheckResult(rootDir);
+    expect(result.findings.map((finding) => finding.id)).toEqual([
+      expect.stringMatching(/^api-self-call-packages-athena-webapp-convex-example-x-ts-5-/),
+    ]);
+  });
+});
+
+describe("round 5: exported let/var, reassignment, and re-exports fail closed", () => {
+  const discover = (body: string, imports = `import { mutation, query } from "../_generated/server";`) =>
+    collectConvexIngressFromSource(
+      "packages/athena-webapp/convex/example/x.ts",
+      `${imports}\n${body}`,
+    );
+  const flagged = (body: string, imports?: string) =>
+    discover(body, imports)
+      .filter((entry) => entry.notStaticallyResolvable)
+      .map((entry) => entry.id);
+
+  it("reports an exported let reassigned after an admitted initializer", () => {
+    const ingress = discover(
+      `export let write = query({ args: {}, handler: admitPublicQuery(def, async () => null) });
+       write = mutation({ args: {}, handler: async (ctx, args) => ctx.db.insert("t", args) });`,
+      `import { mutation, query } from "../_generated/server";
+       import { admitPublicQuery } from "../platform/operationAdmission";
+       import { def } from "../operationAdmission/definitions";`,
+    );
+    expect(ingress.every((entry) => !entry.admitted && entry.notStaticallyResolvable)).toBe(true);
+    expect(ingress.map((entry) => entry.id)).toEqual(["example/x:write", "example/x:write"]);
+    expect(ingress[0].notStaticallyResolvable).toContain("`let` / `var`");
+    expect(ingress[1].notStaticallyResolvable).toContain("assigned after its declaration");
+  });
+
+  it("reports `let x; x = mutation(...); export { x }` and `export var`", () => {
+    expect(flagged(`let x;\nx = mutation({ args: {}, handler: async () => null });\nexport { x };`)).toEqual([
+      "example/x:x",
+    ]);
+    expect(flagged(`export var x = mutation({ args: {}, handler: async () => null });`)).toEqual([
+      "example/x:x",
+    ]);
+  });
+
+  it("does not report a non-exported let that a handler mutates", () => {
+    expect(
+      discover(
+        `let cache;
+         export const read = query({ args: {}, handler: async () => { cache = 1; return cache; } });`,
+      ).map((entry) => [entry.id, entry.notStaticallyResolvable]),
+    ).toEqual([["example/x:read", undefined]]);
+  });
+
+  it("without a repository root, a re-export from outside convex/ is unresolvable", () => {
+    expect(flagged(`export { create } from "../../shared/impl";`)).toEqual(["example/x:create"]);
+    expect(flagged(`import { create } from "../../shared/impl";\nexport { create };`)).toEqual([
+      "example/x:create",
+    ]);
+    expect(flagged(`export * from "../../shared/impl";`)).toEqual(["example/x:*"]);
+    expect(flagged(`import * as impl from "../../shared/impl";\nexport const create = impl.create;`)).toEqual([
+      "example/x:create",
+    ]);
+    // A known-tree sibling, a bare package, and a type-only export are skipped.
+    expect(flagged(`export { helper } from "./sibling";`)).toEqual([]);
+    expect(flagged(`export { z } from "some-package";`)).toEqual([]);
+    expect(flagged(`export type { T } from "../../shared/types";`)).toEqual([]);
+  });
+
+  describe("with a repository root, the external module is read", () => {
+    const BUILDER_IMPL = `
+      import { mutation } from "../convex/_generated/server";
+      export const create = mutation({ args: {}, handler: async (ctx, args) => ctx.db.insert("t", args) });
+    `;
+    const PLAIN_IMPL = `export function validateServiceIntakeInput(input) { return input; }`;
+
+    const check = async (impl: string, reexport: string) => {
+      const rootDir = await createFixtureRoot();
+      await writeBaselineTree(rootDir);
+      // convex/operations/../../shared is packages/athena-webapp/shared, the
+      // real home of the helper operations/serviceIntake.ts re-exports.
+      await writeFixture(rootDir, "packages/athena-webapp/shared/impl.ts", impl);
+      await convexFixture(rootDir, "operations/serviceIntake.ts", reexport);
+      return collectOperationAdmissionCheckResult(rootDir);
+    };
+
+    it.each([
+      [`export { create } from "../../shared/impl";`, "operations-serviceintake-create"],
+      [`import { create } from "../../shared/impl";\nexport { create };`, "operations-serviceintake-create"],
+      [`export * from "../../shared/impl";`, "operations-serviceintake"],
+      [`import * as impl from "../../shared/impl";\nexport const create = impl.create;`, "operations-serviceintake-create"],
+      [`import { create } from "../../shared/impl";\nexport default create;`, "operations-serviceintake-default"],
+    ])("flags %s when the external module imports a builder", async (reexport, slug) => {
+      const result = await check(BUILDER_IMPL, reexport);
+      expect(result.findings.map((finding) => finding.id)).toEqual([
+        `ingress-not-statically-resolvable-${slug}`,
+      ]);
+      expect(result.findings[0].severity).toBe("high");
+      expect(result.findings[0].rationale).toContain("outside the discovered convex tree");
+    });
+
+    it("passes the real shape: a plain helper re-exported from shared/", async () => {
+      const result = await check(
+        PLAIN_IMPL,
+        `export { validateServiceIntakeInput } from "../../shared/serviceIntake";`.replace(
+          "shared/serviceIntake",
+          "shared/impl",
+        ),
+      );
+      expect(result.findings).toEqual([]);
+    });
+
+    it("fails closed when the external module cannot be located", async () => {
+      const result = await check(PLAIN_IMPL, `export { create } from "../../shared/missing";`);
+      expect(result.findings.map((finding) => finding.id)).toEqual([
+        "ingress-not-statically-resolvable-operations-serviceintake-create",
+      ]);
+      expect(result.findings[0].rationale).toContain("could not be located");
+    });
+  });
+});

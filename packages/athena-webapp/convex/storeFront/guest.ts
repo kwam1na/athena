@@ -3,11 +3,12 @@ import {
   internalQuery,
   mutation,
   type MutationCtx,
+  type QueryCtx,
   query,
 } from "../_generated/server";
 import { v } from "convex/values";
 import { Id } from "../_generated/dataModel";
-import { isRecoverableGuestMarker } from "../http/utils";
+import { hashGuestMarker, isRecoverableGuestMarker } from "../http/utils";
 import { deleteGuestOperationDefinition } from "../operationAdmission/domains/u6_storefrontCustomer_definitions";
 import {
   getAllGuestsReadDefinition,
@@ -34,11 +35,27 @@ const entity = "guest";
 const MAX_GUESTS = 5000;
 const MAX_ANALYTICS_VISITORS = 2000;
 
+/**
+ * Operator listing of a store's guests, STORE-SCOPED.
+ *
+ * It used to answer every guest row in the deployment: `scope: none` and an
+ * unindexed `take(5000)`, so any signed-in Athena account listed other
+ * tenants' shoppers. A guest is a per-store row (`create` requires the store),
+ * so the listing names the store it is about and reads `by_storeId`. The
+ * documents come back whole, which is safe only because the marker column
+ * holds a digest (see `create` below), never the recoverable secret.
+ */
 export const getAll = query({
-  args: {},
-  handler: admitPublicQuery(getAllGuestsReadDefinition, async (ctx) => {
-    return await ctx.db.query(entity).take(MAX_GUESTS);
-  }),
+  args: { storeId: v.id("store") },
+  handler: admitPublicQuery(
+    getAllGuestsReadDefinition,
+    async (ctx, args: { storeId: Id<"store"> }) => {
+      return await ctx.db
+        .query(entity)
+        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+        .take(MAX_GUESTS);
+    },
+  ),
 });
 
 /**
@@ -88,6 +105,11 @@ export const getById = internalQuery({
  *    global handle, and a stranger's session in another store is not this
  *    caller's to recover.
  *
+ * The lookup key is the marker's SHA-256 (`hashGuestMarker`), never the raw
+ * value: the row stores only the digest, so a guest document read back by an
+ * operator surface carries nothing this query resolves — presenting the
+ * digest is hashed again and misses.
+ *
  * `by_marker` plus a `storeId` filter rather than a compound index: a
  * recoverable marker is 122 bits of randomness, so the index range is one row
  * (or none) and the filter reads nothing extra.
@@ -100,13 +122,25 @@ export const getByMarker = internalQuery({
   handler: async (ctx, args) => {
     if (!isRecoverableGuestMarker(args.marker)) return null;
 
-    return await ctx.db
-      .query(entity)
-      .withIndex("by_marker", (q) => q.eq("marker", args.marker))
-      .filter((q) => q.eq(q.field("storeId"), args.storeId))
-      .first();
+    return await findGuestByMarkerHash(
+      ctx,
+      await hashGuestMarker(args.marker),
+      args.storeId,
+    );
   },
 });
+
+async function findGuestByMarkerHash(
+  ctx: QueryCtx,
+  markerHash: string,
+  storeId: Id<"store">,
+) {
+  return await ctx.db
+    .query(entity)
+    .withIndex("by_marker", (q) => q.eq("marker", markerHash))
+    .filter((q) => q.eq(q.field("storeId"), storeId))
+    .first();
+}
 
 /**
  * `storeId` is REQUIRED here, which is the write half of the guest-store
@@ -121,6 +155,23 @@ export const getByMarker = internalQuery({
  * Wave B2 (U10) updates the one caller that does not pass it today,
  * `POST /guests` in `http/domains/customerChannel/routes/guest.ts`, to pass the
  * store resolved from the request's `store_id` claim.
+ *
+ * THE MARKER, when one is passed:
+ *
+ *  - it is subject to the same recoverability gate as the lookup. A marker
+ *    that `getByMarker` would never resolve is not stored at all (the row is
+ *    minted marker-less), so nothing that a route forgot to gate ends up
+ *    persisted as a would-be recovery secret;
+ *  - only its digest is written (`hashGuestMarker`) — see `getByMarker`;
+ *  - it is UNIQUE per (store, marker). If a row already holds this digest in
+ *    this store, that row is returned and no second one is minted. Two
+ *    cookie-less bootstraps racing on the same fresh marker used to both miss
+ *    the lookup and both insert, after which `by_marker … .first()` resolved
+ *    the older row while the browser kept whichever cookie landed last; the
+ *    read-then-insert here runs inside one mutation, so Convex's OCC serialises
+ *    the two and the loser re-runs, sees the winner's row and returns it. The
+ *    caller (a bootstrap route) does not need to know which happened: either
+ *    way it mints a signed cookie for the row that owns the marker.
  */
 export const create = internalMutation({
   args: {
@@ -130,8 +181,21 @@ export const create = internalMutation({
     organizationId: v.optional(v.id("organization")),
   },
   handler: async (ctx, args) => {
+    const markerHash = isRecoverableGuestMarker(args.marker)
+      ? await hashGuestMarker(args.marker)
+      : undefined;
+
+    if (markerHash) {
+      const existing = await findGuestByMarkerHash(
+        ctx,
+        markerHash,
+        args.storeId,
+      );
+      if (existing) return existing;
+    }
+
     const id = await ctx.db.insert(entity, {
-      marker: args.marker,
+      marker: markerHash,
       creationOrigin: args.creationOrigin,
       storeId: args.storeId,
       organizationId: args.organizationId,

@@ -30,4 +30,25 @@ describe("getOrCreateGuestMarker", () => {
     expect(marker).toMatch(UUID);
     expect(localStorage.getItem(MARKER_KEY)).toBe(marker);
   });
+  it("mints a 128-bit hex marker from getRandomValues when randomUUID is unavailable", () => {
+    // Secure-context-only API, absent in older WebKit: the marker is on the
+    // bootstrap critical path, so its absence must degrade to another CSPRNG
+    // shape the server accepts, not throw.
+    // Shadow the prototype method on the instance; deleting the own property
+    // afterwards restores it.
+    Object.defineProperty(crypto, "randomUUID", {
+      configurable: true,
+      value: undefined,
+    });
+
+    try {
+      const marker = getOrCreateGuestMarker();
+
+      expect(marker).toMatch(/^[0-9a-f]{32}$/);
+      expect(localStorage.getItem(MARKER_KEY)).toBe(marker);
+      expect(getOrCreateGuestMarker()).toBe(marker);
+    } finally {
+      delete (crypto as { randomUUID?: unknown }).randomUUID;
+    }
+  });
 });

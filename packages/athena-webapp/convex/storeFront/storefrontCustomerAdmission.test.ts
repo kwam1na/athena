@@ -255,7 +255,7 @@ describe("U6 exported handler admission", () => {
       t.query(api.storeFront.rewards.getTiers, { storeId: seed.storeId }),
     ).rejects.toThrow(DENIED_ANONYMOUSLY);
     await expect(
-      t.query(api.storeFront.guest.getAll, {}),
+      t.query(api.storeFront.guest.getAll, { storeId: seed.storeId }),
     ).rejects.toThrow(DENIED_ANONYMOUSLY);
     await expect(
       t.mutation(api.storeFront.guest.deleteGuest, { id: seed.guestId }),
