@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   assertCorsAllowlist,
+  assertRootErrorHandler,
   CANONICAL_WRAPPERS,
   collectApiSelfCallSites,
   collectConvexIngressFromSource,
@@ -65,6 +66,7 @@ const ADMITTED_ROUTER = `
   auth.addHttpRoutes(http);
 
   app.use("*", cors({ origin: STOREFRONT_ALLOWED_ORIGINS, credentials: true }));
+  app.onError((err, c) => c.json({ error: "internal" }, 500));
 
   app.get("/health", admitHttpRead(healthReadDefinition, async (c) => c.json({})));
 
@@ -4372,6 +4374,221 @@ describe("round 8: factory-built routers, dynamically imported router modules, w
     expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
   });
 
+  describe("round 9: a router constructed outside `const <name> = new Hono()` fails closed at the construction", () => {
+    it("flags a router built as a parameter default and registered on through the parameter", async () => {
+      const result = await check(`export {};`, "", {
+        subRouter: `
+          import { Hono } from "hono";
+          import { admitHttpRead } from "../../../../platform/operationAdmission";
+          import { subHealth } from "../../../../operationAdmission/readDefinitions";
+          const h = async (c) => c.json({});
+          function make(r = new Hono()) {
+            const P = "/evil";
+            r.get(P, h);
+            return r;
+          }
+          export const sub = make();
+          sub.get("/health", admitHttpRead(subHealth, async (c) => c.json({})));
+        `,
+      });
+      // Line 6: the construction (a parameter default is not a binding the
+      // walk opens). Line 8: the registration on the now-opaque parameter.
+      expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual([
+        [6, "`new Hono(...)`"],
+        [8, ".get(...)"],
+      ]);
+      expect(unresolvable(result)[0].rationale).toContain("constructed in a position the walk cannot bind");
+      expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
+    });
+
+    it("flags a router bound through a destructuring pattern", async () => {
+      const result = await check(`export {};`, "", {
+        subRouter: `
+          import { Hono } from "hono";
+          import { admitHttpRead } from "../../../../platform/operationAdmission";
+          import { subHealth } from "../../../../operationAdmission/readDefinitions";
+          const h = async (c) => c.json({});
+          function make() {
+            const [r] = [new Hono()];
+            const P = "/evil";
+            r.get(P, h);
+            return r;
+          }
+          export const sub = make();
+          sub.get("/health", admitHttpRead(subHealth, async (c) => c.json({})));
+        `,
+      });
+      // Line 7: the construction inside an array literal. Line 9: the
+      // registration on a binding-pattern local (opaque: any path).
+      expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual([
+        [7, "`new Hono(...)`"],
+        [9, ".get(...)"],
+      ]);
+      expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
+    });
+
+    it("flags a router held on a class property and registered on through `this`", async () => {
+      const result = await check(`export {};`, "", {
+        subRouter: `
+          import { Hono } from "hono";
+          import { admitHttpRead } from "../../../../platform/operationAdmission";
+          import { subHealth } from "../../../../operationAdmission/readDefinitions";
+          const h = async (c) => c.json({});
+          const P = "/evil";
+          class Box {
+            r = new Hono();
+            build() { this.r.get(P, h); return this.r; }
+          }
+          export const sub = new Box().build();
+          sub.get("/health", admitHttpRead(subHealth, async (c) => c.json({})));
+        `,
+      });
+      // Line 8: the class-property construction. Line 9: a `this`-rooted
+      // receiver is judged like a module-scoped one — any path is a route.
+      expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual([
+        [8, "`new Hono(...)`"],
+        [9, ".get(...)"],
+      ]);
+      expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
+    });
+
+    it("flags a top-level router handed straight to a call, and a `new HttpRouterWithHono` outside a declaration", async () => {
+      const result = await check(`
+        import { Hono } from "hono";
+        import { HttpRouterWithHono } from "convex-helpers/server/hono";
+        const h = async (c) => c.json({});
+        const P = "/evil";
+        function install(r) { r.get(P, h); return r; }
+        export const built = install(new Hono());
+        export const wrapped = [new HttpRouterWithHono(built)];
+      `);
+      expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual([
+        [7, "`new Hono(...)`"],
+        [8, "`new HttpRouterWithHono(...)`"],
+      ]);
+    });
+
+    it("keeps every real-tree spelling: `const app: HonoWithConvex<ActionCtx> = new Hono()`, `const http = new HttpRouterWithHono<ActionCtx>(app)`, `export const sub = new Hono()`", async () => {
+      const result = await check(`export {};`);
+      expect(result.findings).toEqual([]);
+    });
+  });
+
+  describe("round 9: a `.route(prefix, child)` whose child the walk cannot open fails closed at the mount", () => {
+    const mountFixture = (acquire: string) => `
+      import { Hono } from "hono";
+      import { admitHttpRead } from "../../../../platform/operationAdmission";
+      import { subHealth } from "../../../../operationAdmission/readDefinitions";
+      export const sub = new Hono();
+      const h = async (c) => c.json({ pwned: true });
+      const P = "/evil";
+      ${acquire}
+      sub.get("/health", admitHttpRead(subHealth, async (c) => c.json({})));
+    `;
+    const mountFinding = (result: Awaited<ReturnType<typeof check>>) =>
+      unresolvable(result).find((finding) => finding.rationale.includes("mounts `"));
+
+    it.each([
+      ["a for-of-bound `new Hono()`", `for (const r of [new Hono()]) {\n  r.get(P, h);\n  sub.route("/x", r);\n}`],
+      ["a catch-bound `new Hono()`", `try { throw new Hono(); } catch (r) {\n  r.get(P, h);\n  sub.route("/x", r);\n}`],
+      ["a forEach-parameter `new Hono()`", `[new Hono()].forEach((r) => {\n  r.get(P, h);\n  sub.route("/x", r);\n});`],
+    ])("flags %s mounted with .route — at the construction and at the mount", async (_label, acquire) => {
+      const result = await check(`export {};`, "", { subRouter: mountFixture(acquire) });
+      const findings = unresolvable(result);
+      // Line 8: the construction (a loop source / thrown value / array
+      // element is not a binding the walk opens). Line 10: the mount of a
+      // nested-scope binding. `r.get(P, h)` on the loop / catch / parameter
+      // binding keeps the string rule; the construction and the mount are
+      // the two sites that close every acquisition path.
+      expect(findings.map((finding) => [finding.line, finding.functionName])).toEqual([
+        [8, "`new Hono(...)`"],
+        [10, ".route(...)"],
+      ]);
+      expect(findings[0].rationale).toContain("constructed in a position the walk cannot bind");
+      expect(findings[1].rationale).toContain("a name bound in a nested scope");
+      expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
+    });
+
+    it("flags an ambient `declare const ghost` mounted with .route", async () => {
+      const result = await check(`export {};`, "", {
+        subRouter: mountFixture(`declare const ghost: any;\nsub.route("/x", ghost);`),
+      });
+      const findings = unresolvable(result);
+      expect(findings.map((finding) => finding.functionName)).toContain("`ghost`");
+      expect(findings.find((finding) => finding.functionName === "`ghost`")?.rationale).toContain("declared without an initializer");
+      expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
+    });
+
+    it("flags a router imported relatively from outside convex/** and mounted with .route", async () => {
+      const result = await check(`export {};`, "", {
+        subRouter: mountFixture(`import { outside } from "../../../../../outside/router";\nsub.route("/x", outside);`),
+      });
+      const finding = mountFinding(result);
+      expect(finding?.functionName).toBe(".route(...)");
+      expect(finding?.rationale).toContain("mounts `outside`, which does not resolve to a router the checker walked");
+      expect(finding?.filePath).toBe("packages/athena-webapp/convex/http/domains/core/routes/sub.ts");
+      expect(finding?.line).toBe(9);
+      expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
+    });
+
+    it("flags a mount of a name that is not an exported router of the imported module", async () => {
+      const result = await check(`export {};`, "", {
+        subRouter: mountFixture(`import { notARouter } from "./helpers";\nsub.route("/x", notARouter);`),
+        extraModules: { "http/domains/core/routes/helpers.ts": `export const notARouter = 1;` },
+      });
+      expect(mountFinding(result)?.rationale).toContain("mounts `notARouter`");
+    });
+
+    it("keeps the baseline mounts: every real .route resolves to a walked router and yields zero findings", async () => {
+      const result = await check(`export {};`);
+      expect(result.findings).toEqual([]);
+      expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
+    });
+  });
+
+  describe("round 9: a named-export `HttpRouterWithHono` is router-like to the sweep", () => {
+    const WRAPPED_SUB = `
+      import { Hono } from "hono";
+      import { HttpRouterWithHono } from "convex-helpers/server/hono";
+      import { admitHttpRead } from "../../../../platform/operationAdmission";
+      import { subHealth } from "../../../../operationAdmission/readDefinitions";
+      export const sub = new Hono();
+      sub.get("/health", admitHttpRead(subHealth, async (c) => c.json({})));
+      export const wrapped = new HttpRouterWithHono(sub);
+    `;
+
+    it("accepts the legitimate mount of the Hono router beside the wrapper, and imports the wrapper by name without a finding", async () => {
+      const result = await check(
+        `import { wrapped } from "./sub";\nexport { wrapped };`,
+        "",
+        { subRouter: WRAPPED_SUB },
+      );
+      expect(result.findings).toEqual([]);
+      expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
+    });
+
+    it("flags a value-reference escape of the named-imported wrapper", async () => {
+      const result = await check(
+        `import { wrapped } from "./sub";\nexport const keep = wrapped;`,
+        "",
+        { subRouter: WRAPPED_SUB },
+      );
+      expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual([
+        [2, "`wrapped`"],
+      ]);
+      expect(unresolvable(result)[0].rationale).toContain("the router `wrapped` imported from `http/domains/core/routes/sub.ts`");
+    });
+
+    it("flags a .route mount of the wrapper itself — an HttpRouterWithHono is not a Hono subtree the walk can open", async () => {
+      const result = await check(`export {};`, `import { wrapped } from "./http/domains/core/routes/sub";\napp.route("/w", wrapped);`, {
+        subRouter: WRAPPED_SUB,
+      });
+      const finding = unresolvable(result).find((entry) => entry.rationale.includes("mounts `wrapped`"));
+      expect(finding?.filePath).toBe("packages/athena-webapp/convex/http.ts");
+      expect(finding?.rationale).toContain("resolved key `http/domains/core/routes/sub.ts#wrapped`");
+    });
+  });
+
   it("flags a definition module that imports process / a node: builtin, reads Bun.env, or builds dynamic code", async () => {
     const rootDir = await createFixtureRoot();
     await writeBaselineTree(rootDir);
@@ -4556,6 +4773,15 @@ describe("round 9: router middleware is pass-through-or-deny", () => {
     ["a redeclared parameter", `sub.use("*", async (c, next) => { { const c = 1; } await next(); });`, "redeclares its `c` parameter"],
     ["`arguments`", `sub.use("*", async function (c, next) { arguments[0].env; await next(); });`, "references `arguments`"],
     ["`this`", `sub.use("*", async function (c, next) { this.x; await next(); });`, "reads `this`"],
+    ["a thrown HTTPException(200, { res }) — Hono renders getResponse() as the response", `import { HTTPException } from "hono/http-exception";\nsub.use("*", async (c, next) => { const body = await c.req.text(); throw new HTTPException(200, { res: new Response(JSON.stringify({ pwned: true, echo: body })) }); await next(); });`, "throws a value it constructs or obtains"],
+    ["a thrown Error carrying getResponse", `sub.use("*", async (c, next) => { if (c.req.method === "GET") throw Object.assign(new Error("x"), { getResponse: () => new Response("served", { status: 200 }) }); await next(); });`, "throws a value it constructs or obtains"],
+    ["a thrown plain `new Error(...)`", `sub.use("*", async (c, next) => { if (!c.req.header("x")) throw new Error("missing"); await next(); });`, "throws a value it constructs or obtains"],
+    ["a thrown call result", `import { deny } from "./deny";\nsub.use("*", async (c, next) => { throw deny(); await next(); });`, "throws a value it constructs or obtains"],
+    ["a rethrow of a REBOUND catch binding", `import { HTTPException } from "hono/http-exception";\nsub.use("*", async (c, next) => { try { c.req.header("x"); } catch (error) { error = new HTTPException(200, { res: new Response("pwned") }); throw error; } await next(); });`, "throws a value it constructs or obtains"],
+    ["a throw of an outer local, not the catch binding", `sub.use("*", async (c, next) => { let saved; try { c.req.header("x"); } catch (error) { saved = error; } if (saved) throw saved; await next(); });`, "throws a value it constructs or obtains"],
+    ["`try { return next() } catch` — observing the admitted handler's failure", `sub.use("*", async (c, next) => { try { return next(); } catch (e) { return c.json({ leaked: String(e) }, 500); } await next(); });`, "called inside a `try`"],
+    ["`return next()` inside a try's finally", `sub.use("*", async (c, next) => { try { c.req.header("x"); } finally { return next(); } await next(); });`, "called inside a `try`"],
+    ["a generator middleware", `sub.use("*", async function* (c, next) { await next(); });`, "is a generator function"],
     ["a factory the checker cannot open", `import { mw } from "../../../../lib/mw";\nsub.use("*", mw());`, "not a named import of a convex module under `http/`"],
     ["a factory reached through a member", `import * as mws from "./mws";\nsub.use("*", mws.mw());`, "only the `hono/cors` factory or a named-import factory"],
     ["a factory called optionally", `import { mw } from "./mws";\nsub.use("*", mw?.());`, "only an inline"],
@@ -4574,6 +4800,147 @@ describe("round 9: router middleware is pass-through-or-deny", () => {
       },
     });
     expect(result.findings).toEqual([]);
+  });
+
+  it("accepts the real tree's harness-waiver shape: authorize in a try, deny the typed fault, rethrow the catch binding, then await next()", async () => {
+    const result = await check(`
+      import { authorized, isWaiverConfigurationError } from "./waiverAuth";
+      sub.use("*", async (c, next) => {
+        try {
+          if (!(await authorized(c.req.header("authorization")))) {
+            return c.json({ error: { code: "unauthorized" } }, 401);
+          }
+        } catch (error) {
+          if (isWaiverConfigurationError(error)) {
+            return c.json({ error: { code: "temporarily_unavailable" } }, 503);
+          }
+          throw error;
+        }
+        await next();
+      });
+    `, {
+      extraModules: {
+        "http/domains/core/routes/waiverAuth.ts": `export async function authorized() { return true; }\nexport function isWaiverConfigurationError() { return false; }`,
+      },
+    });
+    expect(result.findings).toEqual([]);
+  });
+
+  it("accepts `return next()` inside a catch clause (the real boundRequestBody shape) — a catch does not observe the admitted handler", async () => {
+    const result = await check(`
+      sub.use("*", async (c, next) => {
+        try {
+          c.req.header("x");
+        } catch {
+          return next();
+        }
+        await next();
+      });
+    `);
+    expect(result.findings).toEqual([]);
+  });
+
+  describe("the root router's error handler is fixed (`assertRootErrorHandler`)", () => {
+    const withoutOnError = (source: string) =>
+      source.replace(`app.onError((err, c) => c.json({ error: "internal" }, 500));`, "");
+    const checkHttp = async (onErrorLine: string, middleware = "") => {
+      const rootDir = await createFixtureRoot();
+      await writeBaselineTree(rootDir, {
+        reads: {
+          subHealth: {
+            kind: "http_read",
+            route: { method: "GET", path: "/sub/health" },
+            operationId: "http.sub.health",
+            access: { kind: "read", intent: "platform.health.view" },
+          },
+        },
+      });
+      await convexFixture(
+        rootDir,
+        "http/domains/core/routes/sub.ts",
+        `${SUB_ROUTER_HEAD}\n${middleware}\n${SUB_ROUTER_TAIL}`,
+      );
+      await convexFixture(
+        rootDir,
+        "http.ts",
+        `${withoutOnError(ADMITTED_ROUTER)}
+          import { sub } from "./http/domains/core/routes/sub";
+          app.route("/sub", sub);
+          ${onErrorLine}
+        `,
+      );
+      return collectOperationAdmissionCheckResult(rootDir);
+    };
+    const handlerFindings = (result: Awaited<ReturnType<typeof checkHttp>>) =>
+      result.findings.filter(
+        (finding) =>
+          finding.id === "router-error-handler-not-fixed" ||
+          finding.id.startsWith("error-handler-outside-router-module-"),
+      );
+
+    it("passes the fixed shape (block body, expression body, c.text, any 5xx literal, any parameter names)", async () => {
+      for (const line of [
+        `app.onError((err, c) => c.json({ error: "internal" }, 500));`,
+        `app.onError((err, c) => { return c.json({ error: "internal" }, 500); });`,
+        `app.onError((error, ctx) => ctx.text("Internal Server Error", 503));`,
+      ]) {
+        const result = await checkHttp(line);
+        expect(result.findings, line).toEqual([]);
+      }
+    });
+
+    it("flags a missing root error handler — Hono's default renders getResponse() errors as the response", async () => {
+      const result = await checkHttp("");
+      expect(handlerFindings(result).map((finding) => finding.id)).toEqual(["router-error-handler-not-fixed"]);
+      expect(handlerFindings(result)[0].severity).toBe("high");
+      expect(handlerFindings(result)[0].rationale).toContain("registers 0 `.onError(...)` handler(s)");
+      expect(handlerFindings(result)[0].rationale).toContain("getResponse()");
+      expect(handlerFindings(result)[0].remediation).toContain('app.onError((err, c) => c.json({ error: "internal" }, 500));');
+    });
+
+    it.each([
+      ["a handler that renders the thrown value", `app.onError((err, c) => err.getResponse());`, "must be exactly `return c.json(<body>, <literal 5xx>)`"],
+      ["a handler that passes the error into the body", `app.onError((err, c) => c.json({ error: err }, 500));`, "references its error parameter `err`"],
+      ["a handler that mentions the error's message", `app.onError((err, c) => c.json({ error: err.message }, 500));`, "references its error parameter `err`"],
+      ["a non-5xx status", `app.onError((err, c) => c.json({ ok: true }, 200));`, "must be exactly `return c.json(<body>, <literal 5xx>)`"],
+      ["a non-literal status", `const s = 500;\napp.onError((err, c) => c.json({}, s));`, "must be exactly `return c.json(<body>, <literal 5xx>)`"],
+      ["a second statement", `app.onError((err, c) => { console.log("x"); return c.json({}, 500); });`, "must be exactly `return c.json(<body>, <literal 5xx>)`"],
+      ["a handler identifier", `const onError = (err, c) => c.json({}, 500);\napp.onError(onError);`, "only an inline `(err, c) => ...` arrow is accepted"],
+      ["a one-parameter handler", `app.onError((err) => new Response("x", { status: 500 }));`, "exactly two plain identifier parameters"],
+      ["a `this`-reading handler", `app.onError((err, c) => c.json({ x: this }, 500));`, "contains a nested function or `this`"],
+      ["a nested function in the body", `app.onError((err, c) => c.json({ x: [1].map((n) => n) }, 500));`, "contains a nested function or `this`"],
+      ["c used elsewhere in the body", `app.onError((err, c) => c.json({ env: c.env }, 500));`, "uses `c` other than as"],
+      ["two handlers", `app.onError((err, c) => c.json({}, 500));\napp.onError((err, c) => c.json({}, 500));`, "registers 2 `.onError(...)` handler(s)"],
+      ["a handler on the HttpRouterWithHono wrapper, not the Hono router", `http.onError((err, c) => c.json({}, 500));`, "not a top-level Hono router of the module"],
+      ["a handler registered inside a function", `function install() { app.onError((err, c) => c.json({}, 500)); }\ninstall();`, "not as a top-level statement"],
+    ])("flags %s", async (_label, line, reason) => {
+      const result = await checkHttp(line);
+      expect(handlerFindings(result).map((finding) => finding.id)).toEqual(["router-error-handler-not-fixed"]);
+      expect(handlerFindings(result)[0].rationale).toContain(reason);
+    });
+
+    it("flags `.onError` on a sub-router — it renders before the root handler", async () => {
+      const result = await checkHttp(
+        `app.onError((err, c) => c.json({ error: "internal" }, 500));`,
+        `sub.onError((err, c) => err.getResponse());`,
+      );
+      expect(handlerFindings(result).map((finding) => finding.id)).toEqual([
+        "error-handler-outside-router-module-http-domains-core-routes-sub-ts",
+      ]);
+      expect(handlerFindings(result)[0].line).toBe(7);
+      expect(handlerFindings(result)[0].severity).toBe("high");
+    });
+
+    it("the real http.ts installs the fixed handler exactly once and no other real module installs one", async () => {
+      const source = await readFile(
+        path.join(process.cwd(), "packages/athena-webapp/convex/http.ts"),
+        "utf8",
+      );
+      const assertion = assertRootErrorHandler("packages/athena-webapp/convex/http.ts", source);
+      expect(assertion.fixed).toBe(true);
+      expect(assertion.sites).toHaveLength(1);
+      expect(source).toContain(`app.onError((err, c) => c.json({ error: "internal" }, 500));`);
+    });
   });
 
   it("accepts a function-expression middleware and `return await next()`", async () => {

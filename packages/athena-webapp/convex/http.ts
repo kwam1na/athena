@@ -86,6 +86,21 @@ app.use(
   }),
 );
 
+/**
+ * Fixed error handler, never a rendering of the thrown value.
+ *
+ * Hono's default `errorHandler` turns any thrown value that carries
+ * `getResponse()` — an `HTTPException(200, { res })`, an `Error` with a
+ * `getResponse` property — into THAT response, with whatever status it names,
+ * before any admitted handler has run. A `throw` from a router middleware or
+ * an imported verifier would then be an unadmitted response channel. This
+ * handler renders every error as the same 5xx and never consults the error, so
+ * nothing a thrown value carries can shape a response. The checker
+ * (`assertRootErrorHandler`) requires exactly this shape, exactly once, here,
+ * and no `.onError` anywhere else under convex/**.
+ */
+app.onError((err, c) => c.json({ error: "internal" }, 500));
+
 app.get(
   "/health",
   admitHttpRead(healthRouteReadDefinition, (c) =>

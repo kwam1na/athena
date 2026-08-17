@@ -7,7 +7,7 @@
   <body>
     <article
       data-athena-landed-change-report="v2"
-      data-athena-report-diff-fingerprint="54f53863706e600a4652228a8ff38d3c141346dbc42ae5f2cfac5f30ed7ed827"
+      data-athena-report-diff-fingerprint="046c10ad0183516db264cf05e3f2fbf5e9a02ad8e53ad9ab218bbdaa8588f6e8"
     >
       <header data-report-section="header">
         <h1>Closing the Admission Rail</h1>
@@ -810,6 +810,33 @@ handler: admitPublicMutation(createOrganizationOperationDefinition, ...)</code><
             a finding; the pinned residual test now asserts the finding. The
             qualification on the claim that an ingress is either admitted or
             flagged is gone.
+        </p>
+
+        <p>
+          <strong>Throw is a response channel in Hono; two layers close it.</strong>
+            The grammar's first cut let <code>throw</code> through as a fault.
+            Hono's default error handler renders any thrown value carrying
+            <code>getResponse()</code> — <code>new HTTPException(200, { res })</code>,
+            an <code>Error</code> with a <code>getResponse</code> property — as
+            <em>the response</em>, so a grammar-passing middleware could still
+            answer with a constructed 2xx. The grammar now accepts a
+            <code>throw</code> only as the unrebound rethrow of the middleware's
+            own <code>catch (&lt;id&gt;)</code> binding; and <code>http.ts</code>
+            installs exactly one fixed
+            <code>app.onError((err, c) =&gt; c.json({ error: "internal" }, 500))</code>,
+            asserted to be that shape and nothing else with any other
+            <code>.onError</code> under <code>convex/**</code> a finding — so a
+            <code>getResponse</code> error thrown by an imported verifier
+            renders as the fixed 5xx. What a <code>.use</code> middleware can
+            do, provably: read the request, replace <code>c.req.raw</code>,
+            deny with a literal 4xx/5xx, rethrow its own caught fault, or hand
+            the request on. The same round pinned <code>next()</code> inside a
+            <code>try</code> block, rejected generator middleware, and failed
+            closed on router <em>acquisition</em>: every <code>new Hono()</code>
+            outside <code>const &lt;name&gt; = …</code> is a finding at the
+            construction, and a <code>.route(prefix, child)</code> whose child
+            the walk cannot open is a finding at the mount rather than an empty
+            subtree.
         </p>
 
         <h3>Residual risks, ranked</h3>

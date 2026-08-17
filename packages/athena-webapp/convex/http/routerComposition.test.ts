@@ -126,4 +126,55 @@ describe("http router composition", () => {
       "admitHttpRead(healthRouteReadDefinition,",
     );
   });
+
+  it("installs the fixed root error handler exactly once", () => {
+    const httpRouter = readProjectFile("convex", "http.ts");
+
+    expect(
+      httpRouter.match(
+        /app\.onError\(\(err, c\) => c\.json\(\{ error: "internal" \}, 500\)\);/g,
+      ),
+    ).toHaveLength(1);
+    expect(httpRouter.match(/\.onError\(/g)).toHaveLength(1);
+  });
+
+  /**
+   * The premise behind the fixed handler, pinned behaviourally.
+   *
+   * Hono's default error handler renders any thrown value that carries
+   * `getResponse()` — an `HTTPException(200, { res })` — as THAT response,
+   * with the status it names. A `throw` from a router middleware is therefore
+   * a response channel that bypasses admission unless the root handler is
+   * fixed. This test is what makes a silent library change (or a dropped
+   * `app.onError`) fail loudly.
+   */
+  it("renders a thrown getResponse()-bearing error as the fixed 5xx, not as the response it carries", async () => {
+    const { HTTPException } = await import("hono/http-exception");
+    const build = (fixed: boolean) => {
+      const root = new Hono();
+      if (fixed) {
+        root.onError((err, c) => c.json({ error: "internal" }, 500));
+      }
+      const sub = new Hono();
+      sub.use("*", async (c, next) => {
+        throw new HTTPException(200, {
+          res: new Response(JSON.stringify({ pwned: c.req.path }), {
+            status: 200,
+          }),
+        });
+        await next();
+      });
+      sub.get("/probe", (c) => c.json({ ok: true }));
+      root.route("/sub", sub);
+      return root;
+    };
+    const request = () => new Request("https://api.test/sub/probe");
+
+    // Without the handler the thrown value IS the response.
+    expect((await build(false).fetch(request())).status).toBe(200);
+    // With it, every thrown value renders as the same 5xx.
+    const fixed = await build(true).fetch(request());
+    expect(fixed.status).toBe(500);
+    expect(await fixed.json()).toEqual({ error: "internal" });
+  });
 });

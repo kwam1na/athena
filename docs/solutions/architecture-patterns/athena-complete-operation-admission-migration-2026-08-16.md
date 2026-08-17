@@ -14,7 +14,7 @@ applies_when:
   - "HTTP routes authenticate from a cookie id read directly out of the request"
   - "A migration must move ~400 call sites without changing normal-user behavior"
 tags: [athena, convex, operation-admission, shared-demo, authz, static-checker, http-ingress, derived-invariants]
-delivery_diff_fingerprint: 54f53863706e600a4652228a8ff38d3c141346dbc42ae5f2cfac5f30ed7ed827
+delivery_diff_fingerprint: 046c10ad0183516db264cf05e3f2fbf5e9a02ad8e53ad9ab218bbdaa8588f6e8
 ---
 
 # Completing an Admission Rail — Deriving Invariants Instead of Listing Them
@@ -293,9 +293,30 @@ one to answer 2xx / set `c.res` / drop the trailing `next()` produces one
 finding per site); the pinned residual test now asserts the finding. The
 qualification on the central claim — an ingress is either admitted or
 flagged — is gone. Note the grammar proves the middleware cannot
-*respond* except with a denial and cannot *reach* the ActionCtx; it does
-not (and does not claim to) prove what an imported verifier does with the
-bytes it is handed.
+*respond* except with a denial or by rethrowing its own caught fault, and
+cannot *reach* the ActionCtx; it does not (and does not claim to) prove
+what an imported verifier does with the bytes it is handed.
+
+The grammar's first cut let `throw` through as "a fault, not a response".
+In Hono that premise is false: the default error handler renders any thrown
+value carrying `getResponse()` — `new HTTPException(200, { res })`, an
+`Error` with a `getResponse` property — as *the response*, with the status
+it names, so a grammar-passing middleware could still answer every request
+under its path with a constructed 2xx. Two layers close it. The grammar now
+accepts a `throw` **only** as the unrebound rethrow of the middleware's own
+`catch (<id>)` binding (the harness-waiver shape); every constructed or
+obtained value fails. And `http.ts` installs exactly one fixed
+`app.onError((err, c) => c.json({ error: "internal" }, 500))` — asserted by
+`assertRootErrorHandler` to be that shape and nothing else, with any
+`.onError(` elsewhere under `convex/**` a finding — so even a `getResponse`
+error thrown by an imported verifier renders as the fixed 5xx. The same
+round pinned `next()` inside a `try` block / `finally` (a middleware may not
+observe the admitted handler's failure), rejected generator middleware, and
+failed closed on router *acquisition* — every `new Hono()` outside `const
+<name> = …` (parameter default, destructuring, class property, loop / catch
+binding, call argument) is a finding at the construction, and a
+`.route(prefix, child)` whose child the walk cannot open is a finding at the
+mount rather than an empty subtree.
 
 **Freeze what the checker trusts.** A static check that compares definition
 IDENTITY against a registry is only as good as the registry's immutability: a

@@ -75,6 +75,15 @@
  * pass-through-or-deny grammar (`middlewareGrammarViolation`); a factory
  * imported by name from `http/**` is opened and its returned function judged
  * the same way; anything else is `router-middleware-not-statically-resolvable`.
+ * The grammar accepts a `throw` ONLY as the rethrow of the middleware's own
+ * catch binding (Hono renders any thrown `getResponse()`-bearing value as the
+ * response), and the root router must install exactly one FIXED `app.onError`
+ * (`assertRootErrorHandler`: `router-error-handler-not-fixed`,
+ * `error-handler-outside-router-module`). Router ACQUISITION fails closed at
+ * the construction: every `new Hono()` / `new HttpRouterWithHono(...)` that is
+ * not `const <identifier> = …` is a finding, and a `.route(prefix, child)`
+ * whose child resolves to no walked router is flagged at the mount instead of
+ * being walked as empty.
  *
  * Flags:
  *   --path <prefix...>    restrict findings to convex-relative path prefixes
@@ -641,6 +650,15 @@ function hasExportModifier(node: ts.Node) {
       ts
         .getModifiers(node)
         ?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword),
+  );
+}
+
+function hasDeclareModifier(node: ts.Node) {
+  return Boolean(
+    ts.canHaveModifiers(node) &&
+      ts
+        .getModifiers(node)
+        ?.some((modifier) => modifier.kind === ts.SyntaxKind.DeclareKeyword),
   );
 }
 
@@ -1561,14 +1579,21 @@ function nestedDeclarationOf(
  * an `await` result (round 8)? A factory builds its router exactly this way
  * (`function make() { const r = new Hono(); ... return r }`), so a
  * registration on such a local is judged like one on a module-scoped
- * unresolvable receiver: ANY path expression is a route.
+ * unresolvable receiver: ANY path expression is a route. So is a PARAMETER
+ * with such a default (`function make(r = new Hono())`) and any nested
+ * binding-pattern declaration (`const [r] = [new Hono()]`, `const { r } =
+ * made()`): a name bound through a pattern reaches its value through a
+ * container the walk does not open (round 9). A parameter without a default
+ * keeps the string / template rule (the documented caller-table residual).
  */
 function isOpaqueNestedDeclaration(
   declaration: ts.ParameterDeclaration | ts.VariableDeclaration | undefined,
 ): boolean {
-  if (!declaration || ts.isParameter(declaration) || !declaration.initializer) {
-    return false;
+  if (!declaration) return false;
+  if (ts.isVariableDeclaration(declaration) && !ts.isIdentifier(declaration.name)) {
+    return true;
   }
+  if (!declaration.initializer) return false;
   const value = unwrapTypeOnly(declaration.initializer);
   if (ts.isNewExpression(value)) return !isResolvableConstruction(value);
   return ts.isCallExpression(value) || ts.isAwaitExpression(value);
@@ -2583,6 +2608,11 @@ type RouterMount = {
   parentKey: string;
   prefix: string;
   childRef: { local: string; convexPath: string };
+  /** The `.route(prefix, child)` site, for the unresolved-mount finding (round 9). */
+  filePath: string;
+  line: number;
+  /** The child as spelled at the site. */
+  childText: string;
 };
 
 type RouteModuleFacts = {
@@ -2680,15 +2710,29 @@ function isDenialStatusLiteral(node: ts.Expression | undefined) {
  *     `c.json` / `c.text` with a literal 4xx/5xx status — no bare `return`,
  *     no other value;
  *   - no `this`, `arguments`, `eval`, `Function`, and neither parameter name
- *     is redeclared anywhere inside the body.
- *
- * `throw` is allowed: a thrown error is a fault, not a response.
+ *     is redeclared anywhere inside the body;
+ *   - the middleware is not a generator (Hono assigns a returned generator
+ *     object to `context.res`);
+ *   - `next()` has no `try` statement between it and the middleware: a
+ *     middleware may not observe the admitted handler's failure;
+ *   - a `throw` is accepted ONLY as the rethrow of the middleware's own catch
+ *     binding (`catch (error) { ...; throw error; }`). Hono's error handler
+ *     renders any thrown value carrying `getResponse()` (`HTTPException`, an
+ *     `Error` with a `getResponse` property) AS THE RESPONSE with the status it
+ *     names, so `throw <constructed value>` is a response channel the grammar
+ *     cannot see into — every throw of a `new`, an object, a call result, or a
+ *     rebound local fails. (The root router's fixed `app.onError`, asserted by
+ *     `assertRootErrorHandler`, is the second layer: even a `getResponse`
+ *     error thrown by an imported verifier renders as a fixed 5xx.)
  */
 export function middlewareGrammarViolation(
   fn: ts.ArrowFunction | ts.FunctionExpression,
   sourceFile: ts.SourceFile,
 ): string | undefined {
   const text = (node: ts.Node) => node.getText(sourceFile).slice(0, 60);
+  if (ts.isFunctionExpression(fn) && fn.asteriskToken) {
+    return "the middleware is a generator function; Hono assigns the returned generator object to the response, so it is not pass-through-or-deny";
+  }
   if (fn.parameters.length !== 2) {
     return `the middleware declares ${fn.parameters.length} parameter(s); the accepted shape is exactly \`(c, next)\``;
   }
@@ -2816,6 +2860,21 @@ export function middlewareGrammarViolation(
           violation = `\`${nextName}()\` is called from a nested function`;
           return;
         }
+        // A `next()` inside a `try` block (or a `finally`) lets the middleware
+        // observe / swallow the admitted handler's failure; inside a `catch`
+        // clause it does not (the caught fault is the middleware's own, and
+        // a rejection of `next()` propagates out of the clause).
+        for (let ancestor: ts.Node | undefined = call.parent; ancestor && ancestor !== fn; ancestor = ancestor.parent) {
+          const outer: ts.Node | undefined = ancestor.parent;
+          if (
+            outer &&
+            ts.isTryStatement(outer) &&
+            (ancestor === outer.tryBlock || ancestor === outer.finallyBlock)
+          ) {
+            violation = `\`${nextName}()\` is called inside a \`try\` (\`${text(outer).split("\n")[0]}\`); a middleware may not observe the admitted handler's failure`;
+            return;
+          }
+        }
         return;
       }
       if (node.text === ctxName) {
@@ -2854,6 +2913,59 @@ export function middlewareGrammarViolation(
       }
       if (!isNextOrAwaitNext(node.expression) && !isDenialResponse(node.expression)) {
         violation = `\`${text(node)}\` returns something other than \`next()\` / \`await next()\` or a \`${ctxName}.json(..., <literal 4xx/5xx>)\` denial`;
+        return;
+      }
+    }
+    if (ts.isThrowStatement(node)) {
+      // Only the rethrow of the middleware's OWN catch binding: a bare
+      // identifier bound by a `catch (<id>)` clause between the throw and the
+      // middleware. Every other thrown value is one the middleware constructs
+      // or obtains, and Hono renders a `getResponse`-bearing one as the
+      // response.
+      const thrown = node.expression ? unwrapTypeOnly(node.expression) : undefined;
+      let rethrow = false;
+      if (thrown && ts.isIdentifier(thrown)) {
+        for (let ancestor: ts.Node | undefined = node.parent; ancestor && ancestor !== fn; ancestor = ancestor.parent) {
+          if (
+            ts.isCatchClause(ancestor) &&
+            ancestor.variableDeclaration &&
+            ts.isIdentifier(ancestor.variableDeclaration.name) &&
+            ancestor.variableDeclaration.name.text === thrown.text
+          ) {
+            // The binding must still BE the caught value: no assignment to
+            // it and no redeclaration of the name anywhere in the clause.
+            let rebound = false;
+            const scan = (inner: ts.Node) => {
+              if (rebound || ts.isTypeNode(inner)) return;
+              if (
+                ts.isBinaryExpression(inner) &&
+                ts.isIdentifier(inner.left) &&
+                inner.left.text === thrown.text &&
+                inner.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+                inner.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+              ) {
+                rebound = true;
+                return;
+              }
+              if (
+                (ts.isVariableDeclaration(inner) || ts.isParameter(inner) || ts.isBindingElement(inner)) &&
+                ts.isIdentifier(inner.name) &&
+                inner.name.text === thrown.text
+              ) {
+                rebound = true;
+                return;
+              }
+              ts.forEachChild(inner, scan);
+            };
+            scan(ancestor.block);
+            rethrow = !rebound;
+            break;
+          }
+          if (isFunctionLike(ancestor)) break;
+        }
+      }
+      if (!rethrow) {
+        violation = `the middleware throws a value it constructs or obtains (\`${text(node)}\`); Hono's error handler renders any thrown value carrying \`getResponse()\` as the response, so only a rethrow of the middleware's own \`catch (<id>)\` binding is accepted`;
         return;
       }
     }
@@ -3104,6 +3216,7 @@ function collectRouteModuleFacts(
   const candidateNames = collectRouterCandidateNames(sourceFile, topLevelNames);
   const routerLikeLocals = new Set<string>();
   const nestedRouterDeclarations: ts.VariableDeclaration[] = [];
+  const uninitializedRouterCandidates: ts.VariableDeclaration[] = [];
   const collectNestedRouters = (node: ts.Node, nested: boolean) => {
     if (
       nested &&
@@ -3138,6 +3251,16 @@ function collectRouteModuleFacts(
           !candidateNames.has(declaration.name.text)
         ) {
           continue;
+        }
+        if (
+          !declaration.initializer ||
+          hasDeclareModifier(statement)
+        ) {
+          // `declare const ghost: any; sub.route("/x", ghost)` / `let r:
+          // Hono;` — a router candidate with no initializer names a value the
+          // walk cannot bind (round 9); it is a router key with no
+          // registrations, and mounting it would pass an empty subtree.
+          uninitializedRouterCandidates.push(declaration);
         }
         routerVariables.add(declaration.name.text);
         routerLikeLocals.add(declaration.name.text);
@@ -3406,6 +3529,14 @@ function collectRouteModuleFacts(
     }
     return ts.isIdentifier(root) ? root : undefined;
   };
+  /** Is this property chain rooted at `this` (`this.r`, `this.box.r`)? */
+  const chainRootIsThis = (expression: ts.Expression): boolean => {
+    let root: ts.Expression = unwrapTypeOnly(expression);
+    while (ts.isPropertyAccessExpression(root)) {
+      root = unwrapTypeOnly(root.expression);
+    }
+    return root.kind === ts.SyntaxKind.ThisKeyword;
+  };
   /**
    * Can this receiver be a router the checker was handed but cannot walk?
    *
@@ -3622,6 +3753,10 @@ function collectRouteModuleFacts(
    * (`globalThis`, `self`, `window`)?
    */
   const isModuleScopedReceiver = (receiver: ts.Expression): boolean => {
+    // A `this`-rooted chain (`this.r.get(P, h)` in a class method whose
+    // property holds a router) is a receiver the checker cannot see into,
+    // judged like a module-scoped one: any path expression is a route (round 9).
+    if (chainRootIsThis(baseOfReceiver(receiver))) return true;
     const root = chainRootIdentifier(baseOfReceiver(receiver));
     if (!root || isShadowedReference(root)) return false;
     return (
@@ -3794,6 +3929,12 @@ function collectRouteModuleFacts(
               method,
               "`.route(prefix, child)` must take a string-literal prefix and a child router identifier; anything else cannot be walked to the routes it mounts",
             );
+          } else if (isShadowedReference(child)) {
+            flag(
+              node,
+              method,
+              `\`.route(prefix, child)\` mounts \`${child.text}\`, a name bound in a nested scope; the walk resolves a mounted child only through a top-level router of this module or an import, so a nested binding is a subtree it cannot walk`,
+            );
           } else {
             const binding = importBindings.find(
               (candidate) => candidate.local === child.text,
@@ -3810,8 +3951,14 @@ function collectRouteModuleFacts(
               prefix,
               childRef: {
                 local: binding?.imported ?? child.text,
+                // An import the resolver cannot place (a relative path
+                // outside convex/**, an alias) keeps its own module here and
+                // fails at the mount: no router of this module has that key.
                 convexPath: targetPath ?? convexPath,
               },
+              filePath,
+              line: lineOf(sourceFile, node),
+              childText: child.text,
             });
           }
         } else if (method === "mount") {
@@ -3870,6 +4017,42 @@ function collectRouteModuleFacts(
         } else if (method === "use") {
           judgeMiddleware(routerKey, node);
         }
+      }
+    }
+    if (
+      ts.isNewExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      (node.expression.text === "Hono" ||
+        node.expression.text === "HttpRouterWithHono")
+    ) {
+      // A router is CONSTRUCTED here. The walk binds a router only through
+      // `const <name> = new Hono()` (top-level: walked; nested: swept as an
+      // opaque local); a construction in any other position — a parameter
+      // default, an array / object literal element, a class property, a call
+      // argument, a return value, a `for..of` source, a thrown value — reaches
+      // a binding the walk cannot follow, so it fails closed at the
+      // construction (round 9).
+      let holder: ts.Node = node;
+      while (
+        ts.isParenthesizedExpression(holder.parent) ||
+        ts.isNonNullExpression(holder.parent) ||
+        ts.isAsExpression(holder.parent) ||
+        ts.isSatisfiesExpression(holder.parent) ||
+        ts.isTypeAssertionExpression(holder.parent)
+      ) {
+        holder = holder.parent;
+      }
+      const boundByDeclaration =
+        ts.isVariableDeclaration(holder.parent) &&
+        holder.parent.initializer === holder &&
+        ts.isIdentifier(holder.parent.name);
+      if (!boundByDeclaration) {
+        flag(
+          node,
+          "new",
+          `a router is constructed in a position the walk cannot bind (\`${holder.parent.getText(sourceFile).slice(0, 60)}\`); a router must be exactly \`const <name> = new ${node.expression.text}(...)\`, because a router that reaches a parameter default, a container, a class property, a call, a return, or a loop binding can register routes the walk never sees`,
+          `\`new ${node.expression.text}(...)\``,
+        );
       }
     }
     ts.forEachChild(node, visit);
@@ -3958,6 +4141,14 @@ function collectRouteModuleFacts(
     }
     reject(
       `the middleware is \`${handler.getText(sourceFile).slice(0, 60)}\`; only an inline \`(c, next) => {...}\`, the \`hono/cors\` factory call, or a named-import factory call is accepted, because anything else is a handler the checker cannot see into`,
+    );
+  }
+  for (const declaration of uninitializedRouterCandidates) {
+    flag(
+      declaration,
+      "declare",
+      `the router \`${(declaration.name as ts.Identifier).text}\` is declared without an initializer (\`${declaration.parent.parent.getText(sourceFile).slice(0, 60)}\`); an ambient \`declare\` or an unassigned binding names a router value the walk cannot bind, and mounting or registering on it walks an empty subtree`,
+      `\`${(declaration.name as ts.Identifier).text}\``,
     );
   }
   visit(sourceFile);
@@ -4242,11 +4433,12 @@ function sweepRouterReferences(
       expression = parent;
       parent = parent.parent;
     }
-    // Receiver of a router-method call.
+    // Receiver of a router-method call, or of the `.onError(...)` call that
+    // `assertRootErrorHandler` judges (round 9).
     if (
       ts.isPropertyAccessExpression(parent) &&
       parent.expression === expression &&
-      ROUTER_METHODS.has(parent.name.text) &&
+      (ROUTER_METHODS.has(parent.name.text) || parent.name.text === "onError") &&
       ts.isCallExpression(parent.parent) &&
       parent.parent.expression === parent
     ) {
@@ -4337,9 +4529,38 @@ function resolveRouteRegistrations(
 ): { routes: IngressRegistration[]; registrations: Map<string, RawRouteRegistration> } {
   const exportIndex = buildRouterExportIndex(facts);
 
-  const mountsByParent = new Map<string, RouterMount[]>();
+  // Every router key the walk can actually open: a top-level Hono router of
+  // some module. A mount whose child resolves to anything else — an
+  // `HttpRouterWithHono` wrapper, an ambient / loop / catch binding, a router
+  // imported from outside convex/**, a name that is not exported — is a
+  // subtree the walk would traverse as EMPTY; that is a pass for routes it
+  // never sees, so it fails closed at the mount instead (round 9).
+  const walkableRouterKeys = new Set<string>();
   for (const moduleFacts of facts.values()) {
+    for (const router of moduleFacts.routers) walkableRouterKeys.add(router.key);
+  }
+  const resolveMountChild = (mount: RouterMount) =>
+    exportIndex.get(`${mount.childRef.convexPath}::${mount.childRef.local}`) ??
+    `${mount.childRef.convexPath}#${mount.childRef.local}`;
+
+  const mountsByParent = new Map<string, RouterMount[]>();
+  for (const [convexPath, moduleFacts] of facts) {
     for (const mount of moduleFacts.mounts) {
+      if (!walkableRouterKeys.has(resolveMountChild(mount))) {
+        const parentFacts = facts.get(convexPath);
+        if (
+          parentFacts &&
+          !parentFacts.unresolvable.some((site) => site.line === mount.line)
+        ) {
+          parentFacts.unresolvable.push({
+            filePath: mount.filePath,
+            line: mount.line,
+            method: "route",
+            reason: `\`.route(prefix, child)\` mounts \`${mount.childText}\`, which does not resolve to a router the checker walked (a top-level \`new Hono()\` of this module or an exported Hono router of a convex module; resolved key \`${resolveMountChild(mount)}\`); a mounted subtree the checker cannot walk is a set of routes it never sees`,
+          });
+        }
+        continue;
+      }
       const list = mountsByParent.get(mount.parentKey) ?? [];
       list.push(mount);
       mountsByParent.set(mount.parentKey, list);
@@ -4388,11 +4609,7 @@ function resolveRouteRegistrations(
     }
 
     for (const mount of mountsByParent.get(routerKey) ?? []) {
-      const childKey =
-        exportIndex.get(
-          `${mount.childRef.convexPath}::${mount.childRef.local}`,
-        ) ?? `${mount.childRef.convexPath}#${mount.childRef.local}`;
-      walk(childKey, joinRoutePath(prefix, mount.prefix));
+      walk(resolveMountChild(mount), joinRoutePath(prefix, mount.prefix));
     }
   };
 
@@ -5590,6 +5807,169 @@ export function assertCorsAllowlist(
   };
 }
 
+export type RootErrorHandlerAssertion = {
+  /** Every `<x>.onError(...)` call in the module, by line. */
+  sites: { line: number }[];
+  /** Exactly one site, on a top-level Hono router, of the fixed shape. */
+  fixed: boolean;
+  line?: number;
+  detail: string;
+};
+
+/**
+ * The root router's error handler is FIXED (round 9). Hono's default
+ * `errorHandler` renders any thrown value carrying `getResponse()` — an
+ * `HTTPException(200, { res })`, an `Error` with a `getResponse` property — as
+ * the response, with the status it names, and convex-helpers returns
+ * `app.fetch(...)` unchanged. So a thrown value is a response channel that
+ * bypasses admission from any middleware or imported verifier, and the second
+ * layer beside the middleware grammar's throw rule is a root `app.onError`
+ * that renders EVERY error as a fixed 5xx and never consults the error:
+ *
+ *   app.onError((err, c) => c.json({ error: "internal" }, 500));
+ *
+ * Accepted, and nothing else: exactly one `<top-level Hono router>.onError(<inline
+ * arrow>)` in `http.ts`, whose arrow has exactly two plain identifier
+ * parameters, whose body is the single `return <ctx>.json|text(<any>, <literal
+ * 5xx>)` (block with that one statement, or that expression), and which never
+ * references its error parameter, `getResponse`, or the context other than as
+ * that callee. Any `.onError(` under convex/** outside `http.ts` is a finding
+ * (a sub-router's own handler renders before the root's).
+ */
+export function assertRootErrorHandler(
+  filePath: string,
+  source: string,
+): RootErrorHandlerAssertion {
+  const sourceFile = parseSource(filePath, source);
+  const sites: { line: number; node: ts.CallExpression }[] = [];
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(unwrapTypeOnly(node.expression)) &&
+      (unwrapTypeOnly(node.expression) as ts.PropertyAccessExpression).name.text === "onError"
+    ) {
+      sites.push({ line: lineOf(sourceFile, node), node });
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  const failed = (line: number | undefined, detail: string): RootErrorHandlerAssertion => ({
+    sites: sites.map(({ line: l }) => ({ line: l })),
+    fixed: false,
+    line,
+    detail,
+  });
+  if (sites.length !== 1) {
+    return failed(
+      sites[0]?.line,
+      `the router module registers ${sites.length} \`.onError(...)\` handler(s); exactly one fixed \`app.onError((err, c) => c.json({ error: "internal" }, 500))\` is required so that no thrown value (an \`HTTPException\`, an error carrying \`getResponse()\`) renders as a non-5xx response.`,
+    );
+  }
+  const [{ line, node }] = sites;
+  const routerVariables = new Set<string>();
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (ts.isIdentifier(declaration.name) && isHonoRouterDeclaration(declaration)) {
+        routerVariables.add(declaration.name.text);
+      }
+    }
+  }
+  const callee = unwrapTypeOnly(node.expression) as ts.PropertyAccessExpression;
+  const receiver = unwrapTypeOnly(callee.expression);
+  if (
+    callee.questionDotToken ||
+    node.questionDotToken ||
+    !ts.isIdentifier(receiver) ||
+    !routerVariables.has(receiver.text) ||
+    isShadowedReference(receiver) ||
+    !ts.isExpressionStatement(node.parent) ||
+    !ts.isSourceFile(node.parent.parent)
+  ) {
+    return failed(
+      line,
+      `\`.onError(...)\` is called on \`${callee.expression.getText(sourceFile).slice(0, 40)}\`, which is not a top-level Hono router of the module, or not as a top-level statement.`,
+    );
+  }
+  if (node.arguments.length !== 1) {
+    return failed(line, `\`.onError(...)\` takes ${node.arguments.length} argument(s); the accepted shape is exactly one inline \`(err, c) => ...\` arrow.`);
+  }
+  const handler = unwrapTypeOnly(node.arguments[0]);
+  if (!ts.isArrowFunction(handler)) {
+    return failed(line, `the \`.onError\` handler is \`${node.arguments[0].getText(sourceFile).slice(0, 60)}\`; only an inline \`(err, c) => ...\` arrow is accepted, because anything else is a handler the checker cannot see into.`);
+  }
+  if (
+    handler.parameters.length !== 2 ||
+    handler.parameters.some(
+      (parameter) =>
+        !ts.isIdentifier(parameter.name) ||
+        parameter.initializer ||
+        parameter.dotDotDotToken ||
+        parameter.questionToken,
+    ) ||
+    handler.asteriskToken
+  ) {
+    return failed(line, "the `.onError` handler must declare exactly two plain identifier parameters `(err, c)`.");
+  }
+  const [errName, ctxName] = handler.parameters.map(
+    (parameter) => (parameter.name as ts.Identifier).text,
+  );
+  if (errName === ctxName) return failed(line, "the `.onError` handler's two parameters share a name.");
+  let response: ts.Expression | undefined;
+  if (ts.isBlock(handler.body)) {
+    const [only] = handler.body.statements;
+    if (handler.body.statements.length === 1 && ts.isReturnStatement(only) && only.expression) {
+      response = unwrapTypeOnly(only.expression);
+    }
+  } else {
+    response = unwrapTypeOnly(handler.body);
+  }
+  const isFixedResponse =
+    response &&
+    ts.isCallExpression(response) &&
+    !response.questionDotToken &&
+    ts.isPropertyAccessExpression(response.expression) &&
+    !response.expression.questionDotToken &&
+    ts.isIdentifier(response.expression.expression) &&
+    response.expression.expression.text === ctxName &&
+    (response.expression.name.text === "json" || response.expression.name.text === "text") &&
+    response.arguments.length === 2 &&
+    ts.isNumericLiteral(response.arguments[1]) &&
+    Number.isInteger(Number(response.arguments[1].text)) &&
+    Number(response.arguments[1].text) >= 500 &&
+    Number(response.arguments[1].text) <= 599;
+  if (!isFixedResponse) {
+    return failed(
+      line,
+      `the \`.onError\` handler's body is \`${handler.body.getText(sourceFile).slice(0, 60)}\`; it must be exactly \`return ${ctxName}.json(<body>, <literal 5xx>)\` (or \`${ctxName}.text(...)\`), so that every thrown value renders as a fixed 5xx.`,
+    );
+  }
+  const responseCallee = (
+    (response as ts.CallExpression).expression as ts.PropertyAccessExpression
+  ).expression;
+  let leak: string | undefined;
+  const scan = (inner: ts.Node) => {
+    if (leak || ts.isTypeNode(inner)) return;
+    if (ts.isIdentifier(inner) && (isValueReference(inner) || ts.isShorthandPropertyAssignment(inner.parent))) {
+      if (inner.text === errName) leak = `references its error parameter \`${errName}\` (\`${inner.parent.getText(sourceFile).slice(0, 40)}\`)`;
+      else if (inner.text === ctxName && inner !== responseCallee) leak = `uses \`${ctxName}\` other than as the \`${ctxName}.json\` / \`${ctxName}.text\` callee`;
+    }
+    if (ts.isIdentifier(inner) && inner.text === "getResponse") leak = "mentions `getResponse`";
+    if (ts.isFunctionLike(inner) || inner.kind === ts.SyntaxKind.ThisKeyword) leak = "contains a nested function or `this`";
+    ts.forEachChild(inner, scan);
+  };
+  scan(handler.body);
+  if (leak) {
+    return failed(line, `the \`.onError\` handler ${leak}; a fixed handler never consults the thrown value, so nothing it carries (\`getResponse()\`, a status, a body) can shape the response.`);
+  }
+  return {
+    sites: [{ line }],
+    fixed: true,
+    line,
+    detail: "the router's `.onError` handler renders every error as a fixed 5xx.",
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Definition loading + matching
 // ---------------------------------------------------------------------------
@@ -6358,7 +6738,7 @@ export async function collectOperationAdmissionCheckResult(
       functionName: ".use(...)",
       rationale: `${site.reason}. \`.use\` middleware runs for every request under its path, before the admitted handler and with the full ActionCtx on \`c.env\`; a middleware the checker cannot prove pass-through-or-deny is a terminal, unadmitted responder for every method under that path, so it fails closed.`,
       remediation:
-        "Spell the middleware as `<router>.use(<string-literal path>, async (c, next) => { ... })` whose body only reads `c.req`, may replace `c.req.raw`, denies with `return c.json(<body>, <literal 4xx/5xx>)`, and ends with `await next()` (or `return next()`); or call a middleware factory that is a named export of a convex module under `http/` and returns exactly such a function; or move the verification into the route definition's `ingressVerification`. `cors(...)` from `hono/cors` is accepted only as the single registration `assertCorsAllowlist` judges.",
+        "Spell the middleware as `<router>.use(<string-literal path>, async (c, next) => { ... })` whose body only reads `c.req`, may replace `c.req.raw`, denies with `return c.json(<body>, <literal 4xx/5xx>)`, throws only to rethrow its own `catch (<id>)` binding, never calls `next()` inside a `try`, and ends with `await next()` (or `return next()`); or call a middleware factory that is a named export of a convex module under `http/` and returns exactly such a function; or move the verification into the route definition's `ingressVerification`. `cors(...)` from `hono/cors` is accepted only as the single registration `assertCorsAllowlist` judges.",
     });
   }
 
@@ -6785,6 +7165,45 @@ export async function collectOperationAdmissionCheckResult(
       rationale: `${module.convexPath} imports or calls hono/cors. Only http.ts may register the CORS middleware, exactly once, with a fixed allowlist; a cors() on a sub-router or helper is a second middleware Hono runs for the routes it covers, and a reflect-any-origin one there overrides the allowlisted header for every request it sees.`,
       remediation:
         "Remove the hono/cors import from this module; the router-level cors() in convex/http.ts covers every mounted route.",
+    });
+  }
+
+  // --- root error handler (round 9) ---------------------------------------
+  // Hono renders a thrown `getResponse()`-bearing value as the response, so
+  // the root router must install exactly one FIXED `app.onError` (every error
+  // -> a literal 5xx, never consulting the error), and no other module may
+  // install one (a sub-router's handler renders before the root's).
+  if (routerModule) {
+    const handler = assertRootErrorHandler(
+      routerModule.filePath,
+      routerModule.source,
+    );
+    if (!handler.fixed) {
+      push({
+        id: "router-error-handler-not-fixed",
+        severity: "high",
+        title: "Router error handler is not a single fixed 5xx",
+        filePath: routerModule.filePath,
+        line: handler.line,
+        rationale: `${handler.detail} Hono's default error handler renders any thrown value carrying \`getResponse()\` (an \`HTTPException\`, an \`Error\` with a \`getResponse\` property) as the response with the status it names, so without a fixed root handler a thrown value from any middleware or imported verifier is an unadmitted response channel.`,
+        remediation:
+          'Register exactly once in convex/http.ts, on the root Hono router: `app.onError((err, c) => c.json({ error: "internal" }, 500));` — an inline `(err, c)` arrow whose only statement returns `c.json` / `c.text` with a literal 5xx and never references `err`.',
+      });
+    }
+  }
+  for (const module of modules) {
+    if (module.convexPath === "http.ts") continue;
+    const handler = assertRootErrorHandler(module.filePath, module.source);
+    if (handler.sites.length === 0) continue;
+    push({
+      id: `error-handler-outside-router-module-${slugifyForFindingId(module.convexPath)}`,
+      severity: "high",
+      title: "Error handler is registered outside convex/http.ts",
+      filePath: module.filePath,
+      line: handler.sites[0].line,
+      rationale: `${module.convexPath} calls \`.onError(...)\`. Only the root router in http.ts may install an error handler, and only the fixed 5xx one; a handler on a sub-router or helper renders thrown values (including \`getResponse()\`-bearing ones) before the root handler does, so it is an unadmitted response channel.`,
+      remediation:
+        "Remove the `.onError(...)` call from this module; the fixed root handler in convex/http.ts covers every mounted route.",
     });
   }
 

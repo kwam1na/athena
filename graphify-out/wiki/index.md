@@ -8,15 +8,15 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 
 ## Repo Summary
 - Code files discovered: 2987
-- Graph nodes: 12907
-- Graph edges: 15953
+- Graph nodes: 12916
+- Graph edges: 15973
 - Communities: 2911
 
 ## Graph Hotspots
 - `dailyClose.ts` (104 edges, Community 0) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
-- `convex-operation-admission-check.ts` (90 edges, Community 2) - [`scripts/convex-operation-admission-check.ts`](../../scripts/convex-operation-admission-check.ts)
+- `convex-operation-admission-check.ts` (92 edges, Community 1) - [`scripts/convex-operation-admission-check.ts`](../../scripts/convex-operation-admission-check.ts)
 - `harness-inferential-review.ts` (88 edges, Community 3) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
-- `posLocalStore.ts` (87 edges, Community 1) - [`packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts`](../../packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts)
+- `posLocalStore.ts` (87 edges, Community 2) - [`packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts`](../../packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts)
 - `dailyOperations.ts` (76 edges, Community 4) - [`packages/athena-webapp/convex/operations/dailyOperations.ts`](../../packages/athena-webapp/convex/operations/dailyOperations.ts)
 - `terminalHealthPresentation.ts` (76 edges, Community 5) - [`packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts`](../../packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts)
 - `catalogImport.ts` (75 edges, Community 6) - [`packages/athena-webapp/convex/inventory/catalogImport.ts`](../../packages/athena-webapp/convex/inventory/catalogImport.ts)
