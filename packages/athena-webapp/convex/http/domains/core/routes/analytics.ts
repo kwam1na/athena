@@ -66,16 +66,22 @@ analyticsRoutes.post(
       const { admission, ingress } = admitted;
 
       // A malformed body is a client error, answered here rather than left to
-      // escape as a `SyntaxError` that Convex renders as a server fault.
-      let body: any;
+      // escape as a `SyntaxError` that Convex renders as a server fault. Typed
+      // as `Record<string, unknown>` rather than `any` so a rename or shape
+      // change to `guestId` below is a compile error, not a silent pass.
+      let body: Record<string, unknown>;
       try {
-        body = JSON.parse(ingress.rawBody || "{}");
+        const parsed: unknown = JSON.parse(ingress.rawBody || "{}");
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          return c.json({ error: "Invalid request body" }, 400);
+        }
+        body = parsed as Record<string, unknown>;
       } catch (error) {
         if (!(error instanceof SyntaxError)) throw error;
         return c.json({ error: "Invalid request body" }, 400);
       }
 
-      if (!body?.guestId) {
+      if (typeof body.guestId !== "string" || !body.guestId) {
         return c.json({ error: "Guest ID and User ID are required" }, 400);
       }
 
@@ -97,6 +103,19 @@ analyticsRoutes.post(
         // internal message back to the caller.
         if (isCustomerOwnershipDenial(error)) {
           return c.json({ error: "Forbidden" }, 403);
+        }
+        // `guestId` is still caller-supplied. A non-id string reaches the
+        // callee's `v.id("guest")` argument validator and raises rather than
+        // denying — that is a malformed request, not a server fault.
+        // (Production Convex names this `ArgumentValidationError`; the
+        // in-process test harness in `convex-test` raises a plain `Error`
+        // prefixed `Validator error:` for the same condition.)
+        if (
+          error instanceof Error &&
+          (error.message.includes("ArgumentValidationError") ||
+            error.message.includes("Validator error"))
+        ) {
+          return c.json({ error: "Invalid guest id" }, 400);
         }
         throw error;
       }

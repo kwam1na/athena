@@ -30,12 +30,21 @@ import { describe, expect, it, vi } from "vitest";
 import type { Id } from "../../../../_generated/dataModel";
 import schema from "../../../../schema";
 
+import {
+  GUEST_COOKIE_NAME,
+  STOREFRONT_COOKIE_SECRET_ENV,
+  signStorefrontCookieValue,
+  verifyStorefrontCookieValue,
+} from "../../../../platform/storefrontCookieSignature";
+
 import { analyticsRoutes } from "../../core/routes/analytics";
 import { authRoutes } from "../../core/routes/auth";
 import { bagRoutes } from "./bag";
 import { onlineOrderRoutes } from "./onlineOrder";
+import { guestRoutes } from "./guest";
 import { rewardsRoutes } from "./rewards";
 import { savedBagRoutes } from "./savedBag";
+import { storefrontRoutes } from "./storefront";
 
 const modules = Object.fromEntries(
   Object.entries(import.meta.glob("../../../../**/*.ts")).map(
@@ -46,14 +55,46 @@ const modules = Object.fromEntries(
 const ALLOWED_ORIGIN = "https://shop.test";
 const ORIGIN_ENV = "ATHENA_STOREFRONT_ALLOWED_ORIGINS";
 
-const withOrigin = async (run: () => Promise<void>) => {
+/**
+ * The signing secret for the `guest_id` cookie. A guest session is only a
+ * claim — and only grantable — when it carries this signature, which is what
+ * separates "the server issued this session to this browser" from "the caller
+ * typed an id".
+ */
+const COOKIE_SECRET = "test-storefront-cookie-secret";
+
+/** A `guest_id` cookie as the two bootstrap routes mint it. */
+const signedGuest = (guestId: string) =>
+  `guest_id=${signStorefrontCookieValue(GUEST_COOKIE_NAME, guestId, COOKIE_SECRET)}`;
+
+const withOrigin = async (
+  run: () => Promise<void>,
+  { secret = COOKIE_SECRET }: { secret?: string } = {},
+) => {
   vi.stubEnv(ORIGIN_ENV, ALLOWED_ORIGIN);
+  vi.stubEnv(STOREFRONT_COOKIE_SECRET_ENV, secret);
   try {
     await run();
   } finally {
     vi.unstubAllEnvs();
   }
 };
+
+/** The `guest_id` value a route just set, if it set one. */
+function guestCookieFromResponse(response: Response): string | undefined {
+  const headers =
+    typeof response.headers.getSetCookie === "function"
+      ? response.headers.getSetCookie()
+      : [response.headers.get("set-cookie") ?? ""];
+
+  for (const header of headers) {
+    for (const part of header.split(/,(?=[^;]+?=)/)) {
+      const match = part.trim().match(/^guest_id=([^;]*)/);
+      if (match) return decodeURIComponent(match[1]);
+    }
+  }
+  return undefined;
+}
 
 /** Hono `env` backed by the real database and the real admission rail. */
 function envFor(t: ReturnType<typeof convexTest>) {
@@ -274,10 +315,13 @@ async function signIn(
   s: Seed,
   email: string,
   cookie: string,
+  // A verification code is single-use, so a second sign-in for the same
+  // shopper needs a fresh one.
+  code = "123456",
 ): Promise<Response> {
   await s.t.run((ctx) =>
     ctx.db.insert("storeFrontVerificationCode", {
-      code: "123456",
+      code,
       email,
       expiration: Date.now() + 10 * 60 * 1000,
       isUsed: false,
@@ -288,7 +332,7 @@ async function signIn(
   return authRoutes.fetch(
     request("/verify", {
       cookie,
-      body: { code: "123456", email },
+      body: { code, email },
     }),
     envFor(s.t),
   );
@@ -340,7 +384,7 @@ describe("guest→account merge is authorized by a server-issued grant", () => {
     await withOrigin(async () => {
       const s = await seed();
 
-      const guestCookie = `guest_id=${s.victim}; store_id=${s.storeId}; organization_id=${s.organizationId}`;
+      const guestCookie = `${signedGuest(s.victim)}; store_id=${s.storeId}; organization_id=${s.organizationId}`;
       const signInResponse = await signIn(s, "shopper@test", guestCookie);
       expect(signInResponse.status).toBe(200);
       const account = (await signInResponse.json()).user._id as
@@ -356,7 +400,7 @@ describe("guest→account merge is authorized by a server-issued grant", () => {
       );
       expect(grant?.mergeGrantExpiresAt).toBeGreaterThan(Date.now());
 
-      const cookie = `user_id=${account}; guest_id=${s.victim}; store_id=${s.storeId}`;
+      const cookie = `user_id=${account}; ${signedGuest(s.victim)}; store_id=${s.storeId}`;
       for (const merge of mergeRequests(s, cookie, s.victim)) {
         const response = await merge.router.fetch(merge.request, envFor(s.t));
         expect({ merge: merge.name, status: response.status }).toEqual({
@@ -379,11 +423,11 @@ describe("guest→account merge is authorized by a server-issued grant", () => {
     await withOrigin(async () => {
       const s = await seed();
 
-      const guestCookie = `guest_id=${s.victim}; store_id=${s.storeId}; organization_id=${s.organizationId}`;
+      const guestCookie = `${signedGuest(s.victim)}; store_id=${s.storeId}; organization_id=${s.organizationId}`;
       const signInResponse = await signIn(s, "replay@test", guestCookie);
       const account = (await signInResponse.json()).user._id;
 
-      const cookie = `user_id=${account}; guest_id=${s.victim}; store_id=${s.storeId}`;
+      const cookie = `user_id=${account}; ${signedGuest(s.victim)}; store_id=${s.storeId}`;
       const [bagMerge] = mergeRequests(s, cookie, s.victim);
 
       expect(
@@ -402,7 +446,7 @@ describe("guest→account merge is authorized by a server-issued grant", () => {
     await withOrigin(async () => {
       const s = await seed();
 
-      const guestCookie = `guest_id=${s.victim}; store_id=${s.storeId}; organization_id=${s.organizationId}`;
+      const guestCookie = `${signedGuest(s.victim)}; store_id=${s.storeId}; organization_id=${s.organizationId}`;
       const signInResponse = await signIn(s, "expired@test", guestCookie);
       const account = (await signInResponse.json()).user._id;
 
@@ -412,7 +456,7 @@ describe("guest→account merge is authorized by a server-issued grant", () => {
         }),
       );
 
-      const cookie = `user_id=${account}; guest_id=${s.victim}; store_id=${s.storeId}`;
+      const cookie = `user_id=${account}; ${signedGuest(s.victim)}; store_id=${s.storeId}`;
       for (const merge of mergeRequests(s, cookie, s.victim)) {
         const response = await merge.router.fetch(merge.request, envFor(s.t));
         expect({ merge: merge.name, status: response.status }).toEqual({
@@ -435,10 +479,13 @@ describe("guest→account merge is authorized by a server-issued grant", () => {
 
       // The victim signed in legitimately, so their guest row carries a grant
       // — for THEIR account. The attacker rides in on the same guest id.
-      const guestCookie = `guest_id=${s.victim}; store_id=${s.storeId}; organization_id=${s.organizationId}`;
+      const guestCookie = `${signedGuest(s.victim)}; store_id=${s.storeId}; organization_id=${s.organizationId}`;
       await signIn(s, "victim@test", guestCookie);
 
-      const cookie = `user_id=${s.attacker}; guest_id=${s.victim}; store_id=${s.storeId}`;
+      // The attacker holds a genuinely SIGNED cookie for the victim's guest
+      // session, so the denial here is the grant's account check doing its
+      // job, not the signature check standing in for it.
+      const cookie = `user_id=${s.attacker}; ${signedGuest(s.victim)}; store_id=${s.storeId}`;
       for (const merge of mergeRequests(s, cookie, s.victim)) {
         const response = await merge.router.fetch(merge.request, envFor(s.t));
         expect({ merge: merge.name, status: response.status }).toEqual({
@@ -475,7 +522,7 @@ describe("guest→account merge is authorized by a server-issued grant", () => {
         return id;
       });
 
-      const cookie = `user_id=${s.attacker}; guest_id=${foreignGuest}; store_id=${s.storeId}`;
+      const cookie = `user_id=${s.attacker}; ${signedGuest(foreignGuest)}; store_id=${s.storeId}`;
       for (const merge of mergeRequests(s, cookie, foreignGuest)) {
         const response = await merge.router.fetch(merge.request, envFor(s.t));
         expect({ merge: merge.name, status: response.status }).toEqual({
@@ -506,6 +553,37 @@ describe("guest→account merge is authorized by a server-issued grant", () => {
     });
   });
 
+  /**
+   * The merge body's guest id is still caller-supplied — it names the TARGET
+   * row, and the callee's `v.id("guest")` argument validator is the thing
+   * that used to reject a non-id string. That validator raises rather than
+   * denies, and the route's ownership-only `catch` used to rethrow it,
+   * turning a client typo into a 500 that clients retry and monitoring pages
+   * on. It must be a 400, on every one of the five merge routes.
+   */
+  it("answers 400, not 500, for a non-id guest id in the merge body", async () => {
+    await withOrigin(async () => {
+      const s = await seed();
+      const before = await ownership(s);
+
+      // No guest cookie at all: the attacker is simply a signed-in shopper
+      // POSTing a garbage id as the merge target.
+      const cookie = `user_id=${s.attacker}; store_id=${s.storeId}`;
+      const bogus = "not-an-id" as Id<"guest">;
+
+      for (const merge of mergeRequests(s, cookie, bogus)) {
+        const response = await merge.router.fetch(merge.request, envFor(s.t));
+        expect({ merge: merge.name, status: response.status }).toEqual({
+          merge: merge.name,
+          status: 400,
+        });
+      }
+
+      // Terminal: a malformed id never reaches a row, so nothing moved.
+      expect(await ownership(s)).toEqual(before);
+    });
+  });
+
   it("still signs in when the guest_id cookie is unusable, minting no grant", async () => {
     await withOrigin(async () => {
       const s = await seed();
@@ -520,6 +598,301 @@ describe("guest→account merge is authorized by a server-issued grant", () => {
       // what matters is that it is a denial, not a 500 from a thrown id parse.
       expect(response.status).toBeGreaterThanOrEqual(400);
       expect(response.status).toBeLessThan(500);
+    });
+  });
+});
+
+/**
+ * The guest session as a SERVER-ISSUED CREDENTIAL.
+ *
+ * Rounds 1-3 all failed the same way: whatever the merge checked, the guest
+ * side of it was a value the caller wrote. Round 3's grant fixed the merge and
+ * moved the problem one request earlier — the grant itself was minted from the
+ * raw `guest_id` cookie, so presenting a victim's guest id while signing in to
+ * your own account bought you a grant on their row.
+ *
+ * These tests pin the fix: `guest_id` is signed at the two bootstrap points,
+ * and only a signature the server minted makes a guest id usable anywhere.
+ */
+describe("the guest session is a signed, server-issued cookie", () => {
+  const getRequest = (path: string, cookie?: string) =>
+    new Request(`https://api.test${path}`, {
+      method: "GET",
+      headers: new Headers({
+        Origin: ALLOWED_ORIGIN,
+        ...(cookie ? { Cookie: cookie } : {}),
+      }),
+    });
+
+  /** THE ROUND-3 ATTACK, in both of its shapes. */
+  it("mints NO grant when sign-in presents a forged guest cookie, and the merges stay denied", async () => {
+    const forgeries = [
+      {
+        name: "unsigned victim id",
+        cookie: (s: Seed) => `guest_id=${s.victim}`,
+      },
+      {
+        name: "victim id signed with the wrong secret",
+        cookie: (s: Seed) =>
+          `guest_id=${signStorefrontCookieValue(
+            GUEST_COOKIE_NAME,
+            s.victim,
+            "not-the-servers-secret",
+          )}`,
+      },
+    ];
+
+    for (const forgery of forgeries) {
+      await withOrigin(async () => {
+        const s = await seed();
+        const before = await ownership(s);
+
+        // The attacker signs in to their OWN account — admitted on their own
+        // `user_id` — while presenting the victim's guest id.
+        const signInResponse = await signIn(
+          s,
+          "mallory@test",
+          `user_id=${s.attacker}; ${forgery.cookie(s)}; store_id=${s.storeId}; organization_id=${s.organizationId}`,
+        );
+        expect({ forgery: forgery.name, status: signInResponse.status }).toEqual(
+          { forgery: forgery.name, status: 200 },
+        );
+
+        // NO grant was written on the victim's row.
+        const guest = await s.t.run((ctx) => ctx.db.get("guest", s.victim));
+        expect({
+          forgery: forgery.name,
+          grant: guest?.mergeGrantedToStoreFrontUserId ?? null,
+        }).toEqual({ forgery: forgery.name, grant: null });
+
+        // And the five merges deny, with or without the forged cookie.
+        const cookie = `user_id=${s.attacker}; ${forgery.cookie(s)}; store_id=${s.storeId}`;
+        for (const merge of mergeRequests(s, cookie, s.victim)) {
+          const response = await merge.router.fetch(merge.request, envFor(s.t));
+          expect({ merge: merge.name, status: response.status }).toEqual({
+            merge: merge.name,
+            status: 403,
+          });
+        }
+
+        expect(await ownership(s)).toEqual(before);
+      });
+    }
+  });
+
+  it("mints a SIGNED guest cookie at the storefront bootstrap", async () => {
+    await withOrigin(async () => {
+      const s = await seed();
+
+      const response = await storefrontRoutes.fetch(
+        getRequest("/?storeName=store&asNewUser=true"),
+        envFor(s.t),
+      );
+      expect(response.status).toBe(200);
+
+      const cookie = guestCookieFromResponse(response);
+      const guestId = verifyStorefrontCookieValue(
+        GUEST_COOKIE_NAME,
+        cookie,
+        COOKIE_SECRET,
+      );
+
+      // The cookie is not the bare id, and what it carries is a real row.
+      expect(cookie).toBeDefined();
+      expect(cookie).not.toBe(guestId);
+      expect(guestId).toBeDefined();
+      const row = await s.t.run((ctx) =>
+        ctx.db.get("guest", guestId as Id<"guest">),
+      );
+      expect(String(row?.storeId)).toBe(String(s.storeId));
+    });
+  });
+
+  /**
+   * The legacy path: a shopper whose cookie predates signing keeps their cart.
+   * Bootstrap re-mints it signed, and from there the ordinary flow works.
+   */
+  it("upgrades a legacy unsigned cookie at bootstrap, and the upgraded session then merges", async () => {
+    await withOrigin(async () => {
+      const s = await seed();
+
+      const bootstrap = await guestRoutes.fetch(
+        getRequest(
+          "/",
+          `guest_id=${s.victim}; store_id=${s.storeId}; organization_id=${s.organizationId}`,
+        ),
+        envFor(s.t),
+      );
+      expect(bootstrap.status).toBe(200);
+
+      // The SAME guest row comes back, now behind a signature.
+      const upgraded = guestCookieFromResponse(bootstrap);
+      expect(
+        verifyStorefrontCookieValue(GUEST_COOKIE_NAME, upgraded, COOKIE_SECRET),
+      ).toBe(String(s.victim));
+
+      const signInResponse = await signIn(
+        s,
+        "legacy@test",
+        `guest_id=${upgraded}; store_id=${s.storeId}; organization_id=${s.organizationId}`,
+      );
+      expect(signInResponse.status).toBe(200);
+      const account = (await signInResponse.json()).user._id;
+
+      const cookie = `user_id=${account}; guest_id=${upgraded}; store_id=${s.storeId}`;
+      for (const merge of mergeRequests(s, cookie, s.victim)) {
+        const response = await merge.router.fetch(merge.request, envFor(s.t));
+        expect({ merge: merge.name, status: response.status }).toEqual({
+          merge: merge.name,
+          status: 200,
+        });
+      }
+
+      expect(await ownership(s)).toEqual({
+        analytics: String(account),
+        bag: String(account),
+        order: String(account),
+        savedBag: String(account),
+      });
+    });
+  });
+
+  it("does NOT upgrade a legacy cookie at /auth/verify or at a merge", async () => {
+    await withOrigin(async () => {
+      const s = await seed();
+
+      const signInResponse = await signIn(
+        s,
+        "mallory@test",
+        `user_id=${s.attacker}; guest_id=${s.victim}; store_id=${s.storeId}; organization_id=${s.organizationId}`,
+      );
+      expect(signInResponse.status).toBe(200);
+      // Sign-in issues no guest cookie at all: upgrading here would hand the
+      // caller a signed session on any id they typed.
+      expect(guestCookieFromResponse(signInResponse)).toBeUndefined();
+
+      const merge = mergeRequests(
+        s,
+        `user_id=${s.attacker}; guest_id=${s.victim}; store_id=${s.storeId}`,
+        s.victim,
+      )[0];
+      const mergeResponse = await bagRoutes.fetch(merge.request, envFor(s.t));
+      expect(mergeResponse.status).toBe(403);
+      expect(guestCookieFromResponse(mergeResponse)).toBeUndefined();
+    });
+  });
+
+  it("fails closed with no signing secret, while anonymous browse still works", async () => {
+    await withOrigin(
+      async () => {
+        const s = await seed();
+
+        // Anonymous catalog browse: the store still comes back.
+        const browse = await storefrontRoutes.fetch(
+          getRequest("/?storeName=store&asNewUser=true"),
+          envFor(s.t),
+        );
+        expect(browse.status).toBe(200);
+        expect((await browse.json())?.name).toBe("store");
+        // ...but no guest session is issued.
+        expect(guestCookieFromResponse(browse)).toBeUndefined();
+
+        // The guest bootstrap says so rather than handing out a dud session.
+        const guestBootstrap = await guestRoutes.fetch(
+          getRequest("/", `guest_id=${s.victim}; store_id=${s.storeId}`),
+          envFor(s.t),
+        );
+        expect(guestBootstrap.status).toBe(503);
+
+        // And a cookie signed with the (now absent) secret authorizes nothing.
+        const cookie = `user_id=${s.attacker}; ${signedGuest(s.victim)}; store_id=${s.storeId}`;
+        for (const merge of mergeRequests(s, cookie, s.victim)) {
+          const response = await merge.router.fetch(merge.request, envFor(s.t));
+          expect({ merge: merge.name, status: response.status }).toEqual({
+            merge: merge.name,
+            status: 403,
+          });
+        }
+      },
+      { secret: "" },
+    );
+  });
+
+  /**
+   * A second sign-in on the same guest session must not re-point a grant the
+   * first shopper is still working through: that stranded their remaining
+   * merges at 403 halfway down the list.
+   */
+  it("does not re-point a LIVE, partly consumed grant to a second account", async () => {
+    await withOrigin(async () => {
+      const s = await seed();
+
+      const guestCookie = `${signedGuest(s.victim)}; store_id=${s.storeId}; organization_id=${s.organizationId}`;
+      const first = await signIn(s, "first@test", guestCookie);
+      const firstAccount = (await first.json()).user._id;
+
+      // One merge done, four still to go.
+      const firstCookie = `user_id=${firstAccount}; ${signedGuest(s.victim)}; store_id=${s.storeId}`;
+      const [bagMerge, ...rest] = mergeRequests(s, firstCookie, s.victim);
+      expect((await bagRoutes.fetch(bagMerge.request, envFor(s.t))).status).toBe(
+        200,
+      );
+
+      // A second account signs in on the same guest session, mid-sequence.
+      const second = await signIn(
+        s,
+        "second@test",
+        `user_id=${s.attacker}; ${signedGuest(s.victim)}; store_id=${s.storeId}; organization_id=${s.organizationId}`,
+      );
+      expect(second.status).toBe(200);
+
+      // The grant still belongs to the first shopper...
+      const guest = await s.t.run((ctx) => ctx.db.get("guest", s.victim));
+      expect(String(guest?.mergeGrantedToStoreFrontUserId)).toBe(
+        String(firstAccount),
+      );
+      expect(guest?.mergeGrantConsumedBy).toContain("bag");
+
+      // ...whose remaining merges still complete.
+      for (const merge of rest) {
+        const response = await merge.router.fetch(merge.request, envFor(s.t));
+        expect({ merge: merge.name, status: response.status }).toEqual({
+          merge: merge.name,
+          status: 200,
+        });
+      }
+      expect(await ownership(s)).toEqual({
+        analytics: String(firstAccount),
+        bag: String(firstAccount),
+        order: String(firstAccount),
+        savedBag: String(firstAccount),
+      });
+    });
+  });
+
+  it("re-grants normally for the SAME account and after the grant is spent", async () => {
+    await withOrigin(async () => {
+      const s = await seed();
+
+      const guestCookie = `${signedGuest(s.victim)}; store_id=${s.storeId}; organization_id=${s.organizationId}`;
+      const first = await signIn(s, "again@test", guestCookie);
+      const account = (await first.json()).user._id;
+
+      const cookie = `user_id=${account}; ${signedGuest(s.victim)}; store_id=${s.storeId}`;
+      const [bagMerge] = mergeRequests(s, cookie, s.victim);
+      expect((await bagRoutes.fetch(bagMerge.request, envFor(s.t))).status).toBe(
+        200,
+      );
+
+      // Signing in again as the same shopper refreshes their own grant, so the
+      // second visit's merges are not stranded by the first visit's.
+      const again = await signIn(s, "again@test", guestCookie, "654321");
+      expect(again.status).toBe(200);
+      const guest = await s.t.run((ctx) => ctx.db.get("guest", s.victim));
+      expect(guest?.mergeGrantConsumedBy).toEqual([]);
+      expect(String(guest?.mergeGrantedToStoreFrontUserId)).toBe(
+        String(account),
+      );
     });
   });
 });

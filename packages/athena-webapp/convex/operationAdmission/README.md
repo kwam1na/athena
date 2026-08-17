@@ -67,25 +67,34 @@ obvious.
 8. **Run the checker**: `bun scripts/convex-operation-admission-check.ts`
    (add `--path <prefix>` while iterating). Zero findings, exit 0.
 
-### The wrapper must run FIRST
+### The wrapper grammar — three shapes, and nothing else
 
-Not "somewhere in the handler". The canonical wrapper has to be the handler
-expression itself, or the first unconditional statement of the handler body.
-Anything ahead of it — a `ctx.db` read, a `ctx.runQuery` / `runMutation` /
-`runAction`, a `ctx.scheduler` call — runs for a caller nobody has admitted,
-and a wrapper nested inside an `if` admits on some paths only. The checker
-raises `wrapper-not-first` for both.
+Admission is recognized by a **whitelist grammar**, not by rejecting known-bad
+handlers. An ingress is admitted **iff both** of the following hold.
 
-One shape is accepted besides the direct call: a `try` whose block *starts*
-with the wrapper, so a handler can catch a typed denial and reshape it into a
-`CommandResult` (see `convex/notifications/subscriptions.ts`). Nothing runs
-before the wrapper there, so the guarantee holds.
+**(1) The wrapper resolves to the composition root.** The import specifier is
+resolved against the importing file's own directory, and the result must be
+exactly `packages/athena-webapp/convex/platform/operationAdmission.ts`. A bare
+or package specifier never qualifies, because it never resolves. A namespace
+import (`import * as admission from …`) qualifies only when the same resolution
+lands on the same path; a wrapper-named method on any other receiver is not a
+wrapper at all.
+
+**(2) The `handler` property is exactly one of these three spellings.**
 
 ```ts
-// GOOD — the wrapper is the handler
+// 1. The direct application. The definition may be an identifier or a dotted
+//    member expression; the handler an identifier, an inline arrow, or a
+//    function expression. Nothing else may appear in the argument list.
 handler: admitPublicMutation(def, recordThingWithCtx)
 
-// GOOD — first statement, denial mapped in the catch
+// 2. A top-level const bound to shape 1.
+const recordThingAdmittedHandler = admitPublicMutation(def, recordThingWithCtx);
+handler: recordThingAdmittedHandler
+
+// 3. The denial-mapping try, and only in this exact form: plain identifier
+//    parameters with no defaults, a body of exactly one try, a try block of
+//    exactly one statement, and the parameters forwarded verbatim.
 handler: async (ctx, args) => {
   try {
     return await admitPublicMutation(def, recordThingWithCtx)(ctx, args);
@@ -95,13 +104,84 @@ handler: async (ctx, args) => {
     throw error;
   }
 }
+```
 
+Shape 3 exists for one reason: a denial is thrown **by** the wrapper, so the
+only place to translate it into a `CommandResult` is around the wrapper call
+(see `convex/notifications/subscriptions.ts`). It is the only wrapping function
+the grammar accepts. The `catch` and `finally` clauses are unconstrained — they
+can only run after the wrapper has already been applied.
+
+Everything else is rejected, including shapes that look harmless: a concise
+arrow around the wrapper, a block arrow that merely returns the invocation, any
+call / `await` / IIFE / spread / conditional / comma or logical operator
+anywhere in either argument list, a parameter default on the outer handler, a
+destructured `ctx`, an optional-chained invocation, a wrapper reached through a
+property access on a non-root receiver.
+
+```ts
 // BAD — the read runs for an un-admitted caller
 handler: async (ctx, args) => {
   const row = await ctx.db.get(args.id);
   return admitPublicMutation(def, recordThingWithCtx)(ctx, args);
 }
+
+// BAD — a call's arguments evaluate after its callee: the IIFE runs, then
+// admission. The wrapper closure was only BUILT first.
+handler: async (ctx, args) => {
+  try {
+    return await admitPublicMutation(def, fn)(ctx, (() => {
+      ctx.db.insert("t", args);
+      return args;
+    })());
+  } catch (error) { throw error; }
+}
+
+// BAD — a default parameter evaluates before the first statement of the body
+handler: async (ctx, args, pre = ctx.db.insert("t", args)) => { … }
 ```
+
+#### Why a whitelist
+
+Because the blacklist lost three times. Each round the checker enumerated the
+bad shapes it knew about, and each round a review found one it did not:
+
+1. `const run = admitPublicMutation(def, fn)` accepted as proof of admission — a
+   declaration builds the closure; admission happens at the invocation.
+2. Pre-admission work hidden in the invocation's argument list.
+3. An **IIFE** in that argument list (the function-boundary skip made it
+   invisible); a **path-suffix** match on the composition root, so a shim at
+   `…/some/other/platform/operationAdmission.ts` or a package named
+   `@evil/platform/operationAdmission` counted as canonical; computed and
+   destructured `ctx` receivers (`ctx["db"]`, `({ db, …ctx }) => …`); and
+   handler **parameter defaults**, which evaluate before the body.
+
+The argument each time was "the new predicate accepts everything the old one
+accepted". That reasons about the predicate's extension rather than about the
+set of programs with the same runtime effect, which is why it kept leaving a
+door open. A whitelist has no such surface: a shape nobody enumerated is
+rejected by default rather than admitted by default.
+
+The corollary is a real constraint on you, not just on an attacker. If a
+handler cannot be spelled in one of the three shapes, that is a signal about
+the handler, not about the grammar — it means something is running before the
+caller has been admitted. Fix the handler.
+
+#### `wrapper-shape`
+
+The checker raises a single high finding, `wrapper-shape`, whenever a canonical
+wrapper appears in a handler but not in one of the accepted shapes. Its
+rationale names the specific deviation (`the outer handler's 'pre' parameter has
+a default value, and defaults are evaluated on every invocation before the
+wrapper closure is applied`) and then prints all three accepted shapes, so the
+remediation never requires reading the checker.
+
+It is deliberately distinct from the plain "not on the admission rail" finding:
+a handler with no wrapper at all needs "add the wrapper", and a handler with a
+misspelled one needs "spell it the accepted way". `wrapper-shape` replaced the
+old `wrapper-not-first`, whose text described a purely positional failure and
+so read as misleading whenever the real fault was argument evaluation order —
+where the wrapper *is* first and work still runs before admission.
 
 There is no `resolveWriteAdmission` export to probe admission separately with.
 It was removed: every call site paired it with a second wrapper call, admitting
@@ -119,17 +199,33 @@ the same request twice and doing the probe first.
   They are not actor policy. See Target resource guards.
 - **`ingressVerification` runs before admission**, on the raw request, so a
   failed webhook signature leaves no admission row and no capture.
-- **A cookie is caller-supplied, so it can never bound a merge.** A callee that
-  absorbs one identity into another (cart claim, order re-owner, rewards,
-  analytics timeline) must authorize on a **server-issued grant**, never on
-  anything the request carries. `POST /auth/verify` writes
-  `mergeGrantedToStoreFrontUserId` onto the guest row after authenticating the
-  account; the merge callees read the grant off the row — 15-minute window,
-  once per merge kind, bounded to the admitted store. See
-  `convex/storeFront/customerOwnership.ts` for the contract and for what it
-  deliberately does not buy, and `storeFront/bag.ts` for the reference shape.
-  A previous version compared the body's guest id against the `guest_id`
-  cookie; both operands came from the same request, so it bounded nothing.
+- **A cookie is caller-supplied — twice over.** This took three review rounds
+  to get right, so the rule is stated in two halves.
+
+  **(a) The guest cookie is SIGNED.** `guest_id` is minted as `<id>.<hmac>` at
+  the two bootstrap routes (`customerChannel/routes/storefront.ts`,
+  `routes/guest.ts`) using `platform/storefrontCookieSignature.ts`, and every
+  consumer accepts the id only when the HMAC verifies in constant time. An
+  unsigned or tampered cookie is **absent**, never an error — a stale cookie is
+  a shopper to re-bootstrap, not a fault to page on. Unset secret fails closed:
+  no guest is admitted, though anonymous browse still works.
+
+  **(b) A merge authorizes on a SERVER-ISSUED GRANT, not on the cookie.** A
+  callee that absorbs one identity into another (cart claim, order re-owner,
+  rewards, analytics timeline) reads the grant off the guest row.
+  `POST /auth/verify` writes `mergeGrantedToStoreFrontUserId` after
+  authenticating the account and only from a **verified** guest id — 15-minute
+  window, once per merge kind, bounded to the admitted store, and a live
+  unconsumed grant is never re-pointed to a different account. Use
+  `consumeGuestMergeGrant` from `convex/storeFront/customerOwnership.ts`; see
+  that file for the contract and for what it deliberately does not buy, and
+  `storeFront/bag.ts` for the reference shape.
+
+  The history is the lesson: the guest side of this merge was "fixed" three
+  times — a body field, then a cookie compared against itself, then a cookie
+  the mint trusted — and each version shipped with a comment asserting a
+  guarantee it did not have. When a guard compares two values, write down where
+  each one came from.
 - **A scope constraint from an argument is a CLAMP, not an authorization.**
   `resolveOperationScope` records `args[storeIdArg]` as the constraint; it does
   not verify the caller belongs to that store. The constraint is what confines
@@ -334,6 +430,7 @@ corresponding ingress denies everything.
 | `MTN_MOMO_COLLECTIONS_CALLBACK_SECRET` | MTN MoMo callback rejects; must ALSO be appended to the registered callback URL as `callbackSecret=…` |
 | `WALKTHROUGH_ALLOWED_ORIGINS` | marketing walkthrough and funnel writes deny (resolved once, in `convex/marketing/walkthroughConfig.ts`, and injected into the verifier) |
 | `ATHENA_WAIVER_BROKER_SECRET` | harness waiver routes deny |
+| `ATHENA_STOREFRONT_COOKIE_SECRET` | **new** — no guest session can be issued or accepted, so every guest-identified path (cart, saved bag, orders, rewards, the guest→account merge) goes dark. Anonymous catalog browse is unaffected: `public: "admit"` routes never look at a guest cookie |
 
 ## Validation
 

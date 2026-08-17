@@ -29,10 +29,8 @@ import {
   listOnlineOrdersByStoreFrontUserReadDefinition,
 } from "../operationAdmission/domains/u7_storefrontOperator_readDefinitions";
 import {
-  assertCustomerOwnsStore,
-  assertGuestMergeGranted,
+  consumeGuestMergeGrant,
   denyCustomerOwnership,
-  guestMergeGrantConsumedPatch,
 } from "./customerOwnership";
 import { requireReadySharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 import {
@@ -2549,15 +2547,12 @@ export const updateOwnerInternal = internalMutation({
     if (!owner.storeFrontUserId) {
       denyCustomerOwnership();
     }
-    const guest = await ctx.db.get("guest", args.currentOwner);
-    assertGuestMergeGranted(guest, owner, "onlineOrder");
-    assertCustomerOwnsStore(owner, guest?.storeId);
     // Single-use; consumed inside the same transaction as the merge.
-    await ctx.db.patch(
-      "guest",
-      args.currentOwner,
-      guestMergeGrantConsumedPatch(guest!, "onlineOrder"),
-    );
+    await consumeGuestMergeGrant(ctx, {
+      guestId: args.currentOwner,
+      owner,
+      kind: "onlineOrder",
+    });
     return await updateOnlineOrderOwnerWithCtx(ctx, {
       currentOwner: args.currentOwner,
       newOwner: owner.storeFrontUserId,

@@ -24,11 +24,10 @@ import {
 import {
   assertCustomerOwnsRow,
   assertCustomerOwnsStore,
-  assertGuestMergeGranted,
+  consumeGuestMergeGrant,
   customerOwnerActorId,
   customerOwnerValidator,
   denyCustomerOwnership,
-  guestMergeGrantConsumedPatch,
 } from "./customerOwnership";
 
 const entity = "bag";
@@ -226,25 +225,21 @@ export const updateOwner = internalMutation({
     // caller presents is consulted: the previous round compared the body's id
     // against the request's `guest_id` cookie, which proved nothing, because a
     // cookie is caller-supplied and both operands arrived on the same request.
-    const guest = await ctx.db.get("guest", args.currentOwner);
-    assertGuestMergeGranted(guest, args.owner, "bag");
-    // The store bound is kept on top of the grant, not replaced by it.
-    assertCustomerOwnsStore(args.owner, guest?.storeId);
+    //
+    // `consumeGuestMergeGrant` checks the grant, keeps the store bound on top
+    // of it, and records consumption — all inside this mutation's own
+    // transaction, so if any later step throws, the consumption rolls back
+    // with it. A merge that returns is a merge that consumed its grant.
+    await consumeGuestMergeGrant(ctx, {
+      guestId: args.currentOwner,
+      owner: args.owner,
+      kind: "bag",
+    });
 
     // Belt and braces: the actor must still be the admitted account.
     if (String(customerOwnerActorId(args.owner)) !== String(newOwner)) {
       denyCustomerOwnership();
     }
-
-    // Single-use, consumed here rather than at each of the several return
-    // paths below: a Convex mutation is one transaction, so if any later step
-    // throws, this patch rolls back with it. A merge that returns is a merge
-    // that consumed its grant.
-    await ctx.db.patch(
-      "guest",
-      args.currentOwner,
-      guestMergeGrantConsumedPatch(guest!, "bag"),
-    );
 
     const bag = await ctx.db
       .query(entity)

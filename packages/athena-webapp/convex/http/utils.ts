@@ -1,7 +1,16 @@
 import { Context } from "hono";
-import { getCookie } from "hono/cookie";
+import { getCookie, setCookie } from "hono/cookie";
 import { Id } from "../_generated/dataModel";
 import type { OperationIngressClaim } from "../operationAdmission/types";
+import {
+  GUEST_COOKIE_NAME,
+  type SignedGuestClaimFields,
+  isUnsignedStorefrontCookieValue,
+  readStorefrontCookieSecret,
+  signStorefrontCookieValue,
+  storefrontCookieSignature,
+  verifyStorefrontCookieValue,
+} from "../platform/storefrontCookieSignature";
 
 export const getStoreDataFromRequest = (c: Context) => {
   const organizationId = getCookie(c, "organization_id") as Id<"organization">;
@@ -10,9 +19,89 @@ export const getStoreDataFromRequest = (c: Context) => {
   return { organizationId, storeId };
 };
 
+/**
+ * The `guest_id` cookie, VERIFIED.
+ *
+ * A guest id is admitted only when the cookie carries a signature this server
+ * minted for THIS cookie name (see `platform/storefrontCookieSignature`). An
+ * unsigned cookie, a tampered one, and an unconfigured signing secret all
+ * return `undefined` — the guest is ABSENT, which is a denial on a customer
+ * write route and a fall-through to public on a browse read. None of them is
+ * an error: a shopper holding a stale cookie is re-bootstrapped, not paged on.
+ *
+ * This is the single consumer-side gate. The only code allowed to look at the
+ * RAW cookie is the bootstrap upgrade below.
+ */
+export const readVerifiedGuestIdFromRequest = (
+  c: Context,
+): Id<"guest"> | undefined => {
+  const verified = verifyStorefrontCookieValue(
+    GUEST_COOKIE_NAME,
+    getCookie(c, GUEST_COOKIE_NAME),
+    readStorefrontCookieSecret(),
+  );
+  return verified as Id<"guest"> | undefined;
+};
+
+/**
+ * The RAW, UNVERIFIED `guest_id` cookie — for the one-time legacy upgrade and
+ * nothing else.
+ *
+ * Deliberately long and unpleasant to type. It returns a value only when the
+ * cookie is a LEGACY UNSIGNED one: a cookie that carries a signature but fails
+ * verification is tampering, and tampering is never upgraded. The two
+ * bootstrap routes (`GET /storefront`, `GET /guests`) are the only callers, and
+ * they must re-check that the value names a real guest row IN THIS STORE
+ * before re-minting it signed.
+ *
+ * It must never be called from `/auth/verify`, from a merge route, or from the
+ * admission adapter. An upgrade at any of those points would hand the caller
+ * back the ability to name any guest id they like, which is the hole this
+ * whole mechanism closes.
+ */
+export const readLegacyUnsignedGuestCookieForBootstrap = (
+  c: Context,
+): string | undefined => {
+  const raw = getCookie(c, GUEST_COOKIE_NAME);
+  return isUnsignedStorefrontCookieValue(raw) ? raw : undefined;
+};
+
+const STOREFRONT_COOKIE_OPTIONS = {
+  path: "/",
+  secure: true,
+  domain: "wigclub.store",
+  httpOnly: true,
+  sameSite: "None",
+  maxAge: 90 * 24 * 60 * 60, // 90 days in seconds
+} as const;
+
+/**
+ * Mint the guest session cookie, SIGNED.
+ *
+ * Returns `false` when there is no signing secret, which is the fail-closed
+ * path: rather than issue a cookie nothing downstream will accept, the
+ * bootstrap route reports that guest sessions are unavailable. Anonymous
+ * browse does not go through here and is unaffected.
+ */
+export const setSignedGuestCookie = (
+  c: Context,
+  guestId: Id<"guest"> | string,
+): boolean => {
+  const secret = readStorefrontCookieSecret();
+  if (!secret) return false;
+
+  setCookie(
+    c,
+    GUEST_COOKIE_NAME,
+    signStorefrontCookieValue(GUEST_COOKIE_NAME, String(guestId), secret),
+    STOREFRONT_COOKIE_OPTIONS,
+  );
+  return true;
+};
+
 export const getStorefrontUserFromRequest = (c: Context) => {
   const userId = getCookie(c, "user_id") as Id<"storeFrontUser">;
-  const guestId = getCookie(c, "guest_id") as Id<"guest">;
+  const guestId = readVerifiedGuestIdFromRequest(c);
 
   return userId || guestId;
 };
@@ -23,7 +112,7 @@ export const getStorefrontActorFromRequest = (c: Context) => {
     return { kind: "storefrontUser" as const, id: userId };
   }
 
-  const guestId = getCookie(c, "guest_id") as Id<"guest"> | undefined;
+  const guestId = readVerifiedGuestIdFromRequest(c);
   if (guestId) {
     return { kind: "guest" as const, id: guestId };
   }
@@ -38,33 +127,49 @@ export const getStorefrontActorFromRequest = (c: Context) => {
  * This reads cookies only. The `store_id` cookie is carried along so the
  * adapter can CROSS-CHECK it, never so it can decide the store: the admitted
  * store always comes from the claim row itself. A request with neither
- * `user_id` nor `guest_id` yields `undefined` — a customer write route treats
- * that as a terminal denial.
+ * `user_id` nor a VERIFIED `guest_id` yields `undefined` — a customer write
+ * route treats that as a terminal denial.
  *
  * BOTH cookies travel when both are present, but the adapter prefers the
  * account for ACTOR IDENTITY (see `resolveStorefrontCustomer`), so the guest
  * id is currently inert whenever a `user_id` cookie is also set.
  *
- * It is NOT possession evidence, and nothing downstream may treat it as such:
- * a cookie is caller-supplied, so a `guest_id` value proves only that the
- * caller typed it. The guest→account merge is authorized instead by a
- * server-issued grant written onto the guest ROW at sign-in — see
- * `storeFront/customerOwnership.ts`.
+ * WHAT EACH HALF PROVES. `user_id` is still a bearer id: it is NOT signed
+ * (that is V26-1240's job — signing it now would sign every shopper out with
+ * no bootstrap route to re-mint it from), so possession of the string is all
+ * it proves, and every callee still checks ownership against the admitted
+ * actor. `guest_id` IS signed as of this change: an id here has a signature
+ * this server minted, so it is evidence that the server issued this guest
+ * session to this browser. That is what lets `/auth/verify` mint the
+ * guest→account merge grant on it. The signature travels alongside as
+ * `guestIdSignature` so the adapter can re-verify rather than inherit trust
+ * from this function having run.
  */
 export const getStorefrontClaimFromRequest = (
   c: Context,
-): OperationIngressClaim | undefined => {
+): (OperationIngressClaim & SignedGuestClaimFields) | undefined => {
   const storeFrontUserId = getCookie(c, "user_id") as
     | Id<"storeFrontUser">
     | undefined;
-  const guestId = getCookie(c, "guest_id") as Id<"guest"> | undefined;
+  const guestId = readVerifiedGuestIdFromRequest(c);
   const storeId = getCookie(c, "store_id") as Id<"store"> | undefined;
 
   if (!storeFrontUserId && !guestId) return undefined;
 
+  const secret = readStorefrontCookieSecret();
+
   return {
     ...(storeFrontUserId ? { storeFrontUserId } : {}),
-    ...(guestId ? { guestId } : {}),
+    ...(guestId && secret
+      ? {
+          guestId,
+          guestIdSignature: storefrontCookieSignature(
+            GUEST_COOKIE_NAME,
+            guestId,
+            secret,
+          ),
+        }
+      : {}),
     ...(storeId ? { storeId } : {}),
   };
 };
@@ -81,5 +186,7 @@ export const getStorefrontClaimFromRequest = (
  *    this file goes through Hono's guarded parser.
  *
  * The merge is authorized by the server-issued grant on the guest row
- * (`storeFront/customerOwnership.ts`). One mechanism, not two.
+ * (`storeFront/customerOwnership.ts`), and the grant in turn can only be minted
+ * on a SIGNED guest session (`platform/storefrontCookieSignature.ts`). One
+ * mechanism, not two.
  */

@@ -3,8 +3,12 @@ import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
 import { internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
-import { setCookie } from "hono/cookie";
-import { getStorefrontUserFromRequest } from "../../../utils";
+import { getCookie, setCookie } from "hono/cookie";
+import {
+  readLegacyUnsignedGuestCookieForBootstrap,
+  readVerifiedGuestIdFromRequest,
+  setSignedGuestCookie,
+} from "../../../utils";
 import {
   admitHttpRead,
   admitHttpRoute,
@@ -32,9 +36,38 @@ storefrontRoutes.get(
       name: storeName,
     });
 
-    const userId = getStorefrontUserFromRequest(c);
+    // BOOTSTRAP MINT POINT #1 (of two). Guest cookies are SIGNED here and at
+    // `GET /guests`; nowhere else issues one, and nowhere else upgrades one.
+    const accountId = getCookie(c, "user_id");
+    let guestId = readVerifiedGuestIdFromRequest(c);
 
-    if (!userId && asNewUser === "true") {
+    // ONE-TIME LEGACY UPGRADE. A shopper whose cookie predates signing still
+    // holds a bare guest id; re-minting it signed here is what keeps their
+    // cart alive across this deploy. It is confined to bootstrap on purpose —
+    // an upgrade at `/auth/verify` or at a merge would let any caller launder
+    // an arbitrary guest id into a signed one, which is the hole being closed.
+    //
+    // The value is only accepted after the SERVER re-resolves it to a real
+    // guest row in THIS store, so the upgrade cannot mint a session on a
+    // string the shopper made up. It can still re-sign another shopper's guest
+    // id if the caller knows one — the same accepted bootstrap IDOR that
+    // `GET /guests` documents — but that window closes on its own as legacy
+    // cookies age out, and it is strictly narrower than the status quo where
+    // EVERY caller could do this on every request.
+    if (!guestId && store) {
+      const legacy = readLegacyUnsignedGuestCookieForBootstrap(c);
+      if (legacy) {
+        const upgraded = await c.env.runQuery(
+          internal.storeFront.guest.resolveLegacyGuestForCookieUpgrade,
+          { guestId: legacy, storeId: store._id },
+        );
+        if (upgraded && setSignedGuestCookie(c, upgraded)) {
+          guestId = upgraded;
+        }
+      }
+    }
+
+    if (!accountId && !guestId && asNewUser === "true") {
       let guest = await c.env.runQuery(internal.storeFront.guest.getByMarker, {
         marker,
       });
@@ -50,15 +83,13 @@ storefrontRoutes.get(
         });
       }
 
+      // FAIL CLOSED with no signing secret: `setSignedGuestCookie` issues
+      // nothing rather than hand out a cookie no consumer will accept. The
+      // store cookies below and the store payload still go out, so anonymous
+      // catalog browse keeps working in an unconfigured environment — only the
+      // guest-identified paths go dark.
       if (guest) {
-        setCookie(c, "guest_id", guest._id, {
-          path: "/",
-          secure: true,
-          domain: "wigclub.store",
-          httpOnly: true,
-          sameSite: "None",
-          maxAge: 90 * 24 * 60 * 60, // 90 days in seconds
-        });
+        setSignedGuestCookie(c, guest._id);
       }
     }
 

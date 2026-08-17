@@ -12,6 +12,13 @@
  * unadmitted is a framework-generated one named in `FRAMEWORK_ENTRY_POINTS`
  * with a reason, and that list is verified in both directions.
  *
+ * Admission is recognized by a CLOSED GRAMMAR — see `ACCEPTED_WRAPPER_SHAPES`
+ * and the "Wrapper grammar" section below. Three consecutive review rounds
+ * defeated the blacklist this replaced, so the rule is now "exactly these three
+ * spellings, and the wrapper's import specifier RESOLVES to
+ * `convex/platform/operationAdmission.ts`". Everything else raises
+ * `wrapper-shape`.
+ *
  * Flags:
  *   --path <prefix...>    restrict findings to convex-relative path prefixes
  *   --partition           print the per-unit ownership table; fail on orphans
@@ -50,11 +57,12 @@ export type IngressRegistration = {
   wrapperOffComposition?: boolean;
 
   /**
-   * `true` when a wrapper call exists inside the handler but not as the
-   * handler expression or its first unconditional statement — work runs
-   * before the caller is admitted.
+   * Why the handler was rejected by the wrapper grammar, when a canonical
+   * wrapper appears in it but not in one of the accepted shapes. Absent when
+   * the handler is admitted AND when no wrapper appears at all — those are
+   * different remediations and raise different findings.
    */
-  wrapperNotFirst?: boolean;
+  wrapperShape?: string;
 };
 
 export type OperationAdmissionDefinition = {
@@ -138,7 +146,6 @@ type CheckOptions = {
 // ---------------------------------------------------------------------------
 
 const CONVEX_ROOT_RELATIVE = "packages/athena-webapp/convex";
-const COMPOSITION_ROOT_SUFFIX = "platform/operationAdmission";
 
 /** The five canonical wrappers and the ingress kind each one admits. */
 export const CANONICAL_WRAPPERS: Readonly<Record<string, IngressKind>> = {
@@ -586,10 +593,54 @@ function resolveModuleSpecifier(
 }
 
 // ---------------------------------------------------------------------------
-// Wrapper recognition
+// Wrapper grammar (whitelist)
 // ---------------------------------------------------------------------------
 
-type BoundWrapper = { kind: IngressKind; fromRoot: boolean };
+/**
+ * Admission is recognized by a CLOSED GRAMMAR, not by rejecting known-bad shapes.
+ *
+ * Three consecutive review rounds defeated the previous blacklist, each time
+ * with a spelling it did not enumerate: a const-bound wrapper declaration
+ * mistaken for an invocation; pre-admission work hidden in the invocation's
+ * arguments; an IIFE in that argument list; a computed `ctx["db"]` receiver; a
+ * destructured `db`; a handler parameter default. Every round the argument was
+ * "the new predicate accepts everything the old one accepted", which reasons
+ * about the predicate rather than about the set of programs with the same
+ * runtime effect — so every round left a shape nobody had thought of.
+ *
+ * The rule is therefore inverted. An ingress is admitted if and only if its
+ * handler is one of the three shapes below and its wrapper resolves to the
+ * composition root. Anything else — any other expression form anywhere in the
+ * wrapper's argument list, any wrapping arrow other than the denial-mapping
+ * try, any parameter default — is rejected with a `wrapper-shape` finding that
+ * names the accepted shapes, so the remediation needs no reading of this file.
+ */
+export const ACCEPTED_WRAPPER_SHAPES = [
+  "handler: admitX(<definition identifier or dotted member>, <handler identifier | inline arrow | function expression>)",
+  "handler: <const> where the module declares `const <const> = admitX(<definition>, <handler>)` at top level",
+  "handler: async (ctx, args) => { try { return await <one of the two shapes above>(ctx, args); } catch (error) { ...map the denial... } }",
+].join("\n    ");
+
+/**
+ * The single module whose exports are canonical wrappers, as a convex-relative
+ * path. Import specifiers are RESOLVED against the importing file before being
+ * compared: matching an unresolved path SUFFIX let any module named
+ * `<anything>/platform/operationAdmission.ts` — or a package specifier like
+ * `@evil/platform/operationAdmission` — stand in for the rail while the checker
+ * reported zero findings, which is exactly the exemption construct this
+ * contract exists to remove.
+ */
+const COMPOSITION_ROOT_CONVEX_PATH = "platform/operationAdmission.ts";
+
+export type WrapperMatch = {
+  wrapper: string;
+  kind: IngressKind;
+  /** The wrapper identifier resolves to the composition root module. */
+  fromRoot: boolean;
+};
+
+/** A grammar decision: a match, a shape violation, or "no wrapper here". */
+type ShapeOutcome = { match?: WrapperMatch; reason?: string };
 
 type WrapperNames = {
   /** local name -> ingress kind, imported from the composition root. */
@@ -597,394 +648,398 @@ type WrapperNames = {
   /** local name -> ingress kind, but imported from somewhere else. */
   offComposition: Map<string, IngressKind>;
   /**
-   * Local names of `import * as x` bindings whose specifier IS the composition
-   * root. Only these receivers may carry a wrapper method — see
-   * `propertyAccessWrapperName`.
+   * Local names of `import * as x` bindings that RESOLVE to the composition
+   * root. Only these receivers may carry a wrapper method.
    */
   rootNamespaces: Set<string>;
-  /** Local consts bound to a wrapper call. */
-  bound: Map<string, BoundWrapper>;
+  /** Top-level `const X = admitX(def, handler)` of the accepted shape. */
+  bound: Map<string, WrapperMatch>;
+  /** Top-level `const X = admitX(...)` that is NOT of the accepted shape. */
+  boundInvalid: Map<string, string>;
 };
 
-/**
- * The wrapper name a property-access callee denotes, or `undefined`.
- *
- * Wrapper identity used to be resolved by BARE METHOD NAME on any receiver, so
- * `const shim = { admitPublicMutation: (d, f) => f }` — or any unrelated module
- * with a same-named export — satisfied the composition-root rule that every
- * ingress must route through `platform/operationAdmission`. A local shim could
- * therefore stand in for the rail while the checker reported zero findings,
- * which is precisely the exemption construct this contract exists to remove.
- *
- * A method call is now only a wrapper when its receiver is a namespace import
- * of the composition root itself.
- */
-function propertyAccessWrapperName(
-  callee: ts.PropertyAccessExpression,
-  rootNamespaces: ReadonlySet<string>,
-): string | undefined {
-  if (!ts.isIdentifier(callee.expression)) return undefined;
-  if (!rootNamespaces.has(callee.expression.text)) return undefined;
-  return callee.name.text in CANONICAL_WRAPPERS ? callee.name.text : undefined;
+function describeExpressionForOperator(node: ts.Node): string {
+  switch (node.kind) {
+    case ts.SyntaxKind.CallExpression:
+      return "a call expression";
+    case ts.SyntaxKind.AwaitExpression:
+      return "an await expression";
+    case ts.SyntaxKind.SpreadElement:
+      return "a spread element";
+    case ts.SyntaxKind.ConditionalExpression:
+      return "a conditional expression";
+    case ts.SyntaxKind.BinaryExpression:
+      return "a binary expression (comma, logical, or assignment operator)";
+    case ts.SyntaxKind.ParenthesizedExpression:
+      return "a parenthesized expression";
+    case ts.SyntaxKind.ElementAccessExpression:
+      return "a computed element access";
+    case ts.SyntaxKind.ObjectLiteralExpression:
+      return "an object literal";
+    case ts.SyntaxKind.ArrayLiteralExpression:
+      return "an array literal";
+    case ts.SyntaxKind.ArrowFunction:
+      return "an arrow function";
+    case ts.SyntaxKind.FunctionExpression:
+      return "a function expression";
+    case ts.SyntaxKind.AsExpression:
+    case ts.SyntaxKind.SatisfiesExpression:
+      return "a type assertion";
+    case ts.SyntaxKind.NonNullExpression:
+      return "a non-null assertion";
+    case ts.SyntaxKind.TaggedTemplateExpression:
+      return "a tagged template";
+    default:
+      return `a ${ts.SyntaxKind[node.kind]}`;
+  }
 }
 
-function collectWrapperNames(sourceFile: ts.SourceFile): WrapperNames {
+/**
+ * `a`, `a.b`, `a.b.c` — identifiers only, no calls, no computed access, no
+ * optional chaining. Evaluating one of these cannot run user code, which is the
+ * whole reason the definition argument is allowed to be a member expression.
+ */
+function isDottedIdentifierChain(node: ts.Node): boolean {
+  if (ts.isIdentifier(node)) return true;
+  return (
+    ts.isPropertyAccessExpression(node) &&
+    node.questionDotToken === undefined &&
+    ts.isIdentifier(node.name) &&
+    isDottedIdentifierChain(node.expression)
+  );
+}
+
+/**
+ * The wrapper this callee expression denotes, or `undefined`.
+ *
+ * A bare identifier qualifies when it was imported under a canonical wrapper
+ * name (from the composition root or not — an off-root import is recognized so
+ * it can raise its own finding rather than vanishing). A property access
+ * qualifies only when its receiver is a namespace import that RESOLVES to the
+ * composition root; no other receiver, computed or otherwise, is a wrapper.
+ */
+function wrapperReference(
+  node: ts.Expression,
+  names: WrapperNames,
+): WrapperMatch | undefined {
+  if (ts.isIdentifier(node)) {
+    const canonicalKind = names.canonical.get(node.text);
+    if (canonicalKind) {
+      return { wrapper: node.text, kind: canonicalKind, fromRoot: true };
+    }
+    const offKind = names.offComposition.get(node.text);
+    return offKind
+      ? { wrapper: node.text, kind: offKind, fromRoot: false }
+      : undefined;
+  }
+  if (
+    ts.isPropertyAccessExpression(node) &&
+    node.questionDotToken === undefined &&
+    ts.isIdentifier(node.expression) &&
+    names.rootNamespaces.has(node.expression.text)
+  ) {
+    const kind = CANONICAL_WRAPPERS[node.name.text];
+    return kind ? { wrapper: node.name.text, kind, fromRoot: true } : undefined;
+  }
+  return undefined;
+}
+
+/** Does a canonical wrapper appear anywhere inside this expression? */
+function containsWrapperReference(node: ts.Node, names: WrapperNames): boolean {
+  let found = false;
+  const visit = (current: ts.Node) => {
+    if (found) return;
+    if (
+      (ts.isIdentifier(current) || ts.isPropertyAccessExpression(current)) &&
+      wrapperReference(current, names)
+    ) {
+      found = true;
+      return;
+    }
+    if (ts.isIdentifier(current) && names.boundInvalid.has(current.text)) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(current, visit);
+  };
+  visit(node);
+  return found;
+}
+
+/**
+ * Shape 1: `admitX(<definition>, <handler>)`.
+ *
+ * Exactly two arguments. The definition may only be an identifier or a dotted
+ * member expression, and the handler only an identifier, an inline arrow, or a
+ * function expression. Nothing else is allowed to appear in the argument list,
+ * because a call's arguments are evaluated after its callee and before the
+ * wrapper closure is applied: a nested call, an `await`, an IIFE, a spread, a
+ * conditional, or a comma operator all run for a caller nobody has admitted.
+ *
+ * Returns `undefined` when this is not a wrapper application at all, so the
+ * caller can distinguish "wrong shape" from "no wrapper here".
+ */
+function matchWrapperApplication(
+  node: ts.Expression,
+  names: WrapperNames,
+): ShapeOutcome | undefined {
+  if (!ts.isCallExpression(node)) return undefined;
+  const reference = wrapperReference(node.expression, names);
+  if (!reference) return undefined;
+
+  if (node.questionDotToken) {
+    return {
+      reason:
+        "the wrapper is invoked through optional chaining, so admission can be skipped entirely when the wrapper is nullish",
+    };
+  }
+  if (node.arguments.length !== 2) {
+    return {
+      reason: `the wrapper is called with ${node.arguments.length} argument(s); it takes exactly two, the operation definition and the handler`,
+    };
+  }
+
+  const [definition, handler] = node.arguments;
+  if (!isDottedIdentifierChain(definition)) {
+    return {
+      reason: `the wrapper's first argument is ${describeExpressionForOperator(definition)}; only a definition identifier or a dotted member expression is accepted, because anything else executes before admission`,
+    };
+  }
+  if (
+    !ts.isIdentifier(handler) &&
+    !ts.isArrowFunction(handler) &&
+    !ts.isFunctionExpression(handler)
+  ) {
+    return {
+      reason: `the wrapper's second argument is ${describeExpressionForOperator(handler)}; only a handler identifier, an inline arrow, or a function expression is accepted, because anything else executes before admission`,
+    };
+  }
+
+  return { match: reference };
+}
+
+/**
+ * Shape 3: the denial-mapping handler.
+ *
+ * ```
+ * async (ctx, args) => {
+ *   try {
+ *     return await admitX(definition, handler)(ctx, args);
+ *   } catch (error) { ...map the typed denial to a CommandResult... }
+ * }
+ * ```
+ *
+ * This is the only wrapping function the grammar accepts, and it exists for one
+ * reason: a denial is thrown BY the wrapper, so the only place to translate it
+ * into a `CommandResult` is around the wrapper call (see the closing comment in
+ * `convex/platform/operationAdmission.ts`, which retired `resolveWriteAdmission`
+ * in favour of exactly this shape).
+ *
+ * Everything about it is pinned. The parameters must be plain identifiers with
+ * no defaults and no destructuring — a default evaluates on every call before
+ * the wrapper closure is applied, and destructuring `{ db }` off `ctx` produces
+ * a receiver that is neither `ctx.db` nor anything a receiver-shaped predicate
+ * would recognize. The try block holds exactly one statement, a return of the
+ * invocation, and the invocation's arguments must be those same parameters
+ * forwarded verbatim, so no expression at all is evaluated between entering the
+ * handler and applying the wrapper. The catch and finally clauses are
+ * unconstrained: they can only run after the wrapper has already been applied.
+ */
+function matchDenialMappingHandler(
+  fn: ts.ArrowFunction | ts.FunctionExpression,
+  names: WrapperNames,
+): ShapeOutcome | undefined {
+  const shapeSuffix =
+    "the only wrapping handler the grammar accepts is `async (ctx, args) => { try { return await <wrapper>(ctx, args); } catch (error) { ... } }`";
+
+  for (const parameter of fn.parameters) {
+    if (parameter.initializer) {
+      return {
+        reason: `the outer handler's \`${parameter.name.getText()}\` parameter has a default value, and defaults are evaluated on every invocation before the wrapper closure is applied`,
+      };
+    }
+    if (parameter.dotDotDotToken) {
+      return {
+        reason: `the outer handler takes a rest parameter, so its arguments cannot be forwarded verbatim; ${shapeSuffix}`,
+      };
+    }
+    if (!ts.isIdentifier(parameter.name)) {
+      return {
+        reason: `the outer handler destructures a parameter; a destructured \`ctx\` yields bare \`db\` / \`scheduler\` locals that can run before admission, so plain identifier parameters forwarded verbatim are required`,
+      };
+    }
+  }
+
+  const body = fn.body;
+  if (!ts.isBlock(body)) {
+    return {
+      reason: `the handler is an arrow whose body wraps the wrapper in another expression; ${shapeSuffix}`,
+    };
+  }
+  if (body.statements.length !== 1) {
+    return {
+      reason: `the outer handler's body has ${body.statements.length} statements; ${shapeSuffix}`,
+    };
+  }
+
+  const [only] = body.statements;
+  if (!ts.isTryStatement(only)) {
+    return {
+      reason: `the outer handler's body is a ${ts.SyntaxKind[only.kind]} rather than a denial-mapping try; ${shapeSuffix}`,
+    };
+  }
+  if (only.tryBlock.statements.length !== 1) {
+    return {
+      reason: `the try block holds ${only.tryBlock.statements.length} statements; it must hold exactly the admitted invocation, so nothing runs before admission`,
+    };
+  }
+
+  const [inner] = only.tryBlock.statements;
+  if (!ts.isReturnStatement(inner) || !inner.expression) {
+    return {
+      reason: `the try block's only statement is a ${ts.SyntaxKind[inner.kind]} rather than \`return await <wrapper>(ctx, args);\``,
+    };
+  }
+
+  let invocation: ts.Expression = inner.expression;
+  if (ts.isAwaitExpression(invocation)) invocation = invocation.expression;
+  if (!ts.isCallExpression(invocation) || invocation.questionDotToken) {
+    return {
+      reason: `the try block returns ${describeExpressionForOperator(invocation)} rather than a direct invocation of the wrapper`,
+    };
+  }
+
+  if (invocation.arguments.length !== fn.parameters.length) {
+    return {
+      reason: `the admitted invocation is applied to ${invocation.arguments.length} argument(s) but the outer handler declares ${fn.parameters.length}; the parameters must be forwarded verbatim so no expression is evaluated before admission`,
+    };
+  }
+  for (let index = 0; index < invocation.arguments.length; index += 1) {
+    const argument = invocation.arguments[index];
+    const parameterName = (fn.parameters[index].name as ts.Identifier).text;
+    if (!ts.isIdentifier(argument) || argument.text !== parameterName) {
+      return {
+        reason: `argument ${index + 1} of the admitted invocation is ${describeExpressionForOperator(argument)} rather than the outer handler's \`${parameterName}\` parameter forwarded verbatim; anything else is evaluated before the wrapper is applied`,
+      };
+    }
+  }
+
+  const callee = invocation.expression;
+  const applied = matchWrapperApplication(callee, names);
+  if (applied) return applied;
+  if (ts.isIdentifier(callee)) {
+    const bound = names.bound.get(callee.text);
+    if (bound) return { match: bound };
+    const invalid = names.boundInvalid.get(callee.text);
+    if (invalid) return { reason: invalid };
+  }
+  return undefined;
+}
+
+/**
+ * Decide whether a `handler` property (or a Hono route handler argument) is
+ * admitted, and if not, why its shape was rejected.
+ *
+ * `{}` means no canonical wrapper appears anywhere in the expression — a
+ * different remediation ("add the wrapper") from a shape violation ("spell it
+ * the accepted way"), so the two raise different findings.
+ */
+function matchHandlerGrammar(
+  expression: ts.Expression | undefined,
+  names: WrapperNames,
+): ShapeOutcome {
+  if (!expression) return {};
+
+  // Shape 1.
+  const applied = matchWrapperApplication(expression, names);
+  if (applied) return applied;
+
+  // Shape 2.
+  if (ts.isIdentifier(expression)) {
+    const bound = names.bound.get(expression.text);
+    if (bound) return { match: bound };
+    const invalid = names.boundInvalid.get(expression.text);
+    return invalid ? { reason: invalid } : {};
+  }
+
+  // Shape 3. Its structural checks fire on any function, including handlers
+  // that never mention the rail at all, so a rejection is only reported as a
+  // SHAPE violation when a canonical wrapper is actually present somewhere in
+  // the handler. Otherwise this is a plain unadmitted ingress, whose
+  // remediation is "add the wrapper" rather than "spell it differently".
+  if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) {
+    const mapped = matchDenialMappingHandler(expression, names);
+    if (mapped?.match) return mapped;
+    if (mapped?.reason && containsWrapperReference(expression, names)) {
+      return mapped;
+    }
+    if (mapped) return {};
+  }
+
+  return containsWrapperReference(expression, names)
+    ? {
+        reason:
+          "a canonical admission wrapper appears inside the handler, but the handler is not one of the accepted shapes",
+      }
+    : {};
+}
+
+/**
+ * Resolve the wrapper names a module has in scope.
+ *
+ * `convexPath` is the importing module's convex-relative path; every import
+ * specifier is resolved against it, and only a specifier that resolves to
+ * `platform/operationAdmission.ts` counts as the composition root. A bare or
+ * package specifier never resolves, so it never qualifies.
+ */
+function collectWrapperNames(
+  sourceFile: ts.SourceFile,
+  convexPath: string,
+): WrapperNames {
   const canonical = new Map<string, IngressKind>();
   const offComposition = new Map<string, IngressKind>();
   const rootNamespaces = new Set<string>();
-  const bound = new Map<string, BoundWrapper>();
-
-  const recognized: Record<string, IngressKind> = { ...CANONICAL_WRAPPERS };
+  const bound = new Map<string, WrapperMatch>();
+  const boundInvalid = new Map<string, string>();
 
   for (const binding of collectImportBindings(sourceFile)) {
-    const fromRoot = binding.moduleSpecifier.endsWith(COMPOSITION_ROOT_SUFFIX);
+    const resolved = resolveModuleSpecifier(convexPath, binding.moduleSpecifier);
+    const fromRoot = resolved === COMPOSITION_ROOT_CONVEX_PATH;
     if (binding.imported === "*") {
       if (fromRoot) rootNamespaces.add(binding.local);
       continue;
     }
-    const kind = recognized[binding.imported];
+    const kind = CANONICAL_WRAPPERS[binding.imported];
     if (!kind) continue;
     (fromRoot ? canonical : offComposition).set(binding.local, kind);
   }
 
-  function wrapperOfCall(node: ts.Node): BoundWrapper | undefined {
-    if (!ts.isCallExpression(node)) return undefined;
-    const callee = node.expression;
-    if (ts.isIdentifier(callee)) {
-      const canonicalKind = canonical.get(callee.text);
-      if (canonicalKind) return { kind: canonicalKind, fromRoot: true };
-      const offKind = offComposition.get(callee.text);
-      return offKind ? { kind: offKind, fromRoot: false } : undefined;
-    }
-    if (ts.isPropertyAccessExpression(callee)) {
-      const name = propertyAccessWrapperName(callee, rootNamespaces);
-      return name ? { kind: recognized[name], fromRoot: true } : undefined;
-    }
-    return undefined;
-  }
+  const names: WrapperNames = {
+    canonical,
+    offComposition,
+    rootNamespaces,
+    bound,
+    boundInvalid,
+  };
 
+  // Shape 2's binding site: a top-level `const X = admitX(def, handler)`.
   for (const statement of sourceFile.statements) {
     if (!ts.isVariableStatement(statement)) continue;
+    if ((statement.declarationList.flags & ts.NodeFlags.Const) === 0) continue;
     for (const declaration of statement.declarationList.declarations) {
       if (!ts.isIdentifier(declaration.name) || !declaration.initializer) {
         continue;
       }
-      const wrapper = wrapperOfCall(declaration.initializer);
-      if (wrapper) bound.set(declaration.name.text, wrapper);
-    }
-  }
-
-  return { canonical, offComposition, rootNamespaces, bound };
-}
-
-/**
- * Work an inline handler must not do before admission.
- *
- * The earlier rule only rejected a public `ctx.db` write ahead of the wrapper,
- * which let a handler read the database, call another Convex function, or
- * schedule work before the caller had been admitted. Reading before admission
- * is a disclosure, and `ctx.runMutation` before admission is a write by
- * another name — neither is caught by looking for `ctx.db.insert`.
- *
- * There was a second predicate here, `isPublicDbWriteCall`, matching
- * `x.db.{delete,insert,patch,replace}(…)`. Every node it accepted this one
- * accepts too — the `x.db.*` clause below is strictly wider — so it could never
- * change a verdict. A guard that guards nothing is the shape this whole
- * contract exists to remove, so it is gone rather than left looking load-bearing.
- */
-function isPreAdmissionCtxEffect(node: ts.Node) {
-  if (!ts.isCallExpression(node)) return false;
-  const expression = node.expression;
-  if (!ts.isPropertyAccessExpression(expression)) return false;
-
-  const method = expression.name.text;
-  const target = expression.expression;
-
-  // ctx.runQuery / ctx.runMutation / ctx.runAction
-  if (
-    ["runQuery", "runMutation", "runAction"].includes(method) &&
-    ts.isIdentifier(target)
-  ) {
-    return true;
-  }
-
-  if (!ts.isPropertyAccessExpression(target)) return false;
-  // ctx.db.* (any access, read or write) and ctx.scheduler.*
-  return target.name.text === "db" || target.name.text === "scheduler";
-}
-
-/**
- * Does anything in these call expressions' ARGUMENT lists run before admission?
- *
- * JavaScript evaluates a call's callee before its arguments, so in
- * `admitPublicMutation(def, fn)(ctx, { ...args, row: await ctx.db.get(id) })`
- * the wrapper closure is only BUILT first — the `await ctx.db.get(...)` runs
- * next, and admission happens last. A rule that is positional over STATEMENTS
- * alone never looks inside the invocation it accepts, so that read (or a
- * `ctx.runMutation`, or a schedule) happens for a caller nobody has admitted
- * while the checker reports the ingress as fully admitted.
- *
- * `await` counts on its own: anything the handler must wait for before the
- * wrapper can be applied is by definition work done ahead of admission.
- *
- * The walk deliberately stops at function boundaries. The handler passed to the
- * wrapper is an argument, and everything in it runs AFTER admission — descending
- * into it would reject every correctly admitted ingress in the repo.
- */
-function argumentsDoPreAdmissionWork(
-  applications: readonly ts.CallExpression[],
-) {
-  let found = false;
-  const walk = (node: ts.Node) => {
-    if (found) return;
-    // Bodies of nested functions run after admission, not before it.
-    if (ts.isFunctionLike(node)) return;
-    if (ts.isAwaitExpression(node) || isPreAdmissionCtxEffect(node)) {
-      found = true;
-      return;
-    }
-    ts.forEachChild(node, walk);
-  };
-  for (const application of applications) {
-    for (const argument of application.arguments) walk(argument);
-    if (found) return true;
-  }
-  return false;
-}
-
-/**
- * The statement list an inline handler body runs, or `undefined` for a
- * concise arrow body (`(ctx, args) => admitPublicMutation(...)(ctx, args)`),
- * which has no statements that could precede the wrapper.
- */
-function handlerBodyStatements(
-  expression: ts.ArrowFunction | ts.FunctionExpression,
-): readonly ts.Statement[] | undefined {
-  return ts.isBlock(expression.body) ? expression.body.statements : undefined;
-}
-
-/**
- * Is `statement` the wrapper invocation itself, rather than something that
- * merely contains one somewhere inside a branch or a nested closure?
- *
- * Accepted: `return admit…(def, fn)(ctx, args);`, `await admit…(def, fn)(…)`,
- * a bare expression statement of the same, and a `try` whose block STARTS with
- * one of those — the catch-and-reshape pattern in
- * `convex/notifications/subscriptions.ts`, where a typed admission denial is
- * mapped to a `CommandResult` and every other error rethrown. Nothing runs
- * before the wrapper there, so the positional guarantee holds.
- *
- * NOT accepted: `const run = admit…(def, fn);`. That statement only BUILDS the
- * closure — admission happens later, when `run(ctx, args)` is invoked — so
- * treating it as "the wrapper ran first" let a handler write rows and call
- * `ctx.runMutation` before any caller was admitted while the checker reported
- * it as fully admitted. A declaration is not an invocation.
- *
- * Rejected: a wrapper inside an `if`, a loop, or a callback, or anywhere after
- * another statement — an admission that only happens on some paths, or that
- * happens after work, is not admission.
- *
- * Accepting the statement is not enough on its own: the ARGUMENTS of every
- * application unwrapped on the way to the wrapper are evaluated after the
- * callee and before admission, so they are checked too and flagged `notFirst`.
- */
-function statementWrapperMatch(
-  statement: ts.Statement,
-  names: WrapperNames,
-): WrapperMatch | undefined {
-  if (ts.isTryStatement(statement)) {
-    const first = statement.tryBlock.statements[0];
-    return first ? statementWrapperMatch(first, names) : undefined;
-  }
-
-  let expression: ts.Expression | undefined;
-  if (ts.isReturnStatement(statement)) expression = statement.expression;
-  else if (ts.isExpressionStatement(statement)) expression = statement.expression;
-  else return undefined;
-  if (!expression) return undefined;
-
-  return unwrapToWrapper(expression, names);
-}
-
-/**
- * Unwrap `await x`, parentheses, and the outer `(...)(ctx, args)` application
- * down to the wrapper, remembering every application passed through so its
- * argument list can be checked for pre-admission work.
- */
-function unwrapToWrapper(
-  start: ts.Expression,
-  names: WrapperNames,
-): WrapperMatch | undefined {
-  const applications: ts.CallExpression[] = [];
-  const settle = (match: WrapperMatch): WrapperMatch =>
-    argumentsDoPreAdmissionWork(applications) ? { ...match, notFirst: true } : match;
-
-  let expression: ts.Expression | undefined = start;
-  for (let depth = 0; depth < 4 && expression; depth += 1) {
-    const direct = matchDirectWrapper(expression, names);
-    if (direct) {
-      if (ts.isCallExpression(expression)) applications.push(expression);
-      return settle(direct);
-    }
-    if (ts.isAwaitExpression(expression)) {
-      expression = expression.expression;
-      continue;
-    }
-    if (ts.isCallExpression(expression)) {
-      applications.push(expression);
-      expression = expression.expression;
-      continue;
-    }
-    if (ts.isParenthesizedExpression(expression)) {
-      expression = expression.expression;
-      continue;
-    }
-    if (ts.isIdentifier(expression)) {
-      const bound = names.bound.get(expression.text);
-      return bound
-        ? settle({
-            wrapper: expression.text,
-            kind: bound.kind,
-            fromRoot: bound.fromRoot,
-          })
-        : undefined;
-    }
-    return undefined;
-  }
-  return undefined;
-}
-
-type WrapperMatch = {
-  wrapper: string;
-  kind: IngressKind;
-  fromRoot: boolean;
-  /**
-   * A wrapper was found inside an inline handler, but not as the handler
-   * expression and not as the first unconditional statement — so work can run
-   * before the caller is admitted.
-   */
-  notFirst?: boolean;
-};
-
-/**
- * Decide whether `expression` routes through an admission wrapper.
- *
- * Accepts a direct wrapper call, an identifier bound to one, or an inline
- * handler whose FIRST unconditional statement is the wrapper invocation.
- *
- * The rule is positional on purpose. "The wrapper is called somewhere in this
- * body" is not admission: a statement before it runs for an un-admitted
- * caller, and a wrapper call nested in an `if` or a `try` runs only on some
- * paths. The earlier version of this function walked the whole body and only
- * objected to a public `ctx.db` write appearing first, which accepted handlers
- * that read the database or called `ctx.runMutation` ahead of admission.
- *
- * Positional over statements is not sufficient on its own — see
- * `argumentsDoPreAdmissionWork` — so the invocation's own argument list is
- * checked wherever the wrapper is reached from INSIDE a handler body. The
- * `handler: admitPublicMutation(def, fn)` form (the `direct` branch below) is
- * exempt on purpose: those arguments evaluate once at module load, with no
- * caller in flight to admit.
- */
-function matchWrapper(
-  expression: ts.Expression | undefined,
-  names: WrapperNames,
-): WrapperMatch | undefined {
-  if (!expression) return undefined;
-
-  const direct = matchDirectWrapper(expression, names);
-  if (direct) return direct;
-
-  if (ts.isIdentifier(expression)) {
-    const bound = names.bound.get(expression.text);
-    return bound
-      ? {
-          wrapper: expression.text,
-          kind: bound.kind,
-          fromRoot: bound.fromRoot,
-        }
-      : undefined;
-  }
-
-  if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) {
-    const statements = handlerBodyStatements(expression);
-
-    // Concise arrow body: `(ctx, args) => admitPublicMutation(def, fn)(ctx, args)`.
-    // No STATEMENT can precede the wrapper — but an argument of the invocation
-    // still evaluates before admission, so unwrap through `unwrapToWrapper`.
-    if (!statements) {
-      return unwrapToWrapper(expression.body as ts.Expression, names);
-    }
-
-    const first = statements[0];
-    if (first) {
-      const match = statementWrapperMatch(first, names);
-      if (match) return match;
-    }
-
-    // A wrapper invoked by a LATER statement — including the hoisted-const
-    // shape, `const run = admitPublicMutation(def, fn)` at module scope called
-    // further down the body. Any statement ahead of it runs for a caller nobody
-    // has admitted, so the position alone decides: no inspection of what those
-    // statements do, because "harmless work before admission" is not a
-    // distinction this contract makes.
-    for (let index = 1; index < statements.length; index += 1) {
-      const match = statementWrapperMatch(statements[index], names);
-      if (match) return { ...match, notFirst: true };
-    }
-
-    // A wrapper exists somewhere deeper in the body. Report it as a positional
-    // failure rather than silently accepting or silently rejecting: "not
-    // admitted at all" and "admitted too late" need different remediation.
-    let deep: WrapperMatch | undefined;
-    const visit = (node: ts.Node) => {
-      if (deep) return;
-      const nested = matchDirectWrapper(node, names);
-      if (nested) {
-        deep = nested;
-        return;
+      const outcome = matchWrapperApplication(declaration.initializer, names);
+      if (!outcome) continue;
+      if (outcome.match) bound.set(declaration.name.text, outcome.match);
+      else if (outcome.reason) {
+        boundInvalid.set(declaration.name.text, outcome.reason);
       }
-      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-        const bound = names.bound.get(node.expression.text);
-        if (bound) {
-          deep = {
-            wrapper: node.expression.text,
-            kind: bound.kind,
-            fromRoot: bound.fromRoot,
-          };
-          return;
-        }
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(expression.body);
-    return deep ? { ...deep, notFirst: true } : undefined;
+    }
   }
 
-  return undefined;
-}
-
-function matchDirectWrapper(
-  node: ts.Node,
-  names: WrapperNames,
-): WrapperMatch | undefined {
-  if (!ts.isCallExpression(node)) return undefined;
-  const callee = node.expression;
-  if (ts.isPropertyAccessExpression(callee)) {
-    const method = propertyAccessWrapperName(callee, names.rootNamespaces);
-    return method
-      ? { wrapper: method, kind: CANONICAL_WRAPPERS[method], fromRoot: true }
-      : undefined;
-  }
-  if (!ts.isIdentifier(callee)) return undefined;
-  const name = callee.text;
-  const canonicalKind = names.canonical.get(name);
-  if (canonicalKind) {
-    return { wrapper: name, kind: canonicalKind, fromRoot: true };
-  }
-  const offKind = names.offComposition.get(name);
-  if (offKind) return { wrapper: name, kind: offKind, fromRoot: false };
-  return undefined;
+  return names;
 }
 
 // ---------------------------------------------------------------------------
@@ -1056,7 +1111,10 @@ export function collectConvexIngressFromSource(
   const sourceFile = parseSource(filePath, source);
   const { byLocalName, serverNamespaces } =
     getConvexRegistrationNames(sourceFile);
-  const wrapperNames = collectWrapperNames(sourceFile);
+  const wrapperNames = collectWrapperNames(
+    sourceFile,
+    toConvexRelativePath(filePath),
+  );
   const moduleName = toConvexModuleName(filePath);
   const normalized = normalizeRepoPath(filePath);
   const registrarLocals = collectRegistrarLocalNames(sourceFile);
@@ -1068,9 +1126,10 @@ export function collectConvexIngressFromSource(
     kind: IngressKind,
     call: ts.CallExpression | undefined,
   ) => {
-    const match = call
-      ? matchWrapper(handlerExpression(call), wrapperNames)
-      : undefined;
+    const outcome: ShapeOutcome = call
+      ? matchHandlerGrammar(handlerExpression(call), wrapperNames)
+      : {};
+    const match = outcome.match;
     found.push({
       id: `${moduleName}:${exportName}`,
       kind,
@@ -1080,10 +1139,10 @@ export function collectConvexIngressFromSource(
       exportName,
       wrapper: match?.wrapper,
       wrapperOffComposition: match ? !match.fromRoot : undefined,
-      wrapperNotFirst: match?.notFirst,
-      // A late wrapper is not admission: work already ran for an un-admitted
-      // caller, so this counts as unadmitted AND raises its own finding.
-      admitted: Boolean(match) && !match?.notFirst,
+      wrapperShape: outcome.reason,
+      // Only the accepted grammar is admission. A wrapper spelled any other
+      // way is unadmitted AND raises its own `wrapper-shape` finding.
+      admitted: Boolean(match),
     });
   };
 
@@ -1182,8 +1241,8 @@ type RawRouteRegistration = {
   wrapper?: string;
   wrapperFromRoot: boolean;
   wrapperKind?: IngressKind;
-  /** A wrapper exists but runs after other work — see `matchWrapper`. */
-  wrapperNotFirst?: boolean;
+  /** Why the grammar rejected this handler — see `matchHandlerGrammar`. */
+  wrapperShape?: string;
 };
 
 type RouterMount = {
@@ -1337,7 +1396,8 @@ function collectRouteModuleFacts(
           const localPath = stringLiteralText(node.arguments[0]);
           if (localPath !== undefined) {
             const handler = node.arguments[node.arguments.length - 1];
-            const match = matchWrapper(handler, wrapperNames);
+            const outcome = matchHandlerGrammar(handler, wrapperNames);
+            const match = outcome.match;
             registrations.push({
               routerKey,
               method: method === "all" ? "ALL" : method.toUpperCase(),
@@ -1345,8 +1405,8 @@ function collectRouteModuleFacts(
               filePath,
               line: lineOf(sourceFile, node),
               handler,
-              admitted: Boolean(match) && !match?.notFirst,
-              wrapperNotFirst: match?.notFirst,
+              admitted: Boolean(match),
+              wrapperShape: outcome.reason,
               wrapper: match?.wrapper,
               wrapperFromRoot: match?.fromRoot ?? true,
               wrapperKind: match?.kind,
@@ -1367,7 +1427,8 @@ function collectRouteModuleFacts(
           }
           if (localPath !== undefined && methods.length > 0) {
             const handler = node.arguments[node.arguments.length - 1];
-            const match = matchWrapper(handler, wrapperNames);
+            const outcome = matchHandlerGrammar(handler, wrapperNames);
+            const match = outcome.match;
             for (const httpMethod of methods) {
               registrations.push({
                 routerKey,
@@ -1376,8 +1437,8 @@ function collectRouteModuleFacts(
                 filePath,
                 line: lineOf(sourceFile, node),
                 handler,
-                admitted: Boolean(match) && !match?.notFirst,
-                wrapperNotFirst: match?.notFirst,
+                admitted: Boolean(match),
+                wrapperShape: outcome.reason,
                 wrapper: match?.wrapper,
                 wrapperFromRoot: match?.fromRoot ?? true,
                 wrapperKind: match?.kind,
@@ -1485,7 +1546,7 @@ function resolveRouteRegistrations(
         wrapperOffComposition: registration.wrapper
           ? !registration.wrapperFromRoot
           : undefined,
-        wrapperNotFirst: registration.wrapperNotFirst,
+        wrapperShape: registration.wrapperShape,
         admitted: registration.admitted,
       });
       registrations.set(id, registration);
@@ -1527,7 +1588,7 @@ function resolveRouteRegistrations(
         moduleName: toConvexModuleName(registration.filePath),
         route: { method: registration.method, path: registration.localPath },
         wrapper: registration.wrapper,
-        wrapperNotFirst: registration.wrapperNotFirst,
+        wrapperShape: registration.wrapperShape,
         admitted: registration.admitted,
       });
       registrations.set(id, registration);
@@ -2228,7 +2289,7 @@ export async function collectOperationAdmissionCheckResult(
       module.convexPath,
       collectRouteModuleFacts(
         module,
-        collectWrapperNames(module.sourceFile),
+        collectWrapperNames(module.sourceFile, module.convexPath),
         knownConvexPaths,
       ),
     );
@@ -2419,18 +2480,22 @@ export async function collectOperationAdmissionCheckResult(
       });
     }
 
-    if (entry.wrapperNotFirst) {
+    if (entry.wrapperShape) {
       push({
-        id: `wrapper-not-first-${slugifyForFindingId(entry.id)}`,
+        id: `wrapper-shape-${slugifyForFindingId(entry.id)}`,
         severity: "high",
-        title: "Admission wrapper does not run first in the handler",
+        title: "Admission wrapper is not spelled in an accepted shape",
         filePath: entry.filePath,
         line: entry.line,
         functionName: entry.id,
-        rationale:
-          "The wrapper is called somewhere inside the handler rather than as the handler itself or its first unconditional statement. Any statement ahead of it runs for a caller who has not been admitted, and a wrapper nested in a branch or a try block admits on some paths only. Reading rows, calling ctx.runQuery/runMutation/runAction, or scheduling work before admission defeats the rail even when no direct ctx.db write is involved.",
+        // Per-detector: the first sentence is why THIS handler was rejected,
+        // and it is followed by the whole accepted grammar, so the fix needs no
+        // reading of the checker. The grammar is a whitelist because three
+        // consecutive review rounds each defeated a blacklist with a shape it
+        // had not enumerated; "not obviously bad" is not a criterion here.
+        rationale: `A canonical admission wrapper appears in this handler, but ${entry.wrapperShape}.\n  Admission is recognized only in these shapes, and nothing else is accepted:\n    ${ACCEPTED_WRAPPER_SHAPES}`,
         remediation:
-          "Make the canonical wrapper the handler expression itself, or the first statement of the handler body. If the handler needs to translate a denial into a CommandResult, wrap the wrapper call in a catch rather than doing work before it (see convex/notifications/subscriptions.ts).",
+          "Rewrite the handler as one of the accepted shapes. If it only needs to translate a typed admission denial into a CommandResult, use the third shape: a try whose block is exactly `return await <wrapper>(ctx, args);`, with the mapping in the catch (see convex/notifications/subscriptions.ts). Anything that must run before the wrapper cannot run before the wrapper.",
       });
     }
 

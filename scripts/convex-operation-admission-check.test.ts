@@ -203,391 +203,536 @@ describe("collectConvexIngressFromSource", () => {
     expect(ingress.every((entry) => !entry.wrapperOffComposition)).toBe(true);
   });
 
-  it("flags a canonical wrapper imported from somewhere other than the composition root", () => {
-    const [entry] = collectConvexIngressFromSource(
-      "packages/athena-webapp/convex/example/offRoot.ts",
-      `
-        import { mutation } from "../_generated/server";
-        import { admitPublicMutation } from "../operationAdmission/publicMutation";
-        import { definition } from "../operationAdmission/definitions";
-
-        export const write = mutation({ args: {}, handler: admitPublicMutation(definition, async () => null) });
-      `,
-    );
-
-    expect(entry.admitted).toBe(true);
-    expect(entry.wrapperOffComposition).toBe(true);
-  });
-
-  it("does not recognize the retired pre-rename wrapper alias names", () => {
-    const [entry] = collectConvexIngressFromSource(
-      "packages/athena-webapp/convex/example/legacy.ts",
-      `
-        import { mutation } from "../_generated/server";
-        import { withOperationMutationAdmission } from "../platform/operationAdmission";
-        import { definition } from "../operationAdmission/definitions";
-
-        export const write = mutation({
-          args: {},
-          handler: withOperationMutationAdmission(definition, async () => null),
-        });
-      `,
-    );
-
-    expect(entry.admitted).toBe(false);
-  });
-
-  it("resolves a hoisted wrapper const and rejects a public write before it", () => {
-    const admitted = collectConvexIngressFromSource(
-      "packages/athena-webapp/convex/example/hoisted.ts",
-      `
-        import { mutation } from "../_generated/server";
-        import { admitPublicMutation } from "../platform/operationAdmission";
-        import { definition } from "../operationAdmission/definitions";
-
-        const admittedHandler = admitPublicMutation(definition, async () => null);
-
-        export const write = mutation({
-          args: {},
-          handler: async (ctx, args) => {
-            try {
-              return await admittedHandler(ctx, args);
-            } catch (error) {
-              return { kind: "user_error", error: String(error) };
-            }
-          },
-        });
-      `,
-    );
-    expect(admitted[0].admitted).toBe(true);
-
-    const preWrite = collectConvexIngressFromSource(
-      "packages/athena-webapp/convex/example/preWrite.ts",
-      `
-        import { mutation } from "../_generated/server";
-        import { admitPublicMutation } from "../platform/operationAdmission";
-        import { definition } from "../operationAdmission/definitions";
-
-        const admittedHandler = admitPublicMutation(definition, async () => null);
-
-        export const write = mutation({
-          args: {},
-          handler: async (ctx, args) => {
-            await ctx.db.insert("auditLog", { action: "pre-admission" });
-            return admittedHandler(ctx, args);
-          },
-        });
-      `,
-    );
-    expect(preWrite[0].admitted).toBe(false);
-  });
-
   /**
-   * The positional rule. "The wrapper is called somewhere in this body" is not
-   * admission: anything ahead of it runs for a caller nobody admitted, and a
-   * wrapper nested in a branch admits on some paths only.
+   * The wrapper grammar is a WHITELIST, and these fixtures are the reason.
+   *
+   * Three consecutive review rounds defeated the previous blacklist, each with
+   * a shape it had not enumerated. Every one of those shapes is pinned here as
+   * a negative, alongside a positive control for every shape the repository
+   * actually uses today — so the grammar can never be loosened to re-admit an
+   * escape, and can never be tightened past what the codebase is written in.
    */
-  describe("wrapper position", () => {
+  describe("wrapper grammar", () => {
     const PROLOGUE = `
         import { mutation } from "../_generated/server";
         import { admitPublicMutation } from "../platform/operationAdmission";
         import { definition } from "../operationAdmission/definitions";
     `;
 
-    const inlineHandler = (body: string) =>
+    /** One ingress in a module that imports the real composition root. */
+    const module = (body: string) =>
       collectConvexIngressFromSource(
-        "packages/athena-webapp/convex/example/position.ts",
-        `${PROLOGUE}
-        export const write = mutation({
-          args: {},
-          handler: async (ctx, args) => {${body}},
-        });
-      `,
+        "packages/athena-webapp/convex/example/grammar.ts",
+        `${PROLOGUE}\n${body}`,
       )[0];
 
-    it("accepts the wrapper as the first statement", () => {
-      const entry = inlineHandler(`
-            return await admitPublicMutation(definition, async () => null)(ctx, args);
-      `);
-      expect(entry.admitted).toBe(true);
-      expect(entry.wrapperNotFirst).toBeFalsy();
+    /** An inline `handler:` body, wrapped in the outer arrow under test. */
+    const handler = (expression: string) =>
+      module(`export const write = mutation({
+          args: {},
+          handler: ${expression},
+        });`);
+
+    // -- positive controls: every shape the repository uses today -----------
+
+    describe("accepted shapes", () => {
+      it("accepts the direct application with an inline arrow handler", () => {
+        // 562 sites, the dominant repository shape.
+        const entry = handler(
+          `admitPublicMutation(definition, async (ctx, args) => {
+             const row = await ctx.db.get(args.id);
+             await ctx.db.insert("auditLog", { row });
+             return ctx.runMutation(internal.some.write, {});
+           })`,
+        );
+        expect(entry.admitted).toBe(true);
+        expect(entry.wrapperShape).toBeUndefined();
+        expect(entry.wrapperOffComposition).toBe(false);
+      });
+
+      it("accepts the direct application with a named handler identifier", () => {
+        // 21 sites, including both `.on`-form money-movement routes.
+        const entry = handler(
+          "admitPublicMutation(definition, importInventoryCommandWithCtx)",
+        );
+        expect(entry.admitted).toBe(true);
+        expect(entry.wrapperShape).toBeUndefined();
+      });
+
+      it("accepts a dotted member expression as the definition", () => {
+        const entry = handler(
+          "admitPublicMutation(definitions.inventory.import, handlerFn)",
+        );
+        expect(entry.admitted).toBe(true);
+        expect(entry.wrapperShape).toBeUndefined();
+      });
+
+      it("accepts a top-level const bound to the application", () => {
+        // 7 sites, e.g. stockOps/cycleCountDrafts.ts.
+        const entry = module(
+          `const admittedHandler = admitPublicMutation(definition, async () => null);
+
+           export const write = mutation({ args: {}, handler: admittedHandler });`,
+        );
+        expect(entry.admitted).toBe(true);
+        expect(entry.wrapperShape).toBeUndefined();
+      });
+
+      it("accepts the denial-mapping try around a direct application", () => {
+        // 13 sites, e.g. convex/notifications/subscriptions.ts. The catch is
+        // the only place a denial THROWN BY the wrapper can be mapped, which is
+        // why this is the one wrapping function the grammar accepts.
+        const entry = handler(
+          `async (ctx, args) => {
+             try {
+               return await admitPublicMutation(definition, commandWithCtx)(ctx, args);
+             } catch (error) {
+               const mapped = mapSharedDemoFoundationDenial(error);
+               if (mapped) return mapped;
+               throw error;
+             }
+           }`,
+        );
+        expect(entry.admitted).toBe(true);
+        expect(entry.wrapperShape).toBeUndefined();
+      });
+
+      it("accepts the denial-mapping try around a const-bound application", () => {
+        // e.g. convex/inventory/athenaUser.ts and openWorkInventoryReviews.ts.
+        const entry = module(
+          `const admittedHandler = admitPublicMutation(definition, async () => null);
+
+           export const write = mutation({
+             args: {},
+             handler: async (ctx, args) => {
+               try {
+                 return await admittedHandler(ctx, args);
+               } catch (error) {
+                 if (isExpiredSharedDemoSessionError(error)) return null;
+                 throw error;
+               }
+             },
+           });`,
+        );
+        expect(entry.admitted).toBe(true);
+        expect(entry.wrapperShape).toBeUndefined();
+      });
+
+      it("accepts a type-annotated parameter list on the denial-mapping try", () => {
+        // convex/inventory/athenaUser.ts annotates the args parameter.
+        const entry = handler(
+          `async (ctx, args: Record<string, never>) => {
+             try {
+               return await admitPublicMutation(definition, fn)(ctx, args);
+             } catch (error) { throw error; }
+           }`,
+        );
+        expect(entry.admitted).toBe(true);
+      });
+
+      it("accepts a namespace import of the composition root itself", () => {
+        const entry = collectConvexIngressFromSource(
+          "packages/athena-webapp/convex/example/nsRoot.ts",
+          `
+            import { mutation } from "../_generated/server";
+            import * as admission from "../platform/operationAdmission";
+            import { definition } from "../operationAdmission/definitions";
+
+            export const write = mutation({
+              args: {},
+              handler: admission.admitPublicMutation(definition, async () => null),
+            });
+          `,
+        )[0];
+        expect(entry.admitted).toBe(true);
+        expect(entry.wrapperOffComposition).toBe(false);
+      });
     });
 
-    it("accepts a try whose block starts with the wrapper", () => {
-      const entry = inlineHandler(`
-            try {
-              return await admitPublicMutation(definition, async () => null)(ctx, args);
-            } catch (error) {
-              return { kind: "user_error", error: String(error) };
-            }
-      `);
-      expect(entry.admitted).toBe(true);
-      expect(entry.wrapperNotFirst).toBeFalsy();
-    });
-
-    it.each([
-      [
-        "a read before admission",
-        `const row = await ctx.db.get(args.id);
-         return admitPublicMutation(definition, async () => row)(ctx, args);`,
-      ],
-      [
-        "a runQuery before admission",
-        `const seen = await ctx.runQuery(internal.some.probe, {});
-         return admitPublicMutation(definition, async () => seen)(ctx, args);`,
-      ],
-      [
-        "a runMutation before admission",
-        `await ctx.runMutation(internal.some.write, {});
-         return admitPublicMutation(definition, async () => null)(ctx, args);`,
-      ],
-      [
-        "a scheduler call before admission",
-        `await ctx.scheduler.runAfter(0, internal.some.job, {});
-         return admitPublicMutation(definition, async () => null)(ctx, args);`,
-      ],
-      [
-        "a second admission probe before the wrapper",
-        `await resolveWriteAdmission(ctx, args, definition);
-         return admitPublicMutation(definition, async () => null)(ctx, args);`,
-      ],
-      [
-        "the wrapper nested in a branch",
-        `if (args.mode === "admit") {
-           return admitPublicMutation(definition, async () => null)(ctx, args);
-         }
-         return null;`,
-      ],
-    ])("rejects %s", (_label, body) => {
-      const entry = inlineHandler(`\n${body}\n`);
-      expect(entry.admitted).toBe(false);
-      expect(entry.wrapperNotFirst).toBe(true);
-    });
+    // -- composition-root identity: round 3, P0 ----------------------------
 
     /**
-     * `const run = admitPublicMutation(def, fn)` BUILDS the closure; admission
-     * happens when `run(ctx, args)` is invoked. Treating the declaration as
-     * proof let a handler write rows before any caller was admitted while the
-     * checker called it admitted.
+     * Identity used to be an unresolved path SUFFIX, so any module at a path
+     * ending in `platform/operationAdmission` — or a package specifier that
+     * merely spelled it — passed as the rail. A local shim could stand the rail
+     * down file by file while the checker reported zero findings, which is the
+     * exemption construct this contract exists to remove. The specifier is now
+     * RESOLVED against the importing file and compared to the one canonical
+     * path.
      */
-    it("rejects a const-bound wrapper declaration as proof of admission", () => {
-      const entry = inlineHandler(`
-            const run = admitPublicMutation(definition, async () => null);
-            await ctx.db.insert("auditLog", { action: "pre-admission" });
-            await ctx.runMutation(internal.some.write, {});
-            return run(ctx, args);
-      `);
-      expect(entry.admitted).toBe(false);
-      expect(entry.wrapperNotFirst).toBe(true);
-    });
+    describe("composition-root identity is a resolved path, not a suffix", () => {
+      const shimmed = (specifier: string, form: "named" | "namespace") =>
+        collectConvexIngressFromSource(
+          "packages/athena-webapp/convex/x/attack.ts",
+          form === "named"
+            ? `
+              import { mutation } from "../_generated/server";
+              import { admitPublicMutation } from "${specifier}";
+              import { definition } from "../operationAdmission/definitions";
 
-    it("rejects a hoisted wrapper invoked after other work", () => {
-      const entry = collectConvexIngressFromSource(
-        "packages/athena-webapp/convex/example/hoistedLate.ts",
-        `${PROLOGUE}
-        const admittedHandler = admitPublicMutation(definition, async () => null);
+              export const write = mutation({
+                args: {},
+                handler: admitPublicMutation(definition, async () => null),
+              });
+            `
+            : `
+              import { mutation } from "../_generated/server";
+              import * as rail from "${specifier}";
+              import { definition } from "../operationAdmission/definitions";
 
-        export const write = mutation({
-          args: {},
-          handler: async (ctx, args) => {
-            const existing = await ctx.db.get(args.id);
-            return admittedHandler(ctx, args);
-          },
-        });
-      `,
-      )[0];
-      expect(entry.admitted).toBe(false);
-      expect(entry.wrapperNotFirst).toBe(true);
-    });
+              export const write = mutation({
+                args: {},
+                handler: rail.admitPublicMutation(definition, async () => null),
+              });
+            `,
+        )[0];
 
-    it("still accepts a hoisted wrapper invoked as the first statement", () => {
-      const entry = collectConvexIngressFromSource(
-        "packages/athena-webapp/convex/example/hoistedFirst.ts",
-        `${PROLOGUE}
-        const admittedHandler = admitPublicMutation(definition, async () => null);
-
-        export const write = mutation({
-          args: {},
-          handler: async (ctx, args) => {
-            return admittedHandler(ctx, args);
-          },
-        });
-      `,
-      )[0];
-      expect(entry.admitted).toBe(true);
-      expect(entry.wrapperNotFirst).toBeFalsy();
-    });
-
-    /**
-     * A call's callee is evaluated before its arguments, so the wrapper closure
-     * is only BUILT first — everything in the argument list runs next, and
-     * admission happens last. A rule that is positional over statements alone
-     * never looks inside the invocation it accepts.
-     */
-    describe("pre-admission work in the invocation's arguments", () => {
       it.each([
+        ["a sibling shim directory", "./local/platform/operationAdmission"],
+        ["a shim reached by parent traversal", "../a/platform/operationAdmission"],
+        ["a package specifier", "@evil/platform/operationAdmission"],
+        ["a bare specifier", "platform/operationAdmission"],
+      ])("rejects %s as the composition root (named import)", (_label, specifier) => {
+        const entry = shimmed(specifier, "named");
+        // Recognized by name, so it raises its own off-composition finding
+        // rather than vanishing into "no wrapper at all".
+        expect(entry.wrapperOffComposition).toBe(true);
+      });
+
+      it.each([
+        ["a sibling shim directory", "./local/platform/operationAdmission"],
+        ["a shim reached by parent traversal", "../a/platform/operationAdmission"],
+        ["a package specifier", "@evil/platform/operationAdmission"],
+      ])("rejects %s as the composition root (namespace import)", (_label, specifier) => {
+        const entry = shimmed(specifier, "namespace");
+        // A method on a non-root namespace is not a wrapper at all.
+        expect(entry.admitted).toBe(false);
+      });
+
+      it("accepts the real composition root through both import forms", () => {
+        expect(shimmed("../platform/operationAdmission", "named").admitted).toBe(
+          true,
+        );
+        expect(
+          shimmed("../platform/operationAdmission", "named").wrapperOffComposition,
+        ).toBe(false);
+        expect(
+          shimmed("../platform/operationAdmission", "namespace").admitted,
+        ).toBe(true);
+      });
+
+      it("does not admit a same-named method on an unrelated receiver", () => {
+        const ingress = collectConvexIngressFromSource(
+          "packages/athena-webapp/convex/example/shim.ts",
+          `
+            import { mutation } from "../_generated/server";
+            import { admitPublicMutation } from "../platform/operationAdmission";
+            import { definition } from "../operationAdmission/definitions";
+
+            const shim = { admitPublicMutation: (d, f) => f };
+
+            export const real = mutation({ args: {}, handler: admitPublicMutation(definition, async () => null) });
+            export const shimmed = mutation({
+              args: {},
+              handler: shim.admitPublicMutation(definition, async () => null),
+            });
+          `,
+        );
+        expect(ingress.map((entry) => [entry.id, entry.admitted])).toEqual([
+          ["example/shim:real", true],
+          ["example/shim:shimmed", false],
+        ]);
+      });
+
+      it("does not recognize the retired pre-rename wrapper alias names", () => {
+        const entry = collectConvexIngressFromSource(
+          "packages/athena-webapp/convex/example/legacy.ts",
+          `
+            import { mutation } from "../_generated/server";
+            import { withOperationMutationAdmission } from "../platform/operationAdmission";
+            import { definition } from "../operationAdmission/definitions";
+
+            export const write = mutation({
+              args: {},
+              handler: withOperationMutationAdmission(definition, async () => null),
+            });
+          `,
+        )[0];
+        expect(entry.admitted).toBe(false);
+      });
+    });
+
+    // -- negatives: one per adversarial shape from all three rounds ---------
+
+    /**
+     * Each entry is a shape that defeated a previous round of the checker, or
+     * a near neighbour of one. The grammar rejects them all by construction —
+     * not because each is enumerated, but because none of them is one of the
+     * three accepted shapes.
+     */
+    describe("rejected shapes", () => {
+      it.each([
+        // Round 1: a declaration is not an invocation.
+        [
+          "a const-bound wrapper declared, then work, then invoked",
+          `async (ctx, args) => {
+             const run = admitPublicMutation(definition, async () => null);
+             await ctx.db.insert("auditLog", {});
+             return run(ctx, args);
+           }`,
+        ],
+        [
+          "a hoisted wrapper invoked after other work",
+          `async (ctx, args) => {
+             const existing = await ctx.db.get(args.id);
+             return admitPublicMutation(definition, fn)(ctx, args);
+           }`,
+        ],
+        // Round 2: pre-admission work in the argument lists.
         [
           "an awaited read in the applied argument list",
-          `return admitPublicMutation(definition, async () => null)(ctx, { ...args, row: await ctx.db.get(args.id) });`,
+          `async (ctx, args) => {
+             try {
+               return await admitPublicMutation(definition, fn)(ctx, { ...args, row: await ctx.db.get(args.id) });
+             } catch (error) { throw error; }
+           }`,
         ],
         [
           "an awaited handler build in the wrapper's own argument list",
-          `return admitPublicMutation(definition, await buildHandler(ctx))(ctx, args);`,
+          `async (ctx, args) => {
+             try {
+               return await admitPublicMutation(definition, await buildHandler(ctx))(ctx, args);
+             } catch (error) { throw error; }
+           }`,
         ],
         [
           "an unawaited ctx.runMutation in the applied argument list",
-          `return admitPublicMutation(definition, async () => null)(ctx, { probe: ctx.runMutation(internal.some.write, {}) });`,
+          `async (ctx, args) => {
+             try {
+               return await admitPublicMutation(definition, fn)(ctx, { probe: ctx.runMutation(internal.some.write, {}) });
+             } catch (error) { throw error; }
+           }`,
+        ],
+        // Round 3, P0: an IIFE runs before admission.
+        [
+          "a synchronous IIFE in the applied argument list",
+          `async (ctx, args) => {
+             try {
+               return await admitPublicMutation(definition, fn)(ctx, ((): any => { ctx.db.insert("t", args); return args; })());
+             } catch (error) { throw error; }
+           }`,
         ],
         [
-          "an unawaited ctx.db write in the applied argument list",
-          `return admitPublicMutation(definition, async () => null)(ctx, { probe: ctx.db.insert("auditLog", {}) });`,
+          "an async IIFE awaiting a read in the applied argument list",
+          `async (ctx, args) => {
+             try {
+               return await admitPublicMutation(definition, fn)(ctx, (async () => await ctx.db.get(args.id))());
+             } catch (error) { throw error; }
+           }`,
         ],
         [
-          "an unawaited scheduler call in the applied argument list",
-          `return admitPublicMutation(definition, async () => null)(ctx, { probe: ctx.scheduler.runAfter(0, internal.some.job, {}) });`,
+          "an IIFE scheduling work in the applied argument list",
+          `async (ctx, args) => {
+             try {
+               return await admitPublicMutation(definition, fn)(ctx, ((): any => { ctx.scheduler.runAfter(0, internal.a.b, args); return args; })());
+             } catch (error) { throw error; }
+           }`,
         ],
-      ])("rejects %s", (_label, body) => {
-        const entry = inlineHandler(`\n${body}\n`);
+        // Round 3, P1: receivers the old predicate could not see.
+        [
+          "a computed ctx[\"db\"] receiver in the applied argument list",
+          `async (ctx, args) => {
+             try {
+               return await admitPublicMutation(definition, fn)(ctx, { ...args, x: ctx["db"].insert("t", args) });
+             } catch (error) { throw error; }
+           }`,
+        ],
+        [
+          "a computed ctx.db[\"insert\"] method in the applied argument list",
+          `async (ctx, args) => {
+             try {
+               return await admitPublicMutation(definition, fn)(ctx, { ...args, x: ctx.db["insert"]("t", args) });
+             } catch (error) { throw error; }
+           }`,
+        ],
+        [
+          "a parenthesized (ctx).runMutation in the applied argument list",
+          `async (ctx, args) => {
+             try {
+               return await admitPublicMutation(definition, fn)(ctx, { x: (ctx).runMutation(internal.a.b, {}) });
+             } catch (error) { throw error; }
+           }`,
+        ],
+        [
+          "a db destructured off the handler's ctx parameter",
+          `async ({ db, ...ctx }, args) => {
+             try {
+               return await admitPublicMutation(definition, fn)(ctx as any, { ...args, x: db.insert("t", args) });
+             } catch (error) { throw error; }
+           }`,
+        ],
+        // Round 3, P2: parameter defaults run before the body.
+        [
+          "a handler parameter default doing work",
+          `async (ctx, args, pre = ctx.db.insert("t", args)) => {
+             try {
+               return await admitPublicMutation(definition, fn)(ctx, args);
+             } catch (error) { throw error; }
+           }`,
+        ],
+        [
+          "a handler parameter default that merely reads",
+          `async (ctx, args, row = ctx.db.get(args.id)) => {
+             try {
+               return await admitPublicMutation(definition, fn)(ctx, args);
+             } catch (error) { throw error; }
+           }`,
+        ],
+        // Operators that sequence work into an argument position.
+        [
+          "a comma operator in the applied argument list",
+          `async (ctx, args) => {
+             try {
+               return await admitPublicMutation(definition, fn)(ctx, (ctx.db.insert("t", args), args));
+             } catch (error) { throw error; }
+           }`,
+        ],
+        [
+          "a conditional expression in the wrapper's argument list",
+          `async (ctx, args) => {
+             try {
+               return await admitPublicMutation(definition, args.x ? fn : other)(ctx, args);
+             } catch (error) { throw error; }
+           }`,
+        ],
+        [
+          "a logical operator in the wrapper's argument list",
+          `async (ctx, args) => {
+             try {
+               return await admitPublicMutation(definition || fallbackDefinition, fn)(ctx, args);
+             } catch (error) { throw error; }
+           }`,
+        ],
+        [
+          "a spread in the wrapper's argument list",
+          "admitPublicMutation(...wrapperArguments)",
+        ],
+        // Wrapping shapes other than the denial-mapping try.
+        [
+          "a concise arrow wrapping the wrapper",
+          "async (ctx, args) => admitPublicMutation(definition, fn)(ctx, args)",
+        ],
+        [
+          "a block arrow returning the wrapper without a denial-mapping try",
+          `async (ctx, args) => { return admitPublicMutation(definition, fn)(ctx, args); }`,
+        ],
+        [
+          "the wrapper nested in a branch",
+          `async (ctx, args) => {
+             if (args.mode === "admit") {
+               return admitPublicMutation(definition, fn)(ctx, args);
+             }
+             return null;
+           }`,
+        ],
+        [
+          "a try whose block does work before the wrapper",
+          `async (ctx, args) => {
+             try {
+               const row = await ctx.db.get(args.id);
+               return await admitPublicMutation(definition, fn)(ctx, args);
+             } catch (error) { throw error; }
+           }`,
+        ],
+        [
+          "a try whose invocation forwards a rebuilt args object",
+          `async (ctx, args) => {
+             try {
+               return await admitPublicMutation(definition, fn)(ctx, { ...args });
+             } catch (error) { throw error; }
+           }`,
+        ],
+        [
+          "an extra argument on the wrapper",
+          "admitPublicMutation(definition, fn, { bypass: true })",
+        ],
+        [
+          "a single argument on the wrapper",
+          "admitPublicMutation(definition)",
+        ],
+        [
+          "an optional-chained wrapper invocation",
+          "admitPublicMutation?.(definition, fn)",
+        ],
+        [
+          "a wrapper reached through a property access on a non-root receiver",
+          "helpers.admitPublicMutation(definition, fn)",
+        ],
+      ])("rejects %s", (_label, expression) => {
+        const entry = handler(expression);
         expect(entry.admitted).toBe(false);
-        expect(entry.wrapperNotFirst).toBe(true);
-      });
-
-      it("rejects it in a concise arrow body too", () => {
-        const entry = collectConvexIngressFromSource(
-          "packages/athena-webapp/convex/example/conciseArgs.ts",
-          `${PROLOGUE}
-          export const write = mutation({
-            args: {},
-            handler: async (ctx, args) =>
-              admitPublicMutation(definition, async () => null)(ctx, { ...args, row: await ctx.db.get(args.id) }),
-          });
-        `,
-        )[0];
-        expect(entry.admitted).toBe(false);
-        expect(entry.wrapperNotFirst).toBe(true);
-      });
-
-      it("rejects it in a hoisted wrapper's first-statement invocation", () => {
-        const entry = collectConvexIngressFromSource(
-          "packages/athena-webapp/convex/example/hoistedArgs.ts",
-          `${PROLOGUE}
-          const admittedHandler = admitPublicMutation(definition, async () => null);
-
-          export const write = mutation({
-            args: {},
-            handler: async (ctx, args) => {
-              return admittedHandler(ctx, { ...args, row: await ctx.db.get(args.id) });
-            },
-          });
-        `,
-        )[0];
-        expect(entry.admitted).toBe(false);
-        expect(entry.wrapperNotFirst).toBe(true);
       });
 
       /**
-       * The negative control. The admitted handler is itself an argument, and
-       * everything in it runs AFTER admission — a walk that descended into it
-       * would reject every correctly admitted ingress in the repo.
+       * A rejected shape must SAY which shapes are accepted, so the fix never
+       * requires reading the checker.
        */
-      it("still accepts an invocation whose arguments do no pre-admission work", () => {
-        const entry = inlineHandler(`
-              return await admitPublicMutation(definition, async (ctx, args) => {
-                const row = await ctx.db.get(args.id);
-                await ctx.db.insert("auditLog", { row });
-                return ctx.runMutation(internal.some.write, {});
-              })(ctx, args);
-        `);
-        expect(entry.admitted).toBe(true);
-        expect(entry.wrapperNotFirst).toBeFalsy();
+      it("explains the accepted shapes on every shape rejection", () => {
+        const entry = handler(
+          `async (ctx, args, pre = ctx.db.insert("t", args)) => {
+             try {
+               return await admitPublicMutation(definition, fn)(ctx, args);
+             } catch (error) { throw error; }
+           }`,
+        );
+        expect(entry.wrapperShape).toContain("default value");
       });
-    });
 
-    it("reports no wrapper at all as unadmitted WITHOUT the positional flag", () => {
-      const entry = inlineHandler(`
-            return await someOtherHelper(ctx, args);
-      `);
-      expect(entry.admitted).toBe(false);
-      // Different remediation: "add the wrapper" vs "move the wrapper first".
-      expect(entry.wrapperNotFirst).toBeFalsy();
-    });
-  });
+      /**
+       * A shape violation and a missing wrapper need different remediation, so
+       * a handler with no wrapper at all must NOT carry a shape reason.
+       */
+      it("reports no wrapper at all without a shape reason", () => {
+        const entry = handler(
+          `async (ctx, args) => { return await someOtherHelper(ctx, args); }`,
+        );
+        expect(entry.admitted).toBe(false);
+        expect(entry.wrapperShape).toBeUndefined();
+      });
 
-  /**
-   * Wrapper identity used to be resolved by bare method name on ANY receiver,
-   * so a local shim — or any unrelated module with a same-named export — passed
-   * as canonical composition-root admission. That is an exemption construct by
-   * another name: the rail could be stood down file by file while the checker
-   * reported zero findings.
-   */
-  describe("wrapper identity through property access", () => {
-    it("does not admit a same-named method on an unrelated receiver", () => {
-      const ingress = collectConvexIngressFromSource(
-        "packages/athena-webapp/convex/example/shim.ts",
-        `
-          import { mutation } from "../_generated/server";
-          import { admitPublicMutation } from "../platform/operationAdmission";
-          import { definition } from "../operationAdmission/definitions";
+      /**
+       * A const bound to a MALFORMED application is not a wrapper, and using it
+       * carries the binding site's reason rather than looking like a plain
+       * missing wrapper.
+       */
+      it("does not admit a const bound to a malformed application", () => {
+        const entry = module(
+          `const admittedHandler = admitPublicMutation(definition, await buildHandler());
 
-          const shim = { admitPublicMutation: (d, f) => f };
+           export const write = mutation({ args: {}, handler: admittedHandler });`,
+        );
+        expect(entry.admitted).toBe(false);
+        expect(entry.wrapperShape).toContain("second argument");
+      });
 
-          export const real = mutation({ args: {}, handler: admitPublicMutation(definition, async () => null) });
-          export const shimmed = mutation({
-            args: {},
-            handler: async (ctx, args) => {
-              return shim.admitPublicMutation(definition, async () => null)(ctx, args);
-            },
-          });
-        `,
-      );
-
-      expect(ingress.map((entry) => [entry.id, entry.admitted])).toEqual([
-        ["example/shim:real", true],
-        ["example/shim:shimmed", false],
-      ]);
-    });
-
-    it("does not admit a wrapper-named method on an unrelated namespace import", () => {
-      const [entry] = collectConvexIngressFromSource(
-        "packages/athena-webapp/convex/example/nsHelper.ts",
-        `
-          import { mutation } from "../_generated/server";
-          import * as helpers from "./myHelpers";
-          import { definition } from "../operationAdmission/definitions";
-
-          const run = helpers.admitPublicMutation(definition, async () => null);
-
-          export const write = mutation({
-            args: {},
-            handler: async (ctx, args) => {
-              return run(ctx, args);
-            },
-          });
-        `,
-      );
-
-      expect(entry.admitted).toBe(false);
-    });
-
-    it("admits a namespace import of the composition root itself", () => {
-      const [entry] = collectConvexIngressFromSource(
-        "packages/athena-webapp/convex/example/nsRoot.ts",
-        `
-          import { mutation } from "../_generated/server";
-          import * as admission from "../platform/operationAdmission";
-          import { definition } from "../operationAdmission/definitions";
-
-          export const write = mutation({
-            args: {},
-            handler: async (ctx, args) => {
-              return admission.admitPublicMutation(definition, async () => null)(ctx, args);
-            },
-          });
-        `,
-      );
-
-      expect(entry.admitted).toBe(true);
-      expect(entry.wrapperOffComposition).toBeFalsy();
+      /**
+       * The negative control for the whole grammar: everything inside the
+       * admitted handler runs AFTER admission, so no amount of ctx effects
+       * there may reject the ingress. A rule that descended into it would
+       * reject every correctly admitted ingress in the repository.
+       */
+      it("still accepts arbitrary ctx effects inside the admitted handler", () => {
+        const entry = handler(
+          `admitPublicMutation(definition, async (ctx, args) => {
+             const row = await ctx.db.get(args.id);
+             await ctx.db.insert("auditLog", { row });
+             await ctx.scheduler.runAfter(0, internal.a.b, args);
+             return ctx.runMutation(internal.some.write, {});
+           })`,
+        );
+        expect(entry.admitted).toBe(true);
+        expect(entry.wrapperShape).toBeUndefined();
+      });
     });
   });
 

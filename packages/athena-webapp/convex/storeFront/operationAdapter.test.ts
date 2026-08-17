@@ -1,5 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  GUEST_COOKIE_NAME,
+  STOREFRONT_COOKIE_SECRET_ENV,
+  storefrontCookieSignature,
+} from "../platform/storefrontCookieSignature";
 import { defineOperation, defineReadOperation } from "../operationAdmission/domains/_shapes";
 import { OPERATION_INGRESS_CLAIM_ARG } from "../operationAdmission/types";
 import type { OperationDefinition } from "../operationAdmission/types";
@@ -45,11 +50,111 @@ function ctxWith(rows: Record<string, Record<string, unknown> | null>) {
   };
 }
 
-const claim = (value: Record<string, unknown>) => ({
-  [OPERATION_INGRESS_CLAIM_ARG]: value,
+const SIGNING_SECRET = "test-storefront-cookie-secret";
+
+/**
+ * A claim as the ingress extractor builds it. A `guestId` is accompanied by
+ * the signature the adapter re-derives; `signedGuest: false` models a legacy
+ * or forged claim that names a guest with no valid signature.
+ */
+const claim = (
+  value: Record<string, unknown>,
+  { signedGuest = true }: { signedGuest?: boolean } = {},
+) => ({
+  [OPERATION_INGRESS_CLAIM_ARG]: {
+    ...value,
+    ...(value.guestId && signedGuest
+      ? {
+          guestIdSignature: storefrontCookieSignature(
+            GUEST_COOKIE_NAME,
+            String(value.guestId),
+            SIGNING_SECRET,
+          ),
+        }
+      : {}),
+  },
 });
 
 describe("storefront customer adapter", () => {
+  beforeEach(() => {
+    vi.stubEnv(STOREFRONT_COOKIE_SECRET_ENV, SIGNING_SECRET);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  /**
+   * The adapter is the SECOND check on the guest signature (the ingress
+   * extractor is the first). It re-derives the HMAC rather than trusting that
+   * the claim reached it through that extractor.
+   */
+  it("refuses a guest claim whose signature is missing or wrong", async () => {
+    const ctx = ctxWith({ "guest:guest-1": { storeId: "store-1" } });
+
+    for (const args of [
+      // Named a guest with no signature at all (a forged or legacy claim).
+      claim({ guestId: "guest-1" }, { signedGuest: false }),
+      // Signature present but minted for a DIFFERENT guest id.
+      {
+        [OPERATION_INGRESS_CLAIM_ARG]: {
+          guestId: "guest-1",
+          guestIdSignature: storefrontCookieSignature(
+            GUEST_COOKIE_NAME,
+            "guest-2",
+            SIGNING_SECRET,
+          ),
+        },
+      },
+      // Signature minted with a different secret.
+      {
+        [OPERATION_INGRESS_CLAIM_ARG]: {
+          guestId: "guest-1",
+          guestIdSignature: storefrontCookieSignature(
+            GUEST_COOKIE_NAME,
+            "guest-1",
+            "some-other-secret",
+          ),
+        },
+      },
+    ]) {
+      await expect(
+        createStorefrontCustomerOperationAdapter().resolve(
+          ctx as never,
+          { ...args },
+          customerWrite,
+        ),
+      ).resolves.toMatchObject({ kind: "denied", reason: "claim_missing" });
+    }
+  });
+
+  it("admits a correctly signed guest claim", async () => {
+    const ctx = ctxWith({ "guest:guest-1": { storeId: "store-1" } });
+
+    await expect(
+      createStorefrontCustomerOperationAdapter().resolve(
+        ctx as never,
+        { ...claim({ guestId: "guest-1" }) },
+        customerWrite,
+      ),
+    ).resolves.toMatchObject({
+      actor: { kind: "storefront_customer", guestId: "guest-1" },
+    });
+  });
+
+  it("fails closed on the guest branch when no signing secret is configured", async () => {
+    vi.stubEnv(STOREFRONT_COOKIE_SECRET_ENV, "");
+    const ctx = ctxWith({ "guest:guest-1": { storeId: "store-1" } });
+
+    await expect(
+      createStorefrontCustomerOperationAdapter().resolve(
+        ctx as never,
+        { ...claim({ guestId: "guest-1" }) },
+        customerWrite,
+      ),
+    ).resolves.toMatchObject({ kind: "denied", reason: "claim_missing" });
+  });
+
   it("admits a valid claim with bearer assurance and the store from the claim row", async () => {
     const ctx = ctxWith({ "storeFrontUser:user-1": { storeId: "store-1" } });
 

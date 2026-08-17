@@ -33,10 +33,8 @@ import {
 } from "./storefrontObservabilityReport";
 import { SYNTHETIC_MONITOR_ORIGIN } from "./syntheticMonitor";
 import {
-  assertCustomerOwnsStore,
-  assertGuestMergeGranted,
+  consumeGuestMergeGrant,
   denyCustomerOwnership,
-  guestMergeGrantConsumedPatch,
 } from "./customerOwnership";
 import { requireReportsStoreAccess } from "../reports/access";
 
@@ -397,15 +395,12 @@ export const updateOwnerInternal = internalMutation({
     if (!owner.storeFrontUserId) {
       denyCustomerOwnership();
     }
-    const guest = await ctx.db.get("guest", args.guestId);
-    assertGuestMergeGranted(guest, owner, "analytics");
-    assertCustomerOwnsStore(owner, guest?.storeId);
     // Single-use; consumed inside the same transaction as the merge.
-    await ctx.db.patch(
-      "guest",
-      args.guestId,
-      guestMergeGrantConsumedPatch(guest!, "analytics"),
-    );
+    await consumeGuestMergeGrant(ctx, {
+      guestId: args.guestId,
+      owner,
+      kind: "analytics",
+    });
     return await updateAnalyticsOwnerWithCtx(ctx, {
       guestId: args.guestId,
       userId: owner.storeFrontUserId,

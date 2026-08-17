@@ -1,10 +1,15 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
 import { internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
-import { getCookie, setCookie } from "hono/cookie";
-import { getStoreDataFromRequest } from "../../../utils";
+import { getCookie } from "hono/cookie";
+import {
+  getStoreDataFromRequest,
+  readLegacyUnsignedGuestCookieForBootstrap,
+  readVerifiedGuestIdFromRequest,
+  setSignedGuestCookie,
+} from "../../../utils";
 import {
   admitHttpRead,
   admitHttpRoute,
@@ -39,63 +44,114 @@ guestRoutes.get(
     // passes SERVER_INITIATED_OWNER: the missing check is deliberate and
     // greppable rather than an omitted argument. This is an accepted IDOR on
     // the guest record, the price of keeping bootstrap recovery public.
-    const guestId = getCookie(c, "guest_id");
+    //
+    // BOOTSTRAP MINT POINT #2 (of two). Guest cookies are SIGNED here and at
+    // `GET /storefront`; every cookie this route issues carries an HMAC, and
+    // this is one of only two places allowed to upgrade a legacy unsigned one.
+    const presentedCookie = getCookie(c, "guest_id");
 
     const marker = c.req.query("marker");
 
     const { storeId, organizationId } = getStoreDataFromRequest(c);
 
-    if (!guestId) {
+    if (!presentedCookie) {
       return c.json({ error: "Guest id missing" }, 404);
     }
 
-    try {
+    // A cookie whose signature verifies is a session this server issued to
+    // THIS browser: read it back as before.
+    const verifiedGuestId = readVerifiedGuestIdFromRequest(c);
+    if (verifiedGuestId) {
       const guest = await c.env.runQuery(internal.storeFront.guest.getById, {
-        id: guestId as Id<"guest">,
+        id: verifiedGuestId,
         owner: SERVER_INITIATED_OWNER,
       });
 
-      return c.json(guest);
-    } catch (e) {
-      if ((e as Error).message.includes("ArgumentValidationError")) {
-        let guest = await c.env.runQuery(
-          internal.storeFront.guest.getByMarker,
-          { marker },
-        );
+      if (guest) return c.json(guest);
+    }
 
-        if (!guest) {
-          // `guest.create` requires a store since U6 — a guest that cannot be
-          // clamped to one can never be admitted, so refuse to mint it.
-          if (!storeId) {
-            return c.json({ error: "Store id missing" }, 404);
-          }
+    // ONE-TIME LEGACY UPGRADE, confined to bootstrap. A pre-signing cookie that
+    // still names a real guest row IN THIS STORE is re-minted SIGNED, so an
+    // existing shopper's cart survives the deploy. A cookie carrying a
+    // signature that does NOT verify is tampering, never a legacy value:
+    // `readLegacyUnsignedGuestCookieForBootstrap` refuses it, and that caller
+    // falls through to recovery and gets a NEW session rather than the row
+    // they named.
+    //
+    // RESIDUAL, and the reason this path should be DELETED once legacy cookies
+    // have aged out (90 days, the cookie's own max-age): while it exists, a
+    // caller who knows another shopper's guest id can present it here
+    // unsigned and be handed a signed cookie for it — the round-3 attack plus
+    // one request. That is strictly narrower than the status quo it replaces
+    // (where every caller could do it on every request, forever) and it is the
+    // price of not dropping every existing cart on deploy, but it is a window,
+    // not a closed door.
+    const legacyGuestId = readLegacyUnsignedGuestCookieForBootstrap(c);
+    if (legacyGuestId && storeId) {
+      const upgraded = await c.env.runQuery(
+        internal.storeFront.guest.resolveLegacyGuestForCookieUpgrade,
+        { guestId: legacyGuestId, storeId: storeId as Id<"store"> },
+      );
 
-          guest = await c.env.runMutation(internal.storeFront.guest.create, {
-            marker,
-            creationOrigin: "storefront",
-            storeId: storeId as Id<"store">,
-            organizationId,
-          });
+      if (upgraded) {
+        if (!setSignedGuestCookie(c, upgraded)) {
+          return guestSessionsUnavailable(c);
         }
 
-        if (guest) {
-          setCookie(c, "guest_id", guest?._id, {
-            path: "/",
-            secure: true,
-            domain: "wigclub.store",
-            httpOnly: true,
-            sameSite: "None",
-            maxAge: 90 * 24 * 60 * 60, // 90 days in seconds
-          });
-        }
+        const guest = await c.env.runQuery(internal.storeFront.guest.getById, {
+          id: upgraded,
+          owner: SERVER_INITIATED_OWNER,
+        });
 
         return c.json(guest);
       }
-
-      return c.json({ error: (e as Error).message }, 400);
     }
+
+    // Recovery: the presented cookie is unusable — unknown, malformed or
+    // tampered — so this shopper needs a session. Unchanged from before, other
+    // than the cookie now being signed.
+    let guest = await c.env.runQuery(internal.storeFront.guest.getByMarker, {
+      marker,
+    });
+
+    if (!guest) {
+      // `guest.create` requires a store since U6 — a guest that cannot be
+      // clamped to one can never be admitted, so refuse to mint it.
+      if (!storeId) {
+        return c.json({ error: "Store id missing" }, 404);
+      }
+
+      guest = await c.env.runMutation(internal.storeFront.guest.create, {
+        marker,
+        creationOrigin: "storefront",
+        storeId: storeId as Id<"store">,
+        organizationId,
+      });
+    }
+
+    if (guest && !setSignedGuestCookie(c, guest._id)) {
+      return guestSessionsUnavailable(c);
+    }
+
+    return c.json(guest);
   }),
 );
+
+/**
+ * FAIL CLOSED when `ATHENA_STOREFRONT_COOKIE_SECRET` is unset.
+ *
+ * With no secret nothing can issue a guest cookie that any consumer would
+ * accept, so this route says so rather than hand back a session that would
+ * silently fail every subsequent write. Anonymous catalog browse does not come
+ * through here and is unaffected: `GET /storefront` still returns the store,
+ * just without a guest identity.
+ */
+function guestSessionsUnavailable(c: Context) {
+  console.error(
+    "Guest sessions are unavailable: ATHENA_STOREFRONT_COOKIE_SECRET is not configured",
+  );
+  return c.json({ error: "Guest sessions are unavailable" }, 503);
+}
 
 guestRoutes.put(
   "/",

@@ -18,11 +18,10 @@ import {
 import {
   assertCustomerOwnsRow,
   assertCustomerOwnsStore,
-  assertGuestMergeGranted,
+  consumeGuestMergeGrant,
   customerOwnerActorId,
   customerOwnerValidator,
   denyCustomerOwnership,
-  guestMergeGrantConsumedPatch,
 } from "./customerOwnership";
 
 function formatPointsLabel(points: number) {
@@ -555,7 +554,7 @@ export const awardPointsForPastOrderInternal = internalMutation({
 
 type AwardPointsForGuestOrdersArgs = {
   storeFrontUserId: Id<"storeFrontUser">;
-  guestId: Id<"guest">;
+  guestEmail: string;
 };
 
 async function awardPointsForGuestOrdersWithCtx(
@@ -563,9 +562,10 @@ async function awardPointsForGuestOrdersWithCtx(
   args: AwardPointsForGuestOrdersArgs,
 ) {
   {
-    // Get guest information first
-    const guest = await ctx.db.get("guest", args.guestId);
-    if (!guest || !guest.email) {
+    // The caller (`awardPointsForGuestOrdersInternal`) already loaded the
+    // guest row to check the merge grant, so the email travels in as an
+    // argument instead of being fetched a second time here.
+    if (!args.guestEmail) {
       return { success: false, error: "Guest not found or has no email" };
     }
 
@@ -575,7 +575,7 @@ async function awardPointsForGuestOrdersWithCtx(
     // called directly instead, so the caller's admission is the only one.
     const pastEligibleOrders = await listPastEligibleOrders(ctx, {
       storeFrontUserId: args.storeFrontUserId,
-      email: guest.email,
+      email: args.guestEmail,
     });
 
     if (pastEligibleOrders.length === 0) {
@@ -726,15 +726,17 @@ export const awardPointsForGuestOrdersInternal = internalMutation({
     if (String(args.storeFrontUserId) !== String(customerOwnerActorId(owner))) {
       denyCustomerOwnership();
     }
-    const guest = await ctx.db.get("guest", args.guestId);
-    assertGuestMergeGranted(guest, owner, "rewards");
-    assertCustomerOwnsStore(owner, guest?.storeId);
-    // Single-use; consumed inside the same transaction as the award.
-    await ctx.db.patch(
-      "guest",
-      args.guestId,
-      guestMergeGrantConsumedPatch(guest!, "rewards"),
-    );
-    return await awardPointsForGuestOrdersWithCtx(ctx, args);
+    // Single-use; consumed inside the same transaction as the award. The
+    // loaded guest row is reused for its email below, instead of the callee
+    // fetching it a second time.
+    const guest = await consumeGuestMergeGrant(ctx, {
+      guestId: args.guestId,
+      owner,
+      kind: "rewards",
+    });
+    return await awardPointsForGuestOrdersWithCtx(ctx, {
+      storeFrontUserId: args.storeFrontUserId,
+      guestEmail: guest.email ?? "",
+    });
   },
 });

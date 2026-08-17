@@ -20,11 +20,10 @@ import {
 import {
   assertCustomerOwnsRow,
   assertCustomerOwnsStore,
-  assertGuestMergeGranted,
+  consumeGuestMergeGrant,
   customerOwnerActorId,
   customerOwnerValidator,
   denyCustomerOwnership,
-  guestMergeGrantConsumedPatch,
 } from "./customerOwnership";
 
 const entity = "savedBag";
@@ -265,20 +264,17 @@ export const updateOwner = internalMutation({
     const newOwner = args.owner.storeFrontUserId;
     if (!newOwner) denyCustomerOwnership();
 
-    const guest = await ctx.db.get("guest", args.currentOwner);
-    assertGuestMergeGranted(guest, args.owner, "savedBag");
-    assertCustomerOwnsStore(args.owner, guest?.storeId);
+    // See `bag.updateOwner` / `consumeGuestMergeGrant` for why this is
+    // consumed up front, inside this mutation's own transaction.
+    await consumeGuestMergeGrant(ctx, {
+      guestId: args.currentOwner,
+      owner: args.owner,
+      kind: "savedBag",
+    });
 
     if (String(customerOwnerActorId(args.owner)) !== String(newOwner)) {
       denyCustomerOwnership();
     }
-
-    // Single-use; see `bag.updateOwner` for why it is consumed up front.
-    await ctx.db.patch(
-      "guest",
-      args.currentOwner,
-      guestMergeGrantConsumedPatch(guest!, "savedBag"),
-    );
 
     const savedBag = await ctx.db
       .query(entity)

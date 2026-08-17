@@ -1,4 +1,10 @@
 import type { Id } from "../_generated/dataModel";
+import {
+  GUEST_COOKIE_NAME,
+  type SignedGuestClaimFields,
+  readStorefrontCookieSecret,
+  verifyStorefrontCookieSignature,
+} from "../platform/storefrontCookieSignature";
 import { resolveOperationScope } from "../operationAdmission/scopes";
 import {
   OPERATION_INGRESS_CLAIM_ARG,
@@ -24,10 +30,39 @@ const CUSTOMER_DENIAL_MESSAGE = "This request could not be verified.";
 
 export function readOperationIngressClaim(
   args: Record<string, unknown>,
-): OperationIngressClaim | undefined {
+): (OperationIngressClaim & SignedGuestClaimFields) | undefined {
   const claim = args[OPERATION_INGRESS_CLAIM_ARG];
   if (!claim || typeof claim !== "object") return undefined;
-  return claim as OperationIngressClaim;
+  return claim as OperationIngressClaim & SignedGuestClaimFields;
+}
+
+/**
+ * The claim's guest id, accepted ONLY when its signature verifies here.
+ *
+ * The ingress extractor (`http/utils.ts`) already refuses an unsigned cookie,
+ * so this is the second of two independent checks rather than the only one —
+ * on purpose. The claim reaches this adapter as a plain object on the
+ * admission mutation's `operationArgs` record, so "it must have come from the
+ * extractor" is an assumption about call paths, not a property of the value.
+ * Re-deriving the HMAC costs one hash and makes it a property of the value.
+ *
+ * Unverifiable is ABSENT, not an error: with no secret configured, or with a
+ * legacy unsigned claim, the caller is simply not a guest. A write route then
+ * denies (`claim_missing`) and a browse read falls through to the public
+ * adapter — anonymous catalog browse never depends on this.
+ */
+function verifiedClaimGuestId(
+  claim: (OperationIngressClaim & SignedGuestClaimFields) | undefined,
+): Id<"guest"> | undefined {
+  if (!claim?.guestId) return undefined;
+  return verifyStorefrontCookieSignature(
+    GUEST_COOKIE_NAME,
+    String(claim.guestId),
+    claim.guestIdSignature,
+    readStorefrontCookieSecret(),
+  )
+    ? claim.guestId
+    : undefined;
 }
 
 async function resolveStorefrontCustomer(
@@ -41,7 +76,7 @@ async function resolveStorefrontCustomer(
 
   const claim = readOperationIngressClaim(args);
   const storeFrontUserId = claim?.storeFrontUserId;
-  const guestId = claim?.guestId;
+  const guestId = verifiedClaimGuestId(claim);
 
   if (!storeFrontUserId && !guestId) {
     // A write route that admits customers never admits anonymous callers

@@ -27,7 +27,10 @@ import { describe, expect, it } from "vitest";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import schema from "../schema";
-import { SERVER_INITIATED_OWNER } from "./customerOwnership";
+import {
+  GUEST_MERGE_GRANT_TTL_MS,
+  SERVER_INITIATED_OWNER,
+} from "./customerOwnership";
 
 const modules = Object.fromEntries(
   Object.entries(import.meta.glob("../**/*.ts")).map(([path, loader]) => [
@@ -1156,5 +1159,157 @@ describe("guest merge grant bound", () => {
         ),
       ),
     ).rejects.toThrow(NOT_YOURS);
+  });
+});
+
+/* --------------------------------------------- consumeGuestMergeGrant */
+
+/**
+ * `consumeGuestMergeGrant` (customerOwnership.ts) is the single check-and-
+ * consume sequence behind all five merge callees. These pin two properties a
+ * shared implementation must hold that the previous five hand-written copies
+ * could each get subtly wrong on their own: consumption is scoped to the
+ * KIND actually being merged, not to the grant as a whole, and the 15-minute
+ * window is a fixed constant rather than something that can silently drift.
+ */
+describe("consumeGuestMergeGrant", () => {
+  /** Same helper as the "required owner" describe block above, scoped here. */
+  async function accountIn(
+    t: ReturnType<typeof convexTest>,
+    storeId: Id<"store">,
+    email: string,
+  ) {
+    return t.run(async (ctx) =>
+      ctx.db.insert("storeFrontUser", {
+        email,
+        organizationId: (await ctx.db.get("store", storeId))!.organizationId,
+        storeId,
+      }),
+    );
+  }
+
+  /** Write the server-issued merge grant, exactly as `/auth/verify` does. */
+  async function grantMerge(
+    t: ReturnType<typeof convexTest>,
+    guestId: Id<"guest">,
+    storeFrontUserId: Id<"storeFrontUser">,
+  ) {
+    await t.run((ctx) =>
+      ctx.db.patch("guest", guestId, {
+        mergeGrantedToStoreFrontUserId: storeFrontUserId,
+        mergeGrantExpiresAt: Date.now() + 15 * 60 * 1000,
+        mergeGrantConsumedBy: [],
+      }),
+    );
+  }
+
+  it("pins the merge grant TTL to 15 minutes", () => {
+    // A change to this constant changes a stated security property (the
+    // window an authenticated sign-in opens for a merge) — this test exists
+    // so that change is a visible diff to a red test, not a silent edit.
+    expect(GUEST_MERGE_GRANT_TTL_MS).toBe(15 * 60 * 1000);
+  });
+
+  /**
+   * Consuming ONE merge kind must not consume any other kind under the same
+   * grant, and each kind is independently single-use. This is the property a
+   * copy-paste of the wrong kind string between two callees (or a helper that
+   * dropped the `kind` parameter) would silently break: every kind but the
+   * one actually used would look "still granted" forever, or every kind would
+   * look "consumed" after the first merge — this test fails either way.
+   */
+  it("consumes each merge kind independently, per callee", async () => {
+    const t = convexTest(schema, modules);
+    const seed = await seedTwoShoppers(t);
+    const account = await accountIn(t, seed.storeId, "per-kind@test");
+    await grantMerge(t, seed.alice, account);
+    await t.run((ctx) =>
+      ctx.db.insert("savedBag", {
+        items: [],
+        storeFrontUserId: seed.alice,
+        storeId: seed.storeId,
+        updatedAt: Date.now(),
+      }),
+    );
+
+    const owner = { storeFrontUserId: account, storeId: seed.storeId };
+
+    const merges: Array<[string, () => Promise<unknown>]> = [
+      [
+        "bag",
+        () =>
+          t.run((ctx) =>
+            ctx.runMutation(internal.storeFront.bag.updateOwner, {
+              currentOwner: seed.alice,
+              owner,
+            }),
+          ),
+      ],
+      [
+        "savedBag",
+        () =>
+          t.run((ctx) =>
+            ctx.runMutation(internal.storeFront.savedBag.updateOwner, {
+              currentOwner: seed.alice,
+              owner,
+            }),
+          ),
+      ],
+      [
+        "onlineOrder",
+        () =>
+          t.run((ctx) =>
+            ctx.runMutation(
+              internal.storeFront.onlineOrder.updateOwnerInternal,
+              { currentOwner: seed.alice, owner },
+            ),
+          ),
+      ],
+      [
+        "analytics",
+        () =>
+          t.run((ctx) =>
+            ctx.runMutation(internal.storeFront.analytics.updateOwnerInternal, {
+              guestId: seed.alice,
+              owner,
+            }),
+          ),
+      ],
+      [
+        "rewards",
+        () =>
+          t.run((ctx) =>
+            ctx.runMutation(
+              internal.storeFront.rewards.awardPointsForGuestOrdersInternal,
+              { storeFrontUserId: account, guestId: seed.alice, owner },
+            ),
+          ),
+      ],
+    ];
+
+    // Each kind, in turn: the FIRST call under the shared grant succeeds
+    // (consuming ONLY that kind — the four kinds not yet run must still be
+    // available), and a SECOND call for the same kind is a replay and is
+    // refused.
+    for (const [name, run] of merges) {
+      await expect(run(), `${name} (first call)`).resolves.not.toThrow();
+      await expect(run(), `${name} (replay)`).rejects.toThrow(NOT_YOURS);
+    }
+
+    // Outcome, not a call count: every kind ended up consumed exactly once,
+    // and none was skipped or double counted.
+    await expect(
+      t.run(async (ctx) =>
+        (await ctx.db.get("guest", seed.alice))?.mergeGrantConsumedBy
+          ?.slice()
+          .sort(),
+      ),
+    ).resolves.toEqual([
+      "analytics",
+      "bag",
+      "onlineOrder",
+      "rewards",
+      "savedBag",
+    ]);
   });
 });

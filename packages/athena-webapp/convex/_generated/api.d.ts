@@ -310,6 +310,7 @@ import type * as platform_admissionEntrypoints from "../platform/admissionEntryp
 import type * as platform_capabilityCatalog from "../platform/capabilityCatalog.js";
 import type * as platform_operationAdmission from "../platform/operationAdmission.js";
 import type * as platform_readIntentCatalog from "../platform/readIntentCatalog.js";
+import type * as platform_storefrontCookieSignature from "../platform/storefrontCookieSignature.js";
 import type * as platform_storefrontOrigins from "../platform/storefrontOrigins.js";
 import type * as pos_application_commands_adjustTransactionItems from "../pos/application/commands/adjustTransactionItems.js";
 import type * as pos_application_commands_assignCustomer from "../pos/application/commands/assignCustomer.js";
@@ -963,6 +964,7 @@ declare const fullApi: ApiFromModules<{
   "platform/capabilityCatalog": typeof platform_capabilityCatalog;
   "platform/operationAdmission": typeof platform_operationAdmission;
   "platform/readIntentCatalog": typeof platform_readIntentCatalog;
+  "platform/storefrontCookieSignature": typeof platform_storefrontCookieSignature;
   "platform/storefrontOrigins": typeof platform_storefrontOrigins;
   "pos/application/commands/adjustTransactionItems": typeof pos_application_commands_adjustTransactionItems;
   "pos/application/commands/assignCustomer": typeof pos_application_commands_assignCustomer;

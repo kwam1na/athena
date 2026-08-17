@@ -120,6 +120,19 @@ savedBagRoutes.post(
         if (isCustomerOwnershipDenial(error)) {
           return c.json({ error: "Forbidden" }, 403);
         }
+        // `currentOwnerId` is still caller-supplied. A non-id string reaches
+        // the callee's `v.id("guest")` argument validator and raises rather
+        // than denying — that is a malformed request, not a server fault.
+        // (Production Convex names this `ArgumentValidationError`; the
+        // in-process test harness in `convex-test` raises a plain `Error`
+        // prefixed `Validator error:` for the same condition.)
+        if (
+          error instanceof Error &&
+          (error.message.includes("ArgumentValidationError") ||
+            error.message.includes("Validator error"))
+        ) {
+          return c.json({ error: "Invalid guest id" }, 400);
+        }
         throw error;
       }
     },

@@ -7,7 +7,10 @@ import {
   verifyStorefrontAuthCodeRouteOperationDefinition,
 } from "../../../../operationAdmission/domains/u11_httpCore_definitions";
 import { admitHttpRoute } from "../../../../platform/operationAdmission";
-import { getStoreDataFromRequest } from "../../../utils";
+import {
+  getStoreDataFromRequest,
+  readVerifiedGuestIdFromRequest,
+} from "../../../utils";
 import { Id } from "../../../../_generated/dataModel";
 import { getCookie, setCookie } from "hono/cookie";
 import {
@@ -70,29 +73,42 @@ authRoutes.post(
             // `claimGuestId` cookie comparison could never do, since both
             // sides of that comparison arrived on the same request.
             //
-            // Reading the `guest_id` cookie HERE is a different question from
-            // reading it at merge time. There, the cookie was being asked to
-            // prove possession, which a caller-set value cannot do. Here the
-            // server is choosing which guest row to bless on the back of a
-            // verified email code, and `grantMergeToStoreFrontUser` still
-            // bounds that row to the admitted store. The residual — someone
-            // who knows a guest id presenting it while signing in to their own
-            // account — is the sign-in flow's pre-existing trust in the
-            // presented guest row (`verifyCodeWithCtx` already inherits the
-            // new account's name from it), documented in
-            // `storeFront/customerOwnership.ts`.
-            const guestId = getCookie(c, "guest_id");
+            // The guest id is the VERIFIED one, never the raw cookie. Round 3
+            // minted the grant from `getCookie(c, "guest_id")`, so anyone who
+            // knew a victim's guest id could present it while signing in to
+            // their OWN account and receive a grant on the victim's row — the
+            // merge then passed every check. A signed cookie is what closes
+            // that: an id here carries an HMAC this server minted for this
+            // browser's guest session, so knowing the id is no longer enough.
+            //
+            // There is deliberately NO legacy upgrade on this path. A
+            // pre-signing cookie is upgraded ONLY at the two bootstrap mint
+            // points; upgrading it here would restore exactly the primitive
+            // above.
+            //
+            // Isolated try/catch: a grant that fails to mint must not turn an
+            // authenticated sign-in into a 400 with a BURNED verification
+            // code. The shopper is signed in either way; only the merge goes
+            // unauthorized, and they can re-run it by signing in again.
+            const guestId = readVerifiedGuestIdFromRequest(c);
             if (guestId) {
-              await c.env.runMutation(
-                internal.storeFront.guest.grantMergeToStoreFrontUser,
-                {
-                  guestId,
-                  owner: {
-                    storeFrontUserId: res.user._id,
-                    storeId: owner.storeId,
+              try {
+                await c.env.runMutation(
+                  internal.storeFront.guest.grantMergeToStoreFrontUser,
+                  {
+                    guestId,
+                    owner: {
+                      storeFrontUserId: res.user._id,
+                      storeId: owner.storeId,
+                    },
                   },
-                },
-              );
+                );
+              } catch (grantError) {
+                console.error(
+                  "Failed to mint guest merge grant; sign-in still succeeded",
+                  grantError,
+                );
+              }
             }
 
             setCookie(c, "user_id", res.user._id, {

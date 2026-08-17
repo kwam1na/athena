@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
+import type { MutationCtx } from "../_generated/server";
 
 /**
  * Ownership propagation for storefront-reachable internal functions.
@@ -143,11 +144,32 @@ export const GUEST_MERGE_KINDS = [
 
 export type GuestMergeKind = (typeof GUEST_MERGE_KINDS)[number];
 
-/** The grant columns, as the merge callees see them on a loaded guest row. */
+/**
+ * The runtime twin of `GuestMergeKind`, for the one place a kind could ever
+ * legitimately arrive as untrusted input. None of the five callees below take
+ * `kind` as a client-supplied argument today — it is always a literal in the
+ * callee's own code — but this validator exists so that if one ever does, an
+ * invalid kind is a Convex argument-validation error rather than a string that
+ * silently passes through.
+ */
+export const guestMergeKindValidator = v.union(
+  ...GUEST_MERGE_KINDS.map((kind) => v.literal(kind)),
+);
+
+/**
+ * The grant columns, as the merge callees see them on a loaded guest row.
+ *
+ * `mergeGrantConsumedBy` is typed as `GuestMergeKind[]`, not `string[]`: the
+ * schema itself still stores a bare `v.array(v.string())` (schema.ts is a
+ * shared file outside this module's edit surface), so this is a boundary
+ * assertion, not a runtime guarantee from the database. It is sound because
+ * `consumeGuestMergeGrant` below is the ONLY writer of this column, and it
+ * only ever appends a `GuestMergeKind` literal.
+ */
 export type GuestMergeGrantRow = {
   mergeGrantedToStoreFrontUserId?: Id<"storeFrontUser">;
   mergeGrantExpiresAt?: number;
-  mergeGrantConsumedBy?: string[];
+  mergeGrantConsumedBy?: GuestMergeKind[];
 };
 
 /**
@@ -195,13 +217,65 @@ export function assertGuestMergeGranted(
 export function guestMergeGrantConsumedPatch(
   guest: GuestMergeGrantRow,
   kind: GuestMergeKind,
-): { mergeGrantConsumedBy: string[] } {
+): { mergeGrantConsumedBy: GuestMergeKind[] } {
   const consumed = guest.mergeGrantConsumedBy ?? [];
   return {
     mergeGrantConsumedBy: consumed.includes(kind)
       ? consumed
       : [...consumed, kind],
   };
+}
+
+/**
+ * The check-and-consume sequence every guest→account merge callee needs, in
+ * one place instead of five.
+ *
+ * `bag.updateOwner`, `savedBag.updateOwner`, `onlineOrder.updateOwnerInternal`,
+ * `analytics.updateOwnerInternal` and `rewards.awardPointsForGuestOrdersInternal`
+ * each used to hand-repeat: load the guest row, assert the grant, assert the
+ * store bound, then patch the consumed-by list. This is that sequence, once.
+ *
+ * It loads the guest row, then in order:
+ *
+ *  1. `assertGuestMergeGranted` — the grant must name `owner.storeFrontUserId`,
+ *     be unexpired, and not already list `kind` as consumed. Denies otherwise.
+ *  2. `assertCustomerOwnsStore` — the store bound is kept ON TOP OF the grant,
+ *     not replaced by it: a grant minted for the right account on a guest row
+ *     from a different store still does not authorize the merge.
+ *  3. Records consumption of `kind` on the guest row. This happens inside the
+ *     caller's own mutation transaction (Convex mutations are transactional),
+ *     so a later throw in the caller's own merge work rolls the consumption
+ *     back with it — a merge that returns is a merge that consumed its grant,
+ *     and a merge that throws consumes nothing.
+ *
+ * Returns the loaded guest row so a callee that needs more than the
+ * authorization decision (e.g. `rewards` needs `guest.email`) does not have
+ * to fetch it a second time.
+ */
+export async function consumeGuestMergeGrant(
+  ctx: MutationCtx,
+  args: { guestId: Id<"guest">; owner: CustomerOwner; kind: GuestMergeKind },
+): Promise<Doc<"guest">> {
+  const guest = await ctx.db.get("guest", args.guestId);
+
+  // `mergeGrantConsumedBy` is stored as a bare `string[]` in the schema (a
+  // shared file outside this module's edit surface); this module is the only
+  // writer of it, so treating a freshly-loaded row as a `GuestMergeGrantRow`
+  // is sound even though the two types are not structurally assignable.
+  const grantView = guest as unknown as GuestMergeGrantRow | null;
+
+  assertGuestMergeGranted(grantView, args.owner, args.kind);
+  assertCustomerOwnsStore(args.owner, guest?.storeId);
+
+  await ctx.db.patch(
+    "guest",
+    args.guestId,
+    guestMergeGrantConsumedPatch(grantView!, args.kind),
+  );
+
+  // `assertGuestMergeGranted` denies (throws) whenever `guest` is nullish, so
+  // reaching here means the row exists.
+  return guest!;
 }
 
 /**

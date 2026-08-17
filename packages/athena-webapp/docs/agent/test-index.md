@@ -218,6 +218,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/platform/operationAdmission.test.ts`](../../convex/platform/operationAdmission.test.ts)
 - [`convex/platform/readIntentCatalog.test.ts`](../../convex/platform/readIntentCatalog.test.ts)
 - [`convex/platform/sharedDemoCanonicalSites.test.ts`](../../convex/platform/sharedDemoCanonicalSites.test.ts)
+- [`convex/platform/storefrontCookieSignature.test.ts`](../../convex/platform/storefrontCookieSignature.test.ts)
 - [`convex/platform/storefrontOrigins.test.ts`](../../convex/platform/storefrontOrigins.test.ts)
 - [`convex/pos/application/adjustTransactionItems.test.ts`](../../convex/pos/application/adjustTransactionItems.test.ts)
 - [`convex/pos/application/commands/assignCustomer.test.ts`](../../convex/pos/application/commands/assignCustomer.test.ts)

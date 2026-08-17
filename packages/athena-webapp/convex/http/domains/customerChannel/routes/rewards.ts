@@ -22,6 +22,7 @@ import {
 import {
   isCustomerOwnershipDenial,
   parseIngressJson,
+  tryParseIngressJson,
   requireAdmittedCustomerOwner,
 } from "./admittedCustomer";
 
@@ -226,7 +227,14 @@ rewardsRoutes.post(
   admitHttpRoute(
     awardGuestOrderPointsRouteOperationDefinition,
     async (c, admitted) => {
-      const { guestId } = parseIngressJson(admitted);
+      // A malformed body is a client error, answered here rather than left to
+      // escape as a `SyntaxError` that Convex renders as a server fault. Same
+      // shape as the other merge routes (`bag`, `savedBag`, `onlineOrder`).
+      const body = tryParseIngressJson(admitted);
+      if (!body) {
+        return c.json({ error: "Invalid request body" }, 400);
+      }
+      const { guestId } = body;
 
       // The account the points land on is the admitted shopper's, never the
       // body's `userId` — that field is no longer read at all.
@@ -260,6 +268,19 @@ rewardsRoutes.post(
         // case for this endpoint — surfaced as a 500.
         if (isCustomerOwnershipDenial(error)) {
           return c.json({ error: "Forbidden" }, 403);
+        }
+        // `guestId` is still caller-supplied. A non-id string reaches the
+        // callee's `v.id("guest")` argument validator and raises rather than
+        // denying — that is a malformed request, not a server fault.
+        // (Production Convex names this `ArgumentValidationError`; the
+        // in-process test harness in `convex-test` raises a plain `Error`
+        // prefixed `Validator error:` for the same condition.)
+        if (
+          error instanceof Error &&
+          (error.message.includes("ArgumentValidationError") ||
+            error.message.includes("Validator error"))
+        ) {
+          return c.json({ error: "Invalid guest id" }, 400);
         }
         throw error;
       }

@@ -13,7 +13,7 @@ applies_when:
   - "Shared-demo write access must use the same domain path as normal users without becoming full administrator auth"
   - "A migration wave needs exact inventory coverage before all writes can move to a new admission layer"
 tags: [athena, convex, operation-admission, shared-demo, authz, static-checker]
-delivery_diff_fingerprint: 64b5253e737a4bf198006fd29e176cdfbeee7d15503090a800463e0e57e042fd
+delivery_diff_fingerprint: 09ffc96767f99138b72b462e47b6915b02163335fc1a00ce89d1fae583298020
 ---
 
 # Athena Operation Admission Rail

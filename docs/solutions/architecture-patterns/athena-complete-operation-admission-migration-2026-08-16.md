@@ -14,7 +14,7 @@ applies_when:
   - "HTTP routes authenticate from a cookie id read directly out of the request"
   - "A migration must move ~400 call sites without changing normal-user behavior"
 tags: [athena, convex, operation-admission, shared-demo, authz, static-checker, http-ingress, derived-invariants]
-delivery_diff_fingerprint: 64b5253e737a4bf198006fd29e176cdfbeee7d15503090a800463e0e57e042fd
+delivery_diff_fingerprint: 09ffc96767f99138b72b462e47b6915b02163335fc1a00ce89d1fae583298020
 ---
 
 # Completing an Admission Rail — Deriving Invariants Instead of Listing Them
@@ -230,6 +230,7 @@ any deploy or the corresponding ingress denies everything:
 | `MTN_MOMO_COLLECTIONS_CALLBACK_SECRET` | MTN MoMo callback rejects — **also** must be appended to the registered callback URL as `callbackSecret=…` |
 | `WALKTHROUGH_ALLOWED_ORIGINS` | marketing walkthrough / funnel writes deny |
 | `ATHENA_WAIVER_BROKER_SECRET` | harness waiver routes deny |
+| `ATHENA_STOREFRONT_COOKIE_SECRET` | **new** — no guest session can be issued or accepted, so every guest-identified path (cart, saved bag, orders, rewards, the guest→account merge) goes dark; anonymous catalog browse is unaffected |
 
 One data prerequisite: the **guest `storeId` backfill** must run before deploy.
 `POST /guests` now requires a store and mints a guest only once the store
@@ -253,6 +254,20 @@ resolves, so guest rows without `storeId` cannot be re-owned afterwards.
 
 Worth recording, because all four were invisible to the units that introduced
 them and only surfaced when the closure unit went looking.
+
+**A blacklist of bad shapes cannot win; a whitelist of one good shape can.**
+The structural checker was defeated in three consecutive review rounds, each
+time by an expression form its blacklist did not enumerate: a const-bound
+wrapper, work hidden in the invocation's arguments, an IIFE argument, and a
+composition-root match on an unresolved **path suffix** that any shim — or a
+package named `@evil/operationAdmission` — satisfied. Enumerating bad shapes is
+unbounded. The checker now accepts a **closed grammar**: the wrapper identifier
+must resolve, by fully resolved module path, to the composition root, and the
+handler must be exactly `handler: wrapper(definition, handler)` (or a top-level
+const of that shape). Everything else raises `wrapper-shape` with a rationale
+naming the accepted form. A novel shape now fails closed instead of slipping
+through, and the repo's own call sites were adjusted to fit — the grammar is the
+contract.
 
 **A wrapper "somewhere in the handler" is not admission.** The checker
 originally accepted an inline handler as admitted if a wrapper call appeared
@@ -342,29 +357,60 @@ account. The delivery had also shipped comments and a solution-note paragraph
 asserting the opposite ("they hold no such cookie") — the exact defect this
 work exists to remove, committed while removing it.
 
-The real fix is a **server-issued merge grant**. `POST /auth/verify` writes
-`mergeGrantedToStoreFrontUserId` onto the guest row after it has authenticated
-the account; the merge callees read the grant off the row, and the caller
-supplies no evidence at all. Stated precisely, because the previous round's
-imprecision is the whole lesson:
+That fix — a server-issued grant — was **still not enough**, and a fourth round
+found why: `POST /auth/verify` minted the grant from the caller's **raw**
+`guest_id` cookie, so an attacker presenting a victim's id while signing in to
+their own account received a grant on it. Three rounds, three versions of the
+same bug: a body field, a cookie compared against itself, a cookie the mint
+trusted. The server had no way to tell a guest session it issued to *this
+browser* from an id somebody typed.
+
+The complete fix is two layers:
+
+**The guest cookie is signed.** `guest_id` is minted as `<id>.<hmac>` at the two
+bootstrap routes and verified in constant time by every consumer
+(`convex/platform/storefrontCookieSignature.ts`, gated on
+`ATHENA_STOREFRONT_COOKIE_SECRET`). An unsigned or tampered cookie is treated as
+**absent**, not as an error — a stale cookie is a shopper to re-bootstrap, not a
+fault to page on. Unset secret fails closed: no guest is admitted, while
+anonymous catalog browse keeps working.
+
+A hand-rolled synchronous HMAC rather than `hono/cookie`'s signed helpers,
+because verification also happens inside `getStorefrontClaimFromRequest`, which
+the rail calls **synchronously** — and widening the rail's signature was outside
+this change's blast radius.
+
+**The merge authorizes on the server-issued grant**, now minted only from a
+verified guest id. Stated precisely, because the previous rounds' imprecision is
+the whole lesson:
 
 - It ends the "any signed-in shopper may absorb any guest id, at any time, with
   one request" shape. A merge is possible only inside a **15-minute window**
   opened by an authenticated sign-in, **once per merge kind** (bag, savedBag,
   onlineOrder, analytics, rewards), and **bounded to the admitted store**.
-- It does **not** make a guest id unguessable, and it does **not** stop someone
-  who knows a guest id from presenting that cookie while signing in to their
-  own account — `verifyCodeWithCtx` already treats the presented guest row as
-  the row the new account inherits from, so that trust predates this change.
-  That residual is a bearer-id property of the sign-in flow, not something the
-  merge callees can close, and it is tracked in **V26-1240**.
+- A live, unconsumed grant is never re-pointed to a different account, so a
+  second sign-in cannot strand a half-finished merge sequence.
+- **The remaining residual is the legacy-cookie upgrade window.** Pre-signing
+  cookies still in browsers are re-minted signed at bootstrap — otherwise the
+  deploy would empty every existing cart — and while that path exists, someone
+  who knows another shopper's guest id can present it unsigned at bootstrap and
+  be handed a signed cookie for it. The upgrade is confined to the two
+  bootstrap routes (never at `/auth/verify`, never at a merge), and a cookie
+  carrying a signature that does not verify is treated as tampering rather than
+  as legacy. **Delete this path once legacy cookies have aged out — 90 days,
+  the cookie's own max-age.** Tracked in **V26-1240**.
+- `user_id` is deliberately still an unsigned bearer cookie. Signing it is not a
+  small delta — it changes the authenticated-shopper claim path rather than the
+  guest one — so it stays with the session-assurance work in **V26-1240**.
 
 Three lessons, in order of how much they cost:
 
-1. **"Caller-supplied" includes cookies.** This was mis-assumed twice, in two
-   different rounds, by different authors. A guard that compares two
-   caller-supplied values is not a guard; the fix has to be a value the server
-   issued and can look up, not one the request carries.
+1. **"Caller-supplied" includes cookies — and it kept being forgotten.** Three
+   rounds, three versions of the same bug, each shipped believing it was fixed.
+   A guard comparing two caller-supplied values is not a guard, and a
+   server-issued token minted *from* a caller-supplied value inherits that
+   value's trust class. The fix has to be something the server issued **and**
+   can verify it issued to this caller.
 2. **State what a control does NOT buy, at the control.** The residual above is
    written into `customerOwnership.ts` beside the mechanism. A comment naming
    only the guarantee is how the round-2 version survived review by its own
@@ -447,6 +493,7 @@ on V26-1237 / V26-1238 and reflected in the regenerated caller table at
 
 - [Athena Operation Admission Rail (2026-07-21)](./athena-operation-admission-rail-2026-07-21.md) — established the write rail; superseded in scope by this note.
 - [Athena Shared Demo Read Admission Rail (2026-07-22)](./athena-shared-demo-read-admission-rail-2026-07-22.md) — established the read rail; superseded in scope by this note.
+- [Verify the Fix — three rounds where the previous round's fix was the defect](../workflow-issues/verifying-a-fix-actually-fixes-2026-08-17.md) — the workflow learning this delivery produced, extracted so it is findable by someone who is not reading about admission rails.
 - [Athena Public Operation Admission (2026-07-24)](./athena-public-operation-admission-2026-07-24.md)
 - [Reconciling divergent WIP read contracts, not deletions (2026-07-23)](../workflow-issues/reconciling-divergent-wip-read-contracts-not-deletions-2026-07-23.md) — the test this delivery had to pass. That note's lesson is **"intent is recorded somewhere; inference is a last resort"**: its own episode ended in a deletion, and what it argues against is inferring deletion-intent from a diff rather than checking the actual record. This delivery has that record — a written contract (R10 in the plan, restated in the ticket) names every construct to delete and requires each one's invariants to be re-derived rather than dropped. The deletions here are executions of a recorded decision, not inferences from a diff. (A secondary and weaker point: the deleted constructs were duplicates of facts the definitions already carried, so nothing was lost that was not stated elsewhere. The recorded-intent test is the one that actually governs.)
 - Plan: `docs/plans/2026-08-16-002-feat-complete-operation-admission-migration-plan.md`

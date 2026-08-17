@@ -42,16 +42,32 @@ import {
 import { U10_HTTP_CUSTOMER_OPERATION_DEFINITIONS } from "../../../../operationAdmission/domains/u10_httpCustomer_definitions";
 import { U10_HTTP_CUSTOMER_READ_OPERATION_DEFINITIONS } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
 
+import {
+  GUEST_COOKIE_NAME,
+  STOREFRONT_COOKIE_SECRET_ENV,
+  signStorefrontCookieValue,
+} from "../../../../platform/storefrontCookieSignature";
+
 import { bagRoutes } from "./bag";
 import { meRoutes } from "./me";
 import { onlineOrderRoutes } from "./onlineOrder";
 import { paystackRoutes } from "./paystack";
+import { rewardsRoutes } from "./rewards";
 import { reviewRoutes } from "./reviews";
 import { savedBagRoutes } from "./savedBag";
 import { userRoutes } from "./user";
 
 const ALLOWED_ORIGIN = "https://shop.test";
 const ORIGIN_ENV = "ATHENA_STOREFRONT_ALLOWED_ORIGINS";
+
+/**
+ * A `guest_id` cookie is only a claim when it carries the server's signature,
+ * so every guest cookie in this file is minted the way the two bootstrap
+ * routes mint it.
+ */
+const COOKIE_SECRET = "test-storefront-cookie-secret";
+const guestCookie = (guestId: string) =>
+  `guest_id=${signStorefrontCookieValue(GUEST_COOKIE_NAME, guestId, COOKIE_SECRET)}`;
 
 const ADMIT_WRITE = getFunctionName(
   internal.platform.admissionEntrypoints.admitOperation,
@@ -328,6 +344,7 @@ function request(
 
 const withOrigin = async (run: () => Promise<void>) => {
   vi.stubEnv(ORIGIN_ENV, ALLOWED_ORIGIN);
+  vi.stubEnv(STOREFRONT_COOKIE_SECRET_ENV, COOKIE_SECRET);
   try {
     await run();
   } finally {
@@ -462,7 +479,7 @@ describe("customer write routes", () => {
         // The claim row says store-1, the cookie claims store-2.
         "user_id=user-A; store_id=store-2",
         // A guest with no store can never be clamped, so it is never admitted.
-        "guest_id=guest-storeless; store_id=store-1",
+        `${guestCookie("guest-storeless")}; store_id=store-1`,
       ];
 
       for (const cookie of cases) {
@@ -493,7 +510,7 @@ describe("customer write routes", () => {
       await onlineOrderRoutes.fetch(
         request("/owner", {
           method: "POST",
-          cookie: "user_id=user-A; guest_id=guest-A; store_id=store-1",
+          cookie: `user_id=user-A; ${guestCookie("guest-A")}; store_id=store-1`,
           origin: ALLOWED_ORIGIN,
           body: { currentOwnerId: "guest-A", newOwnerId: "user-B" },
         }),
@@ -526,7 +543,7 @@ describe("customer write routes", () => {
       await bagRoutes.fetch(
         request("/bag-1/items", {
           method: "POST",
-          cookie: "user_id=user-A; guest_id=guest-A; store_id=store-1",
+          cookie: `user_id=user-A; ${guestCookie("guest-A")}; store_id=store-1`,
           origin: ALLOWED_ORIGIN,
           body: { productId: "product-1", quantity: 1 },
         }),
@@ -548,7 +565,7 @@ describe("customer write routes", () => {
       await bagRoutes.fetch(
         request("/bag-1/owner", {
           method: "POST",
-          cookie: "user_id=user-A; guest_id=guest-A; store_id=store-1",
+          cookie: `user_id=user-A; ${guestCookie("guest-A")}; store_id=store-1`,
           origin: ALLOWED_ORIGIN,
           // A forged guest id in the body. It stays the TARGET; the callee
           // refuses it because that row carries no server-issued grant.
@@ -570,6 +587,12 @@ describe("customer write routes", () => {
       for (const [name, router, path] of [
         ["bag", bagRoutes, "/bag-1/owner"],
         ["savedBag", savedBagRoutes, "/saved-1/owner"],
+        // `onlineOrder` and `rewards` imported `tryParseIngressJson` but never
+        // called it, so a truncated body on these two routes escaped as an
+        // unhandled `SyntaxError` (a 500) instead of the 400 the sibling merge
+        // routes already answered.
+        ["onlineOrder", onlineOrderRoutes, "/owner"],
+        ["rewards", rewardsRoutes, "/award-guest-orders"],
       ] as const) {
         const test = harness(STORE_ROWS);
 
@@ -578,7 +601,7 @@ describe("customer write routes", () => {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Cookie: "user_id=user-A; guest_id=guest-A; store_id=store-1",
+              Cookie: `user_id=user-A; ${guestCookie("guest-A")}; store_id=store-1`,
               Origin: ALLOWED_ORIGIN,
             },
             body: '{"currentOwnerId":',
@@ -602,7 +625,7 @@ describe("customer write routes", () => {
       await reviewRoutes.fetch(
         request("/review-1/helpful", {
           method: "POST",
-          cookie: "guest_id=guest-A; store_id=store-1",
+          cookie: `${guestCookie("guest-A")}; store_id=store-1`,
           origin: ALLOWED_ORIGIN,
           body: { userId: "user-B" },
         }),

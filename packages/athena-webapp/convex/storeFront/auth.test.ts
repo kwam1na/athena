@@ -37,6 +37,11 @@ import {
   admitReadOperationWithCtx,
 } from "../platform/operationAdmission";
 import { CUSTOMER_OWNERSHIP_DENIED } from "./customerOwnership";
+import {
+  GUEST_COOKIE_NAME,
+  STOREFRONT_COOKIE_SECRET_ENV,
+  signStorefrontCookieValue,
+} from "../platform/storefrontCookieSignature";
 
 import { authRoutes } from "../http/domains/core/routes/auth";
 
@@ -103,8 +108,15 @@ const ROUTE_ROWS: Rows = {
   },
 };
 
-const CLAIM_COOKIE =
-  "guest_id=guest-A; store_id=store-1; organization_id=org-1";
+// The guest cookie is SIGNED: an unsigned `guest_id` is not a claim at all
+// since the storefront cookie-signing change.
+const COOKIE_SECRET = "test-storefront-cookie-secret";
+
+const CLAIM_COOKIE = `guest_id=${signStorefrontCookieValue(
+  GUEST_COOKIE_NAME,
+  "guest-A",
+  COOKIE_SECRET,
+)}; store_id=store-1; organization_id=org-1`;
 
 const ADMITTED_OWNER = { guestId: "guest-A", storeId: "store-1" };
 
@@ -124,6 +136,7 @@ const postVerify = (test: ReturnType<typeof harness>, body: unknown, cookie = CL
 
 const withOrigin = async (run: () => Promise<void>) => {
   vi.stubEnv(ORIGIN_ENV, ALLOWED_ORIGIN);
+  vi.stubEnv(STOREFRONT_COOKIE_SECRET_ENV, COOKIE_SECRET);
   try {
     await run();
   } finally {

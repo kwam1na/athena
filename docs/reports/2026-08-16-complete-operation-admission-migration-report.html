@@ -7,7 +7,7 @@
   <body>
     <article
       data-athena-landed-change-report="v2"
-      data-athena-report-diff-fingerprint="64b5253e737a4bf198006fd29e176cdfbeee7d15503090a800463e0e57e042fd"
+      data-athena-report-diff-fingerprint="09ffc96767f99138b72b462e47b6915b02163335fc1a00ce89d1fae583298020"
     >
       <header data-report-section="header">
         <h1>Closing the Admission Rail</h1>
@@ -605,6 +605,23 @@ handler: admitPublicMutation(createOrganizationOperationDefinition, ...)</code><
             guarantee.
           </li>
           <li>
+            <strong>The checker was defeated three rounds running, so it stopped
+            being a blacklist.</strong> Each round found an expression form the
+            previous rule did not enumerate: a const-bound wrapper, work hidden
+            in the invocation's arguments, an IIFE argument, and a
+            composition-root match on an unresolved <em>path suffix</em> that
+            any shim — or a package named <code>@evil/operationAdmission</code>
+            — satisfied. Enumerating bad shapes is unbounded. The checker now
+            accepts a <strong>closed grammar</strong>: the wrapper must resolve,
+            by fully resolved module path, to the composition root, and the
+            handler must be exactly
+            <code>handler: wrapper(definition, handler)</code>. Everything else
+            raises <code>wrapper-shape</code>. A novel shape fails closed
+            instead of slipping through, and the repo's own call sites were
+            adjusted to fit — the grammar is the contract, not a description of
+            what happened to be there.
+          </li>
+          <li>
             <strong>P1 — a hole in the new checker rule.</strong> It accepted
             <code>const run = admitPublicMutation(def, fn)</code> as proof the
             wrapper ran first. A declaration is not an invocation: a handler
@@ -642,11 +659,24 @@ handler: admitPublicMutation(createOrganizationOperationDefinition, ...)</code><
           remove, committed while removing it.
         </p>
         <p>
-          The real fix is a <strong>server-issued merge grant</strong>.
-          <code>POST /auth/verify</code> writes
-          <code>mergeGrantedToStoreFrontUserId</code> onto the guest row after
-          authenticating the account; the merge callees read the grant off the
-          row and the caller supplies no evidence at all. Precisely:
+          That fix was <strong>still not enough</strong>. A fourth round found
+          that <code>POST /auth/verify</code> minted the grant from the caller's
+          <strong>raw</strong> <code>guest_id</code> cookie — so an attacker
+          presenting a victim's id while signing in to their own account
+          received a grant on it. Three rounds, three versions of one bug: a
+          body field, a cookie compared against itself, a cookie the mint
+          trusted. The server had no way to tell a guest session it issued to
+          <em>this browser</em> from an id somebody typed.
+        </p>
+        <p>
+          The complete fix is two layers. <strong>The guest cookie is
+          signed</strong> — minted as <code>&lt;id&gt;.&lt;hmac&gt;</code> at
+          the two bootstrap routes and verified in constant time by every
+          consumer, gated on <code>ATHENA_STOREFRONT_COOKIE_SECRET</code>. An
+          unsigned or tampered cookie is treated as <em>absent</em>, not as an
+          error: a stale cookie is a shopper to re-bootstrap, not a fault to
+          page on. And <strong>the merge authorizes on the server-issued
+          grant</strong>, now minted only from a verified guest id. Precisely:
         </p>
         <ul>
           <li>
@@ -656,21 +686,36 @@ handler: admitPublicMutation(createOrganizationOperationDefinition, ...)</code><
             <strong>bounded to the admitted store</strong>.
           </li>
           <li>
-            It does <strong>not</strong> make a guest id unguessable, and does
-            not stop someone who knows one from presenting that cookie while
-            signing in to their own account — the sign-in flow already inherits
-            from the presented guest row, so that trust predates this change.
-            Tracked as <strong>V26-1240</strong>.
+            A live, unconsumed grant is never re-pointed to a different account,
+            so a second sign-in cannot strand a half-finished merge sequence.
+          </li>
+          <li>
+            <strong>The remaining residual is the legacy-cookie upgrade
+            window.</strong> Pre-signing cookies still in browsers are re-minted
+            signed at bootstrap — otherwise the deploy would empty every
+            existing cart — and while that path exists, someone who knows
+            another shopper's guest id can present it unsigned at bootstrap and
+            be handed a signed cookie for it. The upgrade is confined to the two
+            bootstrap routes, and a cookie whose signature fails to verify is
+            treated as tampering rather than as legacy.
+            <strong>Delete this path once legacy cookies have aged out — 90
+            days, the cookie's own max-age.</strong> Tracked as
+            <strong>V26-1240</strong>, which also owns signing
+            <code>user_id</code>: that is not a small delta, since it changes
+            the authenticated-shopper claim path rather than the guest one.
           </li>
         </ul>
         <p>
-          <strong>"Caller-supplied" includes cookies.</strong> That was
-          mis-assumed twice, in two rounds, by different authors. A guard
-          comparing two caller-supplied values is not a guard. And the residual
-          above is written beside the mechanism in
-          <code>customerOwnership.ts</code>, because a comment naming only the
-          guarantee is how the round-2 version survived review by its own
-          author.
+          <strong>"Caller-supplied" includes cookies — and it kept being
+          forgotten.</strong> Three rounds, three versions of the same bug, each
+          shipped believing it was fixed. A guard comparing two caller-supplied
+          values is not a guard, and a server-issued token minted <em>from</em> a
+          caller-supplied value inherits that value's trust class. The fix has to
+          be something the server issued <strong>and</strong> can verify it
+          issued to this caller. The residual above is written beside the
+          mechanism in <code>customerOwnership.ts</code>, because a comment
+          naming only the guarantee is how each earlier version survived review
+          by its own author.
         </p>
         <p>
           <strong>One lesson from this round is worth more than the fixes.</strong>
@@ -1067,14 +1112,16 @@ handler: admitPublicMutation(createOrganizationOperationDefinition, ...)</code><
             Removed the 40 orphaned public exports, their definitions, and the
             count and enumeration assertions in the unit admission suites.
             Contributed the exact before/after assertion counts and flagged a
-            latent return-validator mismatch on the deleted
-            <code>verifyPayment</code> export — the deleted public action
-            declared a return union its own handler could violate, and the
-            surviving <code>verifyPaymentInternal</code> has no
-            <code>returns</code> validator, so the mismatch is latent rather
-            than fixed. Tracked as a follow-up alongside two ownership gaps in
-            <code>checkoutSession</code> and <code>userOffers</code>; all three
-            are listed under "Residual risks" in the solution note.
+            latent return-validator mismatch: the deleted public
+            <code>verifyPayment</code> declared a return union
+            (<code>{verified}</code> OR <code>{message}</code>) that its own
+            handler could satisfy neither arm of, since it can return both keys
+            together. <strong>Fixed rather than deferred</strong> —
+            <code>verifyPaymentInternal</code> now carries the correct
+            validator, <code>{ verified, message? }</code>, matching
+            <code>PaymentVerificationResult</code>. The two ownership gaps in
+            <code>checkoutSession</code> and <code>userOffers</code> were
+            genuinely deferred and are listed under "Residual risks".
           </dd>
           <dt>Documentation linker</dt>
           <dd>

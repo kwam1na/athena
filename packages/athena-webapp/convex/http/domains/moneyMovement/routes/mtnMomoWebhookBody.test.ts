@@ -121,16 +121,50 @@ describe("mtn momo callback body handoff", () => {
     vi.unstubAllEnvs();
   });
 
-  it("refuses an oversize callback before reading it all", async () => {
+  it("stops PULLING an oversize callback body, not merely rejecting it", async () => {
     vi.stubEnv(MTN_MOMO_CALLBACK_SECRET_ENV, SECRET);
-    // These endpoints are unauthenticated at the point the body is read, so the
-    // bound has to be in the middleware, not only in the rail behind it.
-    const { admissionCalls, response } = await post("x".repeat(2_000_000), {
-      secret: SECRET,
+
+    // A status assertion cannot pin this fix. Before the bound moved into the
+    // middleware, the route read the whole body with `c.req.text()` and the
+    // rail's own bound then answered 413 on the same 2 MB payload — identical
+    // status, identical zero admission rows. The only observable difference is
+    // WHERE the read stops, so the test has to watch the stream itself.
+    const CHUNK = 64 * 1024;
+    const TOTAL = 2_000_000;
+    let pulled = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (pulled >= TOTAL) {
+          controller.close();
+          return;
+        }
+        pulled += CHUNK;
+        controller.enqueue(new Uint8Array(CHUNK));
+      },
     });
+
+    const { admissionCalls, env } = convexEnv();
+    const response = await mtnMomoRoutes.fetch(
+      new Request("https://api.test/collections", {
+        method: "POST",
+        headers: new Headers({
+          "Content-Type": "application/json",
+          [MTN_MOMO_CALLBACK_SECRET_HEADER]: SECRET,
+        }),
+        body,
+        // @ts-expect-error -- required by undici for a streaming request body
+        duplex: "half",
+      }),
+      env as never,
+    );
 
     expect(response.status).toBe(413);
     expect(admissionCalls).toHaveLength(0);
+    // The bound is 1 MiB. An unbounded `c.req.text()` would drain all 2 MB
+    // before anything rejected it; the middleware cancels the reader shortly
+    // after the limit, so the bytes actually pulled stay close to the cap.
+    expect(pulled).toBeLessThan(TOTAL);
+    expect(pulled).toBeLessThanOrEqual(1_048_576 + CHUNK);
     vi.unstubAllEnvs();
   });
 });
