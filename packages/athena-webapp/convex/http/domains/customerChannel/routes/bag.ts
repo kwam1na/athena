@@ -16,10 +16,10 @@ import {
 } from "../../../../operationAdmission/domains/u10_httpCustomer_definitions";
 import { getBagRouteReadDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
 import {
-  admittedClaimGuestId,
   admittedCustomerId,
   isCustomerOwnershipDenial,
   parseIngressJson,
+  tryParseIngressJson,
   requireAdmittedCustomerOwner,
 } from "./admittedCustomer";
 
@@ -103,16 +103,19 @@ bagRoutes.post(
   "/:bagId/owner",
   admitHttpRoute(updateBagOwnerRouteOperationDefinition, async (c, admitted) => {
     // `newOwnerId` is no longer read from the body: the account the bag moves
-    // TO is the admitted shopper. `currentOwnerId` stays caller-supplied but
-    // the callee checks it against `claimGuestId` — the caller's own guest
-    // cookie — so a stranger's guest bag cannot be named here.
-    const { currentOwnerId } = parseIngressJson(admitted);
+    // TO is the admitted shopper. `currentOwnerId` stays caller-supplied and
+    // this route forwards NO evidence about it — the callee authorizes the
+    // merge from the server-issued grant on the guest row, written at sign-in.
+    const body = tryParseIngressJson(admitted);
+    if (!body) {
+      return c.json({ error: "Invalid request body" }, 400);
+    }
+    const { currentOwnerId } = body;
     const owner = requireAdmittedCustomerOwner(admitted);
 
     try {
       const b = await c.env.runMutation(internal.storeFront.bag.updateOwner, {
         currentOwner: currentOwnerId as Id<"guest">,
-        claimGuestId: admittedClaimGuestId(admitted),
         owner,
       });
       return c.json(b);

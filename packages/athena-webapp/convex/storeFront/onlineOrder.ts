@@ -28,7 +28,12 @@ import {
   isDuplicateOnlineOrderReadDefinition,
   listOnlineOrdersByStoreFrontUserReadDefinition,
 } from "../operationAdmission/domains/u7_storefrontOperator_readDefinitions";
-import { denyCustomerOwnership } from "./customerOwnership";
+import {
+  assertCustomerOwnsStore,
+  assertGuestMergeGranted,
+  denyCustomerOwnership,
+  guestMergeGrantConsumedPatch,
+} from "./customerOwnership";
 import { requireReadySharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 import {
   decideSharedDemoEffect,
@@ -2522,19 +2527,21 @@ async function updateOnlineOrderOwnerWithCtx(
 
 /**
  * Internal sibling for `POST /orders/owner`. The shopper the orders move TO is
- * the admitted actor, and the guest session being re-owned must be one the
- * caller POSSESSES — `claimGuestId` is their own `guest_id` cookie, carried
- * through by the route. Proving only that the guest row shared the admitted
- * store let any signed-in shopper absorb a stranger's order history, with its
- * delivery addresses and contact details, by posting that stranger's guest id.
+ * the admitted actor, and the guest session being re-owned must carry a
+ * SERVER-ISSUED MERGE GRANT for that account — written onto the guest row by
+ * `POST /auth/verify` after it authenticated the shopper.
  *
- * The only legitimate merge is the caller's own guest session: at merge time
- * the browser holds both cookies, which is what the storefront flow does.
+ * Proving only that the guest row shared the admitted store let any signed-in
+ * shopper absorb a stranger's order history, with its delivery addresses and
+ * contact details, by posting that stranger's guest id. The round after that
+ * compared the posted id against the request's own `guest_id` cookie, which
+ * fixed nothing: a cookie is caller-supplied, so both sides of that comparison
+ * came from the same request. Authorization now comes off the row, and the
+ * caller presents no evidence at all. See `customerOwnership.ts`.
  */
 export const updateOwnerInternal = internalMutation({
   args: {
     currentOwner: v.id("guest"),
-    claimGuestId: v.optional(v.id("guest")),
     owner: ownerArg,
   },
   handler: async (ctx, args) => {
@@ -2542,16 +2549,15 @@ export const updateOwnerInternal = internalMutation({
     if (!owner.storeFrontUserId) {
       denyCustomerOwnership();
     }
-    if (
-      !args.claimGuestId ||
-      String(args.claimGuestId) !== String(args.currentOwner)
-    ) {
-      denyCustomerOwnership();
-    }
     const guest = await ctx.db.get("guest", args.currentOwner);
-    if (!guest || guest.storeId !== owner.storeId) {
-      denyCustomerOwnership();
-    }
+    assertGuestMergeGranted(guest, owner, "onlineOrder");
+    assertCustomerOwnsStore(owner, guest?.storeId);
+    // Single-use; consumed inside the same transaction as the merge.
+    await ctx.db.patch(
+      "guest",
+      args.currentOwner,
+      guestMergeGrantConsumedPatch(guest!, "onlineOrder"),
+    );
     return await updateOnlineOrderOwnerWithCtx(ctx, {
       currentOwner: args.currentOwner,
       newOwner: owner.storeFrontUserId,

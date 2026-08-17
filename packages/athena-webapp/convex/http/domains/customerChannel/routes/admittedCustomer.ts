@@ -2,7 +2,6 @@ import { CUSTOMER_OWNERSHIP_DENIED } from "../../../../storeFront/customerOwners
 import type { Id } from "../../../../_generated/dataModel";
 import type { AdmittedHttpContext } from "../../../../operationAdmission/rail";
 import type { CustomerOwner } from "../../../../storeFront/customerOwnership";
-import { getClaimGuestIdFromIngressRequest } from "../../../utils";
 
 /**
  * The single place a customer-channel route turns an admission into identity.
@@ -23,6 +22,27 @@ import { getClaimGuestIdFromIngressRequest } from "../../../utils";
  */
 export function parseIngressJson<T = any>(admitted: AdmittedHttpContext): T {
   return JSON.parse(admitted.ingress.rawBody || "{}") as T;
+}
+
+/**
+ * `parseIngressJson`, for handlers that parse OUTSIDE their `try` block.
+ *
+ * A malformed body is a CLIENT error. The merge routes narrowed their `try` to
+ * isolate ownership denials, which moved the parse above it — so a truncated
+ * body stopped being a 400 and became an escaped `SyntaxError` that Convex
+ * renders as a server fault. This returns `undefined` for exactly that case and
+ * the route answers 400. Only `SyntaxError` is swallowed; anything else
+ * propagates, because anything else is a real fault.
+ */
+export function tryParseIngressJson<T = any>(
+  admitted: AdmittedHttpContext,
+): T | undefined {
+  try {
+    return JSON.parse(admitted.ingress.rawBody || "{}") as T;
+  } catch (error) {
+    if (error instanceof SyntaxError) return undefined;
+    throw error;
+  }
 }
 
 export function admittedCustomerActor(admitted: AdmittedHttpContext) {
@@ -79,27 +99,18 @@ export function admittedStorefrontUserId(
   return owner.storeFrontUserId;
 }
 
-/**
- * The guest session the CALLER holds a cookie for, signed in or not.
+/*
+ * There was an `admittedClaimGuestId` here — the caller's own `guest_id`
+ * cookie, forwarded to the merge callees as "possession evidence". It was not
+ * evidence of anything: a cookie is caller-supplied, so an attacker who knew a
+ * victim's guest id simply set `Cookie: user_id=<theirs>; guest_id=<victim>`
+ * and the check passed.
  *
- * Every other value a route forwards is identity, taken from the rail's actor.
- * This one is not: it is the answer to "does this caller possess that guest
- * session", and it exists because the rail's actor deliberately drops the
- * guest side once a shopper is signed in (the account must win for identity).
- *
- * The only legitimate guest→account merge is the caller's OWN guest session:
- * at merge time the browser holds both cookies, which is exactly what the
- * storefront flow does after sign-in. A merge callee therefore compares the
- * body-supplied guest id against THIS value, so a signed-in attacker who posts
- * a stranger's guest id is refused — they hold no such cookie. Possession of
- * the cookie proves nothing more than possession, which is why the callee
- * still bounds the guest row to the admitted store on top of this check.
+ * The guest→account merge is now authorized by a grant the SERVER wrote onto
+ * the guest row at sign-in (`storeFront/guest:grantMergeToStoreFrontUser`).
+ * Routes forward no merge evidence at all, which is why this helper has no
+ * replacement rather than a hardened version.
  */
-export function admittedClaimGuestId(
-  admitted: AdmittedHttpContext,
-): Id<"guest"> | undefined {
-  return getClaimGuestIdFromIngressRequest(admitted.ingress.request);
-}
 
 /**
  * Did this error come from an ownership refusal, or is it a real fault?

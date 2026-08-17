@@ -18,9 +18,11 @@ import {
 import {
   assertCustomerOwnsRow,
   assertCustomerOwnsStore,
+  assertGuestMergeGranted,
   customerOwnerActorId,
   customerOwnerValidator,
   denyCustomerOwnership,
+  guestMergeGrantConsumedPatch,
 } from "./customerOwnership";
 
 function formatPointsLabel(points: number) {
@@ -704,29 +706,35 @@ async function awardPointsForGuestOrdersWithCtx(
  * Internal sibling for `POST /rewards/award-guest-orders`. This merges a guest
  * history into an account, so BOTH ids must be the admitted shopper's.
  *
- * The account is the claim itself. The guest side is bounded twice: it must be
- * the guest session the CALLER holds a cookie for (`claimGuestId`, resolved by
- * the rail from the request, never from the body), and that guest row must
+ * The account is the claim itself. The guest side is bounded twice: the guest
+ * row must carry a SERVER-ISSUED MERGE GRANT for that account, written by
+ * `POST /auth/verify` after it authenticated the shopper, and the row must
  * belong to the admitted store. Store alone was not enough — reward points are
  * transferable value, so a store-only bound let any signed-in shopper claim a
- * stranger's guest order history and the points attached to it.
+ * stranger's guest order history and the points attached to it. Nor was
+ * comparing the posted guest id against the request's `guest_id` COOKIE: that
+ * cookie is caller-supplied, so the check compared two values the same request
+ * provided. See `customerOwnership.ts` for the grant contract.
  */
 export const awardPointsForGuestOrdersInternal = internalMutation({
   args: {
     storeFrontUserId: v.id("storeFrontUser"),
     guestId: v.id("guest"),
-    claimGuestId: v.optional(v.id("guest")),
     owner: customerOwnerValidator,
   },
-  handler: async (ctx, { owner, claimGuestId, ...args }) => {
+  handler: async (ctx, { owner, ...args }) => {
     if (String(args.storeFrontUserId) !== String(customerOwnerActorId(owner))) {
       denyCustomerOwnership();
     }
-    if (!claimGuestId || String(claimGuestId) !== String(args.guestId)) {
-      denyCustomerOwnership();
-    }
     const guest = await ctx.db.get("guest", args.guestId);
+    assertGuestMergeGranted(guest, owner, "rewards");
     assertCustomerOwnsStore(owner, guest?.storeId);
+    // Single-use; consumed inside the same transaction as the award.
+    await ctx.db.patch(
+      "guest",
+      args.guestId,
+      guestMergeGrantConsumedPatch(guest!, "rewards"),
+    );
     return await awardPointsForGuestOrdersWithCtx(ctx, args);
   },
 });

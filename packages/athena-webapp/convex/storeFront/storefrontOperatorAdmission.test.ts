@@ -729,33 +729,45 @@ describe("ownership assertions on internal callees reachable from customer route
     ).rejects.toThrow(CUSTOMER_OWNERSHIP_DENIED);
   });
 
+  /**
+   * A guest row carrying a live, unconsumed server-issued merge grant for
+   * `OWNER`. Nothing the CALLER supplies can produce this — it is written only
+   * by `storeFront/guest:grantMergeToStoreFrontUser` at sign-in.
+   */
+  const grantedGuestCtx = (storeId: string) =>
+    ctxForStore(storeId, {
+      get: vi.fn(async (_table: string, id: string) => ({
+        _id: id,
+        _creationTime: 1,
+        storeId,
+        organizationId: "demo-org",
+        storeFrontUserId: "shopper-1",
+        mergeGrantedToStoreFrontUserId: "shopper-1",
+        mergeGrantExpiresAt: Date.now() + 60_000,
+        mergeGrantConsumedBy: [],
+      })),
+    });
+
   it("onlineOrder:updateOwnerInternal refuses a guest session from another store", async () => {
-    const ctx = ctxForStore("other-store");
+    const ctx = grantedGuestCtx("other-store");
 
     await expect(
       getHandler(onlineOrder.updateOwnerInternal)(ctx, {
         currentOwner: "guest-1",
-        claimGuestId: "guest-1",
         owner: OWNER,
       }),
     ).rejects.toThrow(CUSTOMER_OWNERSHIP_DENIED);
     expect(ctx.writes.patch).not.toHaveBeenCalled();
   });
 
-  it("onlineOrder:updateOwnerInternal refuses a guest session the caller does not hold", async () => {
-    const ctx = ctxForStore("tenant-store");
-
+  it("onlineOrder:updateOwnerInternal refuses a guest row carrying no merge grant", async () => {
     // Same store, so the old store-only bound admitted this: a signed-in
-    // shopper naming a STRANGER's guest id absorbed their order history.
-    await expect(
-      getHandler(onlineOrder.updateOwnerInternal)(ctx, {
-        currentOwner: "guest-stranger",
-        claimGuestId: "guest-mine",
-        owner: OWNER,
-      }),
-    ).rejects.toThrow(CUSTOMER_OWNERSHIP_DENIED);
+    // shopper naming a STRANGER's guest id absorbed their order history. The
+    // round after that compared the id against the caller's own `guest_id`
+    // COOKIE, which the caller also controls. Neither is consulted now: the
+    // grant is on the row, and this row has none.
+    const ctx = ctxForStore("tenant-store");
 
-    // …and with no guest cookie presented at all.
     await expect(
       getHandler(onlineOrder.updateOwnerInternal)(ctx, {
         currentOwner: "guest-stranger",
@@ -765,27 +777,29 @@ describe("ownership assertions on internal callees reachable from customer route
     expect(ctx.writes.patch).not.toHaveBeenCalled();
   });
 
-  it("onlineOrder:updateOwnerInternal re-owns the caller's OWN guest session", async () => {
-    const ctx = ctxForStore("tenant-store");
+  it("onlineOrder:updateOwnerInternal re-owns a guest session that carries a grant", async () => {
+    const ctx = grantedGuestCtx("tenant-store");
 
     await expect(
       getHandler(onlineOrder.updateOwnerInternal)(ctx, {
         currentOwner: "guest-mine",
-        claimGuestId: "guest-mine",
         owner: OWNER,
       }),
     ).resolves.toBeDefined();
   });
 
   it("analytics:updateOwnerInternal refuses a guest session from another store", async () => {
-    const ctx = ctxForStore("other-store");
+    const ctx = grantedGuestCtx("other-store");
 
+    // Raised as the SHARED ownership denial now, not a module-local error
+    // class, so `POST /analytics/update-owner` recognises it with the same
+    // predicate its siblings use and answers 403 instead of 500.
     await expect(
       getHandler(analytics.updateOwnerInternal)(ctx, {
         guestId: "guest-1",
         owner: OWNER,
       }),
-    ).rejects.toThrow("You do not have access to this guest session.");
+    ).rejects.toThrow(CUSTOMER_OWNERSHIP_DENIED);
   });
 
   it("analytics:createInternal attributes the event to the admitted actor and store", async () => {

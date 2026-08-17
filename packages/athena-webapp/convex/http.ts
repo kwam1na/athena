@@ -64,17 +64,19 @@ auth.addHttpRoutes(http);
  * no origin at all, and an unlisted origin simply gets no
  * `Access-Control-Allow-Origin` header rather than a wildcard.
  *
- * `Vary: Origin` is set explicitly rather than assumed. The response varies by
- * request origin, so without it a shared cache may serve one origin's
- * `Access-Control-Allow-Origin` to another — turning the allowlist into a
- * cache-poisoning primitive. Relying on the CORS middleware to add it is a
- * dependency on library behaviour that a version bump can change silently;
- * this is a security header, so it is stated here where it can be read.
+ * `Vary: Origin` matters here: the response varies by request origin, so
+ * without it a shared cache may serve one origin's
+ * `Access-Control-Allow-Origin` to another, turning the allowlist into a
+ * cache-poisoning primitive. Hono's `cors()` appends it for every
+ * non-wildcard configuration, which this always is.
+ *
+ * That is a dependency on library behaviour, so it is pinned by a test
+ * (`routerComposition.test.ts`) rather than by a second middleware. An earlier
+ * attempt to "state it explicitly" appended it a second time and shipped
+ * `Vary: Origin, Origin` — asserting a header twice is not a stronger
+ * guarantee, it is a duplicate. The test is what makes a silent library change
+ * fail loudly.
  */
-app.use("*", async (c, next) => {
-  await next();
-  c.res.headers.append("Vary", "Origin");
-});
 app.use(
   "*",
   cors({

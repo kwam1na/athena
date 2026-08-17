@@ -12,10 +12,8 @@ import {
   admitHttpRead,
   admitHttpRoute,
 } from "../../../../platform/operationAdmission";
-import {
-  admittedClaimGuestId,
-  admittedCustomerOwner,
-} from "./admittedOwner";
+import { admittedCustomerOwner } from "./admittedOwner";
+import { isCustomerOwnershipDenial } from "../../customerChannel/routes/admittedCustomer";
 
 const analyticsRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
@@ -57,40 +55,50 @@ analyticsRoutes.post(
 );
 
 // Endpoint for updating analytics owner from guest to registered user. The
-// user the records move TO is the admitted shopper; only the guest id being
-// re-owned stays caller-supplied, and the callee checks it against the
-// admitted store.
+// user the records move TO is the admitted shopper; the guest id being
+// re-owned stays caller-supplied, and the callee authorizes it against the
+// server-issued merge grant on the guest row plus the admitted store.
 analyticsRoutes.post(
   "/update-owner",
   admitHttpRoute(
     updateAnalyticsOwnerRouteOperationDefinition,
     async (c, admitted) => {
       const { admission, ingress } = admitted;
+
+      // A malformed body is a client error, answered here rather than left to
+      // escape as a `SyntaxError` that Convex renders as a server fault.
+      let body: any;
       try {
-        const { guestId } = JSON.parse(ingress.rawBody || "{}");
+        body = JSON.parse(ingress.rawBody || "{}");
+      } catch (error) {
+        if (!(error instanceof SyntaxError)) throw error;
+        return c.json({ error: "Invalid request body" }, 400);
+      }
 
-        if (!guestId) {
-          return c.json({ error: "Guest ID and User ID are required" }, 400);
-        }
+      if (!body?.guestId) {
+        return c.json({ error: "Guest ID and User ID are required" }, 400);
+      }
 
+      try {
         await c.env.runMutation(
           internal.storeFront.analytics.updateOwnerInternal,
           {
-            guestId: guestId as Id<"guest">,
-            // Possession, not identity: the callee refuses a guest id the
-            // caller holds no cookie for.
-            claimGuestId: admittedClaimGuestId(admitted),
+            guestId: body.guestId as Id<"guest">,
             owner: admittedCustomerOwner(admission),
           },
         );
 
         return c.json({ success: true });
       } catch (error) {
-        console.error("Error updating analytics owner:", error);
-        return c.json(
-          { error: "Failed to update analytics owner", details: String(error) },
-          500,
-        );
+        // Matches the sibling pattern in `customerChannel/routes/onlineOrder`:
+        // an ownership refusal is a 403 with a fixed body, and everything else
+        // propagates as the fault it is. The previous blanket catch answered
+        // 500 — which clients retry and monitoring pages on — and echoed the
+        // internal message back to the caller.
+        if (isCustomerOwnershipDenial(error)) {
+          return c.json({ error: "Forbidden" }, 403);
+        }
+        throw error;
       }
     },
   ),

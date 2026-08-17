@@ -7,7 +7,7 @@
   <body>
     <article
       data-athena-landed-change-report="v2"
-      data-athena-report-diff-fingerprint="4fed2e844bf5ba3d3ce8a5c4308034732016e03f0a6f6f1669fa7d65b8db2481"
+      data-athena-report-diff-fingerprint="64b5253e737a4bf198006fd29e176cdfbeee7d15503090a800463e0e57e042fd"
     >
       <header data-report-section="header">
         <h1>Closing the Admission Rail</h1>
@@ -624,10 +624,53 @@ handler: admitPublicMutation(createOrganizationOperationDefinition, ...)</code><
         </ul>
         <p>
           The remainder were genuine migration gaps: guest merges bounded by
-          store but not by possession (so a signed-in shopper could absorb a
+          store and nothing else (so a signed-in shopper could absorb a
           stranger's order history and reward points), route handlers mapping
           every fault to an expected client status, and lost behavioral coverage
           on the checkout and sign-in paths.
+        </p>
+        <h3>The fix that wasn't — and the sharpest lesson here</h3>
+        <p>
+          The guest-merge fix shipped in round 2 bounded by "possession":
+          comparing the body's guest id against the request's
+          <code>guest_id</code> <strong>cookie</strong>. Two reviewers
+          independently pointed out in round 3 that a cookie is caller-supplied
+          — both operands arrived on the same request, so any caller satisfied
+          the check by typing the same id twice. The exploit precondition was
+          unchanged. And the round had shipped comments asserting the opposite
+          ("they hold no such cookie"): the exact defect this delivery exists to
+          remove, committed while removing it.
+        </p>
+        <p>
+          The real fix is a <strong>server-issued merge grant</strong>.
+          <code>POST /auth/verify</code> writes
+          <code>mergeGrantedToStoreFrontUserId</code> onto the guest row after
+          authenticating the account; the merge callees read the grant off the
+          row and the caller supplies no evidence at all. Precisely:
+        </p>
+        <ul>
+          <li>
+            A merge is possible only inside a <strong>15-minute window</strong>
+            opened by an authenticated sign-in, <strong>once per merge
+            kind</strong> (bag, savedBag, onlineOrder, analytics, rewards), and
+            <strong>bounded to the admitted store</strong>.
+          </li>
+          <li>
+            It does <strong>not</strong> make a guest id unguessable, and does
+            not stop someone who knows one from presenting that cookie while
+            signing in to their own account — the sign-in flow already inherits
+            from the presented guest row, so that trust predates this change.
+            Tracked as <strong>V26-1240</strong>.
+          </li>
+        </ul>
+        <p>
+          <strong>"Caller-supplied" includes cookies.</strong> That was
+          mis-assumed twice, in two rounds, by different authors. A guard
+          comparing two caller-supplied values is not a guard. And the residual
+          above is written beside the mechanism in
+          <code>customerOwnership.ts</code>, because a comment naming only the
+          guarantee is how the round-2 version survived review by its own
+          author.
         </p>
         <p>
           <strong>One lesson from this round is worth more than the fixes.</strong>
@@ -666,8 +709,28 @@ handler: admitPublicMutation(createOrganizationOperationDefinition, ...)</code><
           <li>
             Payment audit attribution is still read from client arguments rather
             than the admitted actor, so the audit record states what the caller
-            claimed. Scope-checked as an expansion and deferred to
-            <strong>V26-1241</strong>.
+            claimed. Deferred to <strong>V26-1241</strong>.
+          </li>
+          <li>
+            <code>checkoutSession.updateCheckoutSession</code> /
+            <code>getByIdInternal</code> keep an optional-<code>owner</code>
+            no-op, and <code>userOffers.getEligibility</code> asserts nothing on
+            caller-supplied ids. Neither is currently exploitable — every live
+            caller derives the ids from the admitted claim — but the safety
+            rests on callers rather than on the callee refusing. Deferred to
+            <strong>V26-1242</strong>.
+          </li>
+          <li>
+            <strong>Read amplification, and the one thing this delivery made
+            measurably worse.</strong> The shared-demo adapter runs first in the
+            chain for all 605 admitted ingress points, so every authenticated
+            staff request now pays an indexed <code>sharedDemoPrincipal</code>
+            lookup that resolves to <code>null</code> for almost all traffic;
+            before, only the ~17 demo-aware handlers paid it. That is in tension
+            with the project's standing Convex read-minimization rule. Accepted
+            for now because the fix depends on a design call about what the auth
+            identity payload can carry. Deferred to
+            <strong>V26-1243</strong>.
           </li>
         </ol>
       </section>

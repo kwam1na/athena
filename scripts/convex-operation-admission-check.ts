@@ -589,37 +589,76 @@ function resolveModuleSpecifier(
 // Wrapper recognition
 // ---------------------------------------------------------------------------
 
+type BoundWrapper = { kind: IngressKind; fromRoot: boolean };
+
 type WrapperNames = {
   /** local name -> ingress kind, imported from the composition root. */
   canonical: Map<string, IngressKind>;
   /** local name -> ingress kind, but imported from somewhere else. */
   offComposition: Map<string, IngressKind>;
-  /** Local consts bound to a wrapper call: name -> ingress kind. */
-  bound: Map<string, IngressKind>;
+  /**
+   * Local names of `import * as x` bindings whose specifier IS the composition
+   * root. Only these receivers may carry a wrapper method — see
+   * `propertyAccessWrapperName`.
+   */
+  rootNamespaces: Set<string>;
+  /** Local consts bound to a wrapper call. */
+  bound: Map<string, BoundWrapper>;
 };
+
+/**
+ * The wrapper name a property-access callee denotes, or `undefined`.
+ *
+ * Wrapper identity used to be resolved by BARE METHOD NAME on any receiver, so
+ * `const shim = { admitPublicMutation: (d, f) => f }` — or any unrelated module
+ * with a same-named export — satisfied the composition-root rule that every
+ * ingress must route through `platform/operationAdmission`. A local shim could
+ * therefore stand in for the rail while the checker reported zero findings,
+ * which is precisely the exemption construct this contract exists to remove.
+ *
+ * A method call is now only a wrapper when its receiver is a namespace import
+ * of the composition root itself.
+ */
+function propertyAccessWrapperName(
+  callee: ts.PropertyAccessExpression,
+  rootNamespaces: ReadonlySet<string>,
+): string | undefined {
+  if (!ts.isIdentifier(callee.expression)) return undefined;
+  if (!rootNamespaces.has(callee.expression.text)) return undefined;
+  return callee.name.text in CANONICAL_WRAPPERS ? callee.name.text : undefined;
+}
 
 function collectWrapperNames(sourceFile: ts.SourceFile): WrapperNames {
   const canonical = new Map<string, IngressKind>();
   const offComposition = new Map<string, IngressKind>();
-  const bound = new Map<string, IngressKind>();
+  const rootNamespaces = new Set<string>();
+  const bound = new Map<string, BoundWrapper>();
 
   const recognized: Record<string, IngressKind> = { ...CANONICAL_WRAPPERS };
 
   for (const binding of collectImportBindings(sourceFile)) {
+    const fromRoot = binding.moduleSpecifier.endsWith(COMPOSITION_ROOT_SUFFIX);
+    if (binding.imported === "*") {
+      if (fromRoot) rootNamespaces.add(binding.local);
+      continue;
+    }
     const kind = recognized[binding.imported];
     if (!kind) continue;
-    const fromRoot = binding.moduleSpecifier.endsWith(COMPOSITION_ROOT_SUFFIX);
     (fromRoot ? canonical : offComposition).set(binding.local, kind);
   }
 
-  const all = new Map([...canonical, ...offComposition]);
-
-  function wrapperKindOfCall(node: ts.Node): IngressKind | undefined {
+  function wrapperOfCall(node: ts.Node): BoundWrapper | undefined {
     if (!ts.isCallExpression(node)) return undefined;
     const callee = node.expression;
-    if (ts.isIdentifier(callee)) return all.get(callee.text);
+    if (ts.isIdentifier(callee)) {
+      const canonicalKind = canonical.get(callee.text);
+      if (canonicalKind) return { kind: canonicalKind, fromRoot: true };
+      const offKind = offComposition.get(callee.text);
+      return offKind ? { kind: offKind, fromRoot: false } : undefined;
+    }
     if (ts.isPropertyAccessExpression(callee)) {
-      return all.get(callee.name.text) ?? recognized[callee.name.text];
+      const name = propertyAccessWrapperName(callee, rootNamespaces);
+      return name ? { kind: recognized[name], fromRoot: true } : undefined;
     }
     return undefined;
   }
@@ -630,25 +669,12 @@ function collectWrapperNames(sourceFile: ts.SourceFile): WrapperNames {
       if (!ts.isIdentifier(declaration.name) || !declaration.initializer) {
         continue;
       }
-      const kind = wrapperKindOfCall(declaration.initializer);
-      if (kind) bound.set(declaration.name.text, kind);
+      const wrapper = wrapperOfCall(declaration.initializer);
+      if (wrapper) bound.set(declaration.name.text, wrapper);
     }
   }
 
-  return { canonical, offComposition, bound };
-}
-
-function isPublicDbWriteCall(node: ts.Node) {
-  if (!ts.isCallExpression(node)) return false;
-  const expression = node.expression;
-  if (!ts.isPropertyAccessExpression(expression)) return false;
-  if (
-    !["delete", "insert", "patch", "replace"].includes(expression.name.text)
-  ) {
-    return false;
-  }
-  const target = expression.expression;
-  return ts.isPropertyAccessExpression(target) && target.name.text === "db";
+  return { canonical, offComposition, rootNamespaces, bound };
 }
 
 /**
@@ -659,6 +685,12 @@ function isPublicDbWriteCall(node: ts.Node) {
  * schedule work before the caller had been admitted. Reading before admission
  * is a disclosure, and `ctx.runMutation` before admission is a write by
  * another name — neither is caught by looking for `ctx.db.insert`.
+ *
+ * There was a second predicate here, `isPublicDbWriteCall`, matching
+ * `x.db.{delete,insert,patch,replace}(…)`. Every node it accepted this one
+ * accepts too — the `x.db.*` clause below is strictly wider — so it could never
+ * change a verdict. A guard that guards nothing is the shape this whole
+ * contract exists to remove, so it is gone rather than left looking load-bearing.
  */
 function isPreAdmissionCtxEffect(node: ts.Node) {
   if (!ts.isCallExpression(node)) return false;
@@ -679,6 +711,45 @@ function isPreAdmissionCtxEffect(node: ts.Node) {
   if (!ts.isPropertyAccessExpression(target)) return false;
   // ctx.db.* (any access, read or write) and ctx.scheduler.*
   return target.name.text === "db" || target.name.text === "scheduler";
+}
+
+/**
+ * Does anything in these call expressions' ARGUMENT lists run before admission?
+ *
+ * JavaScript evaluates a call's callee before its arguments, so in
+ * `admitPublicMutation(def, fn)(ctx, { ...args, row: await ctx.db.get(id) })`
+ * the wrapper closure is only BUILT first — the `await ctx.db.get(...)` runs
+ * next, and admission happens last. A rule that is positional over STATEMENTS
+ * alone never looks inside the invocation it accepts, so that read (or a
+ * `ctx.runMutation`, or a schedule) happens for a caller nobody has admitted
+ * while the checker reports the ingress as fully admitted.
+ *
+ * `await` counts on its own: anything the handler must wait for before the
+ * wrapper can be applied is by definition work done ahead of admission.
+ *
+ * The walk deliberately stops at function boundaries. The handler passed to the
+ * wrapper is an argument, and everything in it runs AFTER admission — descending
+ * into it would reject every correctly admitted ingress in the repo.
+ */
+function argumentsDoPreAdmissionWork(
+  applications: readonly ts.CallExpression[],
+) {
+  let found = false;
+  const walk = (node: ts.Node) => {
+    if (found) return;
+    // Bodies of nested functions run after admission, not before it.
+    if (ts.isFunctionLike(node)) return;
+    if (ts.isAwaitExpression(node) || isPreAdmissionCtxEffect(node)) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, walk);
+  };
+  for (const application of applications) {
+    for (const argument of application.arguments) walk(argument);
+    if (found) return true;
+  }
+  return false;
 }
 
 /**
@@ -712,6 +783,10 @@ function handlerBodyStatements(
  * Rejected: a wrapper inside an `if`, a loop, or a callback, or anywhere after
  * another statement — an admission that only happens on some paths, or that
  * happens after work, is not admission.
+ *
+ * Accepting the statement is not enough on its own: the ARGUMENTS of every
+ * application unwrapped on the way to the wrapper are evaluated after the
+ * callee and before admission, so they are checked too and flagged `notFirst`.
  */
 function statementWrapperMatch(
   statement: ts.Statement,
@@ -726,16 +801,37 @@ function statementWrapperMatch(
   if (ts.isReturnStatement(statement)) expression = statement.expression;
   else if (ts.isExpressionStatement(statement)) expression = statement.expression;
   else return undefined;
+  if (!expression) return undefined;
 
-  // Unwrap `await x` and the outer `(...)(ctx, args)` application.
+  return unwrapToWrapper(expression, names);
+}
+
+/**
+ * Unwrap `await x`, parentheses, and the outer `(...)(ctx, args)` application
+ * down to the wrapper, remembering every application passed through so its
+ * argument list can be checked for pre-admission work.
+ */
+function unwrapToWrapper(
+  start: ts.Expression,
+  names: WrapperNames,
+): WrapperMatch | undefined {
+  const applications: ts.CallExpression[] = [];
+  const settle = (match: WrapperMatch): WrapperMatch =>
+    argumentsDoPreAdmissionWork(applications) ? { ...match, notFirst: true } : match;
+
+  let expression: ts.Expression | undefined = start;
   for (let depth = 0; depth < 4 && expression; depth += 1) {
     const direct = matchDirectWrapper(expression, names);
-    if (direct) return direct;
+    if (direct) {
+      if (ts.isCallExpression(expression)) applications.push(expression);
+      return settle(direct);
+    }
     if (ts.isAwaitExpression(expression)) {
       expression = expression.expression;
       continue;
     }
     if (ts.isCallExpression(expression)) {
+      applications.push(expression);
       expression = expression.expression;
       continue;
     }
@@ -744,9 +840,13 @@ function statementWrapperMatch(
       continue;
     }
     if (ts.isIdentifier(expression)) {
-      const kind = names.bound.get(expression.text);
-      return kind
-        ? { wrapper: expression.text, kind, fromRoot: true }
+      const bound = names.bound.get(expression.text);
+      return bound
+        ? settle({
+            wrapper: expression.text,
+            kind: bound.kind,
+            fromRoot: bound.fromRoot,
+          })
         : undefined;
     }
     return undefined;
@@ -778,6 +878,13 @@ type WrapperMatch = {
  * paths. The earlier version of this function walked the whole body and only
  * objected to a public `ctx.db` write appearing first, which accepted handlers
  * that read the database or called `ctx.runMutation` ahead of admission.
+ *
+ * Positional over statements is not sufficient on its own — see
+ * `argumentsDoPreAdmissionWork` — so the invocation's own argument list is
+ * checked wherever the wrapper is reached from INSIDE a handler body. The
+ * `handler: admitPublicMutation(def, fn)` form (the `direct` branch below) is
+ * exempt on purpose: those arguments evaluate once at module load, with no
+ * caller in flight to admit.
  */
 function matchWrapper(
   expression: ts.Expression | undefined,
@@ -789,9 +896,13 @@ function matchWrapper(
   if (direct) return direct;
 
   if (ts.isIdentifier(expression)) {
-    const kind = names.bound.get(expression.text);
-    return kind
-      ? { wrapper: expression.text, kind, fromRoot: true }
+    const bound = names.bound.get(expression.text);
+    return bound
+      ? {
+          wrapper: expression.text,
+          kind: bound.kind,
+          fromRoot: bound.fromRoot,
+        }
       : undefined;
   }
 
@@ -799,23 +910,10 @@ function matchWrapper(
     const statements = handlerBodyStatements(expression);
 
     // Concise arrow body: `(ctx, args) => admitPublicMutation(def, fn)(ctx, args)`.
-    // Nothing can precede the wrapper, so unwrap and accept.
+    // No STATEMENT can precede the wrapper — but an argument of the invocation
+    // still evaluates before admission, so unwrap through `unwrapToWrapper`.
     if (!statements) {
-      let body = expression.body as ts.Expression;
-      for (let depth = 0; depth < 4; depth += 1) {
-        const match = matchDirectWrapper(body, names);
-        if (match) return match;
-        if (ts.isAwaitExpression(body) || ts.isParenthesizedExpression(body)) {
-          body = body.expression;
-          continue;
-        }
-        if (ts.isCallExpression(body)) {
-          body = body.expression;
-          continue;
-        }
-        break;
-      }
-      return undefined;
+      return unwrapToWrapper(expression.body as ts.Expression, names);
     }
 
     const first = statements[0];
@@ -824,28 +922,15 @@ function matchWrapper(
       if (match) return match;
     }
 
-    // The hoisted-const shape: `const run = admitPublicMutation(def, fn)` at
-    // module scope, invoked inside the handler. That is legitimate, but only
-    // when nothing runs ahead of the invocation — so find the invoking
-    // statement and check every statement before it for pre-admission work.
-    for (let index = 0; index < statements.length; index += 1) {
+    // A wrapper invoked by a LATER statement — including the hoisted-const
+    // shape, `const run = admitPublicMutation(def, fn)` at module scope called
+    // further down the body. Any statement ahead of it runs for a caller nobody
+    // has admitted, so the position alone decides: no inspection of what those
+    // statements do, because "harmless work before admission" is not a
+    // distinction this contract makes.
+    for (let index = 1; index < statements.length; index += 1) {
       const match = statementWrapperMatch(statements[index], names);
-      if (!match) continue;
-      const preceding = statements.slice(0, index);
-      const doesWorkFirst = preceding.some((statement) => {
-        let found = false;
-        const walk = (node: ts.Node) => {
-          if (found) return;
-          if (isPreAdmissionCtxEffect(node) || isPublicDbWriteCall(node)) {
-            found = true;
-            return;
-          }
-          ts.forEachChild(node, walk);
-        };
-        walk(statement);
-        return found;
-      });
-      return doesWorkFirst || index > 0 ? { ...match, notFirst: true } : match;
+      if (match) return { ...match, notFirst: true };
     }
 
     // A wrapper exists somewhere deeper in the body. Report it as a positional
@@ -860,9 +945,13 @@ function matchWrapper(
         return;
       }
       if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-        const kind = names.bound.get(node.expression.text);
-        if (kind) {
-          deep = { wrapper: node.expression.text, kind, fromRoot: true };
+        const bound = names.bound.get(node.expression.text);
+        if (bound) {
+          deep = {
+            wrapper: node.expression.text,
+            kind: bound.kind,
+            fromRoot: bound.fromRoot,
+          };
           return;
         }
       }
@@ -881,12 +970,14 @@ function matchDirectWrapper(
 ): WrapperMatch | undefined {
   if (!ts.isCallExpression(node)) return undefined;
   const callee = node.expression;
-  const name = ts.isIdentifier(callee)
-    ? callee.text
-    : ts.isPropertyAccessExpression(callee)
-      ? callee.name.text
+  if (ts.isPropertyAccessExpression(callee)) {
+    const method = propertyAccessWrapperName(callee, names.rootNamespaces);
+    return method
+      ? { wrapper: method, kind: CANONICAL_WRAPPERS[method], fromRoot: true }
       : undefined;
-  if (!name) return undefined;
+  }
+  if (!ts.isIdentifier(callee)) return undefined;
+  const name = callee.text;
   const canonicalKind = names.canonical.get(name);
   if (canonicalKind) {
     return { wrapper: name, kind: canonicalKind, fromRoot: true };

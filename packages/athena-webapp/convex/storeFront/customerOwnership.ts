@@ -98,6 +98,112 @@ export function assertCustomerOwnsRow(
   }
 }
 
+/* ------------------------------------------------ guest→account merge grant */
+
+/**
+ * A guest→account merge is authorized by a SERVER-ISSUED GRANT on the guest
+ * row, never by anything the caller presents.
+ *
+ * Why this shape. The merge has to bound two ids that both arrive from the
+ * client: the guest session being absorbed and the account absorbing it. The
+ * account is fine — it is the admitted actor. The guest side was previously
+ * bounded by comparing the body's guest id against the request's `guest_id`
+ * COOKIE, which is not a bound at all: a cookie is caller-supplied, so both
+ * operands came from the same request and any caller could satisfy it by
+ * typing the same id twice.
+ *
+ * Instead, `POST /auth/verify` writes `mergeGrantedToStoreFrontUserId` onto the
+ * guest row after it has authenticated the account. The merge callees read the
+ * grant off the row. The caller supplies no evidence at all.
+ *
+ * WHAT THIS DOES AND DOES NOT BUY (stated plainly, because the previous round
+ * shipped a comment asserting a guarantee the code did not have):
+ *
+ *  - It ends the "any signed-in shopper may absorb any guest id, at any time,
+ *    with one request" shape. A merge is now possible only inside a 15-minute
+ *    window opened by an authenticated sign-in, once per merge kind.
+ *  - It does NOT make a guest id unguessable, and it does NOT prevent someone
+ *    who knows a guest id from presenting that cookie WHILE signing in to their
+ *    own account: `verifyCodeWithCtx` already treats the presented guest row as
+ *    the row the new account inherits from, so that trust predates this change.
+ *    Such a caller receives a grant on the guest they named. The store bound
+ *    below still applies. This is the residual, and it is a bearer-id residual
+ *    inherited from the sign-in flow — not something these callees can close.
+ */
+export const GUEST_MERGE_GRANT_TTL_MS = 15 * 60 * 1000;
+
+/** The five merges the storefront fires after sign-in. Each is single-use. */
+export const GUEST_MERGE_KINDS = [
+  "bag",
+  "savedBag",
+  "onlineOrder",
+  "analytics",
+  "rewards",
+] as const;
+
+export type GuestMergeKind = (typeof GUEST_MERGE_KINDS)[number];
+
+/** The grant columns, as the merge callees see them on a loaded guest row. */
+export type GuestMergeGrantRow = {
+  mergeGrantedToStoreFrontUserId?: Id<"storeFrontUser">;
+  mergeGrantExpiresAt?: number;
+  mergeGrantConsumedBy?: string[];
+};
+
+/**
+ * Does the guest row carry a live, unconsumed grant for THIS account?
+ *
+ * Fail-closed on every axis: a missing row, an absent grant, a grant for a
+ * different account, an expired grant, an already-consumed kind, and a caller
+ * that is not a signed-in account all answer `false`.
+ */
+export function guestMergeGrantAuthorizes(
+  guest: GuestMergeGrantRow | null | undefined,
+  owner: CustomerOwner,
+  kind: GuestMergeKind,
+  now: number = Date.now(),
+): boolean {
+  if (!guest) return false;
+  const account = owner.storeFrontUserId;
+  if (!account) return false;
+  if (!guest.mergeGrantedToStoreFrontUserId) return false;
+  if (String(guest.mergeGrantedToStoreFrontUserId) !== String(account)) {
+    return false;
+  }
+  if ((guest.mergeGrantExpiresAt ?? 0) < now) return false;
+  return !(guest.mergeGrantConsumedBy ?? []).includes(kind);
+}
+
+/** `guestMergeGrantAuthorizes`, as the uniform ownership refusal. */
+export function assertGuestMergeGranted(
+  guest: GuestMergeGrantRow | null | undefined,
+  owner: CustomerOwner,
+  kind: GuestMergeKind,
+): void {
+  if (!guestMergeGrantAuthorizes(guest, owner, kind)) {
+    denyCustomerOwnership();
+  }
+}
+
+/**
+ * The patch that marks this merge kind consumed.
+ *
+ * Returned as a value rather than applied here so the helper needs no Convex
+ * ctx type: each callee applies it with its own `ctx.db.patch("guest", …)`
+ * after the merge has actually succeeded.
+ */
+export function guestMergeGrantConsumedPatch(
+  guest: GuestMergeGrantRow,
+  kind: GuestMergeKind,
+): { mergeGrantConsumedBy: string[] } {
+  const consumed = guest.mergeGrantConsumedBy ?? [];
+  return {
+    mergeGrantConsumedBy: consumed.includes(kind)
+      ? consumed
+      : [...consumed, kind],
+  };
+}
+
 /**
  * An explicitly unowned call: no customer actor exists for this path.
  *

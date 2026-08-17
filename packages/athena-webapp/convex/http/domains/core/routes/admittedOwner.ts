@@ -1,9 +1,5 @@
-import { getClaimGuestIdFromIngressRequest } from "../../../utils";
 import type { Id } from "../../../../_generated/dataModel";
 import type { CustomerOwner } from "../../../../storeFront/customerOwnership";
-import type {
-  AdmittedHttpContext,
-} from "../../../../operationAdmission/rail";
 import type { OperationAdmissionProjection } from "../../../../operationAdmission/types";
 
 /**
@@ -46,21 +42,11 @@ export function admittedCustomerActorId(
   return actorId;
 }
 
-/**
- * The guest session the CALLER holds a cookie for, if any.
- *
- * Distinct from the actor's identity: a signed-in shopper's actor is their
- * account, and the guest cookie the browser still carries is not who they are
- * — it is what they possess. Merge callees need the second fact. Read from the
- * request rather than the actor so the actor's identity precedence (account
- * wins) is untouched.
- *
- * A merge bounded only by store let any signed-in shopper absorb a stranger's
- * guest history by posting that stranger's id; comparing against this value
- * refuses them, because they hold no such cookie.
+/*
+ * `admittedClaimGuestId` used to live here as well — a second copy of the same
+ * "the caller's `guest_id` cookie proves they hold that guest session" claim.
+ * It proved nothing (a cookie is caller-supplied), and two copies of a security
+ * predicate drift. Both are deleted. The guest→account merge is authorized by
+ * the server-issued grant on the guest row; see
+ * `storeFront/customerOwnership.ts`.
  */
-export function admittedClaimGuestId(
-  admitted: AdmittedHttpContext,
-): Id<"guest"> | undefined {
-  return getClaimGuestIdFromIngressRequest(admitted.ingress.request);
-}

@@ -20,7 +20,7 @@ import {
   getRewardTiersRouteReadDefinition,
 } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
 import {
-  admittedClaimGuestId,
+  isCustomerOwnershipDenial,
   parseIngressJson,
   requireAdmittedCustomerOwner,
 } from "./admittedCustomer";
@@ -239,19 +239,30 @@ rewardsRoutes.post(
         return c.json({ error: "Guest ID is required" }, 400);
       }
 
-      const result = await c.env.runMutation(
-        internal.storeFront.rewards.awardPointsForGuestOrdersInternal,
-        {
-          storeFrontUserId: owner.storeFrontUserId,
-          guestId: guestId as Id<"guest">,
-          // Possession, not identity: reward points are transferable value, so
-          // the callee refuses a guest id the caller holds no cookie for.
-          claimGuestId: admittedClaimGuestId(admitted),
-          owner,
-        },
-      );
+      try {
+        const result = await c.env.runMutation(
+          internal.storeFront.rewards.awardPointsForGuestOrdersInternal,
+          {
+            storeFrontUserId: owner.storeFrontUserId,
+            guestId: guestId as Id<"guest">,
+            // Reward points are transferable value, so the callee refuses any
+            // guest row that does not carry a live server-issued merge grant
+            // for this account. The caller forwards no evidence of its own.
+            owner,
+          },
+        );
 
-      return c.json(result);
+        return c.json(result);
+      } catch (error) {
+        // Same rule as the other merge routes: an ownership refusal is a 403
+        // with a fixed body, and everything else propagates as the fault it
+        // is. This route had no catch at all, so a refused merge — the common
+        // case for this endpoint — surfaced as a 500.
+        if (isCustomerOwnershipDenial(error)) {
+          return c.json({ error: "Forbidden" }, 403);
+        }
+        throw error;
+      }
     },
   ),
 );

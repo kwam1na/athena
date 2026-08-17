@@ -346,9 +346,13 @@ describe("required owner on the remaining storefront callees", () => {
    * The guest→account merge, from both directions.
    *
    * The destination is no longer body-supplied at all, and the source guest id
-   * is bounded by POSSESSION — `claimGuestId` is the caller's own `guest_id`
-   * cookie, not something the body can name. Bounding the merge by store alone
-   * let any signed-in shopper absorb (and destroy) a stranger's guest bag.
+   * is authorized by a SERVER-ISSUED GRANT on the guest row. Bounding the merge
+   * by store alone let any signed-in shopper absorb (and destroy) a stranger's
+   * guest bag; bounding it by the caller's own `guest_id` COOKIE was no better,
+   * because a cookie is caller-supplied — both operands of that comparison came
+   * from the same request. These tests therefore never pass merge evidence as
+   * an argument: they either write the grant onto the row (as `/auth/verify`
+   * does) or they do not, and the callee's answer follows from the row.
    */
   async function accountIn(
     t: ReturnType<typeof convexTest>,
@@ -364,24 +368,45 @@ describe("required owner on the remaining storefront callees", () => {
     );
   }
 
-  it("bag.updateOwner refuses a guest session the caller does not hold", async () => {
+  /** Write the server-issued merge grant, exactly as `/auth/verify` does. */
+  async function grantMerge(
+    t: ReturnType<typeof convexTest>,
+    guestId: Id<"guest">,
+    storeFrontUserId: Id<"storeFrontUser">,
+    overrides: { expiresAt?: number; consumedBy?: string[] } = {},
+  ) {
+    await t.run((ctx) =>
+      ctx.db.patch("guest", guestId, {
+        mergeGrantedToStoreFrontUserId: storeFrontUserId,
+        mergeGrantExpiresAt: overrides.expiresAt ?? Date.now() + 15 * 60 * 1000,
+        mergeGrantConsumedBy: overrides.consumedBy ?? [],
+      }),
+    );
+  }
+
+  it("bag.updateOwner refuses a guest row that carries no grant for the caller", async () => {
     const t = convexTest(schema, modules);
     const seed = await seedTwoShoppers(t);
     const mallory = await accountIn(t, seed.storeId, "mallory@test");
 
-    // Mallory is signed in and holds her OWN guest cookie (alice), but names
-    // Bob's guest session in the body. This is the P0 attack.
+    // Mallory signed in, so her OWN guest session (alice) is granted to her.
+    // She names Bob's guest session instead. This is the P0/P1 attack, and it
+    // no longer matters what she presents: Bob's row carries no grant for her.
+    await grantMerge(t, seed.alice, mallory);
+
     await expect(
       t.run((ctx) =>
         ctx.runMutation(internal.storeFront.bag.updateOwner, {
           currentOwner: seed.bob,
-          claimGuestId: seed.alice,
           owner: { storeFrontUserId: mallory, storeId: seed.storeId },
         }),
       ),
     ).rejects.toThrow(NOT_YOURS);
 
-    // …and with no guest cookie at all.
+    // A grant naming a DIFFERENT account does not authorize this caller.
+    const other = await accountIn(t, seed.storeId, "other@test");
+    await grantMerge(t, seed.bob, other);
+
     await expect(
       t.run((ctx) =>
         ctx.runMutation(internal.storeFront.bag.updateOwner, {
@@ -415,27 +440,60 @@ describe("required owner on the remaining storefront callees", () => {
       t.run((ctx) =>
         ctx.runMutation(internal.storeFront.bag.updateOwner, {
           currentOwner: seed.alice,
-          claimGuestId: seed.alice,
           owner: { guestId: seed.alice, storeId: seed.storeId },
         }),
       ),
     ).rejects.toThrow(NOT_YOURS);
   });
 
-  it("bag.updateOwner merges the caller's OWN guest session", async () => {
+  it("bag.updateOwner merges a granted guest session, once", async () => {
     const t = convexTest(schema, modules);
     const seed = await seedTwoShoppers(t);
     const alice = await accountIn(t, seed.storeId, "alice-account@test");
+    await grantMerge(t, seed.alice, alice);
 
     const merged = await t.run((ctx) =>
       ctx.runMutation(internal.storeFront.bag.updateOwner, {
         currentOwner: seed.alice,
-        claimGuestId: seed.alice,
         owner: { storeFrontUserId: alice, storeId: seed.storeId },
       }),
     );
 
     expect(String(merged?.storeFrontUserId)).toBe(String(alice));
+
+    // Single-use per merge kind: the grant is consumed, so a replay is refused
+    // even though the grant has not expired.
+    await expect(
+      t.run((ctx) =>
+        ctx.runMutation(internal.storeFront.bag.updateOwner, {
+          currentOwner: seed.alice,
+          owner: { storeFrontUserId: alice, storeId: seed.storeId },
+        }),
+      ),
+    ).rejects.toThrow(NOT_YOURS);
+  });
+
+  it("bag.updateOwner refuses an EXPIRED grant", async () => {
+    const t = convexTest(schema, modules);
+    const seed = await seedTwoShoppers(t);
+    const alice = await accountIn(t, seed.storeId, "alice-expired@test");
+    await grantMerge(t, seed.alice, alice, { expiresAt: Date.now() - 1 });
+
+    await expect(
+      t.run((ctx) =>
+        ctx.runMutation(internal.storeFront.bag.updateOwner, {
+          currentOwner: seed.alice,
+          owner: { storeFrontUserId: alice, storeId: seed.storeId },
+        }),
+      ),
+    ).rejects.toThrow(NOT_YOURS);
+
+    // The bag stayed with the guest.
+    await expect(
+      t.run(async (ctx) =>
+        String((await ctx.db.get("bag", seed.aliceBag.bagId))?.storeFrontUserId),
+      ),
+    ).resolves.toBe(String(seed.alice));
   });
 
   it("bag.updateOwner refuses a guest session from another store", async () => {
@@ -443,7 +501,8 @@ describe("required owner on the remaining storefront callees", () => {
     const seed = await seedTwoShoppers(t);
     const account = await accountIn(t, seed.storeId, "cross-store@test");
 
-    // A guest with a bag in the OTHER store, whose cookie the caller holds.
+    // A guest with a bag in the OTHER store, granted to this account anyway:
+    // the store bound is kept on top of the grant, not replaced by it.
     const stranger = await t.run(async (ctx) => {
       const organizationId = (await ctx.db.get("store", seed.storeId))!
         .organizationId;
@@ -460,12 +519,12 @@ describe("required owner on the remaining storefront callees", () => {
       });
       return guestId;
     });
+    await grantMerge(t, stranger, account);
 
     await expect(
       t.run((ctx) =>
         ctx.runMutation(internal.storeFront.bag.updateOwner, {
           currentOwner: stranger,
-          claimGuestId: stranger,
           owner: { storeFrontUserId: account, storeId: seed.storeId },
         }),
       ),
@@ -497,10 +556,11 @@ describe("required owner on the remaining storefront callees", () => {
     ).rejects.toThrow(NOT_YOURS);
   });
 
-  it("savedBag.updateOwner refuses a guest session the caller does not hold", async () => {
+  it("savedBag.updateOwner refuses a guest row that carries no grant for the caller", async () => {
     const t = convexTest(schema, modules);
     const seed = await seedTwoShoppers(t);
     const mallory = await accountIn(t, seed.storeId, "mallory2@test");
+    await grantMerge(t, seed.alice, mallory);
 
     const bobSavedBag = await t.run((ctx) =>
       ctx.db.insert("savedBag", {
@@ -515,7 +575,6 @@ describe("required owner on the remaining storefront callees", () => {
       t.run((ctx) =>
         ctx.runMutation(internal.storeFront.savedBag.updateOwner, {
           currentOwner: seed.bob,
-          claimGuestId: seed.alice,
           owner: { storeFrontUserId: mallory, storeId: seed.storeId },
         }),
       ),
@@ -528,10 +587,11 @@ describe("required owner on the remaining storefront callees", () => {
     ).resolves.toBe(String(seed.bob));
   });
 
-  it("savedBag.updateOwner merges the caller's OWN guest session", async () => {
+  it("savedBag.updateOwner merges a granted guest session", async () => {
     const t = convexTest(schema, modules);
     const seed = await seedTwoShoppers(t);
     const alice = await accountIn(t, seed.storeId, "alice-saved@test");
+    await grantMerge(t, seed.alice, alice);
 
     await t.run((ctx) =>
       ctx.db.insert("savedBag", {
@@ -545,12 +605,89 @@ describe("required owner on the remaining storefront callees", () => {
     const merged = await t.run((ctx) =>
       ctx.runMutation(internal.storeFront.savedBag.updateOwner, {
         currentOwner: seed.alice,
-        claimGuestId: seed.alice,
         owner: { storeFrontUserId: alice, storeId: seed.storeId },
       }),
     );
 
     expect(String(merged?.storeFrontUserId)).toBe(String(alice));
+  });
+
+  /**
+   * The five merges the storefront fires after ONE sign-in must all succeed
+   * under ONE grant — single-use is per merge kind, not per grant. This is the
+   * regression a naive "clear the grant on first success" would cause: four of
+   * the five would start failing in production.
+   */
+  it("one grant covers all five merges, and none of them twice", async () => {
+    const t = convexTest(schema, modules);
+    const seed = await seedTwoShoppers(t);
+    const account = await accountIn(t, seed.storeId, "five-merges@test");
+    await grantMerge(t, seed.alice, account);
+
+    await t.run((ctx) =>
+      ctx.db.insert("savedBag", {
+        items: [],
+        storeFrontUserId: seed.alice,
+        storeId: seed.storeId,
+        updatedAt: Date.now(),
+      }),
+    );
+
+    const owner = { storeFrontUserId: account, storeId: seed.storeId };
+
+    await t.run((ctx) =>
+      ctx.runMutation(internal.storeFront.bag.updateOwner, {
+        currentOwner: seed.alice,
+        owner,
+      }),
+    );
+    await t.run((ctx) =>
+      ctx.runMutation(internal.storeFront.savedBag.updateOwner, {
+        currentOwner: seed.alice,
+        owner,
+      }),
+    );
+    await t.run((ctx) =>
+      ctx.runMutation(internal.storeFront.onlineOrder.updateOwnerInternal, {
+        currentOwner: seed.alice,
+        owner,
+      }),
+    );
+    await t.run((ctx) =>
+      ctx.runMutation(internal.storeFront.analytics.updateOwnerInternal, {
+        guestId: seed.alice,
+        owner,
+      }),
+    );
+    await t.run((ctx) =>
+      ctx.runMutation(
+        internal.storeFront.rewards.awardPointsForGuestOrdersInternal,
+        { storeFrontUserId: account, guestId: seed.alice, owner },
+      ),
+    );
+
+    // All five kinds consumed, so every one of them is now a replay.
+    await expect(
+      t.run(async (ctx) =>
+        (await ctx.db.get("guest", seed.alice))?.mergeGrantConsumedBy?.slice()
+          .sort(),
+      ),
+    ).resolves.toEqual([
+      "analytics",
+      "bag",
+      "onlineOrder",
+      "rewards",
+      "savedBag",
+    ]);
+
+    await expect(
+      t.run((ctx) =>
+        ctx.runMutation(internal.storeFront.onlineOrder.updateOwnerInternal, {
+          currentOwner: seed.alice,
+          owner,
+        }),
+      ),
+    ).rejects.toThrow(NOT_YOURS);
   });
 
   it("savedBag.updateOwner refuses a guest session from another store", async () => {
@@ -574,12 +711,12 @@ describe("required owner on the remaining storefront callees", () => {
       });
       return guestId;
     });
+    await grantMerge(t, stranger, account);
 
     await expect(
       t.run((ctx) =>
         ctx.runMutation(internal.storeFront.savedBag.updateOwner, {
           currentOwner: stranger,
-          claimGuestId: stranger,
           owner: { storeFrontUserId: account, storeId: seed.storeId },
         }),
       ),
@@ -930,97 +1067,92 @@ describe("guest storeId backfill", () => {
 });
 
 /**
- * The same possession bound on the two merges that were left store-only.
+ * The same grant bound on the two merges that were left store-only.
  *
  * `analytics.updateOwnerInternal` and `rewards.awardPointsForGuestOrdersInternal`
  * proved the guest row belonged to the admitted STORE and stopped there, so any
  * signed-in shopper could name a stranger's guest id and absorb their browsing
  * history — and, in the rewards case, the transferable points attached to it.
- * Both now require the guest id to be the one the CALLER holds a cookie for.
+ * Both now require a server-issued grant naming the caller's account, on the
+ * guest row itself.
  */
-describe("guest merge possession bound", () => {
-  it("analytics.updateOwnerInternal refuses a guest session the caller does not hold", async () => {
+describe("guest merge grant bound", () => {
+  async function mallorySeed(email: string) {
     const t = convexTest(schema, modules);
     const seed = await seedTwoShoppers(t);
     const mallory = await t.run(async (ctx) =>
       ctx.db.insert("storeFrontUser", {
-        email: "mallory-analytics@test",
+        email,
         organizationId: (await ctx.db.get("store", seed.storeId))!
           .organizationId,
         storeId: seed.storeId,
       }),
     );
-    const owner = { storeFrontUserId: mallory, storeId: seed.storeId };
+    // Mallory signed in, so HER guest session carries a grant. Bob's does not.
+    await t.run((ctx) =>
+      ctx.db.patch("guest", seed.alice, {
+        mergeGrantedToStoreFrontUserId: mallory,
+        mergeGrantExpiresAt: Date.now() + 15 * 60 * 1000,
+        mergeGrantConsumedBy: [],
+      }),
+    );
+    return {
+      t,
+      seed,
+      mallory,
+      owner: { storeFrontUserId: mallory, storeId: seed.storeId },
+    };
+  }
 
-    // Holds her own guest cookie (alice) but names Bob's guest session.
+  it("analytics.updateOwnerInternal refuses a guest row with no grant for the caller", async () => {
+    const { t, seed, owner } = await mallorySeed("mallory-analytics@test");
+
     await expect(
       t.run((ctx) =>
         ctx.runMutation(internal.storeFront.analytics.updateOwnerInternal, {
           guestId: seed.bob,
-          claimGuestId: seed.alice,
           owner,
         }),
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(NOT_YOURS);
 
-    // …and with no guest cookie at all: absence must not pass.
-    await expect(
-      t.run((ctx) =>
-        ctx.runMutation(internal.storeFront.analytics.updateOwnerInternal, {
-          guestId: seed.bob,
-          owner,
-        }),
-      ),
-    ).rejects.toThrow();
-
-    // Her OWN guest session still merges — the real flow is not broken.
+    // Her OWN granted guest session still merges — the real flow is not broken.
     await expect(
       t.run((ctx) =>
         ctx.runMutation(internal.storeFront.analytics.updateOwnerInternal, {
           guestId: seed.alice,
-          claimGuestId: seed.alice,
           owner,
         }),
       ),
     ).resolves.not.toThrow();
   });
 
-  it("rewards.awardPointsForGuestOrdersInternal refuses a guest session the caller does not hold", async () => {
-    const t = convexTest(schema, modules);
-    const seed = await seedTwoShoppers(t);
-    const mallory = await t.run(async (ctx) =>
-      ctx.db.insert("storeFrontUser", {
-        email: "mallory-rewards@test",
-        organizationId: (await ctx.db.get("store", seed.storeId))!
-          .organizationId,
-        storeId: seed.storeId,
-      }),
+  it("rewards.awardPointsForGuestOrdersInternal refuses a guest row with no grant for the caller", async () => {
+    const { t, seed, mallory, owner } = await mallorySeed(
+      "mallory-rewards@test",
     );
-    const owner = { storeFrontUserId: mallory, storeId: seed.storeId };
 
     await expect(
       t.run((ctx) =>
         ctx.runMutation(
           internal.storeFront.rewards.awardPointsForGuestOrdersInternal,
-          {
-            storeFrontUserId: mallory,
-            guestId: seed.bob,
-            claimGuestId: seed.alice,
-            owner,
-          },
+          { storeFrontUserId: mallory, guestId: seed.bob, owner },
         ),
       ),
     ).rejects.toThrow(NOT_YOURS);
 
+    // An EXPIRED grant on her own guest session is refused too.
+    await t.run((ctx) =>
+      ctx.db.patch("guest", seed.alice, {
+        mergeGrantExpiresAt: Date.now() - 1,
+      }),
+    );
+
     await expect(
       t.run((ctx) =>
         ctx.runMutation(
           internal.storeFront.rewards.awardPointsForGuestOrdersInternal,
-          {
-            storeFrontUserId: mallory,
-            guestId: seed.bob,
-            owner,
-          },
+          { storeFrontUserId: mallory, guestId: seed.alice, owner },
         ),
       ),
     ).rejects.toThrow(NOT_YOURS);

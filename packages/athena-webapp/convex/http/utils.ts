@@ -41,11 +41,15 @@ export const getStorefrontActorFromRequest = (c: Context) => {
  * `user_id` nor `guest_id` yields `undefined` — a customer write route treats
  * that as a terminal denial.
  *
- * BOTH cookies travel when both are present. A signed-in shopper mid-merge
- * still holds their guest cookie, and that cookie is the only proof they
- * possess the guest session they are asking to absorb. The adapter still
- * prefers the account for ACTOR IDENTITY (see `resolveStorefrontCustomer`);
- * the guest id rides along as evidence of possession, not as an identity.
+ * BOTH cookies travel when both are present, but the adapter prefers the
+ * account for ACTOR IDENTITY (see `resolveStorefrontCustomer`), so the guest
+ * id is currently inert whenever a `user_id` cookie is also set.
+ *
+ * It is NOT possession evidence, and nothing downstream may treat it as such:
+ * a cookie is caller-supplied, so a `guest_id` value proves only that the
+ * caller typed it. The guest→account merge is authorized instead by a
+ * server-issued grant written onto the guest ROW at sign-in — see
+ * `storeFront/customerOwnership.ts`.
  */
 export const getStorefrontClaimFromRequest = (
   c: Context,
@@ -65,30 +69,17 @@ export const getStorefrontClaimFromRequest = (
   };
 };
 
-/**
- * The `guest_id` cookie the caller actually presented, read off the ingress
- * `Request` the rail hands the handler.
+/*
+ * There was a `getClaimGuestIdFromIngressRequest` here, which hand-parsed the
+ * ingress `Cookie` header so the merge callees could compare the body's guest
+ * id against the cookie's. It is gone, and deliberately not replaced:
  *
- * This is deliberately NOT an identity: `requireAdmittedCustomerOwner` still
- * derives the admitted shopper from the rail's actor. It is possession
- * evidence for the one operation that needs it — merging a guest session into
- * an account — where the question is not "who are you" but "do you hold this
- * guest session's cookie". Reading it here rather than off the actor keeps the
- * actor's identity precedence (account wins) untouched.
+ *  - it authorized nothing. Both operands were caller-supplied on the same
+ *    request, so satisfying the check only required typing the same id twice;
+ *  - its bare `decodeURIComponent` threw `URIError` on `guest_id=%`, turning a
+ *    malformed cookie into a 500 on five routes. Every other cookie read in
+ *    this file goes through Hono's guarded parser.
+ *
+ * The merge is authorized by the server-issued grant on the guest row
+ * (`storeFront/customerOwnership.ts`). One mechanism, not two.
  */
-export const getClaimGuestIdFromIngressRequest = (
-  request: Request,
-): Id<"guest"> | undefined => {
-  const header = request.headers.get("cookie");
-  if (!header) return undefined;
-
-  for (const part of header.split(";")) {
-    const separator = part.indexOf("=");
-    if (separator === -1) continue;
-    if (part.slice(0, separator).trim() !== "guest_id") continue;
-    const value = decodeURIComponent(part.slice(separator + 1).trim());
-    return value ? (value as Id<"guest">) : undefined;
-  }
-
-  return undefined;
-};

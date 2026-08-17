@@ -14,7 +14,7 @@ applies_when:
   - "HTTP routes authenticate from a cookie id read directly out of the request"
   - "A migration must move ~400 call sites without changing normal-user behavior"
 tags: [athena, convex, operation-admission, shared-demo, authz, static-checker, http-ingress, derived-invariants]
-delivery_diff_fingerprint: 4fed2e844bf5ba3d3ce8a5c4308034732016e03f0a6f6f1669fa7d65b8db2481
+delivery_diff_fingerprint: 64b5253e737a4bf198006fd29e176cdfbeee7d15503090a800463e0e57e042fd
 ---
 
 # Completing an Admission Rail — Deriving Invariants Instead of Listing Them
@@ -327,8 +327,52 @@ work itself** — the round that was supposed to be the safety net.
 The rest were genuine gaps in the migration: a `bag`/`savedBag` re-owner that
 admitted a caller matching EITHER side of a merge (so a signed-in shopper could
 absorb and destroy a stranger's cart), guest merges bounded by store but not by
-possession, route handlers mapping every fault to an expected client status, and
-lost behavioral coverage on the checkout and sign-in paths.
+anything else, route handlers mapping every fault to an expected client status,
+and lost behavioral coverage on the checkout and sign-in paths.
+
+### The fix that wasn't: a third round, and the sharpest lesson here
+
+The guest-merge fix went out in round 2 bounded by "possession" — comparing the
+body's guest id against the request's `guest_id` **cookie**. Two reviewers
+independently pointed out in round 3 that a cookie is caller-supplied, so both
+operands arrived on the same request and any caller satisfied the check by
+typing the same id twice. The exploit precondition was unchanged: know a guest
+id, and a stranger's orders, reward points, analytics and cart move into your
+account. The delivery had also shipped comments and a solution-note paragraph
+asserting the opposite ("they hold no such cookie") — the exact defect this
+work exists to remove, committed while removing it.
+
+The real fix is a **server-issued merge grant**. `POST /auth/verify` writes
+`mergeGrantedToStoreFrontUserId` onto the guest row after it has authenticated
+the account; the merge callees read the grant off the row, and the caller
+supplies no evidence at all. Stated precisely, because the previous round's
+imprecision is the whole lesson:
+
+- It ends the "any signed-in shopper may absorb any guest id, at any time, with
+  one request" shape. A merge is possible only inside a **15-minute window**
+  opened by an authenticated sign-in, **once per merge kind** (bag, savedBag,
+  onlineOrder, analytics, rewards), and **bounded to the admitted store**.
+- It does **not** make a guest id unguessable, and it does **not** stop someone
+  who knows a guest id from presenting that cookie while signing in to their
+  own account — `verifyCodeWithCtx` already treats the presented guest row as
+  the row the new account inherits from, so that trust predates this change.
+  That residual is a bearer-id property of the sign-in flow, not something the
+  merge callees can close, and it is tracked in **V26-1240**.
+
+Three lessons, in order of how much they cost:
+
+1. **"Caller-supplied" includes cookies.** This was mis-assumed twice, in two
+   different rounds, by different authors. A guard that compares two
+   caller-supplied values is not a guard; the fix has to be a value the server
+   issued and can look up, not one the request carries.
+2. **State what a control does NOT buy, at the control.** The residual above is
+   written into `customerOwnership.ts` beside the mechanism. A comment naming
+   only the guarantee is how the round-2 version survived review by its own
+   author.
+3. **A security fix deserves the same "does this test fail without it?" check
+   as a bug fix** — and here it deserved an adversarial reading of the trust
+   class of every operand, which is exactly what the review round supplied and
+   self-review did not.
 
 Two lessons generalise:
 
@@ -372,6 +416,28 @@ Not fixed here — recorded so they are decisions rather than oversights.
    than from the admitted actor, so the audit record states what the caller
    claimed. Scope-checked as an expansion beyond this contract and deferred to
    **V26-1241**.
+5. **`checkoutSession.updateCheckoutSession` / `getByIdInternal`** keep an
+   optional `owner` with the `if (args.owner)` no-op shape. Callers are
+   genuinely mixed (the Paystack webhook and `inventory/promoCode.ts` have no
+   customer actor), so converting them needs the `SERVER_INITIATED_OWNER`
+   sentinel plus edits to three route files. `routes/checkout.ts` calls
+   `updateCheckoutSession` with a caller-supplied session id and no owner even
+   though one is in scope — a defence-in-depth gap, not a live hole, because
+   the route checks ownership earlier. Deferred to **V26-1242**.
+6. **`userOffers.getEligibility`** takes caller-supplied `storeFrontUserId` and
+   `storeId` and asserts nothing. Its only caller derives both from the
+   admitted claim, so it is not currently exploitable — but the callee has no
+   guard of its own. Deferred to **V26-1242**.
+7. **Read amplification against the project's own rule.** The shared-demo
+   adapter runs first in the chain for all 605 admitted ingress points, so
+   every authenticated staff request now performs an extra indexed
+   `sharedDemoPrincipal` lookup that resolves to `null` for the overwhelming
+   majority of non-demo traffic. Before this migration only the ~17 demo-aware
+   handlers paid it. That is in tension with the standing Convex
+   read-minimization rule, and it is the one place this delivery made something
+   measurably worse. Accepted for now because the fix — branching on a cheap
+   identity claim before touching `ctx.db` — depends on a design call about
+   what the auth identity payload can carry. Deferred to **V26-1243**.
 
 The 41 deleted public functions are enumerated in the U10/U11 hand-off comments
 on V26-1237 / V26-1238 and reflected in the regenerated caller table at
@@ -382,7 +448,7 @@ on V26-1237 / V26-1238 and reflected in the regenerated caller table at
 - [Athena Operation Admission Rail (2026-07-21)](./athena-operation-admission-rail-2026-07-21.md) — established the write rail; superseded in scope by this note.
 - [Athena Shared Demo Read Admission Rail (2026-07-22)](./athena-shared-demo-read-admission-rail-2026-07-22.md) — established the read rail; superseded in scope by this note.
 - [Athena Public Operation Admission (2026-07-24)](./athena-public-operation-admission-2026-07-24.md)
-- [Reconciling divergent WIP read contracts, not deletions (2026-07-23)](../workflow-issues/reconciling-divergent-wip-read-contracts-not-deletions-2026-07-23.md) — the counterweight to this note. That learning says diverging work-in-progress contracts should be RECONCILED rather than deleted; this delivery deleted a great deal. The distinction: that note is about two live contracts that each still have a constituency, where deletion loses information. Here the deleted constructs had no constituency left — an exemption list whose entries were all migrated, registries whose facts the definitions already carried — and every invariant was re-derived rather than dropped. Deleting a duplicate is not the same act as deleting a divergence.
+- [Reconciling divergent WIP read contracts, not deletions (2026-07-23)](../workflow-issues/reconciling-divergent-wip-read-contracts-not-deletions-2026-07-23.md) — the test this delivery had to pass. That note's lesson is **"intent is recorded somewhere; inference is a last resort"**: its own episode ended in a deletion, and what it argues against is inferring deletion-intent from a diff rather than checking the actual record. This delivery has that record — a written contract (R10 in the plan, restated in the ticket) names every construct to delete and requires each one's invariants to be re-derived rather than dropped. The deletions here are executions of a recorded decision, not inferences from a diff. (A secondary and weaker point: the deleted constructs were duplicates of facts the definitions already carried, so nothing was lost that was not stated elsewhere. The recorded-intent test is the one that actually governs.)
 - Plan: `docs/plans/2026-08-16-002-feat-complete-operation-admission-migration-plan.md`
 - Contract: `packages/athena-webapp/convex/operationAdmission/README.md`
 - Demo coverage: `packages/athena-webapp/docs/shared-demo-backend-coverage.md`

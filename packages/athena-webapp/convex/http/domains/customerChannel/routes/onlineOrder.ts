@@ -13,9 +13,9 @@ import {
   getOrdersRouteReadDefinition,
 } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
 import {
-  admittedClaimGuestId,
   isCustomerOwnershipDenial,
   parseIngressJson,
+  tryParseIngressJson,
   requireAdmittedCustomerOwner,
 } from "./admittedCustomer";
 
@@ -84,9 +84,8 @@ onlineOrderRoutes.post(
           internal.storeFront.onlineOrder.updateOwnerInternal,
           {
             currentOwner: currentOwnerId as Id<"guest">,
-            // The guest session must be one the caller holds a cookie for,
-            // not merely one that shares the admitted store.
-            claimGuestId: admittedClaimGuestId(admitted),
+            // No merge evidence travels from the caller. The callee authorizes
+            // on the server-issued grant written onto the guest row at sign-in.
             owner: requireAdmittedCustomerOwner(admitted),
           },
         );

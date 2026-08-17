@@ -119,6 +119,17 @@ the same request twice and doing the probe first.
   They are not actor policy. See Target resource guards.
 - **`ingressVerification` runs before admission**, on the raw request, so a
   failed webhook signature leaves no admission row and no capture.
+- **A cookie is caller-supplied, so it can never bound a merge.** A callee that
+  absorbs one identity into another (cart claim, order re-owner, rewards,
+  analytics timeline) must authorize on a **server-issued grant**, never on
+  anything the request carries. `POST /auth/verify` writes
+  `mergeGrantedToStoreFrontUserId` onto the guest row after authenticating the
+  account; the merge callees read the grant off the row — 15-minute window,
+  once per merge kind, bounded to the admitted store. See
+  `convex/storeFront/customerOwnership.ts` for the contract and for what it
+  deliberately does not buy, and `storeFront/bag.ts` for the reference shape.
+  A previous version compared the body's guest id against the `guest_id`
+  cookie; both operands came from the same request, so it bounded nothing.
 - **A scope constraint from an argument is a CLAMP, not an authorization.**
   `resolveOperationScope` records `args[storeIdArg]` as the constraint; it does
   not verify the caller belongs to that store. The constraint is what confines

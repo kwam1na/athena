@@ -1,3 +1,5 @@
+import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -71,6 +73,50 @@ describe("http router composition", () => {
     expect(isAllowedStorefrontOrigin("null", environment)).toBe(false);
     expect(isAllowedStorefrontOrigin(undefined, environment)).toBe(false);
     expect(isAllowedStorefrontOrigin("https://wigclub.store", {})).toBe(false);
+  });
+
+  /**
+   * The `Vary: Origin` guarantee, pinned behaviourally.
+   *
+   * The response varies by request origin, so without this header a shared
+   * cache can serve one origin's `Access-Control-Allow-Origin` to another —
+   * the allowlist becomes a cache-poisoning primitive. Hono's `cors()` appends
+   * it for every non-wildcard configuration, which ours always is.
+   *
+   * That is a dependency on library behaviour, so it is asserted here rather
+   * than restated by a second middleware. An earlier attempt at "stating it
+   * explicitly" appended it twice and shipped `Vary: Origin, Origin`; a
+   * duplicated header is not a stronger guarantee. This test is what makes a
+   * silent library change fail loudly — including the exactly-once part.
+   */
+  it("sends Vary: Origin exactly once on a CORS-eligible response", async () => {
+    const app = new Hono();
+    app.use(
+      "*",
+      cors({
+        origin: ["https://wigclub.store"],
+        allowMethods: ["OPTIONS", "GET", "POST", "PUT", "PATCH", "DELETE"],
+        credentials: true,
+      }),
+    );
+    app.get("/probe", (c) => c.json({ ok: true }));
+
+    const response = await app.fetch(
+      new Request("https://api.test/probe", {
+        headers: { Origin: "https://wigclub.store" },
+      }),
+    );
+
+    expect(response.headers.get("Vary")).toBe("Origin");
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
+      "https://wigclub.store",
+    );
+  });
+
+  it("names no second Vary middleware in the router", () => {
+    // The duplicate-append regression, pinned at the source it came from.
+    const httpRouter = readProjectFile("convex", "http.ts");
+    expect(httpRouter).not.toContain('headers.append("Vary"');
   });
 
   it("admits the health probe through the read wrapper", () => {

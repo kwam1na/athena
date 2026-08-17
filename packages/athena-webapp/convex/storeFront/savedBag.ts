@@ -20,9 +20,11 @@ import {
 import {
   assertCustomerOwnsRow,
   assertCustomerOwnsStore,
+  assertGuestMergeGranted,
   customerOwnerActorId,
   customerOwnerValidator,
   denyCustomerOwnership,
+  guestMergeGrantConsumedPatch,
 } from "./customerOwnership";
 
 const entity = "savedBag";
@@ -253,26 +255,30 @@ export const deleteSavedBagInternal = internalMutation({
 export const updateOwner = internalMutation({
   args: {
     currentOwner: v.id("guest"),
-    claimGuestId: v.optional(v.id("guest")),
     owner: customerOwnerValidator,
   },
   handler: async (ctx, args) => {
     // Same contract as `bag.updateOwner`, and for the same reason: the
     // destination is the admitted account (never body-supplied) and the source
-    // guest session must be one the caller demonstrably holds a cookie for.
+    // guest session must carry a server-issued merge grant for that account.
+    // Nothing the caller presents authorizes this.
     const newOwner = args.owner.storeFrontUserId;
     if (!newOwner) denyCustomerOwnership();
 
-    if (
-      !args.claimGuestId ||
-      String(args.claimGuestId) !== String(args.currentOwner)
-    ) {
-      denyCustomerOwnership();
-    }
+    const guest = await ctx.db.get("guest", args.currentOwner);
+    assertGuestMergeGranted(guest, args.owner, "savedBag");
+    assertCustomerOwnsStore(args.owner, guest?.storeId);
 
     if (String(customerOwnerActorId(args.owner)) !== String(newOwner)) {
       denyCustomerOwnership();
     }
+
+    // Single-use; see `bag.updateOwner` for why it is consumed up front.
+    await ctx.db.patch(
+      "guest",
+      args.currentOwner,
+      guestMergeGrantConsumedPatch(guest!, "savedBag"),
+    );
 
     const savedBag = await ctx.db
       .query(entity)

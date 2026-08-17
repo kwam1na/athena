@@ -24,9 +24,11 @@ import {
 import {
   assertCustomerOwnsRow,
   assertCustomerOwnsStore,
+  assertGuestMergeGranted,
   customerOwnerActorId,
   customerOwnerValidator,
   denyCustomerOwnership,
+  guestMergeGrantConsumedPatch,
 } from "./customerOwnership";
 
 const entity = "bag";
@@ -207,7 +209,6 @@ export const clearBag = internalMutation({
 export const updateOwner = internalMutation({
   args: {
     currentOwner: v.id("guest"),
-    claimGuestId: v.optional(v.id("guest")),
     owner: customerOwnerValidator,
   },
   handler: async (ctx, args) => {
@@ -220,22 +221,30 @@ export const updateOwner = internalMutation({
     const newOwner = args.owner.storeFrontUserId;
     if (!newOwner) denyCustomerOwnership();
 
-    // Source: still body-supplied — it is a TARGET — but bounded by possession.
-    // `claimGuestId` is the caller's own `guest_id` cookie, so a signed-in
-    // attacker who posts a stranger's guest id holds no matching cookie and is
-    // refused. (The previous check admitted a call that matched EITHER side,
-    // which meant a signed-in caller's `currentOwner` was never checked at all.)
-    if (
-      !args.claimGuestId ||
-      String(args.claimGuestId) !== String(args.currentOwner)
-    ) {
-      denyCustomerOwnership();
-    }
+    // Source: still body-supplied — it is a TARGET — and authorized by a
+    // SERVER-ISSUED GRANT on the guest row, written at sign-in. Nothing the
+    // caller presents is consulted: the previous round compared the body's id
+    // against the request's `guest_id` cookie, which proved nothing, because a
+    // cookie is caller-supplied and both operands arrived on the same request.
+    const guest = await ctx.db.get("guest", args.currentOwner);
+    assertGuestMergeGranted(guest, args.owner, "bag");
+    // The store bound is kept on top of the grant, not replaced by it.
+    assertCustomerOwnsStore(args.owner, guest?.storeId);
 
     // Belt and braces: the actor must still be the admitted account.
     if (String(customerOwnerActorId(args.owner)) !== String(newOwner)) {
       denyCustomerOwnership();
     }
+
+    // Single-use, consumed here rather than at each of the several return
+    // paths below: a Convex mutation is one transaction, so if any later step
+    // throws, this patch rolls back with it. A merge that returns is a merge
+    // that consumed its grant.
+    await ctx.db.patch(
+      "guest",
+      args.currentOwner,
+      guestMergeGrantConsumedPatch(guest!, "bag"),
+    );
 
     const bag = await ctx.db
       .query(entity)

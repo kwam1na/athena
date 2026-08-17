@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createAdmissionRail } from "./rail";
 import {
   asOperationAdmissionDenial,
+  operationAdmissionDenialData,
   operationDenialError,
   OperationUnauthenticatedError,
 } from "./adapters";
@@ -532,12 +533,22 @@ describe("http ingress", () => {
         }),
       });
 
-      await expect(
-        railWithEntrypoints().admitHttpRoute(
-          customerWrite as never,
-          handler,
-        )(c as never),
-      ).rejects.toThrow("index missing");
+      // Assert IDENTITY, not just message. Before the fix,
+      // `asOperationAdmissionDenial` converted every error into a ConvexError
+      // carrying `message: error.message` — so `.rejects.toThrow("index
+      // missing")` passed identically whether the thrown value was the raw
+      // TypeError (correct) or a denial wrapper with the same text (the
+      // regression). Only the type and the absence of the denial marker
+      // distinguish them.
+      const thrown = await railWithEntrypoints()
+        .admitHttpRoute(customerWrite as never, handler)(c as never)
+        .then(
+          () => undefined,
+          (error: unknown) => error,
+        );
+      expect(thrown).toBeInstanceOf(TypeError);
+      expect((thrown as Error).message).toBe("index missing");
+      expect(operationAdmissionDenialData(thrown)).toBeUndefined();
       expect(handler).not.toHaveBeenCalled();
       vi.unstubAllEnvs();
     });

@@ -32,6 +32,12 @@ import {
   STOREFRONT_OBSERVABILITY_ACTION,
 } from "./storefrontObservabilityReport";
 import { SYNTHETIC_MONITOR_ORIGIN } from "./syntheticMonitor";
+import {
+  assertCustomerOwnsStore,
+  assertGuestMergeGranted,
+  denyCustomerOwnership,
+  guestMergeGrantConsumedPatch,
+} from "./customerOwnership";
 import { requireReportsStoreAccess } from "../reports/access";
 
 const entity = "analytics";
@@ -368,41 +374,38 @@ async function updateAnalyticsOwnerWithCtx(
  * the records move TO is the admitted actor.
  *
  * The guest id being re-owned stays caller-supplied, so it is bounded twice:
- * it must be the guest session the CALLER holds a cookie for (`claimGuestId`,
- * resolved by the rail from the request, never from the body), and that guest
- * row must belong to the admitted store. Store alone was not enough — it let
- * any signed-in shopper absorb a stranger's browsing history by posting their
- * guest id. The only legitimate merge is the caller's own guest session: at
- * merge time the browser holds both cookies, which is what the storefront
- * flow does after sign-in.
+ * the guest row must carry a SERVER-ISSUED MERGE GRANT for the admitted
+ * account (written at `POST /auth/verify`), and that row must belong to the
+ * admitted store. Store alone was not enough — it let any signed-in shopper
+ * absorb a stranger's browsing history by posting their guest id. Comparing
+ * the posted id against the request's `guest_id` COOKIE was no better: a
+ * cookie is caller-supplied, so that check only required the caller to type
+ * the same id twice. See `customerOwnership.ts` for the grant contract.
+ *
+ * These refusals raise the shared ownership denial rather than
+ * `AnalyticsOwnershipError`, so `POST /analytics/update-owner` can recognise
+ * them with the same `isCustomerOwnershipDenial` predicate its siblings use
+ * and answer 403 instead of a 500 carrying the internal message.
  */
 export const updateOwnerInternal = internalMutation({
   args: {
     guestId: v.id("guest"),
-    claimGuestId: v.optional(v.id("guest")),
     owner: ownerArg,
   },
   handler: async (ctx, args) => {
     const { owner } = args;
     if (!owner.storeFrontUserId) {
-      throw new AnalyticsOwnershipError(
-        "Re-owning analytics requires a signed-in shopper.",
-      );
-    }
-    if (
-      !args.claimGuestId ||
-      String(args.claimGuestId) !== String(args.guestId)
-    ) {
-      throw new AnalyticsOwnershipError(
-        "You do not have access to this guest session.",
-      );
+      denyCustomerOwnership();
     }
     const guest = await ctx.db.get("guest", args.guestId);
-    if (!guest || guest.storeId !== owner.storeId) {
-      throw new AnalyticsOwnershipError(
-        "You do not have access to this guest session.",
-      );
-    }
+    assertGuestMergeGranted(guest, owner, "analytics");
+    assertCustomerOwnsStore(owner, guest?.storeId);
+    // Single-use; consumed inside the same transaction as the merge.
+    await ctx.db.patch(
+      "guest",
+      args.guestId,
+      guestMergeGrantConsumedPatch(guest!, "analytics"),
+    );
     return await updateAnalyticsOwnerWithCtx(ctx, {
       guestId: args.guestId,
       userId: owner.storeFrontUserId,

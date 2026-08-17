@@ -60,6 +60,41 @@ authRoutes.post(
           );
 
           if (res.user) {
+            // Mint the guest→account MERGE GRANT.
+            //
+            // This is the one moment the server sees a guest session and an
+            // account it has just AUTHENTICATED. The five merge routes the
+            // storefront fires next (bag, savedBag, orders, analytics,
+            // rewards) then authorize on the grant written here, not on
+            // anything the caller presents — which is what the previous
+            // `claimGuestId` cookie comparison could never do, since both
+            // sides of that comparison arrived on the same request.
+            //
+            // Reading the `guest_id` cookie HERE is a different question from
+            // reading it at merge time. There, the cookie was being asked to
+            // prove possession, which a caller-set value cannot do. Here the
+            // server is choosing which guest row to bless on the back of a
+            // verified email code, and `grantMergeToStoreFrontUser` still
+            // bounds that row to the admitted store. The residual — someone
+            // who knows a guest id presenting it while signing in to their own
+            // account — is the sign-in flow's pre-existing trust in the
+            // presented guest row (`verifyCodeWithCtx` already inherits the
+            // new account's name from it), documented in
+            // `storeFront/customerOwnership.ts`.
+            const guestId = getCookie(c, "guest_id");
+            if (guestId) {
+              await c.env.runMutation(
+                internal.storeFront.guest.grantMergeToStoreFrontUser,
+                {
+                  guestId,
+                  owner: {
+                    storeFrontUserId: res.user._id,
+                    storeId: owner.storeId,
+                  },
+                },
+              );
+            }
+
             setCookie(c, "user_id", res.user._id, {
               path: "/",
               secure: true,

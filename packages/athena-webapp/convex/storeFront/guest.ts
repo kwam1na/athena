@@ -19,6 +19,7 @@ import {
   admitPublicQuery,
 } from "../platform/operationAdmission";
 import {
+  GUEST_MERGE_GRANT_TTL_MS,
   assertCustomerOwnsStore,
   customerOwnerActorId,
   customerOwnerOrServerInitiatedValidator,
@@ -112,6 +113,64 @@ export const create = internalMutation({
     });
 
     return ctx.db.get("guest", id);
+  },
+});
+
+/**
+ * Mint the server-issued guest→account MERGE GRANT.
+ *
+ * Called from `POST /auth/verify` immediately after `verifyCodeInternal` has
+ * authenticated the account. This is the only writer of the grant columns, and
+ * the one point in the system where the server sees the guest session and the
+ * just-authenticated account together — which is exactly why the merge callees
+ * can then authorize on the ROW instead of on something the caller presents.
+ * See `customerOwnership.ts` for the full contract, including what this does
+ * not buy.
+ *
+ * Fail-soft rather than fail-loud: the guest id comes from the request's own
+ * `guest_id` cookie, so an unparseable or unknown id is a client-side defect,
+ * not a server fault — sign-in must still succeed, just without a grant. The
+ * grant is store-bounded here so a guest row from another storefront can never
+ * be granted to this account.
+ *
+ * Re-granting deliberately RESETS `mergeGrantConsumedBy`: a fresh
+ * authenticated sign-in is a fresh authorization, so the shopper who signs in
+ * twice still gets their five merges the second time.
+ */
+export const grantMergeToStoreFrontUser = internalMutation({
+  args: {
+    // `v.string()`, not `v.id("guest")`, on purpose: this value is raw cookie
+    // text. Declaring it as an id would make a hand-edited cookie fail
+    // ARGUMENT VALIDATION — a fault the sign-in route would render as an
+    // error response — instead of the no-op it should be.
+    guestId: v.string(),
+    owner: customerOwnerValidator,
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const storeFrontUserId = args.owner.storeFrontUserId;
+    if (!storeFrontUserId) return false;
+
+    const guestId = args.guestId as Id<"guest">;
+
+    let guest = null;
+    try {
+      guest = await ctx.db.get(entity, guestId);
+    } catch {
+      // A hand-edited cookie is not a parseable Convex id and `get` throws.
+      return false;
+    }
+    if (!guest) return false;
+    if (String(guest.storeId ?? "") !== String(args.owner.storeId)) return false;
+
+    await ctx.db.patch(entity, guestId, {
+      mergeGrantedToStoreFrontUserId: storeFrontUserId,
+      mergeGrantExpiresAt: Date.now() + GUEST_MERGE_GRANT_TTL_MS,
+      mergeGrantConsumedBy: [],
+    });
+
+    return true;
+
   },
 });
 

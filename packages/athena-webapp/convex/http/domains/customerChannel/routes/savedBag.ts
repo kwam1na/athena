@@ -15,10 +15,10 @@ import {
 } from "../../../../operationAdmission/domains/u10_httpCustomer_definitions";
 import { getSavedBagRouteReadDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
 import {
-  admittedClaimGuestId,
   admittedCustomerId,
   isCustomerOwnershipDenial,
   parseIngressJson,
+  tryParseIngressJson,
   requireAdmittedCustomerOwner,
 } from "./admittedCustomer";
 
@@ -99,16 +99,19 @@ savedBagRoutes.post(
     updateSavedBagOwnerRouteOperationDefinition,
     async (c, admitted) => {
       // As on `POST /bags/:bagId/owner`: the destination account is the
-      // admitted shopper, and the guest side is bounded by the caller's own
-      // guest cookie rather than by whatever the body names.
-      const { currentOwnerId } = parseIngressJson(admitted);
+      // admitted shopper, and the guest side is authorized by the server-issued
+      // merge grant on the guest row — nothing this route forwards.
+      const body = tryParseIngressJson(admitted);
+      if (!body) {
+        return c.json({ error: "Invalid request body" }, 400);
+      }
+      const { currentOwnerId } = body;
 
       try {
         const b = await c.env.runMutation(
           internal.storeFront.savedBag.updateOwner,
           {
             currentOwner: currentOwnerId as Id<"guest">,
-            claimGuestId: admittedClaimGuestId(admitted),
             owner: requireAdmittedCustomerOwner(admitted),
           },
         );

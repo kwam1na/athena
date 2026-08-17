@@ -1,6 +1,10 @@
 import { Hono } from "hono";
 
-import { requestWithBody } from "../../../../operationAdmission/ingressBody";
+import {
+  DEFAULT_INGRESS_MAX_BODY_BYTES,
+  readBoundedRequestBody,
+  requestWithBody,
+} from "../../../../operationAdmission/ingressBody";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import type { Context } from "hono";
 import { ActionCtx } from "../../../../_generated/server";
@@ -35,7 +39,18 @@ mtnMomoRoutes.use("*", async (c, next) => {
     return c.json({ error: "Callback verification is not configured" }, 503);
   }
 
-  const rawBody = await c.req.text();
+  // Bounded HERE, not just in the rail. These are unauthenticated endpoints:
+  // reading the body with `c.req.text()` before any credential is checked lets
+  // an anonymous caller make the isolate buffer (and HMAC) an unbounded body,
+  // and the rail's 413 would only fire after the whole thing had been read.
+  const bounded = await readBoundedRequestBody(
+    c.req.raw,
+    DEFAULT_INGRESS_MAX_BODY_BYTES,
+  );
+  if (bounded.kind === "too_large") {
+    return c.json({ error: "Request body too large." }, 413);
+  }
+  const rawBody = new TextDecoder().decode(bounded.bytes);
   const verified = await createMtnMomoCallbackVerifier()({
     headers: c.req.raw.headers,
     rawBody,
@@ -49,7 +64,7 @@ mtnMomoRoutes.use("*", async (c, next) => {
   // A Fetch body stream reads once. The rail reads `c.req.raw.body` directly,
   // not Hono's body cache, so without this reconstruction it would re-verify
   // an empty body and deny every genuine callback.
-  c.req.raw = requestWithBody(c.req.raw, new TextEncoder().encode(rawBody));
+  c.req.raw = requestWithBody(c.req.raw, bounded.bytes);
 
   return next();
 });

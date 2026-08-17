@@ -47,6 +47,7 @@ import { meRoutes } from "./me";
 import { onlineOrderRoutes } from "./onlineOrder";
 import { paystackRoutes } from "./paystack";
 import { reviewRoutes } from "./reviews";
+import { savedBagRoutes } from "./savedBag";
 import { userRoutes } from "./user";
 
 const ALLOWED_ORIGIN = "https://shop.test";
@@ -492,8 +493,6 @@ describe("customer write routes", () => {
       await onlineOrderRoutes.fetch(
         request("/owner", {
           method: "POST",
-          // The real merge flow: the browser still holds the guest cookie at
-          // sign-in time, and that cookie is what proves possession.
           cookie: "user_id=user-A; guest_id=guest-A; store_id=store-1",
           origin: ALLOWED_ORIGIN,
           body: { currentOwnerId: "guest-A", newOwnerId: "user-B" },
@@ -504,11 +503,12 @@ describe("customer write routes", () => {
       const call = test.called(
         internal.storeFront.onlineOrder.updateOwnerInternal,
       );
-      // `newOwner` is gone from the call surface entirely, and the guest side
-      // travels as the CLAIM's guest id rather than only as the body's.
+      // `newOwner` is gone from the call surface entirely, and NO merge
+      // evidence travels either: the guest cookie is not forwarded, because a
+      // cookie proves nothing. The callee authorizes on the server-issued
+      // grant written onto the guest row at sign-in.
       expect(call?.args).toEqual({
         currentOwner: "guest-A",
-        claimGuestId: "guest-A",
         owner: { storeFrontUserId: "user-A", storeId: "store-1" },
       });
     });
@@ -541,7 +541,7 @@ describe("customer write routes", () => {
     });
   });
 
-  it("sends the caller's own guest cookie on a bag merge, not the body's id", async () => {
+  it("forwards no merge evidence on a bag merge, only the target and the owner", async () => {
     await withOrigin(async () => {
       const test = harness(STORE_ROWS);
 
@@ -551,7 +551,7 @@ describe("customer write routes", () => {
           cookie: "user_id=user-A; guest_id=guest-A; store_id=store-1",
           origin: ALLOWED_ORIGIN,
           // A forged guest id in the body. It stays the TARGET; the callee
-          // compares it against `claimGuestId` and refuses the mismatch.
+          // refuses it because that row carries no server-issued grant.
           body: { currentOwnerId: "guest-stranger", newOwnerId: "user-B" },
         }),
         test.env as never,
@@ -560,9 +560,38 @@ describe("customer write routes", () => {
       const call = test.called(internal.storeFront.bag.updateOwner);
       expect(call?.args).toEqual({
         currentOwner: "guest-stranger",
-        claimGuestId: "guest-A",
         owner: { storeFrontUserId: "user-A", storeId: "store-1" },
       });
+    });
+  });
+
+  it("answers 400, not 500, for a malformed merge body", async () => {
+    await withOrigin(async () => {
+      for (const [name, router, path] of [
+        ["bag", bagRoutes, "/bag-1/owner"],
+        ["savedBag", savedBagRoutes, "/saved-1/owner"],
+      ] as const) {
+        const test = harness(STORE_ROWS);
+
+        const response = await router.fetch(
+          new Request(`https://api.test${path}`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Cookie: "user_id=user-A; guest_id=guest-A; store_id=store-1",
+              Origin: ALLOWED_ORIGIN,
+            },
+            body: '{"currentOwnerId":',
+          }),
+          test.env as never,
+        );
+
+        expect({ name, status: response.status }).toEqual({
+          name,
+          status: 400,
+        });
+        expect({ name, calls: test.calls }).toEqual({ name, calls: [] });
+      }
     });
   });
 

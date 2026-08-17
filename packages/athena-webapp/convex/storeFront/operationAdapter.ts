@@ -93,9 +93,10 @@ async function resolveStorefrontCustomer(
       ...(storeFrontUserId ? { storeFrontUserId } : {}),
       // Identity precedence: the account wins whenever both cookies are
       // present, so `guestId` names the actor ONLY for a pure guest. A
-      // signed-in shopper's guest cookie is possession evidence, not identity,
-      // and travels to the merge callees separately (see
-      // `admittedClaimGuestId` in the customer-channel routes).
+      // signed-in shopper's guest cookie is dropped here and travels nowhere:
+      // it is not identity, and it is not evidence either — a cookie is
+      // caller-supplied. The guest→account merge is authorized instead by the
+      // server-issued grant on the guest row (`customerOwnership.ts`).
       ...(guestId && !storeFrontUserId ? { guestId } : {}),
     },
     constraints: { storeId },
