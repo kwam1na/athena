@@ -7,7 +7,7 @@
   <body>
     <article
       data-athena-landed-change-report="v2"
-      data-athena-report-diff-fingerprint="09ffc96767f99138b72b462e47b6915b02163335fc1a00ce89d1fae583298020"
+      data-athena-report-diff-fingerprint="61f8ea5d8c4d0d5e342f33165025b95ce408039ace09c115d3dac666b4e3d17d"
     >
       <header data-report-section="header">
         <h1>Closing the Admission Rail</h1>
@@ -677,6 +677,22 @@ handler: admitPublicMutation(createOrganizationOperationDefinition, ...)</code><
           error: a stale cookie is a shopper to re-bootstrap, not a fault to
           page on. And <strong>the merge authorizes on the server-issued
           grant</strong>, now minted only from a verified guest id. Precisely:
+        </p>
+        <p>
+          Two mint points and no more: <code>GET /homepage-snapshot</code> had
+          been a third that set a bare, unsigned <code>guest_id</code> — a
+          session no consumer accepted, on a route the storefront never
+          bootstrapped through — and that branch is deleted. And because both
+          bootstrap routes will still resolve an <em>existing</em> guest from the
+          storefront's session-recovery <code>marker</code> and sign a cookie for
+          it, <strong>the marker is a secret or nothing</strong>: it was
+          caller-chosen, five base-36 characters of <code>Math.random()</code>,
+          unscoped by store and optional — no marker at all matched the oldest
+          marker-less row. <code>guest:getByMarker</code> now requires a
+          high-entropy marker (≥22 chars) <em>and</em> a store, the storefront
+          mints it with <code>crypto.randomUUID()</code>, and anything else
+          mints a fresh guest. The route tests drive the round-4 attack —
+          bootstrap with the victim's marker, sign in, merge — end to end.
         </p>
         <ul>
           <li>

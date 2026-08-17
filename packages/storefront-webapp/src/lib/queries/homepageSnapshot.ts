@@ -15,7 +15,7 @@ export const useHomepageSnapshotQueries = () => {
     snapshot: () =>
       queryOptions({
         queryKey: homepageSnapshotKeys.snapshot(),
-        queryFn: () => getHomepageSnapshot({ asNewUser: false }),
+        queryFn: () => getHomepageSnapshot(),
         staleTime: DEFAULT_STALE_TIME,
         enabled: queryEnabled,
       }),

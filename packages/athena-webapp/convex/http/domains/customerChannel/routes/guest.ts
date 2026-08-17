@@ -6,6 +6,7 @@ import { Id } from "../../../../_generated/dataModel";
 import { getCookie } from "hono/cookie";
 import {
   getStoreDataFromRequest,
+  isRecoverableGuestMarker,
   readLegacyUnsignedGuestCookieForBootstrap,
   readVerifiedGuestIdFromRequest,
   setSignedGuestCookie,
@@ -48,6 +49,7 @@ guestRoutes.get(
     // BOOTSTRAP MINT POINT #2 (of two). Guest cookies are SIGNED here and at
     // `GET /storefront`; every cookie this route issues carries an HMAC, and
     // this is one of only two places allowed to upgrade a legacy unsigned one.
+    // (`GET /homepage-snapshot` mints nothing.)
     const presentedCookie = getCookie(c, "guest_id");
 
     const marker = c.req.query("marker");
@@ -108,26 +110,38 @@ guestRoutes.get(
     }
 
     // Recovery: the presented cookie is unusable — unknown, malformed or
-    // tampered — so this shopper needs a session. Unchanged from before, other
-    // than the cookie now being signed.
-    let guest = await c.env.runQuery(internal.storeFront.guest.getByMarker, {
-      marker,
-    });
+    // tampered — so this shopper needs a session.
+    //
+    // `guest.create` requires a store since U6 — a guest that cannot be
+    // clamped to one can never be admitted, so refuse to mint it — and the
+    // marker lookup is scoped to that same store.
+    if (!storeId) {
+      return c.json({ error: "Store id missing" }, 404);
+    }
 
-    if (!guest) {
-      // `guest.create` requires a store since U6 — a guest that cannot be
-      // clamped to one can never be admitted, so refuse to mint it.
-      if (!storeId) {
-        return c.json({ error: "Store id missing" }, 404);
-      }
-
-      guest = await c.env.runMutation(internal.storeFront.guest.create, {
-        marker,
+    // The marker is a session-recovery SECRET (see `isRecoverableGuestMarker`
+    // in `http/utils.ts`): only a high-entropy marker is looked up, and only
+    // within this store. Absent, empty or short means NO marker — mint a fresh
+    // guest rather than resolve to somebody else's row. This is the recovery
+    // path a caller with a garbage cookie lands on, so "no marker" resolving
+    // to the oldest marker-less guest would hand any caller a signed session
+    // for a stranger.
+    const recoverableMarker = isRecoverableGuestMarker(marker)
+      ? marker
+      : undefined;
+    const guest =
+      (recoverableMarker
+        ? await c.env.runQuery(internal.storeFront.guest.getByMarker, {
+            marker: recoverableMarker,
+            storeId: storeId as Id<"store">,
+          })
+        : null) ??
+      (await c.env.runMutation(internal.storeFront.guest.create, {
+        marker: recoverableMarker,
         creationOrigin: "storefront",
         storeId: storeId as Id<"store">,
         organizationId,
-      });
-    }
+      }));
 
     if (guest && !setSignedGuestCookie(c, guest._id)) {
       return guestSessionsUnavailable(c);

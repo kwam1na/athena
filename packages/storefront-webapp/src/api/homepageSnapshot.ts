@@ -1,5 +1,4 @@
 import config from "@/config";
-import { MARKER_KEY } from "@/lib/constants";
 
 export type HomepageSnapshotSkuV1 = {
   productId: string;
@@ -82,27 +81,14 @@ type HomepageSnapshotResponse =
   | HomepageSnapshotV1
   | { snapshot: HomepageSnapshotV1 };
 
-function getStoredMarker() {
-  let marker = localStorage.getItem(MARKER_KEY);
-
-  if (!marker) {
-    marker = Math.random().toString(36).substring(7);
-    localStorage.setItem(MARKER_KEY, marker);
-  }
-
-  return marker;
-}
-
-export async function getHomepageSnapshot({
-  asNewUser = false,
-}: {
-  asNewUser?: boolean;
-} = {}): Promise<HomepageSnapshotV1> {
-  const marker = getStoredMarker();
+/**
+ * Public homepage read. It carries no shopper identity: guest sessions are
+ * bootstrapped by `getStore` / `getGuest` (the two signed mint points), and
+ * this route neither looks a guest up nor mints one, so no marker travels.
+ */
+export async function getHomepageSnapshot(): Promise<HomepageSnapshotV1> {
   const search = new URLSearchParams({
     storeName: config.storefront.storeName,
-    marker,
-    asNewUser: String(asNewUser),
   });
 
   const response = await fetch(

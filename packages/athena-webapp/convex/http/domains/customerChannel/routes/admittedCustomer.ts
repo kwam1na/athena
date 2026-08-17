@@ -130,3 +130,41 @@ export function isCustomerOwnershipDenial(error: unknown): boolean {
     error instanceof Error && error.message.includes(CUSTOMER_OWNERSHIP_DENIED)
   );
 }
+
+/**
+ * The response a guest→account MERGE route sends for an error its callee
+ * threw, or `undefined` when the error is a real fault the route must rethrow.
+ *
+ * The five merge routes (bag, saved bag, online orders, analytics, rewards)
+ * classify the same two client-caused failures the same way, and this is the
+ * one place that classification lives:
+ *
+ *  - an ownership refusal — the guest row carries no live server-issued grant
+ *    for this account, or belongs to another store — is a 403 with a fixed
+ *    body, leaking nothing about which;
+ *  - the guest id in the body is still caller-supplied, so a non-id string
+ *    reaches the callee's `v.id("guest")` argument validator and raises rather
+ *    than denying — a malformed request, not a server fault, so 400.
+ *    (Production Convex names this `ArgumentValidationError`; the in-process
+ *    `convex-test` harness raises a plain `Error` prefixed `Validator error:`
+ *    for the same condition.)
+ *
+ * Everything else is `undefined` and the caller MUST rethrow: a blanket catch
+ * that reported every fault under a client-error status told the shopper to
+ * stop retrying and told monitoring nothing was wrong.
+ */
+export function guestMergeErrorResponse(
+  error: unknown,
+): { status: 400 | 403; body: { error: string } } | undefined {
+  if (isCustomerOwnershipDenial(error)) {
+    return { status: 403, body: { error: "Forbidden" } };
+  }
+  if (
+    error instanceof Error &&
+    (error.message.includes("ArgumentValidationError") ||
+      error.message.includes("Validator error"))
+  ) {
+    return { status: 400, body: { error: "Invalid guest id" } };
+  }
+  return undefined;
+}

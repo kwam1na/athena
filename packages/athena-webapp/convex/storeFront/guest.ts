@@ -7,6 +7,7 @@ import {
 } from "../_generated/server";
 import { v } from "convex/values";
 import { Id } from "../_generated/dataModel";
+import { isRecoverableGuestMarker } from "../http/utils";
 import { deleteGuestOperationDefinition } from "../operationAdmission/domains/u6_storefrontCustomer_definitions";
 import {
   getAllGuestsReadDefinition,
@@ -70,17 +71,40 @@ export const getById = internalQuery({
   },
 });
 
+/**
+ * Recover a guest row from the storefront's session-recovery MARKER, scoped
+ * to the store being bootstrapped.
+ *
+ * Callers are the two bootstrap routes (`GET /storefront`, `GET /guests`),
+ * and what they do with the result is mint a SIGNED `guest_id` cookie for it —
+ * so resolving a marker is handing out a session. Two rules follow, both
+ * enforced HERE so no route can forget them:
+ *
+ *  - only a high-entropy marker resolves (`isRecoverableGuestMarker`): an
+ *    absent, empty or short marker answers `null` and the caller mints a fresh
+ *    guest. In particular a missing marker must never match the marker-less
+ *    rows the `by_marker` index files under `undefined`;
+ *  - the row must belong to `storeId`. A marker is a per-browser secret, not a
+ *    global handle, and a stranger's session in another store is not this
+ *    caller's to recover.
+ *
+ * `by_marker` plus a `storeId` filter rather than a compound index: a
+ * recoverable marker is 122 bits of randomness, so the index range is one row
+ * (or none) and the filter reads nothing extra.
+ */
 export const getByMarker = internalQuery({
   args: {
-    marker: v.optional(v.string()),
+    marker: v.string(),
+    storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
-    const guest = await ctx.db
+    if (!isRecoverableGuestMarker(args.marker)) return null;
+
+    return await ctx.db
       .query(entity)
       .withIndex("by_marker", (q) => q.eq("marker", args.marker))
+      .filter((q) => q.eq(q.field("storeId"), args.storeId))
       .first();
-
-    return guest;
   },
 });
 

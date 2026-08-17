@@ -94,7 +94,8 @@ handler: recordThingAdmittedHandler
 
 // 3. The denial-mapping try, and only in this exact form: plain identifier
 //    parameters with no defaults, a body of exactly one try, a try block of
-//    exactly one statement, and the parameters forwarded verbatim.
+//    exactly one statement, the parameters forwarded verbatim, and a catch /
+//    finally that never mentions ctx or args.
 handler: async (ctx, args) => {
   try {
     return await admitPublicMutation(def, recordThingWithCtx)(ctx, args);
@@ -109,15 +110,22 @@ handler: async (ctx, args) => {
 Shape 3 exists for one reason: a denial is thrown **by** the wrapper, so the
 only place to translate it into a `CommandResult` is around the wrapper call
 (see `convex/notifications/subscriptions.ts`). It is the only wrapping function
-the grammar accepts. The `catch` and `finally` clauses are unconstrained — they
-can only run after the wrapper has already been applied.
+the grammar accepts. Its `catch` and `finally` clauses are pinned too: they run
+after the wrapper has been applied, but "applied" includes **denied** — the
+denial is exactly what lands in the catch, with the outer `ctx` / `args` still
+in scope. So neither clause may reference an outer parameter, `this`, or
+`arguments`, and every callee in them must be a plain identifier or dotted
+member (`mapDenial(error)`, `userError({...})`, `error.message`); an IIFE or a
+computed callee there is rejected. `catch (error) { return fn(ctx, args); }` is
+the unadmitted handler wearing a try, and it fails.
 
 Everything else is rejected, including shapes that look harmless: a concise
 arrow around the wrapper, a block arrow that merely returns the invocation, any
 call / `await` / IIFE / spread / conditional / comma or logical operator
 anywhere in either argument list, a parameter default on the outer handler, a
 destructured `ctx`, an optional-chained invocation, a wrapper reached through a
-property access on a non-root receiver.
+property access on a non-root receiver, a catch or finally that touches `ctx`
+or `args`.
 
 ```ts
 // BAD — the read runs for an un-admitted caller
@@ -139,7 +147,28 @@ handler: async (ctx, args) => {
 
 // BAD — a default parameter evaluates before the first statement of the body
 handler: async (ctx, args, pre = ctx.db.insert("t", args)) => { … }
+
+// BAD — the catch runs for the caller the wrapper just DENIED
+handler: async (ctx, args) => {
+  try {
+    return await admitPublicMutation(def, fn)(ctx, args);
+  } catch (error) {
+    return await fn(ctx, args);
+  }
+}
 ```
+
+**(3) The definition handed to the wrapper names this ingress.** The wrapper
+admits with whatever definition it receives (`rail.ts` does no lookup by
+function name), so the checker resolves the first argument — an identifier or
+dotted member — through the module's imports to the exported const it denotes,
+evaluates it, and requires its `functionName` / `route` to equal the ingress
+id. `admitPublicMutation(publicPingDefinition, …)` on `deleteStore` is
+`admission-definition-does-not-name-this-ingress`; a definition the checker
+cannot follow to a registry export (declared inline, imported from a module
+that does not resolve, or a member that does not exist) is
+`admission-definition-not-statically-resolvable`. Import the definition const
+by name from `definitions.ts`, `readDefinitions.ts`, or a `domains/` module.
 
 #### Why a whitelist
 
@@ -155,6 +184,21 @@ bad shapes it knew about, and each round a review found one it did not:
    `@evil/platform/operationAdmission` counted as canonical; computed and
    destructured `ctx` receivers (`ctx["db"]`, `({ db, …ctx }) => …`); and
    handler **parameter defaults**, which evaluate before the body.
+4. The whitelist itself, applied to the wrong set: the grammar pinned the
+   `try` block and left the **catch** "unconstrained" — the clause that runs
+   precisely when the wrapper has denied the caller. And everything AROUND the
+   grammar was still a blacklist: discovery only saw `export const x =
+   <builder>(...)`, so `as any`, `export { a }`, a destructured object,
+   `mutationGeneric` from `convex/server`, or a `.js` specifier made a public
+   function invisible rather than unadmitted; route discovery only looked at
+   the last argument of a verb call and only on a `new Hono()` receiver, so
+   per-route middleware, chained `.get().get()`, a const-held path, `.mount`,
+   and a factory-built router vanished; the `api.*` ban keyed on the spelling
+   `api.` rather than on public-function references (`anyApi`,
+   `makeFunctionReference`, `.js`, a computed index, an object literal); the
+   CORS assertion accepted any `origin` that was not a callback or `"*"`; and
+   nothing checked that the definition handed to the wrapper was the
+   ingress's own. Round 4 inverted every one of those.
 
 The argument each time was "the new predicate accepts everything the old one
 accepted". That reasons about the predicate's extension rather than about the
@@ -187,6 +231,20 @@ There is no `resolveWriteAdmission` export to probe admission separately with.
 It was removed: every call site paired it with a second wrapper call, admitting
 the same request twice and doing the probe first.
 
+#### What the checker resolves, and what it refuses to guess
+
+Every discovery step is a whitelist with a fail-closed finding for the
+remainder. Anything the checker cannot follow is reported as ingress with
+unknown admission — never skipped.
+
+| surface | resolved | otherwise |
+|---|---|---|
+| exported Convex function | `export const x = <builder>({…})` after peeling `as` / `satisfies` / `!` / parentheses; a top-level `const` re-exported with `export { x }` / `export { x as y }` / `export default x`; `export default <builder>({…})`; `export const { a, b: c } = { a: <builder>({…}), b: <builder>({…}) }`; builders are `mutation` / `query` / `action` from `_generated/server` (any extension) or `mutationGeneric` / `queryGeneric` / `actionGeneric` from `convex/server`, named, aliased, or namespaced | any exported binding that mentions a builder in another shape (a conditional, a wrapping call, `x || <builder>(…)`) — `ingress-not-statically-resolvable` |
+| Hono route | a verb / `.on` on a **top-level router binding** (`Hono` / `HonoWithConvex` typed, `new Hono()`, mounted with `.route`, or carrying a registration — so a factory-built router counts), through chained calls, with a string-literal path (and literal method list) and the handler as the **last and only** argument after it | more arguments than (path, handler) — per-route middleware — is a `wrapper-shape` rejection; a non-literal path or method list, `.route` with a non-literal prefix or non-identifier child, `.mount` anywhere, or any registration on a receiver that is not a top-level router — `route-registration-not-statically-resolvable` |
+| definition argument | an import binding (named, aliased, or namespace member) that resolves to a convex module whose export evaluates to a definition naming this ingress | `admission-definition-does-not-name-this-ingress` / `admission-definition-not-statically-resolvable` |
+| `api.*` self-call | roots are `api` from `_generated/api` (any extension), `anyApi` and `makeFunctionReference` from `convex/server`, widened through aliases, consts, destructuring, and object literals; `makeFunctionReference("m:f")` is a site when any statically enumerable value of its argument (literal, template, conditional, once-declared const) names a discovered public function; a computed index on a root is always a site | — the reference IS the finding |
+| router CORS | exactly one `cors(...)` (imported from `hono/cors`) passed directly to `<router>.use(...)`, whose `origin` is an array literal of string literals / spreads of a `platform/storefrontOrigins.ts` export, or such an export (or a zero-argument call to one) directly | any other value — an identifier bound to a callback, a member, a call with arguments — fails; a later passing call never masks an earlier failing one |
+
 ### The four things that are not obvious
 
 - **Dynamic capabilities are all-of, not any-of.** A batch that mixes a granted
@@ -208,7 +266,15 @@ the same request twice and doing the probe first.
   consumer accepts the id only when the HMAC verifies in constant time. An
   unsigned or tampered cookie is **absent**, never an error — a stale cookie is
   a shopper to re-bootstrap, not a fault to page on. Unset secret fails closed:
-  no guest is admitted, though anonymous browse still works.
+  no guest is admitted, though anonymous browse still works. Those two routes
+  are the **only** mint points — `GET /homepage-snapshot` sets store cookies
+  and nothing else — and the one other way to be handed a signed cookie for an
+  **existing** row, the storefront's session-recovery `marker`, is treated as a
+  secret or not at all: `storeFront/guest:getByMarker` resolves only a
+  high-entropy marker (`isRecoverableGuestMarker` in `http/utils.ts`, ≥22
+  chars; the storefront mints a UUID) and only within the store being
+  bootstrapped. Absent, empty, short or foreign-store markers mint a fresh
+  guest — "no marker" must never mean "the oldest marker-less guest".
 
   **(b) A merge authorizes on a SERVER-ISSUED GRANT, not on the cookie.** A
   callee that absorbs one identity into another (cart claim, order re-owner,

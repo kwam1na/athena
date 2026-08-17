@@ -15,7 +15,7 @@ describe("loadHomePageData", () => {
       snapshotRequest,
     });
 
-    expect(snapshotRequest).toHaveBeenCalledWith({ asNewUser: false });
+    expect(snapshotRequest).toHaveBeenCalledWith();
     expect(result.snapshot.data).toEqual({
       contractVersion: "homepage_snapshot.v1",
       bestSellers: [{ id: "best-seller" }],

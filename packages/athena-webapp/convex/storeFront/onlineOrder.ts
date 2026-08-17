@@ -708,7 +708,7 @@ export const create = mutation({
   },
   handler: admitPublicMutation(
     createOnlineOrderOperationDefinition,
-    async (ctx: OperationMutationCtx, args: any) => {
+    async (ctx: OperationMutationCtx, args) => {
     return await createOrderFromCheckoutSession(ctx, {
       checkoutSessionId: args.checkoutSessionId,
       billingDetails: args.billingDetails,

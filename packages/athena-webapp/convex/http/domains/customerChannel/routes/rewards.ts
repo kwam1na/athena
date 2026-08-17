@@ -20,7 +20,7 @@ import {
   getRewardTiersRouteReadDefinition,
 } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
 import {
-  isCustomerOwnershipDenial,
+  guestMergeErrorResponse,
   parseIngressJson,
   tryParseIngressJson,
   requireAdmittedCustomerOwner,
@@ -262,26 +262,12 @@ rewardsRoutes.post(
 
         return c.json(result);
       } catch (error) {
-        // Same rule as the other merge routes: an ownership refusal is a 403
-        // with a fixed body, and everything else propagates as the fault it
-        // is. This route had no catch at all, so a refused merge — the common
-        // case for this endpoint — surfaced as a 500.
-        if (isCustomerOwnershipDenial(error)) {
-          return c.json({ error: "Forbidden" }, 403);
-        }
-        // `guestId` is still caller-supplied. A non-id string reaches the
-        // callee's `v.id("guest")` argument validator and raises rather than
-        // denying — that is a malformed request, not a server fault.
-        // (Production Convex names this `ArgumentValidationError`; the
-        // in-process test harness in `convex-test` raises a plain `Error`
-        // prefixed `Validator error:` for the same condition.)
-        if (
-          error instanceof Error &&
-          (error.message.includes("ArgumentValidationError") ||
-            error.message.includes("Validator error"))
-        ) {
-          return c.json({ error: "Invalid guest id" }, 400);
-        }
+        // Same rule as the other merge routes — ownership refusal → 403,
+        // malformed guest id → 400, anything else propagates as the fault it
+        // is (see `guestMergeErrorResponse`). This route had no catch at all,
+        // so a refused merge — the common case here — surfaced as a 500.
+        const denial = guestMergeErrorResponse(error);
+        if (denial) return c.json(denial.body, denial.status);
         throw error;
       }
     },

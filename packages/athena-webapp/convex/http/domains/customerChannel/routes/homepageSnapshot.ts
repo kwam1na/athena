@@ -4,7 +4,6 @@ import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
 import { internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
-import { getStorefrontUserFromRequest } from "../../../utils";
 import { admitHttpRead } from "../../../../platform/operationAdmission";
 import { getHomepageSnapshotRouteReadDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
 
@@ -21,18 +20,16 @@ type CookieToSet = {
   value: string;
 };
 
+// NOT A GUEST MINT POINT. This route sets only the store context cookies.
+// Guest sessions are minted — SIGNED — at exactly two places, `GET /storefront`
+// and `GET /guests`; a third mint here used to hand out a bare, unsigned
+// `guest_id` that no consumer accepted, and the storefront never bootstrapped a
+// guest through this route (it always sent `asNewUser=false`). Anonymous
+// browse needs no shopper identity, so this route carries none.
 type HomepageSnapshotBootstrapArgs = {
   runQuery: ActionCtx["runQuery"];
-  runMutation: ActionCtx["runMutation"];
   storeName?: string;
-  marker?: string;
-  asNewUser?: string;
-  currentUserId?: string;
   nowMs: number;
-};
-
-const isDisplayableMarker = (marker?: string) => {
-  return typeof marker === "string" && marker.trim().length > 0;
 };
 
 const presentSnapshotAtRequestTime = (snapshot: any, nowMs: number) => {
@@ -57,11 +54,7 @@ const presentSnapshotAtRequestTime = (snapshot: any, nowMs: number) => {
 
 export const resolveHomepageSnapshotBootstrap = async ({
   runQuery,
-  runMutation,
   storeName,
-  marker,
-  asNewUser,
-  currentUserId,
   nowMs,
 }: HomepageSnapshotBootstrapArgs): Promise<{
   status: number;
@@ -92,25 +85,6 @@ export const resolveHomepageSnapshotBootstrap = async ({
     { name: "organization_id", value: store.organizationId },
     { name: "store_id", value: store._id },
   ];
-
-  if (!currentUserId && asNewUser === "true" && isDisplayableMarker(marker)) {
-    let guest = await runQuery(internal.storeFront.guest.getByMarker, {
-      marker,
-    });
-
-    if (!guest) {
-      guest = await runMutation(internal.storeFront.guest.create, {
-        marker,
-        creationOrigin: "storefront",
-        storeId: store._id,
-        organizationId: store.organizationId,
-      });
-    }
-
-    if (guest) {
-      cookies.push({ name: "guest_id", value: guest._id });
-    }
-  }
 
   const snapshot = await runQuery(homepageSnapshotQuery, {
     storeId: store._id as Id<"store">,
@@ -144,11 +118,7 @@ homepageSnapshotRoutes.get(
   admitHttpRead(getHomepageSnapshotRouteReadDefinition, async (c) => {
     const result = await resolveHomepageSnapshotBootstrap({
       runQuery: c.env.runQuery,
-      runMutation: c.env.runMutation,
       storeName: c.req.query("storeName"),
-      marker: c.req.query("marker"),
-      asNewUser: c.req.query("asNewUser"),
-      currentUserId: getStorefrontUserFromRequest(c),
       nowMs: Date.now(),
     });
 

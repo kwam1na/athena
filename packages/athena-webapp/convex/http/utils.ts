@@ -66,6 +66,41 @@ export const readLegacyUnsignedGuestCookieForBootstrap = (
   return isUnsignedStorefrontCookieValue(raw) ? raw : undefined;
 };
 
+/**
+ * The guest MARKER is a session-recovery secret, or it is nothing.
+ *
+ * The storefront keeps a marker in `localStorage` and sends it to the two
+ * bootstrap routes so a shopper whose `guest_id` cookie is gone can be handed
+ * their previous guest row back — and, since the cookie is signed, a SIGNED
+ * cookie for it. That makes "present the right marker" equivalent to "hold the
+ * session": whoever resolves a marker walks away with a signed guest identity
+ * they can then sign in on and merge into their own account.
+ *
+ * So the marker is only ever looked up when it is long enough that guessing
+ * it is not a strategy. The storefront mints it with `crypto.randomUUID()`
+ * (36 characters, 122 bits); anything shorter than {@link GUEST_MARKER_MIN_LENGTH}
+ * — an absent marker, an empty one, or the ~5-character `Math.random()` markers
+ * older clients kept — is treated as NO marker: a fresh guest is minted and
+ * nothing is looked up. Absent must never mean "the marker-less guest": the
+ * `by_marker` index happily matches `undefined`, and the oldest marker-less
+ * row in the database is not this caller's session.
+ *
+ * `storeFront/guest:getByMarker` enforces the same rule server-side, so a
+ * route cannot forget it, and additionally scopes the lookup to the store
+ * being bootstrapped so a marker never resolves across stores.
+ */
+export const GUEST_MARKER_MIN_LENGTH = 22;
+const GUEST_MARKER_MAX_LENGTH = 128;
+const GUEST_MARKER_SHAPE = /^[A-Za-z0-9_-]+$/;
+
+export const isRecoverableGuestMarker = (
+  marker: string | undefined,
+): marker is string =>
+  typeof marker === "string" &&
+  marker.length >= GUEST_MARKER_MIN_LENGTH &&
+  marker.length <= GUEST_MARKER_MAX_LENGTH &&
+  GUEST_MARKER_SHAPE.test(marker);
+
 const STOREFRONT_COOKIE_OPTIONS = {
   path: "/",
   secure: true,

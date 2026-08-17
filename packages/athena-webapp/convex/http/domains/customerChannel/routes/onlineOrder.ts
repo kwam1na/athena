@@ -13,6 +13,7 @@ import {
   getOrdersRouteReadDefinition,
 } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
 import {
+  guestMergeErrorResponse,
   isCustomerOwnershipDenial,
   tryParseIngressJson,
   requireAdmittedCustomerOwner,
@@ -97,26 +98,10 @@ onlineOrderRoutes.post(
         );
         return c.json(b);
       } catch (error) {
-        // Same rule as the read above: an ownership refusal is a 403, and
-        // everything else propagates. Reporting a genuine fault as a 400
-        // ("Internal server error" under a client-error status) told the
-        // caller to stop retrying and told monitoring nothing was wrong.
-        if (isCustomerOwnershipDenial(error)) {
-          return c.json({ error: "Forbidden" }, 403);
-        }
-        // `currentOwnerId` is still caller-supplied. A non-id string reaches
-        // the callee's `v.id("guest")` argument validator and raises rather
-        // than denying — that is a malformed request, not a server fault.
-        // (Production Convex names this `ArgumentValidationError`; the
-        // in-process test harness in `convex-test` raises a plain `Error`
-        // prefixed `Validator error:` for the same condition.)
-        if (
-          error instanceof Error &&
-          (error.message.includes("ArgumentValidationError") ||
-            error.message.includes("Validator error"))
-        ) {
-          return c.json({ error: "Invalid guest id" }, 400);
-        }
+        // Ownership refusal → 403, malformed guest id → 400, anything else is
+        // a real fault and propagates. See `guestMergeErrorResponse`.
+        const denial = guestMergeErrorResponse(error);
+        if (denial) return c.json(denial.body, denial.status);
         throw error;
       }
     },

@@ -14,7 +14,7 @@ applies_when:
   - "HTTP routes authenticate from a cookie id read directly out of the request"
   - "A migration must move ~400 call sites without changing normal-user behavior"
 tags: [athena, convex, operation-admission, shared-demo, authz, static-checker, http-ingress, derived-invariants]
-delivery_diff_fingerprint: 09ffc96767f99138b72b462e47b6915b02163335fc1a00ce89d1fae583298020
+delivery_diff_fingerprint: 61f8ea5d8c4d0d5e342f33165025b95ce408039ace09c115d3dac666b4e3d17d
 ---
 
 # Completing an Admission Rail — Deriving Invariants Instead of Listing Them
@@ -373,7 +373,26 @@ bootstrap routes and verified in constant time by every consumer
 `ATHENA_STOREFRONT_COOKIE_SECRET`). An unsigned or tampered cookie is treated as
 **absent**, not as an error — a stale cookie is a shopper to re-bootstrap, not a
 fault to page on. Unset secret fails closed: no guest is admitted, while
-anonymous catalog browse keeps working.
+anonymous catalog browse keeps working. `GET /storefront` and `GET /guests` are
+the **only** mint points: `GET /homepage-snapshot` used to be a third that set
+a bare unsigned `guest_id` (which no consumer accepted, and which the storefront
+never exercised); that branch is deleted and the route now sets store cookies
+only.
+
+**The recovery marker is a secret, or nothing.** Both bootstrap routes will
+still resolve an *existing* guest from the storefront's session-recovery
+`marker` and hand out a signed cookie for it — so "present the right marker" is
+"hold the session". Round 4 found the marker was caller-chosen, five base-36
+characters of `Math.random()`, matched across every store, and *optional*: no
+marker at all resolved the oldest marker-less row under `undefined`, signed.
+Now `storeFront/guest:getByMarker` takes a required `marker` and a `storeId`,
+answers `null` unless the marker is high-entropy (`isRecoverableGuestMarker`,
+≥22 chars, `[A-Za-z0-9_-]`) and the row belongs to that store, and the
+storefront mints the marker with `crypto.randomUUID()` (replacing any stored
+short one). Absent, empty, short or foreign-store markers mint a fresh guest.
+The route tests drive the round-4 attack end to end — cookie-less bootstrap with
+the victim's marker, sign in as another shopper, run the five merges — and it
+fails at the first step.
 
 A hand-rolled synchronous HMAC rather than `hono/cookie`'s signed helpers,
 because verification also happens inside `getStorefrontClaimFromRequest`, which

@@ -18,7 +18,7 @@ export async function loadHomePageData({
   snapshotRequest?: typeof getHomepageSnapshot;
 } = {}): Promise<HomePageLoaderData> {
   const updatedAt = Date.now();
-  const snapshot = await snapshotRequest({ asNewUser: false });
+  const snapshot = await snapshotRequest();
 
   return {
     snapshot: {

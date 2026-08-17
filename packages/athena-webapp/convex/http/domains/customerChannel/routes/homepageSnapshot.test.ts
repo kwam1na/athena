@@ -12,11 +12,8 @@ describe("homepage snapshot route bootstrap", () => {
         organizationId: "org-1",
       })
       .mockResolvedValueOnce(snapshot);
-    const runMutation = vi.fn();
-
     const result = await resolveHomepageSnapshotBootstrap({
       runQuery: runQuery as any,
-      runMutation: runMutation as any,
       storeName: "main",
       nowMs: 1_000,
     });
@@ -29,7 +26,6 @@ describe("homepage snapshot route bootstrap", () => {
         { name: "store_id", value: "store-1" },
       ],
     });
-    expect(runMutation).not.toHaveBeenCalled();
     expect(runQuery).toHaveBeenLastCalledWith(expect.anything(), {
       storeId: "store-1",
       nowMs: 0,
@@ -55,7 +51,6 @@ describe("homepage snapshot route bootstrap", () => {
 
     const result = await resolveHomepageSnapshotBootstrap({
       runQuery: runQuery as any,
-      runMutation: vi.fn() as any,
       storeName: "main",
       nowMs: 60_500,
     });
@@ -70,34 +65,11 @@ describe("homepage snapshot route bootstrap", () => {
     });
   });
 
-  it("creates a guest only for explicit new-user requests with a marker", async () => {
-    const runQuery = vi
-      .fn()
-      .mockResolvedValueOnce({
-        _id: "store-1",
-        organizationId: "org-1",
-      })
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ contractVersion: "homepage_snapshot.v1" });
-    const runMutation = vi.fn().mockResolvedValueOnce({ _id: "guest-1" });
-
-    const result = await resolveHomepageSnapshotBootstrap({
-      runQuery: runQuery as any,
-      runMutation: runMutation as any,
-      storeName: "main",
-      marker: "marker-1",
-      asNewUser: "true",
-      nowMs: 1_000,
-    });
-
-    expect(result.cookies).toContainEqual({
-      name: "guest_id",
-      value: "guest-1",
-    });
-    expect(runMutation).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not create guest cookies for tampered new-user parameters", async () => {
+  it("never mints a guest session, whatever bootstrap parameters a caller sends", async () => {
+    // Guest cookies are minted, SIGNED, at `GET /storefront` and `GET /guests`
+    // only. This route used to be a third mint point that set a bare unsigned
+    // `guest_id`; it now ignores `asNewUser` / `marker` entirely and issues
+    // just the store context.
     const runQuery = vi
       .fn()
       .mockResolvedValueOnce({
@@ -105,28 +77,27 @@ describe("homepage snapshot route bootstrap", () => {
         organizationId: "org-1",
       })
       .mockResolvedValueOnce({ contractVersion: "homepage_snapshot.v1" });
-    const runMutation = vi.fn();
 
     const result = await resolveHomepageSnapshotBootstrap({
       runQuery: runQuery as any,
-      runMutation: runMutation as any,
       storeName: "main",
-      marker: " ",
-      asNewUser: "true",
       nowMs: 1_000,
+      // Extra query parameters a caller might still send are not part of the
+      // contract and cannot reach a guest lookup or a guest mint.
+      ...({ marker: "marker-1", asNewUser: "true" } as object),
     });
 
     expect(result.cookies.map((cookie) => cookie.name)).toEqual([
       "organization_id",
       "store_id",
     ]);
-    expect(runMutation).not.toHaveBeenCalled();
+    // Only the store lookup and the snapshot read: no guest query, no mint.
+    expect(runQuery).toHaveBeenCalledTimes(2);
   });
 
   it("uses the existing public error shape when store context cannot resolve", async () => {
     const result = await resolveHomepageSnapshotBootstrap({
       runQuery: vi.fn() as any,
-      runMutation: vi.fn() as any,
       nowMs: 1_000,
     });
 

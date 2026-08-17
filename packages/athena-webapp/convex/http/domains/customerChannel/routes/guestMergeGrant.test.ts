@@ -584,7 +584,7 @@ describe("guest→account merge is authorized by a server-issued grant", () => {
     });
   });
 
-  it("still signs in when the guest_id cookie is unusable, minting no grant", async () => {
+  it("denies sign-in when the only claim is an unusable guest_id cookie, without a 500", async () => {
     await withOrigin(async () => {
       const s = await seed();
 
@@ -893,6 +893,206 @@ describe("the guest session is a signed, server-issued cookie", () => {
       expect(String(guest?.mergeGrantedToStoreFrontUserId)).toBe(
         String(account),
       );
+    });
+  });
+});
+
+/**
+ * The guest MARKER as the other way to be handed a signed session.
+ *
+ * Signing the cookie closed the door on a caller who merely knows a guest id,
+ * but both bootstrap routes will still RESOLVE a guest from the storefront's
+ * session-recovery marker and mint a signed cookie for it. Round 4 found the
+ * marker was caller-chosen, low-entropy (five base-36 characters from
+ * `Math.random()`), unscoped by store, and — worst — optional: no marker at all
+ * matched the marker-less rows the `by_marker` index files under `undefined`.
+ * Every one of those handed a stranger's session out, signed.
+ *
+ * These tests pin the rule: a marker resolves only when it is high-entropy,
+ * and only within the store being bootstrapped. Anything else mints a FRESH
+ * guest.
+ */
+describe("the guest marker is a session-recovery secret, or nothing", () => {
+  const getRequest = (path: string, cookie?: string) =>
+    new Request(`https://api.test${path}`, {
+      method: "GET",
+      headers: new Headers({
+        Origin: ALLOWED_ORIGIN,
+        ...(cookie ? { Cookie: cookie } : {}),
+      }),
+    });
+
+  /** The guest id a bootstrap response's SIGNED cookie names. */
+  const issuedGuestId = (response: Response) =>
+    verifyStorefrontCookieValue(
+      GUEST_COOKIE_NAME,
+      guestCookieFromResponse(response),
+      COOKIE_SECRET,
+    );
+
+  const RECOVERABLE_MARKER = "3f9c2b7e-1d4a-4c8e-9b6f-2a7d5e8c1f03";
+
+  it("does NOT hand out an existing marker-less guest when the bootstrap sends no marker", async () => {
+    await withOrigin(async () => {
+      const s = await seed();
+      // The oldest marker-less row in the store — what `by_marker` answered
+      // for `undefined` under the previous code.
+      const markerless = await s.t.run((ctx) =>
+        ctx.db.insert("guest", { organizationId: s.organizationId, storeId: s.storeId }),
+      );
+
+      const storefront = await storefrontRoutes.fetch(
+        getRequest("/?storeName=store&asNewUser=true"),
+        envFor(s.t),
+      );
+      expect(storefront.status).toBe(200);
+      const fromStorefront = issuedGuestId(storefront);
+      expect(fromStorefront).toBeDefined();
+      expect(fromStorefront).not.toBe(String(markerless));
+      expect(fromStorefront).not.toBe(String(s.victim));
+
+      // Same rule on the recovery path: a garbage cookie and no marker mints
+      // a NEW guest rather than resolving to anybody's row.
+      const guests = await guestRoutes.fetch(
+        getRequest(
+          "/",
+          `guest_id=garbage; store_id=${s.storeId}; organization_id=${s.organizationId}`,
+        ),
+        envFor(s.t),
+      );
+      expect(guests.status).toBe(200);
+      const fromGuests = issuedGuestId(guests);
+      expect(fromGuests).toBeDefined();
+      expect(fromGuests).not.toBe(String(markerless));
+      expect(fromGuests).not.toBe(String(s.victim));
+      expect(fromGuests).not.toBe(fromStorefront);
+      const minted = await s.t.run((ctx) =>
+        ctx.db.get("guest", fromGuests as Id<"guest">),
+      );
+      expect(String(minted?.storeId)).toBe(String(s.storeId));
+      expect(minted?.marker).toBeUndefined();
+    });
+  });
+
+  it("does not resolve a low-entropy marker, and does not store one on the fresh guest", async () => {
+    await withOrigin(async () => {
+      const s = await seed();
+      // The victim's marker is exactly the shape older storefront builds sent.
+      for (const path of [
+        "/?storeName=store&asNewUser=true&marker=victim",
+        "/?storeName=store&asNewUser=true&marker=",
+      ]) {
+        const response = await storefrontRoutes.fetch(getRequest(path), envFor(s.t));
+        expect({ path, status: response.status }).toEqual({ path, status: 200 });
+        const issued = issuedGuestId(response);
+        expect({ path, issued }).not.toEqual({ path, issued: String(s.victim) });
+        const row = await s.t.run((ctx) => ctx.db.get("guest", issued as Id<"guest">));
+        expect({ path, marker: row?.marker }).toEqual({ path, marker: undefined });
+      }
+    });
+  });
+
+  it("recovers a session from a high-entropy marker in THIS store, and only this store", async () => {
+    await withOrigin(async () => {
+      const s = await seed();
+      const { mine, foreign } = await s.t.run(async (ctx) => ({
+        mine: await ctx.db.insert("guest", {
+          marker: RECOVERABLE_MARKER,
+          organizationId: s.organizationId,
+          storeId: s.storeId,
+        }),
+        // The SAME marker in another store: a marker is a per-browser secret,
+        // not a global handle, and must never resolve across stores.
+        foreign: await ctx.db.insert("guest", {
+          marker: `${RECOVERABLE_MARKER}-other`,
+          organizationId: s.organizationId,
+          storeId: s.otherStoreId,
+        }),
+      }));
+
+      // Positive control: the storefront's own recovery still works.
+      const recovered = await storefrontRoutes.fetch(
+        getRequest(`/?storeName=store&asNewUser=true&marker=${RECOVERABLE_MARKER}`),
+        envFor(s.t),
+      );
+      expect(issuedGuestId(recovered)).toBe(String(mine));
+
+      const recoveredViaGuests = await guestRoutes.fetch(
+        getRequest(
+          `/?marker=${RECOVERABLE_MARKER}`,
+          `guest_id=garbage; store_id=${s.storeId}; organization_id=${s.organizationId}`,
+        ),
+        envFor(s.t),
+      );
+      expect(issuedGuestId(recoveredViaGuests)).toBe(String(mine));
+
+      // Cross-store: the other store's marker mints a fresh guest in THIS store.
+      const crossStore = await storefrontRoutes.fetch(
+        getRequest(`/?storeName=store&asNewUser=true&marker=${RECOVERABLE_MARKER}-other`),
+        envFor(s.t),
+      );
+      const issued = issuedGuestId(crossStore);
+      expect(issued).toBeDefined();
+      expect(issued).not.toBe(String(foreign));
+      const row = await s.t.run((ctx) => ctx.db.get("guest", issued as Id<"guest">));
+      expect(String(row?.storeId)).toBe(String(s.storeId));
+
+      const crossStoreViaGuests = await guestRoutes.fetch(
+        getRequest(
+          `/?marker=${RECOVERABLE_MARKER}-other`,
+          `guest_id=garbage; store_id=${s.storeId}; organization_id=${s.organizationId}`,
+        ),
+        envFor(s.t),
+      );
+      expect(issuedGuestId(crossStoreViaGuests)).not.toBe(String(foreign));
+    });
+  });
+
+  /**
+   * THE ROUND-4 ATTACK, end to end: bootstrap cookie-less with the victim's
+   * (guessed or leaked) marker, take the signed cookie, sign in as yourself,
+   * run the merges. It has to fail at the first step — the cookie issued is
+   * for a fresh guest, so the grant lands there and the victim's rows stay put.
+   */
+  it("cannot turn a victim's marker into a signed session and then merge their rows", async () => {
+    await withOrigin(async () => {
+      const s = await seed();
+      const before = await ownership(s);
+
+      const bootstrap = await storefrontRoutes.fetch(
+        getRequest("/?storeName=store&asNewUser=true&marker=victim"),
+        envFor(s.t),
+      );
+      const issuedCookie = guestCookieFromResponse(bootstrap);
+      const issued = verifyStorefrontCookieValue(
+        GUEST_COOKIE_NAME,
+        issuedCookie,
+        COOKIE_SECRET,
+      );
+      expect(issued).toBeDefined();
+      expect(issued).not.toBe(String(s.victim));
+
+      const signInResponse = await signIn(
+        s,
+        "mallory@test",
+        `guest_id=${issuedCookie}; store_id=${s.storeId}; organization_id=${s.organizationId}`,
+      );
+      expect(signInResponse.status).toBe(200);
+      const account = (await signInResponse.json()).user._id;
+
+      // The grant was minted on the FRESH guest, never on the victim's row.
+      const victim = await s.t.run((ctx) => ctx.db.get("guest", s.victim));
+      expect(victim?.mergeGrantedToStoreFrontUserId ?? null).toBeNull();
+
+      const cookie = `user_id=${account}; guest_id=${issuedCookie}; store_id=${s.storeId}`;
+      for (const merge of mergeRequests(s, cookie, s.victim)) {
+        const response = await merge.router.fetch(merge.request, envFor(s.t));
+        expect({ merge: merge.name, status: response.status }).toEqual({
+          merge: merge.name,
+          status: 403,
+        });
+      }
+      expect(await ownership(s)).toEqual(before);
     });
   });
 });

@@ -5,6 +5,7 @@ import { internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
 import { getCookie, setCookie } from "hono/cookie";
 import {
+  isRecoverableGuestMarker,
   readLegacyUnsignedGuestCookieForBootstrap,
   readVerifiedGuestIdFromRequest,
   setSignedGuestCookie,
@@ -38,6 +39,8 @@ storefrontRoutes.get(
 
     // BOOTSTRAP MINT POINT #1 (of two). Guest cookies are SIGNED here and at
     // `GET /guests`; nowhere else issues one, and nowhere else upgrades one.
+    // (`GET /homepage-snapshot` deliberately mints nothing: it is a public
+    // browse read that sets only the store cookies.)
     const accountId = getCookie(c, "user_id");
     let guestId = readVerifiedGuestIdFromRequest(c);
 
@@ -67,21 +70,31 @@ storefrontRoutes.get(
       }
     }
 
-    if (!accountId && !guestId && asNewUser === "true") {
-      let guest = await c.env.runQuery(internal.storeFront.guest.getByMarker, {
-        marker,
-      });
-
-      // A guest is only minted once the store is known: `guest.create` requires
-      // a store, and a storeless guest can never be admitted by the rail.
-      if (!guest && store) {
-        guest = await c.env.runMutation(internal.storeFront.guest.create, {
-          marker,
+    // A guest is only minted once the store is known: `guest.create` requires
+    // a store, and a storeless guest can never be admitted by the rail.
+    if (!accountId && !guestId && asNewUser === "true" && store) {
+      // The marker is a session-recovery SECRET (see `isRecoverableGuestMarker`
+      // in `http/utils.ts`): only a high-entropy marker is looked up, and only
+      // within THIS store. Anything else — absent, empty, short — is no marker
+      // at all: this shopper gets a fresh guest, never somebody else's row.
+      // Resolving a marker hands out a signed session, which is why "no
+      // marker" must never mean "the oldest marker-less guest".
+      const recoverableMarker = isRecoverableGuestMarker(marker)
+        ? marker
+        : undefined;
+      const guest =
+        (recoverableMarker
+          ? await c.env.runQuery(internal.storeFront.guest.getByMarker, {
+              marker: recoverableMarker,
+              storeId: store._id,
+            })
+          : null) ??
+        (await c.env.runMutation(internal.storeFront.guest.create, {
+          marker: recoverableMarker,
           creationOrigin: "storefront",
           storeId: store._id,
           organizationId: store.organizationId,
-        });
-      }
+        }));
 
       // FAIL CLOSED with no signing secret: `setSignedGuestCookie` issues
       // nothing rather than hand out a cookie no consumer will accept. The

@@ -49,16 +49,14 @@ describe("getHomepageSnapshot", () => {
     vi.unstubAllGlobals();
   });
 
-  it("persists a marker and requests the snapshot with storefront bootstrap params", async () => {
+  it("requests the public snapshot with only the store name, no shopper identity", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: vi.fn().mockResolvedValue(snapshot),
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(getHomepageSnapshot({ asNewUser: true })).resolves.toEqual(
-      snapshot,
-    );
+    await expect(getHomepageSnapshot()).resolves.toEqual(snapshot);
 
     const [url, init] = fetchMock.mock.calls[0];
     const requestUrl = new URL(url);
@@ -66,16 +64,15 @@ describe("getHomepageSnapshot", () => {
     expect(requestUrl.origin + requestUrl.pathname).toBe(
       "https://api.example.test/homepage-snapshot",
     );
+    expect([...requestUrl.searchParams.keys()]).toEqual(["storeName"]);
     expect(requestUrl.searchParams.get("storeName")).toBe("wigclub");
-    expect(requestUrl.searchParams.get("asNewUser")).toBe("true");
-    expect(requestUrl.searchParams.get("marker")).toBe(
-      localStorage.getItem(MARKER_KEY),
-    );
+    // The guest recovery marker is bootstrap-only (`getStore` / `getGuest`);
+    // it never travels on this public read, and this read never creates one.
+    expect(localStorage.getItem(MARKER_KEY)).toBeNull();
     expect(init).toMatchObject({ credentials: "include" });
   });
 
-  it("uses an existing marker, unwraps legacy response envelopes, and propagates server errors", async () => {
-    localStorage.setItem(MARKER_KEY, "existing-marker");
+  it("unwraps legacy response envelopes and propagates server errors", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
@@ -89,10 +86,6 @@ describe("getHomepageSnapshot", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(getHomepageSnapshot()).resolves.toEqual(snapshot);
-    expect(new URL(fetchMock.mock.calls[0][0]).searchParams.get("marker")).toBe(
-      "existing-marker",
-    );
-
     await expect(getHomepageSnapshot()).rejects.toThrow("Store not found");
   });
 });
