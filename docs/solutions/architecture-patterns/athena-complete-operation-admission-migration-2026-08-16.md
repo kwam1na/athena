@@ -14,7 +14,7 @@ applies_when:
   - "HTTP routes authenticate from a cookie id read directly out of the request"
   - "A migration must move ~400 call sites without changing normal-user behavior"
 tags: [athena, convex, operation-admission, shared-demo, authz, static-checker, http-ingress, derived-invariants]
-delivery_diff_fingerprint: fb71d31ea2333075c19f4ac9676529bb729cd628a4d79edb5bc65aa59acd4ebf
+delivery_diff_fingerprint: 70635862e16f435afba1a9b9204abb32457b16aa381dbea7bd7c7e818c72f5d7
 ---
 
 # Completing an Admission Rail — Deriving Invariants Instead of Listing Them

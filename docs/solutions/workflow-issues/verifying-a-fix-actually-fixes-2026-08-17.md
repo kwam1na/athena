@@ -14,7 +14,7 @@ applies_when:
   - "A security guard compares two values and you have not asked where each one came from"
   - "A static check enumerates bad shapes rather than accepting one good shape"
 tags: [code-review, testing, security, review-loop, regression-tests, static-analysis]
-delivery_diff_fingerprint: fb71d31ea2333075c19f4ac9676529bb729cd628a4d79edb5bc65aa59acd4ebf
+delivery_diff_fingerprint: 70635862e16f435afba1a9b9204abb32457b16aa381dbea7bd7c7e818c72f5d7
 ---
 
 # Verify the Fix — Three Rounds Where the Previous Round's Fix Was the Defect
