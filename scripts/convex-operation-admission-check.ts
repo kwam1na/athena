@@ -85,6 +85,18 @@
  * whose child resolves to no walked router is flagged at the mount instead of
  * being walked as empty.
  *
+ * Round 10: the router CLASS is resolved through its import binding, never
+ * matched by spelling (`isHonoClassReference`: `Hono` from `hono`,
+ * `HttpRouterWithHono` / `HonoWithConvex` from `convex-helpers/server/hono`,
+ * under any alias or `<ns>.<Class>`), so `import { Hono as H }; reg(new H())`
+ * and `new hono.Hono()` are the same construction finding as `new Hono()`;
+ * any other value reference to such a binding, or a dynamic import of those
+ * packages, fails closed. `for..of` / `for..in` / `catch` bindings are opaque
+ * nested receivers; the root error handler must sit on the router wrapped by
+ * the module's single `new HttpRouterWithHono(<root>)`; and a rethrown catch
+ * binding may be referenced in its clause only as the thrown value, a plain
+ * read, or the argument of a tested predicate.
+ *
  * Flags:
  *   --path <prefix...>    restrict findings to convex-relative path prefixes
  *   --partition           print the per-unit ownership table; fail on orphans
@@ -1568,9 +1580,46 @@ function nestedDeclarationOf(
         }
       }
     }
+    // A `for (const r of ...)` / `for (const k in ...)` / `for (let i = ...)`
+    // head binding, and a `catch (r)` binding, are nested declarations too
+    // (round 10): the loop source / thrown value reaches them through a
+    // container the walk does not open.
+    if (
+      (ts.isForOfStatement(current) || ts.isForInStatement(current) || ts.isForStatement(current)) &&
+      current.initializer &&
+      ts.isVariableDeclarationList(current.initializer)
+    ) {
+      for (const declaration of current.initializer.declarations) {
+        const bound = new Set<string>();
+        bindingNameTexts(declaration.name, bound);
+        if (bound.has(reference.text)) return declaration;
+      }
+    }
+    if (ts.isCatchClause(current) && current.variableDeclaration) {
+      const bound = new Set<string>();
+      bindingNameTexts(current.variableDeclaration.name, bound);
+      if (bound.has(reference.text)) return current.variableDeclaration;
+    }
     current = current.parent;
   }
   return undefined;
+}
+
+/**
+ * Is this nested declaration a `for..of` / `for..in` head binding or a
+ * `catch (<id>)` binding? Its value comes from the loop source or the thrown
+ * value — a container the walk does not open — so a router bound this way is
+ * opaque (round 10).
+ */
+function isLoopOrCatchBinding(
+  declaration: ts.ParameterDeclaration | ts.VariableDeclaration,
+): boolean {
+  const parent = declaration.parent;
+  if (ts.isCatchClause(parent)) return true;
+  return (
+    ts.isVariableDeclarationList(parent) &&
+    (ts.isForOfStatement(parent.parent) || ts.isForInStatement(parent.parent))
+  );
 }
 
 /**
@@ -1583,8 +1632,10 @@ function nestedDeclarationOf(
  * with such a default (`function make(r = new Hono())`) and any nested
  * binding-pattern declaration (`const [r] = [new Hono()]`, `const { r } =
  * made()`): a name bound through a pattern reaches its value through a
- * container the walk does not open (round 9). A parameter without a default
- * keeps the string / template rule (the documented caller-table residual).
+ * container the walk does not open (round 9), and so does a `for..of` /
+ * `for..in` / `catch (<id>)` binding (round 10). A parameter without a
+ * default keeps the string / template rule (the documented caller-table
+ * residual).
  */
 function isOpaqueNestedDeclaration(
   declaration: ts.ParameterDeclaration | ts.VariableDeclaration | undefined,
@@ -1593,6 +1644,7 @@ function isOpaqueNestedDeclaration(
   if (ts.isVariableDeclaration(declaration) && !ts.isIdentifier(declaration.name)) {
     return true;
   }
+  if (isLoopOrCatchBinding(declaration)) return true;
   if (!declaration.initializer) return false;
   const value = unwrapTypeOnly(declaration.initializer);
   if (ts.isNewExpression(value)) return !isResolvableConstruction(value);
@@ -2809,6 +2861,140 @@ export function middlewareGrammarViolation(
     return current;
   };
 
+  /**
+   * Is the catch binding `name` used inside `clause` other than as the thrown
+   * value, a plain read, or the argument of a tested predicate? Returns a
+   * description of the first misuse, or `undefined` when the binding still
+   * IS the caught value at every reference. Accepted reference positions:
+   *   - `throw <name>`;
+   *   - a condition (`if` / `while` / `?:`), `!` / `typeof` / `void` operand,
+   *     either operand of a non-assignment binary (`===`, `instanceof`, `in`,
+   *     `&&`, `||`, `??`), the RIGHT side of an assignment;
+   *   - a property / element READ off it (`error.code`) in one of the
+   *     positions above, recursively — never the callee of a call, an
+   *     assignment target, or a `delete` operand;
+   *   - the argument of a call whose result is only TESTED (`isX(error)` as a
+   *     condition, `!isX(error)`, `isX(error) && ...`, `isX(error) === true`).
+   * Everything else — `error = ...`, `[error] = ...`, `({ error } = ...)`,
+   * `const e = error`, `Object.assign(error, ...)`, `error.x = ...`,
+   * `error.setStatus(...)`, `{ error }`, a template / return / throw of a
+   * derived value, a redeclaration of the name — is a misuse.
+   */
+  const catchBindingMisuse = (clause: ts.CatchClause, name: string): string | undefined => {
+    const peelUp = (start: ts.Node): ts.Node => {
+      let expression: ts.Node = start;
+      while (
+        ts.isParenthesizedExpression(expression.parent) ||
+        ts.isNonNullExpression(expression.parent) ||
+        ts.isAsExpression(expression.parent) ||
+        ts.isSatisfiesExpression(expression.parent) ||
+        ts.isTypeAssertionExpression(expression.parent)
+      ) {
+        expression = expression.parent;
+      }
+      return expression;
+    };
+    const isConditionOf = (expression: ts.Node, parent: ts.Node) =>
+      ((ts.isIfStatement(parent) || ts.isWhileStatement(parent) || ts.isDoStatement(parent)) &&
+        parent.expression === expression) ||
+      (ts.isForStatement(parent) && parent.condition === expression) ||
+      (ts.isConditionalExpression(parent) && parent.condition === expression);
+    const isAssignmentOperator = (binary: ts.BinaryExpression) =>
+      binary.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      binary.operatorToken.kind <= ts.SyntaxKind.LastAssignment;
+    const isLogicalOperator = (binary: ts.BinaryExpression) =>
+      binary.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+      binary.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
+      binary.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken;
+    const isComparisonOperator = (binary: ts.BinaryExpression) =>
+      binary.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken ||
+      binary.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken ||
+      binary.operatorToken.kind === ts.SyntaxKind.EqualsEqualsToken ||
+      binary.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsToken;
+    /** Is a call RESULT only tested (a condition, negated, compared, or-ed)? */
+    const isTested = (call: ts.Node): boolean => {
+      const expression = peelUp(call);
+      const parent = expression.parent;
+      if (isConditionOf(expression, parent)) return true;
+      if (
+        ts.isPrefixUnaryExpression(parent) &&
+        parent.operator === ts.SyntaxKind.ExclamationToken
+      ) {
+        return true;
+      }
+      if (ts.isBinaryExpression(parent)) {
+        if (isLogicalOperator(parent)) return isTested(parent);
+        if (isComparisonOperator(parent)) return true;
+      }
+      return false;
+    };
+    /** Is this read of the binding (or of a property chain off it) plain? */
+    const isPlainRead = (start: ts.Node, isBinding: boolean): boolean => {
+      const expression = peelUp(start);
+      const parent = expression.parent;
+      if (ts.isThrowStatement(parent)) return isBinding;
+      if (isConditionOf(expression, parent)) return true;
+      if (
+        ts.isPrefixUnaryExpression(parent) &&
+        (parent.operator === ts.SyntaxKind.ExclamationToken)
+      ) {
+        return true;
+      }
+      if (
+        ts.isTypeOfExpression(parent) ||
+        ts.isVoidExpression(parent)
+      ) {
+        return true;
+      }
+      if (ts.isBinaryExpression(parent)) {
+        if (isAssignmentOperator(parent)) return parent.right === expression;
+        return true;
+      }
+      if (
+        (ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) &&
+        parent.expression === expression
+      ) {
+        const access = peelUp(parent);
+        const holder = access.parent;
+        if (ts.isCallExpression(holder) && holder.expression === access) return false;
+        if (ts.isDeleteExpression(holder)) return false;
+        return isPlainRead(parent, false);
+      }
+      if (
+        ts.isCallExpression(parent) &&
+        parent.expression !== expression &&
+        parent.arguments.some((argument) => argument === expression)
+      ) {
+        return isTested(parent);
+      }
+      return false;
+    };
+    let found: string | undefined;
+    const scan = (inner: ts.Node) => {
+      if (found || ts.isTypeNode(inner)) return;
+      if (
+        (ts.isVariableDeclaration(inner) || ts.isParameter(inner) || ts.isBindingElement(inner)) &&
+        ts.isIdentifier(inner.name) &&
+        inner.name.text === name
+      ) {
+        found = `the catch binding \`${name}\` is redeclared in the clause (\`${text(inner)}\`)`;
+        return;
+      }
+      if (
+        ts.isIdentifier(inner) &&
+        inner.text === name &&
+        (isValueReference(inner) || ts.isShorthandPropertyAssignment(inner.parent)) &&
+        !isPlainRead(inner, true)
+      ) {
+        found = `the catch binding \`${name}\` is used other than as the thrown value, a plain read, or the argument of a tested predicate (\`${text(inner.parent).split("\n")[0]}\`), so it may no longer be the caught value`;
+        return;
+      }
+      ts.forEachChild(inner, scan);
+    };
+    scan(clause.block);
+    return found;
+  };
+
   let violation: string | undefined;
   const visit = (node: ts.Node) => {
     if (violation || ts.isTypeNode(node)) return;
@@ -2919,11 +3105,17 @@ export function middlewareGrammarViolation(
     if (ts.isThrowStatement(node)) {
       // Only the rethrow of the middleware's OWN catch binding: a bare
       // identifier bound by a `catch (<id>)` clause between the throw and the
-      // middleware. Every other thrown value is one the middleware constructs
-      // or obtains, and Hono renders a `getResponse`-bearing one as the
-      // response.
+      // middleware, and referenced inside that clause ONLY as the thrown
+      // value, a plain read, or the argument of a tested predicate (round
+      // 10). Every other thrown value is one the middleware constructs or
+      // obtains — and a catch binding that is reassigned, destructured into,
+      // mutated (`error.x = ...`, `Object.assign(error, ...)`), aliased, or
+      // handed to a call whose result is not merely tested is no longer
+      // known to BE the caught value. Hono renders a `getResponse`-bearing
+      // thrown value as the response.
       const thrown = node.expression ? unwrapTypeOnly(node.expression) : undefined;
       let rethrow = false;
+      let misuse: string | undefined;
       if (thrown && ts.isIdentifier(thrown)) {
         for (let ancestor: ts.Node | undefined = node.parent; ancestor && ancestor !== fn; ancestor = ancestor.parent) {
           if (
@@ -2932,40 +3124,15 @@ export function middlewareGrammarViolation(
             ts.isIdentifier(ancestor.variableDeclaration.name) &&
             ancestor.variableDeclaration.name.text === thrown.text
           ) {
-            // The binding must still BE the caught value: no assignment to
-            // it and no redeclaration of the name anywhere in the clause.
-            let rebound = false;
-            const scan = (inner: ts.Node) => {
-              if (rebound || ts.isTypeNode(inner)) return;
-              if (
-                ts.isBinaryExpression(inner) &&
-                ts.isIdentifier(inner.left) &&
-                inner.left.text === thrown.text &&
-                inner.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
-                inner.operatorToken.kind <= ts.SyntaxKind.LastAssignment
-              ) {
-                rebound = true;
-                return;
-              }
-              if (
-                (ts.isVariableDeclaration(inner) || ts.isParameter(inner) || ts.isBindingElement(inner)) &&
-                ts.isIdentifier(inner.name) &&
-                inner.name.text === thrown.text
-              ) {
-                rebound = true;
-                return;
-              }
-              ts.forEachChild(inner, scan);
-            };
-            scan(ancestor.block);
-            rethrow = !rebound;
+            misuse = catchBindingMisuse(ancestor, thrown.text);
+            rethrow = misuse === undefined;
             break;
           }
           if (isFunctionLike(ancestor)) break;
         }
       }
       if (!rethrow) {
-        violation = `the middleware throws a value it constructs or obtains (\`${text(node)}\`); Hono's error handler renders any thrown value carrying \`getResponse()\` as the response, so only a rethrow of the middleware's own \`catch (<id>)\` binding is accepted`;
+        violation = `the middleware throws a value it constructs or obtains (\`${text(node)}\`${misuse ? `; ${misuse}` : ""}); Hono's error handler renders any thrown value carrying \`getResponse()\` as the response, so only a rethrow of the middleware's own \`catch (<id>)\` binding — referenced in the clause solely as the thrown value, a plain read, or the argument of a tested predicate — is accepted`;
         return;
       }
     }
@@ -3089,32 +3256,193 @@ function calleeMember(
   return undefined;
 }
 
-/** `new <name>(...)` behind any type-only wrapper. */
+/**
+ * The router classes the walk knows, RESOLVED through import bindings (round
+ * 10). `Hono` is the class the `hono` package exports (also under its
+ * `hono/quick` / `hono/tiny` entry points); `HttpRouterWithHono` (and the
+ * `HonoWithConvex` type) come from `convex-helpers/server/hono`. A local name
+ * is one of these only when an import binds it to that export — under ANY
+ * local alias (`import { Hono as H }`) or through a namespace import
+ * (`import * as hono; hono.Hono`) — never by the spelling of the identifier:
+ * `new H()` under an alias is the same router as `new Hono()`, and a local
+ * `class Hono {}` is not one.
+ */
+type RouterClass = "Hono" | "HttpRouterWithHono" | "HonoWithConvex";
+
+const HONO_PACKAGE_SPECIFIERS: ReadonlySet<string> = new Set([
+  "hono",
+  "hono/quick",
+  "hono/tiny",
+]);
+const CONVEX_HELPERS_HONO_SPECIFIER = "convex-helpers/server/hono";
+
+/** Does this module specifier name a package that exports a router class? */
+function isRouterClassPackageSpecifier(specifier: string): boolean {
+  return (
+    HONO_PACKAGE_SPECIFIERS.has(specifier) ||
+    specifier === CONVEX_HELPERS_HONO_SPECIFIER
+  );
+}
+
+/** The router class an export `imported` of `specifier` denotes, if any. */
+function routerClassOfExport(
+  specifier: string,
+  imported: string,
+): RouterClass | undefined {
+  if (HONO_PACKAGE_SPECIFIERS.has(specifier)) {
+    return imported === "Hono" ? "Hono" : undefined;
+  }
+  if (specifier === CONVEX_HELPERS_HONO_SPECIFIER) {
+    return imported === "HttpRouterWithHono" || imported === "HonoWithConvex"
+      ? imported
+      : undefined;
+  }
+  return undefined;
+}
+
+type RouterClassBindings = {
+  /** Local name (value OR type import) -> the router class it is bound to. */
+  byLocalName: Map<string, RouterClass>;
+  /** Namespace-import local name -> the package it names. */
+  namespaces: Map<string, "hono" | "helpers">;
+  /**
+   * Every VALUE binding this module holds on a router-class package: a class
+   * import under any alias, a namespace import, a default import. Any value
+   * reference to one of these outside `new <class>(...)` hands the class to a
+   * spelling the walk cannot follow.
+   */
+  valueLocals: Set<string>;
+};
+
+function collectRouterClassBindings(sourceFile: ts.SourceFile): RouterClassBindings {
+  const byLocalName = new Map<string, RouterClass>();
+  const namespaces = new Map<string, "hono" | "helpers">();
+  const valueLocals = new Set<string>();
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      continue;
+    }
+    const specifier = statement.moduleSpecifier.text;
+    if (!isRouterClassPackageSpecifier(specifier)) continue;
+    const clause = statement.importClause;
+    if (!clause) continue;
+    const packageKind = HONO_PACKAGE_SPECIFIERS.has(specifier) ? "hono" : "helpers";
+    if (clause.name) {
+      // Neither package has a default export; a default binding is a value
+      // the checker cannot resolve to a class, so it may only fail closed.
+      if (!clause.isTypeOnly) valueLocals.add(clause.name.text);
+    }
+    const named = clause.namedBindings;
+    if (!named) continue;
+    if (ts.isNamespaceImport(named)) {
+      namespaces.set(named.name.text, packageKind);
+      if (!clause.isTypeOnly) valueLocals.add(named.name.text);
+      continue;
+    }
+    for (const element of named.elements) {
+      const imported = element.propertyName?.text ?? element.name.text;
+      const routerClass = routerClassOfExport(specifier, imported);
+      if (!routerClass) continue;
+      byLocalName.set(element.name.text, routerClass);
+      if (!clause.isTypeOnly && !element.isTypeOnly) {
+        valueLocals.add(element.name.text);
+      }
+    }
+  }
+  return { byLocalName, namespaces, valueLocals };
+}
+
+/**
+ * The router class an EXPRESSION denotes — an identifier bound by import to
+ * the class (any alias), or `<ns>.<Class>` on a namespace import of its
+ * package — behind parens and type-only wrappers. `undefined` for anything
+ * else, including a shadowed name and a local class of the same spelling.
+ */
+function routerClassOf(
+  expression: ts.Expression,
+  bindings: RouterClassBindings,
+): RouterClass | undefined {
+  const node = unwrapTypeOnly(expression);
+  if (ts.isIdentifier(node)) {
+    if (isShadowedReference(node)) return undefined;
+    return bindings.byLocalName.get(node.text);
+  }
+  if (ts.isPropertyAccessExpression(node) && !node.questionDotToken) {
+    const root = unwrapTypeOnly(node.expression);
+    if (!ts.isIdentifier(root) || isShadowedReference(root)) return undefined;
+    const packageKind = bindings.namespaces.get(root.text);
+    if (!packageKind) return undefined;
+    return routerClassOfExport(
+      packageKind === "hono" ? "hono" : CONVEX_HELPERS_HONO_SPECIFIER,
+      node.name.text,
+    );
+  }
+  return undefined;
+}
+
+/** Does `expression` denote the given router class (default: `Hono`)? */
+function isHonoClassReference(
+  expression: ts.Expression,
+  bindings: RouterClassBindings,
+  routerClass: RouterClass = "Hono",
+): boolean {
+  return routerClassOf(expression, bindings) === routerClass;
+}
+
+/** `new <class>(...)` behind any type-only wrapper, the class resolved. */
 function isConstructionOf(
   initializer: ts.Expression | undefined,
-  name: string,
+  routerClass: RouterClass,
+  bindings: RouterClassBindings,
 ): boolean {
   if (!initializer) return false;
   const value = unwrapTypeOnly(initializer);
   return (
     ts.isNewExpression(value) &&
-    ts.isIdentifier(value.expression) &&
-    value.expression.text === name
+    isHonoClassReference(value.expression, bindings, routerClass)
   );
 }
 
-function isHonoRouterDeclaration(declaration: ts.VariableDeclaration) {
-  const typeName = declaration.type
-    ? declaration.type.getText()
-    : undefined;
-  if (typeName && /^(Hono|HonoWithConvex)\b/.test(typeName.trim())) return true;
-  const initializer = declaration.initializer;
-  return Boolean(
-    initializer &&
-      ts.isNewExpression(initializer) &&
-      ts.isIdentifier(initializer.expression) &&
-      initializer.expression.text === "Hono",
-  );
+/**
+ * The router class a TYPE ANNOTATION names: `Hono<...>` / `HonoWithConvex<...>`
+ * by text (kept: the real tree's `const app: HonoWithConvex<ActionCtx>`), or a
+ * type reference whose name resolves through an import — a value or type
+ * import of the class under any alias, or `<ns>.Hono` on a namespace import.
+ */
+function isHonoRouterTypeAnnotation(
+  type: ts.TypeNode | undefined,
+  bindings: RouterClassBindings,
+): boolean {
+  if (!type) return false;
+  const typeName = type.getText().trim();
+  if (/^(Hono|HonoWithConvex)\b/.test(typeName)) return true;
+  if (!ts.isTypeReferenceNode(type)) return false;
+  const name = type.typeName;
+  if (ts.isIdentifier(name)) {
+    const routerClass = bindings.byLocalName.get(name.text);
+    return routerClass === "Hono" || routerClass === "HonoWithConvex";
+  }
+  if (ts.isIdentifier(name.left)) {
+    const packageKind = bindings.namespaces.get(name.left.text);
+    if (!packageKind) return false;
+    const routerClass = routerClassOfExport(
+      packageKind === "hono" ? "hono" : CONVEX_HELPERS_HONO_SPECIFIER,
+      name.right.text,
+    );
+    return routerClass === "Hono" || routerClass === "HonoWithConvex";
+  }
+  return false;
+}
+
+function isHonoRouterDeclaration(
+  declaration: ts.VariableDeclaration,
+  bindings: RouterClassBindings,
+) {
+  if (isHonoRouterTypeAnnotation(declaration.type, bindings)) return true;
+  return isConstructionOf(declaration.initializer, "Hono", bindings);
 }
 
 /**
@@ -3185,6 +3513,7 @@ function collectRouteModuleFacts(
   const unresolvable: UnresolvableRouteRegistration[] = [];
   const middleware: RouterMiddlewareSite[] = [];
   const importBindings = collectImportBindings(sourceFile);
+  const classBindings = collectRouterClassBindings(sourceFile);
   const { isCorsFactory } = resolveCorsFactoryBindings(
     sourceFile,
     importBindings,
@@ -3222,8 +3551,8 @@ function collectRouteModuleFacts(
       nested &&
       ts.isVariableDeclaration(node) &&
       ts.isIdentifier(node.name) &&
-      (isHonoRouterDeclaration(node) ||
-        isConstructionOf(node.initializer, "HttpRouterWithHono"))
+      (isHonoRouterDeclaration(node, classBindings) ||
+        isConstructionOf(node.initializer, "HttpRouterWithHono", classBindings))
     ) {
       nestedRouterDeclarations.push(node);
     }
@@ -3240,14 +3569,20 @@ function collectRouteModuleFacts(
     if (ts.isVariableStatement(statement)) {
       for (const declaration of statement.declarationList.declarations) {
         if (!ts.isIdentifier(declaration.name)) continue;
-        if (isConstructionOf(declaration.initializer, "HttpRouterWithHono")) {
+        if (
+          isConstructionOf(
+            declaration.initializer,
+            "HttpRouterWithHono",
+            classBindings,
+          )
+        ) {
           routerLikeLocals.add(declaration.name.text);
           if (hasExportModifier(statement)) {
             exportedRouters.set(declaration.name.text, declaration.name.text);
           }
         }
         if (
-          !isHonoRouterDeclaration(declaration) &&
+          !isHonoRouterDeclaration(declaration, classBindings) &&
           !candidateNames.has(declaration.name.text)
         ) {
           continue;
@@ -3833,7 +4168,21 @@ function collectRouteModuleFacts(
   // `internal.a.b.get`, `flags.all`), so a member read is a router escape
   // only when the receiver IS a router.
   const visit = (node: ts.Node) => {
-    if (ts.isTypeNode(node)) return;
+    if (ts.isTypeNode(node)) {
+      // `class Mine extends Hono` — the heritage clause is a type node to the
+      // parser but a VALUE reference to the router class at runtime (round
+      // 10): descend into the extended expression so a subclass of a router
+      // class fails closed like any other value use of the binding.
+      if (
+        ts.isExpressionWithTypeArguments(node) &&
+        ts.isHeritageClause(node.parent) &&
+        node.parent.token === ts.SyntaxKind.ExtendsKeyword &&
+        (ts.isClassDeclaration(node.parent.parent) || ts.isClassExpression(node.parent.parent))
+      ) {
+        visit(node.expression);
+      }
+      return;
+    }
     // Peel `((sub)[verb])(...)`, `(sub as Hono)[verb]!(...)` once, and judge
     // AND describe the same unwrapped callee (round 8: the message builder
     // read `.argumentExpression` off the still-wrapped callee and threw).
@@ -4019,13 +4368,13 @@ function collectRouteModuleFacts(
         }
       }
     }
-    if (
-      ts.isNewExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      (node.expression.text === "Hono" ||
-        node.expression.text === "HttpRouterWithHono")
-    ) {
-      // A router is CONSTRUCTED here. The walk binds a router only through
+    const constructedClass = ts.isNewExpression(node)
+      ? routerClassOf(node.expression, classBindings)
+      : undefined;
+    if (ts.isNewExpression(node) && constructedClass) {
+      // A router is CONSTRUCTED here — the class RESOLVED through its import
+      // binding (`new Hono()`, `new H()` under an alias, `new hono.Hono()`,
+      // `new (Hono)()`; round 10). The walk binds a router only through
       // `const <name> = new Hono()` (top-level: walked; nested: swept as an
       // opaque local); a construction in any other position — a parameter
       // default, an array / object literal element, a class property, a call
@@ -4050,13 +4399,65 @@ function collectRouteModuleFacts(
         flag(
           node,
           "new",
-          `a router is constructed in a position the walk cannot bind (\`${holder.parent.getText(sourceFile).slice(0, 60)}\`); a router must be exactly \`const <name> = new ${node.expression.text}(...)\`, because a router that reaches a parameter default, a container, a class property, a call, a return, or a loop binding can register routes the walk never sees`,
-          `\`new ${node.expression.text}(...)\``,
+          `a router is constructed in a position the walk cannot bind (\`${holder.parent.getText(sourceFile).slice(0, 60)}\`); a router must be exactly \`const <name> = new ${constructedClass}(...)\`, because a router that reaches a parameter default, a container, a class property, a call, a return, or a loop binding can register routes the walk never sees`,
+          `\`new ${constructedClass}(...)\``,
         );
       }
     }
+    if (
+      ts.isIdentifier(node) &&
+      classBindings.valueLocals.has(node.text) &&
+      isValueReference(node) &&
+      !isShadowedReference(node) &&
+      !isAcceptedRouterClassUse(node)
+    ) {
+      // A router CLASS binding (`Hono`, `HttpRouterWithHono`, under any alias
+      // or namespace) referenced as a value other than as the callee of a
+      // resolved `new` — `const H = Hono`, `const { Hono } = hono`,
+      // `hono["Hono"]`, `class X extends Hono`, `make(Hono)` — hands the class
+      // to a spelling under which the construction rule cannot see the router
+      // being built, so it fails closed at the reference (round 10).
+      flag(
+        node,
+        "reference",
+        `the router class binding \`${node.text}\` is referenced as a value (\`${node.parent.getText(sourceFile).slice(0, 60)}\`) other than as the callee of \`new ${node.text}(...)\` / \`new ${node.text}.<Class>(...)\`; a router class rebound, destructured, subclassed, or handed to a call can construct routers the walk never sees`,
+        `\`${node.text}\``,
+      );
+    }
     ts.forEachChild(node, visit);
   };
+
+  /**
+   * The one accepted value use of a router-class binding: the callee of a
+   * `new` that RESOLVES to a router class — the identifier itself
+   * (`new H()`, `new (H)()`), or the root of `<ns>.<Class>` (`new hono.Hono()`).
+   * The construction rule then judges the position of that `new`.
+   */
+  function isAcceptedRouterClassUse(identifier: ts.Identifier): boolean {
+    let expression: ts.Node = identifier;
+    if (
+      ts.isPropertyAccessExpression(identifier.parent) &&
+      identifier.parent.expression === identifier &&
+      classBindings.namespaces.has(identifier.text)
+    ) {
+      expression = identifier.parent;
+    }
+    while (
+      ts.isParenthesizedExpression(expression.parent) ||
+      ts.isNonNullExpression(expression.parent) ||
+      ts.isAsExpression(expression.parent) ||
+      ts.isSatisfiesExpression(expression.parent) ||
+      ts.isTypeAssertionExpression(expression.parent)
+    ) {
+      expression = expression.parent;
+    }
+    const parent = expression.parent;
+    return (
+      ts.isNewExpression(parent) &&
+      parent.expression === expression &&
+      routerClassOf(parent.expression, classBindings) !== undefined
+    );
+  }
 
   /**
    * `<router>.use(...)` on a known router (round 9). Accepted shapes, and
@@ -4359,6 +4760,7 @@ function sweepRouterReferences(
   knownConvexPaths: ReadonlySet<string>,
 ) {
   const { sourceFile, convexPath, filePath } = module;
+  const classBindings = collectRouterClassBindings(sourceFile);
   const routerish = new Set(facts.routerLikeLocals);
   const importDescriptions = new Map<string, string>();
   for (const binding of collectImportBindings(sourceFile)) {
@@ -4405,14 +4807,24 @@ function sweepRouterReferences(
       target !== undefined &&
       knownConvexPaths.has(target) &&
       [...exportIndex.keys()].some((key) => key.startsWith(`${target}::`));
-    if (reference.specifier !== undefined && !exportsRouter) continue;
+    // A router CLASS package (`hono`, `convex-helpers/server/hono`) loaded
+    // dynamically hands the class to a binding no import names, so the
+    // construction rule never sees the routers built from it (round 10).
+    const exportsRouterClass =
+      reference.specifier !== undefined &&
+      isRouterClassPackageSpecifier(reference.specifier);
+    if (reference.specifier !== undefined && !exportsRouter && !exportsRouterClass) {
+      continue;
+    }
     const spelled = reference.node.getText(sourceFile).slice(0, 60);
     escape(
       reference.node,
       `\`${spelled}\``,
       reference.specifier === undefined
         ? `a module is loaded through a non-literal specifier (\`${spelled}\`); it may be a router module, and a router obtained that way reaches a binding the walk cannot follow, so it can register routes the walk never sees`
-        : `the router module \`${target}\` is loaded through \`import()\` / \`require()\` (\`${spelled}\`), so its routers reach a binding the walk cannot follow and can register routes the walk never sees`,
+        : exportsRouterClass
+          ? `the router class package \`${reference.specifier}\` is loaded through \`import()\` / \`require()\` (\`${spelled}\`), so its router class reaches a binding no import declaration names and can construct routers the walk never sees`
+          : `the router module \`${target}\` is loaded through \`import()\` / \`require()\` (\`${spelled}\`), so its routers reach a binding the walk cannot follow and can register routes the walk never sees`,
     );
   }
 
@@ -4466,11 +4878,10 @@ function sweepRouterReferences(
         return true;
       }
     }
-    // `new HttpRouterWithHono(app)`.
+    // `new HttpRouterWithHono(app)` — the class resolved through its import.
     if (
       ts.isNewExpression(parent) &&
-      ts.isIdentifier(parent.expression) &&
-      parent.expression.text === "HttpRouterWithHono" &&
+      isHonoClassReference(parent.expression, classBindings, "HttpRouterWithHono") &&
       parent.arguments?.length === 1 &&
       parent.arguments[0] === expression
     ) {
@@ -5573,6 +5984,7 @@ export function assertCorsAllowlist(
   source: string,
 ): CorsAssertion {
   const sourceFile = parseSource(filePath, source);
+  const classBindings = collectRouterClassBindings(sourceFile);
   const convexPath = toConvexRelativePath(filePath);
   const failed = (line: number | undefined, detail: string): CorsAssertion => ({
     found: true,
@@ -5614,7 +6026,7 @@ export function assertCorsAllowlist(
         statement.declarationList.declarations.some(
           (declaration) =>
             ts.isIdentifier(declaration.name) &&
-            isHonoRouterDeclaration(declaration),
+            isHonoRouterDeclaration(declaration, classBindings),
         ),
     );
   if (declaresRouter) {
@@ -5655,7 +6067,7 @@ export function assertCorsAllowlist(
   for (const statement of sourceFile.statements) {
     if (!ts.isVariableStatement(statement)) continue;
     for (const declaration of statement.declarationList.declarations) {
-      if (ts.isIdentifier(declaration.name) && isHonoRouterDeclaration(declaration)) {
+      if (ts.isIdentifier(declaration.name) && isHonoRouterDeclaration(declaration, classBindings)) {
         routerVariables.add(declaration.name.text);
       }
     }
@@ -5841,6 +6253,7 @@ export function assertRootErrorHandler(
   source: string,
 ): RootErrorHandlerAssertion {
   const sourceFile = parseSource(filePath, source);
+  const classBindings = collectRouterClassBindings(sourceFile);
   const sites: { line: number; node: ts.CallExpression }[] = [];
   const visit = (node: ts.Node) => {
     if (
@@ -5870,11 +6283,48 @@ export function assertRootErrorHandler(
   for (const statement of sourceFile.statements) {
     if (!ts.isVariableStatement(statement)) continue;
     for (const declaration of statement.declarationList.declarations) {
-      if (ts.isIdentifier(declaration.name) && isHonoRouterDeclaration(declaration)) {
+      if (ts.isIdentifier(declaration.name) && isHonoRouterDeclaration(declaration, classBindings)) {
         routerVariables.add(declaration.name.text);
       }
     }
   }
+  // The ROOT is the Hono router the module hands to `new
+  // HttpRouterWithHono(<root>)` (the class resolved through its import): that
+  // router's `errorHandler` is the one convex-helpers' `fetch` runs for every
+  // mounted route, so a handler on a sibling top-level router is not the
+  // second layer (round 10). Exactly one such wrapping, of a top-level Hono
+  // router identifier, names the root; anything else leaves it unbound.
+  const wrappedRoots = new Set<string>();
+  let wrapCount = 0;
+  const findWraps = (inner: ts.Node) => {
+    if (ts.isTypeNode(inner)) return;
+    if (
+      ts.isNewExpression(inner) &&
+      isHonoClassReference(inner.expression, classBindings, "HttpRouterWithHono")
+    ) {
+      wrapCount += 1;
+      const [argument] = inner.arguments ?? [];
+      const wrapped = argument ? unwrapTypeOnly(argument) : undefined;
+      if (
+        inner.arguments?.length === 1 &&
+        wrapped &&
+        ts.isIdentifier(wrapped) &&
+        routerVariables.has(wrapped.text) &&
+        !isShadowedReference(wrapped)
+      ) {
+        wrappedRoots.add(wrapped.text);
+      }
+    }
+    ts.forEachChild(inner, findWraps);
+  };
+  findWraps(sourceFile);
+  if (wrapCount !== 1 || wrappedRoots.size !== 1) {
+    return failed(
+      line,
+      `the router module wraps ${wrapCount} router(s) in \`new HttpRouterWithHono(...)\` (${wrappedRoots.size} of them a top-level Hono router identifier); exactly one \`new HttpRouterWithHono(<root>)\` of a top-level Hono router is required, because it is that root's error handler convex-helpers runs for every mounted route.`,
+    );
+  }
+  const [rootName] = wrappedRoots;
   const callee = unwrapTypeOnly(node.expression) as ts.PropertyAccessExpression;
   const receiver = unwrapTypeOnly(callee.expression);
   if (
@@ -5889,6 +6339,12 @@ export function assertRootErrorHandler(
     return failed(
       line,
       `\`.onError(...)\` is called on \`${callee.expression.getText(sourceFile).slice(0, 40)}\`, which is not a top-level Hono router of the module, or not as a top-level statement.`,
+    );
+  }
+  if (receiver.text !== rootName) {
+    return failed(
+      line,
+      `\`.onError(...)\` is called on \`${receiver.text}\`, a top-level Hono router that is not the root \`${rootName}\` wrapped by \`new HttpRouterWithHono(${rootName})\`; only the root's error handler runs for every mounted route, so a handler on a sibling router leaves the root on Hono's default handler.`,
     );
   }
   if (node.arguments.length !== 1) {

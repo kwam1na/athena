@@ -4489,24 +4489,169 @@ describe("round 8: factory-built routers, dynamically imported router modules, w
       unresolvable(result).find((finding) => finding.rationale.includes("mounts `"));
 
     it.each([
-      ["a for-of-bound `new Hono()`", `for (const r of [new Hono()]) {\n  r.get(P, h);\n  sub.route("/x", r);\n}`],
-      ["a catch-bound `new Hono()`", `try { throw new Hono(); } catch (r) {\n  r.get(P, h);\n  sub.route("/x", r);\n}`],
-      ["a forEach-parameter `new Hono()`", `[new Hono()].forEach((r) => {\n  r.get(P, h);\n  sub.route("/x", r);\n});`],
-    ])("flags %s mounted with .route — at the construction and at the mount", async (_label, acquire) => {
+      ["a for-of-bound `new Hono()`", `for (const r of [new Hono()]) {\n  r.get(P, h);\n  sub.route("/x", r);\n}`, true],
+      ["a catch-bound `new Hono()`", `try { throw new Hono(); } catch (r) {\n  r.get(P, h);\n  sub.route("/x", r);\n}`, true],
+      ["a forEach-parameter `new Hono()`", `[new Hono()].forEach((r) => {\n  r.get(P, h);\n  sub.route("/x", r);\n});`, false],
+    ])("flags %s mounted with .route — at the construction and at the mount", async (_label, acquire, opaqueBinding) => {
       const result = await check(`export {};`, "", { subRouter: mountFixture(acquire) });
       const findings = unresolvable(result);
       // Line 8: the construction (a loop source / thrown value / array
-      // element is not a binding the walk opens). Line 10: the mount of a
-      // nested-scope binding. `r.get(P, h)` on the loop / catch / parameter
-      // binding keeps the string rule; the construction and the mount are
-      // the two sites that close every acquisition path.
-      expect(findings.map((finding) => [finding.line, finding.functionName])).toEqual([
-        [8, "`new Hono(...)`"],
-        [10, ".route(...)"],
-      ]);
+      // element is not a binding the walk opens). Line 9 (round 10): a
+      // for-of / catch binding is an opaque nested declaration — any path
+      // expression on it is a route — while the forEach PARAMETER keeps the
+      // string rule (the router is judged where it is handed in). Line 10:
+      // the mount of a nested-scope binding.
+      expect(findings.map((finding) => [finding.line, finding.functionName])).toEqual(
+        opaqueBinding
+          ? [[8, "`new Hono(...)`"], [9, ".get(...)"], [10, ".route(...)"]]
+          : [[8, "`new Hono(...)`"], [10, ".route(...)"]],
+      );
       expect(findings[0].rationale).toContain("constructed in a position the walk cannot bind");
-      expect(findings[1].rationale).toContain("a name bound in a nested scope");
+      expect(findings[findings.length - 1].rationale).toContain("a name bound in a nested scope");
       expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
+    });
+
+    describe("round 10: the router class is resolved through its import binding, not its spelling", () => {
+      // The delta's for-of / catch / forEach cases under an alias and under
+      // a namespace import: same findings as the literal spelling.
+      const ALIAS_HEAD = `
+        import { Hono as H } from "hono";
+        import { admitHttpRead } from "../../../../platform/operationAdmission";
+        import { subHealth } from "../../../../operationAdmission/readDefinitions";
+        export const sub = new H();
+        const h = async (c) => c.json({ pwned: true });
+        const P = "/evil";
+      `;
+      const NAMESPACE_HEAD = `
+        import * as hono from "hono";
+        import { admitHttpRead } from "../../../../platform/operationAdmission";
+        import { subHealth } from "../../../../operationAdmission/readDefinitions";
+        export const sub = new hono.Hono();
+        const h = async (c) => c.json({ pwned: true });
+        const P = "/evil";
+      `;
+      const TAIL = `sub.get("/health", admitHttpRead(subHealth, async (c) => c.json({})));`;
+
+      it.each([
+        ["alias, for-of", ALIAS_HEAD, `for (const r of [new H()]) {\n  r.get(P, h);\n  sub.route("/x", r);\n}`, true],
+        ["alias, catch", ALIAS_HEAD, `try { throw new H(); } catch (r) {\n  r.get(P, h);\n  sub.route("/x", r);\n}`, true],
+        ["alias, forEach", ALIAS_HEAD, `[new H()].forEach((r) => {\n  r.get(P, h);\n  sub.route("/x", r);\n});`, false],
+        ["namespace, for-of", NAMESPACE_HEAD, `for (const r of [new hono.Hono()]) {\n  r.get(P, h);\n  sub.route("/x", r);\n}`, true],
+        ["namespace, catch", NAMESPACE_HEAD, `try { throw new hono.Hono(); } catch (r) {\n  r.get(P, h);\n  sub.route("/x", r);\n}`, true],
+        ["namespace, forEach", NAMESPACE_HEAD, `[new hono.Hono()].forEach((r) => {\n  r.get(P, h);\n  sub.route("/x", r);\n});`, false],
+      ])("flags the %s construction, the opaque-binding registration, and the mount exactly like the literal spelling", async (_label, head, acquire, opaqueBinding) => {
+        const result = await check(`export {};`, "", { subRouter: `${head}\n${acquire}\n${TAIL}` });
+        const findings = unresolvable(result);
+        // Lines 9 / 10 / 11: the head carries one more line than the literal
+        // fixture; the shape of the findings is identical.
+        expect(findings.map((finding) => [finding.line, finding.functionName])).toEqual(
+          opaqueBinding
+            ? [[9, "`new Hono(...)`"], [10, ".get(...)"], [11, ".route(...)"]]
+            : [[9, "`new Hono(...)`"], [11, ".route(...)"]],
+        );
+        expect(findings[0].rationale).toContain("constructed in a position the walk cannot bind");
+        expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
+      });
+
+      it("flags the aliased for-of / return factory at the `new` (the round-10 probe): the sub-router is a walked key with only its own registrations", async () => {
+        const result = await check(`export {};`, "", {
+          subRouter: `
+            import { Hono as H } from "hono";
+            import { admitHttpRead } from "../../../../platform/operationAdmission";
+            import { subHealth } from "../../../../operationAdmission/readDefinitions";
+            const h = async (c) => c.json({ pwned: true });
+            const P = "/evil";
+            function make() {
+              for (const r of [new H()]) {
+                r.get(P, h);
+                return r;
+              }
+            }
+            export const sub = make();
+            sub.get("/health", admitHttpRead(subHealth, async (c) => c.json({})));
+          `,
+        });
+        expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual([
+          [8, "`new Hono(...)`"],
+          [9, ".get(...)"],
+        ]);
+        expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
+      });
+
+      it("flags `reg(new H())` handed in as a call argument (the round-10 adversarial probe), `new (Hono)()`, and `new hono.Hono()` at the construction", async () => {
+        for (const [head, construction] of [
+          [`import { Hono as H } from "hono";`, `new H()`],
+          [`import { Hono } from "hono";`, `new (Hono)()`],
+          [`import * as hono from "hono";`, `new hono.Hono()`],
+          [`import * as hono from "hono";`, `new (hono.Hono)()`],
+        ]) {
+          const result = await check(`export {};`, "", {
+            subRouter: `
+              ${head}
+              import { admitHttpRead } from "../../../../platform/operationAdmission";
+              import { subHealth } from "../../../../operationAdmission/readDefinitions";
+              const h = async (c) => c.json({ pwned: true });
+              const P = "/evil";
+              function reg(r) { r.get(P, h); return r; }
+              export const sub = reg(${construction});
+              sub.get("/health", admitHttpRead(subHealth, async (c) => c.json({})));
+            `,
+          });
+          expect(unresolvable(result).map((finding) => [finding.line, finding.functionName]), construction).toEqual([
+            [8, "`new Hono(...)`"],
+          ]);
+          expect(unresolvable(result)[0].rationale).toContain("constructed in a position the walk cannot bind");
+          expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
+        }
+      });
+
+      it("flags an aliased `HttpRouterWithHono as W` constructed outside a declaration, and accepts it as a declaration initializer", async () => {
+        const flagged = await check(`
+          import { Hono } from "hono";
+          import { HttpRouterWithHono as W } from "convex-helpers/server/hono";
+          export const inner = new Hono();
+          export const wrapped = [new W(inner)];
+        `);
+        expect(unresolvable(flagged).map((finding) => [finding.line, finding.functionName])).toEqual([
+          [5, "`new HttpRouterWithHono(...)`"],
+        ]);
+        const accepted = await check(`
+          import { Hono } from "hono";
+          import { HttpRouterWithHono as W } from "convex-helpers/server/hono";
+          export const inner = new Hono();
+          export const wrapped = new W(inner);
+        `);
+        expect(accepted.findings).toEqual([]);
+      });
+
+      it.each([
+        ["a rebound class `const H = Hono`", `import { Hono } from "hono";\nconst H = Hono;\nexport const sub = new H();`, [[2, "`Hono`"]]],
+        ["a destructured namespace `const { Hono: H } = hono`", `import * as hono from "hono";\nconst { Hono: H } = hono;\nexport const sub = new H();`, [[2, "`hono`"]]],
+        ["an element access `hono[\"Hono\"]`", `import * as hono from "hono";\nexport const sub = new (hono["Hono"])();`, [[2, "`hono`"]]],
+        ["a subclass `class Mine extends Hono`", `import { Hono } from "hono";\nclass Mine extends Hono {}\nexport const sub = new Mine();`, [[2, "`Hono`"]]],
+        ["the class handed to a call", `import { Hono } from "hono";\nfunction build(C) { return new C(); }\nexport const sub = build(Hono);`, [[3, "`Hono`"]]],
+        ["a dynamic import of `hono`", `const { Hono } = await import("hono");\nexport const sub = new Hono();`, [[1, "`import(\"hono\")`"]]],
+        // The require'd wrapper does not resolve, so `new HttpRouterWithHono(sub)`
+        // is no longer an accepted use of `sub` either: two sites fail closed.
+        ["a require of `convex-helpers/server/hono`", `import { Hono } from "hono";\nconst { HttpRouterWithHono } = require("convex-helpers/server/hono");\nexport const sub = new Hono();\nexport const http = new HttpRouterWithHono(sub);`, [[2, "`require(\"convex-helpers/server/hono\")`"], [4, "`sub`"]]],
+      ])("fails closed on %s — a router class reaching a spelling the construction rule cannot see", async (_label, late, expected) => {
+        const result = await check(late);
+        expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual(expected);
+      });
+
+      it("keeps the type-only spellings: `import type { Hono }`, `HonoWithConvex` in a type annotation, `Context` from hono", async () => {
+        const result = await check(`
+          import type { Hono as HonoType } from "hono";
+          import { type Context } from "hono";
+          import { HonoWithConvex } from "convex-helpers/server/hono";
+          import { sub } from "./sub";
+          export type Sub = HonoType;
+          export type Ctx = Context;
+          export type App = HonoWithConvex<any>;
+          export const keep = 1;
+        `);
+        expect(result.findings).toEqual([]);
+      });
     });
 
     it("flags an ambient `declare const ghost` mounted with .route", async () => {
@@ -4778,6 +4923,13 @@ describe("round 9: router middleware is pass-through-or-deny", () => {
     ["a thrown plain `new Error(...)`", `sub.use("*", async (c, next) => { if (!c.req.header("x")) throw new Error("missing"); await next(); });`, "throws a value it constructs or obtains"],
     ["a thrown call result", `import { deny } from "./deny";\nsub.use("*", async (c, next) => { throw deny(); await next(); });`, "throws a value it constructs or obtains"],
     ["a rethrow of a REBOUND catch binding", `import { HTTPException } from "hono/http-exception";\nsub.use("*", async (c, next) => { try { c.req.header("x"); } catch (error) { error = new HTTPException(200, { res: new Response("pwned") }); throw error; } await next(); });`, "throws a value it constructs or obtains"],
+    ["a rethrow of a catch binding MUTATED through Object.assign (round 10)", `sub.use("*", async (c, next) => { try { c.req.header("x"); } catch (error) { Object.assign(error, { getResponse: () => new Response("pwned") }); throw error; } await next(); });`, "used other than as the thrown value, a plain read, or the argument of a tested predicate"],
+    ["a rethrow of a catch binding with a property WRITE (round 10)", `sub.use("*", async (c, next) => { try { c.req.header("x"); } catch (error) { error.getResponse = () => new Response("pwned"); throw error; } await next(); });`, "used other than as the thrown value"],
+    ["a rethrow of a catch binding REBOUND by array destructuring (round 10)", `import { HTTPException } from "hono/http-exception";\nsub.use("*", async (c, next) => { try { c.req.header("x"); } catch (error) { [error] = [new HTTPException(200, { res: new Response("pwned") })]; throw error; } await next(); });`, "used other than as the thrown value"],
+    ["a rethrow of a catch binding REBOUND by object destructuring (round 10)", `import { HTTPException } from "hono/http-exception";\nsub.use("*", async (c, next) => { try { c.req.header("x"); } catch (error) { ({ error } = { error: new HTTPException(200, { res: new Response("pwned") }) }); throw error; } await next(); });`, "used other than as the thrown value"],
+    ["a rethrow of a catch binding ALIASED into a local (round 10)", `sub.use("*", async (c, next) => { try { c.req.header("x"); } catch (error) { const e = error; e.getResponse = () => new Response("pwned"); throw error; } await next(); });`, "used other than as the thrown value"],
+    ["a rethrow of a catch binding handed to a call whose result is not tested (round 10)", `import { decorate } from "./decorate";\nsub.use("*", async (c, next) => { try { c.req.header("x"); } catch (error) { decorate(error); throw error; } await next(); });`, "used other than as the thrown value"],
+    ["a rethrow of a catch binding whose method is called (round 10)", `sub.use("*", async (c, next) => { try { c.req.header("x"); } catch (error) { error.setStatus(200); throw error; } await next(); });`, "used other than as the thrown value"],
     ["a throw of an outer local, not the catch binding", `sub.use("*", async (c, next) => { let saved; try { c.req.header("x"); } catch (error) { saved = error; } if (saved) throw saved; await next(); });`, "throws a value it constructs or obtains"],
     ["`try { return next() } catch` — observing the admitted handler's failure", `sub.use("*", async (c, next) => { try { return next(); } catch (e) { return c.json({ leaked: String(e) }, 500); } await next(); });`, "called inside a `try`"],
     ["`return next()` inside a try's finally", `sub.use("*", async (c, next) => { try { c.req.header("x"); } finally { return next(); } await next(); });`, "called inside a `try`"],
@@ -4821,6 +4973,33 @@ describe("round 9: router middleware is pass-through-or-deny", () => {
     `, {
       extraModules: {
         "http/domains/core/routes/waiverAuth.ts": `export async function authorized() { return true; }\nexport function isWaiverConfigurationError() { return false; }`,
+      },
+    });
+    expect(result.findings).toEqual([]);
+  });
+
+  it("accepts a rethrow whose catch binding is only read: tested predicates (negated, or-ed, compared), `instanceof`, a property read in a condition, and the right side of an assignment (round 10)", async () => {
+    const result = await check(`
+      import { isA, isB } from "./preds";
+      sub.use("*", async (c, next) => {
+        let seen;
+        try {
+          c.req.header("x");
+        } catch (error) {
+          if (!isA(error) || isB(error) === true) {
+            return c.json({ error: { code: "a" } }, 503);
+          }
+          if (error instanceof TypeError && typeof error.code === "string" && error.code !== "x") {
+            return c.json({ error: { code: "b" } }, 400);
+          }
+          seen = error;
+          throw error;
+        }
+        await next();
+      });
+    `, {
+      extraModules: {
+        "http/domains/core/routes/preds.ts": `export function isA() { return true; }\nexport function isB() { return false; }`,
       },
     });
     expect(result.findings).toEqual([]);
@@ -4917,6 +5096,39 @@ describe("round 9: router middleware is pass-through-or-deny", () => {
       const result = await checkHttp(line);
       expect(handlerFindings(result).map((finding) => finding.id)).toEqual(["router-error-handler-not-fixed"]);
       expect(handlerFindings(result)[0].rationale).toContain(reason);
+    });
+
+    it("flags `.onError` on a SIBLING top-level Hono router while the wrapped root has none (round 10) — only the root's handler runs for mounted routes", async () => {
+      const result = await checkHttp(
+        `const other = new Hono();\nother.onError((err, c) => c.json({ error: "internal" }, 500));\napp.route("/o", other);`,
+      );
+      expect(handlerFindings(result).map((finding) => finding.id)).toEqual(["router-error-handler-not-fixed"]);
+      expect(handlerFindings(result)[0].rationale).toContain("is called on `other`, a top-level Hono router that is not the root `app` wrapped by `new HttpRouterWithHono(app)`");
+    });
+
+    it("binds the root through the resolved import: `HttpRouterWithHono as W` and `import * as hono` still name `app` as the root (round 10)", async () => {
+      const rootDir = await createFixtureRoot();
+      await writeBaselineTree(rootDir, {
+        reads: {
+          subHealth: {
+            kind: "http_read",
+            route: { method: "GET", path: "/sub/health" },
+            operationId: "http.sub.health",
+            access: { kind: "read", intent: "platform.health.view" },
+          },
+        },
+      });
+      await convexFixture(rootDir, "http/domains/core/routes/sub.ts", `${SUB_ROUTER_HEAD}\n${SUB_ROUTER_TAIL}`);
+      const httpSource = ADMITTED_ROUTER
+        .replace(`import { Hono } from "hono";`, `import * as hono from "hono";`)
+        .replace(`import { HonoWithConvex, HttpRouterWithHono } from "convex-helpers/server/hono";`, `import { HonoWithConvex, HttpRouterWithHono as W } from "convex-helpers/server/hono";`)
+        .replace(`const app: HonoWithConvex<ActionCtx> = new Hono();`, `const app: HonoWithConvex<ActionCtx> = new hono.Hono();`)
+        .replace(`const http = new HttpRouterWithHono<ActionCtx>(app);`, `const http = new W<ActionCtx>(app);`);
+      await convexFixture(rootDir, "http.ts", `${httpSource}\nimport { sub } from "./http/domains/core/routes/sub";\napp.route("/sub", sub);`);
+      const result = await collectOperationAdmissionCheckResult(rootDir);
+      expect(result.findings).toEqual([]);
+      const sibling = await checkHttp(`const other = new Hono();\nother.onError((err, c) => c.json({ error: "internal" }, 500));\napp.route("/o", other);`);
+      expect(handlerFindings(sibling).map((finding) => finding.id)).toEqual(["router-error-handler-not-fixed"]);
     });
 
     it("flags `.onError` on a sub-router — it renders before the root handler", async () => {

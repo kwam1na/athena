@@ -13,7 +13,7 @@ applies_when:
   - "A shared-demo read surface is using ad hoc store checks or write capability bridges"
   - "A migration wave needs exact read inventory coverage while reporting reads stay out of scope"
 tags: [athena, convex, read-admission, shared-demo, authz, operations, pos]
-delivery_diff_fingerprint: 046c10ad0183516db264cf05e3f2fbf5e9a02ad8e53ad9ab218bbdaa8588f6e8
+delivery_diff_fingerprint: fb71d31ea2333075c19f4ac9676529bb729cd628a4d79edb5bc65aa59acd4ebf
 ---
 
 # Athena Read Admission Rail
