@@ -52,8 +52,8 @@ Convex artifact refresh rule:
 For localhost and development live testing only, sign into Athena with the development account below, then open its seeded store and use the provisioned POS cashier:
 
 - Athena user: `knownothing955@gmail.com`
-- Username: `jdoog`
-- PIN: `1111`
+- Cashier username: `jdoog`, PIN: `1111` (register sign-in, drawer open/closeout, sales, void *requests*)
+- Manager username: `kmens`, PIN: `1111` (manager paths: unlock the Approvals queue, approve/reject void and other manager-approved commands)
 
 Retrieve the one-time login code from that account's Gmail inbox when needed; never copy one-time codes into repository files. Do not use these credentials against production. If the cashier is missing or the PIN no longer works in development, provision or reset the cashier through Staff Management rather than adding a test-only authentication bypass.
 
