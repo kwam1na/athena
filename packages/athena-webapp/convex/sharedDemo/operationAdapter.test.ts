@@ -10,15 +10,17 @@ vi.mock("@convex-dev/auth/server", () => ({
 import { getAuthUserId } from "@convex-dev/auth/server";
 
 const admittedDefinition = defineOperation({
+  kind: "mutation" as const,
   operationId: "demo.allowed",
   capability: "daily_operations.write",
   scope: { kind: "store", storeIdArg: "storeId" },
   readiness: { kind: "store_write" },
   effects: { mode: "none" },
-  actors: { normalUser: "admit", sharedDemo: "admit" },
+  actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
 });
 
 const organizationScopedDefinition = defineOperation({
+  kind: "mutation" as const,
   operationId: "demo.organization",
   capability: "daily_operations.write",
   scope: {
@@ -27,34 +29,73 @@ const organizationScopedDefinition = defineOperation({
   },
   readiness: { kind: "none" },
   effects: { mode: "none" },
-  actors: { normalUser: "admit", sharedDemo: "admit" },
+  actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
 });
 
 const deniedDefinition = defineOperation({
+  kind: "mutation" as const,
   operationId: "demo.denied",
   capability: "exports.generate",
   scope: { kind: "store", storeIdArg: "storeId" },
   readiness: { kind: "store_write" },
   effects: { mode: "protected", gateways: ["export.deliver"] },
-  actors: { normalUser: "admit", sharedDemo: "deny" },
+  actors: { normalUser: "admit", sharedDemo: "deny", public: "deny" },
 });
 
 const deniedEffectDefinition = defineOperation({
+  kind: "mutation" as const,
   operationId: "demo.deniedEffect",
   capability: "orders.fulfill",
   scope: { kind: "store", storeIdArg: "storeId" },
   readiness: { kind: "store_write" },
   effects: { mode: "protected", gateways: ["unknown.gateway"] },
-  actors: { normalUser: "admit", sharedDemo: "admit" },
+  actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
 });
 
 const simulatedEffectDefinition = defineOperation({
+  kind: "mutation" as const,
   operationId: "demo.simulatedEffect",
   capability: "orders.fulfill",
   scope: { kind: "store", storeIdArg: "storeId" },
   readiness: { kind: "store_write" },
   effects: { mode: "protected", gateways: ["order_notification.send"] },
-  actors: { normalUser: "admit", sharedDemo: "admit" },
+  actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
+});
+
+const dynamicBatchDefinition = defineOperation({
+  kind: "mutation" as const,
+  operationId: "demo.dynamicBatch",
+  capability: {
+    kind: "dynamic" as const,
+    candidates: ["pos.sync.write", "cash.control.write", "exports.generate"],
+    resolve: (args: Record<string, unknown>) =>
+      (args.kinds as string[]) as never,
+  },
+  scope: { kind: "store" as const, storeIdArg: "storeId" },
+  readiness: { kind: "store_write" as const },
+  effects: { mode: "none" as const },
+  actors: {
+    normalUser: "admit" as const,
+    sharedDemo: "admit" as const,
+    public: "deny" as const,
+  },
+});
+
+const storeReadyActionDefinition = defineOperation({
+  kind: "action" as const,
+  operationId: "demo.storeReadyAction",
+  capability: "customer.messaging.send",
+  scope: { kind: "store" as const, storeIdArg: "storeId" },
+  readiness: { kind: "store_ready" as const },
+  effects: {
+    mode: "protected" as const,
+    gateways: ["order_notification.send"],
+  },
+  actors: {
+    normalUser: "admit" as const,
+    sharedDemo: "admit" as const,
+    public: "deny" as const,
+  },
 });
 
 describe("shared demo operation adapter", () => {
@@ -112,7 +153,7 @@ describe("shared demo operation adapter", () => {
     ).resolves.toMatchObject({
       kind: "denied",
       recognized: true,
-      reason: "capability_denied",
+      reason: "actor_denied",
     });
   });
 
@@ -242,7 +283,8 @@ describe("shared demo operation adapter", () => {
     ).resolves.toMatchObject({
       kind: "denied",
       recognized: true,
-      reason: "actor_denied",
+      // Typed reason, not message text: an expired session is its own denial.
+      reason: "session_expired",
     });
   });
 
@@ -283,7 +325,92 @@ describe("shared demo operation adapter", () => {
       storeId: "store-1",
     });
   });
+
+  it("denies a mixed dynamic capability batch before the handler runs", async () => {
+    vi.mocked(getAuthUserId).mockResolvedValue("auth-user" as never);
+    const ctx = demoCtx({ principal: activePrincipal() });
+
+    await expect(
+      createSharedDemoOperationAdapter({ requireReadyWrite: vi.fn() }).resolve(
+        ctx as never,
+        { storeId: "store-1", kinds: ["pos.sync.write", "exports.generate"] },
+        dynamicBatchDefinition,
+      ),
+    ).resolves.toMatchObject({
+      kind: "denied",
+      recognized: true,
+      reason: "capability_denied",
+    });
+  });
+
+  it("admits a dynamic batch when every resolved capability is granted", async () => {
+    vi.mocked(getAuthUserId).mockResolvedValue("auth-user" as never);
+    const ctx = demoCtx({ principal: activePrincipal() });
+
+    await expect(
+      createSharedDemoOperationAdapter({ requireReadyWrite: vi.fn() }).resolve(
+        ctx as never,
+        { storeId: "store-1", kinds: ["pos.sync.write", "cash.control.write"] },
+        dynamicBatchDefinition,
+      ),
+    ).resolves.toMatchObject({
+      actor: { kind: "shared_demo", storeId: "store-1" },
+    });
+  });
+
+  it("denies a dynamic resolver that returns a capability outside its candidates", async () => {
+    vi.mocked(getAuthUserId).mockResolvedValue("auth-user" as never);
+    const ctx = demoCtx({ principal: activePrincipal() });
+
+    await expect(
+      createSharedDemoOperationAdapter({ requireReadyWrite: vi.fn() }).resolve(
+        ctx as never,
+        { storeId: "store-1", kinds: ["administration.destructive"] },
+        dynamicBatchDefinition,
+      ),
+    ).resolves.toMatchObject({
+      kind: "denied",
+      recognized: true,
+      reason: "capability_denied",
+    });
+  });
+
+  it("applies the store_ready fence to an action while the store is restoring", async () => {
+    vi.mocked(getAuthUserId).mockResolvedValue("auth-user" as never);
+    const ready = vi.fn(async () => {
+      throw new Error("The demo is being restored. Try again shortly.");
+    });
+    const ctx = demoCtx({ principal: activePrincipal() });
+
+    await expect(
+      createSharedDemoOperationAdapter({ requireReadyWrite: ready }).resolve(
+        ctx as never,
+        { storeId: "store-1" },
+        storeReadyActionDefinition,
+      ),
+    ).resolves.toMatchObject({
+      kind: "denied",
+      recognized: true,
+      reason: "readiness_denied",
+    });
+    // store_ready never asserts an epoch: it is the fence, not a write.
+    expect(ready).toHaveBeenCalledWith(ctx, {
+      expectedEpoch: undefined,
+      storeId: "store-1",
+    });
+  });
 });
+
+function activePrincipal() {
+  return {
+    admissionExpiresAt: Date.now() + 60_000,
+    athenaUserId: "athena-user",
+    authUserId: "auth-user",
+    organizationId: "org-1",
+    storeId: "store-1",
+  };
+}
+
 
 function demoCtx(args: { principal: Record<string, unknown> | null }) {
   return {

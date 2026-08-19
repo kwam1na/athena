@@ -314,15 +314,13 @@ export async function processOrderUpdateEmail(
     };
   }
 
-  if (options.simulateExternalEffects) {
-    await ctx.runQuery(
-      (internal as any).sharedDemo.actor.enforceSharedDemoActionCapability,
-      {
-        capability: "customer.messaging.send",
-        storeId: order.storeId,
-      },
-    );
-  }
+  // The shared-demo capability + store check that used to run here is the
+  // rail's now: `sendOrderUpdateEmailOperationDefinition` declares
+  // `capability: "customer.messaging.send"` with `store_ready` readiness and a
+  // store scope resolved from the named order, so the shared-demo adapter has
+  // already denied an ungranted capability or a foreign store before this
+  // helper runs. `simulateExternalEffects` remains the demo's send-simulation
+  // switch only.
 
   const store = await ctx.runQuery(internal.inventory.stores.findById, {
     id: order.storeId,

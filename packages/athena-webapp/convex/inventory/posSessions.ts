@@ -35,7 +35,29 @@ import {
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
 import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
+import {
+  bindPosSessionToRegisterSessionOperationDefinition,
+  cleanupOldPosSessionsOperationDefinition,
+  completePosSessionOperationDefinition,
+  createPosSessionOperationDefinition,
+  expireAllPosSessionsForStaffOperationDefinition,
+  expirePosSessionFromOperationsOperationDefinition,
+  holdPosSessionOperationDefinition,
+  releasePosSessionItemsOperationDefinition,
+  resumePosSessionOperationDefinition,
+  syncPosSessionCheckoutStateOperationDefinition,
+  updatePosSessionOperationDefinition,
+  voidPosSessionOperationDefinition,
+} from "../operationAdmission/domains/inventoryIdentity_definitions";
+import { getPosSessionByIdReadDefinition } from "../operationAdmission/domains/inventoryIdentity_readDefinitions";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
 import {
   getPosActiveSessionReadDefinition,
   getPosStoreActiveSessionOperationsReadDefinition,
@@ -777,7 +799,7 @@ export const getStoreActiveSessionOperations = query({
     storeId: v.id("store"),
     limit: v.optional(v.number()),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPosStoreActiveSessionOperationsReadDefinition,
     async (ctx, args: { limit?: number; storeId: Id<"store"> }) => {
       await requireStoreMemberAccessWithCtx(ctx, {
@@ -846,7 +868,17 @@ export const expireSessionFromOperations = mutation({
     reason: v.optional(v.string()),
   },
   returns: commandResultValidator(expireSessionOperationsDataValidator),
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    expirePosSessionFromOperationsOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        storeId: Id<"store">;
+        sessionId: Id<"posSession">;
+        actorStaffProfileId?: Id<"staffProfile">;
+        reason?: string;
+      },
+    ) => {
     const actorValidation = await validateOperationsActor(ctx, args);
     if (actorValidation.error) {
       return actorValidation.error;
@@ -933,7 +965,8 @@ export const expireSessionFromOperations = mutation({
       releasedHoldCount: releaseSummary.releasedHoldCount,
       releasedQuantity: releaseSummary.releasedQuantity,
     });
-  },
+    },
+  ),
 });
 
 // Get sessions for a store (with filtering)
@@ -945,7 +978,7 @@ export const getStoreSessions = query({
     status: v.optional(v.string()), // "active", "held", "completed", "void"
     limit: v.optional(v.number()),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPosStoreSessionsReadDefinition,
     async (
       ctx,
@@ -1056,20 +1089,23 @@ export const getStoreSessions = query({
 // Get a specific session by ID
 export const getSessionById = query({
   args: { sessionId: v.id("posSession") },
-  handler: async (ctx, args) => {
-    const session = await ctx.db.get("posSession", args.sessionId);
-    if (!session) return null;
+  handler: admitPublicQuery(
+    getPosSessionByIdReadDefinition,
+    async (ctx: OperationQueryCtx, args: { sessionId: Id<"posSession"> }) => {
+      const session = await ctx.db.get("posSession", args.sessionId);
+      if (!session) return null;
 
-    const customer = await loadSessionCustomer(ctx, session);
+      const customer = await loadSessionCustomer(ctx, session);
 
-    const cartItems = await loadPosSessionItems(ctx, session._id);
+      const cartItems = await loadPosSessionItems(ctx, session._id);
 
-    return {
-      ...session,
-      cartItems,
-      customer,
-    };
-  },
+      return {
+        ...session,
+        cartItems,
+        customer,
+      };
+    },
+  ),
 });
 
 // Create a new session
@@ -1082,15 +1118,27 @@ export const createSession = mutation({
     registerSessionId: v.optional(v.id("registerSession")),
   },
   returns: commandResultValidator(sessionOperationDataValidator),
-  handler: async (ctx, args) => {
-    const result = await runStartSessionCommand(ctx, args);
+  handler: admitPublicMutation(
+    createPosSessionOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        storeId: Id<"store">;
+        terminalId: Id<"posTerminal">;
+        staffProfileId?: Id<"staffProfile">;
+        registerNumber?: string;
+        registerSessionId?: Id<"registerSession">;
+      },
+    ) => {
+      const result = await runStartSessionCommand(ctx, args);
 
-    if (result.status === "ok") {
-      return ok(result.data);
-    }
+      if (result.status === "ok") {
+        return ok(result.data);
+      }
 
-    return userErrorFromSessionCommandFailure(result);
-  },
+      return userErrorFromSessionCommandFailure(result);
+    },
+  ),
 });
 
 export const bindSessionToRegisterSession = mutation({
@@ -1100,15 +1148,25 @@ export const bindSessionToRegisterSession = mutation({
     registerSessionId: v.id("registerSession"),
   },
   returns: commandResultValidator(sessionOperationDataValidator),
-  handler: async (ctx, args) => {
-    const result = await runBindSessionToRegisterSessionCommand(ctx, args);
+  handler: admitPublicMutation(
+    bindPosSessionToRegisterSessionOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        sessionId: Id<"posSession">;
+        staffProfileId: Id<"staffProfile">;
+        registerSessionId: Id<"registerSession">;
+      },
+    ) => {
+      const result = await runBindSessionToRegisterSessionCommand(ctx, args);
 
-    if (result.status === "ok") {
-      return ok(result.data);
-    }
+      if (result.status === "ok") {
+        return ok(result.data);
+      }
 
-    return userErrorFromSessionCommandFailure(result);
-  },
+      return userErrorFromSessionCommandFailure(result);
+    },
+  ),
 });
 
 // Update session metadata (customer info, totals)
@@ -1130,7 +1188,20 @@ export const updateSession = mutation({
     total: v.optional(v.number()),
   },
   returns: commandResultValidator(sessionOperationDataValidator),
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    updatePosSessionOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        sessionId: Id<"posSession">;
+        staffProfileId: Id<"staffProfile">;
+        customerProfileId?: Id<"customerProfile">;
+        customerInfo?: { name?: string; email?: string; phone?: string };
+        subtotal?: number;
+        tax?: number;
+        total?: number;
+      },
+    ) => {
     const { sessionId, ...updates } = args;
     const now = Date.now();
     const currentSession = await ctx.db.get("posSession", sessionId);
@@ -1208,7 +1279,8 @@ export const updateSession = mutation({
     }
 
     return ok({ sessionId, expiresAt });
-  },
+    },
+  ),
 });
 
 // Hold/suspend a session
@@ -1219,15 +1291,25 @@ export const holdSession = mutation({
     holdReason: v.optional(v.string()),
   },
   returns: commandResultValidator(sessionOperationDataValidator),
-  handler: async (ctx, args) => {
-    const result = await runHoldSessionCommand(ctx, args);
+  handler: admitPublicMutation(
+    holdPosSessionOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        sessionId: Id<"posSession">;
+        staffProfileId: Id<"staffProfile">;
+        holdReason?: string;
+      },
+    ) => {
+      const result = await runHoldSessionCommand(ctx, args);
 
-    if (result.status === "ok") {
-      return ok(result.data);
-    }
+      if (result.status === "ok") {
+        return ok(result.data);
+      }
 
-    return userErrorFromSessionCommandFailure(result);
-  },
+      return userErrorFromSessionCommandFailure(result);
+    },
+  ),
 });
 
 // Resume a held session
@@ -1238,15 +1320,25 @@ export const resumeSession = mutation({
     terminalId: v.id("posTerminal"),
   },
   returns: commandResultValidator(sessionOperationDataValidator),
-  handler: async (ctx, args) => {
-    const result = await runResumeSessionCommand(ctx, args);
+  handler: admitPublicMutation(
+    resumePosSessionOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        sessionId: Id<"posSession">;
+        staffProfileId: Id<"staffProfile">;
+        terminalId: Id<"posTerminal">;
+      },
+    ) => {
+      const result = await runResumeSessionCommand(ctx, args);
 
-    if (result.status === "ok") {
-      return ok(result.data);
-    }
+      if (result.status === "ok") {
+        return ok(result.data);
+      }
 
-    return userErrorFromSessionCommandFailure(result);
-  },
+      return userErrorFromSessionCommandFailure(result);
+    },
+  ),
 });
 
 // Complete a session (convert to transaction)
@@ -1270,7 +1362,22 @@ export const completeSession = mutation({
     priceOverrideApprovalProofId: v.optional(v.id("approvalProof")),
   },
   returns: commandResultValidator(completeSessionDataValidator),
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    completePosSessionOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        sessionId: Id<"posSession">;
+        staffProfileId: Id<"staffProfile">;
+        payments: { method: string; amount: number; timestamp: number }[];
+        notes?: string;
+        subtotal: number;
+        tax: number;
+        total: number;
+        idempotencyKey?: string;
+        priceOverrideApprovalProofId?: Id<"approvalProof">;
+      },
+    ) => {
     const session = await ctx.db.get("posSession", args.sessionId);
     if (!session) {
       return userError({
@@ -1419,7 +1526,8 @@ export const completeSession = mutation({
       transactionId: sessionTransactionId,
       transactionNumber,
     });
-  },
+    },
+  ),
 });
 
 // Void a session
@@ -1429,7 +1537,12 @@ export const voidSession = mutation({
     voidReason: v.optional(v.string()),
   },
   returns: commandResultValidator(sessionIdOnlyValidator),
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    voidPosSessionOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: { sessionId: Id<"posSession">; voidReason?: string },
+    ) => {
     const now = Date.now();
 
     // Get the session
@@ -1491,7 +1604,8 @@ export const voidSession = mutation({
     });
 
     return ok({ sessionId: args.sessionId });
-  },
+    },
+  ),
 });
 
 export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
@@ -1501,7 +1615,16 @@ export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
     checkoutStateVersion: v.number(),
   },
   returns: commandResultValidator(sessionIdOnlyValidator),
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    releasePosSessionItemsOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        sessionId: Id<"posSession">;
+        staffProfileId: Id<"staffProfile">;
+        checkoutStateVersion: number;
+      },
+    ) => {
     const now = Date.now();
     // Get the session
     const session = await ctx.db.get("posSession", args.sessionId);
@@ -1590,7 +1713,8 @@ export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
     }
 
     return ok({ sessionId: args.sessionId });
-  },
+    },
+  ),
 });
 
 export const syncSessionCheckoutState = mutation({
@@ -1616,7 +1740,25 @@ export const syncSessionCheckoutState = mutation({
     previousAmount: v.optional(v.number()),
   },
   returns: commandResultValidator(sessionOperationDataValidator),
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    syncPosSessionCheckoutStateOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        sessionId: Id<"posSession">;
+        staffProfileId: Id<"staffProfile">;
+        checkoutStateVersion: number;
+        payments: { method: string; amount: number; timestamp: number }[];
+        stage:
+          | "paymentAdded"
+          | "paymentUpdated"
+          | "paymentRemoved"
+          | "paymentsCleared";
+        paymentMethod?: string;
+        amount?: number;
+        previousAmount?: number;
+      },
+    ) => {
     const validation = await validateSessionActive(
       ctx.db,
       args.sessionId,
@@ -1679,7 +1821,8 @@ export const syncSessionCheckoutState = mutation({
       sessionId: args.sessionId,
       expiresAt,
     });
-  },
+    },
+  ),
 });
 
 // Get active session for a register/staff member
@@ -1690,7 +1833,7 @@ export const getActiveSession = query({
     staffProfileId: v.optional(v.id("staffProfile")),
     registerNumber: v.optional(v.string()),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPosActiveSessionReadDefinition,
     async (
       ctx,
@@ -1892,7 +2035,12 @@ export const cleanupOldSessions = mutation({
     storeId: v.id("store"),
     olderThanDays: v.optional(v.number()), // Default 30 days
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    cleanupOldPosSessionsOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: { storeId: Id<"store">; olderThanDays?: number },
+    ) => {
     const cutoffTime =
       Date.now() - (args.olderThanDays || 30) * 24 * 60 * 60 * 1000;
 
@@ -1916,7 +2064,8 @@ export const cleanupOldSessions = mutation({
     );
 
     return oldSessions.length;
-  },
+    },
+  ),
 });
 
 export const expireAllSessionsForStaff = mutation({
@@ -1924,7 +2073,15 @@ export const expireAllSessionsForStaff = mutation({
     staffProfileId: v.id("staffProfile"),
     terminalId: v.id("posTerminal"),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    expireAllPosSessionsForStaffOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        staffProfileId: Id<"staffProfile">;
+        terminalId: Id<"posTerminal">;
+      },
+    ) => {
     const now = Date.now();
     const [activeSessions, heldSessions] = await Promise.all([
       ctx.db
@@ -1952,5 +2109,6 @@ export const expireAllSessionsForStaff = mutation({
       success: true as const,
       data: { staffProfileId: args.staffProfileId },
     };
-  },
+    },
+  ),
 });

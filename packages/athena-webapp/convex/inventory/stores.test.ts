@@ -16,6 +16,15 @@ import {
 } from "./stores";
 import { seedWeeklyRowsForDeletionTest } from "./storesTestSupport";
 
+// Cuts the module cycle `platform/operationAdmission` ->
+// `sharedDemo/operationAdapter` -> `sharedDemo/restore` ->
+// `sharedDemo/openingBaseline` -> `inventory/storeSchedule` ->
+// `platform/operationAdmission`. Left intact, the composition root is observed
+// half-initialized from this test's module graph.
+vi.mock("../sharedDemo/restore", () => ({
+  requireReadySharedDemoWriteWithCtx: vi.fn(),
+}));
+
 const modules = Object.fromEntries(
   Object.entries(import.meta.glob("../**/*.ts")).map(([path, loader]) => [
     path.startsWith("../")
@@ -72,12 +81,27 @@ describe("admitted store public return contracts", () => {
   });
 });
 
+/**
+ * `inventory/stores:create` now runs through the admission rail, so a caller
+ * must present a real Athena identity: an auth `users` row, a matching
+ * `athenaUser` row, and the `<authUserId>|<session>` identity subject the auth
+ * component reads.
+ */
+async function asAuthenticatedAthenaUser(
+  t: ReturnType<typeof convexTest>,
+  email: string,
+) {
+  const authUserId = await t.run((ctx) => ctx.db.insert("users", { email }));
+  return { as: t.withIdentity({ subject: `${authUserId}|test-session` }) };
+}
+
 describe("store creation currency normalization", () => {
   async function createStoreWithCurrency(currency: string) {
     const t = convexTest(schema, modules);
     const owner = await t.run(async (ctx) => {
       const userId = await ctx.db.insert("athenaUser", {
         email: "owner@test",
+        normalizedEmail: "owner@test",
       });
       const organizationId = await ctx.db.insert("organization", {
         createdByUserId: userId,
@@ -86,8 +110,9 @@ describe("store creation currency normalization", () => {
       });
       return { organizationId, userId };
     });
+    const { as } = await asAuthenticatedAthenaUser(t, "owner@test");
 
-    return await t.mutation(api.inventory.stores.create, {
+    return await as.mutation(api.inventory.stores.create, {
       createdByUserId: owner.userId,
       currency,
       name: "Wigclub",

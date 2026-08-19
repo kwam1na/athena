@@ -88,6 +88,7 @@ echo "api.* refs inside Convex: $(count_fixed_matches 'api.')"
 echo "Date.now() occurrences: $(count_fixed_matches 'Date.now(')"
 python3 "$ROOT_DIR/scripts/convexPaginationAntiPatternCheck.py" "$ROOT_DIR"
 "$BUN_EXECUTABLE" "$ROOT_DIR/../../scripts/check-register-session-authority-writers.ts"
+"$BUN_EXECUTABLE" "$ROOT_DIR/../../scripts/convex-operation-admission-check.ts"
 echo
 
 echo "Top files by hotspot count"

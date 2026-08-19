@@ -75,6 +75,15 @@ vi.mock("./access", () => ({
 }));
 import { requireReportsStoreAccess } from "./access";
 
+// The admission rail's identity port: convex-test has no auth provider, so an
+// unstubbed identity would turn every read-budget measurement below into an
+// anonymous denial. Admission itself is covered in `reportsAdmission.test.ts`.
+vi.mock("../lib/athenaUserAuth", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/athenaUserAuth")>()),
+  requireAuthenticatedAthenaUserWithCtx: vi.fn(),
+}));
+import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
+
 vi.mock("../platform/capabilityCatalog", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../platform/capabilityCatalog")>()),
   isWeeklyReportingEnabledForStoreDoc: vi.fn(),
@@ -89,6 +98,9 @@ function handlerOf(fn: unknown): (...args: any[]) => Promise<any> {
 beforeEach(() => {
   vi.mocked(requireReportsStoreAccess).mockResolvedValue({} as never);
   vi.mocked(isWeeklyReportingEnabledForStoreDoc).mockReturnValue(true);
+  vi.mocked(requireAuthenticatedAthenaUserWithCtx).mockResolvedValue({
+    _id: "athena-user",
+  } as never);
 });
 
 async function seedStore(ctx: MutationCtx, slug: string) {

@@ -2,10 +2,29 @@ import {
   internalMutation,
   internalQuery,
   mutation,
+  MutationCtx,
   QueryCtx,
   query,
 } from "../_generated/server";
 import { v } from "convex/values";
+import type { Id } from "../_generated/dataModel";
+import { deleteSavedBagOperationDefinition } from "../operationAdmission/domains/storefrontCustomer_definitions";
+import {
+  getAllSavedBagsReadDefinition,
+  getSavedBagByIdReadDefinition,
+} from "../operationAdmission/domains/storefrontCustomer_readDefinitions";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
+import {
+  assertCustomerOwnsRow,
+  assertCustomerOwnsStore,
+  consumeGuestMergeGrant,
+  customerOwnerActorId,
+  customerOwnerValidator,
+  denyCustomerOwnership,
+} from "./customerOwnership";
 
 const entity = "savedBag";
 const MAX_SAVED_BAGS = 500;
@@ -23,17 +42,25 @@ async function listSavedBagItems(
 
 export const getAll = query({
   args: {},
-  handler: async (ctx) => {
+  handler: admitPublicQuery(getAllSavedBagsReadDefinition, async (ctx) => {
     return await ctx.db.query(entity).take(MAX_SAVED_BAGS);
-  },
+  }),
 });
 
 export const create = internalMutation({
   args: {
     storeId: v.id("store"),
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
+    owner: customerOwnerValidator,
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { owner, ...args }) => {
+    // A saved bag may only ever be created for the admitted shopper, in the
+    // store their claim clamped to.
+    assertCustomerOwnsRow(owner, {
+      storeFrontUserId: args.storeFrontUserId,
+      storeId: args.storeId,
+    });
+
     const id = await ctx.db.insert(entity, {
       ...args,
       updatedAt: Date.now(),
@@ -48,12 +75,9 @@ export const create = internalMutation({
   },
 });
 
-export const getById = query({
-  args: {
-    id: v.id(entity),
-  },
-  handler: async (ctx, args) => {
-    const bag = await ctx.db.get("savedBag", args.id);
+async function loadSavedBagById(ctx: QueryCtx, id: Id<"savedBag">) {
+  {
+    const bag = await ctx.db.get("savedBag", id);
     if (!bag) return null;
 
     const items = await listSavedBagItems(ctx, bag._id);
@@ -98,14 +122,43 @@ export const getById = query({
       ...bag,
       items: itemsWithProductDetails,
     };
+  }
+}
+
+export const getById = query({
+  args: {
+    id: v.id(entity),
+  },
+  handler: admitPublicQuery(
+    getSavedBagByIdReadDefinition,
+    async (ctx, args: { id: Id<"savedBag"> }) =>
+      loadSavedBagById(ctx, args.id),
+  ),
+});
+
+export const getByIdInternal = internalQuery({
+  args: {
+    id: v.id(entity),
+    owner: customerOwnerValidator,
+  },
+  handler: async (ctx, args) => {
+    const bag = await ctx.db.get("savedBag", args.id);
+    assertCustomerOwnsRow(args.owner, bag);
+    return await loadSavedBagById(ctx, args.id);
   },
 });
 
 export const getByUserId = internalQuery({
   args: {
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
+    owner: customerOwnerValidator,
   },
   handler: async (ctx, args) => {
+    if (
+      String(args.storeFrontUserId) !== String(customerOwnerActorId(args.owner))
+    ) {
+      denyCustomerOwnership();
+    }
     const bag = await ctx.db
       .query(entity)
       .withIndex("by_storeFrontUserId", (q) =>
@@ -160,30 +213,69 @@ export const getByUserId = internalQuery({
   },
 });
 
+async function deleteSavedBagWithCtx(ctx: MutationCtx, id: Id<"savedBag">) {
+  await ctx.db.delete("savedBag", id);
+
+  const items = await ctx.db
+    .query("savedBagItem")
+    .withIndex("by_savedBagId", (q) => q.eq("savedBagId", id))
+    .take(MAX_SAVED_BAG_ITEMS);
+
+  await Promise.all(
+    items.map((item) => ctx.db.delete("savedBagItem", item._id)),
+  );
+
+  return { message: "Bag and its items deleted" };
+}
+
 export const deleteSavedBag = mutation({
   args: {
     id: v.id(entity),
   },
+  handler: admitPublicMutation(
+    deleteSavedBagOperationDefinition,
+    async (ctx, args: { id: Id<"savedBag"> }) =>
+      deleteSavedBagWithCtx(ctx, args.id),
+  ),
+});
+
+export const deleteSavedBagInternal = internalMutation({
+  args: {
+    id: v.id(entity),
+    owner: customerOwnerValidator,
+  },
   handler: async (ctx, args) => {
-    await ctx.db.delete("savedBag", args.id);
-
-    const items = await ctx.db
-      .query("savedBagItem")
-      .withIndex("by_savedBagId", (q) => q.eq("savedBagId", args.id))
-      .take(MAX_SAVED_BAG_ITEMS);
-
-    await Promise.all(items.map((item) => ctx.db.delete("savedBagItem", item._id)));
-
-    return { message: "Bag and its items deleted" };
+    const bag = await ctx.db.get("savedBag", args.id);
+    assertCustomerOwnsRow(args.owner, bag);
+    return await deleteSavedBagWithCtx(ctx, args.id);
   },
 });
 
 export const updateOwner = internalMutation({
   args: {
     currentOwner: v.id("guest"),
-    newOwner: v.id("storeFrontUser"),
+    owner: customerOwnerValidator,
   },
   handler: async (ctx, args) => {
+    // Same contract as `bag.updateOwner`, and for the same reason: the
+    // destination is the admitted account (never body-supplied) and the source
+    // guest session must carry a server-issued merge grant for that account.
+    // Nothing the caller presents authorizes this.
+    const newOwner = args.owner.storeFrontUserId;
+    if (!newOwner) denyCustomerOwnership();
+
+    // See `bag.updateOwner` / `consumeGuestMergeGrant` for why this is
+    // consumed up front, inside this mutation's own transaction.
+    await consumeGuestMergeGrant(ctx, {
+      guestId: args.currentOwner,
+      owner: args.owner,
+      kind: "savedBag",
+    });
+
+    if (String(customerOwnerActorId(args.owner)) !== String(newOwner)) {
+      denyCustomerOwnership();
+    }
+
     const savedBag = await ctx.db
       .query(entity)
       .withIndex("by_storeFrontUserId", (q) =>
@@ -194,9 +286,13 @@ export const updateOwner = internalMutation({
     const newOwnerBag = await ctx.db
       .query(entity)
       .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.newOwner)
+        q.eq("storeFrontUserId", newOwner)
       )
       .first();
+
+    // Neither saved bag may cross tenants.
+    if (savedBag) assertCustomerOwnsStore(args.owner, savedBag.storeId);
+    if (newOwnerBag) assertCustomerOwnsStore(args.owner, newOwnerBag.storeId);
 
     if (!savedBag) {
       return null; // No guest bag exists
@@ -230,7 +326,7 @@ export const updateOwner = internalMutation({
             await ctx.db.patch("savedBagItem", existingItem._id, {
               quantity: existingItem.quantity + item.quantity,
               savedBagId: newOwnerBag._id,
-              storeFrontUserId: args.newOwner,
+              storeFrontUserId: newOwner,
             });
             // Delete the duplicate item
             await ctx.db.delete("savedBagItem", item._id);
@@ -238,7 +334,7 @@ export const updateOwner = internalMutation({
             // Move item to new owner's bag
             await ctx.db.patch("savedBagItem", item._id, {
               savedBagId: newOwnerBag._id,
-              storeFrontUserId: args.newOwner,
+              storeFrontUserId: newOwner,
             });
           }
         })
@@ -249,7 +345,7 @@ export const updateOwner = internalMutation({
     } else {
       // If new owner doesn't have a bag, update the ownership of existing bag
       await ctx.db.patch("savedBag", savedBag._id, {
-        storeFrontUserId: args.newOwner,
+        storeFrontUserId: newOwner,
         updatedAt: Date.now(),
       });
       return await ctx.db.get("savedBag", savedBag._id);

@@ -1,6 +1,8 @@
 import { v } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 import { query, type QueryCtx } from "../_generated/server";
+import { listReplenishmentRecommendationsReadDefinition } from "../operationAdmission/domains/operations_readDefinitions";
+import { admitPublicQuery } from "../platform/operationAdmission";
 import { requireStoreFullAdminAccess } from "./access";
 
 const LOW_STOCK_THRESHOLD = 2;
@@ -620,8 +622,11 @@ export const listReplenishmentRecommendations = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    await requireStoreFullAdminAccess(ctx, args.storeId);
-    return listReplenishmentRecommendationsWithCtx(ctx, args);
-  },
+  handler: admitPublicQuery(
+    listReplenishmentRecommendationsReadDefinition,
+    async (ctx, args: { storeId: Id<"store"> }) => {
+      await requireStoreFullAdminAccess(ctx, args.storeId);
+      return listReplenishmentRecommendationsWithCtx(ctx, args);
+    },
+  ),
 });

@@ -1,14 +1,12 @@
 /* eslint-disable @convex-dev/no-collect-in-query -- V26-168 adds the missing commerce indexes and refactors the main storefront session access paths first; remaining legacy scans in this large module will be reduced in follow-up passes. */
 import { CheckoutSession, CheckoutSessionItem, ProductSku } from "../../types";
-import { api, internal } from "../_generated/api";
+import { internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
 import {
-  action,
   ActionCtx,
   internalAction,
   internalMutation,
   internalQuery,
-  mutation,
   MutationCtx,
   query,
   QueryCtx,
@@ -37,6 +35,18 @@ import {
   type ScheduledCronFamily,
 } from "../automation/scheduledRunLedger";
 import { applyCommerceInventoryEffectWithCtx } from "../inventoryLedger/commerceEffects";
+import {
+  getActiveCheckoutSessionReadDefinition,
+  getActiveCheckoutSessionsForStoreReadDefinition,
+} from "../operationAdmission/domains/storefrontCustomer_readDefinitions";
+import { admitPublicQuery } from "../platform/operationAdmission";
+import {
+  assertCustomerOwnsRow,
+  assertCustomerOwnsStore,
+  customerOwnerActorId,
+  customerOwnerValidator,
+  denyCustomerOwnership,
+} from "./customerOwnership";
 
 const entity = "checkoutSession";
 
@@ -354,23 +364,41 @@ const checkIfItemsHaveChanged = (
   });
 };
 
-export const create = mutation({
-  args: {
-    storeId: v.id("store"),
-    storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
-    bagId: v.id("bag"),
-    amount: v.number(),
-    products: v.array(
-      v.object({
-        productId: v.id("product"),
-        productSku: v.string(),
-        productSkuId: v.id("productSku"),
-        quantity: v.number(),
-        price: v.number(),
-      }),
-    ),
-  },
-  handler: async (ctx, args) => {
+const createCheckoutSessionArgs = {
+  storeId: v.id("store"),
+  storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
+  bagId: v.id("bag"),
+  amount: v.number(),
+  products: v.array(
+    v.object({
+      productId: v.id("product"),
+      productSku: v.string(),
+      productSkuId: v.id("productSku"),
+      quantity: v.number(),
+      price: v.number(),
+    }),
+  ),
+};
+
+type CreateCheckoutSessionArgs = {
+  storeId: Id<"store">;
+  storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">;
+  bagId: Id<"bag">;
+  amount: number;
+  products: Array<{
+    productId: Id<"product">;
+    productSku: string;
+    productSkuId: Id<"productSku">;
+    quantity: number;
+    price: number;
+  }>;
+};
+
+async function createCheckoutSessionWithCtx(
+  ctx: MutationCtx,
+  args: CreateCheckoutSessionArgs,
+) {
+  {
     const now = Date.now();
     const sessionLimit = sessionLimitMinutes * 60 * 1000;
     const expiresAt = now + sessionLimit;
@@ -634,6 +662,24 @@ export const create = mutation({
         items: products,
       },
     };
+  }
+}
+
+/**
+ * Internal sibling for `POST /checkout`. A checkout session may only be opened
+ * FOR the admitted shopper, in their own store, from a bag they own — the
+ * three ids the route used to forward straight from the request body.
+ */
+export const createInternal = internalMutation({
+  args: { ...createCheckoutSessionArgs, owner: customerOwnerValidator },
+  handler: async (ctx, { owner, ...args }) => {
+    assertCustomerOwnsStore(owner, args.storeId);
+    if (String(args.storeFrontUserId) !== String(customerOwnerActorId(owner))) {
+      denyCustomerOwnership();
+    }
+    const bag = await ctx.db.get("bag", args.bagId);
+    assertCustomerOwnsRow(owner, bag);
+    return await createCheckoutSessionWithCtx(ctx, args);
   },
 });
 
@@ -794,8 +840,34 @@ export const getActiveCheckoutSession = query({
   args: {
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
   },
+  handler: admitPublicQuery(
+    getActiveCheckoutSessionReadDefinition,
+    async (
+      ctx,
+      args: { storeFrontUserId: Id<"storeFrontUser"> | Id<"guest"> },
+    ) => retrieveActiveCheckoutSession(ctx, args.storeFrontUserId),
+  ),
+});
+
+/**
+ * Internal sibling for `GET /checkout/active`. The session is looked up by the
+ * ADMITTED shopper id, so the query string cannot open someone else's cart.
+ */
+export const getActiveCheckoutSessionInternal = internalQuery({
+  args: {
+    storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
+    owner: customerOwnerValidator,
+  },
   handler: async (ctx, args) => {
-    return await retrieveActiveCheckoutSession(ctx, args.storeFrontUserId);
+    if (
+      String(args.storeFrontUserId) !== String(customerOwnerActorId(args.owner))
+    ) {
+      denyCustomerOwnership();
+    }
+    return await retrieveActiveCheckoutSession(
+      ctx,
+      customerOwnerActorId(args.owner),
+    );
   },
 });
 
@@ -803,7 +875,9 @@ export const getActiveCheckoutSessionsForStore = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getActiveCheckoutSessionsForStoreReadDefinition,
+    async (ctx, args: { storeId: Id<"store"> }) => {
     const now = Date.now();
 
     // Query for the first active session for the given storeFrontUserId
@@ -827,16 +901,32 @@ export const getActiveCheckoutSessionsForStore = query({
         ),
       )
       .collect();
+    },
+  ),
+});
+
+/**
+ * Internal sibling for `POST /checkout/:checkoutSessionId` (cancel action).
+ * The session named in the path must belong to the admitted shopper before any
+ * refund is attempted.
+ */
+export const cancelOrderInternal = internalAction({
+  args: { id: v.id("checkoutSession"), owner: customerOwnerValidator },
+  handler: async (ctx, args): Promise<any> => {
+    const session = await ctx.runQuery(
+      internal.storeFront.checkoutSession.getByIdInternal,
+      { sessionId: args.id },
+    );
+    assertCustomerOwnsRow(args.owner, session);
+    return await cancelOrderWithCtx(ctx, { id: args.id });
   },
 });
 
-export const cancelOrder = action({
-  args: { id: v.id("checkoutSession") },
-  handler: async (ctx, args) => {
-    await ctx.runQuery(
-      (internal as any).sharedDemo.actor.requireAuthenticatedNonDemoEffect,
-      {},
-    );
+async function cancelOrderWithCtx(
+  ctx: ActionCtx,
+  args: { id: Id<"checkoutSession"> },
+): Promise<{ success: boolean; message: string }> {
+  {
     const session = await ctx.runQuery(
       internal.storeFront.checkoutSession.getByIdInternal,
       {
@@ -880,8 +970,8 @@ export const cancelOrder = action({
       console.error("Failed to refund payment", response);
       return { success: false, message: "Failed to cancel order." };
     }
-  },
-});
+  }
+}
 
 export const completeCheckoutSessions = internalMutation({
   args: {},
@@ -1142,10 +1232,15 @@ export const updateCheckoutSession = internalMutation({
         ),
       }),
     ),
+    owner: v.optional(customerOwnerValidator),
   },
   handler: async (ctx, args) => {
     try {
       const currentSession = await ctx.db.get("checkoutSession", args.id);
+      // Customer routes patch a session named in the path; when they propagate
+      // the admitted claim, the session must be that shopper's. The paystack
+      // webhook has no claim and passes none.
+      if (args.owner) assertCustomerOwnsRow(args.owner, currentSession);
 
       if (!currentSession) {
         console.log(
@@ -2095,13 +2190,15 @@ export const getCheckoutSession = internalQuery({
   },
 });
 
-export const getPendingCheckoutSessions = query({
-  args: { storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")) },
-  handler: async (ctx, args) => {
+async function listPendingCheckoutSessions(
+  ctx: QueryCtx,
+  storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">,
+) {
+  {
     return await ctx.db
       .query("checkoutSession")
       .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.storeFrontUserId),
+        q.eq("storeFrontUserId", storeFrontUserId),
       )
       .filter((q) =>
         q.and(
@@ -2115,6 +2212,28 @@ export const getPendingCheckoutSessions = query({
         ),
       )
       .take(MAX_CHECKOUT_SESSIONS);
+  }
+}
+
+/**
+ * Internal sibling for `GET /checkout/pending`. Pending sessions are read for
+ * the ADMITTED shopper, never for an id supplied in the query string.
+ */
+export const getPendingCheckoutSessionsInternal = internalQuery({
+  args: {
+    storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
+    owner: customerOwnerValidator,
+  },
+  handler: async (ctx, args) => {
+    if (
+      String(args.storeFrontUserId) !== String(customerOwnerActorId(args.owner))
+    ) {
+      denyCustomerOwnership();
+    }
+    return await listPendingCheckoutSessions(
+      ctx,
+      customerOwnerActorId(args.owner),
+    );
   },
 });
 
@@ -2138,63 +2257,21 @@ export const getUnverifiedPaidSessions = internalQuery({
   },
 });
 
-export const getById = query({
-  args: { sessionId: v.id("checkoutSession") },
-  handler: async (ctx, args) => {
-    const session = await ctx.db.get("checkoutSession", args.sessionId);
-    if (!session) return null;
-
-    const sessionItems = await listSessionItemsForRead(ctx, args.sessionId);
-
-    const sessionItemsWithImages = await Promise.all(
-      sessionItems.map(async (item) => {
-        const [product, productSku] = await Promise.all([
-          ctx.db.get("product", item.productId),
-          ctx.db.get("productSku", item.productSkuId),
-        ]);
-
-        let category: string | undefined;
-
-        let colorName;
-
-        if (productSku?.color) {
-          const color = await ctx.db.get("color", productSku.color);
-          colorName = color?.name;
-        }
-
-        if (product) {
-          const productCategory = await ctx.db.get(
-            "category",
-            product.categoryId,
-          );
-          category = productCategory?.name;
-        }
-
-        return {
-          ...item,
-          productCategory: category,
-          isVisible: product?.isVisible,
-          length: productSku?.length,
-          price: productSku?.price,
-          colorName,
-          productName: product?.name,
-          productImage: productSku?.images?.[0] ?? null,
-        };
-      }),
-    );
-
-    return {
-      ...session,
-      items: sessionItemsWithImages,
-    };
-  },
-});
-
+/**
+ * The internal twin of `getById` — the same enriched session shape, reachable
+ * from routes and actions. `owner` is optional because the paystack webhook
+ * also reads a session and carries no shopper claim; when a customer route
+ * propagates one, the session must belong to that shopper.
+ */
 export const getByIdInternal = internalQuery({
-  args: { sessionId: v.id("checkoutSession") },
+  args: {
+    sessionId: v.id("checkoutSession"),
+    owner: v.optional(customerOwnerValidator),
+  },
   handler: async (ctx, args) => {
     const session = await ctx.db.get("checkoutSession", args.sessionId);
     if (!session) return null;
+    if (args.owner) assertCustomerOwnsRow(args.owner, session);
 
     const sessionItems = await listSessionItemsForRead(ctx, args.sessionId);
 

@@ -120,6 +120,7 @@ vi.mock("../../remoteAssist/infrastructure/remoteAssistReadRepository", () => ({
   createRemoteAssistReadRepository: mocks.createRemoteAssistRepository,
 }));
 
+import { AthenaUnauthenticatedError } from "../../lib/athenaUnauthenticated";
 import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";
 import {
   acknowledgeRegisterLifecycleAuthority,
@@ -154,6 +155,20 @@ const DEMO_ACTOR_USER_ID = "demo-athena-user-1";
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
 }
+
+/**
+ * The write wrapper hands the domain handler the caller's ctx extended with
+ * the resolved admission, so a mutation's downstream helpers see an admitted
+ * context rather than the exact object the test built. Matching on the
+ * admission is stronger than matching on identity: it asserts the handler ran
+ * behind the rail, not merely that some ctx was forwarded.
+ */
+const admittedCtx = () =>
+  expect.objectContaining({
+    operationAdmission: expect.objectContaining({
+      decision: expect.objectContaining({ outcome: "admitted" }),
+    }),
+  });
 
 function buildTerminalHealthSummaryResult() {
   return {
@@ -647,10 +662,14 @@ describe("POS terminal public mutations", () => {
         }),
       }),
     );
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalledWith(
+    expect(
+      mocks.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalledWith(
       expect.objectContaining({
         operationAdmission: expect.objectContaining({
-          actor: expect.objectContaining({ athenaUserId: FALLBACK_AUTH_USER_ID }),
+          actor: expect.objectContaining({
+            athenaUserId: FALLBACK_AUTH_USER_ID,
+          }),
         }),
       }),
     );
@@ -708,14 +727,14 @@ describe("POS terminal public mutations", () => {
     });
 
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(),
       expect.objectContaining({
         allowedRoles: ["full_admin"],
         organizationId: "org-1",
         userId: "athena-user-1",
       }),
     );
-    expect(mocks.deleteTerminalCommand).toHaveBeenCalledWith(ctx, {
+    expect(mocks.deleteTerminalCommand).toHaveBeenCalledWith(admittedCtx(), {
       terminalId: "terminal-1",
     });
   });
@@ -741,14 +760,14 @@ describe("POS terminal public mutations", () => {
     });
 
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(),
       expect.objectContaining({
         allowedRoles: ["full_admin"],
         organizationId: "org-1",
         userId: "athena-user-1",
       }),
     );
-    expect(mocks.updateTerminalCommand).toHaveBeenCalledWith(ctx, {
+    expect(mocks.updateTerminalCommand).toHaveBeenCalledWith(admittedCtx(), {
       terminalId: "terminal-1",
       displayName: "Updated terminal",
     });
@@ -767,7 +786,7 @@ describe("POS terminal public mutations", () => {
       terminalId: "terminal-1",
     });
 
-    expect(mocks.updateTerminalCommand).toHaveBeenCalledWith(ctx, {
+    expect(mocks.updateTerminalCommand).toHaveBeenCalledWith(admittedCtx(), {
       heartbeatEnabled: false,
       terminalId: "terminal-1",
     });
@@ -984,7 +1003,7 @@ describe("POS terminal public mutations", () => {
     expect(
       mocks.acknowledgeRegisterLifecycleAuthorityService,
     ).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(),
       expect.objectContaining({
         appVersion: "1.2.3",
         cloudRegisterSessionId: "cloud-register-1",
@@ -1103,7 +1122,12 @@ describe("POS terminal public mutations", () => {
         terminalId: "terminal-1",
       }),
     ).resolves.toBeNull();
-    expect(oversizedCtx.db.get).not.toHaveBeenCalled();
+    // Admission resolves identity before the handler, so the ctx is read;
+    // what must not happen is the terminal lookup for oversized input.
+    expect(oversizedCtx.db.get).not.toHaveBeenCalledWith(
+      "posTerminal",
+      expect.anything(),
+    );
     expect(
       mocks.getRegisterLifecycleAuthorityShadowQuery,
     ).not.toHaveBeenCalled();
@@ -1117,7 +1141,12 @@ describe("POS terminal public mutations", () => {
         terminalId: "terminal-1",
       }),
     ).resolves.toBeNull();
-    expect(oversizedCtx.db.get).not.toHaveBeenCalled();
+    // Admission resolves identity before the handler, so the ctx is read;
+    // what must not happen is the terminal lookup for oversized input.
+    expect(oversizedCtx.db.get).not.toHaveBeenCalledWith(
+      "posTerminal",
+      expect.anything(),
+    );
     expect(mocks.getRegisterLifecycleAuthorityQuery).not.toHaveBeenCalled();
   });
 
@@ -1227,10 +1256,14 @@ describe("POS terminal public mutations", () => {
         }),
       }),
     );
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalledWith(
+    expect(
+      mocks.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalledWith(
       expect.objectContaining({
         operationAdmission: expect.objectContaining({
-          actor: expect.objectContaining({ athenaUserId: FALLBACK_AUTH_USER_ID }),
+          actor: expect.objectContaining({
+            athenaUserId: FALLBACK_AUTH_USER_ID,
+          }),
         }),
       }),
     );
@@ -1277,7 +1310,7 @@ describe("POS terminal public mutations", () => {
 
   it("accepts redacted runtime status from active terminal proof without Athena user auth", async () => {
     mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
-      new Error("not signed in"),
+      new AthenaUnauthenticatedError(),
     );
     const ctx = buildCtx({
       terminal: {
@@ -1341,7 +1374,7 @@ describe("POS terminal public mutations", () => {
     });
     expect(mocks.requireOrganizationMemberRoleWithCtx).not.toHaveBeenCalled();
     expect(mocks.submitTerminalRuntimeStatusCommand).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(),
       expect.objectContaining({
         storeId: "store-1",
         terminalId: "terminal-1",
@@ -1759,7 +1792,7 @@ describe("POS terminal public mutations", () => {
     });
 
     expect(mocks.submitTerminalRuntimeStatusCommand).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(),
       expect.objectContaining({
         status: expect.objectContaining({
           appSessionRecovery: {
@@ -1816,7 +1849,7 @@ describe("POS terminal public mutations", () => {
     });
 
     expect(mocks.submitTerminalRuntimeStatusCommand).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(),
       expect.objectContaining({
         status: expect.objectContaining({
           appUpdate: {
@@ -1919,7 +1952,7 @@ describe("POS terminal public mutations", () => {
 
   it("does not require Athena user auth before inspecting terminal runtime proof", async () => {
     mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
-      new Error("not signed in"),
+      new AthenaUnauthenticatedError(),
     );
     const ctx = buildCtx({
       terminal: {
@@ -1998,10 +2031,14 @@ describe("POS terminal public mutations", () => {
         }),
       }),
     );
-    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalledWith(
+    expect(
+      mocks.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalledWith(
       expect.objectContaining({
         operationAdmission: expect.objectContaining({
-          actor: expect.objectContaining({ athenaUserId: FALLBACK_AUTH_USER_ID }),
+          actor: expect.objectContaining({
+            athenaUserId: FALLBACK_AUTH_USER_ID,
+          }),
         }),
       }),
     );
@@ -2257,7 +2294,7 @@ describe("POS terminal public mutations", () => {
 
   it("does not allow sync-secret-only terminal proof to read terminal health", async () => {
     mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
-      new Error("not signed in"),
+      new AthenaUnauthenticatedError(),
     );
     const ctx = buildCtx({
       terminal: {
@@ -2273,19 +2310,19 @@ describe("POS terminal public mutations", () => {
       getHandler(listTerminalHealthSummaries)(ctx as never, {
         storeId: "store-1",
       }),
-    ).rejects.toThrow("not signed in");
+    ).rejects.toThrow("Sign in again to continue.");
     await expect(
       getHandler(getTerminalHealthSummary)(ctx as never, {
         storeId: "store-1",
         terminalId: "terminal-1",
       }),
-    ).rejects.toThrow("not signed in");
+    ).rejects.toThrow("Sign in again to continue.");
     await expect(
       getHandler(previewTerminalRecovery)(ctx as never, {
         storeId: "store-1",
         terminalId: "terminal-1",
       }),
-    ).rejects.toThrow("not signed in");
+    ).rejects.toThrow("Sign in again to continue.");
 
     expect(mocks.requireOrganizationMemberRoleWithCtx).not.toHaveBeenCalled();
     expect(mocks.listTerminalHealthSummariesQuery).not.toHaveBeenCalled();
@@ -2303,7 +2340,7 @@ describe("POS terminal public mutations", () => {
     });
 
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(),
       expect.objectContaining({
         allowedRoles: ["full_admin"],
         organizationId: "org-1",
@@ -2311,7 +2348,7 @@ describe("POS terminal public mutations", () => {
       }),
     );
     expect(mocks.resolveTerminalCloudRepairCommand).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(),
       expect.objectContaining({
         resolvedByUserId: "athena-user-1",
         storeId: "store-1",
@@ -2358,7 +2395,7 @@ describe("POS terminal public mutations", () => {
     );
 
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(),
       expect.objectContaining({
         allowedRoles: ["full_admin"],
         organizationId: "org-1",
@@ -2591,7 +2628,7 @@ describe("POS terminal public mutations", () => {
     "allows terminal runtime to $action recovery commands with only active sync-secret proof",
     async ({ handler, repositoryKind, service }) => {
       mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
-        new Error("not signed in"),
+        new AthenaUnauthenticatedError(),
       );
       const ctx = buildCtx({
         terminal: {
@@ -2720,7 +2757,7 @@ describe("POS terminal public mutations", () => {
 
   it("forwards update_app acknowledgement execution ids from terminal runtime proof", async () => {
     mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
-      new Error("not signed in"),
+      new AthenaUnauthenticatedError(),
     );
     const ctx = buildCtx({
       terminal: {
@@ -2762,7 +2799,7 @@ describe("POS terminal public mutations", () => {
 
   it("forwards local review acknowledgement evidence from terminal runtime proof", async () => {
     mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
-      new Error("not signed in"),
+      new AthenaUnauthenticatedError(),
     );
     const ctx = buildCtx({
       terminal: {
@@ -2819,14 +2856,16 @@ describe("POS terminal public mutations", () => {
   });
 
   it("does not let terminal runtime proof issue terminal recovery commands", async () => {
+    // Terminal sync-secret proof is not an Athena identity, and this operation
+    // declares `public: "deny"`, so the chain exhausts before the handler runs
+    // rather than reaching its own authorization catch.
     mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
-      new Error("not signed in"),
+      new AthenaUnauthenticatedError(),
     );
     const ctx = buildCtx();
 
-    const result = await getHandler(issueTerminalRecoveryCommand)(
-      ctx as never,
-      {
+    await expect(
+      getHandler(issueTerminalRecoveryCommand)(ctx as never, {
         storeId: "store-1",
         terminalId: "terminal-1",
         commandType: "repair_terminal_seed",
@@ -2834,20 +2873,9 @@ describe("POS terminal public mutations", () => {
           expectedBlockerType: "terminal_seed",
           reason: "Terminal setup data needs repair.",
         },
-        expectedEvidence: {
-          terminalIntegrityStatus: "healthy",
-        },
-      },
-    );
-
-    expect(result).toEqual({
-      kind: "user_error",
-      error: {
-        code: "authorization_failed",
-        message:
-          "You do not have access to issue POS terminal recovery commands.",
-      },
-    });
+        expectedEvidence: { terminalIntegrityStatus: "healthy" },
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
     expect(mocks.issueTerminalRecoveryCommandService).not.toHaveBeenCalled();
   });
 

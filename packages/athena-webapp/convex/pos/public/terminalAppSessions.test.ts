@@ -53,12 +53,16 @@ describe("terminal app-session recovery validation", () => {
       },
     });
     if (result.status !== "recoverable") {
-      throw new Error("Expected terminal app-session recovery to be recoverable.");
+      throw new Error(
+        "Expected terminal app-session recovery to be recoverable.",
+      );
     }
-    expect(result.assertion.expiresAt).toBeGreaterThan(result.assertion.issuedAt);
-    expect(result.assertion.expiresAt - result.assertion.issuedAt).toBeLessThanOrEqual(
-      5 * 60 * 1000,
+    expect(result.assertion.expiresAt).toBeGreaterThan(
+      result.assertion.issuedAt,
     );
+    expect(
+      result.assertion.expiresAt - result.assertion.issuedAt,
+    ).toBeLessThanOrEqual(5 * 60 * 1000);
     expect(ctx.tables.operationalEvent).toEqual([
       expect.objectContaining({
         eventType: "pos_terminal_app_session_recovery_validated",
@@ -81,24 +85,27 @@ describe("terminal app-session recovery validation", () => {
     "products",
     "services",
     "general_app",
-  ])("blocks non-POS hub route scope %s before terminal/account inspection", async (routeIntent) => {
-    const ctx = await buildCtx();
+  ])(
+    "blocks non-POS hub route scope %s before terminal/account inspection",
+    async (routeIntent) => {
+      const ctx = await buildCtx();
 
-    const result = await validateTerminalAppSessionRecoveryWithCtx(
-      ctx as never,
-      buildArgs({ routeIntent }),
-    );
+      const result = await validateTerminalAppSessionRecoveryWithCtx(
+        ctx as never,
+        buildArgs({ routeIntent }),
+      );
 
-    expect(result).toEqual({
-      status: "blocked",
-      reason: "unsupported_route_scope",
-      diagnostics: {
+      expect(result).toEqual({
+        status: "blocked",
         reason: "unsupported_route_scope",
-      },
-    });
-    expect(ctx.db.get).not.toHaveBeenCalled();
-    expect(ctx.tables.operationalEvent).toHaveLength(0);
-  });
+        diagnostics: {
+          reason: "unsupported_route_scope",
+        },
+      });
+      expect(ctx.db.get).not.toHaveBeenCalled();
+      expect(ctx.tables.operationalEvent).toHaveLength(0);
+    },
+  );
 
   it.each([
     {
@@ -267,7 +274,9 @@ describe("terminal app-session recovery validation", () => {
     if (first.status !== "recoverable" || second.status !== "recoverable") {
       throw new Error("Expected repeated recovery checks to stay recoverable.");
     }
-    expect(first.assertion.recoveryAttemptId).toBe(second.assertion.recoveryAttemptId);
+    expect(first.assertion.recoveryAttemptId).toBe(
+      second.assertion.recoveryAttemptId,
+    );
     expect(ctx.tables.operationalEvent).toHaveLength(1);
   });
 
@@ -374,11 +383,13 @@ function buildArgs(overrides: Record<string, unknown> = {}) {
   };
 }
 
-async function buildCtx(seed: {
-  accounts?: Array<Record<string, unknown>>;
-  members?: Array<Record<string, unknown>>;
-  terminal?: Record<string, unknown> | null;
-} = {}) {
+async function buildCtx(
+  seed: {
+    accounts?: Array<Record<string, unknown>>;
+    members?: Array<Record<string, unknown>>;
+    terminal?: Record<string, unknown> | null;
+  } = {},
+) {
   const terminalProofHash = await hashPosTerminalSyncSecret(PROOF);
   const tables = {
     athenaUser: [
@@ -427,6 +438,10 @@ async function buildCtx(seed: {
 
   const ctx = {
     tables,
+    // Session recovery runs precisely when the caller has no Athena session,
+    // so the admission rail must see an anonymous context here and admit it
+    // through `actors.public`.
+    auth: { getUserIdentity: async () => null },
     db: {
       get: vi.fn(async (table: keyof typeof tables, id: string) => {
         return tables[table].find((row) => row._id === id) ?? null;
@@ -460,10 +475,7 @@ async function buildCtx(seed: {
                 (...predicates) =>
                 (row) =>
                   predicates.every((matches) => matches(row)),
-              eq:
-                (field, value) =>
-                (row) =>
-                  row[field] === value,
+              eq: (field, value) => (row) => row[field] === value,
               field: (field) => field,
             });
             rows = rows.filter(predicate);

@@ -3,7 +3,7 @@ import Footer from "./footer/Footer";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
 import { useHomepageSnapshotQueries } from "@/lib/queries/homepageSnapshot";
-import { MARKER_KEY } from "@/lib/constants";
+import { getOrCreateGuestMarker } from "@/lib/guestMarker";
 import { ProductReminderBar } from "./ProductReminderBar";
 import { useProductReminder } from "@/hooks/useProductReminder";
 import { HomeHeroSectionWithRef } from "./home/HomeHeroSection";
@@ -155,11 +155,8 @@ export default function HomePage({
     setNavBarLayout("sticky");
     setAppLocation(origin);
 
-    // generate a random uuid and save it to local storage
-    const uuid = localStorage.getItem(MARKER_KEY);
-    if (!uuid) {
-      localStorage.setItem(MARKER_KEY, Math.random().toString(36).substring(7));
-    }
+    // Make sure this browser holds a guest session-recovery marker.
+    getOrCreateGuestMarker();
   }, []);
 
   useEffect(() => {

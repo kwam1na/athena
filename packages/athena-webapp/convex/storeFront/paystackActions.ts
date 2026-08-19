@@ -1,9 +1,23 @@
 import { v } from "convex/values";
 import { action } from "../_generated/server";
-import { internal } from "../_generated/api";
 import { listTransactions, verifyTransaction } from "../paystack";
-const requireAuthenticatedNonDemoEffectRef =
-  (internal as any).sharedDemo.actor.requireAuthenticatedNonDemoEffect;
+import {
+  checkTransactionStatusOperationDefinition,
+  findOrderTransactionsOperationDefinition,
+  getAllTransactionsOperationDefinition,
+} from "../operationAdmission/domains/storefrontCustomer_definitions";
+import { admitPublicAction } from "../platform/operationAdmission";
+
+/**
+ * All three actions read the live Paystack ledger.
+ *
+ * Each carried `requireAuthenticatedNonDemoEffect` as its first statement —
+ * "an identity is required and a demo principal is refused". The successor is
+ * the definition: `normalUser: "admit"` with `public: "deny"` demands the
+ * identity, `sharedDemo: "deny"` refuses the demo, and the declared
+ * `payment.collect` gateway states why. Admission now runs before the provider
+ * call rather than inside the handler after it.
+ */
 
 /**
  * Action to fetch all transactions from Paystack
@@ -26,8 +40,21 @@ export const getAllTransactions = action({
     createdAfter: v.optional(v.number()),
     sameDay: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
-    await ctx.runQuery(requireAuthenticatedNonDemoEffectRef, {});
+  handler: admitPublicAction(
+    getAllTransactionsOperationDefinition,
+    async (
+      _ctx,
+      args: {
+        perPage?: number;
+        page?: number;
+        status?: "failed" | "success" | "abandoned" | "pending";
+        from?: string;
+        to?: string;
+        customerEmail?: string;
+        createdAfter?: number;
+        sameDay?: number;
+      },
+    ) => {
     try {
       const transactions = await listTransactions({
         perPage: args.perPage,
@@ -55,7 +82,8 @@ export const getAllTransactions = action({
             : "Failed to fetch transactions",
       };
     }
-  },
+    },
+  ),
 });
 
 /**
@@ -65,8 +93,9 @@ export const checkTransactionStatus = action({
   args: {
     reference: v.string(),
   },
-  handler: async (ctx, args) => {
-    await ctx.runQuery(requireAuthenticatedNonDemoEffectRef, {});
+  handler: admitPublicAction(
+    checkTransactionStatusOperationDefinition,
+    async (_ctx, args: { reference: string }) => {
     try {
       const verificationResult = await verifyTransaction(args.reference);
 
@@ -85,7 +114,8 @@ export const checkTransactionStatus = action({
             : "Failed to verify transaction",
       };
     }
-  },
+    },
+  ),
 });
 
 /**
@@ -98,8 +128,16 @@ export const findOrderTransactions = action({
     // Optional time buffer in milliseconds (no longer used with sameDay filtering)
     timeBuffer: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
-    await ctx.runQuery(requireAuthenticatedNonDemoEffectRef, {});
+  handler: admitPublicAction(
+    findOrderTransactionsOperationDefinition,
+    async (
+      _ctx,
+      args: {
+        customerEmail: string;
+        orderCreatedAt: number;
+        timeBuffer?: number;
+      },
+    ) => {
     try {
       // Now we use sameDay parameter instead of createdAfter
       const transactions = await listTransactions({
@@ -123,5 +161,6 @@ export const findOrderTransactions = action({
             : "Failed to fetch order transactions",
       };
     }
-  },
+    },
+  ),
 });

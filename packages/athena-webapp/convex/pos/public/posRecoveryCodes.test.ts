@@ -295,6 +295,12 @@ describe("POS recovery codes", () => {
     );
 
     authServerMocks.getAuthUserId.mockResolvedValue(AUTH_USER_ID);
+    // The read wrapper extends the caller's own ctx with the admission it
+    // resolved, and a real Convex query gets a fresh ctx per call. This
+    // harness reuses one object across two callers, so the previous
+    // admission has to be cleared or the second call would resolve its
+    // identity from the first caller's admitted actor.
+    delete (ctx as { operationAdmission?: unknown }).operationAdmission;
     await expect(getStatus(ctx, { storeId: STORE_ID })).rejects.toThrow(
       "Only full admins can manage POS recovery codes.",
     );

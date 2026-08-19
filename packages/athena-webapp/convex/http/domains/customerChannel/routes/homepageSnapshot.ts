@@ -2,32 +2,34 @@ import { Hono } from "hono";
 import { setCookie } from "hono/cookie";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
-import { api, internal } from "../../../../_generated/api";
+import { internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
-import { getStorefrontUserFromRequest } from "../../../utils";
+import { admitHttpRead } from "../../../../platform/operationAdmission";
+import { getHomepageSnapshotRouteReadDefinition } from "../../../../operationAdmission/domains/httpCustomer_readDefinitions";
 
 const COOKIE_DOMAIN = "wigclub.store";
 const COOKIE_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
 const HOMEPAGE_MERCHANDISING_BUCKET_MS = 60_000;
-const homepageSnapshotQuery = api.storeFront.homepageSnapshot.get;
+// Anonymous browse read: the snapshot carries no shopper-scoped data, so the
+// internal sibling has no `owner` parameter at all — there is no ownership
+// concept on this path, only the `storeId` that names what to render.
+const homepageSnapshotQuery = internal.storeFront.homepageSnapshot.getInternal;
 
 type CookieToSet = {
   name: string;
   value: string;
 };
 
+// NOT A GUEST MINT POINT. This route sets only the store context cookies.
+// Guest sessions are minted — SIGNED — at exactly two places, `GET /storefront`
+// and `GET /guests`; a third mint here used to hand out a bare, unsigned
+// `guest_id` that no consumer accepted, and the storefront never bootstrapped a
+// guest through this route (it always sent `asNewUser=false`). Anonymous
+// browse needs no shopper identity, so this route carries none.
 type HomepageSnapshotBootstrapArgs = {
   runQuery: ActionCtx["runQuery"];
-  runMutation: ActionCtx["runMutation"];
   storeName?: string;
-  marker?: string;
-  asNewUser?: string;
-  currentUserId?: string;
   nowMs: number;
-};
-
-const isDisplayableMarker = (marker?: string) => {
-  return typeof marker === "string" && marker.trim().length > 0;
 };
 
 const presentSnapshotAtRequestTime = (snapshot: any, nowMs: number) => {
@@ -52,11 +54,7 @@ const presentSnapshotAtRequestTime = (snapshot: any, nowMs: number) => {
 
 export const resolveHomepageSnapshotBootstrap = async ({
   runQuery,
-  runMutation,
   storeName,
-  marker,
-  asNewUser,
-  currentUserId,
   nowMs,
 }: HomepageSnapshotBootstrapArgs): Promise<{
   status: number;
@@ -88,25 +86,6 @@ export const resolveHomepageSnapshotBootstrap = async ({
     { name: "store_id", value: store._id },
   ];
 
-  if (!currentUserId && asNewUser === "true" && isDisplayableMarker(marker)) {
-    let guest = await runQuery(internal.storeFront.guest.getByMarker, {
-      marker,
-    });
-
-    if (!guest) {
-      guest = await runMutation(internal.storeFront.guest.create, {
-        marker,
-        creationOrigin: "storefront",
-        storeId: store._id,
-        organizationId: store.organizationId,
-      });
-    }
-
-    if (guest) {
-      cookies.push({ name: "guest_id", value: guest._id });
-    }
-  }
-
   const snapshot = await runQuery(homepageSnapshotQuery, {
     storeId: store._id as Id<"store">,
     nowMs:
@@ -134,22 +113,21 @@ const setBootstrapCookie = (c: any, cookie: CookieToSet) => {
 
 const homepageSnapshotRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
-homepageSnapshotRoutes.get("/", async (c) => {
-  const result = await resolveHomepageSnapshotBootstrap({
-    runQuery: c.env.runQuery,
-    runMutation: c.env.runMutation,
-    storeName: c.req.query("storeName"),
-    marker: c.req.query("marker"),
-    asNewUser: c.req.query("asNewUser"),
-    currentUserId: getStorefrontUserFromRequest(c),
-    nowMs: Date.now(),
-  });
+homepageSnapshotRoutes.get(
+  "/",
+  admitHttpRead(getHomepageSnapshotRouteReadDefinition, async (c) => {
+    const result = await resolveHomepageSnapshotBootstrap({
+      runQuery: c.env.runQuery,
+      storeName: c.req.query("storeName"),
+      nowMs: Date.now(),
+    });
 
-  for (const cookie of result.cookies) {
-    setBootstrapCookie(c, cookie);
-  }
+    for (const cookie of result.cookies) {
+      setBootstrapCookie(c, cookie);
+    }
 
-  return c.json(result.body, result.status as 200 | 404);
-});
+    return c.json(result.body, result.status as 200 | 404);
+  }),
+);
 
 export { homepageSnapshotRoutes };

@@ -8,7 +8,12 @@ import {
   reviewRegisterSessionCloseoutOperationDefinition,
   submitRegisterSessionCloseoutOperationDefinition,
 } from "../operationAdmission/definitions";
-import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
+import { finalizeRegisterSessionCloseoutOperationDefinition } from "../operationAdmission/domains/operations_definitions";
+import { getCloseoutSnapshotReadDefinition } from "../operationAdmission/domains/operations_readDefinitions";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import type { OperationMutationCtx } from "../operationAdmission/types";
 import { insertApprovalRequestWithCtx } from "../operations/approvalRequestHelpers";
 import {
@@ -749,108 +754,111 @@ export const getCloseoutSnapshot = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: async (
-    ctx: QueryCtx,
-    args: { storeId: Id<"store"> },
-  ): Promise<CloseoutSnapshot> => {
-    const { store } = await requireCashControlsStoreAccess(ctx, args.storeId);
-    const registerSessions = await listRegisterSessionsForCloseout(
+  handler: admitPublicQuery(
+    getCloseoutSnapshotReadDefinition,
+    async (
       ctx,
-      args.storeId,
-    );
-    const config = getCashControlsConfig(store);
-    const approvalRequestIds = Array.from(
-      new Set(
-        registerSessions
-          .map((registerSession) => registerSession.managerApprovalRequestId)
-          .filter(Boolean) as Id<"approvalRequest">[],
-      ),
-    );
-    const approvalRequests = await Promise.all(
-      approvalRequestIds.map((approvalRequestId) =>
-        ctx.db.get("approvalRequest", approvalRequestId),
-      ),
-    );
-    const approvalMap = new Map<
-      Id<"approvalRequest">,
-      CloseoutApprovalRequestRecord
-    >();
-    for (const approvalRequest of approvalRequests) {
-      if (
-        approvalRequest &&
-        approvalRequest.registerSessionId &&
-        approvalRequest.requestType === "variance_review"
-      ) {
-        approvalMap.set(approvalRequest._id, approvalRequest);
+      args: { storeId: Id<"store"> },
+    ): Promise<CloseoutSnapshot> => {
+      const { store } = await requireCashControlsStoreAccess(ctx, args.storeId);
+      const registerSessions = await listRegisterSessionsForCloseout(
+        ctx,
+        args.storeId,
+      );
+      const config = getCashControlsConfig(store);
+      const approvalRequestIds = Array.from(
+        new Set(
+          registerSessions
+            .map((registerSession) => registerSession.managerApprovalRequestId)
+            .filter(Boolean) as Id<"approvalRequest">[],
+        ),
+      );
+      const approvalRequests = await Promise.all(
+        approvalRequestIds.map((approvalRequestId) =>
+          ctx.db.get("approvalRequest", approvalRequestId),
+        ),
+      );
+      const approvalMap = new Map<
+        Id<"approvalRequest">,
+        CloseoutApprovalRequestRecord
+      >();
+      for (const approvalRequest of approvalRequests) {
+        if (
+          approvalRequest &&
+          approvalRequest.registerSessionId &&
+          approvalRequest.requestType === "variance_review"
+        ) {
+          approvalMap.set(approvalRequest._id, approvalRequest);
+        }
       }
-    }
-    const staffProfileIds = new Set<Id<"staffProfile">>();
+      const staffProfileIds = new Set<Id<"staffProfile">>();
 
-    for (const registerSession of registerSessions) {
-      if (registerSession.openedByStaffProfileId) {
-        staffProfileIds.add(registerSession.openedByStaffProfileId);
+      for (const registerSession of registerSessions) {
+        if (registerSession.openedByStaffProfileId) {
+          staffProfileIds.add(registerSession.openedByStaffProfileId);
+        }
+
+        if (registerSession.closedByStaffProfileId) {
+          staffProfileIds.add(registerSession.closedByStaffProfileId);
+        }
+
+        const approvalRequest = registerSession.managerApprovalRequestId
+          ? approvalMap.get(registerSession.managerApprovalRequestId)
+          : null;
+
+        if (approvalRequest?.requestedByStaffProfileId) {
+          staffProfileIds.add(approvalRequest.requestedByStaffProfileId);
+        }
       }
 
-      if (registerSession.closedByStaffProfileId) {
-        staffProfileIds.add(registerSession.closedByStaffProfileId);
-      }
+      const staffMap = await listStaffNames(ctx, staffProfileIds);
 
-      const approvalRequest = registerSession.managerApprovalRequestId
-        ? approvalMap.get(registerSession.managerApprovalRequestId)
-        : null;
-
-      if (approvalRequest?.requestedByStaffProfileId) {
-        staffProfileIds.add(approvalRequest.requestedByStaffProfileId);
-      }
-    }
-
-    const staffMap = await listStaffNames(ctx, staffProfileIds);
-
-    return {
-      config,
-      registerSessions: registerSessions.map(
-        (registerSession: Doc<"registerSession">) => {
-          const approvalRequest = registerSession.managerApprovalRequestId
-            ? approvalMap.get(registerSession.managerApprovalRequestId)
-            : null;
-          const closeoutReview =
-            registerSession.countedCash !== undefined
-              ? buildRegisterSessionCloseoutReview({
-                  countedCash: registerSession.countedCash,
-                  config,
-                  expectedCash: registerSession.expectedCash,
-                })
+      return {
+        config,
+        registerSessions: registerSessions.map(
+          (registerSession: Doc<"registerSession">) => {
+            const approvalRequest = registerSession.managerApprovalRequestId
+              ? approvalMap.get(registerSession.managerApprovalRequestId)
               : null;
+            const closeoutReview =
+              registerSession.countedCash !== undefined
+                ? buildRegisterSessionCloseoutReview({
+                    countedCash: registerSession.countedCash,
+                    config,
+                    expectedCash: registerSession.expectedCash,
+                  })
+                : null;
 
-          return {
-            ...registerSession,
-            approvalRequest: approvalRequest
-              ? {
-                  _id: approvalRequest._id,
-                  createdAt: approvalRequest.createdAt,
-                  notes: approvalRequest.notes,
-                  reason: approvalRequest.reason,
-                  requestedByStaffName:
-                    approvalRequest.requestedByStaffProfileId
-                      ? (staffMap.get(
-                          approvalRequest.requestedByStaffProfileId,
-                        ) ?? null)
-                      : null,
-                  status: approvalRequest.status,
-                }
-              : null,
-            closeoutReview,
-            closedByStaffName: registerSession.closedByStaffProfileId
-              ? (staffMap.get(registerSession.closedByStaffProfileId) ?? null)
-              : null,
-            openedByStaffName: registerSession.openedByStaffProfileId
-              ? (staffMap.get(registerSession.openedByStaffProfileId) ?? null)
-              : null,
-          };
-        },
-      ),
-    };
-  },
+            return {
+              ...registerSession,
+              approvalRequest: approvalRequest
+                ? {
+                    _id: approvalRequest._id,
+                    createdAt: approvalRequest.createdAt,
+                    notes: approvalRequest.notes,
+                    reason: approvalRequest.reason,
+                    requestedByStaffName:
+                      approvalRequest.requestedByStaffProfileId
+                        ? (staffMap.get(
+                            approvalRequest.requestedByStaffProfileId,
+                          ) ?? null)
+                        : null,
+                    status: approvalRequest.status,
+                  }
+                : null,
+              closeoutReview,
+              closedByStaffName: registerSession.closedByStaffProfileId
+                ? (staffMap.get(registerSession.closedByStaffProfileId) ?? null)
+                : null,
+              openedByStaffName: registerSession.openedByStaffProfileId
+                ? (staffMap.get(registerSession.openedByStaffProfileId) ?? null)
+                : null,
+            };
+          },
+        ),
+      };
+    },
+  ),
 });
 
 export const submitRegisterSessionCloseout = mutation({
@@ -870,7 +878,7 @@ export const submitRegisterSessionCloseout = mutation({
     terminalId: v.optional(v.id("posTerminal")),
   },
   returns: submitRegisterSessionCloseoutResultValidator,
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     submitRegisterSessionCloseoutOperationDefinition,
     async (
       ctx: OperationMutationCtx,
@@ -1565,143 +1573,117 @@ export const finalizeRegisterSessionCloseout = mutation({
     storeId: v.id("store"),
   },
   returns: submitRegisterSessionCloseoutResultValidator,
-  handler: async (
-    ctx: MutationCtx,
-    args: FinalizeRegisterSessionCloseoutArgs,
-  ): Promise<ApprovalCommandResult<SubmitRegisterSessionCloseoutResult>> => {
-    const { athenaUser, store } = await requireCashControlsStoreAccess(
+  handler: admitPublicMutation(
+    finalizeRegisterSessionCloseoutOperationDefinition,
+    async (
       ctx,
-      args.storeId,
-    );
-    const actorUserId = athenaUser._id;
-    const requestedByStaffProfileResult =
-      await resolveCloseoutActorStaffProfileId(ctx, {
-        allowedCredentialRoles: ["cashier", "manager"],
-        athenaUserId: athenaUser._id,
-        staffProfileId:
-          args.requestedByStaffProfileId ?? args.actorStaffProfileId,
-        staffPinHash: args.staffPinHash,
-        staffUsername: args.staffUsername,
-        storeId: args.storeId,
-      });
-    if (requestedByStaffProfileResult.kind !== "ok") {
-      return requestedByStaffProfileResult;
-    }
-    const requestedByStaffProfileId = requestedByStaffProfileResult.data;
-    const registerSession = await ctx.db.get(
-      "registerSession",
-      args.registerSessionId,
-    );
-
-    if (!registerSession || registerSession.storeId !== args.storeId) {
-      return userError({
-        code: "not_found",
-        message: "Register session not found for this store.",
-      });
-    }
-
-    if (registerSession.status === "closed") {
-      return userError({
-        code: "precondition_failed",
-        message: "Register session is already closed.",
-      });
-    }
-
-    if (registerSession.status !== "closing") {
-      return userError({
-        code: "precondition_failed",
-        message: "Register session is not in closeout.",
-      });
-    }
-
-    if (registerSession.countedCash === undefined) {
-      return userError({
-        code: "precondition_failed",
-        message: "Counted cash is required before finalizing closeout.",
-      });
-    }
-
-    const closeoutHolds = await listRegisterSessionCloseoutHolds(ctx, {
-      registerSessionId: registerSession._id,
-      storeId: args.storeId,
-    });
-
-    if (hasCashAffectingCloseoutHolds(closeoutHolds)) {
-      return userError({
-        code: "precondition_failed",
-        message:
-          getCloseoutHoldOperatorMessage(closeoutHolds, "finalize") ??
-          "Resolve pending register corrections before finalizing closeout.",
-      });
-    }
-
-    const closeoutReview = buildRegisterSessionCloseoutReview({
-      countedCash: registerSession.countedCash,
-      config: getCashControlsConfig(store),
-      expectedCash: registerSession.expectedCash,
-    });
-
-    if (!registerSession.organizationId) {
-      return userError({
-        code: "precondition_failed",
-        message: "Register session is missing organization context.",
-      });
-    }
-
-    let closedByStaffProfileId = requestedByStaffProfileId;
-
-    if (!closeoutReview.requiresApproval) {
-      if (!requestedByStaffProfileId) {
-        return userError({
-          code: "authorization_failed",
-          message:
-            "Manager staff authentication is required to finalize closeout.",
-        });
-      }
-
-      const canFinalize = await staffProfileCanReviewCloseoutVariance(ctx, {
-        organizationId: registerSession.organizationId,
-        staffProfileId: requestedByStaffProfileId,
-        storeId: args.storeId,
-      });
-
-      if (!canFinalize) {
-        return userError({
-          code: "authorization_failed",
-          message: "Only managers can finalize register closeouts.",
-        });
-      }
-    }
-
-    if (closeoutReview.requiresApproval && !args.approvalProofId) {
-      const requesterBindingResult =
-        await createApprovalRequesterBindingForCloseout(ctx, {
-          actionKey: REGISTER_VARIANCE_REVIEW_ACTION_KEY,
-          organizationId: registerSession.organizationId,
-          registerSession,
-          requestedByStaffProfileId,
-          requiredRole: "manager",
+      args: FinalizeRegisterSessionCloseoutArgs,
+    ): Promise<ApprovalCommandResult<SubmitRegisterSessionCloseoutResult>> => {
+      const { athenaUser, store } = await requireCashControlsStoreAccess(
+        ctx,
+        args.storeId,
+      );
+      const actorUserId = athenaUser._id;
+      const requestedByStaffProfileResult =
+        await resolveCloseoutActorStaffProfileId(ctx, {
+          allowedCredentialRoles: ["cashier", "manager"],
+          athenaUserId: athenaUser._id,
+          staffProfileId:
+            args.requestedByStaffProfileId ?? args.actorStaffProfileId,
+          staffPinHash: args.staffPinHash,
+          staffUsername: args.staffUsername,
           storeId: args.storeId,
         });
-      if (requesterBindingResult.kind !== "ok") {
-        return requesterBindingResult;
+      if (requestedByStaffProfileResult.kind !== "ok") {
+        return requestedByStaffProfileResult;
+      }
+      const requestedByStaffProfileId = requestedByStaffProfileResult.data;
+      const registerSession = await ctx.db.get(
+        "registerSession",
+        args.registerSessionId,
+      );
+
+      if (!registerSession || registerSession.storeId !== args.storeId) {
+        return userError({
+          code: "not_found",
+          message: "Register session not found for this store.",
+        });
       }
 
-      return approvalRequired(
-        buildRegisterSessionVarianceApprovalRequirement({
-          closeoutReview,
-          countedCash: registerSession.countedCash,
-          expectedCash: registerSession.expectedCash,
-          registerSession,
-          requesterBinding: requesterBindingResult.data.requesterBinding,
-        }),
-      );
-    }
+      if (registerSession.status === "closed") {
+        return userError({
+          code: "precondition_failed",
+          message: "Register session is already closed.",
+        });
+      }
 
-    if (closeoutReview.requiresApproval) {
-      const approvalProofId = args.approvalProofId;
+      if (registerSession.status !== "closing") {
+        return userError({
+          code: "precondition_failed",
+          message: "Register session is not in closeout.",
+        });
+      }
 
-      if (!approvalProofId) {
+      if (registerSession.countedCash === undefined) {
+        return userError({
+          code: "precondition_failed",
+          message: "Counted cash is required before finalizing closeout.",
+        });
+      }
+
+      const closeoutHolds = await listRegisterSessionCloseoutHolds(ctx, {
+        registerSessionId: registerSession._id,
+        storeId: args.storeId,
+      });
+
+      if (hasCashAffectingCloseoutHolds(closeoutHolds)) {
+        return userError({
+          code: "precondition_failed",
+          message:
+            getCloseoutHoldOperatorMessage(closeoutHolds, "finalize") ??
+            "Resolve pending register corrections before finalizing closeout.",
+        });
+      }
+
+      const closeoutReview = buildRegisterSessionCloseoutReview({
+        countedCash: registerSession.countedCash,
+        config: getCashControlsConfig(store),
+        expectedCash: registerSession.expectedCash,
+      });
+
+      if (!registerSession.organizationId) {
+        return userError({
+          code: "precondition_failed",
+          message: "Register session is missing organization context.",
+        });
+      }
+
+      let closedByStaffProfileId = requestedByStaffProfileId;
+
+      if (!closeoutReview.requiresApproval) {
+        if (!requestedByStaffProfileId) {
+          return userError({
+            code: "authorization_failed",
+            message:
+              "Manager staff authentication is required to finalize closeout.",
+          });
+        }
+
+        const canFinalize = await staffProfileCanReviewCloseoutVariance(ctx, {
+          organizationId: registerSession.organizationId,
+          staffProfileId: requestedByStaffProfileId,
+          storeId: args.storeId,
+        });
+
+        if (!canFinalize) {
+          return userError({
+            code: "authorization_failed",
+            message: "Only managers can finalize register closeouts.",
+          });
+        }
+      }
+
+      if (closeoutReview.requiresApproval && !args.approvalProofId) {
         const requesterBindingResult =
           await createApprovalRequesterBindingForCloseout(ctx, {
             actionKey: REGISTER_VARIANCE_REVIEW_ACTION_KEY,
@@ -1726,103 +1708,132 @@ export const finalizeRegisterSessionCloseout = mutation({
         );
       }
 
-      const proof = await consumeCommandApprovalProofWithCtx(ctx, {
-        action: REGISTER_VARIANCE_REVIEW_ACTION,
-        approvalProofId,
-        requiredRole: "manager",
-        requestedByStaffProfileId,
-        storeId: args.storeId,
-        subject: {
-          type: "register_session",
-          id: registerSession._id,
-          label: registerSession.registerNumber,
-        },
-      });
+      if (closeoutReview.requiresApproval) {
+        const approvalProofId = args.approvalProofId;
 
-      if (proof.kind !== "ok") {
-        return proof;
-      }
+        if (!approvalProofId) {
+          const requesterBindingResult =
+            await createApprovalRequesterBindingForCloseout(ctx, {
+              actionKey: REGISTER_VARIANCE_REVIEW_ACTION_KEY,
+              organizationId: registerSession.organizationId,
+              registerSession,
+              requestedByStaffProfileId,
+              requiredRole: "manager",
+              storeId: args.storeId,
+            });
+          if (requesterBindingResult.kind !== "ok") {
+            return requesterBindingResult;
+          }
 
-      const canFinalize = await staffProfileCanReviewCloseoutVariance(ctx, {
-        organizationId: registerSession.organizationId,
-        staffProfileId: proof.data.approvedByStaffProfileId,
-        storeId: args.storeId,
-      });
+          return approvalRequired(
+            buildRegisterSessionVarianceApprovalRequirement({
+              closeoutReview,
+              countedCash: registerSession.countedCash,
+              expectedCash: registerSession.expectedCash,
+              registerSession,
+              requesterBinding: requesterBindingResult.data.requesterBinding,
+            }),
+          );
+        }
 
-      if (!canFinalize) {
-        return userError({
-          code: "authorization_failed",
-          message: "Only managers can finalize register closeouts.",
+        const proof = await consumeCommandApprovalProofWithCtx(ctx, {
+          action: REGISTER_VARIANCE_REVIEW_ACTION,
+          approvalProofId,
+          requiredRole: "manager",
+          requestedByStaffProfileId,
+          storeId: args.storeId,
+          subject: {
+            type: "register_session",
+            id: registerSession._id,
+            label: registerSession.registerNumber,
+          },
         });
+
+        if (proof.kind !== "ok") {
+          return proof;
+        }
+
+        const canFinalize = await staffProfileCanReviewCloseoutVariance(ctx, {
+          organizationId: registerSession.organizationId,
+          staffProfileId: proof.data.approvedByStaffProfileId,
+          storeId: args.storeId,
+        });
+
+        if (!canFinalize) {
+          return userError({
+            code: "authorization_failed",
+            message: "Only managers can finalize register closeouts.",
+          });
+        }
+
+        closedByStaffProfileId = proof.data.approvedByStaffProfileId;
       }
 
-      closedByStaffProfileId = proof.data.approvedByStaffProfileId;
-    }
-
-    await cancelPendingApprovalIfNeeded({
-      approvalRequestId: registerSession.managerApprovalRequestId,
-      ctx,
-      registerSessionId: registerSession._id,
-      reviewedByStaffProfileId: closedByStaffProfileId,
-      reviewedByUserId: actorUserId,
-      decisionNotes: "Finalized after pending void approvals were resolved.",
-      storeId: args.storeId,
-    });
-
-    const closedSession = await ctx.runMutation(
-      internal.operations.registerSessions.closeRegisterSession,
-      {
-        closedByStaffProfileId,
-        closedByUserId: actorUserId,
-        countedCash: registerSession.countedCash,
+      await cancelPendingApprovalIfNeeded({
+        approvalRequestId: registerSession.managerApprovalRequestId,
+        ctx,
         registerSessionId: registerSession._id,
-      },
-    );
+        reviewedByStaffProfileId: closedByStaffProfileId,
+        reviewedByUserId: actorUserId,
+        decisionNotes: "Finalized after pending void approvals were resolved.",
+        storeId: args.storeId,
+      });
 
-    await recordOperationalEventWithCtx(ctx, {
-      actorStaffProfileId: closedByStaffProfileId,
-      actorUserId,
-      eventType: "register_session_closed",
-      message: closeoutReview.hasVariance
-        ? `Register session closed with a variance of ${closeoutReview.variance}.`
-        : "Register session closed with an exact cash match.",
-      metadata: {
+      const closedSession = await ctx.runMutation(
+        internal.operations.registerSessions.closeRegisterSession,
+        {
+          closedByStaffProfileId,
+          closedByUserId: actorUserId,
+          countedCash: registerSession.countedCash,
+          registerSessionId: registerSession._id,
+        },
+      );
+
+      await recordOperationalEventWithCtx(ctx, {
+        actorStaffProfileId: closedByStaffProfileId,
+        actorUserId,
+        eventType: "register_session_closed",
+        message: closeoutReview.hasVariance
+          ? `Register session closed with a variance of ${closeoutReview.variance}.`
+          : "Register session closed with an exact cash match.",
+        metadata: {
+          countedCash: registerSession.countedCash,
+          expectedCash: registerSession.expectedCash,
+          variance: closeoutReview.variance,
+        },
+        organizationId: registerSession.organizationId,
+        reason: closeoutReview.reason,
+        registerSessionId: registerSession._id,
+        storeId: args.storeId,
+        subjectId: registerSession._id,
+        subjectLabel: registerSession.registerNumber,
+        subjectType: "register_session",
+      });
+
+      const closedTraceResult = await recordRegisterSessionTraceBestEffort(ctx, {
+        stage: "closed",
+        session: closedSession ?? registerSession,
+        occurredAt: closedSession?.closedAt,
+        actorStaffProfileId: closedByStaffProfileId,
+        actorUserId,
         countedCash: registerSession.countedCash,
-        expectedCash: registerSession.expectedCash,
         variance: closeoutReview.variance,
-      },
-      organizationId: registerSession.organizationId,
-      reason: closeoutReview.reason,
-      registerSessionId: registerSession._id,
-      storeId: args.storeId,
-      subjectId: registerSession._id,
-      subjectLabel: registerSession.registerNumber,
-      subjectType: "register_session",
-    });
+      });
 
-    const closedTraceResult = await recordRegisterSessionTraceBestEffort(ctx, {
-      stage: "closed",
-      session: closedSession ?? registerSession,
-      occurredAt: closedSession?.closedAt,
-      actorStaffProfileId: closedByStaffProfileId,
-      actorUserId,
-      countedCash: registerSession.countedCash,
-      variance: closeoutReview.variance,
-    });
+      await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
+        registerSessionId: registerSession._id,
+        traceCreated: closedTraceResult.traceCreated,
+        traceId: closedTraceResult.traceId,
+        workflowTraceId: closedSession?.workflowTraceId,
+      });
 
-    await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
-      registerSessionId: registerSession._id,
-      traceCreated: closedTraceResult.traceCreated,
-      traceId: closedTraceResult.traceId,
-      workflowTraceId: closedSession?.workflowTraceId,
-    });
-
-    return ok({
-      action: "closed" as const,
-      closeoutReview,
-      registerSession: closedSession,
-    });
-  },
+      return ok({
+        action: "closed" as const,
+        closeoutReview,
+        registerSession: closedSession,
+      });
+    },
+  ),
 });
 
 export const reopenRegisterSessionCloseout = mutation({
@@ -1835,7 +1846,7 @@ export const reopenRegisterSessionCloseout = mutation({
     storeId: v.id("store"),
   },
   returns: reopenRegisterSessionResultValidator,
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     reopenRegisterSessionCloseoutOperationDefinition,
     async (
       ctx: OperationMutationCtx,
@@ -2130,7 +2141,7 @@ export const correctRegisterSessionOpeningFloat = mutation({
     terminalId: v.optional(v.id("posTerminal")),
   },
   returns: correctRegisterSessionOpeningFloatResultValidator,
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     correctRegisterSessionOpeningFloatOperationDefinition,
     async (
       ctx: OperationMutationCtx,
@@ -2329,7 +2340,7 @@ export const reviewRegisterSessionCloseout = mutation({
     storeId: v.id("store"),
   },
   returns: reviewRegisterSessionCloseoutResultValidator,
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     reviewRegisterSessionCloseoutOperationDefinition,
     async (
       ctx: OperationMutationCtx,

@@ -14,6 +14,23 @@ import {
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
 import { getNextHomepageRank } from "../../shared/homepageRanking";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
+import {
+  createBestSellerOperationDefinition,
+  removeBestSellerOperationDefinition,
+  updateBestSellerRanksOperationDefinition,
+} from "../operationAdmission/domains/inventoryCatalog_definitions";
+import {
+  getBestSellerByIdReadDefinition,
+  listBestSellersReadDefinition,
+} from "../operationAdmission/domains/inventoryCatalog_readDefinitions";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
 
 const entity = "bestSeller";
 
@@ -80,7 +97,16 @@ export const create = mutation({
     productSkuId: v.id("productSku"),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    createBestSellerOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        productId: Id<"product">;
+        productSkuId: Id<"productSku">;
+        storeId: Id<"store">;
+      },
+    ) => {
     await requireHomepageStoreAdmin(ctx, args.storeId);
     await validateBestSellerPlacement(ctx, args);
 
@@ -108,33 +134,40 @@ export const create = mutation({
     });
 
     return await ctx.db.get("bestSeller", id);
-  },
+    },
+  ),
 });
 
 export const remove = mutation({
   args: {
     id: v.id(entity),
   },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db.get("bestSeller", args.id);
-    if (!existing) {
+  handler: admitPublicMutation(
+    removeBestSellerOperationDefinition,
+    async (ctx: OperationMutationCtx, args: { id: Id<"bestSeller"> }) => {
+      const existing = await ctx.db.get("bestSeller", args.id);
+      if (!existing) {
+        return true;
+      }
+
+      await requireHomepageStoreAdmin(ctx, existing.storeId);
+      await ctx.db.delete("bestSeller", args.id);
+
       return true;
-    }
-
-    await requireHomepageStoreAdmin(ctx, existing.storeId);
-    await ctx.db.delete("bestSeller", args.id);
-
-    return true;
-  },
+    },
+  ),
 });
 
 export const getById = query({
   args: {
     id: v.id(entity),
   },
-  handler: async (ctx, args) => {
-    return await ctx.db.get("bestSeller", args.id);
-  },
+  handler: admitPublicQuery(
+    getBestSellerByIdReadDefinition,
+    async (ctx: OperationQueryCtx, args: { id: Id<"bestSeller"> }) => {
+      return await ctx.db.get("bestSeller", args.id);
+    },
+  ),
 });
 
 export const getAll = query({
@@ -142,7 +175,12 @@ export const getAll = query({
     storeId: v.id("store"),
     isVisible: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    listBestSellersReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { storeId: Id<"store">; isVisible?: boolean },
+    ) => {
     const items = await ctx.db
       .query(entity)
       .filter((q) => q.eq(q.field("storeId"), args.storeId))
@@ -174,7 +212,8 @@ export const getAll = query({
     );
 
     return enrichedItems.filter((item) => item.productSku);
-  },
+    },
+  ),
 });
 
 export const getAllInternal = internalQuery({
@@ -221,7 +260,12 @@ export const updateRanks = mutation({
   args: {
     ranks: v.array(v.object({ id: v.id(entity), rank: v.number() })),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    updateBestSellerRanksOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: { ranks: { id: Id<"bestSeller">; rank: number }[] },
+    ) => {
     const rows = await Promise.all(
       args.ranks.map((item) => ctx.db.get("bestSeller", item.id))
     );
@@ -246,5 +290,6 @@ export const updateRanks = mutation({
     );
 
     return true;
-  },
+    },
+  ),
 });

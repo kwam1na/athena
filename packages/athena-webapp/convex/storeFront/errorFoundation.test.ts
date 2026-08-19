@@ -29,8 +29,8 @@ import { update } from "./onlineOrder";
 import { sendOrderUpdateEmail } from "./onlineOrderUtilFns";
 import {
   approve,
-  hasReviewForOrderItem,
-  hasUserReviewForOrderItem,
+  hasReviewForOrderItemInternal,
+  hasUserReviewForOrderItemInternal,
   publish,
   reject,
   sendFeedbackRequest,
@@ -44,6 +44,26 @@ function getSource(relativePath: string) {
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
 }
+
+/**
+ * What the registered internal admission mutation returns to an action wrapped
+ * by `admitPublicAction`: the full admission projection, not the narrow
+ * `{ actorKind, storeId }` shape the retired `admitOperationForAction` used.
+ */
+const normalUserAdmission = {
+  actor: { kind: "normal_user" as const, athenaUserId: "athena-user-1" },
+  constraints: { storeId: "store-1" },
+  decision: { adapter: "normal_user" as const, outcome: "admitted" as const },
+  operationId: "storeFront/reviews.sendFeedbackRequest",
+  provenance: { kind: "normal_user" },
+};
+
+const sharedDemoAdmission = {
+  ...normalUserAdmission,
+  actor: { kind: "shared_demo" as const, storeId: "store-1" },
+  decision: { adapter: "shared_demo" as const, outcome: "admitted" as const },
+  provenance: { kind: "shared_demo" },
+};
 
 describe("storefront error foundation", () => {
   beforeEach(() => {
@@ -108,9 +128,47 @@ describe("storefront error foundation", () => {
   });
 
   it("returns a not_found user_error when a review moderation command targets a missing review", async () => {
+    // U7 put review moderation on the admission rail, so the handler now runs
+    // behind the normal-user adapter; the returned CommandResult is unchanged.
     const ctx = {
+      auth: {
+        getUserIdentity: vi.fn(async () => ({ subject: "auth-user-1" })),
+      },
       db: {
-        get: vi.fn(async () => null),
+        get: vi.fn(async (table: string) => {
+          if (table === "users") {
+            return { _id: "auth-user-1", email: "operator@example.com" };
+          }
+          if (table === "athenaUser") {
+            return { _id: "athena-user-1", email: "operator@example.com" };
+          }
+          return null;
+        }),
+        normalizeId: vi.fn((_table: string, id: string) => id),
+        query: vi.fn((table: string) => {
+          if (table === "sharedDemoPrincipal") {
+            return {
+              withIndex: vi.fn(() => ({
+                unique: vi.fn(async () => null),
+              })),
+            };
+          }
+          if (table === "athenaUser") {
+            return {
+              withIndex: vi.fn(() => ({
+                first: vi.fn(async () => null),
+                take: vi.fn(async () => [
+                  {
+                    _id: "athena-user-1",
+                    email: "operator@example.com",
+                    normalizedEmail: "operator@example.com",
+                  },
+                ]),
+              })),
+            };
+          }
+          throw new Error(`Unexpected query table: ${table}`);
+        }),
       },
     };
 
@@ -130,7 +188,7 @@ describe("storefront error foundation", () => {
 
   it("returns a precondition_failed user_error when feedback has already been requested", async () => {
     const ctx = {
-      runMutation: vi.fn(async () => ({ actorKind: "normal_user" })),
+      runMutation: vi.fn(async () => normalUserAdmission),
       runQuery: vi.fn().mockResolvedValueOnce({
         _id: "order-item-1",
         feedbackRequested: true,
@@ -161,7 +219,7 @@ describe("storefront error foundation", () => {
     });
 
     const result = await getHandler(sendOrderUpdateEmail)({
-      runMutation: vi.fn(async () => ({ actorKind: "normal_user" })),
+      runMutation: vi.fn(async () => normalUserAdmission),
     } as never, {
       newStatus: "completed",
       orderId: "order-1",
@@ -186,7 +244,7 @@ describe("storefront error foundation", () => {
     // the store clamp the handler used to re-check through a second query.
     const runMutation = vi
       .fn()
-      .mockResolvedValueOnce({ actorKind: "shared_demo", storeId: "store-1" })
+      .mockResolvedValueOnce(sharedDemoAdmission)
       .mockResolvedValue(null);
     const ctx = {
       runMutation,
@@ -225,8 +283,8 @@ describe("storefront error foundation", () => {
     assertConformsToExportedReturns(sendOrderUpdateEmail, ok({
       message: "Order received email recorded.",
     }));
-    assertConformsToExportedReturns(hasReviewForOrderItem, true);
-    assertConformsToExportedReturns(hasUserReviewForOrderItem, false);
+    assertConformsToExportedReturns(hasReviewForOrderItemInternal, true);
+    assertConformsToExportedReturns(hasUserReviewForOrderItemInternal, false);
     assertConformsToExportedReturns(approve, ok(null));
     assertConformsToExportedReturns(reject, ok(null));
     assertConformsToExportedReturns(publish, ok(null));

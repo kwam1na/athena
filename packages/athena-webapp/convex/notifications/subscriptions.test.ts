@@ -596,6 +596,54 @@ describe("notification subscriptions public API", () => {
     ).toHaveLength(0);
   });
 
+  // The row writes take no organization argument: the guard has to reach the
+  // TARGET ROW's own organizationId, which is what the definition's resolved
+  // scope carries. A normal full admin of the demo org is denied too.
+  it("denies a demo-org toggle and remove even for an admitted full admin", async () => {
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedFixture);
+    const subscriptionId = await t.run((ctx) =>
+      insertSubscription(ctx, {
+        organizationId: fixture.organizationA,
+        category: "approvals",
+        recipientEmail: "demo-foundation@example.com",
+      }),
+    );
+
+    vi.stubEnv("ATHENA_SHARED_DEMO_ENABLED", "true");
+    vi.stubEnv("STAGE", "qa");
+    vi.stubEnv(
+      "ATHENA_SHARED_DEMO_ORGANIZATION_ID",
+      String(fixture.organizationA),
+    );
+    vi.stubEnv("ATHENA_SHARED_DEMO_ATHENA_USER_ID", "demo-user");
+    vi.stubEnv("ATHENA_SHARED_DEMO_STORE_ID", "demo-store");
+
+    const denial = {
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "This action isn't allowed in the demo.",
+      },
+    };
+
+    expect(
+      await callSetEnabled(t, fixture.adminA, {
+        subscriptionId,
+        enabled: false,
+      }),
+    ).toMatchObject(denial);
+    expect(
+      await callRemove(t, fixture.adminA, { subscriptionId }),
+    ).toMatchObject(denial);
+
+    const rows = await t.run((ctx) =>
+      ctx.db.query("notificationSubscription").take(5),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.enabled).toBe(true);
+  });
+
   describe("dispatch integration", () => {
     it("uses the enabled approvals row as the audience, and a disabled row suppresses without re-arming the fallback", async () => {
       const t = convexTest(schema, modules);

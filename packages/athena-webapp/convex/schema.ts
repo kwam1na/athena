@@ -685,7 +685,29 @@ const schema = defineSchema({
   featuredItem: defineTable(featuredItemSchema).index("by_storeId", [
     "storeId",
   ]),
-  guest: defineTable(guestSchema)
+  // `storeId` is the guest's admission clamp — see `schemas/storeFront/guest.ts`
+  // for why the column stays optional while the write path does not, and
+  // `storeFront/guestStoreIdBackfill.ts` for the one-time drain that must run
+  // before the next storefront deploy.
+  // The guest→account MERGE GRANT lives here rather than in `guestSchema`
+  // because it is not a property of the visitor — it is a server-issued
+  // authorization, written by `storeFront/guest:grantMergeToStoreFrontUser` at
+  // the one moment the server can see both identities and has actually
+  // authenticated the account (`POST /auth/verify`). The five merge callees
+  // read it off this row; nothing a caller presents authorizes a merge.
+  //
+  // `mergeGrantConsumedBy` records which merges have already run under the
+  // current grant, so each one is single-use while the five merges the
+  // storefront fires after sign-in (bag, savedBag, onlineOrder, analytics,
+  // rewards) all still succeed under one grant.
+  guest: defineTable(
+    v.object({
+      ...guestSchema.fields,
+      mergeGrantedToStoreFrontUserId: v.optional(v.id("storeFrontUser")),
+      mergeGrantExpiresAt: v.optional(v.number()),
+      mergeGrantConsumedBy: v.optional(v.array(v.string())),
+    }),
+  )
     .index("by_storeId", ["storeId"])
     .index("by_marker", ["marker"]),
   inviteCode: defineTable(inviteCodeSchema),

@@ -1,16 +1,34 @@
 import { v } from "convex/values";
 import {
+  internalQuery,
   mutation,
   query,
   type MutationCtx,
   type QueryCtx,
 } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
-import { api } from "../_generated/api";
+import { internal } from "../_generated/api";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
+import {
+  createFeaturedItemOperationDefinition,
+  removeFeaturedItemOperationDefinition,
+  updateFeaturedItemRanksOperationDefinition,
+} from "../operationAdmission/domains/inventoryCatalog_definitions";
+import {
+  getFeaturedItemByIdReadDefinition,
+  listFeaturedItemsReadDefinition,
+} from "../operationAdmission/domains/inventoryCatalog_readDefinitions";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
 import { getNextHomepageRank } from "../../shared/homepageRanking";
 import {
   isStorefrontSelectableSubcategory,
@@ -124,7 +142,18 @@ export const create = mutation({
     type: v.optional(v.string()),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    createFeaturedItemOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        productId?: Id<"product">;
+        categoryId?: Id<"category">;
+        subcategoryId?: Id<"subcategory">;
+        type?: string;
+        storeId: Id<"store">;
+      },
+    ) => {
     await requireHomepageStoreAdmin(ctx, args.storeId);
     await validateFeaturedPlacement(ctx, args);
 
@@ -173,41 +202,46 @@ export const create = mutation({
     });
 
     return await ctx.db.get(entity, id);
-  },
+    },
+  ),
 });
 
 export const remove = mutation({
   args: {
     id: v.id(entity),
   },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db.get(entity, args.id);
-    if (!existing) {
+  handler: admitPublicMutation(
+    removeFeaturedItemOperationDefinition,
+    async (ctx: OperationMutationCtx, args: { id: Id<"featuredItem"> }) => {
+      const existing = await ctx.db.get(entity, args.id);
+      if (!existing) {
+        return true;
+      }
+
+      await requireHomepageStoreAdmin(ctx, existing.storeId);
+      await ctx.db.delete(entity, args.id);
+
       return true;
-    }
-
-    await requireHomepageStoreAdmin(ctx, existing.storeId);
-    await ctx.db.delete(entity, args.id);
-
-    return true;
-  },
+    },
+  ),
 });
 
 export const getById = query({
   args: {
     id: v.id(entity),
   },
-  handler: async (ctx, args) => {
-    return await ctx.db.get(entity, args.id);
-  },
+  handler: admitPublicQuery(
+    getFeaturedItemByIdReadDefinition,
+    async (ctx: OperationQueryCtx, args: { id: Id<"featuredItem"> }) => {
+      return await ctx.db.get(entity, args.id);
+    },
+  ),
 });
 
-export const getAll = query({
-  args: {
-    storeId: v.id("store"),
-    type: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
+async function listFeaturedItemsWithCtx(
+  ctx: QueryCtx,
+  args: { storeId: Id<"store">; type?: string },
+) {
     const items = await ctx.db
       .query(entity)
       .filter((q) => {
@@ -224,7 +258,7 @@ export const getAll = query({
 
         if (item.productId) {
           const product = await ctx.runQuery(
-            api.inventory.products.getByIdOrSlug,
+            internal.inventory.products.getByIdOrSlugInternal,
             {
               identifier: item.productId,
               storeId: args.storeId,
@@ -312,14 +346,44 @@ export const getAll = query({
     );
 
     return enrichedItems;
+}
+
+export const getAll = query({
+  args: {
+    storeId: v.id("store"),
+    type: v.optional(v.string()),
   },
+  handler: admitPublicQuery(
+    listFeaturedItemsReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { storeId: Id<"store">; type?: string },
+    ) => listFeaturedItemsWithCtx(ctx, args),
+  ),
+});
+
+/**
+ * Internal sibling for the anonymous `GET /products/featured` route. The public
+ * export stays until wave B2 flips the route to this reference.
+ */
+export const getAllInternal = internalQuery({
+  args: {
+    storeId: v.id("store"),
+    type: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => listFeaturedItemsWithCtx(ctx, args),
 });
 
 export const updateRanks = mutation({
   args: {
     ranks: v.array(v.object({ id: v.id(entity), rank: v.number() })),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    updateFeaturedItemRanksOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: { ranks: { id: Id<"featuredItem">; rank: number }[] },
+    ) => {
     const rows = await Promise.all(
       args.ranks.map((item) => ctx.db.get(entity, item.id))
     );
@@ -344,5 +408,6 @@ export const updateRanks = mutation({
     );
 
     return true;
-  },
+    },
+  ),
 });

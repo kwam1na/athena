@@ -1,4 +1,4 @@
-import { describe, it } from "vitest";
+import { describe, it, vi } from "vitest";
 
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import {
@@ -8,6 +8,15 @@ import {
   getUserPermissions,
   getUserRole,
 } from "./organizationMembers";
+
+// Cuts the module cycle `platform/operationAdmission` ->
+// `sharedDemo/operationAdapter` -> `sharedDemo/restore` ->
+// `sharedDemo/openingBaseline` -> `inventory/storeSchedule` ->
+// `platform/operationAdmission`. Left intact, the composition root is observed
+// half-initialized from this test's module graph.
+vi.mock("../sharedDemo/restore", () => ({
+  requireReadySharedDemoWriteWithCtx: vi.fn(),
+}));
 
 describe("organization members", () => {
   it("returns only the member shape exposed by getAll", () => {

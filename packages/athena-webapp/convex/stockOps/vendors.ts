@@ -3,8 +3,16 @@ import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
+import {
+  createVendorCommandOperationDefinition,
+  createVendorOperationDefinition,
+} from "../operationAdmission/domains/operations_definitions";
+import { listVendorsReadDefinition } from "../operationAdmission/domains/operations_readDefinitions";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import { requireStoreFullAdminAccess } from "./access";
-import { requireReadySharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 
 const MAX_VENDORS = 200;
 
@@ -76,11 +84,6 @@ export async function createVendorWithCtx(
   ctx: MutationCtx,
   args: CreateVendorArgs,
 ) {
-  await requireReadySharedDemoStoreCapabilityIfApplicable(
-    ctx,
-    "procurement.manage",
-    args.storeId,
-  );
   const { athenaUser, store } = await requireStoreFullAdminAccess(
     ctx,
     args.storeId,
@@ -143,32 +146,45 @@ export const listVendors = query({
     storeId: v.id("store"),
     status: v.optional(v.union(v.literal("active"), v.literal("inactive"))),
   },
-  handler: async (ctx, args) => {
-    await requireStoreFullAdminAccess(ctx, args.storeId);
+  handler: admitPublicQuery(
+    listVendorsReadDefinition,
+    async (
+      ctx,
+      args: { storeId: Id<"store">; status?: "active" | "inactive" },
+    ) => {
+      await requireStoreFullAdminAccess(ctx, args.storeId);
 
-    const vendors = args.status
-      ? await ctx.db
-          .query("vendor")
-          .withIndex("by_storeId_status", (q) =>
-            q.eq("storeId", args.storeId).eq("status", args.status!),
-          )
-          .take(MAX_VENDORS)
-      : await ctx.db
-          .query("vendor")
-          .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-          .take(MAX_VENDORS);
+      const vendors = args.status
+        ? await ctx.db
+            .query("vendor")
+            .withIndex("by_storeId_status", (q) =>
+              q.eq("storeId", args.storeId).eq("status", args.status!),
+            )
+            .take(MAX_VENDORS)
+        : await ctx.db
+            .query("vendor")
+            .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+            .take(MAX_VENDORS);
 
-    return vendors.sort((left, right) => left.name.localeCompare(right.name));
-  },
+      return vendors.sort((left, right) => left.name.localeCompare(right.name));
+    },
+  ),
 });
 
 export const createVendor = mutation({
   args: createVendorArgs,
-  handler: createVendorWithCtx,
+  handler: admitPublicMutation(
+    createVendorOperationDefinition,
+    createVendorWithCtx,
+  ),
 });
 
 export const createVendorCommand = mutation({
   args: createVendorArgs,
   returns: commandResultValidator(v.any()),
-  handler: async (ctx, args) => createVendorCommandWithCtx(ctx, args),
+  handler: admitPublicMutation(
+    createVendorCommandOperationDefinition,
+    async (ctx, args: CreateVendorArgs) =>
+      createVendorCommandWithCtx(ctx, args),
+  ),
 });

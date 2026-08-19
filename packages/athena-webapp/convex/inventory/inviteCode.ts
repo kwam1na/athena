@@ -4,8 +4,20 @@ import {
   findAthenaUserByEmailWithCtx,
   normalizeAthenaUserEmail,
 } from "../lib/athenaUserAuth";
-import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
-import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
+import {
+  createInviteCodeOperationDefinition,
+  redeemInviteCodeOperationDefinition,
+} from "../operationAdmission/domains/inventoryIdentity_definitions";
+import { listInviteCodesReadDefinition } from "../operationAdmission/domains/inventoryIdentity_readDefinitions";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
+import type { Id } from "../_generated/dataModel";
 
 const MAX_INVITE_CODES = 500;
 
@@ -27,7 +39,14 @@ export const redeem = mutation({
       })
     ),
   }),
-  handler: async (ctx, args) => {
+  // Pre-auth: an invitee redeems on the join-team screen before they belong to
+  // the organization, so the definition declares `public: "admit"`.
+  handler: admitPublicMutation(
+    redeemInviteCodeOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: { code: string; email: string },
+    ) => {
     // Find the invite code
     const inviteCode = await ctx.db
       .query("inviteCode")
@@ -52,7 +71,8 @@ export const redeem = mutation({
     });
 
     return { success: true, inviteCode };
-  },
+    },
+  ),
 });
 
 export const create = mutation({
@@ -67,12 +87,23 @@ export const create = mutation({
     message: v.optional(v.string()),
     inviteCode: v.optional(v.id("inviteCode")),
   }),
-  handler: async (ctx, args) => {
-    requireNonDemoFoundationMutation({
-      athenaUserId: args.createdByUserId,
-      organizationId: args.organizationId,
-    });
-    await requireSharedDemoCapabilityIfApplicable(ctx, "permissions.manage");
+  // Retired here, re-expressed on the definition:
+  // `requireNonDemoFoundationMutation({ athenaUserId, organizationId })` ->
+  // `target.protectDemoFoundation` bound to `createdByUserId`/`organizationId`
+  // (still evaluated for EVERY actor, including a normal full admin), and
+  // `requireSharedDemoCapabilityIfApplicable(ctx, "permissions.manage")` ->
+  // `capability: "permissions.manage"` + `sharedDemo: "deny"`.
+  handler: admitPublicMutation(
+    createInviteCodeOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        organizationId: Id<"organization">;
+        recipientEmail: string;
+        createdByUserId: Id<"athenaUser">;
+        role: "full_admin" | "pos_only";
+      },
+    ) => {
     // check if the email is associated with an existing user
     const user = await findAthenaUserByEmailWithCtx(ctx, args.recipientEmail);
 
@@ -122,7 +153,8 @@ export const create = mutation({
       success: false,
       message: "User is already a member of the organization",
     };
-  },
+    },
+  ),
 });
 
 export const getAll = query({
@@ -139,10 +171,16 @@ export const getAll = query({
       redeemedAt: v.optional(v.number()),
     })
   ),
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("inviteCode")
-      .filter((q) => q.eq(q.field("organizationId"), args.organizationId))
-      .take(MAX_INVITE_CODES);
-  },
+  handler: admitPublicQuery(
+    listInviteCodesReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { organizationId: Id<"organization"> },
+    ) => {
+      return await ctx.db
+        .query("inviteCode")
+        .filter((q) => q.eq(q.field("organizationId"), args.organizationId))
+        .take(MAX_INVITE_CODES);
+    },
+  ),
 });

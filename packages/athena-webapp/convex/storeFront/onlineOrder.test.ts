@@ -325,13 +325,31 @@ describe("online order checkout money wiring", () => {
 });
 
 describe("online order lifecycle workflow tracing", () => {
-  it("keeps cross-store demo fulfillment on the typed denial boundary", () => {
+  it("keeps cross-store demo fulfillment on the typed denial boundary", async () => {
     const source = getSource("./onlineOrder.ts");
 
-    expect(source).toContain("denySharedDemoAction();");
+    // U7 retired the handler-local `denySharedDemoAction()` /
+    // `requireSharedDemoCapability("orders.fulfill")` pair: the SAME typed
+    // denial now comes from the admission rail, which resolves the store from
+    // the named order before the handler runs.
+    expect(source).not.toContain("denySharedDemoAction();");
     expect(source).not.toContain(
       'throw new Error("This action is unavailable in the demo.")',
     );
+
+    const { updateOnlineOrderOperationDefinition } = await import(
+      "../operationAdmission/definitions"
+    );
+    expect(updateOnlineOrderOperationDefinition.capability).toBe(
+      "orders.fulfill",
+    );
+    expect(updateOnlineOrderOperationDefinition.scope).toMatchObject({
+      kind: "store",
+    });
+    expect(
+      (updateOnlineOrderOperationDefinition.scope as { resolve?: unknown })
+        .resolve,
+    ).toBeTypeOf("function");
   });
 
   it("records order creation traces after checkout session order creation", () => {

@@ -2,8 +2,11 @@
 
 import { v } from "convex/values";
 import { action, internalAction } from "../_generated/server";
-import { api, internal } from "../_generated/api";
+import { internal } from "../_generated/api";
 import { ValkeyClient } from "../cache";
+import { admitPublicAction } from "../platform/operationAdmission";
+import { clearAllProductCacheOperationDefinition } from "../operationAdmission/domains/inventoryCatalog_definitions";
+import type { OperationActionCtx } from "../operationAdmission/rail";
 
 export function buildAllProductsCacheKey(args: {
   storeId: string;
@@ -62,7 +65,7 @@ export const getAllProducts = internalAction({
 
       console.log("miss cache. Fetching data...");
       const products: any[] = await ctx.runQuery(
-        api.inventory.products.getAll,
+        internal.inventory.products.getAllInternal,
         args
       );
 
@@ -105,28 +108,33 @@ export const invalidateProductCache = internalAction({
   },
 });
 
+/**
+ * Admitted as `administration.maintenance`: the Athena webapp calls this action
+ * from the products views, so the plan's "internalize when no client caller"
+ * branch does not apply. `actors.sharedDemo: "deny"` on the definition is the
+ * successor to the retired `requireAuthenticatedNonDemoEffect` query.
+ */
 export const clearAllCache = action({
   args: {},
-  handler: async (ctx) => {
-    await ctx.runQuery(
-      (internal as any).sharedDemo.actor.requireAuthenticatedNonDemoEffect,
-      {},
-    );
-    try {
-      const cache = new ValkeyClient();
-      // Use wildcard pattern to clear all keys
-      const keys = await cache.invalidate("*");
+  handler: admitPublicAction(
+    clearAllProductCacheOperationDefinition,
+    async (_ctx: OperationActionCtx, _args: Record<string, never>) => {
+      try {
+        const cache = new ValkeyClient();
+        // Use wildcard pattern to clear all keys
+        const keys = await cache.invalidate("*");
 
-      return {
-        success: true,
-        keysCleared: keys,
-      };
-    } catch (e) {
-      console.log("Cache clear error", (e as Error).message);
-      return {
-        success: false,
-        error: (e as Error).message,
-      };
-    }
-  },
+        return {
+          success: true,
+          keysCleared: keys,
+        };
+      } catch (e) {
+        console.log("Cache clear error", (e as Error).message);
+        return {
+          success: false,
+          error: (e as Error).message,
+        };
+      }
+    },
+  ),
 });

@@ -11,7 +11,7 @@ import { v } from "convex/values";
 import { productSchema, productSkuSchema } from "../schemas/inventory";
 import { ProductSku } from "../../types";
 import { Id } from "../_generated/dataModel";
-import { api, internal } from "../_generated/api";
+import { internal } from "../_generated/api";
 import { deleteDirectoryInR2 } from "../cloudflare/r2";
 import { requireStoreFullAdminAccess } from "../stockOps/access";
 import { readActiveHeldQuantitiesForSkus } from "./helpers/inventoryHolds";
@@ -26,12 +26,33 @@ import {
   EMPTY_CATALOG_SUMMARY,
   refreshCatalogSummaryWithCtx,
 } from "./catalogSummary";
-import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
 import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import { repairCatalogSummaryOperationDefinition } from "../operationAdmission/definitions";
-import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
+import {
+  archiveProductOperationDefinition,
+  batchUpdateSkuPricesOperationDefinition,
+  createProductOperationDefinition,
+  createProductSkuOperationDefinition,
+  generateUniqueBarcodeOperationDefinition,
+  removeAllProductsForStoreOperationDefinition,
+  removeProductSkuOperationDefinition,
+  unarchiveProductOperationDefinition,
+  updateProductOperationDefinition,
+  updateProductSkuFieldsOperationDefinition,
+} from "../operationAdmission/domains/inventoryCatalog_definitions";
 import { listInventoryProductsReadDefinition } from "../operationAdmission/readDefinitions";
+import {
+  batchGetProductsReadDefinition,
+  getCatalogSummaryReadDefinition,
+  getProductByIdOrSlugReadDefinition,
+  getProductByIdReadDefinition,
+  getProductBySlugReadDefinition,
+  getProductSkuReadDefinition,
+} from "../operationAdmission/domains/inventoryCatalog_readDefinitions";
 import type {
   OperationMutationCtx,
   OperationQueryCtx,
@@ -252,6 +273,227 @@ async function adjustSkuAvailabilityForActiveHolds(
   });
 }
 
+type ListInventoryProductsArgs = {
+  availability?: "draft" | "live" | "archived" | "unarchived";
+  category?: string[];
+  color?: Id<"color">[];
+  excludeStorefrontHidden?: boolean;
+  filters?: {
+    isMissingImages?: boolean;
+    isMissingPrice?: boolean;
+    isPriceZero?: boolean;
+  };
+  isVisible?: boolean;
+  length?: number[];
+  storeId: Id<"store">;
+  subcategory?: string[];
+};
+
+async function listInventoryProductsWithCtx(
+  ctx: QueryCtx,
+  args: ListInventoryProductsArgs,
+) {
+    let categoryId: Id<"category"> | undefined;
+    let subcategoryId: Id<"subcategory"> | undefined;
+
+    if (args.category && args.category.length > 0) {
+      const categorySlug = args.category[0];
+      const s = await ctx.db
+        .query("category")
+        .withIndex("by_storeId_slug", (q) =>
+          q.eq("storeId", args.storeId).eq("slug", categorySlug),
+        )
+        .first();
+      categoryId = s?._id;
+    }
+
+    if (args.category && !categoryId) {
+      return [];
+    }
+
+    // this will fetch all products with the given subcategory.
+    // not problematic because the subcategory name is the same as
+    // the one in the db because the it's not set by the frontend
+    if (args.subcategory && args.subcategory.length > 0) {
+      const subcategorySlug = args.subcategory[0];
+      let s;
+      if (categoryId) {
+        s = await ctx.db
+          .query("subcategory")
+          .withIndex("by_categoryId_slug", (q) =>
+            q.eq("categoryId", categoryId).eq("slug", subcategorySlug),
+          )
+          .first();
+      } else {
+        s = await ctx.db
+          .query("subcategory")
+          .withIndex("by_slug", (q) => q.eq("slug", subcategorySlug))
+          .first();
+      }
+      subcategoryId = s?._id;
+    }
+
+    if (args.subcategory && !subcategoryId) {
+      return [];
+    }
+
+    // Use index for products query, then filter by category/subcategory in memory
+    const allProducts = await ctx.db
+      .query(entity)
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .collect();
+
+    const storefrontHiddenCategoryIds = new Set<Id<"category">>();
+    const storefrontHiddenSubcategoryIds = new Set<Id<"subcategory">>();
+
+    if (args.excludeStorefrontHidden) {
+      const categories = await ctx.db
+        .query("category")
+        .filter((q) => q.eq(q.field("storeId"), args.storeId))
+        .collect();
+
+      categories
+        .filter(
+          (category) =>
+            category.slug === "pos-quick-add" ||
+            category.showOnStorefront === false,
+        )
+        .forEach((category) => storefrontHiddenCategoryIds.add(category._id));
+
+      const uncategorizedSubcategories = await ctx.db
+        .query("subcategory")
+        .withIndex("by_slug", (q) => q.eq("slug", "uncategorized"))
+        .collect();
+
+      uncategorizedSubcategories
+        .filter((subcategory) => subcategory.storeId === args.storeId)
+        .forEach((subcategory) =>
+          storefrontHiddenSubcategoryIds.add(subcategory._id),
+        );
+    }
+
+    const requestedAvailability = args.availability;
+    const includeHiddenSkus =
+      args.isVisible === false ||
+      requestedAvailability === "archived" ||
+      requestedAvailability === "unarchived";
+
+    // Filter by category/subcategory in memory
+    const products = allProducts.filter((product) => {
+      if (requestedAvailability) {
+        if (requestedAvailability === "unarchived") {
+          if (product.availability === "archived") {
+            return false;
+          }
+        } else if (product.availability !== requestedAvailability) {
+          return false;
+        }
+      } else {
+        if (product.availability !== "live") {
+          return false;
+        }
+        if (product.isVisible === false) {
+          return false;
+        }
+      }
+
+      if (
+        storefrontHiddenCategoryIds.has(product.categoryId) ||
+        storefrontHiddenSubcategoryIds.has(product.subcategoryId)
+      ) {
+        return false;
+      }
+
+      if (subcategoryId) {
+        return product.subcategoryId === subcategoryId;
+      }
+      if (categoryId) {
+        return product.categoryId === categoryId;
+      }
+      return true;
+    });
+
+    // Use index for SKUs query, then filter colors/lengths in memory
+    // (Convex indexes don't support dynamic OR conditions)
+    const allSkus = await ctx.db
+      .query("productSku")
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .collect();
+
+    // Filter by color and length in memory
+    const skus = allSkus.filter((sku) => {
+      if (!includeHiddenSkus && sku.isVisible === false) {
+        return false;
+      }
+      if (args.color && args.length) {
+        const colorMatch = sku.color ? args.color.includes(sku.color) : false;
+        const lengthMatch = sku.length && args.length.includes(sku.length);
+        return colorMatch && lengthMatch;
+      }
+      if (args.color) {
+        return sku.color ? args.color.includes(sku.color) : false;
+      }
+      if (args.length) {
+        return sku.length && args.length.includes(sku.length);
+      }
+      return true;
+    });
+
+    type SkusByProductId = { [key: string]: (typeof skus)[0][] };
+
+    // Map SKUs by productId for easier lookup
+    const skusByProductId: SkusByProductId = skus.reduce(
+      (acc: SkusByProductId, sku) => {
+        if (!acc[sku.productId]) {
+          acc[sku.productId] = [];
+        }
+        acc[sku.productId].push(sku);
+        return acc;
+      },
+      {},
+    );
+
+    // Filter by visibility if specified
+    const visibleProducts =
+      args.isVisible !== undefined
+        ? products.filter((p) => p.isVisible === args.isVisible)
+        : products;
+
+    // Attach SKUs and inventory data to products
+    const productsWithSkus = visibleProducts
+      .map((product) => {
+        const skus = skusByProductId[product._id] || [];
+        const validSkus = skus
+          .filter((sku) => {
+            // If filtering for unresolved issues (missing images or prices)
+            if (
+              args.filters?.isMissingImages ||
+              args.filters?.isMissingPrice
+            ) {
+              const hasMissingImage =
+                args.filters?.isMissingImages && sku.images.length === 0;
+              const hasMissingPrice =
+                args.filters?.isMissingPrice &&
+                (sku.price === 0 || sku.price === undefined);
+              return hasMissingImage || hasMissingPrice;
+            }
+            // Default behavior: only show SKUs with valid prices
+            return args.filters?.isPriceZero ? true : sku.price > 0;
+          })
+          .sort((a, b) => a.price - b.price);
+
+        return {
+          ...product,
+          inventoryCount: calculateTotalInventoryCount(skus),
+          quantityAvailable: calculateTotalAvailableCount(skus),
+          skus: validSkus,
+        };
+      })
+      .filter((product) => product.skus.length > 0);
+
+    return productsWithSkus;
+}
+
 export const getAll = query({
   args: {
     storeId: v.id("store"),
@@ -277,234 +519,53 @@ export const getAll = query({
       }),
     ),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listInventoryProductsReadDefinition,
-    async (
-      ctx: OperationQueryCtx,
-      args: {
-        availability?: "draft" | "live" | "archived" | "unarchived";
-        category?: string[];
-        color?: Id<"color">[];
-        excludeStorefrontHidden?: boolean;
-        filters?: {
-          isMissingImages?: boolean;
-          isMissingPrice?: boolean;
-          isPriceZero?: boolean;
-        };
-        isVisible?: boolean;
-        length?: number[];
-        storeId: Id<"store">;
-        subcategory?: string[];
-      },
-    ) => {
-      let categoryId: Id<"category"> | undefined;
-      let subcategoryId: Id<"subcategory"> | undefined;
-
-      if (args.category && args.category.length > 0) {
-        const categorySlug = args.category[0];
-        const s = await ctx.db
-          .query("category")
-          .withIndex("by_storeId_slug", (q) =>
-            q.eq("storeId", args.storeId).eq("slug", categorySlug),
-          )
-          .first();
-        categoryId = s?._id;
-      }
-
-      if (args.category && !categoryId) {
-        return [];
-      }
-
-      // this will fetch all products with the given subcategory.
-      // not problematic because the subcategory name is the same as
-      // the one in the db because the it's not set by the frontend
-      if (args.subcategory && args.subcategory.length > 0) {
-        const subcategorySlug = args.subcategory[0];
-        let s;
-        if (categoryId) {
-          s = await ctx.db
-            .query("subcategory")
-            .withIndex("by_categoryId_slug", (q) =>
-              q.eq("categoryId", categoryId).eq("slug", subcategorySlug),
-            )
-            .first();
-        } else {
-          s = await ctx.db
-            .query("subcategory")
-            .withIndex("by_slug", (q) => q.eq("slug", subcategorySlug))
-            .first();
-        }
-        subcategoryId = s?._id;
-      }
-
-      if (args.subcategory && !subcategoryId) {
-        return [];
-      }
-
-      // Use index for products query, then filter by category/subcategory in memory
-      const allProducts = await ctx.db
-        .query(entity)
-        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-        .collect();
-
-      const storefrontHiddenCategoryIds = new Set<Id<"category">>();
-      const storefrontHiddenSubcategoryIds = new Set<Id<"subcategory">>();
-
-      if (args.excludeStorefrontHidden) {
-        const categories = await ctx.db
-          .query("category")
-          .filter((q) => q.eq(q.field("storeId"), args.storeId))
-          .collect();
-
-        categories
-          .filter(
-            (category) =>
-              category.slug === "pos-quick-add" ||
-              category.showOnStorefront === false,
-          )
-          .forEach((category) => storefrontHiddenCategoryIds.add(category._id));
-
-        const uncategorizedSubcategories = await ctx.db
-          .query("subcategory")
-          .withIndex("by_slug", (q) => q.eq("slug", "uncategorized"))
-          .collect();
-
-        uncategorizedSubcategories
-          .filter((subcategory) => subcategory.storeId === args.storeId)
-          .forEach((subcategory) =>
-            storefrontHiddenSubcategoryIds.add(subcategory._id),
-          );
-      }
-
-      const requestedAvailability = args.availability;
-      const includeHiddenSkus =
-        args.isVisible === false ||
-        requestedAvailability === "archived" ||
-        requestedAvailability === "unarchived";
-
-      // Filter by category/subcategory in memory
-      const products = allProducts.filter((product) => {
-        if (requestedAvailability) {
-          if (requestedAvailability === "unarchived") {
-            if (product.availability === "archived") {
-              return false;
-            }
-          } else if (product.availability !== requestedAvailability) {
-            return false;
-          }
-        } else {
-          if (product.availability !== "live") {
-            return false;
-          }
-          if (product.isVisible === false) {
-            return false;
-          }
-        }
-
-        if (
-          storefrontHiddenCategoryIds.has(product.categoryId) ||
-          storefrontHiddenSubcategoryIds.has(product.subcategoryId)
-        ) {
-          return false;
-        }
-
-        if (subcategoryId) {
-          return product.subcategoryId === subcategoryId;
-        }
-        if (categoryId) {
-          return product.categoryId === categoryId;
-        }
-        return true;
-      });
-
-      // Use index for SKUs query, then filter colors/lengths in memory
-      // (Convex indexes don't support dynamic OR conditions)
-      const allSkus = await ctx.db
-        .query("productSku")
-        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-        .collect();
-
-      // Filter by color and length in memory
-      const skus = allSkus.filter((sku) => {
-        if (!includeHiddenSkus && sku.isVisible === false) {
-          return false;
-        }
-        if (args.color && args.length) {
-          const colorMatch = sku.color ? args.color.includes(sku.color) : false;
-          const lengthMatch = sku.length && args.length.includes(sku.length);
-          return colorMatch && lengthMatch;
-        }
-        if (args.color) {
-          return sku.color ? args.color.includes(sku.color) : false;
-        }
-        if (args.length) {
-          return sku.length && args.length.includes(sku.length);
-        }
-        return true;
-      });
-
-      type SkusByProductId = { [key: string]: (typeof skus)[0][] };
-
-      // Map SKUs by productId for easier lookup
-      const skusByProductId: SkusByProductId = skus.reduce(
-        (acc: SkusByProductId, sku) => {
-          if (!acc[sku.productId]) {
-            acc[sku.productId] = [];
-          }
-          acc[sku.productId].push(sku);
-          return acc;
-        },
-        {},
-      );
-
-      // Filter by visibility if specified
-      const visibleProducts =
-        args.isVisible !== undefined
-          ? products.filter((p) => p.isVisible === args.isVisible)
-          : products;
-
-      // Attach SKUs and inventory data to products
-      const productsWithSkus = visibleProducts
-        .map((product) => {
-          const skus = skusByProductId[product._id] || [];
-          const validSkus = skus
-            .filter((sku) => {
-              // If filtering for unresolved issues (missing images or prices)
-              if (
-                args.filters?.isMissingImages ||
-                args.filters?.isMissingPrice
-              ) {
-                const hasMissingImage =
-                  args.filters?.isMissingImages && sku.images.length === 0;
-                const hasMissingPrice =
-                  args.filters?.isMissingPrice &&
-                  (sku.price === 0 || sku.price === undefined);
-                return hasMissingImage || hasMissingPrice;
-              }
-              // Default behavior: only show SKUs with valid prices
-              return args.filters?.isPriceZero ? true : sku.price > 0;
-            })
-            .sort((a, b) => a.price - b.price);
-
-          return {
-            ...product,
-            inventoryCount: calculateTotalInventoryCount(skus),
-            quantityAvailable: calculateTotalAvailableCount(skus),
-            skus: validSkus,
-          };
-        })
-        .filter((product) => product.skus.length > 0);
-
-      return productsWithSkus;
-    },
+    async (ctx: OperationQueryCtx, args: ListInventoryProductsArgs) =>
+      listInventoryProductsWithCtx(ctx, args),
   ),
+});
+
+/**
+ * Internal sibling for backend callers: `productUtil:getAllProducts` (behind
+ * the anonymous `GET /products` route) used to re-enter through `api.*`, which
+ * would run a second admission with the backend's own context.
+ */
+export const getAllInternal = internalQuery({
+  args: {
+    storeId: v.id("store"),
+    color: v.optional(v.array(v.id("color"))),
+    length: v.optional(v.array(v.number())),
+    category: v.optional(v.array(v.string())),
+    subcategory: v.optional(v.array(v.string())),
+    isVisible: v.optional(v.boolean()),
+    availability: v.optional(
+      v.union(
+        v.literal("draft"),
+        v.literal("live"),
+        v.literal("archived"),
+        v.literal("unarchived"),
+      ),
+    ),
+    excludeStorefrontHidden: v.optional(v.boolean()),
+    filters: v.optional(
+      v.object({
+        isMissingImages: v.optional(v.boolean()),
+        isMissingPrice: v.optional(v.boolean()),
+        isPriceZero: v.optional(v.boolean()),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => listInventoryProductsWithCtx(ctx, args),
 });
 
 export const getCatalogSummary = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getCatalogSummaryReadDefinition,
+    async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) => {
     const summary = await ctx.db
       .query("catalogSummary")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
@@ -518,14 +579,15 @@ export const getCatalogSummary = query({
         updatedAt: 0,
       }
     );
-  },
+    },
+  ),
 });
 
 export const repairCatalogSummary = mutation({
   args: {
     storeId: v.id("store"),
   },
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     repairCatalogSummaryOperationDefinition,
     async (ctx: OperationMutationCtx, args: { storeId: Id<"store"> }) => {
       const id = await refreshCatalogSummaryWithCtx(ctx, args.storeId);
@@ -542,7 +604,15 @@ export const getById = query({
     id: v.id(entity),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getProductByIdReadDefinition,
+    async (ctx: OperationQueryCtx,
+      args: {
+        includeHiddenSkus?: boolean;
+        id: Id<"product">;
+        storeId: Id<"store">;
+      },
+    ) => {
     const product = await ctx.db.get("product", args.id);
 
     const skus = await ctx.db
@@ -602,7 +672,8 @@ export const getById = query({
       inventoryCount: calculateTotalInventoryCount(skus),
       skus: skusWithCategory,
     };
-  },
+    },
+  ),
 });
 
 export const getByIdInternal = internalQuery({
@@ -673,7 +744,11 @@ export const getBySlug = query({
     slug: v.string(),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getProductBySlugReadDefinition,
+    async (ctx: OperationQueryCtx,
+      args: { slug: string; storeId: Id<"store"> },
+    ) => {
     const product = await ctx.db
       .query(entity)
       .filter((q) =>
@@ -740,22 +815,24 @@ export const getBySlug = query({
       inventoryCount: calculateTotalInventoryCount(skus),
       skus: skusWithCategory,
     };
-  },
+    },
+  ),
 });
 
-export const getByIdOrSlug = query({
-  args: {
-    identifier: v.union(v.id(entity), v.string()),
-    filters: v.optional(
-      v.object({
-        isVisible: v.boolean(),
-        excludeStorefrontHidden: v.optional(v.boolean()),
-        includeArchived: v.optional(v.boolean()),
-      }),
-    ),
-    storeId: v.id("store"),
-  },
-  handler: async (ctx, args) => {
+type GetProductByIdOrSlugArgs = {
+  identifier: Id<"product"> | string;
+  filters?: {
+    isVisible: boolean;
+    excludeStorefrontHidden?: boolean;
+    includeArchived?: boolean;
+  };
+  storeId: Id<"store">;
+};
+
+async function getProductByIdOrSlugWithCtx(
+  ctx: QueryCtx,
+  args: GetProductByIdOrSlugArgs,
+) {
     const product = await ctx.db
       .query(entity)
       .filter((q) =>
@@ -869,14 +946,52 @@ export const getByIdOrSlug = query({
       inventoryCount: calculateTotalInventoryCount(skus),
       skus: skusWithCategory,
     };
+}
+
+export const getByIdOrSlug = query({
+  args: {
+    identifier: v.union(v.id(entity), v.string()),
+    filters: v.optional(
+      v.object({
+        isVisible: v.boolean(),
+        excludeStorefrontHidden: v.optional(v.boolean()),
+        includeArchived: v.optional(v.boolean()),
+      }),
+    ),
+    storeId: v.id("store"),
   },
+  handler: admitPublicQuery(
+    getProductByIdOrSlugReadDefinition,
+    async (ctx: OperationQueryCtx, args: GetProductByIdOrSlugArgs) =>
+      getProductByIdOrSlugWithCtx(ctx, args),
+  ),
+});
+
+/**
+ * Internal sibling for backend callers: the anonymous `GET /products/:productId`
+ * route and `featuredItem:getAll`, which used to re-enter through `api.*`.
+ */
+export const getByIdOrSlugInternal = internalQuery({
+  args: {
+    identifier: v.union(v.id(entity), v.string()),
+    filters: v.optional(
+      v.object({
+        isVisible: v.boolean(),
+        excludeStorefrontHidden: v.optional(v.boolean()),
+        includeArchived: v.optional(v.boolean()),
+      }),
+    ),
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => getProductByIdOrSlugWithCtx(ctx, args),
 });
 
 export const create = mutation({
   args: productSchema,
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    createProductOperationDefinition,
+    async (ctx: OperationMutationCtx, args: any) => {
     await requireAuthenticatedAthenaUserWithCtx(ctx);
-    requireNonDemoFoundationMutation({ storeId: args.storeId });
     const id = await ctx.db.insert(entity, args);
 
     const product = await ctx.db.get("product", id);
@@ -893,12 +1008,15 @@ export const create = mutation({
     await refreshCatalogSummaryWithCtx(ctx, args.storeId);
 
     return product;
-  },
+    },
+  ),
 });
 
 export const createSku = mutation({
   args: productSkuSchema,
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    createProductSkuOperationDefinition,
+    async (ctx: OperationMutationCtx, args: any) => {
     await requireAuthenticatedAthenaUserWithCtx(ctx);
     // Validate quantityAvailable doesn't exceed stock
     if (
@@ -921,7 +1039,6 @@ export const createSku = mutation({
       .query("product")
       .filter((q) => q.eq(q.field("_id"), args.productId))
       .first();
-    if (product) requireNonDemoFoundationMutation({ storeId: product.storeId });
 
     if (!product) {
       throw new Error(`Product with id ${args.productId} not found`);
@@ -1009,7 +1126,8 @@ export const createSku = mutation({
     await refreshCatalogSummaryWithCtx(ctx, product.storeId);
 
     return await ctx.db.get("productSku", tempSkuId);
-  },
+    },
+  ),
 });
 
 export const generateUniqueBarcode = mutation({
@@ -1023,7 +1141,15 @@ export const generateUniqueBarcode = mutation({
     barcode: v.optional(v.string()),
     error: v.optional(v.string()),
   }),
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    generateUniqueBarcodeOperationDefinition,
+    async (ctx: OperationMutationCtx,
+      args: {
+        storeId: Id<"store">;
+        productId: Id<"product">;
+        skuId: Id<"productSku">;
+      },
+    ) => {
     // Generate initial barcode
     let barcode = generateBarcode({
       storeId: args.storeId,
@@ -1066,14 +1192,17 @@ export const generateUniqueBarcode = mutation({
       success: false,
       error: "Could not generate unique barcode after multiple attempts",
     };
-  },
+    },
+  ),
 });
 
 export const getProductSku = query({
   args: {
     id: v.id("productSku"),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getProductSkuReadDefinition,
+    async (ctx: OperationQueryCtx, args: { id: Id<"productSku"> }) => {
     const productSku = await ctx.db.get("productSku", args.id);
 
     let colorName;
@@ -1087,7 +1216,8 @@ export const getProductSku = query({
       ...productSku,
       colorName,
     };
-  },
+    },
+  ),
 });
 
 export const updateSku = mutation({
@@ -1110,12 +1240,12 @@ export const updateSku = mutation({
     unitCost: v.optional(v.number()),
     attributes: v.optional(v.record(v.string(), v.any())),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    updateProductSkuFieldsOperationDefinition,
+    async (ctx: OperationMutationCtx, args: any) => {
     await requireAuthenticatedAthenaUserWithCtx(ctx);
     // Get current SKU data for validation
     const currentSku = await ctx.db.get("productSku", args.id);
-    if (currentSku)
-      requireNonDemoFoundationMutation({ storeId: currentSku.storeId });
     if (!currentSku) throw new Error("SKU not found");
 
     if (args.barcode) {
@@ -1168,7 +1298,8 @@ export const updateSku = mutation({
     await refreshCatalogSummaryWithCtx(ctx, currentSku.storeId);
 
     return await ctx.db.get("productSku", args.id);
-  },
+    },
+  ),
 });
 
 export const update = mutation({
@@ -1189,12 +1320,12 @@ export const update = mutation({
     isVisible: v.optional(v.boolean()),
     posVisible: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    updateProductOperationDefinition,
+    async (ctx: OperationMutationCtx, args: any) => {
     await requireAuthenticatedAthenaUserWithCtx(ctx);
     const { id, ...rest } = args;
     const productBefore = await ctx.db.get("product", args.id);
-    if (productBefore)
-      requireNonDemoFoundationMutation({ storeId: productBefore.storeId });
     const taxonomyChanged =
       productBefore &&
       ((args.categoryId !== undefined &&
@@ -1296,7 +1427,8 @@ export const update = mutation({
     }
 
     return product;
-  },
+    },
+  ),
 });
 
 export const archive = mutation({
@@ -1304,8 +1436,11 @@ export const archive = mutation({
     id: v.id(entity),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    requireNonDemoFoundationMutation({ storeId: args.storeId });
+  handler: admitPublicMutation(
+    archiveProductOperationDefinition,
+    async (ctx: OperationMutationCtx,
+      args: { id: Id<"product">; storeId: Id<"store"> },
+    ) => {
     await requireStoreFullAdminAccess(ctx, args.storeId);
 
     const product = await ctx.db.get("product", args.id);
@@ -1331,7 +1466,8 @@ export const archive = mutation({
     );
 
     return await ctx.db.get("product", args.id);
-  },
+    },
+  ),
 });
 
 export const unarchive = mutation({
@@ -1339,8 +1475,11 @@ export const unarchive = mutation({
     id: v.id(entity),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    requireNonDemoFoundationMutation({ storeId: args.storeId });
+  handler: admitPublicMutation(
+    unarchiveProductOperationDefinition,
+    async (ctx: OperationMutationCtx,
+      args: { id: Id<"product">; storeId: Id<"store"> },
+    ) => {
     await requireStoreFullAdminAccess(ctx, args.storeId);
 
     const product = await ctx.db.get("product", args.id);
@@ -1366,7 +1505,8 @@ export const unarchive = mutation({
     );
 
     return await ctx.db.get("product", args.id);
-  },
+    },
+  ),
 });
 
 export const remove = internalMutation({
@@ -1424,7 +1564,9 @@ export const removeSku = mutation({
   args: {
     id: v.id("productSku"),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    removeProductSkuOperationDefinition,
+    async (ctx: OperationMutationCtx, args: { id: Id<"productSku"> }) => {
     await requireAuthenticatedAthenaUserWithCtx(ctx);
     const sku = await ctx.db.get("productSku", args.id);
     if (!sku) {
@@ -1432,7 +1574,6 @@ export const removeSku = mutation({
       await ctx.db.delete("productSku", args.id);
       return { message: "OK" };
     }
-    requireNonDemoFoundationMutation({ storeId: sku.storeId });
 
     const hasPendingCheckoutDependency =
       await hasPendingCheckoutRegisterCatalogDependency(ctx, sku);
@@ -1449,16 +1590,18 @@ export const removeSku = mutation({
     await refreshCatalogSummaryWithCtx(ctx, sku.storeId);
 
     return { message: "OK" };
-  },
+    },
+  ),
 });
 
 export const removeAllProductsForStore = mutation({
   args: {
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    removeAllProductsForStoreOperationDefinition,
+    async (ctx: OperationMutationCtx, args: { storeId: Id<"store"> }) => {
     await requireAuthenticatedAthenaUserWithCtx(ctx);
-    requireNonDemoFoundationMutation({ storeId: args.storeId });
     const products = await ctx.db
       .query("product")
       .filter((q) => q.eq(q.field("storeId"), args.storeId))
@@ -1489,7 +1632,8 @@ export const removeAllProductsForStore = mutation({
       products.map((product) => ctx.db.delete("product", product._id)),
     );
     await refreshCatalogSummaryWithCtx(ctx, args.storeId);
-  },
+    },
+  ),
 });
 
 export const batchUpdateSkuPrices = mutation({
@@ -1502,7 +1646,14 @@ export const batchUpdateSkuPrices = mutation({
       }),
     ),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    batchUpdateSkuPricesOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        updates: { id: Id<"productSku">; netPrice: number; price: number }[];
+      },
+    ) => {
     await requireAuthenticatedAthenaUserWithCtx(ctx);
     if (args.updates.length === 0) {
       return { success: true, updatedCount: 0 };
@@ -1510,9 +1661,6 @@ export const batchUpdateSkuPrices = mutation({
     const targetSkus = await Promise.all(
       args.updates.map((update) => ctx.db.get("productSku", update.id)),
     );
-    for (const sku of targetSkus) {
-      if (sku) requireNonDemoFoundationMutation({ storeId: sku.storeId });
-    }
 
     const results = await Promise.allSettled(
       args.updates.map(async (update) => {
@@ -1558,7 +1706,8 @@ export const batchUpdateSkuPrices = mutation({
       updatedCount: args.updates.length - failedCount,
       failedCount,
     };
-  },
+    },
+  ),
 });
 
 export const batchGet = query({
@@ -1566,7 +1715,11 @@ export const batchGet = query({
     ids: v.array(v.id(entity)),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    batchGetProductsReadDefinition,
+    async (ctx: OperationQueryCtx,
+      args: { ids: Id<"product">[]; storeId: Id<"store"> },
+    ) => {
     const res: any[] = await Promise.all(
       args.ids.map((id) =>
         ctx.runQuery(internal.inventory.products.getByIdInternal, {
@@ -1577,5 +1730,6 @@ export const batchGet = query({
     );
 
     return res;
-  },
+    },
+  ),
 });

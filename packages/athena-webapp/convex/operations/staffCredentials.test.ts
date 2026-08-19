@@ -44,7 +44,9 @@ import {
   authenticateStaffCredentialForTerminalWithCtx,
   createStaffCredential,
   createStaffCredentialWithCtx,
+  getStaffCredentialUsernameAvailability,
   getStaffCredentialUsernameAvailabilityWithCtx,
+  listStaffCredentialsByStore,
   listStaffCredentialsByStoreWithCtx,
   refreshTerminalStaffAuthority,
   updateStaffCredential,
@@ -711,8 +713,15 @@ describe("staff credential operations", () => {
       },
     });
     expect(tables.staffCredential.size).toBe(0);
+    // The admitted handler receives the rail's cloned ctx, which carries the
+    // resolved actor alongside the original db handle.
     expect(authMocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
-      ctx,
+      expect.objectContaining({
+        db: (ctx as unknown as { db: unknown }).db,
+        operationAdmission: expect.objectContaining({
+          actor: expect.objectContaining({ kind: "normal_user" }),
+        }),
+      }),
       {
         allowedRoles: ["full_admin"],
         failureMessage: "You do not have access to manage staff credentials.",
@@ -720,6 +729,138 @@ describe("staff credential operations", () => {
         userId: "athena-user-1",
       },
     );
+  });
+
+  it("returns an authorization user_error when createStaffCredential is called with no identity", async () => {
+    const { ctx, tables } = createStaffCredentialsMutationCtx();
+    authMocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
+      new Error("Sign in again to continue."),
+    );
+
+    await expect(
+      getHandler(createStaffCredential)(ctx, {
+        organizationId: "org_1" as Id<"organization">,
+        pinHash: "hash-1",
+        staffProfileId: "staff_profile_1" as Id<"staffProfile">,
+        storeId: "store_1" as Id<"store">,
+        username: "frontdesk",
+      }),
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "You do not have access to manage staff credentials.",
+      },
+    });
+    expect(tables.staffCredential.size).toBe(0);
+    expect(
+      authMocks.requireOrganizationMemberRoleWithCtx,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("returns an authorization user_error when updateStaffCredential is called with no identity", async () => {
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      credentials: [
+        {
+          _id: "credential-1",
+          organizationId: "org_1",
+          staffProfileId: "staff_profile_1",
+          status: "active",
+          storeId: "store_1",
+          username: "frontdesk",
+          pinHash: "hash-1",
+        },
+      ],
+    });
+    authMocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
+      new Error("Sign in again to continue."),
+    );
+
+    await expect(
+      getHandler(updateStaffCredential)(ctx, {
+        organizationId: "org_1" as Id<"organization">,
+        staffCredentialId: "credential-1" as Id<"staffCredential">,
+        storeId: "store_1" as Id<"store">,
+        username: "renamed",
+      }),
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "You do not have access to manage staff credentials.",
+      },
+    });
+    expect(tables.staffCredential.get("credential-1")?.username).toBe(
+      "frontdesk",
+    );
+    expect(
+      authMocks.requireOrganizationMemberRoleWithCtx,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("denies an unauthenticated listStaffCredentialsByStore read", async () => {
+    const { ctx } = createStaffCredentialsMutationCtx();
+    authMocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
+      new Error("Sign in again to continue."),
+    );
+
+    await expect(
+      getHandler(listStaffCredentialsByStore)(ctx, {
+        storeId: "store_1" as Id<"store">,
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+  });
+
+  it("denies an unauthenticated getStaffCredentialUsernameAvailability read", async () => {
+    const { ctx } = createStaffCredentialsMutationCtx();
+    authMocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
+      new Error("Sign in again to continue."),
+    );
+
+    await expect(
+      getHandler(getStaffCredentialUsernameAvailability)(ctx, {
+        storeId: "store_1" as Id<"store">,
+        username: "frontdesk",
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+  });
+
+  it("keeps the admitted normal-user createStaffCredential happy path unchanged", async () => {
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      athenaUsers: [{ _id: "athena-user-1" }],
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+
+    const result = await getHandler(createStaffCredential)(ctx, {
+      organizationId: "org_1" as Id<"organization">,
+      pinHash: "hash-1",
+      staffProfileId: "staff_profile_1" as Id<"staffProfile">,
+      storeId: "store_1" as Id<"store">,
+      username: "frontdesk",
+    });
+
+    expect(result).toMatchObject({ kind: "ok" });
+    expect(tables.staffCredential.size).toBe(1);
   });
 
   it("requires full admin access before public credential updates can reset PINs or clear lockout", async () => {

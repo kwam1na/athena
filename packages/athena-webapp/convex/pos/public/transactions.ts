@@ -15,6 +15,10 @@ import {
   voidTransactionOperationDefinition,
 } from "../../operationAdmission/definitions";
 import {
+  createTransactionFromSessionOperationDefinition,
+  updatePosInventoryOperationDefinition,
+} from "../../operationAdmission/domains/pos_definitions";
+import {
   getPosCompletedTransactionsReadDefinition,
   getPosRecentTransactionsWithCustomersReadDefinition,
   getPosTodaySummaryReadDefinition,
@@ -22,8 +26,10 @@ import {
   getPosTransactionByIdReadDefinition,
   getPosTransactionsByStoreReadDefinition,
 } from "../../operationAdmission/readDefinitions";
-import { withOperationMutationAdmission } from "../../operationAdmission/publicMutation";
-import { withOperationReadAdmission } from "../../operationAdmission/publicQuery";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../../platform/operationAdmission";
 import type {
   OperationMutationCtx,
   OperationQueryCtx,
@@ -400,33 +406,36 @@ export const updateInventory = mutation({
     skuId: v.id("productSku"),
     quantityToSubtract: v.number(),
   },
-  handler: async (ctx, args) => {
-    const sku = await ctx.db.get("productSku", args.skuId);
-    if (!sku) {
-      return userError({
-        code: "not_found",
-        message: "SKU not found.",
+  handler: admitPublicMutation(
+    updatePosInventoryOperationDefinition,
+    async (ctx, args) => {
+      const sku = await ctx.db.get("productSku", args.skuId);
+      if (!sku) {
+        return userError({
+          code: "not_found",
+          message: "SKU not found.",
+        });
+      }
+
+      const store = await ctx.db.get("store", sku.storeId);
+      if (!store) {
+        return userError({
+          code: "not_found",
+          message: "Store not found.",
+        });
+      }
+
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage: "You cannot update POS inventory for this store.",
+        organizationId: store.organizationId,
+        userId: athenaUser._id,
       });
-    }
 
-    const store = await ctx.db.get("store", sku.storeId);
-    if (!store) {
-      return userError({
-        code: "not_found",
-        message: "Store not found.",
-      });
-    }
-
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "You cannot update POS inventory for this store.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
-    });
-
-    return updateInventoryCommand(ctx, args);
-  },
+      return updateInventoryCommand(ctx, args);
+    },
+  ),
 });
 
 export const completeTransaction = mutation({
@@ -466,7 +475,7 @@ export const completeTransaction = mutation({
       transactionItems: v.array(v.id("posTransactionItem")),
     }),
   ),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     completeTransactionOperationDefinition,
     async (ctx: OperationMutationCtx, args) => {
       const store = await ctx.db.get("store", args.storeId);
@@ -503,7 +512,7 @@ export const getTransaction = query({
   args: {
     transactionId: v.id("posTransaction"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPosTransactionReadDefinition,
     async (ctx, args: { transactionId: Id<"posTransaction"> }) => {
       const access = await requirePosTransactionAccess(ctx, {
@@ -524,7 +533,7 @@ export const getTransactionsByStore = query({
     storeId: v.id("store"),
     limit: v.optional(v.number()),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPosTransactionsByStoreReadDefinition,
     async (
       ctx,
@@ -583,7 +592,7 @@ export const getCompletedTransactions = query({
       servicePaymentTotal: v.number(),
     }),
   ),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPosCompletedTransactionsReadDefinition,
     async (
       ctx,
@@ -740,7 +749,7 @@ export const getTransactionById = query({
       ),
     }),
   ),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPosTransactionByIdReadDefinition,
     async (ctx, args: { transactionId: Id<"posTransaction"> }) => {
       const access = await requirePosTransactionAccess(ctx, {
@@ -767,7 +776,7 @@ export const voidTransaction = mutation({
     staffProofToken: v.string(),
   },
   returns: voidTransactionResultValidator,
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     voidTransactionOperationDefinition,
     async (ctx: OperationMutationCtx, args) => {
       const actorStaffProfileId =
@@ -886,7 +895,7 @@ export const markReceiptPrinted = mutation({
     transactionId: v.id("posTransaction"),
   },
   returns: commandResultValidator(v.null()),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     markReceiptPrintedOperationDefinition,
     async (ctx, args) => {
       const access = await requirePosTransactionAccess(ctx, {
@@ -927,33 +936,36 @@ export const createTransactionFromSession = mutation({
       transactionItems: v.array(v.id("posTransactionItem")),
     }),
   ),
-  handler: async (ctx, args) => {
-    const session = await ctx.db.get("posSession", args.sessionId);
-    if (!session) {
-      return userError({
-        code: "not_found",
-        message: "POS session not found.",
+  handler: admitPublicMutation(
+    createTransactionFromSessionOperationDefinition,
+    async (ctx, args) => {
+      const session = await ctx.db.get("posSession", args.sessionId);
+      if (!session) {
+        return userError({
+          code: "not_found",
+          message: "POS session not found.",
+        });
+      }
+
+      const store = await ctx.db.get("store", session.storeId);
+      if (!store) {
+        return userError({
+          code: "not_found",
+          message: "Store not found.",
+        });
+      }
+
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage: "You cannot complete this POS sale.",
+        organizationId: store.organizationId,
+        userId: athenaUser._id,
       });
-    }
 
-    const store = await ctx.db.get("store", session.storeId);
-    if (!store) {
-      return userError({
-        code: "not_found",
-        message: "Store not found.",
-      });
-    }
-
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "You cannot complete this POS sale.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
-    });
-
-    return createTransactionFromSessionHandler(ctx, args);
-  },
+      return createTransactionFromSessionHandler(ctx, args);
+    },
+  ),
 });
 
 export const correctTransactionCustomer = mutation({
@@ -972,7 +984,7 @@ export const correctTransactionCustomer = mutation({
       operationalEventId: v.optional(v.id("operationalEvent")),
     }),
   ),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     correctTransactionCustomerOperationDefinition,
     async (ctx, args) => {
       if (!args.actorStaffProfileId) {
@@ -1066,7 +1078,7 @@ export const correctTransactionPaymentMethod = mutation({
     staffProofToken: v.optional(v.string()),
   },
   returns: correctTransactionPaymentMethodResultValidator,
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     correctTransactionPaymentMethodOperationDefinition,
     async (ctx, args) => {
       if (!args.reason.trim()) {
@@ -1204,7 +1216,7 @@ export const adjustTransactionItems = mutation({
     staffProofToken: v.string(),
   },
   returns: adjustTransactionItemsResultValidator,
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     adjustTransactionItemsOperationDefinition,
     async (ctx: OperationMutationCtx, args) => {
       if (!args.actorStaffProfileId) {
@@ -1330,7 +1342,7 @@ export const getRecentTransactionsWithCustomers = query({
       hasCustomerLink: v.boolean(),
     }),
   ),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPosRecentTransactionsWithCustomersReadDefinition,
     async (ctx, args: { limit?: number; storeId: Id<"store"> }) => {
       const access = await requirePosTransactionStoreAccess(ctx, {
@@ -1369,7 +1381,7 @@ export const getTodaySummary = query({
     date: v.string(),
     operatorSnapshot: posOperatorSnapshotValidator,
   }),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPosTodaySummaryReadDefinition,
     async (
       ctx,

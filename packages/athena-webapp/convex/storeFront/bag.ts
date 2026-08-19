@@ -4,9 +4,31 @@ import {
   internalQuery,
   mutation,
   query,
+  type MutationCtx,
+  type QueryCtx,
 } from "../_generated/server";
 import { v } from "convex/values";
 import { loadBagWithItems } from "./helpers/bag";
+import type { Id } from "../_generated/dataModel";
+import { deleteBagOperationDefinition } from "../operationAdmission/domains/storefrontCustomer_definitions";
+import {
+  getAllBagsReadDefinition,
+  getBagByIdReadDefinition,
+  getBagByUserIdReadDefinition,
+  getPaginatedBagsReadDefinition,
+} from "../operationAdmission/domains/storefrontCustomer_readDefinitions";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
+import {
+  assertCustomerOwnsRow,
+  assertCustomerOwnsStore,
+  consumeGuestMergeGrant,
+  customerOwnerActorId,
+  customerOwnerValidator,
+  denyCustomerOwnership,
+} from "./customerOwnership";
 
 const entity = "bag";
 const MAX_BAGS = 500;
@@ -14,17 +36,25 @@ const MAX_BAG_ITEMS = 200;
 
 export const getAll = query({
   args: {},
-  handler: async (ctx) => {
+  handler: admitPublicQuery(getAllBagsReadDefinition, async (ctx) => {
     return await ctx.db.query(entity).take(MAX_BAGS);
-  },
+  }),
 });
 
 export const create = internalMutation({
   args: {
     storeId: v.id("store"),
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
+    owner: customerOwnerValidator,
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { owner, ...args }) => {
+    // A bag may only ever be created FOR the admitted shopper, in the store
+    // their claim clamped to — the body's copy of those ids is not trusted.
+    assertCustomerOwnsRow(owner, {
+      storeFrontUserId: args.storeFrontUserId,
+      storeId: args.storeId,
+    });
+
     const id = await ctx.db.insert(entity, {
       ...args,
       updatedAt: Date.now(),
@@ -39,75 +69,131 @@ export const create = internalMutation({
   },
 });
 
+async function loadBagById(ctx: QueryCtx, id: Id<"bag">) {
+  const bag = await ctx.db.get("bag", id);
+
+  if (!bag) return null;
+
+  return (await loadBagWithItems(ctx, bag)) as Doc<"bag">;
+}
+
 export const getById = query({
   args: {
     id: v.id(entity),
   },
-  handler: async (ctx, args) => {
-    const bag = await ctx.db.get("bag", args.id);
-
-    if (!bag) return null;
-
-    return (await loadBagWithItems(ctx, bag)) as Doc<"bag">;
-  },
+  handler: admitPublicQuery(
+    getBagByIdReadDefinition,
+    async (ctx, args: { id: Id<"bag"> }) => loadBagById(ctx, args.id),
+  ),
 });
 
 export const getByIdInternal = internalQuery({
   args: {
     id: v.id(entity),
+    owner: customerOwnerValidator,
   },
   handler: async (ctx, args) => {
     const bag = await ctx.db.get("bag", args.id);
-
-    if (!bag) return null;
-
-    return (await loadBagWithItems(ctx, bag)) as Doc<"bag">;
+    assertCustomerOwnsRow(args.owner, bag);
+    return await loadBagById(ctx, args.id);
   },
 });
+
+async function loadBagForUser(
+  ctx: QueryCtx,
+  storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">,
+) {
+  const bag = await ctx.db
+    .query(entity)
+    .withIndex("by_storeFrontUserId", (q) =>
+      q.eq("storeFrontUserId", storeFrontUserId)
+    )
+    .first();
+
+  if (!bag) return null;
+
+  return await loadBagWithItems(ctx, bag, {
+    includeOtherBagsWithSku: true,
+  });
+}
 
 export const getByUserId = query({
   args: {
     storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
   },
+  handler: admitPublicQuery(
+    getBagByUserIdReadDefinition,
+    async (
+      ctx,
+      args: { storeFrontUserId: Id<"storeFrontUser"> | Id<"guest"> },
+    ) => loadBagForUser(ctx, args.storeFrontUserId),
+  ),
+});
+
+/**
+ * Internal sibling for `GET /bags/:bagId`. The bag is looked up by the ADMITTED
+ * shopper id, so the request's own `storeFrontUserId` cannot select another
+ * shopper's bag.
+ */
+export const getByUserIdInternal = internalQuery({
+  args: {
+    storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
+    owner: customerOwnerValidator,
+  },
   handler: async (ctx, args) => {
-    const bag = await ctx.db
-      .query(entity)
-      .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.storeFrontUserId)
-      )
-      .first();
-
-    if (!bag) return null;
-
-    return await loadBagWithItems(ctx, bag, {
-      includeOtherBagsWithSku: true,
-    });
+    if (
+      String(args.storeFrontUserId) !== String(customerOwnerActorId(args.owner))
+    ) {
+      denyCustomerOwnership();
+    }
+    return await loadBagForUser(ctx, customerOwnerActorId(args.owner));
   },
 });
+
+async function deleteBagWithCtx(ctx: MutationCtx, id: Id<"bag">) {
+  await ctx.db.delete("bag", id);
+
+  const items = await ctx.db
+    .query("bagItem")
+    .withIndex("by_bagId", (q) => q.eq("bagId", id))
+    .take(MAX_BAG_ITEMS);
+
+  await Promise.all(items.map((item) => ctx.db.delete("bagItem", item._id)));
+
+  return { message: "Bag and its items deleted" };
+}
 
 export const deleteBag = mutation({
   args: {
     id: v.id(entity),
   },
+  handler: admitPublicMutation(
+    deleteBagOperationDefinition,
+    async (ctx, args: { id: Id<"bag"> }) => deleteBagWithCtx(ctx, args.id),
+  ),
+});
+
+export const deleteBagInternal = internalMutation({
+  args: {
+    id: v.id(entity),
+    owner: customerOwnerValidator,
+  },
   handler: async (ctx, args) => {
-    await ctx.db.delete("bag", args.id);
-
-    const items = await ctx.db
-      .query("bagItem")
-      .withIndex("by_bagId", (q) => q.eq("bagId", args.id))
-      .take(MAX_BAG_ITEMS);
-
-    await Promise.all(items.map((item) => ctx.db.delete("bagItem", item._id)));
-
-    return { message: "Bag and its items deleted" };
+    const bag = await ctx.db.get("bag", args.id);
+    assertCustomerOwnsRow(args.owner, bag);
+    return await deleteBagWithCtx(ctx, args.id);
   },
 });
 
 export const clearBag = internalMutation({
   args: {
     id: v.id(entity),
+    owner: customerOwnerValidator,
   },
   handler: async (ctx, args) => {
+    const bag = await ctx.db.get("bag", args.id);
+    assertCustomerOwnsRow(args.owner, bag);
+
     const items = await ctx.db
       .query("bagItem")
       .withIndex("by_bagId", (q) => q.eq("bagId", args.id))
@@ -122,9 +208,39 @@ export const clearBag = internalMutation({
 export const updateOwner = internalMutation({
   args: {
     currentOwner: v.id("guest"),
-    newOwner: v.id("storeFrontUser"),
+    owner: customerOwnerValidator,
   },
   handler: async (ctx, args) => {
+    // Merging a guest bag into an account is only ever the admitted shopper's
+    // own move, and BOTH sides are proved here rather than either one.
+    //
+    // Destination: never body-supplied. It is the admitted account, so a guest
+    // caller cannot push their bag into a stranger's account and a signed-in
+    // caller cannot nominate an account other than their own.
+    const newOwner = args.owner.storeFrontUserId;
+    if (!newOwner) denyCustomerOwnership();
+
+    // Source: still body-supplied — it is a TARGET — and authorized by a
+    // SERVER-ISSUED GRANT on the guest row, written at sign-in. Nothing the
+    // caller presents is consulted: the previous round compared the body's id
+    // against the request's `guest_id` cookie, which proved nothing, because a
+    // cookie is caller-supplied and both operands arrived on the same request.
+    //
+    // `consumeGuestMergeGrant` checks the grant, keeps the store bound on top
+    // of it, and records consumption — all inside this mutation's own
+    // transaction, so if any later step throws, the consumption rolls back
+    // with it. A merge that returns is a merge that consumed its grant.
+    await consumeGuestMergeGrant(ctx, {
+      guestId: args.currentOwner,
+      owner: args.owner,
+      kind: "bag",
+    });
+
+    // Belt and braces: the actor must still be the admitted account.
+    if (String(customerOwnerActorId(args.owner)) !== String(newOwner)) {
+      denyCustomerOwnership();
+    }
+
     const bag = await ctx.db
       .query(entity)
       .withIndex("by_storeFrontUserId", (q) =>
@@ -135,11 +251,16 @@ export const updateOwner = internalMutation({
     const newOwnerBag = await ctx.db
       .query(entity)
       .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.newOwner)
+        q.eq("storeFrontUserId", newOwner)
       )
       .first();
 
-    console.log("updating bag owner.", args.currentOwner, args.newOwner);
+    // Neither bag may cross tenants. The index above is global, so without
+    // this a same-id merge could move rows between stores.
+    if (bag) assertCustomerOwnsStore(args.owner, bag.storeId);
+    if (newOwnerBag) assertCustomerOwnsStore(args.owner, newOwnerBag.storeId);
+
+    console.log("updating bag owner.", args.currentOwner, newOwner);
 
     if (!bag) {
       console.log("bag not found.");
@@ -174,7 +295,7 @@ export const updateOwner = internalMutation({
             await ctx.db.patch("bagItem", existingItem._id, {
               quantity: existingItem.quantity + item.quantity,
               bagId: newOwnerBag._id,
-              storeFrontUserId: args.newOwner,
+              storeFrontUserId: newOwner,
             });
             // Delete the duplicate item
             await ctx.db.delete("bagItem", item._id);
@@ -182,14 +303,14 @@ export const updateOwner = internalMutation({
             // Move item to new owner's bag
             await ctx.db.patch("bagItem", item._id, {
               bagId: newOwnerBag._id,
-              storeFrontUserId: args.newOwner,
+              storeFrontUserId: newOwner,
             });
           }
         })
       );
 
       console.log(
-        `successfully updated bag owner from ${args.currentOwner} to ${args.newOwner}.`
+        `successfully updated bag owner from ${args.currentOwner} to ${newOwner}.`
       );
 
       await ctx.db.delete("bag", bag._id);
@@ -197,12 +318,12 @@ export const updateOwner = internalMutation({
     } else {
       // If new owner doesn't have a bag, update the ownership of existing bag
       await ctx.db.patch("bag", bag._id, {
-        storeFrontUserId: args.newOwner,
+        storeFrontUserId: newOwner,
         updatedAt: Date.now(),
       });
 
       console.log(
-        `successfully updated bag owner from ${args.currentOwner} to ${args.newOwner}.`
+        `successfully updated bag owner from ${args.currentOwner} to ${newOwner}.`
       );
       return await ctx.db.get("bag", bag._id);
     }
@@ -233,7 +354,17 @@ export const getPaginatedBags = query({
       )
     ),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getPaginatedBagsReadDefinition,
+    async (
+      ctx,
+      args: {
+        storeId: Id<"store">;
+        pagination: { pageIndex: number; pageSize: number };
+        sorting?: Array<{ id: string; desc: boolean }>;
+        filters?: Array<{ id: string; value: any }>;
+      },
+    ) => {
     let query = ctx.db
       .query(entity)
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId));
@@ -357,5 +488,6 @@ export const getPaginatedBags = query({
       totalCount,
       pageCount: Math.ceil(totalCount / args.pagination.pageSize),
     };
-  },
+    },
+  ),
 });

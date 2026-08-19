@@ -2,114 +2,173 @@ import { Hono } from "hono";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
 import { internal } from "../../../../_generated/api";
-import { getCookie } from "hono/cookie";
 import { Id } from "../../../../_generated/dataModel";
 import {
-  getStoreDataFromRequest,
-  getStorefrontUserFromRequest,
-} from "../../../utils";
+  admitHttpRead,
+  admitHttpRoute,
+} from "../../../../platform/operationAdmission";
+import {
+  addSavedBagItemRouteOperationDefinition,
+  deleteSavedBagItemRouteOperationDefinition,
+  updateSavedBagItemRouteOperationDefinition,
+  updateSavedBagOwnerRouteOperationDefinition,
+} from "../../../../operationAdmission/domains/httpCustomer_definitions";
+import { getSavedBagRouteReadDefinition } from "../../../../operationAdmission/domains/httpCustomer_readDefinitions";
+import {
+  admittedCustomerId,
+  guestMergeErrorResponse,
+  isCustomerOwnershipDenial,
+  parseIngressJson,
+  tryParseIngressJson,
+  requireAdmittedCustomerOwner,
+} from "./admittedCustomer";
 
 const savedBagRoutes: HonoWithConvex<ActionCtx> = new Hono();
 
 // Get a specific bag
-savedBagRoutes.get("/:bagId", async (c) => {
-  const { bagId } = c.req.param();
+savedBagRoutes.get(
+  "/:bagId",
+  admitHttpRead(getSavedBagRouteReadDefinition, async (c, admitted) => {
+    const { bagId } = c.req.param();
 
-  const { storeId } = getStoreDataFromRequest(c);
+    const owner = requireAdmittedCustomerOwner(admitted);
 
-  if (!storeId) {
-    return c.json({ error: "Store id missing" }, 404);
-  }
+    if (bagId == "active") {
+      const storeFrontUserId = admittedCustomerId(owner);
 
-  if (bagId == "active") {
-    const userId = getStorefrontUserFromRequest(c);
+      try {
+        const bag = await c.env.runQuery(
+          internal.storeFront.savedBag.getByUserId,
+          { storeFrontUserId, owner },
+        );
 
-    if (!userId) {
-      return c.json({ error: "Customer id missing" }, 404);
-    }
+        if (!bag) {
+          const b = await c.env.runMutation(
+            internal.storeFront.savedBag.create,
+            { storeFrontUserId, storeId: owner.storeId, owner },
+          );
 
-    try {
-      const bag = await c.env.runQuery(internal.storeFront.savedBag.getByUserId, {
-        storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
-      });
-
-      if (!bag) {
-        const b = await c.env.runMutation(internal.storeFront.savedBag.create, {
-          storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
-          storeId: storeId as Id<"store">,
-        });
-
-        return c.json(b);
+          return c.json(b);
+        }
+        return c.json(bag);
+      } catch (error) {
+        if (isCustomerOwnershipDenial(error)) {
+          return c.json({ error: "Forbidden" }, 403);
+        }
+        throw error;
       }
-      return c.json(bag);
-    } catch (e) {
-      console.error(e);
-      return c.json({ error: "Internal server error" }, 400);
     }
-  }
 
-  return c.json({});
-});
+    return c.json({});
+  }),
+);
 
 // Add an item to a bag
-savedBagRoutes.post("/:bagId/items", async (c) => {
-  const { bagId } = c.req.param();
-  const { productId, productSkuId, quantity, productSku } = await c.req.json();
+savedBagRoutes.post(
+  "/:bagId/items",
+  admitHttpRoute(
+    addSavedBagItemRouteOperationDefinition,
+    async (c, admitted) => {
+      const { bagId } = c.req.param();
+      const { productId, productSkuId, quantity, productSku } =
+        parseIngressJson(admitted);
 
-  const userId = getStorefrontUserFromRequest(c);
+      const owner = requireAdmittedCustomerOwner(admitted);
 
-  const b = await c.env.runMutation(internal.storeFront.savedBagItem.addItemToBag, {
-    productId: productId as Id<"product">,
-    quantity,
-    storeFrontUserId: userId as Id<"storeFrontUser"> | Id<"guest">,
-    savedBagId: bagId as Id<"savedBag">,
-    productSkuId: productSkuId as Id<"productSku">,
-    productSku,
-  });
+      const b = await c.env.runMutation(
+        internal.storeFront.savedBagItem.addItemToBag,
+        {
+          productId: productId as Id<"product">,
+          quantity,
+          storeFrontUserId: admittedCustomerId(owner),
+          savedBagId: bagId as Id<"savedBag">,
+          productSkuId: productSkuId as Id<"productSku">,
+          productSku,
+          owner,
+        },
+      );
 
-  return c.json(b);
-});
+      return c.json(b);
+    },
+  ),
+);
 
 // Update the owner of a bag
-savedBagRoutes.post("/:bagId/owner", async (c) => {
-  try {
-    const { currentOwnerId, newOwnerId } = await c.req.json();
+savedBagRoutes.post(
+  "/:bagId/owner",
+  admitHttpRoute(
+    updateSavedBagOwnerRouteOperationDefinition,
+    async (c, admitted) => {
+      // As on `POST /bags/:bagId/owner`: the destination account is the
+      // admitted shopper, and the guest side is authorized by the server-issued
+      // merge grant on the guest row — nothing this route forwards.
+      const body = tryParseIngressJson(admitted);
+      if (!body) {
+        return c.json({ error: "Invalid request body" }, 400);
+      }
+      const { currentOwnerId } = body;
 
-    const b = await c.env.runMutation(internal.storeFront.savedBag.updateOwner, {
-      currentOwner: currentOwnerId as Id<"guest">,
-      newOwner: newOwnerId as Id<"storeFrontUser">,
-    });
-    return c.json(b);
-  } catch (e) {
-    console.error(e);
-    return c.json({ error: "Internal server error" }, 400);
-  }
-});
+      try {
+        const b = await c.env.runMutation(
+          internal.storeFront.savedBag.updateOwner,
+          {
+            currentOwner: currentOwnerId as Id<"guest">,
+            owner: requireAdmittedCustomerOwner(admitted),
+          },
+        );
+        return c.json(b);
+      } catch (error) {
+        // Ownership refusal → 403, malformed guest id → 400, anything else is
+        // a real fault and propagates. See `guestMergeErrorResponse`.
+        const denial = guestMergeErrorResponse(error);
+        if (denial) return c.json(denial.body, denial.status);
+        throw error;
+      }
+    },
+  ),
+);
 
 // Delete an item from a bag
-savedBagRoutes.delete("/:bagId/items/:itemId", async (c) => {
-  const { itemId } = c.req.param();
+savedBagRoutes.delete(
+  "/:bagId/items/:itemId",
+  admitHttpRoute(
+    deleteSavedBagItemRouteOperationDefinition,
+    async (c, admitted) => {
+      const { itemId } = c.req.param();
 
-  await c.env.runMutation(internal.storeFront.savedBagItem.deleteItemFromSavedBag, {
-    itemId: itemId as Id<"savedBagItem">,
-  });
+      await c.env.runMutation(
+        internal.storeFront.savedBagItem.deleteItemFromSavedBag,
+        {
+          itemId: itemId as Id<"savedBagItem">,
+          owner: requireAdmittedCustomerOwner(admitted),
+        },
+      );
 
-  return c.json({ success: true });
-});
+      return c.json({ success: true });
+    },
+  ),
+);
 
 // Update an item in a bag
-savedBagRoutes.put("/:bagId/items/:itemId", async (c) => {
-  const { itemId } = c.req.param();
-  const { quantity } = await c.req.json();
+savedBagRoutes.put(
+  "/:bagId/items/:itemId",
+  admitHttpRoute(
+    updateSavedBagItemRouteOperationDefinition,
+    async (c, admitted) => {
+      const { itemId } = c.req.param();
+      const { quantity } = parseIngressJson(admitted);
 
-  const b = await c.env.runMutation(
-    internal.storeFront.savedBagItem.updateItemInBag,
-    {
-      quantity,
-      itemId: itemId as Id<"savedBagItem">,
-    }
-  );
-  return c.json(b);
-});
+      const b = await c.env.runMutation(
+        internal.storeFront.savedBagItem.updateItemInBag,
+        {
+          quantity,
+          itemId: itemId as Id<"savedBagItem">,
+          owner: requireAdmittedCustomerOwner(admitted),
+        },
+      );
+      return c.json(b);
+    },
+  ),
+);
 
 export { savedBagRoutes };

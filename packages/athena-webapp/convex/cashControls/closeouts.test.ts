@@ -529,6 +529,25 @@ describe("cash control closeouts", () => {
     expect(source).toContain("currency: store?.currency");
   });
 
+  // Admission rail: the closeout snapshot read and the final closeout write
+  // resolve an actor at the ingress. `cash.control.write` / `cash_controls.view`
+  // ARE demo-granted, so the demo keeps the reach it has today — now with the
+  // store clamp and (for the write) the restore fence the rail applies.
+  it("routes the closeout snapshot read and final closeout through the admission rail", () => {
+    const source = getSource("./closeouts.ts");
+
+    expect(source).toContain(
+      "handler: admitPublicQuery(\n    getCloseoutSnapshotReadDefinition,",
+    );
+    expect(source).toContain(
+      "handler: admitPublicMutation(\n    finalizeRegisterSessionCloseoutOperationDefinition,",
+    );
+    expect(source).toContain("export const getCloseoutSnapshot = query({");
+    expect(source).toContain(
+      "export const finalizeRegisterSessionCloseout = mutation({",
+    );
+  });
+
   it("exposes opening float correction as a command-result mutation with audit rails", () => {
     const source = getSource("./closeouts.ts");
 

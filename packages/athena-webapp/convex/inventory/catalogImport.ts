@@ -14,7 +14,23 @@ import {
   finalizeInventoryImportReviewVersionPayloadOperationDefinition,
   stageInventoryImportReviewVersionPayloadChunkOperationDefinition,
 } from "../operationAdmission/definitions";
-import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
+import {
+  finalizeTrustedInventoryFromProductPageOperationDefinition,
+  importInventoryOperationDefinition,
+  saveInventoryImportReviewVersionOperationDefinition,
+  stageInventoryImportReviewRowsForPosOperationDefinition,
+} from "../operationAdmission/domains/inventoryCatalog_definitions";
+import {
+  getInventoryImportReviewVersionPayloadChunkReadDefinition,
+  getLatestInventoryImportReviewVersionMetadataReadDefinition,
+  getLatestInventoryImportReviewVersionReadDefinition,
+  listInventoryImportReviewSkuContextReadDefinition,
+  listProductPageProvisionalSkuBindingReadDefinition,
+} from "../operationAdmission/domains/inventoryCatalog_readDefinitions";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
@@ -893,7 +909,10 @@ export const importInventory = mutation({
     terminalId: v.optional(v.id("posTerminal")),
   },
   returns: commandResultValidator(v.any()),
-  handler: importInventoryCommandWithCtx,
+  handler: admitPublicMutation(
+    importInventoryOperationDefinition,
+    importInventoryCommandWithCtx,
+  ),
 });
 
 export async function stageInventoryImportReviewVersionPayloadChunkWithCtx(
@@ -1103,7 +1122,7 @@ export const stageInventoryImportReviewVersionPayloadChunk = mutation({
   returns: commandResultValidator(
     stagedInventoryImportReviewPayloadChunkValidator,
   ),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     stageInventoryImportReviewVersionPayloadChunkOperationDefinition,
     stageInventoryImportReviewVersionPayloadChunkCommandWithCtx,
   ),
@@ -1435,7 +1454,7 @@ export const finalizeInventoryImportReviewVersionPayload = mutation({
     uploadKey: v.string(),
   },
   returns: commandResultValidator(inventoryImportReviewVersionSummaryValidator),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     finalizeInventoryImportReviewVersionPayloadOperationDefinition,
     finalizeInventoryImportReviewVersionPayloadCommandWithCtx,
   ),
@@ -1647,7 +1666,10 @@ export const saveInventoryImportReviewVersion = mutation({
     terminalId: v.optional(v.id("posTerminal")),
   },
   returns: commandResultValidator(v.any()),
-  handler: saveInventoryImportReviewVersionCommandWithCtx,
+  handler: admitPublicMutation(
+    saveInventoryImportReviewVersionOperationDefinition,
+    saveInventoryImportReviewVersionCommandWithCtx,
+  ),
 });
 
 export async function stageInventoryImportReviewRowsForPosWithCtx(
@@ -1897,7 +1919,10 @@ export const stageInventoryImportReviewRowsForPos = mutation({
     terminalId: v.optional(v.id("posTerminal")),
   },
   returns: commandResultValidator(v.any()),
-  handler: stageInventoryImportReviewRowsForPosCommandWithCtx,
+  handler: admitPublicMutation(
+    stageInventoryImportReviewRowsForPosOperationDefinition,
+    stageInventoryImportReviewRowsForPosCommandWithCtx,
+  ),
 });
 
 async function hydrateInventoryImportReviewVersionWithCtx(
@@ -2131,7 +2156,10 @@ export const getLatestInventoryImportReviewVersion = query({
     terminalId: v.optional(v.id("posTerminal")),
   },
   returns: v.union(legacyInventoryImportReviewVersionValidator, v.null()),
-  handler: getLatestInventoryImportReviewVersionWithCtx,
+  handler: admitPublicQuery(
+    getLatestInventoryImportReviewVersionReadDefinition,
+    getLatestInventoryImportReviewVersionWithCtx,
+  ),
 });
 
 export const getLatestInventoryImportReviewVersionMetadata = query({
@@ -2141,7 +2169,10 @@ export const getLatestInventoryImportReviewVersionMetadata = query({
     terminalId: v.optional(v.id("posTerminal")),
   },
   returns: v.union(inventoryImportReviewVersionMetadataValidator, v.null()),
-  handler: getLatestInventoryImportReviewVersionMetadataWithCtx,
+  handler: admitPublicQuery(
+    getLatestInventoryImportReviewVersionMetadataReadDefinition,
+    getLatestInventoryImportReviewVersionMetadataWithCtx,
+  ),
 });
 
 export async function getInventoryImportReviewVersionPayloadChunkWithCtx(
@@ -2205,7 +2236,10 @@ export const getInventoryImportReviewVersionPayloadChunk = query({
     terminalId: v.optional(v.id("posTerminal")),
   },
   returns: v.union(inventoryImportReviewVersionPayloadChunkValidator, v.null()),
-  handler: getInventoryImportReviewVersionPayloadChunkWithCtx,
+  handler: admitPublicQuery(
+    getInventoryImportReviewVersionPayloadChunkReadDefinition,
+    getInventoryImportReviewVersionPayloadChunkWithCtx,
+  ),
 });
 
 export async function listInventoryImportReviewSkuContextWithCtx(
@@ -2283,9 +2317,10 @@ export const listInventoryImportReviewSkuContext = query({
       sku: v.optional(v.string()),
     }),
   ),
-  async handler(ctx, args) {
-    return listInventoryImportReviewSkuContextWithCtx(ctx, args);
-  },
+  handler: admitPublicQuery(
+    listInventoryImportReviewSkuContextReadDefinition,
+    async (ctx, args) => listInventoryImportReviewSkuContextWithCtx(ctx, args),
+  ),
 });
 
 export const listProductPageProvisionalSkuBinding = query({
@@ -2297,7 +2332,9 @@ export const listProductPageProvisionalSkuBinding = query({
     terminalId: v.optional(v.id("posTerminal")),
   },
   returns: v.any(),
-  async handler(ctx, args) {
+  handler: admitPublicQuery(
+    listProductPageProvisionalSkuBindingReadDefinition,
+    async (ctx, args) => {
     try {
       const access = await requireInventoryImportAccess(ctx, args);
       return listProductPageProvisionalSkuBindingWithCtx(ctx, args, access);
@@ -2318,7 +2355,8 @@ export const listProductPageProvisionalSkuBinding = query({
 
       throw error;
     }
-  },
+    },
+  ),
 });
 
 export const finalizeTrustedInventoryFromProductPage = mutation({
@@ -2342,23 +2380,30 @@ export const finalizeTrustedInventoryFromProductPage = mutation({
     trustedSkuFingerprint: v.string(),
   },
   returns: commandResultValidator(v.any()),
-  async handler(ctx, args) {
-    try {
-      const access = await requireInventoryImportAccess(ctx, args);
-      return finalizeTrustedInventoryFromProductPageWithCtx(ctx, args, access);
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Trusted inventory was not finalized.";
+  handler: admitPublicMutation(
+    finalizeTrustedInventoryFromProductPageOperationDefinition,
+    async (ctx, args) => {
+      try {
+        const access = await requireInventoryImportAccess(ctx, args);
+        return finalizeTrustedInventoryFromProductPageWithCtx(
+          ctx,
+          args,
+          access,
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Trusted inventory was not finalized.";
 
-      if (isInventoryImportAccessError(message)) {
-        return userError({ code: "authorization_failed", message });
+        if (isInventoryImportAccessError(message)) {
+          return userError({ code: "authorization_failed", message });
+        }
+
+        throw error;
       }
-
-      throw error;
-    }
-  },
+    },
+  ),
 });
 
 export const repairOnboardedLegacyImportTrustedSkuVisibility = internalMutation(

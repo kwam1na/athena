@@ -13,12 +13,8 @@ import {
   requireOrganizationMemberRoleWithCtx,
   requireAuthenticatedAthenaUserWithCtx,
 } from "../lib/athenaUserAuth";
-import {
-  createNormalUserOperationAdapter,
-  resolveOperationAdmission,
-} from "../operationAdmission/adapters";
 import { decideApprovalRequestOperationDefinition } from "../operationAdmission/definitions";
-import { admitPublicMutation } from "../operationAdmission/publicMutation";
+import { admitPublicMutation } from "../platform/operationAdmission";
 import { requireOperationActorAthenaUserId } from "../operationAdmission/actors";
 import type {
   OperationMutationCtx,
@@ -33,7 +29,6 @@ import {
 } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { consumeApprovalProofWithCtx } from "./approvalProofs";
-import { createSharedDemoOperationAdapter } from "../sharedDemo/operationAdapter";
 import { isSharedDemoActionDeniedData } from "../../shared/sharedDemoActionError";
 
 const APPROVAL_DECISION_ACTION_KEY = "operations.approval_request.decide";
@@ -623,16 +618,13 @@ const decideApprovalRequestInternalArgs = {
   reviewedByStaffProfileId: v.optional(v.id("staffProfile")),
 };
 
+// The default chain (shared demo -> normal user -> storefront customer ->
+// public) is what this site used to hand-assemble; the definition denies
+// `public` and declares no storefront customer, so the two extra links are
+// inert and the admitted set is unchanged.
 const decideApprovalRequestAdmittedHandler = admitPublicMutation(
   decideApprovalRequestOperationDefinition,
   decideApprovalRequestAsCommandWithCtx,
-  {
-    resolveAdmission: (ctx, args, definition) =>
-      resolveOperationAdmission(ctx, args, definition, {
-        normalAdapter: createNormalUserOperationAdapter(),
-        sharedDemoAdapter: createSharedDemoOperationAdapter(),
-      }),
-  },
 );
 
 export const decideApprovalRequest = mutation({

@@ -1,15 +1,34 @@
 /* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
 import { v } from "convex/values";
-import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
 import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 import {
   internalMutation,
   internalQuery,
   mutation,
   query,
+  type QueryCtx,
 } from "../_generated/server";
-import { api, internal } from "../_generated/api";
+import { internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
+import {
+  createPromoCodeOperationDefinition,
+  removePromoCodeOperationDefinition,
+  updatePromoCodeOperationDefinition,
+} from "../operationAdmission/domains/inventoryCatalog_definitions";
+import {
+  getPromoCodeByIdReadDefinition,
+  listPromoCodeItemsLightweightReadDefinition,
+  listPromoCodeItemsReadDefinition,
+  listPromoCodesReadDefinition,
+} from "../operationAdmission/domains/inventoryCatalog_readDefinitions";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
 
 const entity = "promoCode";
 
@@ -286,12 +305,29 @@ export const create = mutation({
     productSkus: v.optional(v.array(v.id("productSku"))),
     createdByUserId: v.id("athenaUser"),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    createPromoCodeOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        storeId: Id<"store">;
+        code: string;
+        discountType: "percentage" | "amount";
+        discountValue: number;
+        limit?: number;
+        autoApply?: boolean;
+        isExclusive?: boolean;
+        isMultipleUses?: boolean;
+        sitewide?: boolean;
+        displayText: string;
+        validFrom: number;
+        validTo: number;
+        span: "entire-order" | "selected-products";
+        productSkus?: Id<"productSku">[];
+        createdByUserId: Id<"athenaUser">;
+      },
+    ) => {
     await requireAuthenticatedAthenaUserWithCtx(ctx);
-    requireNonDemoFoundationMutation({
-      athenaUserId: args.createdByUserId,
-      storeId: args.storeId,
-    });
     const id = await ctx.db.insert(entity, {
       code: args.code,
       storeId: args.storeId,
@@ -325,17 +361,36 @@ export const create = mutation({
     }
 
     return { success: true, promoCode };
-  },
+    },
+  ),
 });
+
+async function listPromoCodesWithCtx(
+  ctx: QueryCtx,
+  args: { storeId: Id<"store"> },
+) {
+  return await ctx.db
+    .query(entity)
+    .filter((q) => q.eq(q.field("storeId"), args.storeId))
+    .collect();
+}
 
 export const getAll = query({
   args: { storeId: v.id("store") },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query(entity)
-      .filter((q) => q.eq(q.field("storeId"), args.storeId))
-      .collect();
-  },
+  handler: admitPublicQuery(
+    listPromoCodesReadDefinition,
+    async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) =>
+      listPromoCodesWithCtx(ctx, args),
+  ),
+});
+
+/**
+ * Internal sibling for the anonymous `GET /stores/promoCodes` route. The public
+ * export stays until wave B2 flips the route to this reference.
+ */
+export const getAllInternal = internalQuery({
+  args: { storeId: v.id("store") },
+  handler: async (ctx, args) => listPromoCodesWithCtx(ctx, args),
 });
 
 export const getAllItems = internalQuery({
@@ -390,9 +445,12 @@ export const getById = query({
     }),
     v.null(),
   ),
-  handler: async (ctx, args) => {
-    return await ctx.db.get("promoCode", args.id);
-  },
+  handler: admitPublicQuery(
+    getPromoCodeByIdReadDefinition,
+    async (ctx: OperationQueryCtx, args: { id: Id<"promoCode"> }) => {
+      return await ctx.db.get("promoCode", args.id);
+    },
+  ),
 });
 
 export const getByIdInternal = internalQuery({
@@ -426,24 +484,27 @@ export const getPromoCodeItems = query({
       weight: v.optional(v.string()),
     }),
   ),
-  handler: async (ctx, args) => {
-    const items = await ctx.db
-      .query("promoCodeItem")
-      .filter((q) => q.eq(q.field("promoCodeId"), args.promoCodeId))
-      .collect();
+  handler: admitPublicQuery(
+    listPromoCodeItemsReadDefinition,
+    async (ctx: OperationQueryCtx, args: { promoCodeId: Id<"promoCode"> }) => {
+      const items = await ctx.db
+        .query("promoCodeItem")
+        .filter((q) => q.eq(q.field("promoCodeId"), args.promoCodeId))
+        .collect();
 
-    const productSkuIds = items
-      .map((item) => item.productSkuId)
-      .filter((id): id is Id<"productSku"> => id !== undefined);
+      const productSkuIds = items
+        .map((item) => item.productSkuId)
+        .filter((id): id is Id<"productSku"> => id !== undefined);
 
-    // Fetch all productSku documents
-    const productSkus = await Promise.all(
-      productSkuIds.map((id) => ctx.db.get("productSku", id)),
-    );
+      // Fetch all productSku documents
+      const productSkus = await Promise.all(
+        productSkuIds.map((id) => ctx.db.get("productSku", id)),
+      );
 
-    // Filter out any null values (in case some IDs don't exist)
-    return productSkus.filter((sku) => sku !== null);
-  },
+      // Filter out any null values (in case some IDs don't exist)
+      return productSkus.filter((sku) => sku !== null);
+    },
+  ),
 });
 
 export const getPromoCodeItemsLightweight = query({
@@ -457,44 +518,49 @@ export const getPromoCodeItemsLightweight = query({
       productId: v.id("product"),
     }),
   ),
-  handler: async (ctx, args) => {
-    const items = await ctx.db
-      .query("promoCodeItem")
-      .withIndex("by_promoCodeId", (q) => q.eq("promoCodeId", args.promoCodeId))
-      .collect();
+  handler: admitPublicQuery(
+    listPromoCodeItemsLightweightReadDefinition,
+    async (ctx: OperationQueryCtx, args: { promoCodeId: Id<"promoCode"> }) => {
+      const items = await ctx.db
+        .query("promoCodeItem")
+        .withIndex("by_promoCodeId", (q) =>
+          q.eq("promoCodeId", args.promoCodeId),
+        )
+        .collect();
 
-    const productSkuIds = items
-      .map((item) => item.productSkuId)
-      .filter((id): id is Id<"productSku"> => id !== undefined);
+      const productSkuIds = items
+        .map((item) => item.productSkuId)
+        .filter((id): id is Id<"productSku"> => id !== undefined);
 
-    // Fetch only essential fields from productSku documents
-    const productSkus = await Promise.all(
-      productSkuIds.map(async (id) => {
-        const sku = await ctx.db.get("productSku", id);
-        if (!sku) return null;
+      // Fetch only essential fields from productSku documents
+      const productSkus = await Promise.all(
+        productSkuIds.map(async (id) => {
+          const sku = await ctx.db.get("productSku", id);
+          if (!sku) return null;
 
-        return {
-          _id: sku._id,
-          productName: sku.productName,
-          price: sku.price,
-          images: sku.images,
-          productId: sku.productId,
-        };
-      }),
-    );
+          return {
+            _id: sku._id,
+            productName: sku.productName,
+            price: sku.price,
+            images: sku.images,
+            productId: sku.productId,
+          };
+        }),
+      );
 
-    // Filter out any null values (in case some IDs don't exist)
-    return productSkus.filter((sku) => sku !== null);
-  },
+      // Filter out any null values (in case some IDs don't exist)
+      return productSkus.filter((sku) => sku !== null);
+    },
+  ),
 });
 
 export const remove = mutation({
   args: { id: v.id(entity) },
   returns: v.object({ success: v.boolean() }),
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    removePromoCodeOperationDefinition,
+    async (ctx: OperationMutationCtx, args: { id: Id<"promoCode"> }) => {
     await requireAuthenticatedAthenaUserWithCtx(ctx);
-    const promoCode = await ctx.db.get("promoCode", args.id);
-    if (promoCode) requireNonDemoFoundationMutation({ storeId: promoCode.storeId });
     const promoCodeItems = await ctx.db
       .query("promoCodeItem")
       .filter((q) => q.eq(q.field("promoCodeId"), args.id))
@@ -509,7 +575,8 @@ export const remove = mutation({
     await ctx.db.delete("promoCode", args.id);
 
     return { success: true };
-  },
+    },
+  ),
 });
 
 export const update = mutation({
@@ -535,12 +602,29 @@ export const update = mutation({
     productSkus: v.optional(v.array(v.id("productSku"))),
   },
   returns: v.object({ success: v.boolean() }),
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    updatePromoCodeOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        id: Id<"promoCode">;
+        active?: boolean;
+        autoApply?: boolean;
+        isExclusive?: boolean;
+        isMultipleUses?: boolean;
+        sitewide?: boolean;
+        displayText?: string;
+        code?: string;
+        discountType?: "percentage" | "amount";
+        discountValue?: number;
+        limit?: number;
+        validFrom?: number;
+        validTo?: number;
+        span?: "entire-order" | "selected-products";
+        productSkus?: Id<"productSku">[];
+      },
+    ) => {
     await requireAuthenticatedAthenaUserWithCtx(ctx);
-    const existingPromoCode = await ctx.db.get("promoCode", args.id);
-    if (existingPromoCode) {
-      requireNonDemoFoundationMutation({ storeId: existingPromoCode.storeId });
-    }
     const promoCode = await ctx.db.get("promoCode", args.id);
     if (!promoCode) {
       throw new Error("Promo code not found");
@@ -586,7 +670,8 @@ export const update = mutation({
     }
 
     return { success: true };
-  },
+    },
+  ),
 });
 
 export const updateQuantityClaimedForMiniStraightener = internalMutation({

@@ -6,11 +6,15 @@ import {
 } from "../../shared/sharedDemoActionError";
 import {
   ATHENA_CAPABILITY_CATALOG,
-  classifyAthenaPublicWrite,
   isSharedDemoCapabilityAllowed,
   SHARED_DEMO_ALLOWED_CAPABILITIES,
   type AthenaCapability,
 } from "../platform/capabilityCatalog";
+import type { AthenaReadIntent } from "../platform/readIntentCatalog";
+import type {
+  OperationDefinition,
+  OperationReadDefinition,
+} from "../operationAdmission/types";
 
 export const SHARED_DEMO_UNAVAILABLE = SHARED_DEMO_ACTION_DENIED_MESSAGE;
 
@@ -51,6 +55,56 @@ export const SHARED_DEMO_EFFECT_CLASSIFICATIONS = [
   { gateway: "export.deliver", decision: "denied" },
   { gateway: "integration.dispatch", decision: "denied" },
 ] as const;
+
+/**
+ * Closed grant set for shared-demo READS.
+ *
+ * Read intents are not write capabilities, so demo read reach gets its own
+ * list rather than being inferred from `SHARED_DEMO_ALLOWED_CAPABILITIES`.
+ * Seeded in U1a from the intents of every read definition that is currently
+ * `sharedDemo: "admit"`. `readIntentGrants.test.ts` asserts seed ⊇ derived: a
+ * demo-admitted read whose intent is missing here is a failure, so demo reach
+ * can never widen silently. The set may run AHEAD of the migrated definitions
+ * only for a surface the demo demonstrably shows today — every entry below
+ * that is not yet derivable names its evidence.
+ *
+ * Every addition to this list is a deliberate widening of what a demo visitor
+ * can observe. The default answer for a Phase B unit is "do not add"; adding
+ * requires that the demo already renders the surface.
+ */
+export const SHARED_DEMO_ALLOWED_READ_INTENTS = [
+  "cash_controls.view",
+  "daily_close.view",
+  "daily_operations.view",
+  // The demo runtime reads its own context and register bootstrap
+  // (`sharedDemo/public:getContext`, `:getRegisterBootstrap`) on every demo
+  // page; without this grant the demo cannot render at all.
+  "demo.context.view",
+  // The webapp's identity probe (`app:getCurrentUser`,
+  // `inventory/athenaUser:getAuthenticatedUser`) runs unconditionally on every
+  // page; the retired `reports.read` auth bridge answered it for the demo
+  // principal, so the intent replaces that bridge rather than widening reach.
+  "identity.view",
+  "inventory.catalog.view",
+  "online_orders.view",
+  "operations.workItems.view",
+  "organization.view",
+  "pos.view",
+  // Successor to the retired `reports.read` write capability, which existed
+  // only to let the demo READ the Reports surface. Reports reads are reads, so
+  // the grant now lives where reads are granted; deleting `reports.read`
+  // narrows nothing and widens nothing.
+  "reports.view",
+  "stock_adjustments.view",
+] as const satisfies readonly AthenaReadIntent[];
+
+const SHARED_DEMO_ALLOWED_READ_INTENT_SET = new Set<string>(
+  SHARED_DEMO_ALLOWED_READ_INTENTS,
+);
+
+export function isSharedDemoReadIntentAllowed(intent: string) {
+  return SHARED_DEMO_ALLOWED_READ_INTENT_SET.has(intent);
+}
 
 export const SHARED_DEMO_POLICY = { defaultDecision: "denied" } as const;
 const SHARED_DEMO_LIFECYCLE_CAPABILITY = "demo.lifecycle";
@@ -109,175 +163,6 @@ export function requireSharedDemoRegisterSessionSyncReview(args: {
   }
 }
 
-export const SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY = [
-  {
-    functionName: "operations/approvalRequests:decideApprovalRequest",
-    capability: "approvals.manage",
-  },
-  {
-    functionName: "operations/staffCredentials:authenticateStaffCredential",
-    capability: "staff.authenticate",
-  },
-  {
-    functionName:
-      "operations/staffCredentials:authenticateStaffCredentialForApproval",
-    capability: "staff.authenticate",
-  },
-  {
-    functionName: "pos/public/transactions:completeTransaction",
-    capability: "pos.sale.complete",
-  },
-  {
-    functionName: "pos/public/transactions:markReceiptPrinted",
-    capability: "pos.transaction.correct",
-  },
-  {
-    functionName: "pos/public/transactions:voidTransaction",
-    capability: "pos.transaction.void",
-  },
-  {
-    functionName: "stockOps/adjustments:submitStockAdjustmentBatch",
-    capability: "inventory.adjust",
-  },
-  {
-    functionName: "cashControls/deposits:recordRegisterSessionDeposit",
-    capability: "cash.control.write",
-  },
-  {
-    functionName: "cashControls/deposits:resolveRegisterSessionSyncReview",
-    capability: "cash.control.write",
-  },
-  {
-    functionName: "cashControls/closeouts:correctRegisterSessionOpeningFloat",
-    capability: "cash.control.write",
-  },
-  {
-    functionName: "cashControls/closeouts:submitRegisterSessionCloseout",
-    capability: "cash.control.write",
-  },
-  {
-    functionName: "cashControls/closeouts:reviewRegisterSessionCloseout",
-    capability: "cash.control.write",
-  },
-  {
-    functionName: "cashControls/closeouts:reopenRegisterSessionCloseout",
-    capability: "cash.control.write",
-  },
-  {
-    functionName: "pos/public/catalog:quickAddSku",
-    capability: "catalog.quick_add",
-  },
-  {
-    functionName: "inventory/products:repairCatalogSummary",
-    capability: "catalog.maintain",
-  },
-  {
-    functionName: "storeFront/onlineOrder:update",
-    capability: "orders.fulfill",
-  },
-  {
-    functionName: "storeFront/onlineOrderItem:update",
-    capability: "orders.manage",
-  },
-  {
-    functionName: "storeFront/onlineOrder:returnItemsToStock",
-    capability: "orders.return",
-  },
-  {
-    functionName: "storeFront/onlineOrder:returnAllItemsToStock",
-    capability: "orders.return",
-  },
-  {
-    functionName: "storeFront/onlineOrderUtilFns:sendOrderUpdateEmail",
-    capability: "customer.messaging.send",
-  },
-  {
-    functionName: "storeFront/reviews:sendFeedbackRequest",
-    capability: "reviews.manage",
-  },
-  {
-    functionName: "operations/staffMessages:postStaffMessage",
-    capability: "staff.communication.write",
-  },
-  {
-    functionName: "operations/dailyOpening:startStoreDay",
-    capability: "daily_operations.write",
-  },
-  {
-    functionName: "pos/public/terminals:registerTerminal",
-    capability: "daily_operations.write",
-  },
-  {
-    functionName: "pos/public/sync:ingestLocalEvents",
-    capability: "pos.sync.write",
-  },
-  {
-    functionName: "pos/public/sync:ingestLocalEvents",
-    capability: "expense.manage",
-  },
-  {
-    functionName: "reports/queries:getOverview",
-    capability: "reports.read",
-  },
-  {
-    // The demo's primary Reports read: the live current operating day the
-    // fixture folds onto its history. Same requireReportsStoreAccess gate.
-    functionName: "reports/liveDay:getLiveOperatingDay",
-    capability: "reports.read",
-  },
-  {
-    functionName: "operations/staffCredentials:createStaffCredential",
-    capability: "identity.manage",
-  },
-  {
-    functionName: "operations/staffProfiles:createStaffProfile",
-    capability: "staff.manage",
-  },
-  {
-    functionName: "operations/staffProfiles:updateStaffProfile",
-    capability: "staff.manage",
-  },
-  {
-    functionName: "inventory/inviteCode:create",
-    capability: "permissions.manage",
-  },
-  {
-    functionName: "storeFront/payment:createTransaction",
-    capability: "billing.manage",
-  },
-  {
-    functionName: "inventory/stores:patchConfigV2Command",
-    capability: "integrations.manage",
-  },
-  {
-    functionName: "storeFront/onlineOrder:processReturnExchange",
-    capability: "payments.refund",
-  },
-  {
-    functionName: "inventory/stores:remove",
-    capability: "administration.destructive",
-  },
-] as const satisfies ReadonlyArray<{
-  functionName: string;
-  capability: SharedDemoCapability;
-}>;
-
-export function classifySharedDemoPublicFunction(functionName: string) {
-  const classification = classifyAthenaPublicWrite(functionName);
-  if (classification.decision === "unclassified") {
-    return { decision: "denied" as const, reason: "unclassified" as const };
-  }
-  return {
-    capability: classification.capability,
-    decision: "declared" as const,
-    demoDecision: isSharedDemoOperationCapabilityAllowed(
-      classification.capability,
-    )
-      ? ("allowed" as const)
-      : ("denied" as const),
-  };
-}
-
 export function classifySharedDemoExternalGateway(gateway: string) {
   return (
     SHARED_DEMO_EFFECT_CLASSIFICATIONS.find(
@@ -285,35 +170,6 @@ export function classifySharedDemoExternalGateway(gateway: string) {
     ) ?? { gateway, decision: "denied" as const }
   );
 }
-
-export const SHARED_DEMO_GATEWAY_ENFORCEMENT_BINDINGS = [
-  { moduleName: "storeFront/onlineOrder", binding: "decideSharedDemoEffect" },
-  {
-    moduleName: "storeFront/payment",
-    binding: "enforceSharedDemoActionCapability",
-  },
-  {
-    moduleName: "cloudflare/stream",
-    binding: "requireAuthenticatedNonDemoEffect",
-  },
-  { moduleName: "inventory/productSku", binding: "requireNonDemoFoundation" },
-  {
-    moduleName: "inventory/stores",
-    binding: "requireNonDemoFoundationMutation",
-  },
-  {
-    moduleName: "storeFront/payment",
-    binding: "enforceSharedDemoActionCapability",
-  },
-  {
-    moduleName: "storeFront/paystackActions",
-    binding: "requireAuthenticatedNonDemoEffect",
-  },
-  {
-    moduleName: "storeFront/checkoutSession",
-    binding: "requireAuthenticatedNonDemoEffect",
-  },
-] as const;
 
 export function requireSharedDemoCapability(capability: SharedDemoCapability) {
   if (!isSharedDemoOperationCapabilityAllowed(capability)) {
@@ -340,7 +196,107 @@ export async function decideSharedDemoEffect(
   return { kind: "denied" as const, reason: "protected" as const };
 }
 
-export function validateSharedDemoCoverage() {
+/** How a definition names itself in a coverage error. */
+function describeDefinition(
+  definition: OperationDefinition | OperationReadDefinition,
+) {
+  return (
+    definition.functionName ??
+    (definition.route
+      ? `${definition.route.method} ${definition.route.path}`
+      : definition.operationId)
+  );
+}
+
+/** Every capability a write definition can require, static or dynamic. */
+function declaredCapabilities(
+  definition: OperationDefinition,
+): readonly AthenaCapability[] {
+  const capability = definition.capability;
+  return typeof capability === "string" ? [capability] : capability.candidates;
+}
+
+/**
+ * The capabilities the demo can actually reach, derived from the definitions.
+ *
+ * This replaces the hand-maintained `SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY`.
+ * The inventory had to be edited by hand whenever a function moved, so it
+ * could drift into claiming representation that no longer existed; a
+ * definition with `actors.sharedDemo: "admit"` IS the representation, so
+ * deriving cannot drift.
+ */
+export function deriveSharedDemoRepresentedCapabilities(
+  definitions: readonly OperationDefinition[],
+): ReadonlySet<AthenaCapability> {
+  const represented = new Set<AthenaCapability>();
+  for (const definition of definitions) {
+    if (definition.actors.sharedDemo !== "admit") continue;
+    for (const capability of declaredCapabilities(definition)) {
+      represented.add(capability);
+    }
+  }
+  return represented;
+}
+
+/** The read intents the demo can actually reach, derived the same way. */
+export function deriveSharedDemoRepresentedReadIntents(
+  readDefinitions: readonly OperationReadDefinition[],
+): ReadonlySet<AthenaReadIntent> {
+  const represented = new Set<AthenaReadIntent>();
+  for (const definition of readDefinitions) {
+    if (definition.actors.sharedDemo !== "admit") continue;
+    represented.add(definition.access.intent);
+  }
+  return represented;
+}
+
+export type SharedDemoGatewayBinding = {
+  gateway: string;
+  operation: string;
+  demoReachable: boolean;
+};
+
+/**
+ * Which protected external gateways each definition binds.
+ *
+ * Replaces `SHARED_DEMO_GATEWAY_ENFORCEMENT_BINDINGS`, which listed
+ * `module -> handler-local guard name` pairs and was verified by grepping the
+ * module source for that identifier. Those guards are retired; the successor
+ * fact is `effects: { mode: "protected", gateways }` on the definition, which
+ * the rail enforces rather than a test merely observing.
+ */
+export function deriveSharedDemoGatewayBindings(
+  definitions: readonly OperationDefinition[],
+): readonly SharedDemoGatewayBinding[] {
+  const bindings: SharedDemoGatewayBinding[] = [];
+  for (const definition of definitions) {
+    if (definition.effects.mode !== "protected") continue;
+    for (const gateway of definition.effects.gateways) {
+      bindings.push({
+        gateway,
+        operation: describeDefinition(definition),
+        demoReachable: definition.actors.sharedDemo === "admit",
+      });
+    }
+  }
+  return bindings;
+}
+
+/**
+ * The shared-demo coverage invariant, both directions, over the definitions.
+ *
+ * Forward: every granted capability/intent has at least one demo-admitted
+ * definition representing it — a grant nothing implements is a stale grant.
+ * Reverse: every demo-admitted definition declares only granted capabilities
+ * and intents — a definition that admits the demo for something ungranted is
+ * a silent widening of demo reach. Plus: no demo-reachable definition may
+ * bind a gateway that policy classifies as fully denied, and every gateway a
+ * definition binds must be classified at all.
+ */
+export function validateSharedDemoCoverage(
+  definitions: readonly OperationDefinition[],
+  readDefinitions: readonly OperationReadDefinition[],
+) {
   const errors: string[] = [];
   const seenCapabilities = new Set<string>();
   for (const entry of SHARED_DEMO_CAPABILITY_CLASSIFICATIONS) {
@@ -356,15 +312,54 @@ export function validateSharedDemoCoverage() {
     }
     seenGateways.add(entry.gateway);
   }
-  const enforcedCapabilities = new Set(
-    SHARED_DEMO_PUBLIC_FUNCTION_INVENTORY.map((entry) => entry.capability),
-  );
+
+  const represented = deriveSharedDemoRepresentedCapabilities(definitions);
   for (const capability of SHARED_DEMO_ALLOWED_CAPABILITIES) {
-    if (!enforcedCapabilities.has(capability)) {
+    if (!represented.has(capability)) {
       errors.push(
-        `No enforced public function represents allowed demo capability: ${capability}`,
+        `No admitted definition represents allowed demo capability: ${capability}`,
       );
     }
   }
+  for (const capability of represented) {
+    if (!isSharedDemoOperationCapabilityAllowed(capability)) {
+      errors.push(
+        `Definition admits the shared demo for ungranted capability: ${capability}`,
+      );
+    }
+  }
+
+  const representedIntents =
+    deriveSharedDemoRepresentedReadIntents(readDefinitions);
+  for (const intent of SHARED_DEMO_ALLOWED_READ_INTENTS) {
+    if (!representedIntents.has(intent)) {
+      errors.push(
+        `No admitted read definition represents allowed demo read intent: ${intent}`,
+      );
+    }
+  }
+  for (const intent of representedIntents) {
+    if (!isSharedDemoReadIntentAllowed(intent)) {
+      errors.push(
+        `Read definition admits the shared demo for ungranted intent: ${intent}`,
+      );
+    }
+  }
+
+  for (const binding of deriveSharedDemoGatewayBindings(definitions)) {
+    const classification = classifySharedDemoExternalGateway(binding.gateway);
+    if (!seenGateways.has(binding.gateway)) {
+      errors.push(
+        `Unclassified protected gateway on ${binding.operation}: ${binding.gateway}`,
+      );
+      continue;
+    }
+    if (binding.demoReachable && classification.decision !== "simulated") {
+      errors.push(
+        `${binding.operation} admits the shared demo but binds a non-simulated gateway: ${binding.gateway}`,
+      );
+    }
+  }
+
   return errors;
 }

@@ -279,7 +279,17 @@ describe("customRange.requestRange mutation (access gating)", () => {
         startDate: "2026-07-01",
         endDate: "2026-07-10",
       }),
-    ).rejects.toThrow("Reports access unavailable.");
+      // The admission rail stops an anonymous caller before the handler, so
+      // the denial is the rail's rather than the reports gate's. Nothing is
+      // written either way, which the row assertion below proves.
+    ).rejects.toThrow("Sign in again to continue.");
+
+    await expect(
+      t.run((ctx) =>
+        // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
+        ctx.db.query("reportRangeResult").collect(),
+      ),
+    ).resolves.toEqual([]);
   });
 });
 

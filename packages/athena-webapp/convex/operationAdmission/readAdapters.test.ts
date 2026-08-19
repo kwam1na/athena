@@ -1,10 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { defineReadOperation } from "./readDefinitions";
-import {
-  createSharedDemoReadOperationAdapter,
-  resolveReadOperationAdmission,
-} from "./readAdapters";
+import { resolveAdmissionChain } from "./adapters";
+import { createPublicReadOperationAdapter } from "./readAdapters";
+import { createSharedDemoReadOperationAdapter } from "../sharedDemo/readOperationAdapter";
 import type { OperationReadAdapter } from "./types";
 
 vi.mock("@convex-dev/auth/server", () => ({
@@ -14,10 +13,11 @@ vi.mock("@convex-dev/auth/server", () => ({
 import { getAuthUserId } from "@convex-dev/auth/server";
 
 const definition = defineReadOperation({
+  kind: "query" as const,
   operationId: "demo.read",
-  access: { kind: "read", intent: "demo.view" },
+  access: { kind: "read", intent: "pos.view" as const },
   scope: { kind: "store", storeIdArg: "storeId" },
-  actors: { normalUser: "admit", sharedDemo: "admit" },
+  actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
 });
 
 describe("operation read admission adapters", () => {
@@ -35,7 +35,7 @@ describe("operation read admission adapters", () => {
     };
 
     await expect(
-      resolveReadOperationAdmission(
+      resolveAdmissionChain(
         demoCtx({
           principal: {
             admissionExpiresAt: Date.now() - 1,
@@ -47,10 +47,7 @@ describe("operation read admission adapters", () => {
         }) as never,
         { storeId: "store-1" },
         definition,
-        {
-          normalAdapter,
-          sharedDemoAdapter: createSharedDemoReadOperationAdapter(),
-        },
+        [createSharedDemoReadOperationAdapter(), normalAdapter],
       ),
     ).rejects.toThrow("demo session has expired");
     expect(normalAdapter.resolve).not.toHaveBeenCalled();
@@ -65,7 +62,7 @@ describe("operation read admission adapters", () => {
     };
 
     await expect(
-      resolveReadOperationAdmission(
+      resolveAdmissionChain(
         demoCtx({
           principal: {
             admissionExpiresAt: Date.now() + 60_000,
@@ -77,10 +74,7 @@ describe("operation read admission adapters", () => {
         }) as never,
         { storeId: "store-1" },
         definition,
-        {
-          normalAdapter,
-          sharedDemoAdapter: createSharedDemoReadOperationAdapter(),
-        },
+        [createSharedDemoReadOperationAdapter(), normalAdapter],
       ),
     ).rejects.toThrow("demo is unavailable in this environment");
     expect(normalAdapter.resolve).not.toHaveBeenCalled();
@@ -89,25 +83,27 @@ describe("operation read admission adapters", () => {
   it("admits an anonymous caller for a public-opted-in read", async () => {
     const anonymousNormalAdapter: OperationReadAdapter = {
       kind: "normal_user",
-      resolve: vi.fn(async () => ({ kind: "not_applicable" as const })),
+      resolve: vi.fn(async () => ({ kind: "unauthenticated" as const })),
     };
 
     const publicDefinition = defineReadOperation({
       operationId: "storefront.read",
-      access: { kind: "read", intent: "storefront.view" },
+      access: { kind: "read", intent: "inventory.catalog.view" as const },
       scope: { kind: "store", storeIdArg: "storeId" },
+      kind: "query" as const,
       actors: { normalUser: "admit", sharedDemo: "admit", public: "admit" },
     });
 
     await expect(
-      resolveReadOperationAdmission(
+      resolveAdmissionChain(
         demoCtx({ principal: null }) as never,
         { storeId: "store-1" },
         publicDefinition,
-        {
-          normalAdapter: anonymousNormalAdapter,
-          sharedDemoAdapter: createSharedDemoReadOperationAdapter(),
-        },
+        [
+          createSharedDemoReadOperationAdapter(),
+          anonymousNormalAdapter,
+          createPublicReadOperationAdapter(),
+        ],
       ),
     ).resolves.toMatchObject({
       actor: { kind: "public" },
@@ -118,18 +114,19 @@ describe("operation read admission adapters", () => {
   it("rejects an anonymous caller when the read does not opt public in", async () => {
     const anonymousNormalAdapter: OperationReadAdapter = {
       kind: "normal_user",
-      resolve: vi.fn(async () => ({ kind: "not_applicable" as const })),
+      resolve: vi.fn(async () => ({ kind: "unauthenticated" as const })),
     };
 
     await expect(
-      resolveReadOperationAdmission(
+      resolveAdmissionChain(
         demoCtx({ principal: null }) as never,
         { storeId: "store-1" },
         definition,
-        {
-          normalAdapter: anonymousNormalAdapter,
-          sharedDemoAdapter: createSharedDemoReadOperationAdapter(),
-        },
+        [
+          createSharedDemoReadOperationAdapter(),
+          anonymousNormalAdapter,
+          createPublicReadOperationAdapter(),
+        ],
       ),
     ).rejects.toThrow("Sign in again to continue.");
   });

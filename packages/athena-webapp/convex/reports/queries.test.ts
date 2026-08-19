@@ -52,12 +52,6 @@ vi.mock("../lib/athenaUserAuth", async (importOriginal) => ({
 }));
 import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 
-vi.mock("../sharedDemo/actor", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../sharedDemo/actor")>()),
-  requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
-}));
-import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
-
 vi.mock("../platform/capabilityCatalog", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../platform/capabilityCatalog")>()),
   isWeeklyReportingEnabledForStoreDoc: vi.fn(),
@@ -72,6 +66,13 @@ function handlerOf(fn: unknown): (...args: any[]) => Promise<any> {
 beforeEach(() => {
   vi.mocked(requireReportsStoreAccess).mockResolvedValue({} as never);
   vi.mocked(isWeeklyReportingEnabledForStoreDoc).mockReturnValue(true);
+  // The admission rail's identity port. convex-test has no auth provider, so
+  // without a stub every exported query is an anonymous denial and these
+  // suites would test admission rather than projections. Admission behaviour
+  // on these eleven queries is covered in `reportsAdmission.test.ts`.
+  vi.mocked(requireAuthenticatedAthenaUserWithCtx).mockResolvedValue({
+    _id: "athena-user" as Id<"athenaUser">,
+  } as never);
 });
 
 async function seedStore(t: ReturnType<typeof convexTest>) {
@@ -3296,9 +3297,6 @@ describe("weekly reads under the real access gate", () => {
     vi.mocked(requireReportsStoreAccess).mockImplementation(
       actualAccess.requireReportsStoreAccess as never,
     );
-    vi.mocked(
-      requireSharedDemoStoreCapabilityIfApplicable,
-    ).mockResolvedValue(null as never);
   });
 
   it("lets a full admin of the owning organization read all three surfaces", async () => {
@@ -3333,6 +3331,13 @@ describe("weekly reads under the real access gate", () => {
     }
   });
 
+  /**
+   * Unauthenticated callers are now stopped one layer earlier — by the
+   * admission rail, before the handler and therefore before the reports gate.
+   * The outcome that matters is unchanged (nothing is read), and the message
+   * is the rail's generic one rather than the gate's opaque one; neither
+   * discloses whether the store exists.
+   */
   it("denies an unauthenticated caller on every surface", async () => {
     const t = convexTest(schema, modules);
     const { storeId } = await seedStore(t);
@@ -3340,7 +3345,7 @@ describe("weekly reads under the real access gate", () => {
     signOut();
 
     for (const read of readAll(t, storeId)) {
-      await expect(read()).rejects.toThrow("Reports access unavailable.");
+      await expect(read()).rejects.toThrow("Sign in again to continue.");
     }
   });
 
@@ -3392,8 +3397,11 @@ describe("weekly reads under the real access gate", () => {
 
   it("rejects an oversized history page before authorizing or reading", async () => {
     const t = convexTest(schema, modules);
-    const { storeId } = await seedStore(t);
-    signOut();
+    const { organizationId, storeId } = await seedStore(t);
+    // Admitted (the rail runs first now) but NOT authorized: the page-size
+    // rejection still has to beat the reports gate, which would otherwise
+    // answer "Reports access unavailable." for this caller.
+    signIn(await seedMember(t, organizationId, "pos_only"));
 
     await expect(
       t.run((ctx) =>

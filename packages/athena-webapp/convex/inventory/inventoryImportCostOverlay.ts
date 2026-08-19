@@ -23,8 +23,10 @@ import {
   updateCostOverlayDecisionOperationDefinition,
 } from "../operationAdmission/definitions";
 import { requireOperationActorAthenaUserId } from "../operationAdmission/actors";
-import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import {
   getCostOverlayRunReadDefinition,
   resolveCostOverlayRunFromUrlReadDefinition,
@@ -483,7 +485,7 @@ export const createCostOverlayRun = mutation({
     requestKey: v.string(),
     selectedColumn: inventoryImportCostOverlayColumnValidator,
   },
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     createCostOverlayRunOperationDefinition,
     async (
       ctx,
@@ -575,7 +577,7 @@ export const getCostOverlayRun = query({
     storeId: v.id("store"),
     runId: v.id("inventoryImportCostOverlayRun"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getCostOverlayRunReadDefinition,
     async (
       ctx,
@@ -599,7 +601,7 @@ export const resolveCostOverlayRunFromUrl = query({
     storeId: v.id("store"),
     runId: v.string(),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     resolveCostOverlayRunFromUrlReadDefinition,
     async (
       ctx,
@@ -626,7 +628,7 @@ export const resolveCostOverlayRunFromUrl = query({
 
 export const getLatestCostOverlaySourceDescriptor = query({
   args: { storeId: v.id("store") },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getLatestCostOverlaySourceDescriptorReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
       await requireReportsStoreAccess(ctx, args.storeId);
@@ -643,7 +645,7 @@ export const getLatestCostOverlaySourceDescriptor = query({
 
 export const listRecentCostOverlayRuns = query({
   args: { storeId: v.id("store") },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listRecentCostOverlayRunsReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
       await requireReportsStoreAccess(ctx, args.storeId);
@@ -736,7 +738,7 @@ export const listCostOverlayRows = query({
     search: v.optional(v.string()),
     filter: v.optional(costOverlayRowFilterValidator),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listCostOverlayRowsReadDefinition,
     async (
       ctx,
@@ -762,7 +764,7 @@ export const updateCostOverlayDecision = mutation({
     rowId: v.id("inventoryImportCostOverlayRow"),
     decision: inventoryImportCostOverlayCommandDecisionValidator,
   },
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     updateCostOverlayDecisionOperationDefinition,
     async (
       ctx,
@@ -827,7 +829,7 @@ export const updateCostOverlayDecisionsBulk = mutation({
     decision: inventoryImportCostOverlayCommandDecisionValidator,
     requestKey: v.string(),
   },
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     updateCostOverlayDecisionsBulkOperationDefinition,
     async (
       ctx,
@@ -1060,7 +1062,7 @@ export const prepareCostOverlayRun = mutation({
     runId: v.id("inventoryImportCostOverlayRun"),
     expectedDecisionRevision: v.number(),
   },
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     prepareCostOverlayRunOperationDefinition,
     async (
       ctx,
@@ -1120,7 +1122,7 @@ export const confirmCostOverlayApply = mutation({
     runId: v.id("inventoryImportCostOverlayRun"),
     expectedManifestDigest: v.string(),
   },
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     confirmCostOverlayApplyOperationDefinition,
     async (
       ctx,
@@ -1178,7 +1180,7 @@ export const getCostOverlayUndoPreview = query({
     storeId: v.id("store"),
     runId: v.id("inventoryImportCostOverlayRun"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getCostOverlayUndoPreviewReadDefinition,
     async (
       ctx,
@@ -1208,7 +1210,7 @@ export const refreshCostOverlayUndoPreview = mutation({
     runId: v.id("inventoryImportCostOverlayRun"),
     requestKey: v.string(),
   },
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     refreshCostOverlayUndoPreviewOperationDefinition,
     async (ctx, args) => {
       await requireReportsStoreAccess(ctx, args.storeId);
@@ -1289,7 +1291,7 @@ export const requestCostOverlayUndo = mutation({
     runId: v.id("inventoryImportCostOverlayRun"),
     requestKey: v.string(),
   },
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     requestCostOverlayUndoOperationDefinition,
     async (
       ctx,
@@ -1362,7 +1364,7 @@ export const retryCostOverlayWork = mutation({
     storeId: v.id("store"),
     runId: v.id("inventoryImportCostOverlayRun"),
   },
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     retryCostOverlayWorkOperationDefinition,
     async (
       ctx,
@@ -1462,7 +1464,7 @@ export const reopenCostOverlayRun = mutation({
     storeId: v.id("store"),
     runId: v.id("inventoryImportCostOverlayRun"),
   },
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     reopenCostOverlayRunOperationDefinition,
     async (
       ctx,
@@ -1496,7 +1498,7 @@ export const abandonCostOverlayRun = mutation({
     storeId: v.id("store"),
     runId: v.id("inventoryImportCostOverlayRun"),
   },
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     abandonCostOverlayRunOperationDefinition,
     async (
       ctx,

@@ -10,9 +10,16 @@ import {
 import { ok, userError } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import { listPosStaffProfilesReadDefinition } from "../operationAdmission/readDefinitions";
-import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
+import {
+  createStaffProfileOperationDefinition,
+  updateStaffProfileOperationDefinition,
+} from "../operationAdmission/domains/operations_definitions";
+import { getStaffProfileByIdReadDefinition } from "../operationAdmission/domains/operations_readDefinitions";
 import { normalizePhoneNumber } from "./helpers/linking";
 import {
   createStaffCredentialWithCtx,
@@ -528,7 +535,11 @@ export const getStaffProfileById = query({
   args: {
     staffProfileId: v.id("staffProfile"),
   },
-  handler: (ctx, args) => getStaffProfileByIdWithCtx(ctx, args),
+  handler: admitPublicQuery(
+    getStaffProfileByIdReadDefinition,
+    (ctx, args: { staffProfileId: Id<"staffProfile"> }) =>
+      getStaffProfileByIdWithCtx(ctx, args),
+  ),
 });
 
 export const listStaffProfiles = query({
@@ -536,7 +547,7 @@ export const listStaffProfiles = query({
     status: v.optional(staffProfileStatusValidator),
     storeId: v.id("store"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listPosStaffProfilesReadDefinition,
     async (
       ctx,
@@ -575,38 +586,59 @@ export const createStaffProfile = mutation({
     username: v.string(),
   },
   returns: commandResultValidator(v.any()),
-  handler: async (ctx, args) => {
-    await requireSharedDemoCapabilityIfApplicable(ctx, "staff.manage");
-    try {
-      return ok(await createStaffProfileWithCtx(ctx, args));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
+  handler: admitPublicMutation(
+    createStaffProfileOperationDefinition,
+    async (
+      ctx,
+      args: {
+        createdByUserId?: Id<"athenaUser">;
+        email?: string;
+        firstName: string;
+        hiredAt?: number;
+        jobTitle?: string;
+        lastName: string;
+        linkedUserId?: Id<"athenaUser">;
+        memberRole?: "full_admin" | "pos_only";
+        notes?: string;
+        organizationId: Id<"organization">;
+        phoneNumber?: string;
+        requestedRoles: OperationalRole[];
+        staffCode?: string;
+        storeId: Id<"store">;
+        username: string;
+      },
+    ) => {
+      try {
+        return ok(await createStaffProfileWithCtx(ctx, args));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
 
-      if (
-        message === "Username is already in use for this store." ||
-        message ===
-          "A staff profile already links this Athena user in the store."
-      ) {
-        return userError({
-          code: "conflict",
-          message,
-        });
+        if (
+          message === "Username is already in use for this store." ||
+          message ===
+            "A staff profile already links this Athena user in the store."
+        ) {
+          return userError({
+            code: "conflict",
+            message,
+          });
+        }
+
+        if (
+          message === "At least one staff role is required." ||
+          message.startsWith("Staff first name is required.") ||
+          message.startsWith("Staff last name is required.")
+        ) {
+          return userError({
+            code: "validation_failed",
+            message,
+          });
+        }
+
+        throw error;
       }
-
-      if (
-        message === "At least one staff role is required." ||
-        message.startsWith("Staff first name is required.") ||
-        message.startsWith("Staff last name is required.")
-      ) {
-        return userError({
-          code: "validation_failed",
-          message,
-        });
-      }
-
-      throw error;
-    }
-  },
+    },
+  ),
 });
 
 export const updateStaffProfile = mutation({
@@ -632,48 +664,71 @@ export const updateStaffProfile = mutation({
     username: v.optional(v.string()),
   },
   returns: commandResultValidator(v.any()),
-  handler: async (ctx, args) => {
-    await requireSharedDemoCapabilityIfApplicable(ctx, "staff.manage");
-    try {
-      return ok(await updateStaffProfileWithCtx(ctx, args));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
+  handler: admitPublicMutation(
+    updateStaffProfileOperationDefinition,
+    async (
+      ctx,
+      args: {
+        email?: string;
+        firstName?: string;
+        hiredAt?: number;
+        jobTitle?: string;
+        lastName?: string;
+        linkedUserId?: Id<"athenaUser">;
+        memberRole?: "full_admin" | "pos_only";
+        notes?: string;
+        organizationId: Id<"organization">;
+        phoneNumber?: string;
+        requestedRoles?: OperationalRole[];
+        staffCode?: string;
+        staffProfileId: Id<"staffProfile">;
+        status?: StaffProfileStatus;
+        storeId: Id<"store">;
+        updatedByUserId?: Id<"athenaUser">;
+        username?: string;
+      },
+    ) => {
+      try {
+        return ok(await updateStaffProfileWithCtx(ctx, args));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
 
-      if (
-        message === "Staff profile not found." ||
-        message === "Staff credential not found."
-      ) {
-        return userError({
-          code: "not_found",
-          message,
-        });
+        if (
+          message === "Staff profile not found." ||
+          message === "Staff credential not found."
+        ) {
+          return userError({
+            code: "not_found",
+            message,
+          });
+        }
+
+        if (
+          message === "Staff profile does not belong to this store." ||
+          message === "Username is already in use for this store." ||
+          message ===
+            "A staff profile already links this Athena user in the store."
+        ) {
+          return userError({
+            code: "conflict",
+            message,
+          });
+        }
+
+        if (
+          message === "No staff profile changes were provided." ||
+          message === "At least one staff role is required." ||
+          message.startsWith("Staff first name is required.") ||
+          message.startsWith("Staff last name is required.")
+        ) {
+          return userError({
+            code: "validation_failed",
+            message,
+          });
+        }
+
+        throw error;
       }
-
-      if (
-        message === "Staff profile does not belong to this store." ||
-        message === "Username is already in use for this store." ||
-        message ===
-          "A staff profile already links this Athena user in the store."
-      ) {
-        return userError({
-          code: "conflict",
-          message,
-        });
-      }
-
-      if (
-        message === "No staff profile changes were provided." ||
-        message === "At least one staff role is required." ||
-        message.startsWith("Staff first name is required.") ||
-        message.startsWith("Staff last name is required.")
-      ) {
-        return userError({
-          code: "validation_failed",
-          message,
-        });
-      }
-
-      throw error;
-    }
-  },
+    },
+  ),
 });

@@ -40,6 +40,16 @@ vi.mock("./catalogSummary", () => ({
 type Row = Record<string, unknown> & { _id: string };
 type TableName = "category" | "color" | "subcategory";
 
+/**
+ * `admitPublicMutation` hands the handler a CLONE of the caller's context (with
+ * `operationAdmission` attached), so helpers no longer receive the exact object
+ * the test constructed. Matching on the shared `db` keeps the assertion about
+ * "the same transaction" rather than about object identity.
+ */
+function admittedCtx(ctx: unknown) {
+  return expect.objectContaining({ db: (ctx as { db: unknown }).db });
+}
+
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
 }
@@ -127,7 +137,7 @@ describe("taxonomy SKU search refresh", () => {
     });
 
     expect(mocks.markCatalogSummaryNeedsRefresh).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       "store-1",
     );
   });
@@ -143,11 +153,11 @@ describe("taxonomy SKU search refresh", () => {
     });
 
     expect(mocks.refreshProductSkuSearchForCategory).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       "category-1",
     );
     expect(mocks.markCatalogSummaryNeedsRefresh).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       "store-1",
     );
   });
@@ -170,7 +180,7 @@ describe("taxonomy SKU search refresh", () => {
     });
 
     expect(mocks.refreshProductSkuSearchForSubcategory).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       "subcategory-1",
     );
   });
@@ -186,7 +196,7 @@ describe("taxonomy SKU search refresh", () => {
     });
 
     expect(mocks.refreshProductSkuSearchForColor).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       "color-1",
     );
   });
@@ -201,11 +211,11 @@ describe("taxonomy SKU search refresh", () => {
     });
 
     expect(mocks.refreshProductSkuSearchForCategory).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       "category-1",
     );
     expect(mocks.markCatalogSummaryNeedsRefresh).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       "store-1",
     );
   });
@@ -227,7 +237,7 @@ describe("taxonomy SKU search refresh", () => {
     });
 
     expect(mocks.refreshProductSkuSearchForSubcategory).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       "subcategory-1",
     );
   });
@@ -242,7 +252,7 @@ describe("taxonomy SKU search refresh", () => {
     });
 
     expect(mocks.refreshProductSkuSearchForColor).toHaveBeenCalledWith(
-      ctx,
+      admittedCtx(ctx),
       "color-1",
     );
   });

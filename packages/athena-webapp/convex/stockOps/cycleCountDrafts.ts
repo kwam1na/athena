@@ -14,8 +14,10 @@ import {
   submitActiveCycleCountDraftsOperationDefinition,
   submitCycleCountDraftOperationDefinition,
 } from "../operationAdmission/definitions";
-import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import {
   getActiveCycleCountDraftReadDefinition,
   getActiveCycleCountDraftSummaryReadDefinition,
@@ -1062,7 +1064,7 @@ export const getActiveCycleCountDraft = query({
     scopeKey: v.string(),
     storeId: v.id("store"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getActiveCycleCountDraftReadDefinition,
     getActiveCycleCountDraftWithCtx,
   ),
@@ -1072,40 +1074,40 @@ export const getActiveCycleCountDraftSummary = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getActiveCycleCountDraftSummaryReadDefinition,
     getActiveCycleCountDraftSummaryWithCtx,
   ),
 });
 
-const ensureCycleCountDraftAdmittedHandler = withOperationMutationAdmission(
+const ensureCycleCountDraftAdmittedHandler = admitPublicMutation(
   ensureCycleCountDraftOperationDefinition,
   ensureCycleCountDraftCommandWithCtx,
 );
 
-const saveCycleCountDraftLineAdmittedHandler = withOperationMutationAdmission(
+const saveCycleCountDraftLineAdmittedHandler = admitPublicMutation(
   saveCycleCountDraftLineOperationDefinition,
   saveCycleCountDraftLineCommandWithCtx,
 );
 
-const discardCycleCountDraftAdmittedHandler = withOperationMutationAdmission(
+const discardCycleCountDraftAdmittedHandler = admitPublicMutation(
   discardCycleCountDraftOperationDefinition,
   discardCycleCountDraftCommandWithCtx,
 );
 
 const refreshCycleCountDraftLineBaselineAdmittedHandler =
-  withOperationMutationAdmission(
+  admitPublicMutation(
     refreshCycleCountDraftLineBaselineOperationDefinition,
     refreshCycleCountDraftLineBaselineCommandWithCtx,
   );
 
-const submitCycleCountDraftAdmittedHandler = withOperationMutationAdmission(
+const submitCycleCountDraftAdmittedHandler = admitPublicMutation(
   submitCycleCountDraftOperationDefinition,
   submitCycleCountDraftCommandWithCtx,
 );
 
 const submitActiveCycleCountDraftsAdmittedHandler =
-  withOperationMutationAdmission(
+  admitPublicMutation(
     submitActiveCycleCountDraftsOperationDefinition,
     submitActiveCycleCountDraftsCommandWithCtx,
   );

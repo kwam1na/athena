@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import {
   internalMutation,
+  internalQuery,
   mutation,
   query,
   type MutationCtx,
@@ -12,6 +13,22 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
+import {
+  removeBannerMessageOperationDefinition,
+  upsertBannerMessageOperationDefinition,
+} from "../operationAdmission/domains/inventoryCatalog_definitions";
+import {
+  getBannerMessageReadDefinition,
+  getPublicActiveBannerMessageReadDefinition,
+} from "../operationAdmission/domains/inventoryCatalog_readDefinitions";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
 
 const entity = "bannerMessage";
 
@@ -134,15 +151,30 @@ export const get = query({
       countdownEndsAt: v.optional(v.number()),
     })
   ),
-  handler: async (ctx, args) => {
-    return (
-      (await ctx.db
-      .query(entity)
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .first()) ?? null
-    );
-  },
+  handler: admitPublicQuery(
+    getBannerMessageReadDefinition,
+    async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) => {
+      return (
+        (await ctx.db
+          .query(entity)
+          .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+          .first()) ?? null
+      );
+    },
+  ),
 });
+
+async function getPublicActiveBannerMessageWithCtx(
+  ctx: QueryCtx,
+  args: { storeId: Id<"store">; nowMs: number },
+) {
+  const bannerMessage = await ctx.db
+    .query(entity)
+    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+    .first();
+
+  return presentPublicBannerMessage(bannerMessage, args.nowMs);
+}
 
 export const getPublicActive = query({
   args: {
@@ -150,14 +182,26 @@ export const getPublicActive = query({
     nowMs: v.number(),
   },
   returns: publicBannerMessageValidator,
-  handler: async (ctx, args) => {
-    const bannerMessage = await ctx.db
-      .query(entity)
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .first();
+  handler: admitPublicQuery(
+    getPublicActiveBannerMessageReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { storeId: Id<"store">; nowMs: number },
+    ) => getPublicActiveBannerMessageWithCtx(ctx, args),
+  ),
+});
 
-    return presentPublicBannerMessage(bannerMessage, args.nowMs);
+/**
+ * Internal sibling for the anonymous `GET /banner-message` route. The public
+ * export stays until wave B2 flips the route to this reference.
+ */
+export const getPublicActiveInternal = internalQuery({
+  args: {
+    storeId: v.id("store"),
+    nowMs: v.number(),
   },
+  returns: publicBannerMessageValidator,
+  handler: async (ctx, args) => getPublicActiveBannerMessageWithCtx(ctx, args),
 });
 
 export const upsert = mutation({
@@ -178,7 +222,19 @@ export const upsert = mutation({
     active: v.boolean(),
     countdownEndsAt: v.optional(v.number()),
   }),
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    upsertBannerMessageOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        storeId: Id<"store">;
+        heading?: string;
+        message?: string;
+        active: boolean;
+        countdownEndsAt?: number;
+        currentTimeMs: number;
+      },
+    ) => {
     await requireHomepageStoreAdmin(ctx, args.storeId);
 
     const shouldActivate =
@@ -240,7 +296,8 @@ export const upsert = mutation({
       throw new Error("Failed to get created banner message");
     }
     return created;
-  },
+    },
+  ),
 });
 
 export const remove = mutation({
@@ -248,14 +305,17 @@ export const remove = mutation({
     id: v.id(entity),
   },
   returns: v.boolean(),
-  handler: async (ctx, args) => {
-    const existing = await ctx.db.get("bannerMessage", args.id);
-    if (!existing) {
-      return true;
-    }
+  handler: admitPublicMutation(
+    removeBannerMessageOperationDefinition,
+    async (ctx: OperationMutationCtx, args: { id: Id<"bannerMessage"> }) => {
+      const existing = await ctx.db.get("bannerMessage", args.id);
+      if (!existing) {
+        return true;
+      }
 
-    await requireHomepageStoreAdmin(ctx, existing.storeId);
-    await ctx.db.delete("bannerMessage", args.id);
-    return true;
-  },
+      await requireHomepageStoreAdmin(ctx, existing.storeId);
+      await ctx.db.delete("bannerMessage", args.id);
+      return true;
+    },
+  ),
 });

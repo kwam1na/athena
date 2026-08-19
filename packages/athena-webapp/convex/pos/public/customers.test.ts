@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  getSharedDemoActorWithCtx: vi.fn(),
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
   requireStoreMemberAccessWithCtx: vi.fn(),
@@ -28,6 +29,10 @@ vi.mock("../../lib/athenaUserAuth", () => ({
 
 vi.mock("../../lib/storeMemberAccess", () => ({
   requireStoreMemberAccessWithCtx: mocks.requireStoreMemberAccessWithCtx,
+}));
+
+vi.mock("../../sharedDemo/actor", () => ({
+  getSharedDemoActorWithCtx: mocks.getSharedDemoActorWithCtx,
 }));
 
 vi.mock("../application/queries/searchCustomers", () => ({
@@ -64,6 +69,7 @@ import {
   updateCustomer,
   updateCustomerStats,
 } from "./customers";
+import { AthenaUnauthenticatedError } from "../../lib/athenaUnauthenticated";
 import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";
 
 function getHandler(definition: unknown) {
@@ -357,6 +363,75 @@ describe("pos public customers authorization", () => {
       expect(delegate()).not.toHaveBeenCalled();
     },
   );
+});
+
+describe("pos public customers admission", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mocks.getSharedDemoActorWithCtx.mockResolvedValue(null);
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
+      _id: "athena-user-1",
+    });
+    mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue({
+      role: "pos_only",
+    });
+    mocks.updateCustomer.mockResolvedValue({ kind: "ok", data: null });
+    mocks.createCustomer.mockResolvedValue({ kind: "ok", data: {} });
+  });
+
+  it("resolves store scope from the customer row a caller-supplied id names", async () => {
+    const ctx = buildCtx();
+
+    await getHandler(updateCustomer)(ctx as never, {
+      customerId: "customer-1",
+      name: "Ada",
+    });
+
+    expect(mocks.updateCustomer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationAdmission: expect.objectContaining({
+          constraints: { storeId: "store-1" },
+        }),
+      }),
+      expect.objectContaining({ customerId: "customer-1" }),
+    );
+  });
+
+  it("denies an anonymous caller: no POS customer write admits `public`", async () => {
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
+      new AthenaUnauthenticatedError(),
+    );
+    const ctx = buildCtx();
+
+    await expect(
+      getHandler(createCustomer)(ctx as never, {
+        storeId: "store-1",
+        name: "Mallory",
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+    expect(mocks.createCustomer).not.toHaveBeenCalled();
+  });
+
+  it("denies shared demo: `pos.customer.manage` is not a demo grant", async () => {
+    // The denial is terminal — the demo actor is never retried against the
+    // lower-trust adapters, so it cannot slip through as an anonymous caller.
+    mocks.getSharedDemoActorWithCtx.mockResolvedValue({
+      athenaUserId: "demo-user-1",
+      kind: "shared_demo",
+      organizationId: "org-1",
+      storeId: "store-1",
+    });
+    const ctx = buildCtx();
+
+    await expect(
+      getHandler(createCustomer)(ctx as never, {
+        storeId: "store-1",
+        name: "Demo",
+      }),
+    ).rejects.toThrow("This action isn't allowed in the demo.");
+    expect(mocks.createCustomer).not.toHaveBeenCalled();
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).not.toHaveBeenCalled();
+  });
 });
 
 describe("pos public customers return contracts", () => {

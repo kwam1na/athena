@@ -26,7 +26,22 @@ import type { OutboundValuationBasisSnapshot } from "../inventoryLedger/types";
 import { resolveReportingOperatingPeriodWithCtx } from "../storeTime/operatingPeriods";
 import { recordFacts } from "../reports/ingest";
 import type { NewReportFact } from "../../shared/reportsContract";
-import { requireReadySharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
+import {
+  addServiceCaseLineItemOperationDefinition,
+  createServiceCaseOperationDefinition,
+  createWalkInServiceCaseOperationDefinition,
+  recordServiceInventoryUsageOperationDefinition,
+  recordServicePaymentOperationDefinition,
+  updateServiceCaseStatusOperationDefinition,
+} from "../operationAdmission/domains/operations_definitions";
+import {
+  getServiceCaseDetailsReadDefinition,
+  listActiveServiceCasesReadDefinition,
+} from "../operationAdmission/domains/operations_readDefinitions";
 
 export const SERVICE_CASE_STATUSES = [
   "intake",
@@ -437,11 +452,6 @@ export async function createServiceCaseWithCtx(
   ctx: MutationCtx,
   args: Parameters<typeof buildServiceCase>[0]
 ) {
-  await requireReadySharedDemoStoreCapabilityIfApplicable(
-    ctx,
-    "service.cases.manage",
-    args.storeId,
-  );
   const existingServiceCase = await ctx.db
     .query("serviceCase")
     .withIndex("by_operationalWorkItemId", (q) =>
@@ -511,150 +521,176 @@ export const createServiceCase = mutation({
     ),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      return userError({
-        code: "not_found",
-        message: "Store not found.",
-      });
-    }
+  handler: admitPublicMutation(
+    createServiceCaseOperationDefinition,
+    async (
+      ctx,
+      args: {
+        appointmentId?: Id<"serviceAppointment">;
+        assignedStaffProfileId?: Id<"staffProfile">;
+        createdByUserId?: Id<"athenaUser">;
+        customerProfileId: Id<"customerProfile">;
+        notes?: string;
+        operationalWorkItemId: Id<"operationalWorkItem">;
+        quotedAmount?: number;
+        serviceCatalogId?: Id<"serviceCatalog">;
+        serviceMode: "same_day" | "consultation" | "repair" | "revamp";
+        storeId: Id<"store">;
+      },
+    ) => {
+      const store = await ctx.db.get("store", args.storeId);
+      if (!store) {
+        return userError({
+          code: "not_found",
+          message: "Store not found.",
+        });
+      }
 
-    const workItem = await ctx.db.get("operationalWorkItem", args.operationalWorkItemId);
-    if (!workItem || workItem.storeId !== args.storeId) {
-      return userError({
-        code: "not_found",
-        message: "Operational work item not found for this store.",
-      });
-    }
+      const workItem = await ctx.db.get(
+        "operationalWorkItem",
+        args.operationalWorkItemId,
+      );
+      if (!workItem || workItem.storeId !== args.storeId) {
+        return userError({
+          code: "not_found",
+          message: "Operational work item not found for this store.",
+        });
+      }
 
-    return createServiceCaseWithCtx(ctx, {
-      ...args,
-      organizationId: store.organizationId,
-    });
-  },
+      return createServiceCaseWithCtx(ctx, {
+        ...args,
+        organizationId: store.organizationId,
+      });
+    },
+  ),
 });
 
 export const listActiveServiceCases = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    const serviceCases = await ctx.db
-      .query("serviceCase")
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .collect();
+  handler: admitPublicQuery(
+    listActiveServiceCasesReadDefinition,
+    async (ctx, args: { storeId: Id<"store"> }) => {
+      const serviceCases = await ctx.db
+        .query("serviceCase")
+        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+        .collect();
 
-    const activeServiceCases = serviceCases.filter(
-      (serviceCase) => !TERMINAL_SERVICE_CASE_STATUSES.has(serviceCase.status)
-    );
+      const activeServiceCases = serviceCases.filter(
+        (serviceCase) => !TERMINAL_SERVICE_CASE_STATUSES.has(serviceCase.status)
+      );
 
-    return Promise.all(
-      activeServiceCases.map(async (serviceCase) => {
-        const [
-          customerProfile,
-          staffProfile,
-          serviceCatalogItem,
-          workItem,
-          pendingApprovals,
-          trace,
-        ] =
-          await Promise.all([
-            ctx.db.get("customerProfile", serviceCase.customerProfileId),
-            serviceCase.assignedStaffProfileId
-              ? ctx.db.get("staffProfile", serviceCase.assignedStaffProfileId)
-              : null,
-            serviceCase.serviceCatalogId
-              ? ctx.db.get("serviceCatalog", serviceCase.serviceCatalogId)
-              : null,
-            ctx.db.get("operationalWorkItem", serviceCase.operationalWorkItemId),
-            listPendingApprovalRequestsWithCtx(ctx, serviceCase.operationalWorkItemId),
-            getWorkflowTraceByLookupWithCtx(ctx, {
-              storeId: serviceCase.storeId,
-              workflowType: SERVICE_CASE_WORKFLOW_TYPE,
-              lookupType: SERVICE_CASE_LOOKUP_TYPE,
-              lookupValue: serviceCase._id,
-            }),
-          ]);
+      return Promise.all(
+        activeServiceCases.map(async (serviceCase) => {
+          const [
+            customerProfile,
+            staffProfile,
+            serviceCatalogItem,
+            workItem,
+            pendingApprovals,
+            trace,
+          ] =
+            await Promise.all([
+              ctx.db.get("customerProfile", serviceCase.customerProfileId),
+              serviceCase.assignedStaffProfileId
+                ? ctx.db.get("staffProfile", serviceCase.assignedStaffProfileId)
+                : null,
+              serviceCase.serviceCatalogId
+                ? ctx.db.get("serviceCatalog", serviceCase.serviceCatalogId)
+                : null,
+              ctx.db.get("operationalWorkItem", serviceCase.operationalWorkItemId),
+              listPendingApprovalRequestsWithCtx(ctx, serviceCase.operationalWorkItemId),
+              getWorkflowTraceByLookupWithCtx(ctx, {
+                storeId: serviceCase.storeId,
+                workflowType: SERVICE_CASE_WORKFLOW_TYPE,
+                lookupType: SERVICE_CASE_LOOKUP_TYPE,
+                lookupValue: serviceCase._id,
+              }),
+            ]);
 
-        return {
-          ...serviceCase,
-          customerName: customerProfile?.fullName ?? null,
-          pendingApprovalCount: pendingApprovals.length,
-          serviceCatalogName: serviceCatalogItem?.name ?? null,
-          staffName: staffProfile?.fullName ?? null,
-          workItemTitle: workItem?.title ?? null,
-          workflowTraceId: trace?.traceId,
-        };
-      })
-    );
-  },
+          return {
+            ...serviceCase,
+            customerName: customerProfile?.fullName ?? null,
+            pendingApprovalCount: pendingApprovals.length,
+            serviceCatalogName: serviceCatalogItem?.name ?? null,
+            staffName: staffProfile?.fullName ?? null,
+            workItemTitle: workItem?.title ?? null,
+            workflowTraceId: trace?.traceId,
+          };
+        })
+      );
+    },
+  ),
 });
 
 export const getServiceCaseDetails = query({
   args: {
     serviceCaseId: v.id("serviceCase"),
   },
-  handler: async (ctx, args) => {
-    const serviceCase = await ctx.db.get("serviceCase", args.serviceCaseId);
+  handler: admitPublicQuery(
+    getServiceCaseDetailsReadDefinition,
+    async (ctx, args: { serviceCaseId: Id<"serviceCase"> }) => {
+      const serviceCase = await ctx.db.get("serviceCase", args.serviceCaseId);
 
-    if (!serviceCase) {
-      return null;
-    }
+      if (!serviceCase) {
+        return null;
+      }
 
-    const [
-      lineItems,
-      inventoryUsage,
-      paymentAllocations,
-      pendingApprovals,
-      workItem,
-      trace,
-    ] =
-      await Promise.all([
-        ctx.db
-          .query("serviceCaseLineItem")
-          .withIndex("by_serviceCaseId", (q) => q.eq("serviceCaseId", args.serviceCaseId))
-          .collect(),
-        ctx.db
-          .query("serviceInventoryUsage")
-          .withIndex("by_serviceCaseId", (q) => q.eq("serviceCaseId", args.serviceCaseId))
-          .collect(),
-        ctx.db
-          .query("paymentAllocation")
-          .withIndex("by_storeId_target", (q) =>
-            q
-              .eq("storeId", serviceCase.storeId)
-              .eq("targetType", "service_case")
-              .eq("targetId", args.serviceCaseId)
-          )
-          .collect(),
-        listPendingApprovalRequestsWithCtx(ctx, serviceCase.operationalWorkItemId),
-        ctx.db.get("operationalWorkItem", serviceCase.operationalWorkItemId),
-        getWorkflowTraceByLookupWithCtx(ctx, {
-          storeId: serviceCase.storeId,
-          workflowType: SERVICE_CASE_WORKFLOW_TYPE,
-          lookupType: SERVICE_CASE_LOOKUP_TYPE,
-          lookupValue: serviceCase._id,
-        }),
-      ]);
+      const [
+        lineItems,
+        inventoryUsage,
+        paymentAllocations,
+        pendingApprovals,
+        workItem,
+        trace,
+      ] =
+        await Promise.all([
+          ctx.db
+            .query("serviceCaseLineItem")
+            .withIndex("by_serviceCaseId", (q) => q.eq("serviceCaseId", args.serviceCaseId))
+            .collect(),
+          ctx.db
+            .query("serviceInventoryUsage")
+            .withIndex("by_serviceCaseId", (q) => q.eq("serviceCaseId", args.serviceCaseId))
+            .collect(),
+          ctx.db
+            .query("paymentAllocation")
+            .withIndex("by_storeId_target", (q) =>
+              q
+                .eq("storeId", serviceCase.storeId)
+                .eq("targetType", "service_case")
+                .eq("targetId", args.serviceCaseId)
+            )
+            .collect(),
+          listPendingApprovalRequestsWithCtx(ctx, serviceCase.operationalWorkItemId),
+          ctx.db.get("operationalWorkItem", serviceCase.operationalWorkItemId),
+          getWorkflowTraceByLookupWithCtx(ctx, {
+            storeId: serviceCase.storeId,
+            workflowType: SERVICE_CASE_WORKFLOW_TYPE,
+            lookupType: SERVICE_CASE_LOOKUP_TYPE,
+            lookupValue: serviceCase._id,
+          }),
+        ]);
 
-    return {
-      ...serviceCase,
-      inventorySummary: summarizeInventoryMovements(
-        inventoryUsage
-          .filter((usage) => typeof usage.inventoryMovementId === "string")
-          .map((usage) => ({
-            quantityDelta: usage.usageType === "returned" ? usage.quantity : -usage.quantity,
-          }))
-      ),
-      lineItems,
-      paymentAllocations,
-      pendingApprovals,
-      paymentSummary: summarizePaymentAllocations(paymentAllocations),
-      workItem,
-      workflowTraceId: trace?.traceId,
-    };
-  },
+      return {
+        ...serviceCase,
+        inventorySummary: summarizeInventoryMovements(
+          inventoryUsage
+            .filter((usage) => typeof usage.inventoryMovementId === "string")
+            .map((usage) => ({
+              quantityDelta: usage.usageType === "returned" ? usage.quantity : -usage.quantity,
+            }))
+        ),
+        lineItems,
+        paymentAllocations,
+        pendingApprovals,
+        paymentSummary: summarizePaymentAllocations(paymentAllocations),
+        workItem,
+        workflowTraceId: trace?.traceId,
+      };
+    },
+  ),
 });
 
 export const addServiceCaseLineItem = mutation({
@@ -669,54 +705,61 @@ export const addServiceCaseLineItem = mutation({
     serviceCaseId: v.id("serviceCase"),
     unitPrice: v.number(),
   },
-  handler: async (ctx, args) => {
-    const serviceCaseContext = await getServiceCaseContext(ctx, args.serviceCaseId);
-    if (serviceCaseContext.kind === "user_error") {
-      return serviceCaseContext;
-    }
-
-    const { serviceCase, workItem } = serviceCaseContext.data;
-    await requireReadySharedDemoStoreCapabilityIfApplicable(
+  handler: admitPublicMutation(
+    addServiceCaseLineItemOperationDefinition,
+    async (
       ctx,
-      "service.cases.manage",
-      serviceCase.storeId,
-    );
-    const lineItemResult = buildServiceCaseLineItem(args);
-    if (lineItemResult.kind === "user_error") {
-      return lineItemResult;
-    }
+      args: {
+        description: string;
+        lineType: "labor" | "material" | "adjustment";
+        quantity: number;
+        serviceCaseId: Id<"serviceCase">;
+        unitPrice: number;
+      },
+    ) => {
+      const serviceCaseContext = await getServiceCaseContext(ctx, args.serviceCaseId);
+      if (serviceCaseContext.kind === "user_error") {
+        return serviceCaseContext;
+      }
 
-    const lineItemId = await ctx.db.insert(
-      "serviceCaseLineItem",
-      lineItemResult.data
-    );
+      const { serviceCase, workItem } = serviceCaseContext.data;
+      const lineItemResult = buildServiceCaseLineItem(args);
+      if (lineItemResult.kind === "user_error") {
+        return lineItemResult;
+      }
 
-    const nextServiceCase = await syncServiceCaseFinancialsWithCtx(ctx, serviceCase);
+      const lineItemId = await ctx.db.insert(
+        "serviceCaseLineItem",
+        lineItemResult.data
+      );
 
-    await recordOperationalEventWithCtx(ctx, {
-      customerProfileId: serviceCase.customerProfileId,
-      eventType: "service_case_line_item_added",
-      organizationId: serviceCase.organizationId,
-      storeId: serviceCase.storeId,
-      subjectId: serviceCase._id,
-      subjectType: "service_case",
-      workItemId: workItem._id,
-    });
+      const nextServiceCase = await syncServiceCaseFinancialsWithCtx(ctx, serviceCase);
 
-    await recordServiceCaseTraceBestEffort(ctx, {
-      amount: lineItemResult.data.amount,
-      lineItemId,
-      lineType: args.lineType,
-      quantity: args.quantity,
-      serviceCase: nextServiceCase ?? serviceCase,
-      stage: "line_item_added",
-    });
+      await recordOperationalEventWithCtx(ctx, {
+        customerProfileId: serviceCase.customerProfileId,
+        eventType: "service_case_line_item_added",
+        organizationId: serviceCase.organizationId,
+        storeId: serviceCase.storeId,
+        subjectId: serviceCase._id,
+        subjectType: "service_case",
+        workItemId: workItem._id,
+      });
 
-    return ok({
-      lineItem: await ctx.db.get("serviceCaseLineItem", lineItemId),
-      serviceCase: nextServiceCase,
-    });
-  },
+      await recordServiceCaseTraceBestEffort(ctx, {
+        amount: lineItemResult.data.amount,
+        lineItemId,
+        lineType: args.lineType,
+        quantity: args.quantity,
+        serviceCase: nextServiceCase ?? serviceCase,
+        stage: "line_item_added",
+      });
+
+      return ok({
+        lineItem: await ctx.db.get("serviceCaseLineItem", lineItemId),
+        serviceCase: nextServiceCase,
+      });
+    },
+  ),
 });
 
 export const recordServiceInventoryUsage = mutation({
@@ -731,178 +774,187 @@ export const recordServiceInventoryUsage = mutation({
       v.union(v.literal("planned"), v.literal("consumed"), v.literal("returned"))
     ),
   },
-  handler: async (ctx, args) => {
-    if (args.quantity <= 0) {
-      return userError({
-        code: "validation_failed",
-        message: "Inventory usage quantity must be greater than zero.",
-      });
-    }
-
-    const serviceCaseContext = await getServiceCaseContext(ctx, args.serviceCaseId);
-    if (serviceCaseContext.kind === "user_error") {
-      return serviceCaseContext;
-    }
-
-    const { serviceCase, store, workItem } = serviceCaseContext.data;
-    await requireReadySharedDemoStoreCapabilityIfApplicable(
+  handler: admitPublicMutation(
+    recordServiceInventoryUsageOperationDefinition,
+    async (
       ctx,
-      "service.cases.manage",
-      serviceCase.storeId,
-    );
-    const usageType = args.usageType ?? "consumed";
-    const now = Date.now();
-    const productSku = await ctx.db.get("productSku", args.productSkuId);
-    if (!productSku || productSku.storeId !== serviceCase.storeId) {
-      return userError({
-        code: "not_found",
-        message: "Selected inventory item could not be found for this store.",
-      });
-    }
-    const returnBasis =
-      usageType === "returned"
-        ? await resolveServiceReturnBasisWithCtx(ctx, {
-            productSkuId: args.productSkuId,
-            quantity: args.quantity,
-            serviceCaseId: args.serviceCaseId,
-          })
-        : null;
-    const usageId = await ctx.db.insert("serviceInventoryUsage", {
-      createdAt: now,
-      notes: args.notes,
-      productSkuId: args.productSkuId,
-      quantity: args.quantity,
-      recordedByStaffProfileId: args.recordedByStaffProfileId,
-      recordedByUserId: args.recordedByUserId,
-      serviceCaseId: args.serviceCaseId,
-      usageType,
-    });
+      args: {
+        notes?: string;
+        productSkuId: Id<"productSku">;
+        quantity: number;
+        recordedByStaffProfileId?: Id<"staffProfile">;
+        recordedByUserId?: Id<"athenaUser">;
+        serviceCaseId: Id<"serviceCase">;
+        usageType?: "planned" | "consumed" | "returned";
+      },
+    ) => {
+      if (args.quantity <= 0) {
+        return userError({
+          code: "validation_failed",
+          message: "Inventory usage quantity must be greater than zero.",
+        });
+      }
 
-    let inventoryMovement = null;
-    if (usageType !== "planned") {
-      const reportingPeriod = await resolveReportingOperatingPeriodWithCtx(ctx, {
-        occurrenceAt: now,
-        storeId: serviceCase.storeId,
-      });
-      const quantityDelta =
-        usageType === "returned" ? args.quantity : -args.quantity;
-      const nextOnHand = Math.max(
-        0,
-        productSku.inventoryCount + quantityDelta,
-      );
-      const nextSellable =
+      const serviceCaseContext = await getServiceCaseContext(ctx, args.serviceCaseId);
+      if (serviceCaseContext.kind === "user_error") {
+        return serviceCaseContext;
+      }
+
+      const { serviceCase, store, workItem } = serviceCaseContext.data;
+      const usageType = args.usageType ?? "consumed";
+      const now = Date.now();
+      const productSku = await ctx.db.get("productSku", args.productSkuId);
+      if (!productSku || productSku.storeId !== serviceCase.storeId) {
+        return userError({
+          code: "not_found",
+          message: "Selected inventory item could not be found for this store.",
+        });
+      }
+      const returnBasis =
         usageType === "returned"
-          ? Math.min(
-              nextOnHand,
-              productSku.quantityAvailable + args.quantity,
-            )
-          : Math.min(nextOnHand, productSku.quantityAvailable);
-      const businessEventKey = `service_inventory_usage:${usageId}:${usageType}`;
-      const inventoryEffect = await applyInventoryEffectWithCtx(ctx, {
-        activityStatus: "committed",
-        activityType:
+          ? await resolveServiceReturnBasisWithCtx(ctx, {
+              productSkuId: args.productSkuId,
+              quantity: args.quantity,
+              serviceCaseId: args.serviceCaseId,
+            })
+          : null;
+      const usageId = await ctx.db.insert("serviceInventoryUsage", {
+        createdAt: now,
+        notes: args.notes,
+        productSkuId: args.productSkuId,
+        quantity: args.quantity,
+        recordedByStaffProfileId: args.recordedByStaffProfileId,
+        recordedByUserId: args.recordedByUserId,
+        serviceCaseId: args.serviceCaseId,
+        usageType,
+      });
+
+      let inventoryMovement = null;
+      if (usageType !== "planned") {
+        const reportingPeriod = await resolveReportingOperatingPeriodWithCtx(ctx, {
+          occurrenceAt: now,
+          storeId: serviceCase.storeId,
+        });
+        const quantityDelta =
+          usageType === "returned" ? args.quantity : -args.quantity;
+        const nextOnHand = Math.max(
+          0,
+          productSku.inventoryCount + quantityDelta,
+        );
+        const nextSellable =
           usageType === "returned"
-            ? "stock_service_material_returned"
-            : "stock_service_material_consumed",
+            ? Math.min(
+                nextOnHand,
+                productSku.quantityAvailable + args.quantity,
+              )
+            : Math.min(nextOnHand, productSku.quantityAvailable);
+        const businessEventKey = `service_inventory_usage:${usageId}:${usageType}`;
+        const inventoryEffect = await applyInventoryEffectWithCtx(ctx, {
+          activityStatus: "committed",
+          activityType:
+            usageType === "returned"
+              ? "stock_service_material_returned"
+              : "stock_service_material_consumed",
+          actorStaffProfileId: args.recordedByStaffProfileId,
+          actorUserId: args.recordedByUserId,
+          businessEventKey,
+          compatibilityBalance: {
+            onHandQuantity: nextOnHand,
+            sellableQuantity: nextSellable,
+          },
+          completeness:
+            reportingPeriod.kind === "resolved" ? "complete" : "partial",
+          contentFingerprint: [
+            "service-material:v1",
+            String(args.serviceCaseId),
+            String(usageId),
+            String(args.productSkuId),
+            usageType,
+            String(args.quantity),
+          ].join(":"),
+          effectType: usageType === "returned" ? "return" : "adjustment",
+          movementType:
+            usageType === "returned"
+              ? "service_material_returned"
+              : "service_material_consumed",
+          notes: args.notes,
+          occurrenceAt: now,
+          ...(reportingPeriod.kind === "resolved"
+            ? {
+                operatingDate: reportingPeriod.operatingDate,
+                scheduleVersionId:
+                  reportingPeriod.scheduleVersionId as Id<"storeSchedule">,
+              }
+            : {}),
+          organizationId: serviceCase.organizationId ?? store.organizationId,
+          physicalQuantityDelta: quantityDelta,
+          productId: productSku.productId,
+          productSkuId: args.productSkuId,
+          reasonCode:
+            usageType === "returned"
+              ? "service_case_material_return"
+              : "service_case_material_consumption",
+          recordedAt: now,
+          sellableQuantityDelta:
+            nextSellable - productSku.quantityAvailable,
+          sourceDomain: "service",
+          sourceId: String(usageId),
+          sourceLineId: String(args.productSkuId),
+          sourceType: "service_inventory_usage",
+          storeId: serviceCase.storeId,
+          valuation:
+                usageType === "returned"
+              ? {
+                  disposition: "sellable",
+                  financialContribution: "reverse_original_lane",
+                  kind: "return",
+                  originalBasis: returnBasis!,
+                  originalCostLane: "inventory_consumed",
+                  quantity: args.quantity,
+                }
+              : {
+                  disposition: "service_consumption",
+                  kind: "outbound",
+                  quantity: args.quantity,
+                },
+          workItemId: workItem._id,
+        });
+        inventoryMovement = inventoryEffect.movement;
+      }
+
+      if (inventoryMovement) {
+        await ctx.db.patch("serviceInventoryUsage", usageId, {
+          inventoryMovementId: inventoryMovement._id,
+        });
+      }
+
+      await recordOperationalEventWithCtx(ctx, {
         actorStaffProfileId: args.recordedByStaffProfileId,
         actorUserId: args.recordedByUserId,
-        businessEventKey,
-        compatibilityBalance: {
-          onHandQuantity: nextOnHand,
-          sellableQuantity: nextSellable,
-        },
-        completeness:
-          reportingPeriod.kind === "resolved" ? "complete" : "partial",
-        contentFingerprint: [
-          "service-material:v1",
-          String(args.serviceCaseId),
-          String(usageId),
-          String(args.productSkuId),
-          usageType,
-          String(args.quantity),
-        ].join(":"),
-        effectType: usageType === "returned" ? "return" : "adjustment",
-        movementType:
-          usageType === "returned"
-            ? "service_material_returned"
-            : "service_material_consumed",
-        notes: args.notes,
-        occurrenceAt: now,
-        ...(reportingPeriod.kind === "resolved"
-          ? {
-              operatingDate: reportingPeriod.operatingDate,
-              scheduleVersionId:
-                reportingPeriod.scheduleVersionId as Id<"storeSchedule">,
-            }
-          : {}),
-        organizationId: serviceCase.organizationId ?? store.organizationId,
-        physicalQuantityDelta: quantityDelta,
-        productId: productSku.productId,
-        productSkuId: args.productSkuId,
-        reasonCode:
-          usageType === "returned"
-            ? "service_case_material_return"
-            : "service_case_material_consumption",
-        recordedAt: now,
-        sellableQuantityDelta:
-          nextSellable - productSku.quantityAvailable,
-        sourceDomain: "service",
-        sourceId: String(usageId),
-        sourceLineId: String(args.productSkuId),
-        sourceType: "service_inventory_usage",
+        customerProfileId: serviceCase.customerProfileId,
+        eventType: "service_case_inventory_usage_recorded",
+        inventoryMovementId: inventoryMovement?._id,
+        organizationId: serviceCase.organizationId,
         storeId: serviceCase.storeId,
-        valuation:
-              usageType === "returned"
-            ? {
-                disposition: "sellable",
-                financialContribution: "reverse_original_lane",
-                kind: "return",
-                originalBasis: returnBasis!,
-                originalCostLane: "inventory_consumed",
-                quantity: args.quantity,
-              }
-            : {
-                disposition: "service_consumption",
-                kind: "outbound",
-                quantity: args.quantity,
-              },
+        subjectId: serviceCase._id,
+        subjectType: "service_case",
         workItemId: workItem._id,
       });
-      inventoryMovement = inventoryEffect.movement;
-    }
 
-    if (inventoryMovement) {
-      await ctx.db.patch("serviceInventoryUsage", usageId, {
-        inventoryMovementId: inventoryMovement._id,
+      await recordServiceCaseTraceBestEffort(ctx, {
+        actorStaffProfileId: args.recordedByStaffProfileId,
+        actorUserId: args.recordedByUserId,
+        inventoryMovementId: inventoryMovement?._id,
+        productSkuId: args.productSkuId,
+        quantity: args.quantity,
+        serviceCase,
+        serviceInventoryUsageId: usageId,
+        stage: "inventory_usage_recorded",
       });
-    }
 
-    await recordOperationalEventWithCtx(ctx, {
-      actorStaffProfileId: args.recordedByStaffProfileId,
-      actorUserId: args.recordedByUserId,
-      customerProfileId: serviceCase.customerProfileId,
-      eventType: "service_case_inventory_usage_recorded",
-      inventoryMovementId: inventoryMovement?._id,
-      organizationId: serviceCase.organizationId,
-      storeId: serviceCase.storeId,
-      subjectId: serviceCase._id,
-      subjectType: "service_case",
-      workItemId: workItem._id,
-    });
-
-    await recordServiceCaseTraceBestEffort(ctx, {
-      actorStaffProfileId: args.recordedByStaffProfileId,
-      actorUserId: args.recordedByUserId,
-      inventoryMovementId: inventoryMovement?._id,
-      productSkuId: args.productSkuId,
-      quantity: args.quantity,
-      serviceCase,
-      serviceInventoryUsageId: usageId,
-      stage: "inventory_usage_recorded",
-    });
-
-    return ok(await ctx.db.get("serviceInventoryUsage", usageId));
-  },
+      return ok(await ctx.db.get("serviceInventoryUsage", usageId));
+    },
+  ),
 });
 
 export const recordServicePayment = mutation({
@@ -918,79 +970,91 @@ export const recordServicePayment = mutation({
     registerSessionId: v.optional(v.id("registerSession")),
     serviceCaseId: v.id("serviceCase"),
   },
-  handler: async (ctx, args) => {
-    const serviceCaseContext = await getServiceCaseContext(ctx, args.serviceCaseId);
-    if (serviceCaseContext.kind === "user_error") {
-      return serviceCaseContext;
-    }
-
-    const { serviceCase, workItem } = serviceCaseContext.data;
-    await requireReadySharedDemoStoreCapabilityIfApplicable(
+  handler: admitPublicMutation(
+    recordServicePaymentOperationDefinition,
+    async (
       ctx,
-      "billing.manage",
-      serviceCase.storeId,
-    );
-    const collectedInStore = args.collectedInStore ?? true;
-    const resolvedRegisterSessionId = collectedInStore
-      ? await resolveRegisterSessionForInStoreCollectionWithCtx(ctx, {
-          actorStaffProfileId: args.actorStaffProfileId,
-          actorUserId: args.actorUserId,
-          registerSessionId: args.registerSessionId,
-          storeId: serviceCase.storeId,
-        })
-      : undefined;
+      args: {
+        actorStaffProfileId?: Id<"staffProfile">;
+        actorUserId?: Id<"athenaUser">;
+        amount: number;
+        businessEventKey?: string;
+        collectedInStore?: boolean;
+        direction?: "in" | "out";
+        method: string;
+        notes?: string;
+        registerSessionId?: Id<"registerSession">;
+        serviceCaseId: Id<"serviceCase">;
+      },
+    ) => {
+      const serviceCaseContext = await getServiceCaseContext(ctx, args.serviceCaseId);
+      if (serviceCaseContext.kind === "user_error") {
+        return serviceCaseContext;
+      }
 
-    const paymentAllocation = await recordPaymentAllocationWithCtx(ctx, {
-      actorStaffProfileId: args.actorStaffProfileId,
-      actorUserId: args.actorUserId,
-      allocationType: args.direction === "out" ? "service_refund" : "service_payment",
-      amount: args.amount,
-      businessEventKey:
-        args.businessEventKey ??
-        `service:${serviceCase._id}:payment:${crypto.randomUUID()}`,
-      collectedInStore,
-      customerProfileId: serviceCase.customerProfileId,
-      direction: args.direction,
-      method: args.method,
-      notes: args.notes,
-      organizationId: serviceCase.organizationId,
-      registerSessionId: resolvedRegisterSessionId,
-      storeId: serviceCase.storeId,
-      targetId: serviceCase._id,
-      targetType: "service_case",
-      workItemId: workItem._id,
-    });
+      const { serviceCase, workItem } = serviceCaseContext.data;
+      const collectedInStore = args.collectedInStore ?? true;
+      const resolvedRegisterSessionId = collectedInStore
+        ? await resolveRegisterSessionForInStoreCollectionWithCtx(ctx, {
+            actorStaffProfileId: args.actorStaffProfileId,
+            actorUserId: args.actorUserId,
+            registerSessionId: args.registerSessionId,
+            storeId: serviceCase.storeId,
+          })
+        : undefined;
 
-    const nextServiceCase = await syncServiceCaseFinancialsWithCtx(ctx, serviceCase);
+      const paymentAllocation = await recordPaymentAllocationWithCtx(ctx, {
+        actorStaffProfileId: args.actorStaffProfileId,
+        actorUserId: args.actorUserId,
+        allocationType: args.direction === "out" ? "service_refund" : "service_payment",
+        amount: args.amount,
+        businessEventKey:
+          args.businessEventKey ??
+          `service:${serviceCase._id}:payment:${crypto.randomUUID()}`,
+        collectedInStore,
+        customerProfileId: serviceCase.customerProfileId,
+        direction: args.direction,
+        method: args.method,
+        notes: args.notes,
+        organizationId: serviceCase.organizationId,
+        registerSessionId: resolvedRegisterSessionId,
+        storeId: serviceCase.storeId,
+        targetId: serviceCase._id,
+        targetType: "service_case",
+        workItemId: workItem._id,
+      });
 
-    await recordOperationalEventWithCtx(ctx, {
-      actorStaffProfileId: args.actorStaffProfileId,
-      actorUserId: args.actorUserId,
-      customerProfileId: serviceCase.customerProfileId,
-      eventType: args.direction === "out" ? "service_case_refunded" : "service_case_paid",
-      organizationId: serviceCase.organizationId,
-      paymentAllocationId: paymentAllocation?._id,
-      registerSessionId: resolvedRegisterSessionId,
-      storeId: serviceCase.storeId,
-      subjectId: serviceCase._id,
-      subjectType: "service_case",
-      workItemId: workItem._id,
-    });
+      const nextServiceCase = await syncServiceCaseFinancialsWithCtx(ctx, serviceCase);
 
-    await recordServiceCaseTraceBestEffort(ctx, {
-      actorStaffProfileId: args.actorStaffProfileId,
-      actorUserId: args.actorUserId,
-      amount: args.amount,
-      direction: args.direction ?? "in",
-      method: args.method,
-      paymentAllocationId: paymentAllocation?._id,
-      registerSessionId: resolvedRegisterSessionId,
-      serviceCase: nextServiceCase ?? serviceCase,
-      stage: args.direction === "out" ? "refund_recorded" : "payment_recorded",
-    });
+      await recordOperationalEventWithCtx(ctx, {
+        actorStaffProfileId: args.actorStaffProfileId,
+        actorUserId: args.actorUserId,
+        customerProfileId: serviceCase.customerProfileId,
+        eventType: args.direction === "out" ? "service_case_refunded" : "service_case_paid",
+        organizationId: serviceCase.organizationId,
+        paymentAllocationId: paymentAllocation?._id,
+        registerSessionId: resolvedRegisterSessionId,
+        storeId: serviceCase.storeId,
+        subjectId: serviceCase._id,
+        subjectType: "service_case",
+        workItemId: workItem._id,
+      });
 
-    return ok(nextServiceCase);
-  },
+      await recordServiceCaseTraceBestEffort(ctx, {
+        actorStaffProfileId: args.actorStaffProfileId,
+        actorUserId: args.actorUserId,
+        amount: args.amount,
+        direction: args.direction ?? "in",
+        method: args.method,
+        paymentAllocationId: paymentAllocation?._id,
+        registerSessionId: resolvedRegisterSessionId,
+        serviceCase: nextServiceCase ?? serviceCase,
+        stage: args.direction === "out" ? "refund_recorded" : "payment_recorded",
+      });
+
+      return ok(nextServiceCase);
+    },
+  ),
 });
 
 export const updateServiceCaseStatus = mutation({
@@ -1007,159 +1071,164 @@ export const updateServiceCaseStatus = mutation({
       v.literal("cancelled")
     ),
   },
-  handler: async (ctx, args) => {
-    const serviceCaseContext = await getServiceCaseContext(ctx, args.serviceCaseId);
-    if (serviceCaseContext.kind === "user_error") {
-      return serviceCaseContext;
-    }
-
-    const { serviceCase, store, workItem } = serviceCaseContext.data;
-    await requireReadySharedDemoStoreCapabilityIfApplicable(
+  handler: admitPublicMutation(
+    updateServiceCaseStatusOperationDefinition,
+    async (
       ctx,
-      "service.cases.manage",
-      serviceCase.storeId,
-    );
+      args: {
+        notes?: string;
+        serviceCaseId: Id<"serviceCase">;
+        status: ServiceCaseStatus;
+      },
+    ) => {
+      const serviceCaseContext = await getServiceCaseContext(ctx, args.serviceCaseId);
+      if (serviceCaseContext.kind === "user_error") {
+        return serviceCaseContext;
+      }
 
-    const statusTransitionResult = assertValidServiceCaseStatusTransition(
-      serviceCase.status,
-      args.status
-    );
-    if (statusTransitionResult.kind === "user_error") {
-      return statusTransitionResult;
-    }
+      const { serviceCase, store, workItem } = serviceCaseContext.data;
 
-    const [lineItems, pendingApprovals, paymentAllocations] = await Promise.all([
-      listServiceCaseLineItemsWithCtx(ctx, serviceCase._id),
-      listPendingApprovalRequestsWithCtx(ctx, workItem._id),
-      listServiceCaseAllocationsWithCtx(ctx, serviceCase.storeId, serviceCase._id),
-    ]);
+      const statusTransitionResult = assertValidServiceCaseStatusTransition(
+        serviceCase.status,
+        args.status
+      );
+      if (statusTransitionResult.kind === "user_error") {
+        return statusTransitionResult;
+      }
 
-    const totalAmount =
-      lineItems.length > 0
-        ? lineItems.reduce((sum, lineItem) => sum + lineItem.amount, 0)
-        : serviceCase.quotedAmount ?? 0;
-    const paymentSummary = summarizePaymentAllocations(paymentAllocations);
-    const balanceDueAmount = Math.max(totalAmount - paymentSummary.netAmount, 0);
+      const [lineItems, pendingApprovals, paymentAllocations] = await Promise.all([
+        listServiceCaseLineItemsWithCtx(ctx, serviceCase._id),
+        listPendingApprovalRequestsWithCtx(ctx, workItem._id),
+        listServiceCaseAllocationsWithCtx(ctx, serviceCase.storeId, serviceCase._id),
+      ]);
 
-    if (balanceDueAmount > 0 && args.status === "completed") {
-      return userError({
-        code: "precondition_failed",
-        message: "Cannot complete a service case with an outstanding balance.",
+      const totalAmount =
+        lineItems.length > 0
+          ? lineItems.reduce((sum, lineItem) => sum + lineItem.amount, 0)
+          : serviceCase.quotedAmount ?? 0;
+      const paymentSummary = summarizePaymentAllocations(paymentAllocations);
+      const balanceDueAmount = Math.max(totalAmount - paymentSummary.netAmount, 0);
+
+      if (balanceDueAmount > 0 && args.status === "completed") {
+        return userError({
+          code: "precondition_failed",
+          message: "Cannot complete a service case with an outstanding balance.",
+        });
+      }
+
+      if (args.status === "completed" && pendingApprovals.length > 0) {
+        return userError({
+          code: "precondition_failed",
+          message: "Resolve pending approvals before completing the service case.",
+        });
+      }
+
+      if (args.status === "cancelled" && paymentSummary.netAmount > 0) {
+        return userError({
+          code: "precondition_failed",
+          message: "Refund service payments before cancelling the case.",
+        });
+      }
+
+      await syncServiceCaseFinancialsWithCtx(ctx, serviceCase);
+
+      const now = Date.now();
+      await ctx.db.patch("serviceCase", serviceCase._id, {
+        cancelledAt: args.status === "cancelled" ? now : undefined,
+        completedAt: args.status === "completed" ? now : undefined,
+        lastStatusChangedAt: now,
+        notes: args.notes ?? serviceCase.notes,
+        status: args.status,
+        updatedAt: now,
       });
-    }
 
-    if (args.status === "completed" && pendingApprovals.length > 0) {
-      return userError({
-        code: "precondition_failed",
-        message: "Resolve pending approvals before completing the service case.",
-      });
-    }
-
-    if (args.status === "cancelled" && paymentSummary.netAmount > 0) {
-      return userError({
-        code: "precondition_failed",
-        message: "Refund service payments before cancelling the case.",
-      });
-    }
-
-    await syncServiceCaseFinancialsWithCtx(ctx, serviceCase);
-
-    const now = Date.now();
-    await ctx.db.patch("serviceCase", serviceCase._id, {
-      cancelledAt: args.status === "cancelled" ? now : undefined,
-      completedAt: args.status === "completed" ? now : undefined,
-      lastStatusChangedAt: now,
-      notes: args.notes ?? serviceCase.notes,
-      status: args.status,
-      updatedAt: now,
-    });
-
-    await updateOperationalWorkItemStatusWithCtx(ctx, {
-      approvalState:
-        args.status === "awaiting_approval"
-          ? "pending"
-          : pendingApprovals.length > 0
+      await updateOperationalWorkItemStatusWithCtx(ctx, {
+        approvalState:
+          args.status === "awaiting_approval"
             ? "pending"
-            : "not_required",
-      status: mapServiceCaseStatusToWorkItemStatus(args.status),
-      workItemId: workItem._id,
-    });
+            : pendingApprovals.length > 0
+              ? "pending"
+              : "not_required",
+        status: mapServiceCaseStatusToWorkItemStatus(args.status),
+        workItemId: workItem._id,
+      });
 
-    await recordOperationalEventWithCtx(ctx, {
-      customerProfileId: serviceCase.customerProfileId,
-      eventType: "service_case_status_updated",
-      organizationId: serviceCase.organizationId,
-      reason: args.status,
-      storeId: serviceCase.storeId,
-      subjectId: serviceCase._id,
-      subjectType: "service_case",
-      workItemId: workItem._id,
-    });
+      await recordOperationalEventWithCtx(ctx, {
+        customerProfileId: serviceCase.customerProfileId,
+        eventType: "service_case_status_updated",
+        organizationId: serviceCase.organizationId,
+        reason: args.status,
+        storeId: serviceCase.storeId,
+        subjectId: serviceCase._id,
+        subjectType: "service_case",
+        workItemId: workItem._id,
+      });
 
-    if (args.status === "completed") {
-      const posServiceLine = await ctx.db
-        .query("posTransactionServiceLine")
-        .withIndex("by_serviceCaseId", (q) =>
-          q.eq("serviceCaseId", serviceCase._id),
-        )
-        .first();
-      if (!posServiceLine) {
-        const saleFacts: NewReportFact[] =
-          lineItems.length > 0
-            ? lineItems.map((lineItem) => ({
-                sourceDomain: "service" as const,
-                sourceId: String(serviceCase._id),
-                lineId: String(lineItem._id),
-                factKind: "sale" as const,
-                occurredAt: now,
-                currency: store.currency,
-                grossAmountMinor: lineItem.amount,
-                netAmountMinor: lineItem.amount,
-                taxAmountMinor: 0,
-                discountAmountMinor: 0,
-                quantity: lineItem.quantity,
-              }))
-            : [
-                {
+      if (args.status === "completed") {
+        const posServiceLine = await ctx.db
+          .query("posTransactionServiceLine")
+          .withIndex("by_serviceCaseId", (q) =>
+            q.eq("serviceCaseId", serviceCase._id),
+          )
+          .first();
+        if (!posServiceLine) {
+          const saleFacts: NewReportFact[] =
+            lineItems.length > 0
+              ? lineItems.map((lineItem) => ({
                   sourceDomain: "service" as const,
                   sourceId: String(serviceCase._id),
-                  lineId: "service",
+                  lineId: String(lineItem._id),
                   factKind: "sale" as const,
                   occurredAt: now,
                   currency: store.currency,
-                  grossAmountMinor: totalAmount,
-                  netAmountMinor: totalAmount,
+                  grossAmountMinor: lineItem.amount,
+                  netAmountMinor: lineItem.amount,
                   taxAmountMinor: 0,
                   discountAmountMinor: 0,
-                  quantity: 1,
-                },
-              ];
-        await recordFacts(ctx, serviceCase.storeId, saleFacts);
+                  quantity: lineItem.quantity,
+                }))
+              : [
+                  {
+                    sourceDomain: "service" as const,
+                    sourceId: String(serviceCase._id),
+                    lineId: "service",
+                    factKind: "sale" as const,
+                    occurredAt: now,
+                    currency: store.currency,
+                    grossAmountMinor: totalAmount,
+                    netAmountMinor: totalAmount,
+                    taxAmountMinor: 0,
+                    discountAmountMinor: 0,
+                    quantity: 1,
+                  },
+                ];
+          await recordFacts(ctx, serviceCase.storeId, saleFacts);
+        }
       }
-    }
 
-    const updatedServiceCase = await ctx.db.get("serviceCase", serviceCase._id);
+      const updatedServiceCase = await ctx.db.get("serviceCase", serviceCase._id);
 
-    if (updatedServiceCase) {
-      await recordServiceCaseTraceBestEffort(ctx, {
-        nextStatus: args.status,
-        previousStatus: serviceCase.status,
-        serviceCase: updatedServiceCase,
-        stage:
-          args.status === "awaiting_approval"
-            ? "approval_pending"
-            : args.status === "awaiting_pickup"
-              ? "awaiting_pickup"
-              : args.status === "completed"
-                ? "completed"
-                : args.status === "cancelled"
-                  ? "cancelled"
-                  : "status_updated",
-      });
-    }
+      if (updatedServiceCase) {
+        await recordServiceCaseTraceBestEffort(ctx, {
+          nextStatus: args.status,
+          previousStatus: serviceCase.status,
+          serviceCase: updatedServiceCase,
+          stage:
+            args.status === "awaiting_approval"
+              ? "approval_pending"
+              : args.status === "awaiting_pickup"
+                ? "awaiting_pickup"
+                : args.status === "completed"
+                  ? "completed"
+                  : args.status === "cancelled"
+                    ? "cancelled"
+                    : "status_updated",
+        });
+      }
 
-    return ok(updatedServiceCase);
-  },
+      return ok(updatedServiceCase);
+    },
+  ),
 });
 
 export const createWalkInServiceCase = mutation({
@@ -1179,62 +1248,73 @@ export const createWalkInServiceCase = mutation({
     title: v.string(),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    await requireReadySharedDemoStoreCapabilityIfApplicable(
+  handler: admitPublicMutation(
+    createWalkInServiceCaseOperationDefinition,
+    async (
       ctx,
-      "service.cases.manage",
-      args.storeId,
-    );
-    const store = await ctx.db.get("store", args.storeId);
+      args: {
+        assignedStaffProfileId: Id<"staffProfile">;
+        createdByUserId?: Id<"athenaUser">;
+        customerProfileId: Id<"customerProfile">;
+        notes?: string;
+        quotedAmount?: number;
+        serviceCatalogId?: Id<"serviceCatalog">;
+        serviceMode: "same_day" | "consultation" | "repair" | "revamp";
+        title: string;
+        storeId: Id<"store">;
+      },
+    ) => {
+      const store = await ctx.db.get("store", args.storeId);
 
-    if (!store) {
-      return userError({
-        code: "not_found",
-        message: "Store not found.",
+      if (!store) {
+        return userError({
+          code: "not_found",
+          message: "Store not found.",
+        });
+      }
+
+      const createdByStaffProfile = args.createdByUserId
+        ? await ctx.db
+            .query("staffProfile")
+            .withIndex("by_storeId_linkedUserId", (q) =>
+              q.eq("storeId", args.storeId).eq("linkedUserId", args.createdByUserId!)
+            )
+            .first()
+        : null;
+
+      const workItem = await createOperationalWorkItemWithCtx(ctx, {
+        assignedToStaffProfileId: args.assignedStaffProfileId,
+        createdByStaffProfileId: createdByStaffProfile?._id,
+        createdByUserId: args.createdByUserId,
+        customerProfileId: args.customerProfileId,
+        notes: args.notes,
+        organizationId: store.organizationId,
+        priority: "normal",
+        status: "open",
+        storeId: args.storeId,
+        title: args.title,
+        type: "service_case",
       });
-    }
 
-    const createdByStaffProfile = args.createdByUserId
-      ? await ctx.db
-          .query("staffProfile")
-          .withIndex("by_storeId_linkedUserId", (q) =>
-            q.eq("storeId", args.storeId).eq("linkedUserId", args.createdByUserId!)
-          )
-          .first()
-      : null;
+      if (!workItem) {
+        return userError({
+          code: "unavailable",
+          message: "Unable to create the service work item.",
+        });
+      }
 
-    const workItem = await createOperationalWorkItemWithCtx(ctx, {
-      assignedToStaffProfileId: args.assignedStaffProfileId,
-      createdByStaffProfileId: createdByStaffProfile?._id,
-      createdByUserId: args.createdByUserId,
-      customerProfileId: args.customerProfileId,
-      notes: args.notes,
-      organizationId: store.organizationId,
-      priority: "normal",
-      status: "open",
-      storeId: args.storeId,
-      title: args.title,
-      type: "service_case",
-    });
-
-    if (!workItem) {
-      return userError({
-        code: "unavailable",
-        message: "Unable to create the service work item.",
+      return createServiceCaseWithCtx(ctx, {
+        assignedStaffProfileId: args.assignedStaffProfileId,
+        createdByUserId: args.createdByUserId,
+        customerProfileId: args.customerProfileId,
+        notes: args.notes,
+        operationalWorkItemId: workItem._id,
+        organizationId: store.organizationId,
+        quotedAmount: args.quotedAmount,
+        serviceCatalogId: args.serviceCatalogId,
+        serviceMode: args.serviceMode,
+        storeId: args.storeId,
       });
-    }
-
-    return createServiceCaseWithCtx(ctx, {
-      assignedStaffProfileId: args.assignedStaffProfileId,
-      createdByUserId: args.createdByUserId,
-      customerProfileId: args.customerProfileId,
-      notes: args.notes,
-      operationalWorkItemId: workItem._id,
-      organizationId: store.organizationId,
-      quotedAmount: args.quotedAmount,
-      serviceCatalogId: args.serviceCatalogId,
-      serviceMode: args.serviceMode,
-      storeId: args.storeId,
-    });
-  },
+    },
+  ),
 });

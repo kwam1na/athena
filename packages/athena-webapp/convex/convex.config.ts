@@ -20,6 +20,10 @@ export default defineApp({
     WALKTHROUGH_HMAC_PRIOR_KEYRING: v.optional(v.string()),
     LANDING_FUNNEL_HOURLY_LIMIT: v.optional(v.string()),
     LANDING_FUNNEL_INGRESS_DISABLED: v.optional(v.string()),
+    // Signs the storefront `guest_id` cookie. Optional so an unconfigured
+    // environment still deploys and still serves anonymous browse; every
+    // guest-identified path fails closed without it.
+    ATHENA_STOREFRONT_COOKIE_SECRET: v.optional(v.string()),
     ATHENA_WAIVER_REVIEWER_EMAIL: v.optional(v.string()),
     ATHENA_WAIVER_BROKER_SECRET: v.optional(v.string()),
     ATHENA_WAIVER_ENROLLMENT_TOKEN_HASH: v.optional(v.string()),

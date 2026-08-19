@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, type QueryCtx } from "../_generated/server";
+import { internalQuery, type QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { normalizeStoreConfig } from "../inventory/storeConfigV2";
 import {
@@ -703,11 +703,19 @@ export async function getHomepageSnapshotWithCtx(
   });
 }
 
-export const get = query({
+/**
+ * Internal sibling for `GET /homepageSnapshot`. The storefront homepage is
+ * merchandising, not shopper-scoped data, and the same snapshot is served to
+ * genuinely anonymous browse traffic, so there is no ownership concept here:
+ * `storeId` names the store to render and nothing read is shopper-scoped.
+ */
+export const getInternal = internalQuery({
   args: {
     storeId: v.id("store"),
     nowMs: v.number(),
   },
   returns: v.union(homepageSnapshotV1Validator, v.null()),
-  handler: (ctx, args) => getHomepageSnapshotWithCtx(ctx, args),
+  handler: async (ctx, args) => {
+    return await getHomepageSnapshotWithCtx(ctx, args);
+  },
 });

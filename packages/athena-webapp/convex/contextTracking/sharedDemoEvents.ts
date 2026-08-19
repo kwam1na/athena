@@ -1,7 +1,8 @@
 import { v } from "convex/values";
 
 import { mutation } from "../_generated/server";
-import { getSharedDemoActorWithCtx } from "../sharedDemo/actor";
+import { recordSharedDemoActivityOperationDefinition } from "../operationAdmission/domains/platform_definitions";
+import { admitPublicMutation } from "../platform/operationAdmission";
 import { appendContextEventWithCtx } from "./contextEvents";
 
 export const SHARED_DEMO_ACTIVITY_CLOCK_SKEW_MS = 5 * 60 * 1_000;
@@ -125,32 +126,41 @@ export const recordSharedDemoActivity = mutation({
     status: v.optional(v.union(v.literal("recorded"), v.literal("rejected"))),
     message: v.optional(v.string()),
   }),
-  handler: async (ctx, activity) => {
-    const validationError = validateSharedDemoActivity(activity);
-    if (validationError) {
-      return { kind: "rejected" as const, message: validationError };
-    }
+  /**
+   * The retired `getSharedDemoActorWithCtx` call is now the shared-demo
+   * ADAPTER: `actors.sharedDemo: "admit"` with every other actor denied means
+   * the visitor is resolved, its session expiry and `demo_disabled` state are
+   * classified as typed denials, and the store/organization/auth-user this
+   * event is attributed to arrive as `ctx.operationAdmission.actor` — server
+   * facts the browser cannot supply or spoof. The expired/disabled session that
+   * used to be swallowed into a `rejected` envelope is now a recognized
+   * admission denial, which is the same end state (nothing recorded) stated
+   * honestly.
+   */
+  handler: admitPublicMutation(
+    recordSharedDemoActivityOperationDefinition,
+    async (ctx, activity: SharedDemoActivity) => {
+      const validationError = validateSharedDemoActivity(activity);
+      if (validationError) {
+        return { kind: "rejected" as const, message: validationError };
+      }
 
-    let actor;
-    try {
-      actor = await getSharedDemoActorWithCtx(ctx);
-    } catch {
-      // An expired or disabled demo session is a normal end state, not a
-      // reportable failure. Drop the observation rather than surfacing an
-      // error into a surface the visitor is already leaving.
-      return { kind: "rejected" as const, message: "No active demo session." };
-    }
-    if (!actor) {
-      return { kind: "rejected" as const, message: "No active demo session." };
-    }
+      const actor = ctx.operationAdmission.actor;
+      if (actor.kind !== "shared_demo") {
+        return {
+          kind: "rejected" as const,
+          message: "No active demo session.",
+        };
+      }
 
-    return appendContextEventWithCtx(
-      ctx,
-      buildSharedDemoActivityAppendArgs(activity, {
-        authUserId: actor.authUserId,
-        organizationId: actor.organizationId,
-        storeId: actor.storeId,
-      }) as Parameters<typeof appendContextEventWithCtx>[1],
-    );
-  },
+      return appendContextEventWithCtx(
+        ctx,
+        buildSharedDemoActivityAppendArgs(activity, {
+          authUserId: actor.authUserId,
+          organizationId: actor.organizationId,
+          storeId: actor.storeId,
+        }) as Parameters<typeof appendContextEventWithCtx>[1],
+      );
+    },
+  ),
 });

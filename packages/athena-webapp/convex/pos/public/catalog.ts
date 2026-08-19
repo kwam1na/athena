@@ -7,8 +7,21 @@ import {
   type QueryCtx,
 } from "../../_generated/server";
 import { quickAddSkuOperationDefinition } from "../../operationAdmission/definitions";
-import { withOperationMutationAdmission } from "../../operationAdmission/publicMutation";
-import { withOperationReadAdmission } from "../../operationAdmission/publicQuery";
+import {
+  createOrReusePendingCheckoutItemForSaleOperationDefinition,
+  finalizePendingCheckoutTrustedInventoryFromProductPageOperationDefinition,
+  resolvePendingCheckoutItemReviewOperationDefinition,
+} from "../../operationAdmission/domains/pos_definitions";
+import {
+  listLinkedPendingCheckoutAliasesBySkuReadDefinition,
+  listLinkedPendingCheckoutProvisionalBindingsBySkuReadDefinition,
+  listPendingCheckoutItemsForReviewReadDefinition,
+  listPendingCheckoutProductPageBindingReadDefinition,
+} from "../../operationAdmission/domains/pos_readDefinitions";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../../platform/operationAdmission";
 import {
   barcodeLookupPosRegisterCatalogReadDefinition,
   getPosRegisterCatalogRevisionReadDefinition,
@@ -685,7 +698,7 @@ export const search = query({
     storeId: v.id("store"),
     searchQuery: v.string(),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     searchPosRegisterCatalogReadDefinition,
     async (ctx, args: { searchQuery: string; storeId: Id<"store"> }) => {
       await requireRegisterCatalogStoreAccess(ctx, args);
@@ -699,7 +712,7 @@ export const listRegisterCatalogSnapshot = query({
     storeId: v.id("store"),
   },
   returns: v.array(registerCatalogRowValidator),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listPosRegisterCatalogSnapshotReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
       await requireRegisterCatalogStoreAccess(ctx, args);
@@ -717,7 +730,7 @@ export const getRegisterCatalogRevision = query({
     v.object({ status: v.literal("authorization-paused") }),
     v.object({ revision: v.number(), status: v.literal("ready") }),
   ),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPosRegisterCatalogRevisionReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
       try {
@@ -744,7 +757,7 @@ export const listRegisterCatalogSnapshotWithRevision = query({
     revision: v.number(),
     rows: v.array(registerCatalogRowValidator),
   }),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listPosRegisterCatalogSnapshotWithRevisionReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
       await requireRegisterCatalogStoreAccess(ctx, args);
@@ -760,7 +773,7 @@ export const listRegisterCatalogAvailability = query({
     productSkuIds: v.array(v.id("productSku")),
   },
   returns: v.array(registerCatalogAvailabilityValidator),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listPosRegisterCatalogAvailabilityReadDefinition,
     async (
       ctx,
@@ -784,7 +797,7 @@ export const listRegisterCatalogAvailabilitySnapshot = query({
     storeId: v.id("store"),
   },
   returns: v.array(registerCatalogAvailabilityValidator),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listPosRegisterCatalogAvailabilitySnapshotReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
       await requireRegisterCatalogStoreAccess(ctx, args);
@@ -804,7 +817,7 @@ export const barcodeLookup = query({
     catalogResultValidator,
     v.array(catalogResultValidator),
   ),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     barcodeLookupPosRegisterCatalogReadDefinition,
     async (ctx, args: { barcode: string; storeId: Id<"store"> }) => {
       await requireRegisterCatalogStoreAccess(ctx, args);
@@ -828,7 +841,7 @@ export const quickAddSku = mutation({
     terminalId: v.optional(v.id("posTerminal")),
   },
   returns: catalogResultValidator,
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     quickAddSkuOperationDefinition,
     async (ctx: OperationMutationCtx, args) => {
       const store = await ctx.db.get("store", args.storeId);
@@ -867,33 +880,39 @@ export const createOrReusePendingCheckoutItemForSale = mutation({
     terminalId: v.optional(v.id("posTerminal")),
   },
   returns: pendingCheckoutResultValidator,
-  handler: async (ctx, args) => {
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      throw new Error("Store not found.");
-    }
+  handler: admitPublicMutation(
+    createOrReusePendingCheckoutItemForSaleOperationDefinition,
+    async (ctx, args) => {
+      const store = await ctx.db.get("store", args.storeId);
+      if (!store) {
+        throw new Error("Store not found.");
+      }
 
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "You cannot add pending checkout items for this store.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
-    });
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage: "You cannot add pending checkout items for this store.",
+        organizationId: store.organizationId,
+        userId: athenaUser._id,
+      });
 
-    const registerContext = await requirePendingCheckoutSaleContext(ctx, args);
+      const registerContext = await requirePendingCheckoutSaleContext(
+        ctx,
+        args,
+      );
 
-    return createOrReusePendingCheckoutItem(ctx, {
-      storeId: args.storeId,
-      name: args.name,
-      lookupCode: args.lookupCode,
-      price: args.price,
-      quantitySold: args.quantitySold,
-      createdByUserId: athenaUser._id,
-      ...registerContext,
-      source: "online",
-    });
-  },
+      return createOrReusePendingCheckoutItem(ctx, {
+        storeId: args.storeId,
+        name: args.name,
+        lookupCode: args.lookupCode,
+        price: args.price,
+        quantitySold: args.quantitySold,
+        createdByUserId: athenaUser._id,
+        ...registerContext,
+        source: "online",
+      });
+    },
+  ),
 });
 
 export const listPendingCheckoutItemsForReview = query({
@@ -901,41 +920,44 @@ export const listPendingCheckoutItemsForReview = query({
     storeId: v.id("store"),
   },
   returns: v.array(pendingCheckoutReviewItemValidator),
-  handler: async (ctx, args) => {
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      throw new Error("Store not found.");
-    }
+  handler: admitPublicQuery(
+    listPendingCheckoutItemsForReviewReadDefinition,
+    async (ctx, args: { storeId: Id<"store"> }) => {
+      const store = await ctx.db.get("store", args.storeId);
+      if (!store) {
+        throw new Error("Store not found.");
+      }
 
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin"],
-      failureMessage:
-        "You cannot review pending checkout items for this store.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
-    });
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin"],
+        failureMessage:
+          "You cannot review pending checkout items for this store.",
+        organizationId: store.organizationId,
+        userId: athenaUser._id,
+      });
 
-    const pendingItems = await ctx.db
-      .query("posPendingCheckoutItem")
-      .withIndex("by_storeId_status_updatedAt", (q) =>
-        q.eq("storeId", args.storeId).eq("status", "pending_review"),
-      )
-      .order("desc")
-      .take(100);
-    const flaggedItems = await ctx.db
-      .query("posPendingCheckoutItem")
-      .withIndex("by_storeId_status_updatedAt", (q) =>
-        q.eq("storeId", args.storeId).eq("status", "flagged"),
-      )
-      .order("desc")
-      .take(100);
+      const pendingItems = await ctx.db
+        .query("posPendingCheckoutItem")
+        .withIndex("by_storeId_status_updatedAt", (q) =>
+          q.eq("storeId", args.storeId).eq("status", "pending_review"),
+        )
+        .order("desc")
+        .take(100);
+      const flaggedItems = await ctx.db
+        .query("posPendingCheckoutItem")
+        .withIndex("by_storeId_status_updatedAt", (q) =>
+          q.eq("storeId", args.storeId).eq("status", "flagged"),
+        )
+        .order("desc")
+        .take(100);
 
-    return [...pendingItems, ...flaggedItems]
-      .sort((left, right) => right.updatedAt - left.updatedAt)
-      .slice(0, 100)
-      .map(toPendingCheckoutReviewItem);
-  },
+      return [...pendingItems, ...flaggedItems]
+        .sort((left, right) => right.updatedAt - left.updatedAt)
+        .slice(0, 100)
+        .map(toPendingCheckoutReviewItem);
+    },
+  ),
 });
 
 export const listPendingCheckoutProductPageBinding = query({
@@ -945,10 +967,20 @@ export const listPendingCheckoutProductPageBinding = query({
     storeId: v.id("store"),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    await requirePendingCheckoutReviewAccess(ctx, args);
-    return listPendingCheckoutProductPageBindingWithCtx(ctx, args);
-  },
+  handler: admitPublicQuery(
+    listPendingCheckoutProductPageBindingReadDefinition,
+    async (
+      ctx,
+      args: {
+        productSkuId: Id<"productSku">;
+        refreshNonce?: number;
+        storeId: Id<"store">;
+      },
+    ) => {
+      await requirePendingCheckoutReviewAccess(ctx, args);
+      return listPendingCheckoutProductPageBindingWithCtx(ctx, args);
+    },
+  ),
 });
 
 export const listLinkedPendingCheckoutAliasesBySku = query({
@@ -957,67 +989,73 @@ export const listLinkedPendingCheckoutAliasesBySku = query({
     storeId: v.id("store"),
   },
   returns: v.array(linkedPendingCheckoutAliasSummaryValidator),
-  handler: async (ctx, args) => {
-    await requirePendingCheckoutReviewAccess(ctx, args);
+  handler: admitPublicQuery(
+    listLinkedPendingCheckoutAliasesBySkuReadDefinition,
+    async (
+      ctx,
+      args: { productSkuIds: Id<"productSku">[]; storeId: Id<"store"> },
+    ) => {
+      await requirePendingCheckoutReviewAccess(ctx, args);
 
-    const summaries = await Promise.all(
-      Array.from(new Set(args.productSkuIds)).map(async (productSkuId) => {
-        const aliases = await ctx.db
-          .query("posPendingCheckoutItem")
-          .withIndex("by_storeId_status_approvedProductSkuId", (q) =>
-            q
-              .eq("storeId", args.storeId)
-              .eq("status", "linked_to_catalog")
-              .eq("approvedProductSkuId", productSkuId),
-          )
-          .take(20);
+      const summaries = await Promise.all(
+        Array.from(new Set(args.productSkuIds)).map(async (productSkuId) => {
+          const aliases = await ctx.db
+            .query("posPendingCheckoutItem")
+            .withIndex("by_storeId_status_approvedProductSkuId", (q) =>
+              q
+                .eq("storeId", args.storeId)
+                .eq("status", "linked_to_catalog")
+                .eq("approvedProductSkuId", productSkuId),
+            )
+            .take(20);
 
-        const visibleAliases = [];
-        for (const alias of aliases) {
-          if (
-            await isLinkedPendingCheckoutAliasVisible(ctx, {
-              item: alias,
-              storeId: args.storeId,
-            })
-          ) {
-            visibleAliases.push(alias);
+          const visibleAliases = [];
+          for (const alias of aliases) {
+            if (
+              await isLinkedPendingCheckoutAliasVisible(ctx, {
+                item: alias,
+                storeId: args.storeId,
+              })
+            ) {
+              visibleAliases.push(alias);
+            }
           }
-        }
 
-        const aliasSummaries = await Promise.all(
-          visibleAliases.map(async (alias) => {
-            const provisionalSku = alias.provisionalProductSkuId
-              ? await ctx.db.get("productSku", alias.provisionalProductSkuId)
-              : null;
+          const aliasSummaries = await Promise.all(
+            visibleAliases.map(async (alias) => {
+              const provisionalSku = alias.provisionalProductSkuId
+                ? await ctx.db.get("productSku", alias.provisionalProductSkuId)
+                : null;
 
-            return {
-              ...(alias.lookupCode ? { lookupCode: alias.lookupCode } : {}),
-              name: alias.name,
-              pendingCheckoutItemId: alias._id,
-              ...(alias.provisionalProductId
-                ? { provisionalProductId: alias.provisionalProductId }
-                : {}),
-              ...(provisionalSku?.sku
-                ? { provisionalSku: provisionalSku.sku }
-                : {}),
-              ...(alias.provisionalProductSkuId
-                ? { provisionalProductSkuId: alias.provisionalProductSkuId }
-                : {}),
-              quantitySold: alias.evidence.totalQuantitySold,
-            };
-          }),
-        );
+              return {
+                ...(alias.lookupCode ? { lookupCode: alias.lookupCode } : {}),
+                name: alias.name,
+                pendingCheckoutItemId: alias._id,
+                ...(alias.provisionalProductId
+                  ? { provisionalProductId: alias.provisionalProductId }
+                  : {}),
+                ...(provisionalSku?.sku
+                  ? { provisionalSku: provisionalSku.sku }
+                  : {}),
+                ...(alias.provisionalProductSkuId
+                  ? { provisionalProductSkuId: alias.provisionalProductSkuId }
+                  : {}),
+                quantitySold: alias.evidence.totalQuantitySold,
+              };
+            }),
+          );
 
-        return {
-          aliases: aliasSummaries,
-          count: aliasSummaries.length,
-          productSkuId,
-        };
-      }),
-    );
+          return {
+            aliases: aliasSummaries,
+            count: aliasSummaries.length,
+            productSkuId,
+          };
+        }),
+      );
 
-    return summaries.filter((summary) => summary.count > 0);
-  },
+      return summaries.filter((summary) => summary.count > 0);
+    },
+  ),
 });
 
 export const listLinkedPendingCheckoutProvisionalBindingsBySku = query({
@@ -1026,40 +1064,46 @@ export const listLinkedPendingCheckoutProvisionalBindingsBySku = query({
     storeId: v.id("store"),
   },
   returns: v.array(linkedPendingCheckoutProvisionalBindingValidator),
-  handler: async (ctx, args) => {
-    await requirePendingCheckoutReviewAccess(ctx, args);
+  handler: admitPublicQuery(
+    listLinkedPendingCheckoutProvisionalBindingsBySkuReadDefinition,
+    async (
+      ctx,
+      args: { productSkuIds: Id<"productSku">[]; storeId: Id<"store"> },
+    ) => {
+      await requirePendingCheckoutReviewAccess(ctx, args);
 
-    const bindings = await Promise.all(
-      Array.from(new Set(args.productSkuIds)).map(async (productSkuId) => {
-        const binding = await listPendingCheckoutProductPageBindingWithCtx(
-          ctx,
-          {
+      const bindings = await Promise.all(
+        Array.from(new Set(args.productSkuIds)).map(async (productSkuId) => {
+          const binding = await listPendingCheckoutProductPageBindingWithCtx(
+            ctx,
+            {
+              productSkuId,
+              storeId: args.storeId,
+            },
+          );
+
+          if (
+            binding.state !== "unique" ||
+            binding.row.status !== "linked_to_catalog" ||
+            !binding.row.linkedTarget
+          ) {
+            return null;
+          }
+
+          return {
+            linkedTarget: binding.row.linkedTarget,
+            pendingCheckoutItemId: binding.row._id,
             productSkuId,
-            storeId: args.storeId,
-          },
-        );
+          };
+        }),
+      );
 
-        if (
-          binding.state !== "unique" ||
-          binding.row.status !== "linked_to_catalog" ||
-          !binding.row.linkedTarget
-        ) {
-          return null;
-        }
-
-        return {
-          linkedTarget: binding.row.linkedTarget,
-          pendingCheckoutItemId: binding.row._id,
-          productSkuId,
-        };
-      }),
-    );
-
-    return bindings.filter(
-      (binding): binding is NonNullable<(typeof bindings)[number]> =>
-        binding !== null,
-    );
-  },
+      return bindings.filter(
+        (binding): binding is NonNullable<(typeof bindings)[number]> =>
+          binding !== null,
+      );
+    },
+  ),
 });
 
 export const finalizePendingCheckoutTrustedInventoryFromProductPage = mutation({
@@ -1081,243 +1125,250 @@ export const finalizePendingCheckoutTrustedInventoryFromProductPage = mutation({
     trustedSkuFingerprint: v.string(),
   },
   returns: commandResultValidator(v.any()),
-  handler: async (ctx, args) => {
-    const normalizedArgs = {
-      ...args,
-      conversionRequestId: args.conversionRequestId.trim(),
-      reviewedPosVisible: args.reviewedPosVisible ?? args.reviewedIsVisible,
-    };
-    const access = await requirePendingCheckoutReviewAccess(
-      ctx,
-      normalizedArgs,
-    );
-    const validationError =
-      validateReviewedTrustedInventoryFields(normalizedArgs);
-    if (validationError) return validationError;
+  handler: admitPublicMutation(
+    finalizePendingCheckoutTrustedInventoryFromProductPageOperationDefinition,
+    async (ctx, args) => {
+      const normalizedArgs = {
+        ...args,
+        conversionRequestId: args.conversionRequestId.trim(),
+        reviewedPosVisible: args.reviewedPosVisible ?? args.reviewedIsVisible,
+      };
+      const access = await requirePendingCheckoutReviewAccess(
+        ctx,
+        normalizedArgs,
+      );
+      const validationError =
+        validateReviewedTrustedInventoryFields(normalizedArgs);
+      if (validationError) return validationError;
 
-    if (!normalizedArgs.conversionRequestId) {
-      return userError({
-        code: "validation_failed",
-        message: "Finalization request id is required.",
+      if (!normalizedArgs.conversionRequestId) {
+        return userError({
+          code: "validation_failed",
+          message: "Finalization request id is required.",
+        });
+      }
+
+      const [item, product, productSku] = await Promise.all([
+        ctx.db.get("posPendingCheckoutItem", normalizedArgs.provisionalSkuId),
+        ctx.db.get("product", normalizedArgs.productId),
+        ctx.db.get("productSku", normalizedArgs.productSkuId),
+      ]);
+
+      if (!item || item.storeId !== normalizedArgs.storeId) {
+        return userError({
+          code: "not_found",
+          message: "Pending checkout item was not found.",
+        });
+      }
+
+      if (item.status !== "pending_review" && item.status !== "flagged") {
+        return userError({
+          code: "conflict",
+          message: "This pending checkout item has already been reviewed.",
+        });
+      }
+
+      if (
+        !product ||
+        product.storeId !== normalizedArgs.storeId ||
+        product.availability !== "draft" ||
+        product._id !== item.provisionalProductId
+      ) {
+        return userError({
+          code: "precondition_failed",
+          message:
+            "Open the draft pending checkout product before finalizing trusted inventory.",
+        });
+      }
+
+      if (
+        !productSku ||
+        productSku.storeId !== normalizedArgs.storeId ||
+        productSku.productId !== product._id ||
+        productSku._id !== item.provisionalProductSkuId
+      ) {
+        return userError({
+          code: "precondition_failed",
+          message:
+            "Open the pending checkout SKU before finalizing trusted inventory.",
+        });
+      }
+
+      const currentSaleEvidenceFingerprint =
+        buildPendingCheckoutSaleEvidenceFingerprint(item);
+      if (
+        normalizedArgs.saleEvidenceFingerprint !==
+        currentSaleEvidenceFingerprint
+      ) {
+        return userError({
+          code: "conflict",
+          message:
+            "Pending checkout sales changed while you were reviewing. Refresh before finalizing.",
+        });
+      }
+
+      const currentTrustedSkuFingerprint =
+        buildTrustedSkuFingerprint(productSku);
+      if (
+        normalizedArgs.trustedSkuFingerprint !== currentTrustedSkuFingerprint
+      ) {
+        return userError({
+          code: "conflict",
+          message:
+            "SKU stock or price changed while you were reviewing. Refresh before finalizing.",
+        });
+      }
+
+      const now = Date.now();
+      const payloadHash =
+        buildPendingCheckoutFinalizationPayloadHash(normalizedArgs);
+      const productSkuPatch = omitUndefined({
+        isVisible: normalizedArgs.reviewedIsVisible,
+        posVisible: normalizedArgs.reviewedPosVisible,
+        netPrice: normalizedArgs.reviewedNetPrice,
+        price: normalizedArgs.reviewedPrice,
       });
-    }
-
-    const [item, product, productSku] = await Promise.all([
-      ctx.db.get("posPendingCheckoutItem", normalizedArgs.provisionalSkuId),
-      ctx.db.get("product", normalizedArgs.productId),
-      ctx.db.get("productSku", normalizedArgs.productSkuId),
-    ]);
-
-    if (!item || item.storeId !== normalizedArgs.storeId) {
-      return userError({
-        code: "not_found",
-        message: "Pending checkout item was not found.",
-      });
-    }
-
-    if (item.status !== "pending_review" && item.status !== "flagged") {
-      return userError({
-        code: "conflict",
-        message: "This pending checkout item has already been reviewed.",
-      });
-    }
-
-    if (
-      !product ||
-      product.storeId !== normalizedArgs.storeId ||
-      product.availability !== "draft" ||
-      product._id !== item.provisionalProductId
-    ) {
-      return userError({
-        code: "precondition_failed",
-        message:
-          "Open the draft pending checkout product before finalizing trusted inventory.",
-      });
-    }
-
-    if (
-      !productSku ||
-      productSku.storeId !== normalizedArgs.storeId ||
-      productSku.productId !== product._id ||
-      productSku._id !== item.provisionalProductSkuId
-    ) {
-      return userError({
-        code: "precondition_failed",
-        message:
-          "Open the pending checkout SKU before finalizing trusted inventory.",
-      });
-    }
-
-    const currentSaleEvidenceFingerprint =
-      buildPendingCheckoutSaleEvidenceFingerprint(item);
-    if (
-      normalizedArgs.saleEvidenceFingerprint !== currentSaleEvidenceFingerprint
-    ) {
-      return userError({
-        code: "conflict",
-        message:
-          "Pending checkout sales changed while you were reviewing. Refresh before finalizing.",
-      });
-    }
-
-    const currentTrustedSkuFingerprint = buildTrustedSkuFingerprint(productSku);
-    if (normalizedArgs.trustedSkuFingerprint !== currentTrustedSkuFingerprint) {
-      return userError({
-        code: "conflict",
-        message:
-          "SKU stock or price changed while you were reviewing. Refresh before finalizing.",
-      });
-    }
-
-    const now = Date.now();
-    const payloadHash =
-      buildPendingCheckoutFinalizationPayloadHash(normalizedArgs);
-    const productSkuPatch = omitUndefined({
-      isVisible: normalizedArgs.reviewedIsVisible,
-      posVisible: normalizedArgs.reviewedPosVisible,
-      netPrice: normalizedArgs.reviewedNetPrice,
-      price: normalizedArgs.reviewedPrice,
-    });
-    const productPatch = {
-      availability: "live" as const,
-      inventoryCount: normalizedArgs.reviewedInventoryCount,
-      posVisible: true,
-      quantityAvailable: normalizedArgs.reviewedQuantityAvailable,
-    };
-
-    const stockDelta =
-      normalizedArgs.reviewedInventoryCount - productSku.inventoryCount;
-    const availabilityDelta =
-      normalizedArgs.reviewedQuantityAvailable - productSku.quantityAvailable;
-    const valuation =
-      stockDelta > 0
-        ? {
-            costBasis:
-              normalizedArgs.reviewedUnitCost === undefined
-                ? uncostedBasis()
-                : knownUnitCostBasis({
-                    currency: product.currency ?? item.currency,
-                    quantity: stockDelta,
-                    unitCost: normalizedArgs.reviewedUnitCost,
-                  }),
-            deficitLots: [],
-            kind: "inbound" as const,
-            quantity: stockDelta,
-          }
-        : stockDelta < 0
-          ? {
-              disposition: "stock_correction" as const,
-              kind: "outbound" as const,
-              quantity: Math.abs(stockDelta),
-            }
-          : { kind: "availability_only" as const };
-    const inventoryEffect = await applyInventoryEffectWithCtx(ctx, {
-      actorUserId: access.athenaUser._id,
-      activityType: "pending_checkout_trusted_finalization",
-      businessEventKey: `pending_checkout:${item._id}:trusted:${normalizedArgs.conversionRequestId}`,
-      compatibilityBalance: {
-        onHandQuantity: normalizedArgs.reviewedInventoryCount,
-        sellableQuantity: normalizedArgs.reviewedQuantityAvailable,
-      },
-      completeness: "partial",
-      contentFingerprint: payloadHash,
-      effectType: "baseline",
-      movementType: "pending_checkout_trusted_finalization",
-      notes: "Trusted inventory finalized from pending checkout review.",
-      occurrenceAt: now,
-      organizationId: access.store.organizationId,
-      physicalQuantityDelta: stockDelta,
-      productId: normalizedArgs.productId,
-      productSkuId: normalizedArgs.productSkuId,
-      reasonCode: "trusted_inventory_conversion",
-      sellableQuantityDelta: availabilityDelta,
-      sourceDomain: "inventory",
-      sourceId: String(item._id),
-      sourceType: "pos_pending_checkout_item",
-      storeId: normalizedArgs.storeId,
-      valuation,
-    });
-    await ctx.db.patch("productSku", normalizedArgs.productSkuId, {
-      ...(productSkuPatch.isVisible !== undefined
-        ? { isVisible: productSkuPatch.isVisible }
-        : {}),
-      ...(productSkuPatch.posVisible !== undefined
-        ? { posVisible: productSkuPatch.posVisible }
-        : {}),
-      ...(productSkuPatch.netPrice !== undefined
-        ? { netPrice: productSkuPatch.netPrice }
-        : {}),
-      ...(productSkuPatch.price !== undefined
-        ? { price: productSkuPatch.price }
-        : {}),
-    });
-    await ctx.db.patch("product", normalizedArgs.productId, productPatch);
-    await upsertProductSkuSearchProjection(ctx, normalizedArgs.productSkuId, {
-      advanceRevision: false,
-    });
-
-    const inventoryMovementId = inventoryEffect.movement?._id;
-
-    await ctx.db.patch("posPendingCheckoutItem", item._id, {
-      approvedProductId: normalizedArgs.productId,
-      approvedProductSkuId: normalizedArgs.productSkuId,
-      reviewedAt: now,
-      reviewedByUserId: access.athenaUser._id,
-      reviewNote: "Trusted inventory finalized from product edit.",
-      status: "approved",
-      updatedAt: now,
-    });
-    await advanceRegisterCatalogRevision(ctx, {
-      didChange: true,
-      storeId: normalizedArgs.storeId,
-    });
-
-    if (item.operationalWorkItemId) {
-      const workItemPatch =
-        mapPendingCheckoutReviewStatusToWorkItemPatch("approved");
-      await updateOperationalWorkItemStatusWithCtx(ctx, {
-        approvalState: workItemPatch.approvalState,
-        status: workItemPatch.status,
-        workItemId: item.operationalWorkItemId,
-      });
-    }
-
-    await refreshCatalogSummaryWithCtx(ctx, normalizedArgs.storeId);
-
-    await recordOperationalEventWithCtx(ctx, {
-      actorUserId: access.athenaUser._id,
-      eventType: "pos_pending_checkout_item_trusted_finalized",
-      message: `Pending checkout item ${item.name} was finalized as trusted inventory.`,
-      metadata: {
-        conversionRequestId: normalizedArgs.conversionRequestId,
-        finalTrustedQuantity: normalizedArgs.reviewedInventoryCount,
-        inventoryMovementId,
-        pendingCheckoutItemId: item._id,
-        previousStatus: item.status,
+      const productPatch = {
+        availability: "live" as const,
+        inventoryCount: normalizedArgs.reviewedInventoryCount,
+        posVisible: true,
         quantityAvailable: normalizedArgs.reviewedQuantityAvailable,
-        saleEvidenceFingerprint: normalizedArgs.saleEvidenceFingerprint,
-        stockQuantityDelta: stockDelta,
-        trustedSkuFingerprint: normalizedArgs.trustedSkuFingerprint,
-        trustedInventoryPayloadHash: payloadHash,
-      },
-      organizationId: access.store.organizationId,
-      storeId: normalizedArgs.storeId,
-      subjectId: String(item._id),
-      subjectLabel: item.name,
-      subjectType: "pos_pending_checkout_item",
-    });
+      };
 
-    return ok({
-      finalTrustedQuantity: normalizedArgs.reviewedInventoryCount,
-      product: productPatch,
-      productId: normalizedArgs.productId,
-      productSkuId: normalizedArgs.productSkuId,
-      provisionalSkuId: item._id,
-      provisionalSoldQuantity: item.evidence.totalQuantitySold,
-      quantityAvailable: normalizedArgs.reviewedQuantityAvailable,
-      ...(inventoryMovementId ? { inventoryMovementId } : {}),
-    });
-  },
+      const stockDelta =
+        normalizedArgs.reviewedInventoryCount - productSku.inventoryCount;
+      const availabilityDelta =
+        normalizedArgs.reviewedQuantityAvailable - productSku.quantityAvailable;
+      const valuation =
+        stockDelta > 0
+          ? {
+              costBasis:
+                normalizedArgs.reviewedUnitCost === undefined
+                  ? uncostedBasis()
+                  : knownUnitCostBasis({
+                      currency: product.currency ?? item.currency,
+                      quantity: stockDelta,
+                      unitCost: normalizedArgs.reviewedUnitCost,
+                    }),
+              deficitLots: [],
+              kind: "inbound" as const,
+              quantity: stockDelta,
+            }
+          : stockDelta < 0
+            ? {
+                disposition: "stock_correction" as const,
+                kind: "outbound" as const,
+                quantity: Math.abs(stockDelta),
+              }
+            : { kind: "availability_only" as const };
+      const inventoryEffect = await applyInventoryEffectWithCtx(ctx, {
+        actorUserId: access.athenaUser._id,
+        activityType: "pending_checkout_trusted_finalization",
+        businessEventKey: `pending_checkout:${item._id}:trusted:${normalizedArgs.conversionRequestId}`,
+        compatibilityBalance: {
+          onHandQuantity: normalizedArgs.reviewedInventoryCount,
+          sellableQuantity: normalizedArgs.reviewedQuantityAvailable,
+        },
+        completeness: "partial",
+        contentFingerprint: payloadHash,
+        effectType: "baseline",
+        movementType: "pending_checkout_trusted_finalization",
+        notes: "Trusted inventory finalized from pending checkout review.",
+        occurrenceAt: now,
+        organizationId: access.store.organizationId,
+        physicalQuantityDelta: stockDelta,
+        productId: normalizedArgs.productId,
+        productSkuId: normalizedArgs.productSkuId,
+        reasonCode: "trusted_inventory_conversion",
+        sellableQuantityDelta: availabilityDelta,
+        sourceDomain: "inventory",
+        sourceId: String(item._id),
+        sourceType: "pos_pending_checkout_item",
+        storeId: normalizedArgs.storeId,
+        valuation,
+      });
+      await ctx.db.patch("productSku", normalizedArgs.productSkuId, {
+        ...(productSkuPatch.isVisible !== undefined
+          ? { isVisible: productSkuPatch.isVisible }
+          : {}),
+        ...(productSkuPatch.posVisible !== undefined
+          ? { posVisible: productSkuPatch.posVisible }
+          : {}),
+        ...(productSkuPatch.netPrice !== undefined
+          ? { netPrice: productSkuPatch.netPrice }
+          : {}),
+        ...(productSkuPatch.price !== undefined
+          ? { price: productSkuPatch.price }
+          : {}),
+      });
+      await ctx.db.patch("product", normalizedArgs.productId, productPatch);
+      await upsertProductSkuSearchProjection(ctx, normalizedArgs.productSkuId, {
+        advanceRevision: false,
+      });
+
+      const inventoryMovementId = inventoryEffect.movement?._id;
+
+      await ctx.db.patch("posPendingCheckoutItem", item._id, {
+        approvedProductId: normalizedArgs.productId,
+        approvedProductSkuId: normalizedArgs.productSkuId,
+        reviewedAt: now,
+        reviewedByUserId: access.athenaUser._id,
+        reviewNote: "Trusted inventory finalized from product edit.",
+        status: "approved",
+        updatedAt: now,
+      });
+      await advanceRegisterCatalogRevision(ctx, {
+        didChange: true,
+        storeId: normalizedArgs.storeId,
+      });
+
+      if (item.operationalWorkItemId) {
+        const workItemPatch =
+          mapPendingCheckoutReviewStatusToWorkItemPatch("approved");
+        await updateOperationalWorkItemStatusWithCtx(ctx, {
+          approvalState: workItemPatch.approvalState,
+          status: workItemPatch.status,
+          workItemId: item.operationalWorkItemId,
+        });
+      }
+
+      await refreshCatalogSummaryWithCtx(ctx, normalizedArgs.storeId);
+
+      await recordOperationalEventWithCtx(ctx, {
+        actorUserId: access.athenaUser._id,
+        eventType: "pos_pending_checkout_item_trusted_finalized",
+        message: `Pending checkout item ${item.name} was finalized as trusted inventory.`,
+        metadata: {
+          conversionRequestId: normalizedArgs.conversionRequestId,
+          finalTrustedQuantity: normalizedArgs.reviewedInventoryCount,
+          inventoryMovementId,
+          pendingCheckoutItemId: item._id,
+          previousStatus: item.status,
+          quantityAvailable: normalizedArgs.reviewedQuantityAvailable,
+          saleEvidenceFingerprint: normalizedArgs.saleEvidenceFingerprint,
+          stockQuantityDelta: stockDelta,
+          trustedSkuFingerprint: normalizedArgs.trustedSkuFingerprint,
+          trustedInventoryPayloadHash: payloadHash,
+        },
+        organizationId: access.store.organizationId,
+        storeId: normalizedArgs.storeId,
+        subjectId: String(item._id),
+        subjectLabel: item.name,
+        subjectType: "pos_pending_checkout_item",
+      });
+
+      return ok({
+        finalTrustedQuantity: normalizedArgs.reviewedInventoryCount,
+        product: productPatch,
+        productId: normalizedArgs.productId,
+        productSkuId: normalizedArgs.productSkuId,
+        provisionalSkuId: item._id,
+        provisionalSoldQuantity: item.evidence.totalQuantitySold,
+        quantityAvailable: normalizedArgs.reviewedQuantityAvailable,
+        ...(inventoryMovementId ? { inventoryMovementId } : {}),
+      });
+    },
+  ),
 });
 
 export const resolvePendingCheckoutItemReview = mutation({
@@ -1335,252 +1386,260 @@ export const resolvePendingCheckoutItemReview = mutation({
     approvedProductSkuId: v.optional(v.id("productSku")),
   },
   returns: commandResultValidator(pendingCheckoutReviewItemValidator),
-  handler: async (ctx, args) => {
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      return userError({
-        code: "not_found",
-        message: "Store not found.",
-      });
-    }
-
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin"],
-      failureMessage:
-        "You cannot resolve pending checkout items for this store.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
-    });
-
-    const item = await ctx.db.get(
-      "posPendingCheckoutItem",
-      args.pendingCheckoutItemId,
-    );
-    if (!item || item.storeId !== args.storeId) {
-      return userError({
-        code: "not_found",
-        message: "Pending checkout item not found.",
-      });
-    }
-    if (
-      item.status === "linked_to_catalog" &&
-      (await hasPendingCheckoutTransactionAttribution(ctx, item._id)) &&
-      (args.status !== "linked_to_catalog" ||
-        args.approvedProductId !== item.approvedProductId ||
-        args.approvedProductSkuId !== item.approvedProductSkuId)
-    ) {
-      return userError({
-        code: "conflict",
-        message:
-          "This pending checkout item is already linked to a trusted SKU. Create a correction to change linked sale history.",
-      });
-    }
-
-    const approvedProduct = args.approvedProductId
-      ? await ctx.db.get("product", args.approvedProductId)
-      : null;
-    const approvedSku = args.approvedProductSkuId
-      ? await ctx.db.get("productSku", args.approvedProductSkuId)
-      : null;
-    const provisionalSku = item.provisionalProductSkuId
-      ? await ctx.db.get("productSku", item.provisionalProductSkuId)
-      : null;
-    const approvedProductCategory = approvedProduct?.categoryId
-      ? await ctx.db.get("category", approvedProduct.categoryId)
-      : null;
-    const pendingStoredPrice =
-      provisionalSku &&
-      provisionalSku.storeId === args.storeId &&
-      provisionalSku._id === item.provisionalProductSkuId
-        ? provisionalSku.price
-        : item.provisionalPrice;
-    const trustedSkuLinkPrice = approvedSku?.netPrice ?? approvedSku?.price;
-    if (
-      args.status === "approved" ||
-      args.status === "linked_to_catalog" ||
-      args.approvedProductId ||
-      args.approvedProductSkuId
-    ) {
-      if (
-        !approvedProduct ||
-        approvedProduct.storeId !== args.storeId ||
-        !approvedSku ||
-        approvedSku.storeId !== args.storeId ||
-        approvedSku.productId !== approvedProduct._id ||
-        approvedProduct._id === item.provisionalProductId ||
-        approvedSku._id === item.provisionalProductSkuId ||
-        !isTrustedRegisterCatalogSku({
-          category: approvedProductCategory,
-          product: approvedProduct,
-          sku: approvedSku,
-        })
-      ) {
+  handler: admitPublicMutation(
+    resolvePendingCheckoutItemReviewOperationDefinition,
+    async (ctx, args) => {
+      const store = await ctx.db.get("store", args.storeId);
+      if (!store) {
         return userError({
-          code: "validation_failed",
-          message: "Choose a valid catalog product and SKU from this store.",
+          code: "not_found",
+          message: "Store not found.",
         });
       }
 
-      if (
-        args.status === "linked_to_catalog" &&
-        (typeof pendingStoredPrice !== "number" ||
-          typeof trustedSkuLinkPrice !== "number" ||
-          !pendingCheckoutLinkPricesMatch({
-            pendingStoredPrice,
-            trustedSkuStoredPrice: trustedSkuLinkPrice,
-          }))
-      ) {
-        return userError({
-          code: "validation_failed",
-          message:
-            "Link to a SKU with the same price as the pending checkout item.",
-        });
-      }
-    }
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin"],
+        failureMessage:
+          "You cannot resolve pending checkout items for this store.",
+        organizationId: store.organizationId,
+        userId: athenaUser._id,
+      });
 
-    const reviewedAt = Date.now();
-    const shouldRetirePriorLinkedLookup =
-      item.status === "linked_to_catalog" &&
-      (args.status !== "linked_to_catalog" ||
-        args.approvedProductId !== item.approvedProductId ||
-        args.approvedProductSkuId !== item.approvedProductSkuId);
-    let retiredLookupAliasId: Id<"posPendingCheckoutLookupAlias"> | null = null;
-    if (shouldRetirePriorLinkedLookup) {
-      retiredLookupAliasId = await retirePendingCheckoutLookupAliasForItem(
-        ctx,
-        {
-          lookupCode: item.lookupCode,
-          now: reviewedAt,
-          pendingCheckoutItemId: item._id,
-          storeId: args.storeId,
-        },
+      const item = await ctx.db.get(
+        "posPendingCheckoutItem",
+        args.pendingCheckoutItemId,
       );
-
-      if (item.lookupCode && item.approvedProductSkuId) {
-        const priorApprovedSku = await ctx.db.get(
-          "productSku",
-          item.approvedProductSkuId,
-        );
-        if (priorApprovedSku?.barcode?.trim() === item.lookupCode.trim()) {
-          await ctx.db.patch("productSku", priorApprovedSku._id, {
-            barcode: undefined,
-          });
-          await upsertProductSkuSearchProjection(ctx, priorApprovedSku._id, {
-            advanceRevision: false,
-          });
-        }
+      if (!item || item.storeId !== args.storeId) {
+        return userError({
+          code: "not_found",
+          message: "Pending checkout item not found.",
+        });
       }
-    }
-    let attachedLookupCode: string | undefined;
-    let lookupAliasId: Id<"posPendingCheckoutLookupAlias"> | null = null;
-    if (args.status === "linked_to_catalog" && approvedSku && item.lookupCode) {
-      const existingBarcodeSku = await findStoreSkuByBarcode(ctx, {
-        barcode: item.lookupCode,
-        storeId: args.storeId,
-      });
-      if (existingBarcodeSku && existingBarcodeSku._id !== approvedSku._id) {
+      if (
+        item.status === "linked_to_catalog" &&
+        (await hasPendingCheckoutTransactionAttribution(ctx, item._id)) &&
+        (args.status !== "linked_to_catalog" ||
+          args.approvedProductId !== item.approvedProductId ||
+          args.approvedProductSkuId !== item.approvedProductSkuId)
+      ) {
         return userError({
           code: "conflict",
-          message: "This lookup code already belongs to another catalog SKU.",
+          message:
+            "This pending checkout item is already linked to a trusted SKU. Create a correction to change linked sale history.",
         });
       }
 
-      if (!approvedSku.barcode?.trim()) {
-        await ctx.db.patch("productSku", approvedSku._id, {
-          barcode: item.lookupCode,
-          barcodeAutoGenerated: false,
-        });
-        await upsertProductSkuSearchProjection(ctx, approvedSku._id, {
-          advanceRevision: false,
-        });
-        attachedLookupCode = item.lookupCode;
-      } else {
-        try {
-          lookupAliasId = await upsertPendingCheckoutLookupAlias(ctx, {
-            lookupCode: item.lookupCode,
-            now: reviewedAt,
-            organizationId: store.organizationId,
-            pendingCheckoutItemId: item._id,
-            productId: approvedProduct!._id,
-            productSkuId: approvedSku._id,
-            storeId: args.storeId,
+      const approvedProduct = args.approvedProductId
+        ? await ctx.db.get("product", args.approvedProductId)
+        : null;
+      const approvedSku = args.approvedProductSkuId
+        ? await ctx.db.get("productSku", args.approvedProductSkuId)
+        : null;
+      const provisionalSku = item.provisionalProductSkuId
+        ? await ctx.db.get("productSku", item.provisionalProductSkuId)
+        : null;
+      const approvedProductCategory = approvedProduct?.categoryId
+        ? await ctx.db.get("category", approvedProduct.categoryId)
+        : null;
+      const pendingStoredPrice =
+        provisionalSku &&
+        provisionalSku.storeId === args.storeId &&
+        provisionalSku._id === item.provisionalProductSkuId
+          ? provisionalSku.price
+          : item.provisionalPrice;
+      const trustedSkuLinkPrice = approvedSku?.netPrice ?? approvedSku?.price;
+      if (
+        args.status === "approved" ||
+        args.status === "linked_to_catalog" ||
+        args.approvedProductId ||
+        args.approvedProductSkuId
+      ) {
+        if (
+          !approvedProduct ||
+          approvedProduct.storeId !== args.storeId ||
+          !approvedSku ||
+          approvedSku.storeId !== args.storeId ||
+          approvedSku.productId !== approvedProduct._id ||
+          approvedProduct._id === item.provisionalProductId ||
+          approvedSku._id === item.provisionalProductSkuId ||
+          !isTrustedRegisterCatalogSku({
+            category: approvedProductCategory,
+            product: approvedProduct,
+            sku: approvedSku,
+          })
+        ) {
+          return userError({
+            code: "validation_failed",
+            message: "Choose a valid catalog product and SKU from this store.",
           });
-        } catch (error) {
-          if (
-            error instanceof Error &&
-            error.message ===
-              "This lookup code is already linked to another SKU."
-          ) {
-            return userError({
-              code: "conflict",
-              message: error.message,
-            });
-          }
-          throw error;
+        }
+
+        if (
+          args.status === "linked_to_catalog" &&
+          (typeof pendingStoredPrice !== "number" ||
+            typeof trustedSkuLinkPrice !== "number" ||
+            !pendingCheckoutLinkPricesMatch({
+              pendingStoredPrice,
+              trustedSkuStoredPrice: trustedSkuLinkPrice,
+            }))
+        ) {
+          return userError({
+            code: "validation_failed",
+            message:
+              "Link to a SKU with the same price as the pending checkout item.",
+          });
         }
       }
-    }
 
-    await ctx.db.patch("posPendingCheckoutItem", item._id, {
-      approvedProductId: args.approvedProductId,
-      approvedProductSkuId: args.approvedProductSkuId,
-      reviewedAt,
-      reviewedByUserId: athenaUser._id,
-      reviewNote: args.note,
-      status: args.status,
-      updatedAt: reviewedAt,
-    });
-    await advanceRegisterCatalogRevision(ctx, {
-      didChange:
-        item.status !== args.status ||
-        item.approvedProductId !== args.approvedProductId ||
-        item.approvedProductSkuId !== args.approvedProductSkuId ||
-        attachedLookupCode !== undefined ||
-        lookupAliasId !== null ||
-        retiredLookupAliasId !== null,
-      storeId: args.storeId,
-    });
+      const reviewedAt = Date.now();
+      const shouldRetirePriorLinkedLookup =
+        item.status === "linked_to_catalog" &&
+        (args.status !== "linked_to_catalog" ||
+          args.approvedProductId !== item.approvedProductId ||
+          args.approvedProductSkuId !== item.approvedProductSkuId);
+      let retiredLookupAliasId: Id<"posPendingCheckoutLookupAlias"> | null =
+        null;
+      if (shouldRetirePriorLinkedLookup) {
+        retiredLookupAliasId = await retirePendingCheckoutLookupAliasForItem(
+          ctx,
+          {
+            lookupCode: item.lookupCode,
+            now: reviewedAt,
+            pendingCheckoutItemId: item._id,
+            storeId: args.storeId,
+          },
+        );
 
-    if (item.operationalWorkItemId) {
-      const workItemPatch = mapPendingCheckoutReviewStatusToWorkItemPatch(
-        args.status,
-      );
-      await updateOperationalWorkItemStatusWithCtx(ctx, {
-        approvalState: workItemPatch.approvalState,
-        status: workItemPatch.status,
-        workItemId: item.operationalWorkItemId,
-      });
-    }
+        if (item.lookupCode && item.approvedProductSkuId) {
+          const priorApprovedSku = await ctx.db.get(
+            "productSku",
+            item.approvedProductSkuId,
+          );
+          if (priorApprovedSku?.barcode?.trim() === item.lookupCode.trim()) {
+            await ctx.db.patch("productSku", priorApprovedSku._id, {
+              barcode: undefined,
+            });
+            await upsertProductSkuSearchProjection(ctx, priorApprovedSku._id, {
+              advanceRevision: false,
+            });
+          }
+        }
+      }
+      let attachedLookupCode: string | undefined;
+      let lookupAliasId: Id<"posPendingCheckoutLookupAlias"> | null = null;
+      if (
+        args.status === "linked_to_catalog" &&
+        approvedSku &&
+        item.lookupCode
+      ) {
+        const existingBarcodeSku = await findStoreSkuByBarcode(ctx, {
+          barcode: item.lookupCode,
+          storeId: args.storeId,
+        });
+        if (existingBarcodeSku && existingBarcodeSku._id !== approvedSku._id) {
+          return userError({
+            code: "conflict",
+            message: "This lookup code already belongs to another catalog SKU.",
+          });
+        }
 
-    const reviewedItem = (await ctx.db.get(
-      "posPendingCheckoutItem",
-      item._id,
-    ))!;
-    await recordOperationalEventWithCtx(ctx, {
-      actorUserId: athenaUser._id,
-      eventType: "pos_pending_checkout_item_reviewed",
-      message: `Pending checkout item ${reviewedItem.name} was marked ${args.status.replace(/_/g, " ")}.`,
-      metadata: {
+        if (!approvedSku.barcode?.trim()) {
+          await ctx.db.patch("productSku", approvedSku._id, {
+            barcode: item.lookupCode,
+            barcodeAutoGenerated: false,
+          });
+          await upsertProductSkuSearchProjection(ctx, approvedSku._id, {
+            advanceRevision: false,
+          });
+          attachedLookupCode = item.lookupCode;
+        } else {
+          try {
+            lookupAliasId = await upsertPendingCheckoutLookupAlias(ctx, {
+              lookupCode: item.lookupCode,
+              now: reviewedAt,
+              organizationId: store.organizationId,
+              pendingCheckoutItemId: item._id,
+              productId: approvedProduct!._id,
+              productSkuId: approvedSku._id,
+              storeId: args.storeId,
+            });
+          } catch (error) {
+            if (
+              error instanceof Error &&
+              error.message ===
+                "This lookup code is already linked to another SKU."
+            ) {
+              return userError({
+                code: "conflict",
+                message: error.message,
+              });
+            }
+            throw error;
+          }
+        }
+      }
+
+      await ctx.db.patch("posPendingCheckoutItem", item._id, {
         approvedProductId: args.approvedProductId,
         approvedProductSkuId: args.approvedProductSkuId,
-        attachedLookupCode,
-        lookupAliasId: lookupAliasId ?? undefined,
-        retiredLookupAliasId: retiredLookupAliasId ?? undefined,
-        pendingCheckoutItemId: reviewedItem._id,
-        previousApprovedProductId: item.approvedProductId,
-        previousApprovedProductSkuId: item.approvedProductSkuId,
-        previousStatus: item.status,
+        reviewedAt,
+        reviewedByUserId: athenaUser._id,
         reviewNote: args.note,
         status: args.status,
-      },
-      organizationId: store.organizationId,
-      storeId: args.storeId,
-      subjectId: String(reviewedItem._id),
-      subjectLabel: reviewedItem.name,
-      subjectType: "pos_pending_checkout_item",
-    });
+        updatedAt: reviewedAt,
+      });
+      await advanceRegisterCatalogRevision(ctx, {
+        didChange:
+          item.status !== args.status ||
+          item.approvedProductId !== args.approvedProductId ||
+          item.approvedProductSkuId !== args.approvedProductSkuId ||
+          attachedLookupCode !== undefined ||
+          lookupAliasId !== null ||
+          retiredLookupAliasId !== null,
+        storeId: args.storeId,
+      });
 
-    return ok(toPendingCheckoutReviewItem(reviewedItem));
-  },
+      if (item.operationalWorkItemId) {
+        const workItemPatch = mapPendingCheckoutReviewStatusToWorkItemPatch(
+          args.status,
+        );
+        await updateOperationalWorkItemStatusWithCtx(ctx, {
+          approvalState: workItemPatch.approvalState,
+          status: workItemPatch.status,
+          workItemId: item.operationalWorkItemId,
+        });
+      }
+
+      const reviewedItem = (await ctx.db.get(
+        "posPendingCheckoutItem",
+        item._id,
+      ))!;
+      await recordOperationalEventWithCtx(ctx, {
+        actorUserId: athenaUser._id,
+        eventType: "pos_pending_checkout_item_reviewed",
+        message: `Pending checkout item ${reviewedItem.name} was marked ${args.status.replace(/_/g, " ")}.`,
+        metadata: {
+          approvedProductId: args.approvedProductId,
+          approvedProductSkuId: args.approvedProductSkuId,
+          attachedLookupCode,
+          lookupAliasId: lookupAliasId ?? undefined,
+          retiredLookupAliasId: retiredLookupAliasId ?? undefined,
+          pendingCheckoutItemId: reviewedItem._id,
+          previousApprovedProductId: item.approvedProductId,
+          previousApprovedProductSkuId: item.approvedProductSkuId,
+          previousStatus: item.status,
+          reviewNote: args.note,
+          status: args.status,
+        },
+        organizationId: store.organizationId,
+        storeId: args.storeId,
+        subjectId: String(reviewedItem._id),
+        subjectLabel: reviewedItem.name,
+        subjectType: "pos_pending_checkout_item",
+      });
+
+      return ok(toPendingCheckoutReviewItem(reviewedItem));
+    },
+  ),
 });

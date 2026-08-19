@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-19T08:54:38.074Z",
+  "branch": "codex/backend-operations-admission-migration",
+  "headSha": "96e43bf7d55632a4b80113e710b9d07fca8389ee",
+  "deliverableDiffFingerprint": "a74b06c5c4e61ce533c1cac4775d54fb41ac310cb1f29bd47292a4c90d3073a6",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 16,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 794341.6211270001
+  },
+  "reviewLoop": {
+    "providerId": "execute",
+    "runId": "execute-v26-1239-round15-20260819-043954",
+    "finalPassId": "pass-1a61592a",
+    "recordedAt": "2026-08-19T08:41:13.422Z",
+    "iterationCount": 15,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 0,
+      "P3": 0
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}

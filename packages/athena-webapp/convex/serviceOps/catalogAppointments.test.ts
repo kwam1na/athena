@@ -1,21 +1,36 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+// Loaded first on purpose. `convex/inventory/storeSchedule.ts` calls
+// `admitPublicQuery` at module scope and sits inside an import cycle with the
+// composition root; entering that cycle from this suite (which fakes
+// `sharedDemo/actor`, so the real module never warms the chain) would evaluate
+// it before the root's exports exist. Importing it first breaks the cycle at a
+// safe point and can be dropped once that module no longer closes the loop.
+import "../inventory/storeSchedule";
 import { Id } from "../_generated/dataModel";
 import * as athenaUserAuth from "../lib/athenaUserAuth";
 import * as sharedDemoActor from "../sharedDemo/actor";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
+import { AthenaUnauthenticatedError } from "../lib/athenaUnauthenticated";
 import {
+  archiveServiceCatalogItem,
   buildPosServiceCatalogRow,
   buildServiceCatalogItem,
+  createServiceCatalogItem,
+  listServiceCatalogItems,
   listPosServiceCatalogSnapshotWithCtx,
   listPosServiceCatalogSnapshot,
   normalizeServiceCatalogNameKey,
+  updateServiceCatalogItem,
 } from "./catalog";
 import {
   buildServiceAppointment,
   cancelAppointment,
   closeCurrentServiceAppointmentWorkItemsWithCtx,
   convertAppointmentToWalkIn,
+  createAppointment,
   findOverlappingAppointment,
+  listAppointments,
+  rescheduleAppointment,
 } from "./appointments";
 
 vi.mock("../lib/athenaUserAuth", () => ({
@@ -663,8 +678,11 @@ describe("service catalog and appointment helpers", () => {
         message: "Appointment store does not match its organization.",
       },
     });
+    // Admission resolves identity before the handler runs, so the auth helper
+    // IS called now. What must stay true is that the organization/role check
+    // never ran and nothing was written.
     expect(
-      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
     ).not.toHaveBeenCalled();
     expect(ctx.db.patch).not.toHaveBeenCalled();
     expect(ctx.db.insert).not.toHaveBeenCalled();
@@ -689,8 +707,11 @@ describe("service catalog and appointment helpers", () => {
         message: "Appointment store does not match its organization.",
       },
     });
+    // Admission resolves identity before the handler runs, so the auth helper
+    // IS called now. What must stay true is that the organization/role check
+    // never ran and nothing was written.
     expect(
-      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
     ).not.toHaveBeenCalled();
     expect(ctx.db.patch).not.toHaveBeenCalled();
     expect(ctx.db.insert).not.toHaveBeenCalled();
@@ -810,7 +831,140 @@ describe("service catalog and appointment helpers", () => {
       }),
     );
   });
+
+  it("creates an appointment and a catalog item for an admitted normal user", async () => {
+    const ctx = createAppointmentMutationCtx();
+
+    const appointment = await getHandler(createAppointment)(ctx, {
+      assignedStaffProfileId: "staff-assigned" as Id<"staffProfile">,
+      customerProfileId: "customer-1" as Id<"customerProfile">,
+      serviceCatalogId: "catalog-1" as Id<"serviceCatalog">,
+      startAt: 1_772_640_000_000,
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(appointment).toMatchObject({
+      kind: "ok",
+      data: expect.objectContaining({ status: "scheduled" }),
+    });
+
+    const catalogItem = await getHandler(createServiceCatalogItem)(ctx, {
+      basePrice: 4_500,
+      depositType: "none" as const,
+      durationMinutes: 90,
+      name: "Wig Revamp",
+      pricingModel: "fixed" as const,
+      requiresManagerApproval: false,
+      serviceMode: "revamp" as const,
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(catalogItem).toMatchObject({
+      kind: "ok",
+      data: expect.objectContaining({ slug: "wig-revamp", status: "active" }),
+    });
+  });
+
+  it("lists appointments and catalog items for an admitted normal user", async () => {
+    const ctx = createAppointmentMutationCtx();
+
+    await expect(
+      getHandler(listAppointments)(ctx, { storeId: "store-1" as Id<"store"> }),
+    ).resolves.toEqual([expect.objectContaining({ _id: "appointment-1" })]);
+    await expect(
+      getHandler(listServiceCatalogItems)(ctx, {
+        storeId: "store-1" as Id<"store">,
+      }),
+    ).resolves.toEqual([expect.objectContaining({ _id: "catalog-1" })]);
+  });
+
+  it("denies unauthenticated appointment and catalog ingress before any row changes", async () => {
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockRejectedValue(new AthenaUnauthenticatedError());
+
+    for (const [fn, args] of serviceOpsIngressCases()) {
+      const ctx = createAppointmentMutationCtx();
+
+      await expect(getHandler(fn)(ctx, args as never)).rejects.toThrow(
+        "Sign in again to continue.",
+      );
+      expect(ctx.db.patch).not.toHaveBeenCalled();
+      expect(ctx.db.insert).not.toHaveBeenCalled();
+    }
+  });
+
+  it("denies shared-demo actors every retired appointment and catalog gate, in and out of their store", async () => {
+    for (const demoStoreId of ["store-1", "store-2"]) {
+      for (const [fn, args] of serviceOpsIngressCases()) {
+        vi.mocked(
+          sharedDemoActor.getSharedDemoActorWithCtx,
+        ).mockResolvedValue({
+          authUserId: "auth-demo" as Id<"users">,
+          athenaUserId: "demo-owner" as Id<"athenaUser">,
+          kind: "shared_demo",
+          organizationId: "org-1" as Id<"organization">,
+          storeId: demoStoreId as Id<"store">,
+        });
+        const ctx = createAppointmentMutationCtx();
+
+        await expect(
+          getHandler(fn)(
+            { ...ctx, auth: { getUserIdentity: vi.fn() } },
+            args as never,
+          ),
+        ).rejects.toThrow("This action isn't allowed in the demo.");
+        expect(ctx.db.patch).not.toHaveBeenCalled();
+        expect(ctx.db.insert).not.toHaveBeenCalled();
+      }
+    }
+  });
 });
+
+/**
+ * Every serviceOps ingress whose handler-local demo gate the definition now
+ * expresses, plus the two `service_ops.view` reads that were never gated at
+ * all. `appointments.manage`, `service.catalog.manage` and `service_ops.view`
+ * are all outside the demo grant sets, so the expected decision is the same
+ * denial for each.
+ */
+function serviceOpsIngressCases(): Array<[unknown, Record<string, unknown>]> {
+  return [
+    [
+      createAppointment,
+      {
+        assignedStaffProfileId: "staff-assigned",
+        customerProfileId: "customer-1",
+        serviceCatalogId: "catalog-1",
+        startAt: 1_772_640_000_000,
+        storeId: "store-1",
+      },
+    ],
+    [
+      rescheduleAppointment,
+      { appointmentId: "appointment-1", startAt: 1_772_640_000_000 },
+    ],
+    [cancelAppointment, { appointmentId: "appointment-1" }],
+    [convertAppointmentToWalkIn, { appointmentId: "appointment-1" }],
+    [
+      createServiceCatalogItem,
+      {
+        basePrice: 4_500,
+        depositType: "none",
+        durationMinutes: 90,
+        name: "Wig Revamp",
+        pricingModel: "fixed",
+        requiresManagerApproval: false,
+        serviceMode: "revamp",
+        storeId: "store-1",
+      },
+    ],
+    [updateServiceCatalogItem, { name: "Renamed", serviceCatalogId: "catalog-1" }],
+    [archiveServiceCatalogItem, { serviceCatalogId: "catalog-1" }],
+    [listAppointments, { storeId: "store-1" }],
+    [listServiceCatalogItems, { storeId: "store-1" }],
+  ];
+}
 
 function createAppointmentMutationCtx() {
   const now = 1_772_550_000_000;
@@ -871,8 +1025,11 @@ function createAppointmentMutationCtx() {
         {
           _id: "catalog-1",
           basePrice: 4_500,
+          durationMinutes: 60,
           name: "Closure Repair",
           serviceMode: "repair",
+          slug: "closure-repair",
+          status: "active",
           storeId: "store-1",
         },
       ],
@@ -883,6 +1040,14 @@ function createAppointmentMutationCtx() {
         {
           _id: "staff-admin",
           linkedUserId: "user-admin",
+          storeId: "store-1",
+        },
+      ],
+      [
+        "staff-assigned",
+        {
+          _id: "staff-assigned",
+          status: "active",
           storeId: "store-1",
         },
       ],

@@ -38,30 +38,78 @@ import { savedBagRoutes } from "./http/domains/customerChannel/routes/savedBag";
 import { mtnMomoRoutes } from "./http/domains/moneyMovement/routes";
 import { whatsappMessagingRoutes } from "./http/domains/customerMessaging/routes/whatsapp";
 import { harnessWaiverRoutes } from "./http/domains/core/routes/harnessWaivers";
+import { healthRouteReadDefinition } from "./operationAdmission/domains/httpCore_readDefinitions";
+import { admitHttpRead } from "./platform/operationAdmission";
+import { readStorefrontOriginAllowlist } from "./platform/storefrontOrigins";
 
 const app: HonoWithConvex<ActionCtx> = new Hono();
 
 const http = new HttpRouterWithHono<ActionCtx>(app);
 
+// Convex Auth installs its own HTTP route family and is the trust root that
+// mints the principals the admission adapters later resolve, so it is not
+// admitted. It is registered here, exactly once, BEFORE the CORS middleware —
+// its routes are a framework surface that manages its own headers, and moving
+// it under the middleware would put the sign-in redirect chain behind an
+// allowlist meant for storefront XHR.
 auth.addHttpRoutes(http);
 
+/**
+ * Fixed origin allowlist, never a reflection of the request.
+ *
+ * The storefront claim cookies are `SameSite=None`, so reflecting whatever
+ * `Origin` arrives while also sending `Access-Control-Allow-Credentials: true`
+ * makes every customer route reachable from any site the visitor is browsing.
+ * The list is exact-string and fails closed: an unset environment value allows
+ * no origin at all, and an unlisted origin simply gets no
+ * `Access-Control-Allow-Origin` header rather than a wildcard.
+ *
+ * `Vary: Origin` matters here: the response varies by request origin, so
+ * without it a shared cache may serve one origin's
+ * `Access-Control-Allow-Origin` to another, turning the allowlist into a
+ * cache-poisoning primitive. Hono's `cors()` appends it for every
+ * non-wildcard configuration, which this always is.
+ *
+ * That is a dependency on library behaviour, so it is pinned by a test
+ * (`routerComposition.test.ts`) rather than by a second middleware. An earlier
+ * attempt to "state it explicitly" appended it a second time and shipped
+ * `Vary: Origin, Origin` — asserting a header twice is not a stronger
+ * guarantee, it is a duplicate. The test is what makes a silent library change
+ * fail loudly.
+ */
 app.use(
   "*",
   cors({
-    origin: (origin) => {
-      return origin;
-    },
+    origin: [...readStorefrontOriginAllowlist()],
     allowMethods: ["OPTIONS", "GET", "POST", "PUT", "PATCH", "DELETE"],
     credentials: true,
   }),
 );
 
-app.get("/health", (c) => {
-  return c.json({
-    app: "athena-webapp-backend",
-    status: "ok",
-  });
-});
+/**
+ * Fixed error handler, never a rendering of the thrown value.
+ *
+ * Hono's default `errorHandler` turns any thrown value that carries
+ * `getResponse()` — an `HTTPException(200, { res })`, an `Error` with a
+ * `getResponse` property — into THAT response, with whatever status it names,
+ * before any admitted handler has run. A `throw` from a router middleware or
+ * an imported verifier would then be an unadmitted response channel. This
+ * handler renders every error as the same 5xx and never consults the error, so
+ * nothing a thrown value carries can shape a response. The checker
+ * (`assertRootErrorHandler`) requires exactly this shape, exactly once, here,
+ * and no `.onError` anywhere else under convex/**.
+ */
+app.onError((err, c) => c.json({ error: "internal" }, 500));
+
+app.get(
+  "/health",
+  admitHttpRead(healthRouteReadDefinition, (c) =>
+    c.json({
+      app: "athena-webapp-backend",
+      status: "ok",
+    }),
+  ),
+);
 
 app.route("/upsells", upsellRoutes);
 

@@ -71,5 +71,8 @@ describe("convex audit script", () => {
     expect(result.stdout).toContain(
       "Register-session authority writers are centralized.",
     );
-  }, 15_000);
+    // convex-audit.sh now also runs the operation-admission checker, which walks
+    // the whole convex tree (~4s standalone, more on CI under v8 coverage
+    // instrumentation). The 15s budget predates that step.
+  }, 120_000);
 });

@@ -1,5 +1,20 @@
 import { internalMutation, query } from "../_generated/server";
 import { v } from "convex/values";
+import { admitPublicQuery } from "../platform/operationAdmission";
+import {
+  canAccessAdminReadDefinition,
+  canAccessPosReadDefinition,
+  getOrganizationMemberPermissionsReadDefinition,
+  getOrganizationMemberRoleReadDefinition,
+  listOrganizationMembersReadDefinition,
+} from "../operationAdmission/domains/inventoryIdentity_readDefinitions";
+import type { OperationQueryCtx } from "../operationAdmission/types";
+import type { Id } from "../_generated/dataModel";
+
+type MembershipArgs = {
+  userId: Id<"athenaUser">;
+  organizationId: Id<"organization">;
+};
 
 const entity = "organizationMember";
 
@@ -21,7 +36,12 @@ export const getAll = query({
       })
     )
   ),
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    listOrganizationMembersReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { organizationId: Id<"organization"> },
+    ) => {
     const members = [];
     for await (const member of ctx.db
       .query("organizationMember")
@@ -50,7 +70,8 @@ export const getAll = query({
         phoneNumber: user.phoneNumber,
         organizationId: user.organizationId,
       }));
-  },
+    },
+  ),
 });
 
 // Get user's role for a specific organization
@@ -63,19 +84,22 @@ export const getUserRole = query({
     v.null(),
     v.union(v.literal("full_admin"), v.literal("pos_only"))
   ),
-  handler: async (ctx, args) => {
-    const membership = await ctx.db
-      .query(entity)
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("userId"), args.userId),
-          q.eq(q.field("organizationId"), args.organizationId)
+  handler: admitPublicQuery(
+    getOrganizationMemberRoleReadDefinition,
+    async (ctx: OperationQueryCtx, args: MembershipArgs) => {
+      const membership = await ctx.db
+        .query(entity)
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("userId"), args.userId),
+            q.eq(q.field("organizationId"), args.organizationId)
+          )
         )
-      )
-      .first();
+        .first();
 
-    return membership?.role ?? null;
-  },
+      return membership?.role ?? null;
+    },
+  ),
 });
 
 // Get computed permissions for a user in an organization
@@ -92,25 +116,28 @@ export const getUserPermissions = query({
       v.union(v.literal("full_admin"), v.literal("pos_only"))
     ),
   }),
-  handler: async (ctx, args) => {
-    const membership = await ctx.db
-      .query(entity)
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("userId"), args.userId),
-          q.eq(q.field("organizationId"), args.organizationId)
+  handler: admitPublicQuery(
+    getOrganizationMemberPermissionsReadDefinition,
+    async (ctx: OperationQueryCtx, args: MembershipArgs) => {
+      const membership = await ctx.db
+        .query(entity)
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("userId"), args.userId),
+            q.eq(q.field("organizationId"), args.organizationId)
+          )
         )
-      )
-      .first();
+        .first();
 
-    const role = membership?.role ?? null;
+      const role = membership?.role ?? null;
 
-    return {
-      canAccessAdmin: role === "full_admin",
-      canAccessPOS: role === "full_admin" || role === "pos_only",
-      role,
-    };
-  },
+      return {
+        canAccessAdmin: role === "full_admin",
+        canAccessPOS: role === "full_admin" || role === "pos_only",
+        role,
+      };
+    },
+  ),
 });
 
 // Check if user can access POS features
@@ -120,20 +147,23 @@ export const canAccessPOS = query({
     organizationId: v.id("organization"),
   },
   returns: v.boolean(),
-  handler: async (ctx, args) => {
-    const membership = await ctx.db
-      .query(entity)
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("userId"), args.userId),
-          q.eq(q.field("organizationId"), args.organizationId)
+  handler: admitPublicQuery(
+    canAccessPosReadDefinition,
+    async (ctx: OperationQueryCtx, args: MembershipArgs) => {
+      const membership = await ctx.db
+        .query(entity)
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("userId"), args.userId),
+            q.eq(q.field("organizationId"), args.organizationId)
+          )
         )
-      )
-      .first();
+        .first();
 
-    const role = membership?.role;
-    return role === "full_admin" || role === "pos_only";
-  },
+      const role = membership?.role;
+      return role === "full_admin" || role === "pos_only";
+    },
+  ),
 });
 
 // Check if user can access admin features
@@ -143,19 +173,22 @@ export const canAccessAdmin = query({
     organizationId: v.id("organization"),
   },
   returns: v.boolean(),
-  handler: async (ctx, args) => {
-    const membership = await ctx.db
-      .query(entity)
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("userId"), args.userId),
-          q.eq(q.field("organizationId"), args.organizationId)
+  handler: admitPublicQuery(
+    canAccessAdminReadDefinition,
+    async (ctx: OperationQueryCtx, args: MembershipArgs) => {
+      const membership = await ctx.db
+        .query(entity)
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("userId"), args.userId),
+            q.eq(q.field("organizationId"), args.organizationId)
+          )
         )
-      )
-      .first();
+        .first();
 
-    return membership?.role === "full_admin";
-  },
+      return membership?.role === "full_admin";
+    },
+  ),
 });
 
 // Migration function to set default role for existing members

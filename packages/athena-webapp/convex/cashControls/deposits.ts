@@ -11,10 +11,9 @@ import {
   resolveRegisterSessionSyncReviewOperationDefinition,
 } from "../operationAdmission/definitions";
 import {
-  withOperationMutationAdmission,
-  resolveSharedDemoOperationAdmission,
-} from "../operationAdmission/publicMutation";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import {
   getCashControlsDashboardSnapshotReadDefinition,
   getRegisterSessionSnapshotReadDefinition,
@@ -1170,7 +1169,7 @@ export const getDashboardSnapshot = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getCashControlsDashboardSnapshotReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
       await requireCashControlsStoreAccess(ctx, args.storeId);
@@ -1302,7 +1301,7 @@ export const getRegisterSessionSnapshot = query({
     registerSessionId: v.id("registerSession"),
     storeId: v.id("store"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getRegisterSessionSnapshotReadDefinition,
     async (
       ctx,
@@ -1559,11 +1558,216 @@ export const recordRegisterSessionDeposit = mutation({
   returns: registerSessionDepositResultValidator,
   handler: async (ctx, args) => {
     try {
-      await resolveSharedDemoOperationAdmission(
-        ctx,
-        args,
+      return await admitPublicMutation(
         recordRegisterSessionDepositOperationDefinition,
-      );
+        async (
+          admittedCtx,
+          admittedArgs,
+        ): Promise<CommandResult<RecordRegisterSessionDepositResult>> => {
+          const ctx = admittedCtx;
+          const args = admittedArgs;
+          let athenaUserId: Id<"athenaUser">;
+          try {
+            const { athenaUser } = await requireCashControlsStoreAccess(
+              ctx,
+              args.storeId,
+            );
+            athenaUserId = athenaUser._id;
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "";
+            if (
+              message !== "Sign in again to continue." &&
+              message !== "You do not have access to cash controls." &&
+              !message.includes("shared_demo_action_denied")
+            ) {
+              throw error;
+            }
+            return userError({
+              code: "authorization_failed",
+              message: "You do not have access to cash controls.",
+            });
+          }
+
+          if (args.actorUserId && args.actorUserId !== athenaUserId) {
+            return userError({
+              code: "authorization_failed",
+              message: "Deposit actor does not match the signed-in user.",
+            });
+          }
+
+          let actorStaffProfileId: Id<"staffProfile"> | undefined;
+          try {
+            actorStaffProfileId = await resolveDepositActorStaffProfileId(ctx, {
+              athenaUserId,
+              staffProfileId: args.actorStaffProfileId,
+              storeId: args.storeId,
+            });
+          } catch {
+            return userError({
+              code: "authorization_failed",
+              message: "Deposit staff actor does not match the signed-in user.",
+            });
+          }
+
+          if (!Number.isFinite(args.amount) || args.amount <= 0) {
+            return userError({
+              code: "validation_failed",
+              message: "Deposit amount must be positive.",
+            });
+          }
+
+          const storedAmount = toPesewas(args.amount);
+
+          const submissionKey = trimOptional(args.submissionKey);
+
+          if (!submissionKey) {
+            return userError({
+              code: "validation_failed",
+              message:
+                "A submission key is required to record a register deposit.",
+            });
+          }
+
+          const registerSession = await ctx.db.get(
+            "registerSession",
+            args.registerSessionId,
+          );
+
+          if (!registerSession || registerSession.storeId !== args.storeId) {
+            return userError({
+              code: "not_found",
+              message: "Register session not found for this store.",
+            });
+          }
+
+          const targetId = buildRegisterSessionDepositTargetId({
+            registerSessionId: args.registerSessionId,
+            submissionKey,
+          });
+          const businessEventKey = `cash_deposit:${args.registerSessionId}:${submissionKey}`;
+          const paymentAllocationArgs = {
+            actorStaffProfileId,
+            actorUserId: athenaUserId,
+            allocationType: CASH_DEPOSIT_ALLOCATION_TYPE,
+            amount: storedAmount,
+            businessEventKey,
+            collectedInStore: true,
+            direction: "out" as const,
+            externalReference: trimOptional(args.reference),
+            method: "cash",
+            notes: trimOptional(args.notes),
+            organizationId: registerSession.organizationId,
+            registerSessionId: args.registerSessionId,
+            storeId: args.storeId,
+            targetId,
+            targetType: CASH_DEPOSIT_SUBJECT_TYPE,
+          };
+          const existingDeposit = await ctx.db
+            .query("paymentAllocation")
+            .withIndex("by_storeId_target", (q) =>
+              q
+                .eq("storeId", args.storeId)
+                .eq("targetType", CASH_DEPOSIT_SUBJECT_TYPE)
+                .eq("targetId", targetId),
+            )
+            .first();
+
+          if (
+            existingDeposit &&
+            isCashControlDepositAllocation(existingDeposit)
+          ) {
+            const validatedDeposit = existingDeposit.businessEventKey
+              ? await recordPaymentAllocationWithCtx(ctx, paymentAllocationArgs)
+              : existingDeposit;
+            return ok({
+              action: "duplicate" as const,
+              deposit: validatedDeposit,
+              registerSession,
+            });
+          }
+
+          if (!isRegisterSessionSaleUsable(registerSession)) {
+            return userError({
+              code: "precondition_failed",
+              message: "Register session is not accepting new deposits.",
+            });
+          }
+
+          const closeoutHolds = await listRegisterSessionCloseoutHolds(ctx, {
+            registerSessionId: registerSession._id,
+            storeId: args.storeId,
+          });
+
+          if (hasCashAffectingCloseoutHolds(closeoutHolds)) {
+            return userError({
+              code: "precondition_failed",
+              message:
+                getCloseoutHoldOperatorMessage(closeoutHolds, "deposit") ??
+                "Resolve pending register corrections before recording a deposit.",
+            });
+          }
+
+          const deposit = await recordPaymentAllocationWithCtx(
+            ctx,
+            paymentAllocationArgs,
+          );
+          const updatedRegisterSession =
+            await recordRegisterSessionDepositWithCtx(ctx, {
+              amount: storedAmount,
+              registerSessionId: args.registerSessionId,
+            });
+
+          if (!updatedRegisterSession) {
+            return userError({
+              code: "unavailable",
+              message: "Register session deposit was recorded without a session.",
+            });
+          }
+
+          await recordOperationalEventWithCtx(ctx, {
+            actorStaffProfileId,
+            actorUserId: athenaUserId,
+            eventType: "register_session_cash_deposit_recorded",
+            message: `Recorded cash deposit of ${args.amount}.`,
+            metadata: {
+              amount: storedAmount,
+              reference: trimOptional(args.reference),
+              submissionKey,
+            },
+            organizationId: registerSession.organizationId,
+            paymentAllocationId: deposit?._id,
+            reason: trimOptional(args.notes),
+            registerSessionId: args.registerSessionId,
+            storeId: args.storeId,
+            subjectId: targetId,
+            subjectLabel: registerSession.registerNumber,
+            subjectType: CASH_DEPOSIT_SUBJECT_TYPE,
+          });
+
+          const occurredAt = Date.now();
+          const traceResult = await recordRegisterSessionTraceBestEffort(ctx, {
+            stage: "deposit_recorded",
+            session: updatedRegisterSession,
+            occurredAt,
+            amount: storedAmount,
+            actorStaffProfileId,
+            actorUserId: athenaUserId,
+          });
+
+          await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
+            registerSessionId: args.registerSessionId,
+            traceCreated: traceResult.traceCreated,
+            traceId: traceResult.traceId,
+            workflowTraceId: updatedRegisterSession.workflowTraceId,
+          });
+
+          return ok({
+            action: "recorded" as const,
+            deposit,
+            registerSession: updatedRegisterSession,
+          });
+        },
+      )(ctx, args);
     } catch (error) {
       if (!isDepositAdmissionAuthorizationError(error)) {
         throw error;
@@ -1573,217 +1777,6 @@ export const recordRegisterSessionDeposit = mutation({
         message: "You do not have access to cash controls.",
       });
     }
-
-    return withOperationMutationAdmission(
-      recordRegisterSessionDepositOperationDefinition,
-      async (
-        admittedCtx,
-        admittedArgs,
-      ): Promise<CommandResult<RecordRegisterSessionDepositResult>> => {
-        const ctx = admittedCtx;
-        const args = admittedArgs;
-        let athenaUserId: Id<"athenaUser">;
-        try {
-          const { athenaUser } = await requireCashControlsStoreAccess(
-            ctx,
-            args.storeId,
-          );
-          athenaUserId = athenaUser._id;
-        } catch (error) {
-          const message = error instanceof Error ? error.message : "";
-          if (
-            message !== "Sign in again to continue." &&
-            message !== "You do not have access to cash controls." &&
-            !message.includes("shared_demo_action_denied")
-          ) {
-            throw error;
-          }
-          return userError({
-            code: "authorization_failed",
-            message: "You do not have access to cash controls.",
-          });
-        }
-
-        if (args.actorUserId && args.actorUserId !== athenaUserId) {
-          return userError({
-            code: "authorization_failed",
-            message: "Deposit actor does not match the signed-in user.",
-          });
-        }
-
-        let actorStaffProfileId: Id<"staffProfile"> | undefined;
-        try {
-          actorStaffProfileId = await resolveDepositActorStaffProfileId(ctx, {
-            athenaUserId,
-            staffProfileId: args.actorStaffProfileId,
-            storeId: args.storeId,
-          });
-        } catch {
-          return userError({
-            code: "authorization_failed",
-            message: "Deposit staff actor does not match the signed-in user.",
-          });
-        }
-
-        if (!Number.isFinite(args.amount) || args.amount <= 0) {
-          return userError({
-            code: "validation_failed",
-            message: "Deposit amount must be positive.",
-          });
-        }
-
-        const storedAmount = toPesewas(args.amount);
-
-        const submissionKey = trimOptional(args.submissionKey);
-
-        if (!submissionKey) {
-          return userError({
-            code: "validation_failed",
-            message:
-              "A submission key is required to record a register deposit.",
-          });
-        }
-
-        const registerSession = await ctx.db.get(
-          "registerSession",
-          args.registerSessionId,
-        );
-
-        if (!registerSession || registerSession.storeId !== args.storeId) {
-          return userError({
-            code: "not_found",
-            message: "Register session not found for this store.",
-          });
-        }
-
-        const targetId = buildRegisterSessionDepositTargetId({
-          registerSessionId: args.registerSessionId,
-          submissionKey,
-        });
-        const businessEventKey = `cash_deposit:${args.registerSessionId}:${submissionKey}`;
-        const paymentAllocationArgs = {
-          actorStaffProfileId,
-          actorUserId: athenaUserId,
-          allocationType: CASH_DEPOSIT_ALLOCATION_TYPE,
-          amount: storedAmount,
-          businessEventKey,
-          collectedInStore: true,
-          direction: "out" as const,
-          externalReference: trimOptional(args.reference),
-          method: "cash",
-          notes: trimOptional(args.notes),
-          organizationId: registerSession.organizationId,
-          registerSessionId: args.registerSessionId,
-          storeId: args.storeId,
-          targetId,
-          targetType: CASH_DEPOSIT_SUBJECT_TYPE,
-        };
-        const existingDeposit = await ctx.db
-          .query("paymentAllocation")
-          .withIndex("by_storeId_target", (q) =>
-            q
-              .eq("storeId", args.storeId)
-              .eq("targetType", CASH_DEPOSIT_SUBJECT_TYPE)
-              .eq("targetId", targetId),
-          )
-          .first();
-
-        if (
-          existingDeposit &&
-          isCashControlDepositAllocation(existingDeposit)
-        ) {
-          const validatedDeposit = existingDeposit.businessEventKey
-            ? await recordPaymentAllocationWithCtx(ctx, paymentAllocationArgs)
-            : existingDeposit;
-          return ok({
-            action: "duplicate" as const,
-            deposit: validatedDeposit,
-            registerSession,
-          });
-        }
-
-        if (!isRegisterSessionSaleUsable(registerSession)) {
-          return userError({
-            code: "precondition_failed",
-            message: "Register session is not accepting new deposits.",
-          });
-        }
-
-        const closeoutHolds = await listRegisterSessionCloseoutHolds(ctx, {
-          registerSessionId: registerSession._id,
-          storeId: args.storeId,
-        });
-
-        if (hasCashAffectingCloseoutHolds(closeoutHolds)) {
-          return userError({
-            code: "precondition_failed",
-            message:
-              getCloseoutHoldOperatorMessage(closeoutHolds, "deposit") ??
-              "Resolve pending register corrections before recording a deposit.",
-          });
-        }
-
-        const deposit = await recordPaymentAllocationWithCtx(
-          ctx,
-          paymentAllocationArgs,
-        );
-        const updatedRegisterSession =
-          await recordRegisterSessionDepositWithCtx(ctx, {
-            amount: storedAmount,
-            registerSessionId: args.registerSessionId,
-          });
-
-        if (!updatedRegisterSession) {
-          return userError({
-            code: "unavailable",
-            message: "Register session deposit was recorded without a session.",
-          });
-        }
-
-        await recordOperationalEventWithCtx(ctx, {
-          actorStaffProfileId,
-          actorUserId: athenaUserId,
-          eventType: "register_session_cash_deposit_recorded",
-          message: `Recorded cash deposit of ${args.amount}.`,
-          metadata: {
-            amount: storedAmount,
-            reference: trimOptional(args.reference),
-            submissionKey,
-          },
-          organizationId: registerSession.organizationId,
-          paymentAllocationId: deposit?._id,
-          reason: trimOptional(args.notes),
-          registerSessionId: args.registerSessionId,
-          storeId: args.storeId,
-          subjectId: targetId,
-          subjectLabel: registerSession.registerNumber,
-          subjectType: CASH_DEPOSIT_SUBJECT_TYPE,
-        });
-
-        const occurredAt = Date.now();
-        const traceResult = await recordRegisterSessionTraceBestEffort(ctx, {
-          stage: "deposit_recorded",
-          session: updatedRegisterSession,
-          occurredAt,
-          amount: storedAmount,
-          actorStaffProfileId,
-          actorUserId: athenaUserId,
-        });
-
-        await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
-          registerSessionId: args.registerSessionId,
-          traceCreated: traceResult.traceCreated,
-          traceId: traceResult.traceId,
-          workflowTraceId: updatedRegisterSession.workflowTraceId,
-        });
-
-        return ok({
-          action: "recorded" as const,
-          deposit,
-          registerSession: updatedRegisterSession,
-        });
-      },
-    )(ctx, args);
   },
 });
 
@@ -1798,7 +1791,7 @@ export const resolveRegisterSessionSyncReview = mutation({
     storeId: v.id("store"),
   },
   returns: registerSessionSyncReviewResultValidator,
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     resolveRegisterSessionSyncReviewOperationDefinition,
     async (
       ctx: OperationMutationCtx,

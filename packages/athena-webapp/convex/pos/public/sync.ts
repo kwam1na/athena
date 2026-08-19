@@ -4,23 +4,23 @@ import { mutation } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx } from "../../_generated/server";
 import {
+  POS_LOCAL_SYNC_EVENT_CAPABILITIES,
   ingestLocalEventsOperationDefinition,
   ingestRegisterSessionActivityOperationDefinition,
   reportLocalSyncDeadLetterOperationDefinition,
 } from "../../operationAdmission/definitions";
+import { resolveLocalSyncReviewOperationDefinition } from "../../operationAdmission/domains/pos_definitions";
 import { recordLocalSyncDeadLetter } from "../application/sync/deadLetter";
-import { withOperationMutationAdmission } from "../../operationAdmission/publicMutation";
-import type { OperationMutationCtx } from "../../operationAdmission/types";
+import {
+  admitPublicMutation,
+} from "../../platform/operationAdmission";
 import { commandResultValidator } from "../../lib/commandResultValidators";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../../lib/athenaUserAuth";
 import { ok, userError } from "../../../shared/commandResult";
-import {
-  requireSharedDemoCapability,
-  type SharedDemoCapability,
-} from "../../sharedDemo/policy";
+import type { SharedDemoCapability } from "../../sharedDemo/policy";
 import { ingestLocalEventsWithCtx } from "../application/sync/ingestLocalEvents";
 import { approvalRequestSchema } from "../../schemas/operations/approvalRequest";
 import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
@@ -105,27 +105,44 @@ const localSyncResultValidator = commandResultValidator(
   }),
 );
 
+/**
+ * The client contract for every sync ingress is a `CommandResult`, so an
+ * admission denial has to arrive as a `user_error` rather than as a thrown
+ * mutation: the terminal's scheduler treats a throw as a transient failure and
+ * retries the same poison batch forever, while a `user_error` is terminal and
+ * surfaces to the operator.
+ *
+ * Only recognized admission denials are translated. Anything else — a broken
+ * scope lookup, a database error — propagates untouched, which is what keeps
+ * this from becoming a catch-all that hides real faults.
+ */
+function isSyncAdmissionDenial(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  return (
+    message === "Sign in again to continue." ||
+    message === "This operation is not available for the current actor." ||
+    message.includes("shared_demo_action_denied")
+  );
+}
+
+const SYNC_ADMISSION_DENIED_USER_ERROR = {
+  code: "authorization_failed" as const,
+  message: "You do not have access to sync this POS terminal.",
+};
+
 const MAX_LOCAL_SYNC_EVENTS_PER_REQUEST = 250;
 const MAX_PENDING_CHECKOUT_DEFINITIONS_PER_REQUEST = 50;
 const MAX_REGISTER_SESSION_ACTIVITY_PER_REQUEST = 250;
 
+/**
+ * The mapping the admission definition classifies uploads with. Kept as an
+ * export because callers and tests name it; the table itself lives beside the
+ * definition so the two can never drift.
+ */
 export function sharedDemoCapabilityForSyncEvent(
   eventType: Doc<"posLocalSyncEvent">["eventType"],
 ): SharedDemoCapability {
-  switch (eventType) {
-    case "register_opened":
-    case "register_closed":
-    case "register_reopened":
-      return "cash.control.write";
-    case "store_day_started":
-      return "daily_operations.write";
-    case "pending_checkout_item_defined":
-    case "sale_completed":
-    case "sale_cleared":
-      return "pos.sale.complete";
-    case "expense_recorded":
-      return "expense.manage";
-  }
+  return POS_LOCAL_SYNC_EVENT_CAPABILITIES[eventType];
 }
 
 const registerSessionActivityUploadValidator = v.object({
@@ -181,101 +198,100 @@ export const ingestLocalEvents = mutation({
     events: v.array(posLocalSyncUploadEventValidator),
   },
   returns: localSyncResultValidator,
-  handler: withOperationMutationAdmission(
-    ingestLocalEventsOperationDefinition,
-    async (ctx, args) => {
-      if (args.events.length > MAX_LOCAL_SYNC_EVENTS_PER_REQUEST) {
-        return userError({
-          code: "validation_failed",
-          message: `Sync uploads can include at most ${MAX_LOCAL_SYNC_EVENTS_PER_REQUEST} events.`,
-        });
-      }
-
-      const pendingDefinitionCount = args.events.filter(
-        (event: (typeof args.events)[number]) =>
-          event.eventType === "pending_checkout_item_defined",
-      ).length;
-      if (
-        pendingDefinitionCount > MAX_PENDING_CHECKOUT_DEFINITIONS_PER_REQUEST
-      ) {
-        return userError({
-          code: "validation_failed",
-          message: `Sync uploads can include at most ${MAX_PENDING_CHECKOUT_DEFINITIONS_PER_REQUEST} pending checkout items.`,
-        });
-      }
-
-      const store = await ctx.db.get("store", args.storeId);
-      if (!store) {
-        return userError({
-          code: "not_found",
-          message: "Store not found.",
-        });
-      }
-
-      let athenaUser: Doc<"athenaUser">;
-      try {
-        const admittedActor = (ctx as OperationMutationCtx).operationAdmission
-          .actor;
-        if (admittedActor.kind === "shared_demo") {
-          const capabilities = new Set<SharedDemoCapability>(
-            args.events.map((event: (typeof args.events)[number]) =>
-              sharedDemoCapabilityForSyncEvent(event.eventType),
-            ),
-          );
-          for (const capability of capabilities) {
-            requireSharedDemoCapability(capability);
+  handler: async (ctx, args) => {
+    try {
+      return await admitPublicMutation(
+        ingestLocalEventsOperationDefinition,
+        async (ctx, args) => {
+          if (args.events.length > MAX_LOCAL_SYNC_EVENTS_PER_REQUEST) {
+            return userError({
+              code: "validation_failed",
+              message: `Sync uploads can include at most ${MAX_LOCAL_SYNC_EVENTS_PER_REQUEST} events.`,
+            });
           }
-        }
-        const resolvedAthenaUser =
-          await requireAuthenticatedAthenaUserWithCtx(ctx);
-        if (!resolvedAthenaUser) throw new Error("Sign in again to continue.");
-        athenaUser = resolvedAthenaUser;
-        await requireOrganizationMemberRoleWithCtx(ctx, {
-          allowedRoles: ["full_admin", "pos_only"],
-          failureMessage: "You do not have access to sync this POS terminal.",
-          organizationId: store.organizationId,
-          userId: athenaUser._id,
-        });
-      } catch {
-        return userError({
-          code: "authorization_failed",
-          message: "You do not have access to sync this POS terminal.",
-        });
-      }
-      const terminal = await ctx.db.get("posTerminal", args.terminalId);
-      const submittedSyncSecretHash = await hashPosTerminalSyncSecret(
-        args.syncSecretHash,
-      );
-      if (
-        !terminal ||
-        terminal.storeId !== args.storeId ||
-        terminal.status !== "active" ||
-        !terminal.syncSecretHash ||
-        terminal.syncSecretHash !== submittedSyncSecretHash
-      ) {
-        return userError({
-          code: "authorization_failed",
-          message: "You do not have access to sync this POS terminal.",
-          metadata: { terminalAuthorizationFailure: true },
-        });
-      }
 
-      const result = await ingestLocalEventsWithCtx(ctx, {
-        ...args,
-        submittedByUserId: athenaUser._id,
-        submittedAt: args.submittedAt ?? Date.now(),
-      });
+          const pendingDefinitionCount = args.events.filter(
+            (event: (typeof args.events)[number]) =>
+              event.eventType === "pending_checkout_item_defined",
+          ).length;
+          if (
+            pendingDefinitionCount > MAX_PENDING_CHECKOUT_DEFINITIONS_PER_REQUEST
+          ) {
+            return userError({
+              code: "validation_failed",
+              message: `Sync uploads can include at most ${MAX_PENDING_CHECKOUT_DEFINITIONS_PER_REQUEST} pending checkout items.`,
+            });
+          }
 
-      if (result.kind === "ok") {
-        await scheduleRegisterCloseoutNotifications(ctx, {
-          events: args.events,
-          mappings: result.data.mappings,
-        });
-      }
+          const store = await ctx.db.get("store", args.storeId);
+          if (!store) {
+            return userError({
+              code: "not_found",
+              message: "Store not found.",
+            });
+          }
 
-      return result;
-    },
-  ),
+          let athenaUser: Doc<"athenaUser">;
+          try {
+            // The per-event shared-demo capability check now lives on
+            // `ingestLocalEventsOperationDefinition` as a set-valued dynamic
+            // capability (all-of), evaluated before this handler runs.
+            const resolvedAthenaUser =
+              await requireAuthenticatedAthenaUserWithCtx(ctx);
+            if (!resolvedAthenaUser)
+              throw new Error("Sign in again to continue.");
+            athenaUser = resolvedAthenaUser;
+            await requireOrganizationMemberRoleWithCtx(ctx, {
+              allowedRoles: ["full_admin", "pos_only"],
+              failureMessage: "You do not have access to sync this POS terminal.",
+              organizationId: store.organizationId,
+              userId: athenaUser._id,
+            });
+          } catch {
+            return userError({
+              code: "authorization_failed",
+              message: "You do not have access to sync this POS terminal.",
+            });
+          }
+          const terminal = await ctx.db.get("posTerminal", args.terminalId);
+          const submittedSyncSecretHash = await hashPosTerminalSyncSecret(
+            args.syncSecretHash,
+          );
+          if (
+            !terminal ||
+            terminal.storeId !== args.storeId ||
+            terminal.status !== "active" ||
+            !terminal.syncSecretHash ||
+            terminal.syncSecretHash !== submittedSyncSecretHash
+          ) {
+            return userError({
+              code: "authorization_failed",
+              message: "You do not have access to sync this POS terminal.",
+              metadata: { terminalAuthorizationFailure: true },
+            });
+          }
+
+          const result = await ingestLocalEventsWithCtx(ctx, {
+            ...args,
+            submittedByUserId: athenaUser._id,
+            submittedAt: args.submittedAt ?? Date.now(),
+          });
+
+          if (result.kind === "ok") {
+            await scheduleRegisterCloseoutNotifications(ctx, {
+              events: args.events,
+              mappings: result.data.mappings,
+            });
+          }
+
+          return result;
+        },
+      )(ctx, args);
+    } catch (error) {
+      if (!isSyncAdmissionDenial(error)) throw error;
+      return userError(SYNC_ADMISSION_DENIED_USER_ERROR);
+    }
+  },
 });
 
 async function scheduleRegisterCloseoutNotifications(
@@ -468,7 +484,9 @@ function isVarianceReviewForCloseout(
 // this marker and have no notificationIntent to dedupe against, so a sync
 // batch replayed across the deploy boundary would otherwise re-alert. Safe to
 // delete once no unnotified pre-deploy closeouts remain.
-function wasVarianceNotifiedBeforeRail(approvalRequest: Doc<"approvalRequest">) {
+function wasVarianceNotifiedBeforeRail(
+  approvalRequest: Doc<"approvalRequest">,
+) {
   return (
     typeof approvalRequest.metadata?.varianceNotificationScheduledAt ===
     "number"
@@ -498,7 +516,7 @@ export const reportLocalSyncDeadLetter = mutation({
   returns: commandResultValidator(
     v.object({ conflictId: v.string(), alreadyReported: v.boolean() }),
   ),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     reportLocalSyncDeadLetterOperationDefinition,
     async (ctx, args) => {
       const store = await ctx.db.get("store", args.storeId);
@@ -576,7 +594,7 @@ export const ingestRegisterSessionActivity = mutation({
     activities: v.array(registerSessionActivityUploadValidator),
   },
   returns: registerSessionActivityResultValidator,
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     ingestRegisterSessionActivityOperationDefinition,
     async (ctx, args) => {
       if (args.activities.length > MAX_REGISTER_SESSION_ACTIVITY_PER_REQUEST) {
@@ -656,44 +674,58 @@ export const resolveLocalSyncReview = mutation({
     }),
   ),
   handler: async (ctx, args) => {
-    if (args.localEventIds.length > MAX_LOCAL_SYNC_REVIEW_EVENTS) {
-      return userError({
-        code: "validation_failed",
-        message: `A review resolution request can include at most ${MAX_LOCAL_SYNC_REVIEW_EVENTS} events.`,
-      });
-    }
-
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      return userError({ code: "not_found", message: "Store not found." });
-    }
-
-    let athenaUser;
     try {
-      athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-      // One explicit POS org role gates the round-trip; a terminal cannot
-      // resolve a server-owned conflict without an authorized org member.
-      await requireOrganizationMemberRoleWithCtx(ctx, {
-        allowedRoles: ["full_admin", "pos_only"],
-        failureMessage: "You do not have access to resolve POS sync reviews.",
-        organizationId: store.organizationId,
-        userId: athenaUser._id,
-      });
-    } catch {
+      return await admitPublicMutation(
+        resolveLocalSyncReviewOperationDefinition,
+        async (ctx, args) => {
+          if (args.localEventIds.length > MAX_LOCAL_SYNC_REVIEW_EVENTS) {
+            return userError({
+              code: "validation_failed",
+              message: `A review resolution request can include at most ${MAX_LOCAL_SYNC_REVIEW_EVENTS} events.`,
+            });
+          }
+
+          const store = await ctx.db.get("store", args.storeId);
+          if (!store) {
+            return userError({ code: "not_found", message: "Store not found." });
+          }
+
+          let athenaUser;
+          try {
+            athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+            // One explicit POS org role gates the round-trip; a terminal cannot
+            // resolve a server-owned conflict without an authorized org member.
+            await requireOrganizationMemberRoleWithCtx(ctx, {
+              allowedRoles: ["full_admin", "pos_only"],
+              failureMessage:
+                "You do not have access to resolve POS sync reviews.",
+              organizationId: store.organizationId,
+              userId: athenaUser._id,
+            });
+          } catch {
+            return userError({
+              code: "authorization_failed",
+              message: "You do not have access to resolve POS sync reviews.",
+            });
+          }
+
+          const result = await resolveLocalSyncReviewWithCtx(ctx, {
+            storeId: args.storeId,
+            terminalId: args.terminalId,
+            localEventIds: args.localEventIds,
+            resolvedByUserId: athenaUser._id,
+            now: args.submittedAt ?? Date.now(),
+          });
+
+          return ok(result);
+        },
+      )(ctx, args);
+    } catch (error) {
+      if (!isSyncAdmissionDenial(error)) throw error;
       return userError({
         code: "authorization_failed",
         message: "You do not have access to resolve POS sync reviews.",
       });
     }
-
-    const result = await resolveLocalSyncReviewWithCtx(ctx, {
-      storeId: args.storeId,
-      terminalId: args.terminalId,
-      localEventIds: args.localEventIds,
-      resolvedByUserId: athenaUser._id,
-      now: args.submittedAt ?? Date.now(),
-    });
-
-    return ok(result);
   },
 });

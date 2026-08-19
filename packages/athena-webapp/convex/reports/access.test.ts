@@ -6,15 +6,16 @@ import { requireReportsStoreAccess } from "./access";
 vi.mock("../lib/athenaUserAuth", () => ({
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
 }));
-vi.mock("../sharedDemo/actor", () => ({
-  requireSharedDemoStoreCapabilityIfApplicable: vi.fn(),
-}));
-
-import { requireSharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 
 /**
  * Ported from convex/reporting/access.test.ts — same fixtures, same
  * fail-closed assertions, retargeted at requireReportsStoreAccess.
+ *
+ * The shared-demo half of this gate moved to the admission rail in U8 (see
+ * `operationAdmission/domains/reports_readDefinitions.ts`), so the gate now
+ * has exactly one dependency: "who is the authenticated Athena user", which
+ * the rail answers for a demo principal and a normal user alike. The
+ * membership rule below is unchanged and still applies to both.
  */
 
 function context(args: {
@@ -55,9 +56,6 @@ function context(args: {
 
 describe("reports access", () => {
   beforeEach(() => {
-    vi.mocked(requireSharedDemoStoreCapabilityIfApplicable).mockResolvedValue(
-      null,
-    );
     vi.mocked(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
     ).mockResolvedValue({
@@ -78,21 +76,16 @@ describe("reports access", () => {
       store: { _id: "store-1", organizationId: "org-1" },
       athenaUser: { _id: "user-1" },
     });
-    expect(requireSharedDemoStoreCapabilityIfApplicable).toHaveBeenCalledWith(
-      expect.anything(),
-      "reports.read",
-      "store-1",
-    );
   });
 
-  it("fails closed before reading a report for another store", async () => {
+  it("collapses an identity failure into the same opaque denial", async () => {
     vi.mocked(
-      requireSharedDemoStoreCapabilityIfApplicable,
-    ).mockRejectedValueOnce(new Error("This action is unavailable in the demo."));
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockRejectedValueOnce(new Error("SECRET_INTERNAL_DETAIL"));
     await expect(
       requireReportsStoreAccess(
         context({ role: "full_admin", storeOrganizationId: "org-1" }) as never,
-        "other-store" as Id<"store">,
+        "store-1" as Id<"store">,
       ),
     ).rejects.toThrow("Reports access unavailable.");
   });

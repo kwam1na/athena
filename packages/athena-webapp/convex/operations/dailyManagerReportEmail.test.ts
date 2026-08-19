@@ -3,10 +3,14 @@
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { internal } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import schema from "../schema";
+import {
+  sendDailyManagerReportsForDateRangeOperationDefinition,
+  sendMostRecentDailyManagerReportOperationDefinition,
+} from "../operationAdmission/domains/operations_definitions";
 import {
   buildCashMetrics,
   buildDailyTopMoversUrl,
@@ -16,6 +20,18 @@ import {
   formatCompletedAt,
   resolveAppUrl,
 } from "./dailyManagerReportEmail";
+
+// The manager-report actions are the only call site of this sender, so the
+// module mock is scoped to exactly what the admission tests must observe:
+// whether MailerSend was reached at all.
+const mailerMocks = vi.hoisted(() => ({
+  sendDailyManagerReportEmail: vi.fn(),
+}));
+
+vi.mock("../mailersend", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../mailersend")>()),
+  sendDailyManagerReportEmail: mailerMocks.sendDailyManagerReportEmail,
+}));
 
 const modules = Object.fromEntries(
   Object.entries(import.meta.glob("../**/*.ts")).map(([path, loader]) => [
@@ -894,5 +910,118 @@ describe("units sold in the closed-day report payload", () => {
       value: "1,000",
       comparison: undefined,
     });
+  });
+});
+
+/**
+ * Admission contract for the two exported manager-report actions.
+ *
+ * Before the migration both were completely unauthenticated: any caller could
+ * reach MailerSend. They now run behind `admitPublicAction`, so an anonymous
+ * caller is refused before the body runs, and the shared demo is denied at the
+ * definition because `reporting.generate` is not a demo-granted capability.
+ */
+describe("daily manager report action admission", () => {
+  const DENIED_ANONYMOUSLY = /Sign in again to continue\./;
+  const mostRecentReport =
+    api.operations.dailyManagerReportEmail.sendMostRecentDailyManagerReport;
+  const reportsForDateRange =
+    api.operations.dailyManagerReportEmail.sendDailyManagerReportsForDateRange;
+
+  async function seedOperator(t: ReturnType<typeof convexTest>) {
+    return t.run(async (ctx) => {
+      const athenaUserId = await ctx.db.insert("athenaUser", {
+        email: "operator@test",
+        normalizedEmail: "operator@test",
+      });
+      const organizationId = await ctx.db.insert("organization", {
+        createdByUserId: athenaUserId,
+        name: "org",
+        slug: "org",
+      });
+      const storeId = await ctx.db.insert("store", {
+        createdByUserId: athenaUserId,
+        currency: "GHS",
+        name: "store",
+        organizationId,
+        slug: "store",
+      });
+      const authUserId = await ctx.db.insert("users", {
+        email: "operator@test",
+      });
+      return { athenaUserId, authUserId, organizationId, storeId };
+    });
+  }
+
+  afterEach(() => {
+    mailerMocks.sendDailyManagerReportEmail.mockReset();
+  });
+
+  it("keeps report delivery out of shared-demo reach at the definition", () => {
+    for (const definition of [
+      sendMostRecentDailyManagerReportOperationDefinition,
+      sendDailyManagerReportsForDateRangeOperationDefinition,
+    ]) {
+      expect(definition.kind).toBe("action");
+      expect(definition.capability).toBe("reporting.generate");
+      expect(definition.actors.normalUser).toBe("admit");
+      expect(definition.actors.sharedDemo).toBe("deny");
+      expect(definition.actors.public).toBe("deny");
+      expect(definition.effects).toEqual({
+        mode: "protected",
+        gateways: ["order_notification.send"],
+      });
+    }
+  });
+
+  it("denies an unauthenticated caller before MailerSend is reached", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await seedOperator(t);
+
+    await expect(
+      t.action(mostRecentReport, {
+        recipientEmail: "manager@test",
+        storeId: seeded.storeId,
+      }),
+    ).rejects.toThrow(DENIED_ANONYMOUSLY);
+
+    await expect(
+      t.action(reportsForDateRange, {
+        endOperatingDate: "2026-07-16",
+        recipientEmail: "manager@test",
+        startOperatingDate: "2026-07-15",
+        storeId: seeded.storeId,
+      }),
+    ).rejects.toThrow(DENIED_ANONYMOUSLY);
+
+    expect(mailerMocks.sendDailyManagerReportEmail).not.toHaveBeenCalled();
+  });
+
+  it("keeps the normal-user outcome unchanged once admitted", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await seedOperator(t);
+    const as = t.withIdentity({ subject: `${seeded.authUserId}|session` });
+
+    // No completed close in range: the body runs to its own empty result,
+    // which is exactly what it returned before the wrapper existed.
+    await expect(
+      as.action(reportsForDateRange, {
+        endOperatingDate: "2026-07-16",
+        recipientEmail: "manager@test",
+        startOperatingDate: "2026-07-15",
+        storeId: seeded.storeId,
+      }),
+    ).resolves.toEqual([]);
+
+    // And the single-report action reaches its own domain error rather than a
+    // denial, which is the proof that admission let the body run.
+    await expect(
+      as.action(mostRecentReport, {
+        recipientEmail: "manager@test",
+        storeId: seeded.storeId,
+      }),
+    ).rejects.toThrow("No completed EOD report with a snapshot was found.");
+
+    expect(mailerMocks.sendDailyManagerReportEmail).not.toHaveBeenCalled();
   });
 });

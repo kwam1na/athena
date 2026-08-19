@@ -2,19 +2,27 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { OperationMutationCtx } from "../operationAdmission/types";
-import type { AthenaCapability } from "../platform/capabilityCatalog";
-import { getSharedDemoActorWithCtx } from "../sharedDemo/actor";
+import { AthenaUnauthenticatedError } from "./athenaUnauthenticated";
+
+export { AthenaUnauthenticatedError };
+
+/**
+ * Generic Athena-user authentication.
+ *
+ * This module is deliberately shared-demo-UNAWARE. A demo principal reaches an
+ * Athena identity through the operation admission rail — the shared-demo
+ * adapter admits it and publishes `ctx.operationAdmission.actor` — never
+ * through a capability option threaded down from a handler. The old
+ * `{ sharedDemoCapability: "reports.read" }` bridge (and the allowlist that
+ * decided which capabilities it honoured) is gone with U8: reads that a demo
+ * visitor may perform are declared on read definitions and enforced by the
+ * rail, so no caller can re-open a demo identity path by passing an argument.
+ */
 
 type AthenaAuthCtx =
   | Pick<QueryCtx, "auth" | "db">
   | Pick<MutationCtx, "auth" | "db">;
 type OrganizationMemberRole = "full_admin" | "pos_only";
-type AthenaUserAuthOptions = { sharedDemoCapability: AthenaCapability };
-type AthenaUserAuthReadCapability = "reports.read";
-
-const SHARED_DEMO_ATHENA_USER_READ_CAPABILITIES = new Set<AthenaCapability>([
-  "reports.read",
-]);
 
 export function normalizeAthenaUserEmail(email: string) {
   return email.trim().toLowerCase();
@@ -103,36 +111,34 @@ async function getAuthenticatedUserRecord(ctx: AthenaAuthCtx) {
   };
 }
 
-function isSharedDemoAthenaUserReadCapability(
-  capability: AthenaCapability,
-): capability is AthenaUserAuthReadCapability {
-  return SHARED_DEMO_ATHENA_USER_READ_CAPABILITIES.has(capability);
-}
-
 function getOperationAdmissionActorUserId(ctx: AthenaAuthCtx) {
   const actor = (ctx as Partial<OperationMutationCtx>).operationAdmission?.actor;
-  if (!actor || actor.kind === "public") return undefined;
-  return actor.athenaUserId;
+  if (!actor) return undefined;
+  // Exhaustive by actor kind: an actor kind that carries no Athena identity
+  // (anonymous, or a storefront shopper holding only a bearer claim) must
+  // never be mapped onto one, and a new kind must fail to compile here rather
+  // than silently fall into the identified branch.
+  switch (actor.kind) {
+    case "normal_user":
+    case "shared_demo":
+      return actor.athenaUserId;
+    case "storefront_customer":
+    case "public":
+      return undefined;
+    default: {
+      const exhaustive: never = actor;
+      void exhaustive;
+      return undefined;
+    }
+  }
 }
 
-export async function getAuthenticatedAthenaUserWithCtx(
-  ctx: AthenaAuthCtx,
-  options?: AthenaUserAuthOptions,
-) {
+export async function getAuthenticatedAthenaUserWithCtx(ctx: AthenaAuthCtx) {
   const admittedUserId = getOperationAdmissionActorUserId(ctx);
   if (admittedUserId) {
     return ctx.db.get("athenaUser", admittedUserId);
   }
 
-  if (
-    options &&
-    isSharedDemoAthenaUserReadCapability(options.sharedDemoCapability)
-  ) {
-    const demoActor = await getSharedDemoActorWithCtx(ctx);
-    if (demoActor) {
-      return ctx.db.get("athenaUser", demoActor.athenaUserId);
-    }
-  }
   const authUserRecord = await getAuthenticatedUserRecord(ctx);
 
   if (!authUserRecord) {
@@ -144,12 +150,11 @@ export async function getAuthenticatedAthenaUserWithCtx(
 
 export async function requireAuthenticatedAthenaUserWithCtx(
   ctx: AthenaAuthCtx,
-  options?: AthenaUserAuthOptions,
 ) {
-  const athenaUser = await getAuthenticatedAthenaUserWithCtx(ctx, options);
+  const athenaUser = await getAuthenticatedAthenaUserWithCtx(ctx);
 
   if (!athenaUser) {
-    throw new Error("Sign in again to continue.");
+    throw new AthenaUnauthenticatedError();
   }
 
   return athenaUser;
@@ -157,30 +162,18 @@ export async function requireAuthenticatedAthenaUserWithCtx(
 
 export async function requireAuthenticatedAthenaUserIndexedWithCtx(
   ctx: AthenaAuthCtx,
-  options?: AthenaUserAuthOptions,
 ) {
   const admittedUserId = getOperationAdmissionActorUserId(ctx);
   if (admittedUserId) {
     const athenaUser = await ctx.db.get("athenaUser", admittedUserId);
-    if (!athenaUser) throw new Error("Sign in again to continue.");
+    if (!athenaUser) throw new AthenaUnauthenticatedError();
     return athenaUser;
   }
 
-  if (
-    options &&
-    isSharedDemoAthenaUserReadCapability(options.sharedDemoCapability)
-  ) {
-    const demoActor = await getSharedDemoActorWithCtx(ctx);
-    if (demoActor) {
-      const athenaUser = await ctx.db.get("athenaUser", demoActor.athenaUserId);
-      if (!athenaUser) throw new Error("Sign in again to continue.");
-      return athenaUser;
-    }
-  }
   const authUserRecord = await getAuthenticatedUserRecord(ctx);
 
   if (!authUserRecord) {
-    throw new Error("Sign in again to continue.");
+    throw new AthenaUnauthenticatedError();
   }
 
   const athenaUser = await findAthenaUserByEmailIndexedWithCtx(
@@ -188,7 +181,7 @@ export async function requireAuthenticatedAthenaUserIndexedWithCtx(
     authUserRecord.normalizedEmail,
   );
   if (!athenaUser) {
-    throw new Error("Sign in again to continue.");
+    throw new AthenaUnauthenticatedError();
   }
 
   return athenaUser;

@@ -13,6 +13,9 @@ import {
   type ReportSkuDayMetrics,
 } from "../../shared/reportsContract";
 import { requireReportsStoreAccess } from "./access";
+import { requestRangeOperationDefinition } from "../operationAdmission/domains/reports_definitions";
+import { admitPublicMutation } from "../platform/operationAdmission";
+import type { OperationMutationCtx } from "../operationAdmission/types";
 import { stableStringHash } from "./fingerprint";
 
 /**
@@ -152,10 +155,16 @@ export const requestRange = mutation({
     startDate: v.string(),
     endDate: v.string(),
   },
-  handler: async (ctx, args): Promise<{ requestKey: string }> => {
-    await requireReportsStoreAccess(ctx, args.storeId);
-    return requestRangeCore(ctx, args);
-  },
+  handler: admitPublicMutation(
+    requestRangeOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: RequestRangeArgs,
+    ): Promise<{ requestKey: string }> => {
+      await requireReportsStoreAccess(ctx, args.storeId);
+      return requestRangeCore(ctx, args);
+    },
+  ),
 });
 
 const ZERO_DAY_METRICS: ReportDayMetrics = {

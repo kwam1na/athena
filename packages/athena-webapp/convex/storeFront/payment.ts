@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { action, ActionCtx, internalAction } from "../_generated/server";
-import { api, internal } from "../_generated/api";
+import { internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { CheckoutSession, OnlineOrder } from "../../types";
@@ -34,8 +34,31 @@ import {
   type ScheduledCronFamily,
 } from "../automation/scheduledRunLedger";
 
-const enforceSharedDemoActionCapabilityRef =
-  (internal as any).sharedDemo.actor.enforceSharedDemoActionCapability;
+import { refundPaymentOperationDefinition } from "../operationAdmission/domains/storefrontCustomer_definitions";
+import { admitPublicAction } from "../platform/operationAdmission";
+import {
+  assertCustomerOwnsRow,
+  customerOwnerValidator,
+} from "./customerOwnership";
+
+/**
+ * Every `enforceSharedDemoActionCapability` call site in this module is retired
+ * in favour of the definition it stood in for:
+ *
+ * | retired site                          | successor on the definition                                  |
+ * |---------------------------------------|--------------------------------------------------------------|
+ * | createTransaction ("billing.manage")  | capability `billing.manage`, gateway `payment.collect`, demo deny |
+ * | createPODOrder ("billing.manage")     | capability `billing.manage`, gateway `payment.collect`, demo deny |
+ * | verifyPayment ("billing.manage")      | capability `billing.manage`, gateway `payment.collect`, demo deny |
+ * | refundPayment ("payments.refund")     | capability `payments.refund`, gateway `payment.refund`, demo ADMIT + `store_ready` |
+ *
+ * `billing.manage` is not in `SHARED_DEMO_ALLOWED_CAPABILITIES`, so the three
+ * collection paths deny a demo principal exactly as the helper did.
+ * `payments.refund` IS granted and `payment.refund` is classified `simulated`,
+ * so the refund keeps its demo reach — and now also gains the store clamp and
+ * the restore fence the ad-hoc call never applied. `isSharedDemo` is read from
+ * the admitted actor instead of the helper's return value.
+ */
 
 const appUrl = process.env.APP_URL;
 
@@ -160,32 +183,46 @@ async function recordPaymentScheduledRunEvidence(args: {
 /**
  * Create a Paystack transaction for online payment
  */
-export const createTransaction = action({
-  args: {
-    checkoutSessionId: v.id("checkoutSession"),
-    customerEmail: v.string(),
-    amount: v.number(),
-    orderDetails: orderDetailsSchema,
-  },
-  returns: v.union(
-    v.object({
-      success: v.boolean(),
-      message: v.string(),
-    }),
-    v.object({
-      authorization_url: v.string(),
-      access_code: v.string(),
-      reference: v.string(),
-    }),
-  ),
-  handler: async (ctx, args) => {
-    await ctx.runQuery(enforceSharedDemoActionCapabilityRef, {
-      capability: "billing.manage",
-    });
+const paymentSessionArgs = {
+  checkoutSessionId: v.id("checkoutSession"),
+  customerEmail: v.string(),
+  amount: v.number(),
+  orderDetails: orderDetailsSchema,
+};
+
+type PaymentSessionArgs = {
+  checkoutSessionId: Id<"checkoutSession">;
+  customerEmail: string;
+  amount: number;
+  orderDetails: any;
+};
+
+/** The session named in the path must belong to the admitted shopper. */
+async function requireOwnedCheckoutSession(
+  ctx: ActionCtx,
+  checkoutSessionId: Id<"checkoutSession">,
+  owner: { guestId?: Id<"guest">; storeFrontUserId?: Id<"storeFrontUser">; storeId: Id<"store"> },
+) {
+  const session = await ctx.runQuery(
+    internal.storeFront.checkoutSession.getByIdInternal,
+    { sessionId: checkoutSessionId },
+  );
+  assertCustomerOwnsRow(owner, session);
+  return session;
+}
+
+async function createTransactionWithCtx(
+  ctx: ActionCtx,
+  args: PaymentSessionArgs,
+): Promise<any> {
+  {
     try {
-      // Fetch the checkout session
+      // Fetch the checkout session. This used to re-enter through
+      // `api.storeFront.checkoutSession.getById`, which ran a second admission
+      // with the backend's own context; the internal twin returns the same
+      // enriched shape under this call's admission.
       const session = await ctx.runQuery(
-        api.storeFront.checkoutSession.getById,
+        internal.storeFront.checkoutSession.getByIdInternal,
         {
           sessionId: args.checkoutSessionId,
         },
@@ -328,28 +365,45 @@ export const createTransaction = action({
         message: "Failed to create payment transaction",
       };
     }
+  }
+}
+
+/**
+ * Internal sibling for `POST /checkout/:checkoutSessionId` (pay action). The
+ * session named in the path must belong to the admitted shopper before a live
+ * Paystack transaction is initialized for it.
+ */
+export const createTransactionInternal = internalAction({
+  args: { ...paymentSessionArgs, owner: customerOwnerValidator },
+  // Carried over from the deleted public `createTransaction`. An internal
+  // sibling is still a contract with its caller, and dropping the validator
+  // during internalization silently removed the only runtime check that this
+  // action returns what the route serialises.
+  returns: v.union(
+    v.object({
+      success: v.boolean(),
+      message: v.string(),
+    }),
+    v.object({
+      authorization_url: v.string(),
+      access_code: v.string(),
+      reference: v.string(),
+    }),
+  ),
+  handler: async (ctx, { owner, ...args }): Promise<any> => {
+    await requireOwnedCheckoutSession(ctx, args.checkoutSessionId, owner);
+    return await createTransactionWithCtx(ctx, args);
   },
 });
 
 /**
  * Create a Payment on Delivery (POD) order
  */
-export const createPODOrder = action({
-  args: {
-    checkoutSessionId: v.id("checkoutSession"),
-    customerEmail: v.string(),
-    amount: v.number(),
-    orderDetails: orderDetailsSchema,
-  },
-  returns: v.object({
-    success: v.boolean(),
-    message: v.string(),
-    reference: v.optional(v.string()),
-  }),
-  handler: async (ctx, args): Promise<PaymentResult> => {
-    await ctx.runQuery(enforceSharedDemoActionCapabilityRef, {
-      capability: "billing.manage",
-    });
+async function createPODOrderWithCtx(
+  ctx: ActionCtx,
+  args: PaymentSessionArgs,
+): Promise<PaymentResult> {
+  {
     console.log(`Creating POD order for session: ${args.checkoutSessionId}`);
 
     try {
@@ -487,35 +541,50 @@ export const createPODOrder = action({
         message: "Failed to create payment on delivery order",
       };
     }
+  }
+}
+
+/** Internal sibling for `POST /checkout/:checkoutSessionId` (POD action). */
+export const createPODOrderInternal = internalAction({
+  args: { ...paymentSessionArgs, owner: customerOwnerValidator },
+  // Carried over from the deleted public `createPODOrder` — see the note on
+  // `createTransactionInternal` above.
+  returns: v.object({
+    success: v.boolean(),
+    message: v.string(),
+    reference: v.optional(v.string()),
+  }),
+  handler: async (ctx, { owner, ...args }): Promise<PaymentResult> => {
+    await requireOwnedCheckoutSession(ctx, args.checkoutSessionId, owner);
+    return await createPODOrderWithCtx(ctx, args);
   },
 });
 
 /**
  * Verify a payment transaction with Paystack
  */
-export const verifyPayment = action({
-  args: {
-    storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
-    externalReference: v.string(),
-    signedInAthenaUser: v.optional(
-      v.object({
-        id: v.id("athenaUser"),
-        email: v.string(),
-      }),
-    ),
-  },
-  returns: v.union(
+const verifyPaymentArgs = {
+  storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
+  externalReference: v.string(),
+  signedInAthenaUser: v.optional(
     v.object({
-      verified: v.boolean(),
-    }),
-    v.object({
-      message: v.string(),
+      id: v.id("athenaUser"),
+      email: v.string(),
     }),
   ),
-  handler: async (ctx, args): Promise<PaymentVerificationResult> => {
-    await ctx.runQuery(enforceSharedDemoActionCapabilityRef, {
-      capability: "billing.manage",
-    });
+};
+
+type VerifyPaymentArgs = {
+  storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">;
+  externalReference: string;
+  signedInAthenaUser?: { id: Id<"athenaUser">; email: string };
+};
+
+async function verifyPaymentWithCtx(
+  ctx: ActionCtx,
+  args: VerifyPaymentArgs,
+): Promise<PaymentVerificationResult> {
+  {
     console.log(
       `Verifying payment for session with reference: ${args.externalReference}`,
     );
@@ -533,8 +602,10 @@ export const verifyPayment = action({
         },
       );
 
+      // `api.storeFront.onlineOrder.get` re-entered the public boundary from
+      // inside an admitted action; the internal twin U7 owns is called instead.
       const order: OnlineOrder | null = await ctx.runQuery(
-        api.storeFront.onlineOrder.get,
+        internal.storeFront.onlineOrder.getInternal,
         {
           identifier: args.externalReference,
         },
@@ -675,6 +746,43 @@ export const verifyPayment = action({
         message: "No active session found.",
       };
     }
+  }
+}
+
+/**
+ * Internal sibling for `GET /checkout/verify/:reference`. Verification runs for
+ * the ADMITTED shopper, so a reference belonging to another customer cannot be
+ * verified into this session.
+ */
+export const verifyPaymentInternal = internalAction({
+  args: { ...verifyPaymentArgs, owner: customerOwnerValidator },
+  /**
+   * NOT carried over verbatim from the deleted public `verifyPayment`, because
+   * that one was wrong. It declared
+   * `v.union(v.object({verified}), v.object({message}))` — two disjoint arms —
+   * while the handler can return `{ verified: false, message: "No active
+   * session found." }`, which matches NEITHER. On a live path that would have
+   * thrown a return-validation error. `PaymentVerificationResult` in
+   * `convex/types/payment.ts` is `{ verified: boolean; message?: string }`, so
+   * that is what the validator states.
+   */
+  returns: v.object({
+    verified: v.boolean(),
+    message: v.optional(v.string()),
+  }),
+  handler: async (
+    ctx,
+    { owner, ...args },
+  ): Promise<PaymentVerificationResult> => {
+    if (
+      String(args.storeFrontUserId) !==
+      String(owner.storeFrontUserId ?? owner.guestId)
+    ) {
+      throw new Error(
+        "This storefront resource is not available for this shopper.",
+      );
+    }
+    return await verifyPaymentWithCtx(ctx, args);
   },
 });
 
@@ -700,16 +808,26 @@ export const refundPayment = action({
       message: v.string(),
     })
   ),
-  handler: async (
-    ctx,
-    args,
-  ): Promise<CommandResult<{ message: string }>> => {
+  handler: admitPublicAction(
+    refundPaymentOperationDefinition,
+    async (
+      ctx,
+      args: {
+        externalTransactionId: string;
+        amount?: number;
+        returnItemsToStock: boolean;
+        onlineOrderItemIds?: Array<Id<"onlineOrderItem">>;
+        refundItems?: string[];
+        signedInAthenaUser?: { id: Id<"athenaUser">; email: string };
+      },
+    ): Promise<CommandResult<{ message: string }>> => {
     let refundReservation: RefundReservationResult | undefined;
     let refundFinalized = false;
 
-    const isSharedDemo = await ctx.runQuery(enforceSharedDemoActionCapabilityRef, {
-      capability: "payments.refund",
-    });
+    // Retired `enforceSharedDemoActionCapability({ capability: "payments.refund" })`:
+    // the grant, the store clamp and the restore fence are the definition's
+    // job now, and the demo flag comes from the admitted actor.
+    const isSharedDemo = ctx.operationAdmission.actor.kind === "shared_demo";
     try {
       const reservation = (await ctx.runMutation(
         internal.storeFront.onlineOrder.reserveRefundInternal,
@@ -822,7 +940,8 @@ export const refundPayment = action({
         message: "Failed to refund payment.",
       });
     }
-  },
+    },
+  ),
 });
 
 /**

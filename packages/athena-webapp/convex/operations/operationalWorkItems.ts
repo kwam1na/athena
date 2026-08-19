@@ -11,7 +11,7 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import { admitPublicQuery } from "../platform/operationAdmission";
 import {
   getOpenWorkCountSummaryReadDefinition,
   getPendingApprovalCountSummaryReadDefinition,
@@ -144,7 +144,7 @@ export const getOpenWorkCountSummary = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getOpenWorkCountSummaryReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
       await authorizeOperationalWorkSummaryRead(
@@ -239,7 +239,7 @@ export const getPendingApprovalCountSummary = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPendingApprovalCountSummaryReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
       await authorizeOperationalWorkSummaryRead(
@@ -691,7 +691,7 @@ export const getQueueSnapshot = query({
     storeId: v.id("store"),
     workType: v.optional(v.string()),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getQueueSnapshotReadDefinition,
     async (
       ctx,

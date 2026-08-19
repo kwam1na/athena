@@ -27,6 +27,11 @@ import {
   updateOpeningAutoStartPolicy,
   updateRegisterCloseoutApprovalPolicy,
 } from "./dailyOperationsAutomation";
+import {
+  updateEodAutoCompletePolicyOperationDefinition,
+  updateOpeningAutoStartPolicyOperationDefinition,
+  updateRegisterCloseoutApprovalPolicyOperationDefinition,
+} from "../operationAdmission/domains/operations_definitions";
 
 const modules = Object.fromEntries(
   Object.entries(import.meta.glob("../**/*.ts")).map(([path, loader]) => [
@@ -3786,4 +3791,125 @@ describe("daily operations automation adapter", () => {
       }),
     );
   });
+});
+
+/**
+ * U5 admission contract for the three exported automation-policy mutations.
+ *
+ * These let auth failures throw (they return plain objects, not
+ * `CommandResult`), so plain `admitPublicMutation` is the whole change. The
+ * pre-existing `requireStoreFullAdminAccess` guard stays, and the parity of
+ * the admitted path is what the rest of this file already asserts.
+ */
+describe("daily operations policy admission", () => {
+  const POLICY_CALLS: Array<[string, unknown, Record<string, unknown>]> = [
+    [
+      "updateOpeningAutoStartPolicy",
+      updateOpeningAutoStartPolicy,
+      {
+        localStartMinutes: 480,
+        mode: "enabled",
+        openingBlockerHandling: "start_with_manager_review",
+        operatingTimezoneOffsetMinutes: 0,
+        storeId: "store-1" as Id<"store">,
+      },
+    ],
+    [
+      "updateEodAutoCompletePolicy",
+      updateEodAutoCompletePolicy,
+      {
+        cleanDayAutoCompleteEnabled: true,
+        localCompletionWindowMinutes: 1260,
+        maxAbsoluteCashVariance: 5000,
+        maxVoidedSaleCount: 2,
+        maxVoidedSaleTotal: 50000,
+        mode: "enabled",
+        operatingTimezoneOffsetMinutes: 0,
+        storeId: "store-1" as Id<"store">,
+      },
+    ],
+    [
+      "updateRegisterCloseoutApprovalPolicy",
+      updateRegisterCloseoutApprovalPolicy,
+      {
+        storeId: "store-1" as Id<"store">,
+        varianceApprovalThreshold: 7500,
+      },
+    ],
+  ];
+
+  beforeEach(() => {
+    admissionMocks.getSharedDemoActorWithCtx.mockResolvedValue(null);
+    accessMocks.requireStoreFullAdminAccess.mockResolvedValue({
+      athenaUser: { _id: "user-1" },
+      store,
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    accessMocks.requireStoreFullAdminAccess.mockReset();
+    admissionMocks.getSharedDemoActorWithCtx.mockReset();
+    admissionMocks.requireAuthenticatedAthenaUserWithCtx.mockReset();
+  });
+
+  it("keeps automation policy out of shared-demo reach at the definition", () => {
+    for (const definition of [
+      updateOpeningAutoStartPolicyOperationDefinition,
+      updateEodAutoCompletePolicyOperationDefinition,
+      updateRegisterCloseoutApprovalPolicyOperationDefinition,
+    ]) {
+      expect(definition.kind).toBe("mutation");
+      expect(definition.capability).toBe("store.configure");
+      expect(definition.actors.normalUser).toBe("admit");
+      expect(definition.actors.sharedDemo).toBe("deny");
+      expect(definition.actors.public).toBe("deny");
+      expect(definition.scope).toEqual({ kind: "store", storeIdArg: "storeId" });
+    }
+  });
+
+  it.each(POLICY_CALLS)(
+    "denies an unadmitted caller on %s before the store is touched",
+    async (_name, fn, args) => {
+      admissionMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue(
+        null,
+      );
+      const { db, inserts, patches } = createDb({ store: [store] });
+
+      await expect(
+        getHandler(fn)({ db } as unknown as MutationCtx, args),
+      ).rejects.toThrow("Sign in again to continue.");
+
+      expect(accessMocks.requireStoreFullAdminAccess).not.toHaveBeenCalled();
+      expect(inserts).toEqual([]);
+      expect(patches).toEqual([]);
+    },
+  );
+
+  it.each(POLICY_CALLS)(
+    "denies a shared-demo visitor on %s before the store is touched",
+    async (_name, fn, args) => {
+      admissionMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
+        _id: "user-1",
+      });
+      admissionMocks.getSharedDemoActorWithCtx.mockResolvedValue({
+        athenaUserId: "demo-user-1",
+        authUserId: "auth-user-demo",
+        kind: "shared_demo",
+        organizationId: "org-1",
+        storeId: "store-1",
+      });
+      const { db, inserts, patches } = createDb({ store: [store] });
+
+      // `store.configure` is not a demo-granted capability, so the demo is
+      // refused at the definition rather than by a handler-local check.
+      await expect(
+        getHandler(fn)({ db } as unknown as MutationCtx, args),
+      ).rejects.toThrow();
+
+      expect(accessMocks.requireStoreFullAdminAccess).not.toHaveBeenCalled();
+      expect(inserts).toEqual([]);
+      expect(patches).toEqual([]);
+    },
+  );
 });

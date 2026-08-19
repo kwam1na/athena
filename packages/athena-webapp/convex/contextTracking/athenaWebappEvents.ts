@@ -2,6 +2,8 @@ import { v } from "convex/values";
 
 import { mutation } from "../_generated/server";
 import { getAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
+import { recordDocsWorkspaceVisitOperationDefinition } from "../operationAdmission/domains/platform_definitions";
+import { admitPublicMutation } from "../platform/operationAdmission";
 import { appendContextEventWithCtx } from "./contextEvents";
 
 const viewportBucketValidator = v.union(
@@ -96,18 +98,24 @@ export const recordDocsWorkspaceVisit = mutation({
     status: v.optional(v.union(v.literal("recorded"), v.literal("rejected"))),
     message: v.optional(v.string()),
   }),
-  handler: async (ctx, visit) => {
-    const validationError = validateDocsWorkspaceVisit(visit);
-    if (validationError) {
-      return { kind: "rejected" as const, message: validationError };
-    }
+  // Anonymous readers record visits too, so the definition admits `public`;
+  // the OPTIONAL identity lookup below is what keeps an anonymous visit
+  // attributed to its session rather than to a user.
+  handler: admitPublicMutation(
+    recordDocsWorkspaceVisitOperationDefinition,
+    async (ctx, visit: DocsWorkspaceVisit) => {
+      const validationError = validateDocsWorkspaceVisit(visit);
+      if (validationError) {
+        return { kind: "rejected" as const, message: validationError };
+      }
 
-    const athenaUser = await getAuthenticatedAthenaUserWithCtx(ctx);
-    return appendContextEventWithCtx(
-      ctx,
-      buildDocsWorkspaceAppendArgs(visit, {
-        athenaUserId: athenaUser?._id,
-      }),
-    );
-  },
+      const athenaUser = await getAuthenticatedAthenaUserWithCtx(ctx);
+      return appendContextEventWithCtx(
+        ctx,
+        buildDocsWorkspaceAppendArgs(visit, {
+          athenaUserId: athenaUser?._id,
+        }),
+      );
+    },
+  ),
 });

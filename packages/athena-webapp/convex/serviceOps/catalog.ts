@@ -6,9 +6,17 @@ import { v } from "convex/values";
 import { toSlug } from "../utils";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { requireStoreMemberAccessWithCtx } from "../lib/storeMemberAccess";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import { listPosServiceCatalogSnapshotReadDefinition } from "../operationAdmission/readDefinitions";
-import { requireReadySharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
+import {
+  archiveServiceCatalogItemOperationDefinition,
+  createServiceCatalogItemOperationDefinition,
+  updateServiceCatalogItemOperationDefinition,
+} from "../operationAdmission/domains/operations_definitions";
+import { listServiceCatalogItemsReadDefinition } from "../operationAdmission/domains/operations_readDefinitions";
 
 type ServiceCatalogPricingModel =
   "fixed" | "starting_at" | "quote_after_consultation";
@@ -281,21 +289,27 @@ export const listServiceCatalogItems = query({
     status: v.optional(v.union(v.literal("active"), v.literal("archived"))),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    if (args.status) {
+  handler: admitPublicQuery(
+    listServiceCatalogItemsReadDefinition,
+    async (
+      ctx,
+      args: { status?: "active" | "archived"; storeId: Id<"store"> },
+    ) => {
+      if (args.status) {
+        return ctx.db
+          .query("serviceCatalog")
+          .withIndex("by_storeId_status", (q) =>
+            q.eq("storeId", args.storeId).eq("status", args.status!),
+          )
+          .collect();
+      }
+
       return ctx.db
         .query("serviceCatalog")
-        .withIndex("by_storeId_status", (q) =>
-          q.eq("storeId", args.storeId).eq("status", args.status!),
-        )
+        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
         .collect();
-    }
-
-    return ctx.db
-      .query("serviceCatalog")
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .collect();
-  },
+    },
+  ),
 });
 
 export const listPosServiceCatalogSnapshot = query({
@@ -303,7 +317,7 @@ export const listPosServiceCatalogSnapshot = query({
     storeId: v.id("store"),
   },
   returns: v.array(posServiceCatalogRowValidator),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listPosServiceCatalogSnapshotReadDefinition,
     async (ctx, args: { storeId: Id<"store"> }) => {
       await requireStoreMemberAccessWithCtx(ctx, {
@@ -344,35 +358,47 @@ export const createServiceCatalogItem = mutation({
     ),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    await requireReadySharedDemoStoreCapabilityIfApplicable(
+  handler: admitPublicMutation(
+    createServiceCatalogItemOperationDefinition,
+    async (
       ctx,
-      "service.catalog.manage",
-      args.storeId,
-    );
-    const catalogItemResult = buildServiceCatalogItem(args);
-    if (catalogItemResult.kind === "user_error") {
-      return catalogItemResult;
-    }
+      args: {
+        basePrice?: number;
+        depositType: "none" | "flat" | "percentage";
+        depositValue?: number;
+        description?: string;
+        durationMinutes: number;
+        name: string;
+        pricingModel: "fixed" | "starting_at" | "quote_after_consultation";
+        requiresManagerApproval: boolean;
+        serviceMode: "same_day" | "consultation" | "repair" | "revamp";
+        storeId: Id<"store">;
+      },
+    ) => {
+      const catalogItemResult = buildServiceCatalogItem(args);
+      if (catalogItemResult.kind === "user_error") {
+        return catalogItemResult;
+      }
 
-    const catalogItem = catalogItemResult.data;
-    const existingCatalogItem = await ctx.db
-      .query("serviceCatalog")
-      .withIndex("by_storeId_slug", (q) =>
-        q.eq("storeId", args.storeId).eq("slug", catalogItem.slug),
-      )
-      .first();
+      const catalogItem = catalogItemResult.data;
+      const existingCatalogItem = await ctx.db
+        .query("serviceCatalog")
+        .withIndex("by_storeId_slug", (q) =>
+          q.eq("storeId", args.storeId).eq("slug", catalogItem.slug),
+        )
+        .first();
 
-    if (existingCatalogItem) {
-      return userError({
-        code: "conflict",
-        message: "A service catalog item with this name already exists.",
-      });
-    }
+      if (existingCatalogItem) {
+        return userError({
+          code: "conflict",
+          message: "A service catalog item with this name already exists.",
+        });
+      }
 
-    const catalogItemId = await ctx.db.insert("serviceCatalog", catalogItem);
-    return ok(await ctx.db.get("serviceCatalog", catalogItemId));
-  },
+      const catalogItemId = await ctx.db.insert("serviceCatalog", catalogItem);
+      return ok(await ctx.db.get("serviceCatalog", catalogItemId));
+    },
+  ),
 });
 
 export const updateServiceCatalogItem = mutation({
@@ -403,123 +429,131 @@ export const updateServiceCatalogItem = mutation({
       ),
     ),
   },
-  handler: async (ctx, args) => {
-    const existingCatalogItem = await ctx.db.get(
-      "serviceCatalog",
-      args.serviceCatalogId,
-    );
-
-    if (!existingCatalogItem) {
-      return userError({
-        code: "not_found",
-        message: "Service catalog item not found.",
-      });
-    }
-
-    await requireReadySharedDemoStoreCapabilityIfApplicable(
+  handler: admitPublicMutation(
+    updateServiceCatalogItemOperationDefinition,
+    async (
       ctx,
-      "service.catalog.manage",
-      existingCatalogItem.storeId,
-    );
+      args: {
+        basePrice?: number | null;
+        depositType?: "none" | "flat" | "percentage";
+        depositValue?: number | null;
+        description?: string | null;
+        durationMinutes?: number;
+        name?: string;
+        pricingModel?: "fixed" | "starting_at" | "quote_after_consultation";
+        requiresManagerApproval?: boolean;
+        serviceCatalogId: Id<"serviceCatalog">;
+        serviceMode?: "same_day" | "consultation" | "repair" | "revamp";
+      },
+    ) => {
+      const existingCatalogItem = await ctx.db.get(
+        "serviceCatalog",
+        args.serviceCatalogId,
+      );
 
-    const nextBasePrice =
-      args.basePrice === null
-        ? undefined
-        : args.basePrice === undefined
-          ? existingCatalogItem.basePrice
-          : args.basePrice;
-    const nextDepositValue =
-      args.depositValue === null
-        ? undefined
-        : args.depositValue === undefined
-          ? existingCatalogItem.depositValue
-          : args.depositValue;
-    const nextDescription =
-      args.description === null
-        ? undefined
-        : args.description === undefined
-          ? existingCatalogItem.description
-          : args.description;
+      if (!existingCatalogItem) {
+        return userError({
+          code: "not_found",
+          message: "Service catalog item not found.",
+        });
+      }
 
-    const nextCatalogItemResult = buildServiceCatalogItem({
-      basePrice: nextBasePrice,
-      depositType: args.depositType ?? existingCatalogItem.depositType,
-      depositValue: nextDepositValue,
-      description: nextDescription,
-      durationMinutes:
-        args.durationMinutes ?? existingCatalogItem.durationMinutes,
-      name: args.name ?? existingCatalogItem.name,
-      organizationId: existingCatalogItem.organizationId,
-      pricingModel: args.pricingModel ?? existingCatalogItem.pricingModel,
-      requiresManagerApproval:
-        args.requiresManagerApproval ??
-        existingCatalogItem.requiresManagerApproval,
-      serviceMode: args.serviceMode ?? existingCatalogItem.serviceMode,
-      storeId: existingCatalogItem.storeId,
-    });
-    if (nextCatalogItemResult.kind === "user_error") {
-      return nextCatalogItemResult;
-    }
+      const nextBasePrice =
+        args.basePrice === null
+          ? undefined
+          : args.basePrice === undefined
+            ? existingCatalogItem.basePrice
+            : args.basePrice;
+      const nextDepositValue =
+        args.depositValue === null
+          ? undefined
+          : args.depositValue === undefined
+            ? existingCatalogItem.depositValue
+            : args.depositValue;
+      const nextDescription =
+        args.description === null
+          ? undefined
+          : args.description === undefined
+            ? existingCatalogItem.description
+            : args.description;
 
-    const nextCatalogItem = nextCatalogItemResult.data;
-
-    const conflictingCatalogItem = await ctx.db
-      .query("serviceCatalog")
-      .withIndex("by_storeId_slug", (q) =>
-        q
-          .eq("storeId", existingCatalogItem.storeId)
-          .eq("slug", nextCatalogItem.slug),
-      )
-      .first();
-
-    if (
-      conflictingCatalogItem &&
-      conflictingCatalogItem._id !== existingCatalogItem._id
-    ) {
-      return userError({
-        code: "conflict",
-        message: "A service catalog item with this name already exists.",
+      const nextCatalogItemResult = buildServiceCatalogItem({
+        basePrice: nextBasePrice,
+        depositType: args.depositType ?? existingCatalogItem.depositType,
+        depositValue: nextDepositValue,
+        description: nextDescription,
+        durationMinutes:
+          args.durationMinutes ?? existingCatalogItem.durationMinutes,
+        name: args.name ?? existingCatalogItem.name,
+        organizationId: existingCatalogItem.organizationId,
+        pricingModel: args.pricingModel ?? existingCatalogItem.pricingModel,
+        requiresManagerApproval:
+          args.requiresManagerApproval ??
+          existingCatalogItem.requiresManagerApproval,
+        serviceMode: args.serviceMode ?? existingCatalogItem.serviceMode,
+        storeId: existingCatalogItem.storeId,
       });
-    }
+      if (nextCatalogItemResult.kind === "user_error") {
+        return nextCatalogItemResult;
+      }
 
-    await ctx.db.patch("serviceCatalog", args.serviceCatalogId, {
-      ...nextCatalogItem,
-      createdAt: existingCatalogItem.createdAt,
-      status: existingCatalogItem.status,
-    });
+      const nextCatalogItem = nextCatalogItemResult.data;
 
-    return ok(await ctx.db.get("serviceCatalog", args.serviceCatalogId));
-  },
+      const conflictingCatalogItem = await ctx.db
+        .query("serviceCatalog")
+        .withIndex("by_storeId_slug", (q) =>
+          q
+            .eq("storeId", existingCatalogItem.storeId)
+            .eq("slug", nextCatalogItem.slug),
+        )
+        .first();
+
+      if (
+        conflictingCatalogItem &&
+        conflictingCatalogItem._id !== existingCatalogItem._id
+      ) {
+        return userError({
+          code: "conflict",
+          message: "A service catalog item with this name already exists.",
+        });
+      }
+
+      await ctx.db.patch("serviceCatalog", args.serviceCatalogId, {
+        ...nextCatalogItem,
+        createdAt: existingCatalogItem.createdAt,
+        status: existingCatalogItem.status,
+      });
+
+      return ok(await ctx.db.get("serviceCatalog", args.serviceCatalogId));
+    },
+  ),
 });
 
 export const archiveServiceCatalogItem = mutation({
   args: {
     serviceCatalogId: v.id("serviceCatalog"),
   },
-  handler: async (ctx, args) => {
-    const existingCatalogItem = await ctx.db.get(
-      "serviceCatalog",
-      args.serviceCatalogId,
-    );
+  handler: admitPublicMutation(
+    archiveServiceCatalogItemOperationDefinition,
+    async (ctx, args: { serviceCatalogId: Id<"serviceCatalog"> }) => {
+      const existingCatalogItem = await ctx.db.get(
+        "serviceCatalog",
+        args.serviceCatalogId,
+      );
 
-    if (!existingCatalogItem) {
-      return userError({
-        code: "not_found",
-        message: "Service catalog item not found.",
+      if (!existingCatalogItem) {
+        return userError({
+          code: "not_found",
+          message: "Service catalog item not found.",
+        });
+      }
+
+      await ctx.db.patch("serviceCatalog", args.serviceCatalogId, {
+        status: "archived",
+        updatedAt: Date.now(),
       });
-    }
 
-    await requireReadySharedDemoStoreCapabilityIfApplicable(
-      ctx,
-      "service.catalog.manage",
-      existingCatalogItem.storeId,
-    );
-
-    await ctx.db.patch("serviceCatalog", args.serviceCatalogId, {
-      status: "archived",
-      updatedAt: Date.now(),
-    });
-
-    return ok(await ctx.db.get("serviceCatalog", args.serviceCatalogId));
-  },
+      return ok(await ctx.db.get("serviceCatalog", args.serviceCatalogId));
+    },
+  ),
 });

@@ -3,8 +3,12 @@ import { v } from "convex/values";
 import { mutation, query } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
 import { requireStoreMemberAccessWithCtx } from "../../lib/storeMemberAccess";
-import { withOperationReadAdmission } from "../../operationAdmission/publicQuery";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../../platform/operationAdmission";
 import { getPosRegisterStateReadDefinition } from "../../operationAdmission/readDefinitions";
+import { openRegisterDrawerOperationDefinition } from "../../operationAdmission/domains/pos_definitions";
 import { getRegisterState } from "../application/queries/getRegisterState";
 import { openDrawer as openDrawerCommand } from "../application/commands/register";
 
@@ -63,7 +67,7 @@ export const getState = query({
     staffProfileId: v.optional(v.id("staffProfile")),
     registerNumber: v.optional(v.string()),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getPosRegisterStateReadDefinition,
     async (
       ctx,
@@ -101,5 +105,8 @@ export const openDrawer = mutation({
     notes: v.optional(v.string()),
   },
   returns: registerSessionCommandResultValidator,
-  handler: async (ctx, args) => openDrawerCommand(ctx, args),
+  handler: admitPublicMutation(
+    openRegisterDrawerOperationDefinition,
+    async (ctx, args) => openDrawerCommand(ctx, args),
+  ),
 });

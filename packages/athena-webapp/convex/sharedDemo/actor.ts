@@ -3,13 +3,37 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { internalQuery } from "../_generated/server";
-import { v } from "convex/values";
 import type { SharedDemoCapability } from "./policy";
 import { denySharedDemoAction, requireSharedDemoCapability } from "./policy";
+import { SHARED_DEMO_ALLOWED_CAPABILITIES } from "../platform/capabilityCatalog";
 import { isSharedDemoEnabled } from "./config";
 import { requireReadySharedDemoWriteWithCtx } from "./restore";
 
 type AuthCtx = Pick<QueryCtx, "auth" | "db"> | Pick<MutationCtx, "auth" | "db">;
+
+export type SharedDemoActorDenialReason = "demo_disabled" | "session_expired";
+
+/**
+ * A recognized shared-demo principal failure, carrying its reason as data.
+ *
+ * Adapters classify on `reason`, never on message text — the message stays
+ * user-facing and may change without moving a policy decision.
+ */
+export class SharedDemoActorError extends Error {
+  readonly reason: SharedDemoActorDenialReason;
+
+  constructor(reason: SharedDemoActorDenialReason, message: string) {
+    super(message);
+    this.name = "SharedDemoActorError";
+    this.reason = reason;
+  }
+}
+
+export function isSharedDemoActorError(
+  error: unknown,
+): error is SharedDemoActorError {
+  return error instanceof SharedDemoActorError;
+}
 
 export async function getSharedDemoActorWithCtx(
   ctx: AuthCtx,
@@ -39,10 +63,16 @@ export async function getSharedDemoActorWithCtx(
     return null;
   }
   if (!isSharedDemoEnabled(options.environment ?? process.env)) {
-    throw new Error("The demo is unavailable in this environment.");
+    throw new SharedDemoActorError(
+      "demo_disabled",
+      "The demo is unavailable in this environment.",
+    );
   }
   if (principal.admissionExpiresAt <= (options.now ?? Date.now())) {
-    throw new Error("The demo session has expired. Open the demo again.");
+    throw new SharedDemoActorError(
+      "session_expired",
+      "The demo session has expired. Open the demo again.",
+    );
   }
 
   return {
@@ -105,71 +135,27 @@ export async function requireReadySharedDemoStoreCapabilityIfApplicable(
   return actor;
 }
 
-const sharedDemoCapabilityValidator = v.union(
-  v.literal("approvals.manage"),
-  v.literal("customer.messaging.send"),
-  v.literal("expense.manage"),
-  v.literal("pos.sale.complete"),
-  v.literal("pos.sync.write"),
-  v.literal("pos.transaction.correct"),
-  v.literal("inventory.adjust"),
-  v.literal("cash.control.write"),
-  v.literal("catalog.maintain"),
-  v.literal("catalog.quick_add"),
-  v.literal("orders.fulfill"),
-  v.literal("orders.manage"),
-  v.literal("orders.return"),
-  v.literal("reviews.manage"),
-  v.literal("staff.communication.write"),
-  v.literal("daily_operations.write"),
-  v.literal("reports.read"),
-  v.literal("staff.authenticate"),
-  v.literal("identity.manage"),
-  v.literal("permissions.manage"),
-  v.literal("billing.manage"),
-  v.literal("integrations.manage"),
-  v.literal("exports.generate"),
-  v.literal("payments.refund"),
-  v.literal("administration.destructive"),
-  v.literal("demo.lifecycle"),
-);
+/*
+ * `sharedDemoCapabilityValidator` was deleted with them.
+ *
+ * The U12 contract asked for it to be DERIVED from
+ * `SHARED_DEMO_ALLOWED_CAPABILITIES` instead of hand-listed — it had drifted,
+ * accepting six capabilities the demo was never granted plus one that no
+ * longer exists. Deriving it satisfied that. Deleting it satisfies R10's
+ * actual goal more strictly: its only consumer was
+ * `enforceSharedDemoActionCapability` above, so once that went the validator
+ * was dead code, and dead code cannot drift at all.
+ */
 
-export const enforceSharedDemoActionCapability = internalQuery({
-  args: {
-    capability: sharedDemoCapabilityValidator,
-    storeId: v.optional(v.id("store")),
-  },
-  returns: v.boolean(),
-  handler: async (ctx, args) => {
-    const actor = args.storeId
-      ? await requireSharedDemoStoreCapabilityIfApplicable(
-          ctx,
-          args.capability,
-          args.storeId,
-        )
-      : await requireSharedDemoCapabilityIfApplicable(ctx, args.capability);
-    return Boolean(actor);
-  },
-});
-
-export const requireAuthenticatedNonDemoEffect = internalQuery({
-  args: {},
-  returns: v.null(),
-  handler: async (ctx) => {
-    const authUserId = await getAuthUserId(ctx);
-    if (!authUserId) throw new Error("Sign in again to continue.");
-    const actor = await getSharedDemoActorWithCtx(ctx);
-    if (actor) denySharedDemoAction();
-    return null;
-  },
-});
-
-export const denySharedDemoEffectIfApplicable = internalQuery({
-  args: {},
-  returns: v.null(),
-  handler: async (ctx) => {
-    const actor = await getSharedDemoActorWithCtx(ctx);
-    if (actor) denySharedDemoAction();
-    return null;
-  },
-});
+/*
+ * `enforceSharedDemoActionCapability`, `requireAuthenticatedNonDemoEffect`, and
+ * `denySharedDemoEffectIfApplicable` were deleted here.
+ *
+ * All three were `internalQuery` wrappers that handlers called via
+ * `ctx.runQuery` to ask "is this the demo?" mid-handler. R10 retired every such
+ * call site: the question is now answered by `actors.sharedDemo` on the
+ * operation definition, before the handler is entered. Keeping them exported
+ * with zero callers left three live Convex functions in the deployment whose
+ * only purpose was a pattern this delivery removed — and a future handler could
+ * have reached for one and quietly reintroduced mid-handler demo checks.
+ */

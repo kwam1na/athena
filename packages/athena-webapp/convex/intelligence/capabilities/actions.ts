@@ -1,6 +1,10 @@
 import { v } from "convex/values";
 
-import { action, type ActionCtx } from "../../_generated/server";
+import {
+  action,
+  internalAction,
+  type ActionCtx,
+} from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
 import { internal } from "../../_generated/api";
 import {
@@ -17,6 +21,11 @@ import {
   createFakeStructuredTextProvider,
   createTanStackStructuredTextProvider,
 } from "../providers";
+import {
+  generateStoreInsightsOperationDefinition,
+  generateUserInsightsOperationDefinition,
+} from "../../operationAdmission/domains/platform_definitions";
+import { admitPublicAction } from "../../platform/operationAdmission";
 import {
   buildStoreInsightsPromptFromContextBundle,
   buildUserInsightsPromptFromContextBundle,
@@ -138,12 +147,31 @@ const userInsightsSchema: AthenaStructuredTextSchema = {
   },
 };
 
-export const generateStoreInsights = action({
-  args: {
-    storeId: v.id("store"),
-    provider: v.optional(v.string()),
-  },
-  handler: async (ctx, args): Promise<StoreInsightsActionResult> => {
+type GenerateStoreInsightsArgs = {
+  provider?: string;
+  storeId: Id<"store">;
+};
+
+type GenerateUserInsightsArgs = {
+  provider?: string;
+  storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">;
+  storeId: Id<"store">;
+};
+
+/**
+ * The generation bodies live here so the admitted public action and its
+ * internal sibling run byte-for-byte the same code.
+ *
+ * The siblings exist because `llm/storeInsights` and `llm/userInsights` used to
+ * re-enter this module through `api.*`, which runs a SECOND admission with the
+ * backend's own context. An admitted body may call only `internal.*`, so those
+ * callers now target `internalGenerateStoreInsights` /
+ * `internalGenerateUserInsights` while the public exports stay for the webapp.
+ */
+async function runGenerateStoreInsights(
+  ctx: ActionCtx,
+  args: GenerateStoreInsightsArgs,
+): Promise<StoreInsightsActionResult> {
     const access = await ctx.runQuery(
       internal.intelligence.access.requireStoreFullAdmin,
       { storeId: args.storeId },
@@ -255,16 +283,33 @@ export const generateStoreInsights = action({
       await failRunBestEffort(ctx, runId, error);
       throw error;
     }
-  },
-});
+}
 
-export const generateUserInsights = action({
+export const generateStoreInsights = action({
   args: {
     storeId: v.id("store"),
-    storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
     provider: v.optional(v.string()),
   },
-  handler: async (ctx, args): Promise<UserInsightsActionResult> => {
+  handler: admitPublicAction(
+    generateStoreInsightsOperationDefinition,
+    async (ctx, args: GenerateStoreInsightsArgs) =>
+      runGenerateStoreInsights(ctx, args),
+  ),
+});
+
+export const internalGenerateStoreInsights = internalAction({
+  args: {
+    storeId: v.id("store"),
+    provider: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<StoreInsightsActionResult> =>
+    runGenerateStoreInsights(ctx, args),
+});
+
+async function runGenerateUserInsights(
+  ctx: ActionCtx,
+  args: GenerateUserInsightsArgs,
+): Promise<UserInsightsActionResult> {
     const access = await ctx.runQuery(
       internal.intelligence.access.requireStoreFullAdmin,
       { storeId: args.storeId },
@@ -374,7 +419,29 @@ export const generateUserInsights = action({
       await failRunBestEffort(ctx, runId, error);
       throw error;
     }
+}
+
+export const generateUserInsights = action({
+  args: {
+    storeId: v.id("store"),
+    storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
+    provider: v.optional(v.string()),
   },
+  handler: admitPublicAction(
+    generateUserInsightsOperationDefinition,
+    async (ctx, args: GenerateUserInsightsArgs) =>
+      runGenerateUserInsights(ctx, args),
+  ),
+});
+
+export const internalGenerateUserInsights = internalAction({
+  args: {
+    storeId: v.id("store"),
+    storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
+    provider: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<UserInsightsActionResult> =>
+    runGenerateUserInsights(ctx, args),
 });
 
 function resolveProviderId(provider?: string) {

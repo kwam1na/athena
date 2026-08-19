@@ -15,7 +15,7 @@
         "packages/athena-webapp/convex/contextTracking",
         "packages/athena-webapp/convex/crons.ts",
         "packages/athena-webapp/convex/http.ts",
-        "packages/athena-webapp/convex/operationAdmission/publicMutation.ts",
+        "packages/athena-webapp/convex/operationAdmission",
         "packages/athena-webapp/src/components/shared-demo",
         "packages/athena-webapp/src/lib/errors/sharedDemoDenialObserver.ts",
         "packages/athena-webapp/src/routes/demo.tsx",

@@ -9,7 +9,19 @@ import {
   type QueryCtx,
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
+import {
+  dismissIntelligenceArtifactOperationDefinition,
+} from "../operationAdmission/domains/platform_definitions";
+import {
+  latestArtifactBySubjectReadDefinition,
+  latestArtifactReadDefinition,
+  latestRunDebugReadDefinition,
+} from "../operationAdmission/domains/platform_readDefinitions";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import { requireStoreFullAdminAccess } from "../stockOps/access";
 import {
   intelligenceArtifactKindValidator,
@@ -24,6 +36,34 @@ import {
 import { assertArtifactTransition, assertRunTransition } from "./lifecycle";
 
 const payloadValidator = v.record(v.string(), v.any());
+
+type LatestArtifactArgs = {
+  capability: string;
+  includeDismissed?: boolean;
+  kind: Doc<"intelligenceArtifact">["kind"];
+  storeId: Id<"store">;
+};
+
+type LatestArtifactBySubjectArgs = {
+  includeDismissed?: boolean;
+  kind: Doc<"intelligenceArtifact">["kind"];
+  storeId: Id<"store">;
+  subjectId: string;
+  subjectTable: string;
+};
+
+type LatestRunDebugArgs = {
+  capability: string;
+  sourceRefId?: string;
+  sourceRefTable?: string;
+  storeId: Id<"store">;
+};
+
+type DismissArtifactArgs = {
+  actorRef?: string;
+  artifactId: Id<"intelligenceArtifact">;
+  reason?: string;
+};
 export const INTELLIGENCE_ACTIVE_RUN_STALE_AFTER_MS = 2 * 60 * 1000;
 export const INTELLIGENCE_RUNNING_RUN_STALE_AFTER_MS =
   INTELLIGENCE_ACTIVE_RUN_STALE_AFTER_MS + 30 * 1000;
@@ -471,29 +511,32 @@ export const latestArtifact = query({
     kind: intelligenceArtifactKindValidator,
     includeDismissed: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
-    await requireStoreFullAdminAccess(ctx, args.storeId);
+  handler: admitPublicQuery(
+    latestArtifactReadDefinition,
+    async (ctx, args: LatestArtifactArgs) => {
+      await requireStoreFullAdminAccess(ctx, args.storeId);
 
-    const statuses: Array<Doc<"intelligenceArtifact">["status"]> =
-      args.includeDismissed === true ? ["ready", "stale", "dismissed"] : ["ready", "stale"];
+      const statuses: Array<Doc<"intelligenceArtifact">["status"]> =
+        args.includeDismissed === true ? ["ready", "stale", "dismissed"] : ["ready", "stale"];
 
-    // eslint-disable-next-line @convex-dev/no-collect-in-query -- Panel query returns latest artifact for one store/capability.
-    const artifacts = await ctx.db
-      .query("intelligenceArtifact")
-      .withIndex("by_storeId_capability_status", (q) =>
-        q.eq("storeId", args.storeId).eq("capability", args.capability),
-      )
-      .collect();
-
-    return (
-      artifacts
-        .filter(
-          (artifact) =>
-            artifact.kind === args.kind && statuses.includes(artifact.status),
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- Panel query returns latest artifact for one store/capability.
+      const artifacts = await ctx.db
+        .query("intelligenceArtifact")
+        .withIndex("by_storeId_capability_status", (q) =>
+          q.eq("storeId", args.storeId).eq("capability", args.capability),
         )
-        .sort((a, b) => b.createdAt - a.createdAt)[0] ?? null
-    );
-  },
+        .collect();
+
+      return (
+        artifacts
+          .filter(
+            (artifact) =>
+              artifact.kind === args.kind && statuses.includes(artifact.status),
+          )
+          .sort((a, b) => b.createdAt - a.createdAt)[0] ?? null
+      );
+    },
+  ),
 });
 
 export const latestArtifactBySubject = query({
@@ -504,35 +547,38 @@ export const latestArtifactBySubject = query({
     subjectId: v.string(),
     includeDismissed: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
-    await requireStoreFullAdminAccess(ctx, args.storeId);
+  handler: admitPublicQuery(
+    latestArtifactBySubjectReadDefinition,
+    async (ctx, args: LatestArtifactBySubjectArgs) => {
+      await requireStoreFullAdminAccess(ctx, args.storeId);
 
-    const statuses: Array<Doc<"intelligenceArtifact">["status"]> =
-      args.includeDismissed === true ? ["ready", "stale", "dismissed"] : ["ready", "stale"];
+      const statuses: Array<Doc<"intelligenceArtifact">["status"]> =
+        args.includeDismissed === true ? ["ready", "stale", "dismissed"] : ["ready", "stale"];
 
-    const artifacts = await Promise.all(
-      statuses.map((status) =>
-        // eslint-disable-next-line @convex-dev/no-collect-in-query -- Subject/status lookup is indexed and bounded to one artifact stream for one insight panel.
-        ctx.db
-          .query("intelligenceArtifact")
-          .withIndex("by_storeId_kind_subject_status", (q) =>
-            q
-              .eq("storeId", args.storeId)
-              .eq("kind", args.kind)
-              .eq("subjectTable", args.subjectTable)
-              .eq("subjectId", args.subjectId)
-              .eq("status", status),
-          )
-          .collect(),
-      ),
-    );
+      const artifacts = await Promise.all(
+        statuses.map((status) =>
+          // eslint-disable-next-line @convex-dev/no-collect-in-query -- Subject/status lookup is indexed and bounded to one artifact stream for one insight panel.
+          ctx.db
+            .query("intelligenceArtifact")
+            .withIndex("by_storeId_kind_subject_status", (q) =>
+              q
+                .eq("storeId", args.storeId)
+                .eq("kind", args.kind)
+                .eq("subjectTable", args.subjectTable)
+                .eq("subjectId", args.subjectId)
+                .eq("status", status),
+            )
+            .collect(),
+        ),
+      );
 
-    return (
-      artifacts
-        .flat()
-        .sort((a, b) => b.createdAt - a.createdAt)[0] ?? null
-    );
-  },
+      return (
+        artifacts
+          .flat()
+          .sort((a, b) => b.createdAt - a.createdAt)[0] ?? null
+      );
+    },
+  ),
 });
 
 export async function getLatestDebugRunBySubject(
@@ -721,34 +767,37 @@ export const latestRunDebug = query({
     sourceRefTable: v.optional(v.string()),
     sourceRefId: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    await requireStoreFullAdminAccess(ctx, args.storeId);
+  handler: admitPublicQuery(
+    latestRunDebugReadDefinition,
+    async (ctx, args: LatestRunDebugArgs) => {
+      await requireStoreFullAdminAccess(ctx, args.storeId);
 
-    const run =
-      args.sourceRefTable && args.sourceRefId
-        ? await getLatestDebugRunBySubject(ctx, args)
-        : await getLatestDebugRunByCapability(ctx, args);
-    if (!run) return null;
+      const run =
+        args.sourceRefTable && args.sourceRefId
+          ? await getLatestDebugRunBySubject(ctx, args)
+          : await getLatestDebugRunByCapability(ctx, args);
+      if (!run) return null;
 
-    const [snapshot, artifact, providerInvocations] = await Promise.all([
-      run.contextSnapshotId
-        ? ctx.db.get("intelligenceContextSnapshot", run.contextSnapshotId)
-        : null,
-      run.artifactId ? ctx.db.get("intelligenceArtifact", run.artifactId) : null,
-      // eslint-disable-next-line @convex-dev/no-collect-in-query -- Provider attempts are bounded to one run for the debug drawer.
-      ctx.db
-        .query("intelligenceProviderInvocation")
-        .withIndex("by_runId", (q) => q.eq("runId", run._id))
-        .collect(),
-    ]);
+      const [snapshot, artifact, providerInvocations] = await Promise.all([
+        run.contextSnapshotId
+          ? ctx.db.get("intelligenceContextSnapshot", run.contextSnapshotId)
+          : null,
+        run.artifactId ? ctx.db.get("intelligenceArtifact", run.artifactId) : null,
+        // eslint-disable-next-line @convex-dev/no-collect-in-query -- Provider attempts are bounded to one run for the debug drawer.
+        ctx.db
+          .query("intelligenceProviderInvocation")
+          .withIndex("by_runId", (q) => q.eq("runId", run._id))
+          .collect(),
+      ]);
 
-    return buildLatestRunDebugPayload({
-      artifact,
-      providerInvocations,
-      run,
-      snapshot,
-    });
-  },
+      return buildLatestRunDebugPayload({
+        artifact,
+        providerInvocations,
+        run,
+        snapshot,
+      });
+    },
+  ),
 });
 
 export const markArtifactStatus = internalMutation({
@@ -775,41 +824,44 @@ export const dismissArtifact = mutation({
     actorRef: v.optional(v.string()),
     reason: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    const artifact = await ctx.db.get("intelligenceArtifact", args.artifactId);
-    if (!artifact) throw new Error("Intelligence artifact not found");
-    if (!artifact.storeId) throw new Error("Store-scoped artifact required");
-    const { athenaUser } = await requireStoreFullAdminAccess(ctx, artifact.storeId);
-    if (artifact.status !== "dismissed") {
-      assertArtifactTransition(artifact.status, "dismissed");
-    }
+  handler: admitPublicMutation(
+    dismissIntelligenceArtifactOperationDefinition,
+    async (ctx, args: DismissArtifactArgs) => {
+      const artifact = await ctx.db.get("intelligenceArtifact", args.artifactId);
+      if (!artifact) throw new Error("Intelligence artifact not found");
+      if (!artifact.storeId) throw new Error("Store-scoped artifact required");
+      const { athenaUser } = await requireStoreFullAdminAccess(ctx, artifact.storeId);
+      if (artifact.status !== "dismissed") {
+        assertArtifactTransition(artifact.status, "dismissed");
+      }
 
-    const now = Date.now();
-    await ctx.db.patch("intelligenceArtifact", args.artifactId, {
-      status: "dismissed",
-      dismissedAt: now,
-      dismissedByActorRef: args.actorRef,
-      updatedAt: now,
-    });
+      const now = Date.now();
+      await ctx.db.patch("intelligenceArtifact", args.artifactId, {
+        status: "dismissed",
+        dismissedAt: now,
+        dismissedByActorRef: args.actorRef,
+        updatedAt: now,
+      });
 
-    await recordOperationalEventWithCtx(ctx, {
-      storeId: artifact.storeId,
-      organizationId: artifact.organizationId,
-      eventType: "intelligence_artifact.dismissed",
-      subjectType: "intelligenceArtifact",
-      subjectId: String(artifact._id),
-      subjectLabel: artifact.title ?? artifact.capability,
-      reason: args.reason,
-      message: "Athena insight dismissed.",
-      metadata: {
-        capability: artifact.capability,
-        kind: artifact.kind,
-        runId: String(artifact.runId),
-      },
-      actorUserId: athenaUser._id,
-      actorType: "human",
-    });
+      await recordOperationalEventWithCtx(ctx, {
+        storeId: artifact.storeId,
+        organizationId: artifact.organizationId,
+        eventType: "intelligence_artifact.dismissed",
+        subjectType: "intelligenceArtifact",
+        subjectId: String(artifact._id),
+        subjectLabel: artifact.title ?? artifact.capability,
+        reason: args.reason,
+        message: "Athena insight dismissed.",
+        metadata: {
+          capability: artifact.capability,
+          kind: artifact.kind,
+          runId: String(artifact.runId),
+        },
+        actorUserId: athenaUser._id,
+        actorType: "human",
+      });
 
-    return { artifactId: args.artifactId, status: "dismissed" as const };
-  },
+      return { artifactId: args.artifactId, status: "dismissed" as const };
+    },
+  ),
 });

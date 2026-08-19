@@ -13,6 +13,8 @@ import {
   SHARED_DEMO_TICKET_DURATION_MS,
   SHARED_DEMO_BASELINE_VERSION,
 } from "./config";
+import { issueSharedDemoTicketOperationDefinition } from "../operationAdmission/domains/platform_definitions";
+import { admitPublicAction } from "../platform/operationAdmission";
 import { createOpaqueTicket, hashSharedDemoTicket } from "./crypto";
 
 const storeTicketRef = (internal as any).sharedDemo.admission.storeSharedDemoTicket;
@@ -73,19 +75,36 @@ export async function consumeSharedDemoTicketWithCtx(
   return { authUserId: ticket.authUserId };
 }
 
+/**
+ * The demo's front door, so every actor kind is admitted: the visitor who opens
+ * it has no identity at all (`public: "admit"`), and a signed-in Athena user or
+ * a visitor who already holds a demo session may open it too. `demo.lifecycle`
+ * is the demo's own capability and carries no restore fence here on purpose —
+ * the fence protects demo store DATA, while this call only mints an admission
+ * ticket. The real preconditions stay where they were, inside
+ * `storeSharedDemoTicket`: a current provisioned foundation, the mint rate
+ * budget, and the configured owner/organization/store triple.
+ */
 export const issueSharedDemoTicket = action({
   args: {},
   returns: v.object({ ticket: v.string(), expiresAt: v.number() }),
-  handler: async (ctx) => {
-    const config = readRuntimeSharedDemoConfig();
-    const now = Date.now();
-    const ticket = createOpaqueTicket();
-    const ticketHash = await hashSharedDemoTicket(ticket);
-    const expiresAt = now + SHARED_DEMO_TICKET_DURATION_MS;
+  handler: admitPublicAction(
+    issueSharedDemoTicketOperationDefinition,
+    async (ctx) => {
+      const config = readRuntimeSharedDemoConfig();
+      const now = Date.now();
+      const ticket = createOpaqueTicket();
+      const ticketHash = await hashSharedDemoTicket(ticket);
+      const expiresAt = now + SHARED_DEMO_TICKET_DURATION_MS;
 
-    await ctx.runMutation(storeTicketRef, { ...config, expiresAt, ticketHash });
-    return { ticket, expiresAt };
-  },
+      await ctx.runMutation(storeTicketRef, {
+        ...config,
+        expiresAt,
+        ticketHash,
+      });
+      return { ticket, expiresAt };
+    },
+  ),
 });
 
 export const consumeSharedDemoExchangeBudget = internalMutation({

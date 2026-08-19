@@ -38,13 +38,24 @@ import {
   isToleratedIncompleteDailyCloseCompletionSource,
 } from "./dailyClose";
 import { requireStoreFullAdminAccess } from "../stockOps/access";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import {
   getEodAutoCompletePolicyReadDefinition,
   getOpeningAutoStartPolicyReadDefinition,
   getRegisterCloseoutApprovalPolicyReadDefinition,
 } from "../operationAdmission/readDefinitions";
-import type { OperationQueryCtx } from "../operationAdmission/types";
+import {
+  updateEodAutoCompletePolicyOperationDefinition,
+  updateOpeningAutoStartPolicyOperationDefinition,
+  updateRegisterCloseoutApprovalPolicyOperationDefinition,
+} from "../operationAdmission/domains/operations_definitions";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
 import { getCashControlsConfig } from "./registerSessionCloseoutGate";
 import {
   getStoreScheduleContextForStoreAtWithCtx,
@@ -2346,7 +2357,7 @@ export const getOpeningAutoStartPolicy = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getOpeningAutoStartPolicyReadDefinition,
     async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) =>
       getOpeningAutoStartPolicyForApi(ctx, args),
@@ -2357,7 +2368,7 @@ export const getEodAutoCompletePolicy = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getEodAutoCompletePolicyReadDefinition,
     async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) =>
       getEodAutoCompletePolicyForApi(ctx, args),
@@ -2379,7 +2390,23 @@ export const updateOpeningAutoStartPolicy = mutation({
     operatingTimezoneOffsetMinutes: v.optional(v.number()),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    updateOpeningAutoStartPolicyOperationDefinition,
+    updateOpeningAutoStartPolicyPublicHandler,
+  ),
+});
+
+async function updateOpeningAutoStartPolicyPublicHandler(
+  ctx: OperationMutationCtx,
+  args: {
+    localStartMinutes: number;
+    mode: "disabled" | "dry_run" | "enabled";
+    openingBlockerHandling: "skip_when_blocked" | "start_with_manager_review";
+    operatingTimezoneOffsetMinutes?: number;
+    storeId: Id<"store">;
+  },
+) {
+  {
     const { athenaUser, store } = await requireStoreFullAdminAccess(
       ctx,
       args.storeId,
@@ -2412,8 +2439,8 @@ export const updateOpeningAutoStartPolicy = mutation({
       paused: Boolean(policy.paused),
       policyVersion: policy.policyVersion,
     };
-  },
-});
+  }
+}
 
 export const updateEodAutoCompletePolicy = mutation({
   args: {
@@ -2430,7 +2457,26 @@ export const updateEodAutoCompletePolicy = mutation({
     operatingTimezoneOffsetMinutes: v.optional(v.number()),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    updateEodAutoCompletePolicyOperationDefinition,
+    updateEodAutoCompletePolicyPublicHandler,
+  ),
+});
+
+async function updateEodAutoCompletePolicyPublicHandler(
+  ctx: OperationMutationCtx,
+  args: {
+    cleanDayAutoCompleteEnabled: boolean;
+    localCompletionWindowMinutes: number;
+    maxAbsoluteCashVariance: number;
+    maxVoidedSaleCount: number;
+    maxVoidedSaleTotal: number;
+    mode: "disabled" | "dry_run" | "enabled";
+    operatingTimezoneOffsetMinutes?: number;
+    storeId: Id<"store">;
+  },
+) {
+  {
     const { athenaUser, store } = await requireStoreFullAdminAccess(
       ctx,
       args.storeId,
@@ -2466,8 +2512,8 @@ export const updateEodAutoCompletePolicy = mutation({
       paused: Boolean(policy.paused),
       policyVersion: policy.policyVersion,
     };
-  },
-});
+  }
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -2481,7 +2527,7 @@ export const getRegisterCloseoutApprovalPolicy = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getRegisterCloseoutApprovalPolicyReadDefinition,
     async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) => {
       const { store } = await requireAutomationPolicyReadAccess(
@@ -2506,7 +2552,20 @@ export const updateRegisterCloseoutApprovalPolicy = mutation({
     storeId: v.id("store"),
     varianceApprovalThreshold: v.number(),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    updateRegisterCloseoutApprovalPolicyOperationDefinition,
+    updateRegisterCloseoutApprovalPolicyPublicHandler,
+  ),
+});
+
+async function updateRegisterCloseoutApprovalPolicyPublicHandler(
+  ctx: OperationMutationCtx,
+  args: {
+    storeId: Id<"store">;
+    varianceApprovalThreshold: number;
+  },
+) {
+  {
     const { store } = await requireStoreFullAdminAccess(ctx, args.storeId);
     if (
       !Number.isFinite(args.varianceApprovalThreshold) ||
@@ -2547,5 +2606,5 @@ export const updateRegisterCloseoutApprovalPolicy = mutation({
           : false,
       varianceApprovalThreshold: threshold,
     };
-  },
-});
+  }
+}

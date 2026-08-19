@@ -20,6 +20,19 @@ vi.mock("./access", () => ({
 }));
 import { requireReportsStoreAccess } from "./access";
 
+/**
+ * These suites are about projections, so both boundaries the exported query
+ * now crosses are stubbed: the reports gate above, and the admission rail's
+ * identity port below (convex-test has no auth provider, so an unstubbed
+ * identity makes every call an anonymous denial). The rail's own behaviour on
+ * these queries is covered end to end in `reportsAdmission.test.ts`.
+ */
+vi.mock("../lib/athenaUserAuth", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/athenaUserAuth")>()),
+  requireAuthenticatedAthenaUserWithCtx: vi.fn(),
+}));
+import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
+
 function handlerOf(fn: unknown): (...args: any[]) => Promise<any> {
   return (fn as unknown as { _handler: (...args: any[]) => Promise<any> })
     ._handler;
@@ -27,6 +40,9 @@ function handlerOf(fn: unknown): (...args: any[]) => Promise<any> {
 
 beforeEach(() => {
   vi.mocked(requireReportsStoreAccess).mockResolvedValue({} as never);
+  vi.mocked(requireAuthenticatedAthenaUserWithCtx).mockResolvedValue({
+    _id: "athena-user" as Id<"athenaUser">,
+  } as never);
 });
 
 const dayFlags = {

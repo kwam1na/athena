@@ -10,7 +10,7 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import { admitPublicQuery } from "../platform/operationAdmission";
 import {
   getSkuActivityForProductSkuReadDefinition,
   getUntrustedSkuSaleEvidenceReadDefinition,
@@ -1180,7 +1180,7 @@ export const getSkuActivityForProductSku = query({
     productSkuId: v.optional(v.id("productSku")),
     sku: v.optional(v.string()),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getSkuActivityForProductSkuReadDefinition,
     async (
       ctx: OperationQueryCtx,
@@ -1227,7 +1227,7 @@ export const getUntrustedSkuSaleEvidence = query({
       }),
     ),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getUntrustedSkuSaleEvidenceReadDefinition,
     async (
       ctx: OperationQueryCtx,

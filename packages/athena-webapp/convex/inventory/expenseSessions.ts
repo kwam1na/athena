@@ -23,6 +23,31 @@ import {
   createExpenseSessionTraceRecorder,
   type ExpenseSessionTraceStage,
 } from "../pos/application/commands/expenseSessionTracing";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
+import {
+  bindExpenseSessionToRegisterSessionOperationDefinition,
+  completeExpenseSessionOperationDefinition,
+  createExpenseSessionOperationDefinition,
+  holdExpenseSessionOperationDefinition,
+  releaseExpenseSessionItemsOperationDefinition,
+  resumeExpenseSessionOperationDefinition,
+  updateExpenseSessionOperationDefinition,
+  voidExpenseSessionOperationDefinition,
+} from "../operationAdmission/domains/inventoryIdentity_definitions";
+import {
+  getActiveExpenseSessionReadDefinition,
+  getExpenseSessionByIdReadDefinition,
+  listStoreExpenseSessionsReadDefinition,
+} from "../operationAdmission/domains/inventoryIdentity_readDefinitions";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
+
+type ExpenseSessionArg = { sessionId: Id<"expenseSession"> };
 
 const MAX_EXPENSE_SESSION_ITEMS = 200;
 const EXPENSE_SESSION_QUERY_CANDIDATE_LIMIT = 200;
@@ -191,7 +216,18 @@ export const getStoreExpenseSessions = query({
       cartItems: v.array(v.any()),
     }),
   ),
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    listStoreExpenseSessionsReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: {
+        storeId: Id<"store">;
+        terminalId?: Id<"posTerminal">;
+        staffProfileId?: Id<"staffProfile">;
+        status?: string;
+        limit?: number;
+      },
+    ) => {
     const { storeId, status, limit = 50 } = args;
     const boundedLimit = Math.min(limit, EXPENSE_SESSION_QUERY_CANDIDATE_LIMIT);
 
@@ -274,7 +310,8 @@ export const getStoreExpenseSessions = query({
     );
 
     return enrichedSessions;
-  },
+    },
+  ),
 });
 
 // Get a specific expense session by ID
@@ -303,17 +340,20 @@ export const getExpenseSessionById = query({
     }),
     v.null(),
   ),
-  handler: async (ctx, args) => {
-    const session = await ctx.db.get("expenseSession", args.sessionId);
-    if (!session) return null;
+  handler: admitPublicQuery(
+    getExpenseSessionByIdReadDefinition,
+    async (ctx: OperationQueryCtx, args: ExpenseSessionArg) => {
+      const session = await ctx.db.get("expenseSession", args.sessionId);
+      if (!session) return null;
 
-    const cartItems = await loadExpenseSessionItems(ctx, session._id);
+      const cartItems = await loadExpenseSessionItems(ctx, session._id);
 
-    return {
-      ...session,
-      cartItems,
-    };
-  },
+      return {
+        ...session,
+        cartItems,
+      };
+    },
+  ),
 });
 
 // Create a new expense session
@@ -326,15 +366,27 @@ export const createExpenseSession = mutation({
     registerSessionId: v.optional(v.id("registerSession")),
   },
   returns: commandResultValidator(expenseSessionOperationValidator),
-  handler: async (ctx, args) => {
-    const result = await runStartExpenseSessionCommand(ctx, args);
+  handler: admitPublicMutation(
+    createExpenseSessionOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        storeId: Id<"store">;
+        terminalId: Id<"posTerminal">;
+        staffProfileId: Id<"staffProfile">;
+        registerNumber?: string;
+        registerSessionId?: Id<"registerSession">;
+      },
+    ) => {
+      const result = await runStartExpenseSessionCommand(ctx, args);
 
-    if (result.status === "ok") {
-      return ok(result.data);
-    }
+      if (result.status === "ok") {
+        return ok(result.data);
+      }
 
-    return userErrorFromExpenseSessionCommandFailure(result);
-  },
+      return userErrorFromExpenseSessionCommandFailure(result);
+    },
+  ),
 });
 
 export const bindExpenseSessionToRegisterSession = mutation({
@@ -344,18 +396,28 @@ export const bindExpenseSessionToRegisterSession = mutation({
     registerSessionId: v.id("registerSession"),
   },
   returns: commandResultValidator(expenseSessionOperationValidator),
-  handler: async (ctx, args) => {
-    const result = await runBindExpenseSessionToRegisterSessionCommand(
-      ctx,
-      args,
-    );
+  handler: admitPublicMutation(
+    bindExpenseSessionToRegisterSessionOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        sessionId: Id<"expenseSession">;
+        staffProfileId: Id<"staffProfile">;
+        registerSessionId: Id<"registerSession">;
+      },
+    ) => {
+      const result = await runBindExpenseSessionToRegisterSessionCommand(
+        ctx,
+        args,
+      );
 
-    if (result.status === "ok") {
-      return ok(result.data);
-    }
+      if (result.status === "ok") {
+        return ok(result.data);
+      }
 
-    return userErrorFromExpenseSessionCommandFailure(result);
-  },
+      return userErrorFromExpenseSessionCommandFailure(result);
+    },
+  ),
 });
 
 // Update expense session metadata (notes)
@@ -366,7 +428,16 @@ export const updateExpenseSession = mutation({
     notes: v.optional(v.string()),
   },
   returns: commandResultValidator(expenseSessionOperationValidator),
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    updateExpenseSessionOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        sessionId: Id<"expenseSession">;
+        staffProfileId: Id<"staffProfile">;
+        notes?: string;
+      },
+    ) => {
     const { sessionId, ...updates } = args;
     const now = Date.now();
 
@@ -409,7 +480,8 @@ export const updateExpenseSession = mutation({
     });
 
     return ok({ sessionId, expiresAt });
-  },
+    },
+  ),
 });
 
 // Hold/suspend an expense session
@@ -419,7 +491,15 @@ export const holdExpenseSession = mutation({
     staffProfileId: v.id("staffProfile"),
   },
   returns: commandResultValidator(expenseSessionOperationValidator),
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    holdExpenseSessionOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        sessionId: Id<"expenseSession">;
+        staffProfileId: Id<"staffProfile">;
+      },
+    ) => {
     const now = Date.now();
 
     // Validate session can be modified
@@ -457,7 +537,8 @@ export const holdExpenseSession = mutation({
     });
 
     return ok({ sessionId: args.sessionId, expiresAt: session.expiresAt });
-  },
+    },
+  ),
 });
 
 // Resume a held expense session
@@ -468,15 +549,25 @@ export const resumeExpenseSession = mutation({
     terminalId: v.id("posTerminal"),
   },
   returns: commandResultValidator(expenseSessionOperationValidator),
-  handler: async (ctx, args) => {
-    const result = await runResumeExpenseSessionCommand(ctx, args);
+  handler: admitPublicMutation(
+    resumeExpenseSessionOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        sessionId: Id<"expenseSession">;
+        staffProfileId: Id<"staffProfile">;
+        terminalId: Id<"posTerminal">;
+      },
+    ) => {
+      const result = await runResumeExpenseSessionCommand(ctx, args);
 
-    if (result.status === "ok") {
-      return ok(result.data);
-    }
+      if (result.status === "ok") {
+        return ok(result.data);
+      }
 
-    return userErrorFromExpenseSessionCommandFailure(result);
-  },
+      return userErrorFromExpenseSessionCommandFailure(result);
+    },
+  ),
 });
 
 // Complete an expense session (convert to transaction)
@@ -487,7 +578,16 @@ export const completeExpenseSession = mutation({
     totalValue: v.number(),
   },
   returns: commandResultValidator(completedExpenseSessionValidator),
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    completeExpenseSessionOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        sessionId: Id<"expenseSession">;
+        notes?: string;
+        totalValue: number;
+      },
+    ) => {
     const session = await ctx.db.get("expenseSession", args.sessionId);
     if (!session) {
       return expenseSessionError("Session not found", "not_found");
@@ -540,7 +640,8 @@ export const completeExpenseSession = mutation({
       transactionNumber: transactionResult.data.transactionNumber,
       completedAt: transactionResult.data.completedAt,
     });
-  },
+    },
+  ),
 });
 
 // Void an expense session
@@ -549,7 +650,9 @@ export const voidExpenseSession = mutation({
     sessionId: v.id("expenseSession"),
   },
   returns: commandResultValidator(expenseSessionIdValidator),
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    voidExpenseSessionOperationDefinition,
+    async (ctx: OperationMutationCtx, args: ExpenseSessionArg) => {
     const now = Date.now();
 
     // Get the session
@@ -606,7 +709,8 @@ export const voidExpenseSession = mutation({
     });
 
     return ok({ sessionId: args.sessionId });
-  },
+    },
+  ),
 });
 
 export const releaseExpenseSessionInventoryHoldsAndDeleteItems = mutation({
@@ -614,15 +718,18 @@ export const releaseExpenseSessionInventoryHoldsAndDeleteItems = mutation({
     sessionId: v.id("expenseSession"),
   },
   returns: commandResultValidator(expenseSessionIdValidator),
-  handler: async (ctx, args) => {
-    const result = await runClearExpenseSessionItemsCommand(ctx, args);
+  handler: admitPublicMutation(
+    releaseExpenseSessionItemsOperationDefinition,
+    async (ctx: OperationMutationCtx, args: ExpenseSessionArg) => {
+      const result = await runClearExpenseSessionItemsCommand(ctx, args);
 
-    if (result.status === "ok") {
-      return ok(result.data);
-    }
+      if (result.status === "ok") {
+        return ok(result.data);
+      }
 
-    return userErrorFromExpenseSessionCommandFailure(result);
-  },
+      return userErrorFromExpenseSessionCommandFailure(result);
+    },
+  ),
 });
 
 // Get active expense session for a register/staff profile
@@ -656,7 +763,17 @@ export const getActiveExpenseSession = query({
     }),
     v.null(),
   ),
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getActiveExpenseSessionReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: {
+        storeId: Id<"store">;
+        terminalId: Id<"posTerminal">;
+        staffProfileId: Id<"staffProfile">;
+        registerNumber?: string;
+      },
+    ) => {
     const activeSessions = await ctx.db
       .query("expenseSession")
       .withIndex("by_storeId_status_staffProfileId", (q) =>
@@ -700,7 +817,8 @@ export const getActiveExpenseSession = query({
       ...activeSession,
       cartItems,
     };
-  },
+    },
+  ),
 });
 
 // Legacy cron hook. Expense sessions no longer expire automatically; keep this

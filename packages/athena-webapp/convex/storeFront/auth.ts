@@ -1,14 +1,19 @@
 import { v } from "convex/values";
 import {
-  action,
+  internalAction,
   internalMutation,
-  mutation,
   MutationCtx,
 } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import { sendVerificationCode } from "../mailersend";
 import { internal } from "../_generated/api";
 import { SignJWT } from "jose";
+import {
+  assertCustomerOwnsStore,
+  customerOwnerActorId,
+  customerOwnerValidator,
+  denyCustomerOwnership,
+} from "./customerOwnership";
 
 const expirationTimeInMinutes = 10;
 
@@ -63,15 +68,24 @@ export const requestVerificationCode = internalMutation({
   },
 });
 
-export const verifyCode = mutation({
-  args: {
-    code: v.string(),
-    email: v.string(),
-    storeId: v.id("store"),
-    organizationId: v.id("organization"),
-    userId: v.union(v.id("storeFrontUser"), v.id("guest")),
-  },
-  handler: async (ctx, args) => {
+const verifyCodeArgs = {
+  code: v.string(),
+  email: v.string(),
+  storeId: v.id("store"),
+  organizationId: v.id("organization"),
+  userId: v.union(v.id("storeFrontUser"), v.id("guest")),
+};
+
+type VerifyCodeArgs = {
+  code: string;
+  email: string;
+  storeId: Id<"store">;
+  organizationId: Id<"organization">;
+  userId: Id<"storeFrontUser"> | Id<"guest">;
+};
+
+async function verifyCodeWithCtx(ctx: MutationCtx, args: VerifyCodeArgs) {
+  {
     const verificationCode = await ctx.db
       .query("storeFrontVerificationCode")
       .filter((q) =>
@@ -160,21 +174,47 @@ export const verifyCode = mutation({
       accessToken,
       refreshToken,
     };
+  }
+}
+
+/**
+ * Internal sibling for the `POST /auth/verify` route.
+ *
+ * This IS the pre-auth step, but a shopper still arrives holding a claim — a
+ * guest marker if nothing else — so `owner` is required: the route's rail
+ * always resolves one. The code is only ever accepted for that shopper's own
+ * id and store, so a bearer id for another shopper cannot mint a session here.
+ */
+export const verifyCodeInternal = internalMutation({
+  args: { ...verifyCodeArgs, owner: customerOwnerValidator },
+  handler: async (ctx, { owner, ...args }) => {
+    assertCustomerOwnsStore(owner, args.storeId);
+    if (String(args.userId) !== String(customerOwnerActorId(owner))) {
+      denyCustomerOwnership();
+    }
+    return await verifyCodeWithCtx(ctx, args);
   },
 });
 
-export const sendVerificationCodeViaProvider = action({
-  args: {
-    email: v.string(),
-    firstName: v.optional(v.string()),
-    lastName: v.optional(v.string()),
-    storeId: v.id("store"),
-  },
-  handler: async (ctx, args): Promise<any> => {
-    await ctx.runQuery(
-      (internal as any).sharedDemo.actor.denySharedDemoEffectIfApplicable,
-      {},
-    );
+const sendVerificationCodeViaProviderArgs = {
+  email: v.string(),
+  firstName: v.optional(v.string()),
+  lastName: v.optional(v.string()),
+  storeId: v.id("store"),
+};
+
+type SendVerificationCodeViaProviderArgs = {
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  storeId: Id<"store">;
+};
+
+async function sendVerificationCodeViaProviderWithCtx(
+  ctx: { runMutation: any; runQuery: any },
+  args: SendVerificationCodeViaProviderArgs,
+): Promise<any> {
+  {
     const [data, store] = await Promise.all([
       ctx.runMutation(internal.storeFront.auth.requestVerificationCode, {
         email: args.email,
@@ -225,5 +265,21 @@ export const sendVerificationCodeViaProvider = action({
         message: "Could not send verification code",
       };
     }
+  }
+}
+
+/**
+ * Internal sibling for the `POST /auth/verify` route. `owner` is required for
+ * the same reason as `verifyCodeInternal`: a code may only ever be sent for the
+ * store the admitted claim clamped to.
+ */
+export const sendVerificationCodeViaProviderInternal = internalAction({
+  args: {
+    ...sendVerificationCodeViaProviderArgs,
+    owner: customerOwnerValidator,
+  },
+  handler: async (ctx, { owner, ...args }): Promise<any> => {
+    assertCustomerOwnsStore(owner, args.storeId);
+    return await sendVerificationCodeViaProviderWithCtx(ctx, args);
   },
 });

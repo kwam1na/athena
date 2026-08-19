@@ -6,19 +6,35 @@ import {
   returnItemsToStockOperationDefinition,
   updateOnlineOrderOperationDefinition,
 } from "../operationAdmission/definitions";
-import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import {
   getNewestOnlineOrderReadDefinition,
   getOnlineOrderMetricsReadDefinition,
   getOnlineOrderReadDefinition,
   listOnlineOrdersReadDefinition,
 } from "../operationAdmission/readDefinitions";
+import {
+  createOnlineOrderOperationDefinition,
+  updateOnlineOrderItemsOperationDefinition,
+} from "../operationAdmission/domains/storefrontOperator_definitions";
+import {
+  getOnlineOrderByCheckoutSessionReadDefinition,
+  getOnlineOrderByExternalReferenceReadDefinition,
+  getOnlineOrderItemsReadDefinition,
+  getReturnExchangeOverviewReadDefinition,
+  isDuplicateOnlineOrderReadDefinition,
+  listOnlineOrdersByStoreFrontUserReadDefinition,
+} from "../operationAdmission/domains/storefrontOperator_readDefinitions";
+import {
+  consumeGuestMergeGrant,
+  denyCustomerOwnership,
+} from "./customerOwnership";
 import { requireReadySharedDemoStoreCapabilityIfApplicable } from "../sharedDemo/actor";
 import {
   decideSharedDemoEffect,
-  denySharedDemoAction,
-  requireSharedDemoCapability,
   requireSharedDemoOrderFulfillmentUpdate,
 } from "../sharedDemo/policy";
 import {
@@ -93,6 +109,61 @@ import { recordFacts } from "../reports/ingest";
 import type { NewReportFact } from "../../shared/reportsContract";
 
 const entity = "onlineOrder";
+
+/**
+ * The admitted storefront actor, propagated from an HTTP route into an
+ * internal callee. Internal functions have no `ctx.operationAdmission`, so the
+ * route passes the facts the rail admitted — never anything the client sent.
+ */
+const ownerArg = v.object({
+  guestId: v.optional(v.id("guest")),
+  storeFrontUserId: v.optional(v.id("storeFrontUser")),
+  storeId: v.id("store"),
+});
+
+type OnlineOrderOwner = {
+  guestId?: Id<"guest">;
+  storeFrontUserId?: Id<"storeFrontUser">;
+  storeId: Id<"store">;
+};
+
+/**
+ * Ownership refusals here raise the SHARED `CUSTOMER_OWNERSHIP_DENIED` error,
+ * not a module-local error class.
+ *
+ * The HTTP routes classify refusals with `isCustomerOwnershipDenial`, which
+ * matches on that shared message. A bespoke error class with its own wording
+ * never matched, so every refusal escaped the route's catch and Convex
+ * rendered it as a 500 — a refusal reported as a server fault.
+ */
+function ownerActorId(
+  owner: OnlineOrderOwner,
+): Id<"storeFrontUser"> | Id<"guest"> {
+  const actorId = owner.storeFrontUserId ?? owner.guestId;
+  if (!actorId) {
+    denyCustomerOwnership();
+  }
+  return actorId;
+}
+
+/**
+ * A same-store shopper claim grants nothing beyond "holds this id": a
+ * caller-supplied order must belong to the admitted shopper, in the admitted
+ * store, before its rows are returned.
+ */
+function assertOwnedOrder(
+  order: { storeFrontUserId?: unknown; storeId: Id<"store"> } | null,
+  owner: OnlineOrderOwner,
+) {
+  if (
+    !order ||
+    order.storeId !== owner.storeId ||
+    order.storeFrontUserId !== ownerActorId(owner)
+  ) {
+    denyCustomerOwnership();
+  }
+}
+
 const MAX_ORDER_ITEMS = 200;
 const MAX_ORDERS = 500;
 const MAX_OPERATIONAL_EVENTS = 20;
@@ -635,7 +706,9 @@ export const create = mutation({
     pickupLocation: v.union(v.string(), v.null()),
     paymentMethod: v.optional(paymentMethodSchema),
   },
-  handler: async (ctx, args) => {
+  handler: admitPublicMutation(
+    createOnlineOrderOperationDefinition,
+    async (ctx: OperationMutationCtx, args) => {
     return await createOrderFromCheckoutSession(ctx, {
       checkoutSessionId: args.checkoutSessionId,
       billingDetails: args.billingDetails,
@@ -649,7 +722,8 @@ export const create = mutation({
       pickupLocation: args.pickupLocation,
       paymentMethod: args.paymentMethod,
     });
-  },
+    },
+  ),
 });
 
 export const createInternal = internalMutation({
@@ -706,9 +780,11 @@ export const createFromSession = internalMutation({
   },
 });
 
-export const getAll = query({
-  args: { storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")) },
-  handler: async (ctx, args) => {
+async function listCustomerOrdersWithCtx(
+  ctx: QueryCtx,
+  args: { storeFrontUserId: Id<"storeFrontUser"> | Id<"guest"> },
+) {
+  {
     const orders = await ctx.db
       .query(entity)
       .withIndex("by_storeFrontUserId", (q) =>
@@ -743,21 +819,54 @@ export const getAll = query({
       }),
     );
     return ordersWithItemsAndImages;
+  }
+}
+
+/**
+ * Internal sibling for `GET /orders`. The shopper whose orders are listed is
+ * the admitted actor, so a bearer id can no longer list another shopper's
+ * orders by passing their id.
+ */
+export const getAllForCustomerInternal = internalQuery({
+  args: { owner: ownerArg },
+  handler: async (ctx, args) => {
+    const orders = await listCustomerOrdersWithCtx(ctx, {
+      storeFrontUserId: ownerActorId(args.owner),
+    });
+    return orders.filter((order) => order.storeId === args.owner.storeId);
   },
 });
 
-export const get = query({
+/**
+ * Internal sibling for `GET /orders/:orderId` and the payment-verification
+ * action. When the caller is a storefront shopper the route passes `owner` and
+ * the order must be theirs; backend callers with no shopper claim (the paystack
+ * webhook, `payment:verifyPayment`) omit it.
+ */
+export const getForCustomerInternal = internalQuery({
   args: {
     identifier: v.union(v.id("onlineOrder"), v.string()),
+    owner: v.optional(ownerArg),
   },
-  handler: getOnlineOrderWithCtx,
+  handler: async (ctx, args) => {
+    const order = await getOnlineOrderWithCtx(ctx, {
+      identifier: args.identifier,
+    });
+    // An absent order returns null so the route can answer 404; a PRESENT
+    // order that is not this shopper's is refused, so the route answers 403.
+    // Throwing on null too would have made the route's 404 branch
+    // unreachable — every miss would have read as "Forbidden".
+    if (!order) return null;
+    if (args.owner) assertOwnedOrder(order, args.owner);
+    return order;
+  },
 });
 
 export const getForOperations = query({
   args: {
     identifier: v.union(v.id("onlineOrder"), v.string()),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getOnlineOrderReadDefinition,
     getOnlineOrderWithCtx,
   ),
@@ -956,8 +1065,11 @@ export const getInternal = internalQuery({
 
 export const getByExternalReference = query({
   args: { externalReference: v.string() },
-  handler: (ctx, args) =>
-    findOrderByExternalReference(ctx, args.externalReference),
+  handler: admitPublicQuery(
+    getOnlineOrderByExternalReferenceReadDefinition,
+    (ctx: QueryCtx, args: { externalReference: string }) =>
+      findOrderByExternalReference(ctx, args.externalReference),
+  ),
 });
 
 export const getByExternalTransactionId = internalQuery({
@@ -966,21 +1078,48 @@ export const getByExternalTransactionId = internalQuery({
     findOrderByExternalTransactionId(ctx, args.externalTransactionId),
 });
 
+async function getOrderByCheckoutSessionIdWithCtx(
+  ctx: QueryCtx,
+  args: { checkoutSessionId: Id<"checkoutSession"> },
+) {
+  return await ctx.db
+    .query(entity)
+    .withIndex("by_checkoutSessionId", (q) =>
+      q.eq("checkoutSessionId", args.checkoutSessionId),
+    )
+    .first();
+}
+
 export const getByCheckoutSessionId = query({
   args: { checkoutSessionId: v.id("checkoutSession") },
+  handler: admitPublicQuery(
+    getOnlineOrderByCheckoutSessionReadDefinition,
+    getOrderByCheckoutSessionIdWithCtx,
+  ),
+});
+
+/**
+ * Internal sibling for `POST /checkout/:checkoutSessionId` and the paystack
+ * webhook. A shopper-reached call passes `owner` and the order must be theirs;
+ * the webhook, which carries no shopper claim, omits it.
+ */
+export const getByCheckoutSessionIdInternal = internalQuery({
+  args: {
+    checkoutSessionId: v.id("checkoutSession"),
+    owner: v.optional(ownerArg),
+  },
   handler: async (ctx, args) => {
-    return await ctx.db
-      .query(entity)
-      .withIndex("by_checkoutSessionId", (q) =>
-        q.eq("checkoutSessionId", args.checkoutSessionId),
-      )
-      .first();
+    const order = await getOrderByCheckoutSessionIdWithCtx(ctx, {
+      checkoutSessionId: args.checkoutSessionId,
+    });
+    if (args.owner) assertOwnedOrder(order, args.owner);
+    return order;
   },
 });
 
 export const getAllOnlineOrders = query({
   args: { storeId: v.id("store") },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listOnlineOrdersReadDefinition,
     async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) => {
       const orders = await ctx.db
@@ -1005,17 +1144,23 @@ export const getAllOnlineOrders = query({
 
 export const getAllOnlineOrdersByStoreFrontUserId = query({
   args: { storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")) },
-  handler: async (ctx, args) => {
-    const orders = await ctx.db
-      .query(entity)
-      .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.storeFrontUserId),
-      )
-      .order("desc")
-      .take(MAX_ORDERS);
+  handler: admitPublicQuery(
+    listOnlineOrdersByStoreFrontUserReadDefinition,
+    async (
+      ctx: QueryCtx,
+      args: { storeFrontUserId: Id<"storeFrontUser"> | Id<"guest"> },
+    ) => {
+      const orders = await ctx.db
+        .query(entity)
+        .withIndex("by_storeFrontUserId", (q) =>
+          q.eq("storeFrontUserId", args.storeFrontUserId),
+        )
+        .order("desc")
+        .take(MAX_ORDERS);
 
-    return orders;
-  },
+      return orders;
+    },
+  ),
 });
 
 export const update = mutation({
@@ -1033,14 +1178,20 @@ export const update = mutation({
     ),
   },
   returns: commandResultValidator(v.null()),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     updateOnlineOrderOperationDefinition,
     async (ctx: OperationMutationCtx, args) => {
       try {
         const admittedActor = ctx.operationAdmission.actor;
         const isSharedDemoActor = admittedActor.kind === "shared_demo";
         if (isSharedDemoActor) {
-          requireSharedDemoCapability("orders.fulfill");
+          // The demo CAPABILITY check and the cross-store denial below are the
+          // rail's now: `updateOnlineOrderOperationDefinition` declares
+          // `capability: "orders.fulfill"` and resolves its store scope from
+          // the named order / external reference, so the shared-demo adapter
+          // denies an ungranted capability and a foreign store before this
+          // body runs. What remains here is the fulfillment-status allowlist,
+          // a domain rule no definition field expresses.
           requireSharedDemoOrderFulfillmentUpdate(args.update);
         }
         if (args.orderId) {
@@ -1051,9 +1202,6 @@ export const update = mutation({
               code: "not_found",
               message: "Order not found.",
             });
-          }
-          if (isSharedDemoActor && order.storeId !== admittedActor.storeId) {
-            denySharedDemoAction();
           }
           const accessResult = await requireNormalOrderStoreAccessWithCtx(
             ctx,
@@ -1080,9 +1228,6 @@ export const update = mutation({
               code: "not_found",
               message: "Order not found.",
             });
-          }
-          if (isSharedDemoActor && order.storeId !== admittedActor.storeId) {
-            denySharedDemoAction();
           }
           const accessResult = await requireNormalOrderStoreAccessWithCtx(
             ctx,
@@ -1475,7 +1620,9 @@ export const getReturnExchangeOverview = query({
     ),
     refundTotal: v.number(),
   }),
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getReturnExchangeOverviewReadDefinition,
+    async (ctx: QueryCtx, args: { orderId: Id<"onlineOrder"> }) => {
     const order = await ctx.db.get("onlineOrder", args.orderId);
 
     if (!order) {
@@ -1561,7 +1708,8 @@ export const getReturnExchangeOverview = query({
         )
         .reduce((sum, allocation) => sum + allocation.amount, 0),
     };
-  },
+    },
+  ),
 });
 
 export const processReturnExchange = mutation({
@@ -1607,7 +1755,7 @@ export const processReturnExchange = mutation({
       success: v.boolean(),
     }),
   ),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     processReturnExchangeOperationDefinition,
     async (ctx: OperationMutationCtx, args) => {
       try {
@@ -2175,7 +2323,7 @@ export const returnItemsToStock = mutation({
     externalTransactionId: v.string(),
     onlineOrderItemIds: v.optional(v.array(v.id("onlineOrderItem"))),
   },
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     returnItemsToStockOperationDefinition,
     async (
       ctx: OperationMutationCtx,
@@ -2246,14 +2394,23 @@ export const updateOrderItems = mutation({
     orderItemIds: v.array(v.id("onlineOrderItem")),
     updates: v.record(v.string(), v.any()),
   },
-  handler: async (ctx, args) => {
-    await Promise.all(
-      args.orderItemIds.map(async (itemId) => {
-        await ctx.db.patch("onlineOrderItem", itemId, args.updates);
-      }),
-    );
-    return true;
-  },
+  handler: admitPublicMutation(
+    updateOnlineOrderItemsOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        orderItemIds: Id<"onlineOrderItem">[];
+        updates: Record<string, any>;
+      },
+    ) => {
+      await Promise.all(
+        args.orderItemIds.map(async (itemId) => {
+          await ctx.db.patch("onlineOrderItem", itemId, args.updates);
+        }),
+      );
+      return true;
+    },
+  ),
 });
 
 export const updateOrderItemsInternal = internalMutation({
@@ -2273,7 +2430,7 @@ export const updateOrderItemsInternal = internalMutation({
 
 export const returnAllItemsToStock = mutation({
   args: { orderId: v.id("onlineOrder") },
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     returnAllItemsToStockOperationDefinition,
     async (ctx: OperationMutationCtx, args: { orderId: Id<"onlineOrder"> }) => {
       const order = await ctx.db.get("onlineOrder", args.orderId);
@@ -2294,7 +2451,7 @@ export const returnAllItemsToStockInternal = internalMutation({
 
 export const newOrder = query({
   args: { storeId: v.id("store") },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getNewestOnlineOrderReadDefinition,
     async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) => {
       const order = await ctx.db
@@ -2310,22 +2467,24 @@ export const newOrder = query({
 
 export const getOrderItems = query({
   args: { orderId: v.id("onlineOrder") },
-  handler: async (ctx, args) => {
-    const items = await ctx.db
-      .query("onlineOrderItem")
-      .filter((q) => q.eq(q.field("orderId"), args.orderId))
-      .collect();
+  handler: admitPublicQuery(
+    getOnlineOrderItemsReadDefinition,
+    async (ctx: QueryCtx, args: { orderId: Id<"onlineOrder"> }) => {
+      const items = await ctx.db
+        .query("onlineOrderItem")
+        .filter((q) => q.eq(q.field("orderId"), args.orderId))
+        .collect();
 
-    return items;
-  },
+      return items;
+    },
+  ),
 });
 
-export const updateOwner = mutation({
-  args: {
-    currentOwner: v.id("guest"),
-    newOwner: v.id("storeFrontUser"),
-  },
-  handler: async (ctx, args) => {
+async function updateOnlineOrderOwnerWithCtx(
+  ctx: MutationCtx,
+  args: { currentOwner: Id<"guest">; newOwner: Id<"storeFrontUser"> },
+) {
+  {
     const orders = await ctx.db
       .query(entity)
       .filter((q) => q.eq(q.field("storeFrontUserId"), args.currentOwner))
@@ -2361,6 +2520,43 @@ export const updateOwner = mutation({
     console.info("successfully updated owner for orders");
 
     return true;
+  }
+}
+
+/**
+ * Internal sibling for `POST /orders/owner`. The shopper the orders move TO is
+ * the admitted actor, and the guest session being re-owned must carry a
+ * SERVER-ISSUED MERGE GRANT for that account — written onto the guest row by
+ * `POST /auth/verify` after it authenticated the shopper.
+ *
+ * Proving only that the guest row shared the admitted store let any signed-in
+ * shopper absorb a stranger's order history, with its delivery addresses and
+ * contact details, by posting that stranger's guest id. The round after that
+ * compared the posted id against the request's own `guest_id` cookie, which
+ * fixed nothing: a cookie is caller-supplied, so both sides of that comparison
+ * came from the same request. Authorization now comes off the row, and the
+ * caller presents no evidence at all. See `customerOwnership.ts`.
+ */
+export const updateOwnerInternal = internalMutation({
+  args: {
+    currentOwner: v.id("guest"),
+    owner: ownerArg,
+  },
+  handler: async (ctx, args) => {
+    const { owner } = args;
+    if (!owner.storeFrontUserId) {
+      denyCustomerOwnership();
+    }
+    // Single-use; consumed inside the same transaction as the merge.
+    await consumeGuestMergeGrant(ctx, {
+      guestId: args.currentOwner,
+      owner,
+      kind: "onlineOrder",
+    });
+    return await updateOnlineOrderOwnerWithCtx(ctx, {
+      currentOwner: args.currentOwner,
+      newOwner: owner.storeFrontUserId,
+    });
   },
 });
 
@@ -2368,21 +2564,24 @@ export const isDuplicateOrder = query({
   args: {
     id: v.id("onlineOrder"),
   },
-  handler: async (ctx, args) => {
-    const order = await ctx.db.get("onlineOrder", args.id);
-    if (!order) {
-      return false;
-    }
+  handler: admitPublicQuery(
+    isDuplicateOnlineOrderReadDefinition,
+    async (ctx: QueryCtx, args: { id: Id<"onlineOrder"> }) => {
+      const order = await ctx.db.get("onlineOrder", args.id);
+      if (!order) {
+        return false;
+      }
 
-    const orders = await ctx.db
-      .query(entity)
-      .filter((q) =>
-        q.eq(q.field("externalReference"), order.externalReference),
-      )
-      .collect();
+      const orders = await ctx.db
+        .query(entity)
+        .filter((q) =>
+          q.eq(q.field("externalReference"), order.externalReference),
+        )
+        .collect();
 
-    return orders.length > 1;
-  },
+      return orders.length > 1;
+    },
+  ),
 });
 
 export const getOrderMetrics = query({
@@ -2401,7 +2600,7 @@ export const getOrderMetrics = query({
     totalDiscounts: v.number(),
     netRevenue: v.number(),
   }),
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getOnlineOrderMetricsReadDefinition,
     async (
       ctx: OperationQueryCtx,

@@ -2,6 +2,25 @@ import { query, QueryCtx } from "../_generated/server";
 import { v } from "convex/values";
 import { Doc, Id } from "../_generated/dataModel";
 import {
+  getCustomerBehaviorSummaryReadDefinition,
+  getCustomerBehaviorTimelineReadDefinition,
+  getCustomerObservabilityTimelineReadDefinition,
+} from "../operationAdmission/domains/storefrontCustomer_readDefinitions";
+import { admitPublicQuery } from "../platform/operationAdmission";
+
+type CustomerTimelineRange = "24h" | "7d" | "30d" | "all";
+
+type CustomerTimelineArgs = {
+  userId: Id<"storeFrontUser"> | Id<"guest">;
+  limit?: number;
+  timeRange?: CustomerTimelineRange;
+};
+
+type CustomerSummaryArgs = {
+  userId: Id<"storeFrontUser"> | Id<"guest">;
+  timeRange?: CustomerTimelineRange;
+};
+import {
   buildCustomerObservabilityTimeline,
   STOREFRONT_OBSERVABILITY_ACTION,
 } from "./customerObservabilityTimelineData";
@@ -242,7 +261,9 @@ export const getCustomerBehaviorTimeline = query({
       ),
     })
   ),
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getCustomerBehaviorTimelineReadDefinition,
+    async (ctx, args: CustomerTimelineArgs) => {
     const { userId, limit = 50, timeRange = "30d" } = args;
 
     // Calculate time filter
@@ -367,6 +388,7 @@ export const getCustomerBehaviorTimeline = query({
 
     return enrichedAnalytics;
   },
+  ),
 });
 
 export const getCustomerBehaviorSummary = query({
@@ -391,7 +413,9 @@ export const getCustomerBehaviorSummary = query({
     }),
     lastActiveTime: v.optional(v.number()),
   }),
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getCustomerBehaviorSummaryReadDefinition,
+    async (ctx, args: CustomerSummaryArgs) => {
     const { userId, timeRange = "30d" } = args;
 
     // Calculate time filter (same logic as above)
@@ -470,6 +494,7 @@ export const getCustomerBehaviorSummary = query({
       lastActiveTime,
     };
   },
+  ),
 });
 
 export const getCustomerObservabilityTimeline = query({
@@ -543,7 +568,9 @@ export const getCustomerObservabilityTimeline = query({
       }),
     ),
   }),
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    getCustomerObservabilityTimelineReadDefinition,
+    async (ctx, args: CustomerTimelineArgs) => {
     const { userId, limit = 100, timeRange = "30d" } = args;
     const timeFilter = getTimeFilterForRange(timeRange);
 
@@ -601,4 +628,5 @@ export const getCustomerObservabilityTimeline = query({
       events: timeline.events.slice(0, limit),
     };
   },
+  ),
 });

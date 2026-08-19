@@ -5,6 +5,12 @@ import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import { action } from "../_generated/server";
 import { commandResultValidator } from "../lib/commandResultValidators";
+import type { Id } from "../_generated/dataModel";
+import {
+  remoteAssistRequestRuntimeCredentialOperationDefinition,
+  remoteAssistRequestSupportCredentialOperationDefinition,
+} from "../operationAdmission/domains/platform_definitions";
+import { admitPublicAction } from "../platform/operationAdmission";
 import { type CommandResult, userError } from "../../shared/commandResult";
 // eslint-disable-next-line @convex-dev/import-wrong-runtime -- this public action is explicitly Node-runtime and owns the provider SDK boundary.
 import { createRemoteAssistTransportProvider } from "./infrastructure/transport/createRemoteAssistTransportProvider";
@@ -34,22 +40,38 @@ const transportCredentialValidator = v.object({
 
 const transportInternal: any = (internal as any).remoteAssist.transportInternal;
 
+type RequestSupportCredentialArgs = {
+  sessionId: Id<"remoteAssistSession">;
+};
+
+type RequestRuntimeCredentialArgs = {
+  sessionId: Id<"remoteAssistSession">;
+  storeId: Id<"store">;
+  syncSecretHash: string;
+  terminalId: Id<"posTerminal">;
+};
+
 export const requestSupportCredential = action({
   args: {
     sessionId: v.id("remoteAssistSession"),
   },
   returns: commandResultValidator(transportCredentialValidator),
-  handler: async (ctx, args) => {
-    const prepared = await ctx.runMutation(
-      transportInternal.prepareSupportCredential,
-      args,
-    );
-    if (prepared.kind !== "ok") {
-      return prepared;
-    }
+  // Support joins as a signed-in full admin, so the definition denies `public`
+  // and the internal mutation still re-proves org membership.
+  handler: admitPublicAction(
+    remoteAssistRequestSupportCredentialOperationDefinition,
+    async (ctx, args: RequestSupportCredentialArgs) => {
+      const prepared = await ctx.runMutation(
+        transportInternal.prepareSupportCredential,
+        args,
+      );
+      if (prepared.kind !== "ok") {
+        return prepared;
+      }
 
-    return issueCredential(prepared.data);
-  },
+      return issueCredential(prepared.data);
+    },
+  ),
 });
 
 export const requestRuntimeCredential = action({
@@ -60,17 +82,24 @@ export const requestRuntimeCredential = action({
     terminalId: v.id("posTerminal"),
   },
   returns: commandResultValidator(transportCredentialValidator),
-  handler: async (ctx, args) => {
-    const prepared = await ctx.runMutation(
-      transportInternal.prepareRuntimeCredential,
-      args,
-    );
-    if (prepared.kind !== "ok") {
-      return prepared;
-    }
+  // The POS runtime authenticates with a terminal sync-secret proof and carries
+  // no Athena session, so this one admits `public`; the proof is re-checked
+  // against the terminal row inside `prepareRuntimeCredential`, which is where
+  // the real boundary has always been.
+  handler: admitPublicAction(
+    remoteAssistRequestRuntimeCredentialOperationDefinition,
+    async (ctx, args: RequestRuntimeCredentialArgs) => {
+      const prepared = await ctx.runMutation(
+        transportInternal.prepareRuntimeCredential,
+        args,
+      );
+      if (prepared.kind !== "ok") {
+        return prepared;
+      }
 
-    return issueCredential(prepared.data);
-  },
+      return issueCredential(prepared.data);
+    },
+  ),
 });
 
 type TransportCredentialReturn = {

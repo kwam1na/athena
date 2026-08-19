@@ -13,6 +13,15 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
 } from "../lib/athenaUserAuth";
 import { ok, userError } from "../../shared/commandResult";
+import {
+  endManagerElevationOperationDefinition,
+  startManagerElevationOperationDefinition,
+} from "../operationAdmission/domains/operations_definitions";
+import { getActiveManagerElevationReadDefinition } from "../operationAdmission/domains/operations_readDefinitions";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import { authenticateStaffCredentialWithCtx } from "./staffCredentials";
 import { recordOperationalEventWithCtx } from "./operationalEvents";
 
@@ -341,18 +350,24 @@ export const getActiveManagerElevation = query({
     storeId: v.id("store"),
     terminalId: v.id("posTerminal"),
   },
-  handler: async (ctx, args) => {
-    const account = await getAuthenticatedAthenaUserWithCtx(ctx);
-    if (!account) {
-      return null;
-    }
+  handler: admitPublicQuery(
+    getActiveManagerElevationReadDefinition,
+    async (
+      ctx,
+      args: { storeId: Id<"store">; terminalId: Id<"posTerminal"> },
+    ) => {
+      const account = await getAuthenticatedAthenaUserWithCtx(ctx);
+      if (!account) {
+        return null;
+      }
 
-    return getActiveManagerElevationWithCtx(ctx, {
-      accountId: account._id,
-      storeId: args.storeId,
-      terminalId: args.terminalId,
-    });
-  },
+      return getActiveManagerElevationWithCtx(ctx, {
+        accountId: account._id,
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+      });
+    },
+  ),
 });
 
 export const startManagerElevation = mutation({
@@ -364,14 +379,26 @@ export const startManagerElevation = mutation({
     username: v.string(),
   },
   returns: commandResultValidator(v.any()),
-  handler: async (ctx, args) => {
-    const account = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  handler: admitPublicMutation(
+    startManagerElevationOperationDefinition,
+    async (
+      ctx,
+      args: {
+        pinHash: string;
+        reason?: string;
+        storeId: Id<"store">;
+        terminalId: Id<"posTerminal">;
+        username: string;
+      },
+    ) => {
+      const account = await requireAuthenticatedAthenaUserWithCtx(ctx);
 
-    return startManagerElevationWithCtx(ctx, {
-      accountId: account._id,
-      ...args,
-    });
-  },
+      return startManagerElevationWithCtx(ctx, {
+        accountId: account._id,
+        ...args,
+      });
+    },
+  ),
 });
 
 export const endManagerElevation = mutation({
@@ -381,12 +408,22 @@ export const endManagerElevation = mutation({
     terminalId: v.id("posTerminal"),
   },
   returns: commandResultValidator(v.any()),
-  handler: async (ctx, args) => {
-    const account = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  handler: admitPublicMutation(
+    endManagerElevationOperationDefinition,
+    async (
+      ctx,
+      args: {
+        elevationId: Id<"managerElevation">;
+        storeId: Id<"store">;
+        terminalId: Id<"posTerminal">;
+      },
+    ) => {
+      const account = await requireAuthenticatedAthenaUserWithCtx(ctx);
 
-    return endManagerElevationWithCtx(ctx, {
-      accountId: account._id,
-      ...args,
-    });
-  },
+      return endManagerElevationWithCtx(ctx, {
+        accountId: account._id,
+        ...args,
+      });
+    },
+  ),
 });

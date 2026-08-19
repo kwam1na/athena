@@ -9,8 +9,11 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { submitStockAdjustmentBatchOperationDefinition } from "../operationAdmission/definitions";
-import { withOperationMutationAdmission } from "../operationAdmission/publicMutation";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import { temporaryDeleteStockAdjustmentScopeSkusOperationDefinition } from "../operationAdmission/domains/operations_definitions";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import {
   getInventoryUnitSummaryReadDefinition,
   listInventorySnapshotForProductSkusReadDefinition,
@@ -1286,7 +1289,7 @@ export const listInventorySnapshot = query({
     limit: v.optional(v.number()),
     storeId: v.id("store"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listInventorySnapshotReadDefinition,
     async (
       ctx: OperationQueryCtx,
@@ -1302,7 +1305,7 @@ export const listInventorySnapshotForProductSkus = query({
     productSkuIds: v.array(v.id("productSku")),
     storeId: v.id("store"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listInventorySnapshotForProductSkusReadDefinition,
     async (
       ctx: OperationQueryCtx,
@@ -1319,7 +1322,7 @@ export const getInventoryUnitSummary = query({
   args: {
     storeId: v.id("store"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getInventoryUnitSummaryReadDefinition,
     async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) => {
       return getInventoryUnitSummaryWithCtx(ctx, args);
@@ -1332,7 +1335,7 @@ export const listInventorySnapshotPage = query({
     paginationOpts: paginationOptsValidator,
     storeId: v.id("store"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listInventorySnapshotPageReadDefinition,
     async (
       ctx: OperationQueryCtx,
@@ -1435,7 +1438,10 @@ export const temporaryDeleteStockAdjustmentScopeSkus = mutation({
     scopeKey: v.string(),
     storeId: v.id("store"),
   },
-  handler: temporaryDeleteStockAdjustmentScopeSkusWithCtx,
+  handler: admitPublicMutation(
+    temporaryDeleteStockAdjustmentScopeSkusOperationDefinition,
+    temporaryDeleteStockAdjustmentScopeSkusWithCtx,
+  ),
 });
 
 type SubmitStockAdjustmentBatchArgs = {
@@ -1756,7 +1762,7 @@ export const submitStockAdjustmentBatch = mutation({
     submissionKey: v.string(),
   },
   returns: commandResultValidator(v.any()),
-  handler: withOperationMutationAdmission(
+  handler: admitPublicMutation(
     submitStockAdjustmentBatchOperationDefinition,
     async (ctx: OperationMutationCtx, args) => {
       return submitStockAdjustmentBatchCommandWithCtx(ctx, args);

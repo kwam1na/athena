@@ -24,7 +24,22 @@ import {
   type ReportSkuMixData,
 } from "../../shared/reportsContract";
 import { requireReportsStoreAccess } from "./access";
-import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
+import {
+  ensureMixRangeOperationDefinition,
+  retryMixRangeOperationDefinition,
+} from "../operationAdmission/domains/reports_definitions";
+import {
+  getMixRangeReadDefinition,
+  getMixRangeVisibleReadDefinition,
+} from "../operationAdmission/domains/reports_readDefinitions";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
 import { stableStringHash } from "./fingerprint";
 import { resolveSkuIdentity } from "./queries";
 import {
@@ -391,19 +406,25 @@ export const ensureMixRange = mutation({
     startDate: v.string(),
     endDate: v.string(),
   },
-  handler: async (ctx, args): Promise<MixEnsureResult> => {
-    // Generation authority: shared-demo actors are denied server-side
-    // (reporting.generate is not a demo-allowed capability), independent of
-    // any client demo gating; then the full-admin reports gate runs.
-    await requireSharedDemoCapabilityIfApplicable(ctx, "reporting.generate");
-    const { athenaUser } = await requireReportsStoreAccess(ctx, args.storeId);
-    return ensureMixRangeCore(ctx, {
-      storeId: args.storeId,
-      principalKey: String(athenaUser._id),
-      startDate: args.startDate,
-      endDate: args.endDate,
-    });
-  },
+  // Generation authority: shared-demo actors are denied at admission
+  // (`reporting.generate` is not a demo-allowed capability, so the definition
+  // declares `sharedDemo: "deny"`), independent of any client demo gating;
+  // then the full-admin reports gate runs.
+  handler: admitPublicMutation(
+    ensureMixRangeOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: { storeId: Id<"store">; startDate: string; endDate: string },
+    ): Promise<MixEnsureResult> => {
+      const { athenaUser } = await requireReportsStoreAccess(ctx, args.storeId);
+      return ensureMixRangeCore(ctx, {
+        storeId: args.storeId,
+        principalKey: String(athenaUser._id),
+        startDate: args.startDate,
+        endDate: args.endDate,
+      });
+    },
+  ),
 });
 
 // ---------------------------------------------------------------------------
@@ -413,15 +434,20 @@ export const ensureMixRange = mutation({
 
 export const retryMixRange = mutation({
   args: { storeId: v.id("store"), requestKey: v.string() },
-  handler: async (ctx, args): Promise<MixEnsureResult> => {
-    await requireSharedDemoCapabilityIfApplicable(ctx, "reporting.generate");
-    const { athenaUser } = await requireReportsStoreAccess(ctx, args.storeId);
-    return retryTerminalMixRequest(ctx, {
-      storeId: args.storeId,
-      requestKey: args.requestKey,
-      principalKey: String(athenaUser._id),
-    });
-  },
+  handler: admitPublicMutation(
+    retryMixRangeOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: { storeId: Id<"store">; requestKey: string },
+    ): Promise<MixEnsureResult> => {
+      const { athenaUser } = await requireReportsStoreAccess(ctx, args.storeId);
+      return retryTerminalMixRequest(ctx, {
+        storeId: args.storeId,
+        requestKey: args.requestKey,
+        principalKey: String(athenaUser._id),
+      });
+    },
+  ),
 });
 
 export async function retryTerminalMixRequest(
@@ -575,7 +601,12 @@ function readableMixHeader(
  */
 export const getMixRange = query({
   args: { storeId: v.id("store"), requestKey: v.string() },
-  handler: async (ctx, args): Promise<MixRangeStatus> => {
+  handler: admitPublicQuery(
+    getMixRangeReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { storeId: Id<"store">; requestKey: string },
+    ): Promise<MixRangeStatus> => {
     await requireReportsStoreAccess(ctx, args.storeId);
     const row = readableMixHeader(
       await ctx.db
@@ -593,7 +624,8 @@ export const getMixRange = query({
       endDate: row.endDate,
       lifecycle: deriveMixRequestLifecycle(row),
     };
-  },
+    },
+  ),
 });
 
 export type MixRangeVisible = {
@@ -619,7 +651,12 @@ export type MixRangeVisible = {
  */
 export const getMixRangeVisible = query({
   args: { storeId: v.id("store"), requestKey: v.string() },
-  handler: async (ctx, args): Promise<MixRangeVisible> => {
+  handler: admitPublicQuery(
+    getMixRangeVisibleReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { storeId: Id<"store">; requestKey: string },
+    ): Promise<MixRangeVisible> => {
     await requireReportsStoreAccess(ctx, args.storeId);
 
     const row = readableMixHeader(
@@ -699,5 +736,6 @@ export const getMixRangeVisible = query({
       lifecycle,
       data: { rows, totalUnitsSold, skuCount },
     };
-  },
+    },
+  ),
 });

@@ -10,6 +10,38 @@ import {
 } from "./helpers/resultTypes";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { ok, userError } from "../../shared/commandResult";
+import type { Id } from "../_generated/dataModel";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
+import {
+  addOrUpdateExpenseItemOperationDefinition,
+  removeExpenseItemOperationDefinition,
+} from "../operationAdmission/domains/inventoryIdentity_definitions";
+import { getExpenseSessionItemsReadDefinition } from "../operationAdmission/domains/inventoryIdentity_readDefinitions";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
+
+type UpsertExpenseItemArgs = {
+  sessionId: Id<"expenseSession">;
+  productId: Id<"product">;
+  productSkuId: Id<"productSku">;
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
+  staffProfileId: Id<"staffProfile">;
+  productSku: string;
+  barcode?: string;
+  productName: string;
+  price: number;
+  quantity: number;
+  image?: string;
+  size?: string;
+  length?: number;
+  color?: string;
+};
 
 function userErrorFromExpenseItemCommandFailure(result: {
   status: string;
@@ -74,16 +106,22 @@ export const getExpenseSessionItems = query({
       updatedAt: v.number(),
     })
   ),
-  handler: async (ctx, args) => {
-    // Expense session carts stay small enough to read in full for a single session.
-    // eslint-disable-next-line @convex-dev/no-collect-in-query
-    const items = await ctx.db
-      .query("expenseSessionItem")
-      .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
-      .collect();
+  handler: admitPublicQuery(
+    getExpenseSessionItemsReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { sessionId: Id<"expenseSession"> },
+    ) => {
+      // Expense session carts stay small enough to read in full for a single session.
+      // eslint-disable-next-line @convex-dev/no-collect-in-query
+      const items = await ctx.db
+        .query("expenseSessionItem")
+        .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
+        .collect();
 
-    return items;
-  },
+      return items;
+    },
+  ),
 });
 
 // Add or update an item in the expense session
@@ -108,15 +146,18 @@ export const addOrUpdateExpenseItem = mutation({
     color: v.optional(v.string()),
   },
   returns: commandResultValidator(expenseItemOperationResultValidator),
-  handler: async (ctx, args) => {
-    const result = await runUpsertExpenseSessionItemCommand(ctx, args);
+  handler: admitPublicMutation(
+    addOrUpdateExpenseItemOperationDefinition,
+    async (ctx: OperationMutationCtx, args: UpsertExpenseItemArgs) => {
+      const result = await runUpsertExpenseSessionItemCommand(ctx, args);
 
-    if (result.status === "ok") {
-      return ok(result.data);
-    }
+      if (result.status === "ok") {
+        return ok(result.data);
+      }
 
-    return userErrorFromExpenseItemCommandFailure(result);
-  },
+      return userErrorFromExpenseItemCommandFailure(result);
+    },
+  ),
 });
 
 // Remove an item from the expense session
@@ -127,13 +168,23 @@ export const removeExpenseItem = mutation({
     itemId: v.id("expenseSessionItem"),
   },
   returns: commandResultValidator(operationResultValidator),
-  handler: async (ctx, args) => {
-    const result = await runRemoveExpenseSessionItemCommand(ctx, args);
+  handler: admitPublicMutation(
+    removeExpenseItemOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        sessionId: Id<"expenseSession">;
+        staffProfileId: Id<"staffProfile">;
+        itemId: Id<"expenseSessionItem">;
+      },
+    ) => {
+      const result = await runRemoveExpenseSessionItemCommand(ctx, args);
 
-    if (result.status === "ok") {
-      return ok(result.data);
-    }
+      if (result.status === "ok") {
+        return ok(result.data);
+      }
 
-    return userErrorFromExpenseItemCommandFailure(result);
-  },
+      return userErrorFromExpenseItemCommandFailure(result);
+    },
+  ),
 });

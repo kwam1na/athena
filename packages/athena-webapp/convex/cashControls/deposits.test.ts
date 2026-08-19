@@ -7396,6 +7396,34 @@ describe("cash control deposits", () => {
     );
   });
 
+  // The handler used to probe admission with `resolveWriteAdmission` before
+  // running `admitPublicMutation`, so the rail resolved twice per admitted
+  // call. The single-admission shape maps the denial in a catch around the
+  // wrapper instead. This pins BOTH halves of that: the caller-visible
+  // `CommandResult` is byte-for-byte what it was, and the rail resolved once.
+  it("maps a rail admission denial to the cash-controls userError with a single admission", async () => {
+    mockedAuthServer.getAuthUserId.mockResolvedValue(null);
+    const ctx = createAuthorizedRegisterDepositCtx();
+
+    await expect(
+      getHandler(recordRegisterSessionDeposit)(ctx as never, {
+        actorStaffProfileId: "staff_1" as Id<"staffProfile">,
+        amount: 100,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        storeId: "store_1" as Id<"store">,
+        submissionKey: "deposit-1",
+      }),
+    ).resolves.toEqual(
+      userError({
+        code: "authorization_failed",
+        message: "You do not have access to cash controls.",
+      }),
+    );
+    // One admission per call: the rail reaches the shared-demo adapter exactly
+    // once, so the chain cannot have run a second time.
+    expect(sharedDemoMocks.getSharedDemoActorWithCtx).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects register-session deposits when the caller lacks cash-control roles", async () => {
     const ctx = createQueryCtx({
       athenaUser: [{ _id: "athena_user_1", email: "operator@example.com" }],

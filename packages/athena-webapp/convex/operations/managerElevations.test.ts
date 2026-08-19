@@ -1,11 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("@convex-dev/auth/server", () => ({
+  getAuthUserId: vi.fn().mockResolvedValue(null),
+}));
+
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import {
+  endManagerElevation,
   endManagerElevationWithCtx,
+  getActiveManagerElevation,
   getActiveManagerElevationByIdWithCtx,
   getActiveManagerElevationWithCtx,
   MANAGER_ELEVATION_TTL_MS,
+  startManagerElevation,
   startManagerElevationWithCtx,
 } from "./managerElevations";
 
@@ -186,6 +194,126 @@ function startArgs(overrides?: Partial<Parameters<typeof startManagerElevationWi
     ...overrides,
   };
 }
+
+function getHandler(definition: unknown) {
+  return (definition as { _handler: Function })._handler;
+}
+
+// Mirrors the admitted actor the rail injects for a signed-in Athena user;
+// lib/athenaUserAuth resolves identity from it without touching auth session
+// state, so every database-backed check below stays real.
+function asAdmitted(ctx: unknown, athenaUserId: Id<"athenaUser">) {
+  return {
+    ...(ctx as Record<string, unknown>),
+    operationAdmission: {
+      actor: { kind: "normal_user" as const, athenaUserId },
+    },
+  } as never;
+}
+
+describe("manager elevation admission", () => {
+  it("starts an elevation through the admitted public mutation", async () => {
+    const { ctx, tables } = createManagerElevationsCtx();
+
+    const result = await getHandler(startManagerElevation)(
+      asAdmitted(ctx, ACCOUNT_ID),
+      {
+        pinHash: "pin-manager",
+        reason: "Review store day",
+        storeId: STORE_ID,
+        terminalId: TERMINAL_ID,
+        username: "manager",
+      },
+    );
+
+    expect(result).toMatchObject({ kind: "ok" });
+    expect(tables.managerElevation.size).toBe(1);
+  });
+
+  it("denies an unauthenticated startManagerElevation before writing an elevation", async () => {
+    const { ctx, tables } = createManagerElevationsCtx();
+
+    await expect(
+      getHandler(startManagerElevation)(ctx, {
+        pinHash: "pin-manager",
+        storeId: STORE_ID,
+        terminalId: TERMINAL_ID,
+        username: "manager",
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+    expect(tables.managerElevation.size).toBe(0);
+  });
+
+  it("denies an unauthenticated endManagerElevation before patching the row", async () => {
+    const now = Date.now();
+    const { ctx, tables } = createManagerElevationsCtx({
+      elevations: [
+        {
+          _id: "elevation-1",
+          accountId: ACCOUNT_ID,
+          createdAt: now - 1_000,
+          expiresAt: now + MANAGER_ELEVATION_TTL_MS,
+          managerCredentialId: "credential-1",
+          managerStaffProfileId: "manager-1",
+          organizationId: ORGANIZATION_ID,
+          storeId: STORE_ID,
+          terminalId: TERMINAL_ID,
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(endManagerElevation)(ctx, {
+        elevationId: "elevation-1" as Id<"managerElevation">,
+        storeId: STORE_ID,
+        terminalId: TERMINAL_ID,
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+    expect(tables.managerElevation.get("elevation-1")?.endedAt).toBeUndefined();
+  });
+
+  it("denies an unauthenticated getActiveManagerElevation read", async () => {
+    const { ctx } = createManagerElevationsCtx();
+
+    await expect(
+      getHandler(getActiveManagerElevation)(ctx, {
+        storeId: STORE_ID,
+        terminalId: TERMINAL_ID,
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+  });
+
+  it("returns the active elevation through the admitted public query", async () => {
+    const now = Date.now();
+    const { ctx } = createManagerElevationsCtx({
+      elevations: [
+        {
+          _id: "elevation-1",
+          accountId: ACCOUNT_ID,
+          createdAt: now - 1_000,
+          expiresAt: now + MANAGER_ELEVATION_TTL_MS,
+          managerCredentialId: "credential-1",
+          managerStaffProfileId: "manager-1",
+          organizationId: ORGANIZATION_ID,
+          storeId: STORE_ID,
+          terminalId: TERMINAL_ID,
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(getActiveManagerElevation)(asAdmitted(ctx, ACCOUNT_ID), {
+        storeId: STORE_ID,
+        terminalId: TERMINAL_ID,
+      }),
+    ).resolves.toMatchObject({
+      accountId: ACCOUNT_ID,
+      elevationId: "elevation-1",
+      storeId: STORE_ID,
+      terminalId: TERMINAL_ID,
+    });
+  });
+});
 
 describe("manager elevations", () => {
   it("starts a temporary account, store, organization, and terminal-scoped elevation for an active manager credential", async () => {

@@ -1,3 +1,21 @@
+/**
+ * Closed catalog of Athena write capabilities.
+ *
+ * A capability names an effect a caller may CAUSE; its read-side sibling,
+ * `readIntentCatalog.ts`, names a body of data a caller may OBSERVE. The
+ * operation admission rail resolves every write definition against this union,
+ * and shared-demo write policy grants a subset of it (see
+ * `SHARED_DEMO_ALLOWED_CAPABILITIES` below).
+ *
+ * The catalog is CLOSED. Definitions reference ids from this list; they never
+ * coin new ones at a call site. If an operation genuinely fits nothing here,
+ * that is a catalog change reviewed on its own merits — propose it, do not
+ * inline a literal. A capability added carelessly is a permission grant nobody
+ * reviewed.
+ *
+ * Ids are `<area>.<effect>`, ordered alphabetically so a diff to this file is
+ * readable as a policy change.
+ */
 export const ATHENA_CAPABILITY_CATALOG = [
   { id: "administration.destructive", label: "Destructive administration" },
   { id: "administration.maintenance", label: "System maintenance" },
@@ -20,6 +38,13 @@ export const ATHENA_CAPABILITY_CATALOG = [
   { id: "intelligence.manage", label: "Athena intelligence management" },
   { id: "inventory.adjust", label: "Inventory adjustments and counts" },
   { id: "inventory.import", label: "Inventory import" },
+  // The two public marketing ingress routes (`/walkthrough-requests`,
+  // `/landing-funnel-events`) accept unauthenticated writes and are not backed
+  // by any Convex module, so they have no module capability to inherit.
+  // Naming them here is what lets their route definitions declare one instead
+  // of coining a literal.
+  { id: "marketing.funnel.track", label: "Landing funnel tracking" },
+  { id: "marketing.walkthrough.request", label: "Walkthrough requests" },
   { id: "orders.create", label: "Order creation" },
   { id: "orders.fulfill", label: "Order fulfillment" },
   { id: "orders.manage", label: "Order management" },
@@ -40,7 +65,6 @@ export const ATHENA_CAPABILITY_CATALOG = [
   { id: "remote_assist.manage", label: "Remote Assist" },
   { id: "reporting.generate", label: "Report generation" },
   { id: "reporting.maintain", label: "Reporting maintenance" },
-  { id: "reports.read", label: "Reports read access" },
   { id: "reviews.manage", label: "Reviews" },
   { id: "rewards.manage", label: "Rewards" },
   { id: "service.catalog.manage", label: "Service catalog" },
@@ -175,153 +199,13 @@ export const SHARED_DEMO_ALLOWED_CAPABILITIES = [
   "pos.sync.write",
   "pos.transaction.correct",
   "pos.transaction.void",
-  "reports.read",
+  // NOTE: the retired `reports.read` capability lived here so the demo could
+  // READ Reports. Its successor is the `reports.view` READ intent in
+  // `sharedDemo/policy.ts` — see `SHARED_DEMO_ALLOWED_READ_INTENTS`.
   "reviews.manage",
   "staff.authenticate",
   "staff.communication.write",
 ] as const satisfies readonly AthenaCapability[];
-
-const EXACT_PUBLIC_WRITE_CAPABILITIES = {
-  "inventory/organizations:remove": "administration.destructive",
-  "inventory/productSku:nukeProblematicImages": "administration.maintenance",
-  "inventory/products:removeAllProductsForStore": "administration.destructive",
-  "inventory/stores:patchConfigV2Command": "integrations.manage",
-  "inventory/stores:remove": "administration.destructive",
-  "operations/staffCredentials:createStaffCredential": "identity.manage",
-  "operations/staffCredentials:updateStaffCredential": "identity.manage",
-  "operations/staffProfiles:createStaffProfile": "staff.manage",
-  "operations/staffProfiles:updateStaffProfile": "staff.manage",
-  "pos/public/catalog:quickAddSku": "catalog.quick_add",
-  "pos/public/terminals:deleteTerminal": "administration.destructive",
-  "pos/public/terminals:registerTerminal": "daily_operations.write",
-  "pos/public/transactions:completeTransaction": "pos.sale.complete",
-  "pos/public/transactions:createTransactionFromSession": "pos.sale.complete",
-  "pos/public/transactions:updateInventory": "inventory.adjust",
-  "pos/public/transactions:voidTransaction": "pos.transaction.void",
-  "serviceOps/serviceCases:recordServicePayment": "billing.manage",
-  "storeFront/checkoutSession:cancelOrder": "orders.manage",
-  "storeFront/onlineOrder:processReturnExchange": "payments.refund",
-  "storeFront/onlineOrder:returnAllItemsToStock": "orders.return",
-  "storeFront/onlineOrder:returnItemsToStock": "orders.return",
-  "storeFront/onlineOrder:update": "orders.fulfill",
-  "storeFront/onlineOrderUtilFns:sendOrderUpdateEmail":
-    "customer.messaging.send",
-  "storeFront/payment:createTransaction": "billing.manage",
-  "storeFront/payment:refundPayment": "payments.refund",
-} as const satisfies Record<string, AthenaCapability>;
-
-const PUBLIC_WRITE_MODULE_CAPABILITIES = {
-  "cashControls/closeouts": "cash.control.write",
-  "cashControls/deposits": "cash.control.write",
-  "cloudflare/stream": "integrations.manage",
-  "contextTracking/athenaWebappEvents": "workspace.telemetry.write",
-  "contextTracking/sharedDemoEvents": "workspace.telemetry.write",
-  "customerMessaging/public": "customer.messaging.send",
-  devPatchBadTransaction: "administration.maintenance",
-  "harnessWaiver/passkeys": "administration.maintenance",
-  "harnessWaiver/registrationAuthorization": "administration.maintenance",
-  "intelligence/capabilities/actions": "intelligence.generate",
-  "intelligence/runs": "intelligence.manage",
-  "inventory/auth": "identity.authenticate",
-  "inventory/bannerMessage": "storefront.content.manage",
-  "inventory/bestSeller": "storefront.content.manage",
-  "inventory/catalogImport": "inventory.import",
-  "inventory/inventoryImportCostOverlay": "inventory.import",
-  "inventory/categories": "catalog.manage",
-  "inventory/colors": "catalog.manage",
-  "inventory/complimentaryProduct": "storefront.content.manage",
-  "inventory/expenseSessionItems": "expense.manage",
-  "inventory/expenseSessions": "expense.manage",
-  "inventory/expenseTransactions": "expense.manage",
-  "inventory/featuredItem": "storefront.content.manage",
-  "inventory/inviteCode": "permissions.manage",
-  "inventory/organizations": "organization.manage",
-  "inventory/posSessionItems": "pos.session.manage",
-  "inventory/posSessions": "pos.session.manage",
-  "inventory/productSku": "catalog.manage",
-  "inventory/productUtil": "administration.maintenance",
-  "inventory/products": "catalog.manage",
-  "inventory/promoCode": "storefront.content.manage",
-  "inventory/skuSearch": "administration.maintenance",
-  "inventory/storeSchedule": "store.configure",
-  "inventory/stores": "store.configure",
-  "inventoryLedger/corrections": "reporting.maintain",
-  "inventory/subcategories": "catalog.manage",
-  "llm/storeInsights": "intelligence.generate",
-  "notifications/subscriptions": "organization.manage",
-  "llm/userInsights": "intelligence.generate",
-  "operations/approvalRequests": "approvals.manage",
-  "operations/dailyClose": "daily_operations.write",
-  "operations/dailyManagerReportEmail": "customer.messaging.send",
-  "operations/dailyOpening": "daily_operations.write",
-  "operations/dailyOperationsAutomation": "store.configure",
-  "operations/managerElevations": "staff.authenticate",
-  "operations/openWorkInventoryReviews": "daily_operations.write",
-  "operations/serviceIntake": "service.intake.write",
-  "operations/staffCredentials": "staff.authenticate",
-  "operations/staffMessages": "staff.communication.write",
-  "operations/staffProfiles": "staff.manage",
-  "pos/public/catalog": "pos.catalog.manage",
-  "pos/public/customers": "pos.customer.manage",
-  "pos/public/posRecoveryCodes": "pos.recovery.manage",
-  "pos/public/register": "cash.control.write",
-  "pos/public/sync": "pos.sync.write",
-  "pos/public/telemetry": "pos.sync.write",
-  "pos/public/terminalAppSessions": "pos.terminal.manage",
-  "pos/public/terminals": "pos.terminal.manage",
-  "pos/public/transactions": "pos.transaction.correct",
-  "remoteAssist/public": "remote_assist.manage",
-  "remoteAssist/transport": "remote_assist.manage",
-  "reports/customRange": "reporting.generate",
-  "reports/skuMixRange": "reporting.generate",
-  "reports/skuMovementRange": "reporting.generate",
-  "serviceOps/appointments": "appointments.manage",
-  "serviceOps/catalog": "service.catalog.manage",
-  "serviceOps/serviceCases": "service.cases.manage",
-  "sharedDemo/admission": "demo.lifecycle",
-  "sharedDemo/public": "demo.lifecycle",
-  "stockOps/adjustments": "inventory.adjust",
-  "stockOps/cycleCountDrafts": "inventory.adjust",
-  "stockOps/purchaseOrders": "procurement.manage",
-  "stockOps/receiving": "procurement.manage",
-  "stockOps/vendors": "procurement.manage",
-  "storeFront/analytics": "storefront.analytics.write",
-  "storeFront/auth": "identity.authenticate",
-  "storeFront/bag": "storefront.session.manage",
-  "storeFront/checkoutSession": "orders.create",
-  "storeFront/guest": "storefront.session.manage",
-  "storeFront/offers": "storefront.content.manage",
-  "storeFront/onlineOrder": "orders.manage",
-  "storeFront/onlineOrderItem": "orders.manage",
-  "storeFront/onlineOrderUtilFns": "customer.messaging.send",
-  "storeFront/payment": "billing.manage",
-  "storeFront/paystackActions": "billing.manage",
-  "storeFront/reviews": "reviews.manage",
-  "storeFront/rewards": "rewards.manage",
-  "storeFront/savedBag": "storefront.session.manage",
-  "storeFront/supportTicket": "customer.messaging.send",
-} as const satisfies Record<string, AthenaCapability>;
-
-export function classifyAthenaPublicWrite(
-  functionName: string,
-):
-  | { capability: AthenaCapability; decision: "classified" }
-  | { decision: "unclassified" } {
-  const exact = (
-    EXACT_PUBLIC_WRITE_CAPABILITIES as Record<string, AthenaCapability>
-  )[functionName];
-  if (exact) return { capability: exact, decision: "classified" };
-
-  const separator = functionName.lastIndexOf(":");
-  const moduleName =
-    separator < 0 ? functionName : functionName.slice(0, separator);
-  const capability = (
-    PUBLIC_WRITE_MODULE_CAPABILITIES as Record<string, AthenaCapability>
-  )[moduleName];
-  return capability
-    ? { capability, decision: "classified" }
-    : { decision: "unclassified" };
-}
 
 export function isSharedDemoCapabilityAllowed(capability: AthenaCapability) {
   return (

@@ -6,10 +6,10 @@ import {
   mutation,
   query,
 } from "../_generated/server";
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import { storeSchema } from "../schemas/inventory";
 import { listItemsInR2Directory, uploadFileToR2 } from "../cloudflare/r2";
-import { api, internal } from "../_generated/api";
+import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import {
   getUnknownStoreConfigRootKeys,
@@ -20,15 +20,38 @@ import {
   removeLegacyRootKeysFromConfig,
   toV2Config,
 } from "./storeConfigV2";
-import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
 import { ok, userError } from "../../shared/commandResult";
 import { normalizeCurrencyCode } from "../../shared/reportsContract";
-import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
 import { commandResultValidator } from "../lib/commandResultValidators";
-import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import {
+  admitPublicAction,
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import { listOrganizationStoresReadDefinition } from "../operationAdmission/readDefinitions";
-import type { OperationQueryCtx } from "../operationAdmission/types";
+import {
+  calculateStoreTaxReadDefinition,
+  getStoreByIdReadDefinition,
+  getStoreImageAssetsReadDefinition,
+  preflightStoreConfigKeysReadDefinition,
+} from "../operationAdmission/domains/inventoryIdentity_readDefinitions";
+import {
+  cleanupLegacyStoreConfigKeysPageOperationDefinition,
+  createStoreOperationDefinition,
+  getStoreReelVersionsOperationDefinition,
+  listStoresByOrganizationOperationDefinition,
+  migrateStoreConfigToV2PageOperationDefinition,
+  patchStoreConfigV2CommandOperationDefinition,
+  patchStoreConfigV2OperationDefinition,
+  removeStoreOperationDefinition,
+  updateStoreLandingPageReelOperationDefinition,
+  updateStoreOperationDefinition,
+  uploadStoreImageAssetsOperationDefinition,
+} from "../operationAdmission/domains/inventoryIdentity_definitions";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
 import type { MutationCtx } from "../_generated/server";
 
 const entity = "store";
@@ -121,7 +144,7 @@ export const getAll = query({
   args: {
     organizationId: v.id("organization"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listOrganizationStoresReadDefinition,
     async (
       ctx: OperationQueryCtx,
@@ -165,12 +188,14 @@ export const getAllByOrganization = action({
   args: {
     organizationId: v.id("organization"),
   },
-  handler: async (ctx, args) => {
-    await ctx.runQuery(
-      (internal as any).sharedDemo.actor.requireAuthenticatedNonDemoEffect,
-      {},
-    );
-    requireNonDemoFoundationMutation({ organizationId: args.organizationId });
+  // Retired here, re-expressed on the definition:
+  // `sharedDemo.actor.requireAuthenticatedNonDemoEffect` -> `normalUser:
+  // "admit"` + `sharedDemo: "deny"` + `public: "deny"`, and
+  // `requireNonDemoFoundationMutation({ organizationId })` ->
+  // `target.protectDemoFoundation` bound to `organizationId`.
+  handler: admitPublicAction(
+    listStoresByOrganizationOperationDefinition,
+    async (ctx, args: { organizationId: Id<"organization"> }) => {
     const stores: Doc<"store">[] = await ctx.runQuery(
       internal.inventory.stores.getAllInternal,
       {
@@ -210,16 +235,20 @@ export const getAllByOrganization = action({
     });
 
     return { storesWithReelVersions };
-  },
+    },
+  ),
 });
 
 export const getById = query({
   args: {
     id: v.id(entity),
   },
-  handler: async (ctx, args) => {
-    return await ctx.db.get("store", args.id);
-  },
+  handler: admitPublicQuery(
+    getStoreByIdReadDefinition,
+    async (ctx: OperationQueryCtx, args: { id: Id<"store"> }) => {
+      return await ctx.db.get("store", args.id);
+    },
+  ),
 });
 
 export const findById = internalQuery({
@@ -279,8 +308,14 @@ export const getByIdOrSlug = internalQuery({
 
 export const create = mutation({
   args: storeSchema,
-  handler: async (ctx, args) => {
-    requireNonDemoFoundationMutation({ organizationId: args.organizationId });
+  // `requireNonDemoFoundationMutation({ organizationId })` retired here and
+  // re-expressed as `target.protectDemoFoundation` bound to `organizationId`.
+  handler: admitPublicMutation(
+    createStoreOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: Infer<typeof storeSchema>,
+    ) => {
     // The store-creation form takes currency as free text, so it has shipped
     // values like "ghs" and " GHS ". Daily Close stamps report facts from
     // `store.currency` while POS facts carry the canonical uppercase code; a
@@ -293,7 +328,8 @@ export const create = mutation({
     });
 
     return await ctx.db.get("store", id);
-  },
+    },
+  ),
 });
 
 export const update = mutation({
@@ -301,28 +337,38 @@ export const update = mutation({
     id: v.id(entity),
     name: v.string(),
   },
-  handler: async (ctx, args) => {
-    requireNonDemoFoundationMutation({ storeId: args.id });
-    await ctx.db.patch("store", args.id, { name: args.name });
+  // `requireNonDemoFoundationMutation({ storeId: id })` retired here and
+  // re-expressed as `target.protectDemoFoundation` bound to `id`.
+  handler: admitPublicMutation(
+    updateStoreOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: { id: Id<"store">; name: string },
+    ) => {
+      await ctx.db.patch("store", args.id, { name: args.name });
 
-    return await ctx.db.get("store", args.id);
-  },
+      return await ctx.db.get("store", args.id);
+    },
+  ),
 });
 
 export const remove = mutation({
   args: {
     id: v.id(entity),
   },
-  handler: async (ctx, args) => {
-    requireNonDemoFoundationMutation({ storeId: args.id });
-    await requireSharedDemoCapabilityIfApplicable(
-      ctx,
-      "administration.destructive",
-    );
-    await removeStoreWithCtx(ctx, args.id);
+  // Retired here, re-expressed on the definition:
+  // `requireNonDemoFoundationMutation({ storeId: id })` ->
+  // `target.protectDemoFoundation` bound to `id`, and
+  // `requireSharedDemoCapabilityIfApplicable(ctx, "administration.destructive")`
+  // -> `capability: "administration.destructive"` + `sharedDemo: "deny"`.
+  handler: admitPublicMutation(
+    removeStoreOperationDefinition,
+    async (ctx: OperationMutationCtx, args: { id: Id<"store"> }) => {
+      await removeStoreWithCtx(ctx, args.id);
 
-    return { message: "OK" };
-  },
+      return { message: "OK" };
+    },
+  ),
 });
 
 export const updateConfig = internalMutation({
@@ -346,8 +392,18 @@ export const patchConfigV2 = mutation({
     patch: v.record(v.string(), v.any()),
     mirrorLegacy: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
-    requireNonDemoFoundationMutation({ storeId: args.id });
+  // `requireNonDemoFoundationMutation({ storeId: id })` retired here and
+  // re-expressed as `target.protectDemoFoundation` bound to `id`.
+  handler: admitPublicMutation(
+    patchStoreConfigV2OperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        id: Id<"store">;
+        patch: Record<string, any>;
+        mirrorLegacy?: boolean;
+      },
+    ) => {
     const store = await ctx.db.get("store", args.id);
     if (!store) {
       throw new Error("Store not found");
@@ -364,7 +420,8 @@ export const patchConfigV2 = mutation({
     await ctx.db.patch("store", args.id, { config });
 
     return await ctx.db.get("store", args.id);
-  },
+    },
+  ),
 });
 
 export const patchConfigV2Command = mutation({
@@ -374,9 +431,21 @@ export const patchConfigV2Command = mutation({
     mirrorLegacy: v.optional(v.boolean()),
   },
   returns: commandResultValidator(v.any()),
-  handler: async (ctx, args) => {
-    requireNonDemoFoundationMutation({ storeId: args.id });
-    await requireSharedDemoCapabilityIfApplicable(ctx, "integrations.manage");
+  // Retired here, re-expressed on the definition:
+  // `requireNonDemoFoundationMutation({ storeId: id })` ->
+  // `target.protectDemoFoundation` bound to `id`, and
+  // `requireSharedDemoCapabilityIfApplicable(ctx, "integrations.manage")` ->
+  // `capability: "integrations.manage"` + `sharedDemo: "deny"`.
+  handler: admitPublicMutation(
+    patchStoreConfigV2CommandOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        id: Id<"store">;
+        patch: Record<string, any>;
+        mirrorLegacy?: boolean;
+      },
+    ) => {
     const store = await ctx.db.get("store", args.id);
     if (!store) {
       return userError({
@@ -396,7 +465,8 @@ export const patchConfigV2Command = mutation({
     await ctx.db.patch("store", args.id, { config });
 
     return ok(await ctx.db.get("store", args.id));
-  },
+    },
+  ),
 });
 
 export const patchConfigV2Internal = internalMutation({
@@ -421,7 +491,9 @@ export const patchConfigV2Internal = internalMutation({
 
 export const preflightConfigKeys = query({
   args: {},
-  handler: async (ctx) => {
+  handler: admitPublicQuery(
+    preflightStoreConfigKeysReadDefinition,
+    async (ctx: OperationQueryCtx) => {
     const stores = await ctx.db.query(entity).collect();
 
     const keyCounts: Record<string, number> = {};
@@ -466,15 +538,19 @@ export const preflightConfigKeys = query({
       unknownKeyCounts,
       storesWithUnknownKeys,
     };
-  },
+    },
+  ),
 });
 
 export const migrateConfigToV2Page = mutation({
   args: {
     cursor: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    await requireAuthenticatedAthenaUserWithCtx(ctx);
+  // `requireAuthenticatedAthenaUserWithCtx(ctx)` retired here: the definition
+  // declares `normalUser: "admit"` with `sharedDemo`/`public` denied.
+  handler: admitPublicMutation(
+    migrateStoreConfigToV2PageOperationDefinition,
+    async (ctx: OperationMutationCtx, args: { cursor?: string }) => {
     const page = await ctx.db.query(entity).paginate({
       numItems: CONFIG_MIGRATION_PAGE_SIZE,
       cursor: args.cursor ?? null,
@@ -504,15 +580,19 @@ export const migrateConfigToV2Page = mutation({
       isDone: page.isDone,
       cursor: page.continueCursor,
     };
-  },
+    },
+  ),
 });
 
 export const cleanupLegacyConfigKeysPage = mutation({
   args: {
     cursor: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    await requireAuthenticatedAthenaUserWithCtx(ctx);
+  // `requireAuthenticatedAthenaUserWithCtx(ctx)` retired here: the definition
+  // declares `normalUser: "admit"` with `sharedDemo`/`public` denied.
+  handler: admitPublicMutation(
+    cleanupLegacyStoreConfigKeysPageOperationDefinition,
+    async (ctx: OperationMutationCtx, args: { cursor?: string }) => {
     const page = await ctx.db.query(entity).paginate({
       numItems: CONFIG_MIGRATION_PAGE_SIZE,
       cursor: args.cursor ?? null,
@@ -544,7 +624,8 @@ export const cleanupLegacyConfigKeysPage = mutation({
       isDone: page.isDone,
       cursor: page.continueCursor,
     };
-  },
+    },
+  ),
 });
 
 export const createImageAsset = internalMutation({
@@ -573,7 +654,12 @@ export const calculateTax = query({
     taxRate: v.number(),
     taxName: v.string(),
   }),
-  handler: async (ctx, args) => {
+  handler: admitPublicQuery(
+    calculateStoreTaxReadDefinition,
+    async (
+      ctx: OperationQueryCtx,
+      args: { storeId: Id<"store">; amount: number },
+    ) => {
     const store = await ctx.db.get("store", args.storeId);
     const normalizedConfig = normalizeStoreConfig(store?.config);
     const taxConfig = normalizedConfig.commerce.tax;
@@ -609,21 +695,25 @@ export const calculateTax = query({
       taxRate,
       taxName,
     };
-  },
+    },
+  ),
 });
 
 export const getImageAssets = query({
   args: {
     storeId: v.id(entity),
   },
-  handler: async (ctx, args) => {
-    const assets = await ctx.db
-      .query("storeAsset")
-      .filter((q) => q.eq(q.field("storeId"), args.storeId))
-      .collect();
+  handler: admitPublicQuery(
+    getStoreImageAssetsReadDefinition,
+    async (ctx: OperationQueryCtx, args: { storeId: Id<"store"> }) => {
+      const assets = await ctx.db
+        .query("storeAsset")
+        .filter((q) => q.eq(q.field("storeId"), args.storeId))
+        .collect();
 
-    return assets;
-  },
+      return assets;
+    },
+  ),
 });
 
 export const uploadImageAssets = action({
@@ -631,12 +721,13 @@ export const uploadImageAssets = action({
     images: v.array(v.bytes()),
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) => {
-    await ctx.runQuery(
-      (internal as any).sharedDemo.actor.requireAuthenticatedNonDemoEffect,
-      {},
-    );
-    requireNonDemoFoundationMutation({ storeId: args.storeId });
+  // Retired here, re-expressed on the definition:
+  // `requireAuthenticatedNonDemoEffect` -> `normalUser: "admit"` +
+  // `sharedDemo: "deny"` + `public: "deny"`; `requireNonDemoFoundationMutation`
+  // -> `target.protectDemoFoundation` bound to `storeId`.
+  handler: admitPublicAction(
+    uploadStoreImageAssetsOperationDefinition,
+    async (ctx, args: { images: ArrayBuffer[]; storeId: Id<"store"> }) => {
     const uploadPromises = args.images.map(async (imgBuffer) => {
       return uploadFileToR2(
         imgBuffer,
@@ -657,7 +748,8 @@ export const uploadImageAssets = action({
     );
 
     return { success: true, images };
-  },
+    },
+  ),
 });
 
 export const updateLandingPageReel = action({
@@ -668,12 +760,20 @@ export const updateLandingPageReel = action({
     }),
     config: v.record(v.string(), v.any()),
   },
-  handler: async (ctx, args) => {
-    await ctx.runQuery(
-      (internal as any).sharedDemo.actor.requireAuthenticatedNonDemoEffect,
-      {},
-    );
-    requireNonDemoFoundationMutation({ storeId: args.storeId });
+  // Retired here, re-expressed on the definition:
+  // `requireAuthenticatedNonDemoEffect` -> `normalUser: "admit"` +
+  // `sharedDemo: "deny"` + `public: "deny"`; `requireNonDemoFoundationMutation`
+  // -> `target.protectDemoFoundation` bound to `storeId`.
+  handler: admitPublicAction(
+    updateStoreLandingPageReelOperationDefinition,
+    async (
+      ctx,
+      args: {
+        storeId: Id<"store">;
+        data: { reelVersion: string };
+        config: Record<string, any>;
+      },
+    ) => {
     const versions = await listItemsInR2Directory({
       directory: `stores/${args.storeId}/assets/hero`,
       firstLevelOnly: true,
@@ -696,26 +796,29 @@ export const updateLandingPageReel = action({
     });
 
     return { success: true };
-  },
+    },
+  ),
 });
 
 export const getReelVersions = action({
   args: {
     storeId: v.id(entity),
   },
-  handler: async (ctx, args) => {
-    await ctx.runQuery(
-      (internal as any).sharedDemo.actor.requireAuthenticatedNonDemoEffect,
-      {},
-    );
-    requireNonDemoFoundationMutation({ storeId: args.storeId });
-    const versions = await listItemsInR2Directory({
-      directory: `stores/${args.storeId}/assets/hero`,
-      firstLevelOnly: true,
-    });
+  // Retired here, re-expressed on the definition:
+  // `requireAuthenticatedNonDemoEffect` -> `normalUser: "admit"` +
+  // `sharedDemo: "deny"` + `public: "deny"`; `requireNonDemoFoundationMutation`
+  // -> `target.protectDemoFoundation` bound to `storeId`.
+  handler: admitPublicAction(
+    getStoreReelVersionsOperationDefinition,
+    async (ctx, args: { storeId: Id<"store"> }) => {
+      const versions = await listItemsInR2Directory({
+        directory: `stores/${args.storeId}/assets/hero`,
+        firstLevelOnly: true,
+      });
 
-    return versions;
-  },
+      return versions;
+    },
+  ),
 });
 
 export const clearExpiredRestrictions = internalMutation({

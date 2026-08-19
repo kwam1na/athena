@@ -1,8 +1,12 @@
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
-import type { OperationAdapter } from "../operationAdmission/types";
+import type {
+  OperationAdapter,
+  OperationAdapterDeniedReason,
+} from "../operationAdmission/types";
+import { resolveOperationCapabilities } from "../operationAdmission/capabilities";
 import { resolveOperationScope } from "../operationAdmission/scopes";
-import { getSharedDemoActorWithCtx } from "./actor";
+import { getSharedDemoActorWithCtx, isSharedDemoActorError } from "./actor";
 import {
   classifySharedDemoExternalGateway,
   denySharedDemoAction,
@@ -25,11 +29,14 @@ export function createSharedDemoOperationAdapter(
       try {
         actor = await getSharedDemoActorWithCtx(ctx);
       } catch (error) {
-        if (isRecognizedSharedDemoActorError(error)) {
+        // Recognized principal failures are typed, terminal denials: an
+        // expired or disabled demo session must never fall through and be
+        // re-admitted as a normal user.
+        if (isSharedDemoActorError(error)) {
           return {
-            error: error instanceof Error ? error : new Error(String(error)),
+            error,
             kind: "denied",
-            reason: "actor_denied",
+            reason: error.reason,
             recognized: true,
           };
         }
@@ -37,18 +44,30 @@ export function createSharedDemoOperationAdapter(
       }
       if (!actor) return { kind: "not_applicable" };
       if (definition.actors.sharedDemo !== "admit") {
+        return sharedDemoDenied("actor_denied");
+      }
+
+      // All-of semantics: a batch that mixes granted and ungranted
+      // capabilities is denied as a whole, before the handler runs.
+      const capabilities = resolveOperationCapabilities(
+        definition.capability,
+        args,
+      );
+      if (capabilities.kind === "out_of_candidates") {
         return sharedDemoDenied("capability_denied");
       }
       try {
-        requireSharedDemoCapability(definition.capability);
+        for (const capability of capabilities.capabilities) {
+          requireSharedDemoCapability(capability);
+        }
       } catch {
         return sharedDemoDenied("capability_denied");
       }
+
       if (definition.effects.mode === "protected") {
         const deniedGateway = definition.effects.gateways.some(
           (gateway) =>
-            classifySharedDemoExternalGateway(gateway).decision !==
-            "simulated",
+            classifySharedDemoExternalGateway(gateway).decision !== "simulated",
         );
         if (deniedGateway) {
           return sharedDemoDenied("effect_denied");
@@ -66,8 +85,16 @@ export function createSharedDemoOperationAdapter(
         return sharedDemoDenied("scope_denied");
       }
 
-      if (definition.readiness.kind === "store_write") {
+      if (
+        definition.readiness.kind === "store_write" ||
+        definition.readiness.kind === "store_ready"
+      ) {
+        // `store_ready` is the same fence without write semantics: an action
+        // or route admitted while the store is restoring is denied here, and
+        // the internal mutation that performs the write re-applies the epoch
+        // assertion with the admitted store id.
         const expectedEpoch =
+          definition.readiness.kind === "store_write" &&
           definition.readiness.expectedEpochArg &&
           typeof args[definition.readiness.expectedEpochArg] === "number"
             ? (args[definition.readiness.expectedEpochArg] as number)
@@ -97,22 +124,7 @@ export function createSharedDemoOperationAdapter(
   };
 }
 
-function isRecognizedSharedDemoActorError(error: unknown) {
-  if (!(error instanceof Error)) return false;
-  return (
-    error.message.includes("demo session has expired") ||
-    error.message.includes("demo is unavailable in this environment")
-  );
-}
-
-function sharedDemoDenied(
-  reason:
-    | "actor_denied"
-    | "capability_denied"
-    | "effect_denied"
-    | "scope_denied"
-    | "readiness_denied",
-) {
+function sharedDemoDenied(reason: OperationAdapterDeniedReason) {
   return {
     error: sharedDemoDenialError(),
     kind: "denied" as const,

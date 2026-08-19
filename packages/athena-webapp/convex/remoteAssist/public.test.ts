@@ -46,6 +46,35 @@ function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
 }
 
+/**
+ * A minimal ADMITTED context.
+ *
+ * The Remote Assist definitions resolve their organization scope from the
+ * target row rather than from a caller-supplied `organizationId`, so admission
+ * needs a `db.get` before the handler runs. It answers from the same repository
+ * mocks the handler uses, which keeps "missing client" and "missing session"
+ * meaning the same thing at both layers. `auth` is absent, so the shared-demo
+ * adapter falls through and the mocked `requireAuthenticatedAthenaUserWithCtx`
+ * admits the normal user.
+ */
+function admittedCtx() {
+  return {
+    db: {
+      get: async (table: string) =>
+        table === "remoteAssistClient"
+          ? await mocks.getClient()
+          : await mocks.getSession(),
+    },
+  };
+}
+
+/** The handler receives the admitted context, not the bare one it was called with. */
+const admittedHandlerCtx = expect.objectContaining({
+  operationAdmission: expect.objectContaining({
+    actor: expect.objectContaining({ kind: "normal_user" }),
+  }),
+});
+
 describe("remote assist public API", () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -124,7 +153,7 @@ describe("remote assist public API", () => {
   });
 
   it("requires organization membership before returning a runtime client", async () => {
-    const ctx = {};
+    const ctx = admittedCtx();
 
     await getHandler(remoteAssistPublic.getClientByRuntime)(ctx, {
       organizationId: "org-1",
@@ -133,7 +162,7 @@ describe("remote assist public API", () => {
     });
 
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedHandlerCtx,
       expect.objectContaining({
         allowedRoles: ["full_admin", "pos_only"],
         organizationId: "org-1",
@@ -151,7 +180,7 @@ describe("remote assist public API", () => {
     mocks.getClient.mockResolvedValue(null);
 
     const result = await getHandler(remoteAssistPublic.startSession)(
-      {},
+      admittedCtx(),
       {
         clientId: "client-1",
         reason: "M Supplies terminal recovery",
@@ -177,7 +206,7 @@ describe("remote assist public API", () => {
 
     await expect(
       getHandler(remoteAssistPublic.startSession)(
-        {},
+        admittedCtx(),
         {
           clientId: "client-1",
           reason: "M Supplies terminal recovery",
@@ -187,7 +216,7 @@ describe("remote assist public API", () => {
     ).rejects.toThrow("denied");
 
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
-      {},
+      admittedHandlerCtx,
       expect.objectContaining({
         allowedRoles: ["full_admin"],
         organizationId: "org-1",
@@ -198,7 +227,7 @@ describe("remote assist public API", () => {
   });
 
   it("delegates support session starts with actor, mode, and metadata", async () => {
-    const ctx = {};
+    const ctx = admittedCtx();
 
     const result = await getHandler(remoteAssistPublic.startSession)(ctx, {
       clientId: "client-1",
@@ -234,7 +263,7 @@ describe("remote assist public API", () => {
     mocks.getClient.mockResolvedValue(null);
 
     const result = await getHandler(remoteAssistPublic.getCurrentSessionByClient)(
-      {},
+      admittedCtx(),
       {
         clientId: "client-1",
       },
@@ -246,7 +275,7 @@ describe("remote assist public API", () => {
   });
 
   it("requires full admin membership before hydrating the current support session", async () => {
-    const ctx = {};
+    const ctx = admittedCtx();
 
     const result = await getHandler(remoteAssistPublic.getCurrentSessionByClient)(
       ctx,
@@ -257,7 +286,7 @@ describe("remote assist public API", () => {
 
     expect(result).toEqual(buildSession({ status: "active" }));
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedHandlerCtx,
       expect.objectContaining({
         allowedRoles: ["full_admin"],
         organizationId: "org-1",
@@ -274,7 +303,7 @@ describe("remote assist public API", () => {
     mocks.getSession.mockResolvedValue(null);
 
     const result = await getHandler(remoteAssistPublic.endSupportSession)(
-      {},
+      admittedCtx(),
       {
         reason: "support finished",
         sessionId: "session-1",
@@ -293,7 +322,7 @@ describe("remote assist public API", () => {
   });
 
   it("requires full admin membership before ending a support session", async () => {
-    const ctx = {};
+    const ctx = admittedCtx();
 
     await getHandler(remoteAssistPublic.endSupportSession)(ctx, {
       reason: "support finished",
@@ -301,7 +330,7 @@ describe("remote assist public API", () => {
     });
 
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
-      ctx,
+      admittedHandlerCtx,
       expect.objectContaining({
         allowedRoles: ["full_admin"],
         organizationId: "org-1",

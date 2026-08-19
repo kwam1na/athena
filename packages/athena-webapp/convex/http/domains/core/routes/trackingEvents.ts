@@ -4,65 +4,81 @@ import { HonoWithConvex } from "convex-helpers/server/hono";
 import { internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
 import { ActionCtx } from "../../../../_generated/server";
+import { isAllowedTrackingOrigin } from "../../../../operationAdmission/ingressVerification";
+import { appendStorefrontTrackingEventRouteOperationDefinition } from "../../../../operationAdmission/domains/httpCore_definitions";
+import { admitHttpRoute } from "../../../../platform/operationAdmission";
 import { SYNTHETIC_MONITOR_ORIGIN } from "../../../../storeFront/syntheticMonitor";
-import {
-  getStoreDataFromRequest,
-  getStorefrontActorFromRequest,
-} from "../../../utils";
+import { getStoreDataFromRequest } from "../../../utils";
 
 const trackingEventRoutes: HonoWithConvex<ActionCtx> = new Hono();
 type ViewportBucket = "sm" | "md" | "lg" | "xl" | "unknown";
 
-trackingEventRoutes.post("/", async (c) => {
-  if (!isAllowedTrackingOrigin(c.req.header("origin"))) {
-    return c.json({ error: "Tracking origin not allowed" }, 403);
-  }
+/**
+ * The anonymous storefront beacon.
+ *
+ * It is public by design — the first event of a visit predates any claim — and
+ * it therefore reads no claim cookie at all. It used to derive the event's
+ * actor from a `guest_id` cookie, which is caller-controlled on a route that
+ * verifies nothing: anyone could write events onto another visitor's timeline
+ * and abuse partition. Events from this route now carry no actor, and the
+ * origin fence that was checked inside the handler is declared on the
+ * definition so it runs before any admission row is written.
+ */
+trackingEventRoutes.post(
+  "/",
+  admitHttpRoute(
+    appendStorefrontTrackingEventRouteOperationDefinition,
+    async (c, { ingress }) => {
+      const { storeId, organizationId } = getStoreDataFromRequest(c);
 
-  const { storeId, organizationId } = getStoreDataFromRequest(c);
+      if (!storeId || !organizationId) {
+        return c.json({ error: "Store or organization id missing" }, 400);
+      }
 
-  if (!storeId || !organizationId) {
-    return c.json({ error: "Store or organization id missing" }, 400);
-  }
+      const body = JSON.parse(ingress.rawBody || "{}");
+      if (body.surface !== "storefront") {
+        return c.json(
+          { error: "Tracking surface not available on this route" },
+          400,
+        );
+      }
 
-  const body = await c.req.json();
-  if (body.surface !== "storefront") {
-    return c.json({ error: "Tracking surface not available on this route" }, 400);
-  }
+      const appendArgs = buildServerContextTrackingEnvelope({
+        body,
+        storeId,
+        organizationId,
+        originHeader: c.req.header("origin"),
+        syntheticHeader: c.req.header("x-athena-synthetic-monitor"),
+        userAgent: c.req.header("user-agent"),
+        ipAddress: readTrackingIpAddress(
+          c.req.header("x-forwarded-for"),
+          c.req.header("x-real-ip"),
+        ),
+      });
 
-  const appendArgs = buildServerContextTrackingEnvelope({
-    body,
-    storeId,
-    organizationId,
-    originHeader: c.req.header("origin"),
-    syntheticHeader: c.req.header("x-athena-synthetic-monitor"),
-    userAgent: c.req.header("user-agent"),
-    ipAddress: readTrackingIpAddress(
-      c.req.header("x-forwarded-for"),
-      c.req.header("x-real-ip"),
-    ),
-    storefrontActor: getStorefrontActorFromRequest(c),
-  });
+      const result = await c.env.runMutation(
+        internal.contextTracking.contextEvents.appendContextEvent,
+        appendArgs,
+      );
 
-  const result = await c.env.runMutation(
-    internal.contextTracking.contextEvents.appendContextEvent,
-    appendArgs,
-  );
+      if (result.kind === "rejected") {
+        return c.json({ error: result.message ?? "Context event rejected" }, 400);
+      }
 
-  if (result.kind === "rejected") {
-    return c.json({ error: result.message ?? "Context event rejected" }, 400);
-  }
+      if (result.kind === "idempotency_conflict") {
+        return c.json(
+          { error: result.message ?? "Context event idempotency conflict" },
+          409,
+        );
+      }
 
-  if (result.kind === "idempotency_conflict") {
-    return c.json(
-      { error: result.message ?? "Context event idempotency conflict" },
-      409,
-    );
-  }
-
-  return c.json(result);
-});
+      return c.json(result);
+    },
+  ),
+);
 
 export { trackingEventRoutes };
+export { isAllowedTrackingOrigin };
 
 export function buildServerContextTrackingEnvelope(input: {
   body: Record<string, unknown>;
@@ -173,23 +189,6 @@ function readViewportBucket(body: Record<string, unknown>): ViewportBucket | und
   return value === "sm" || value === "md" || value === "lg" || value === "xl"
     ? value
     : undefined;
-}
-
-export function isAllowedTrackingOrigin(origin?: string) {
-  if (!origin) return false;
-
-  try {
-    const { hostname } = new URL(origin);
-    return (
-      hostname === "wigclub.store" ||
-      hostname === "www.wigclub.store" ||
-      hostname === "dev.wigclub.store" ||
-      hostname === "localhost" ||
-      hostname === "127.0.0.1"
-    );
-  } catch {
-    return false;
-  }
 }
 
 function isAcceptedSyntheticContext(

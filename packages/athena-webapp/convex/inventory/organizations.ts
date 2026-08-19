@@ -3,13 +3,24 @@ import { internalMutation, mutation, query } from "../_generated/server";
 import type { MutationCtx } from "../_generated/server";
 import { v } from "convex/values";
 import { organizationSchema } from "../schemas/inventory";
-import { requireNonDemoFoundationMutation } from "../sharedDemo/foundation";
-import { withOperationReadAdmission } from "../operationAdmission/publicQuery";
+import {
+  admitPublicMutation,
+  admitPublicQuery,
+} from "../platform/operationAdmission";
 import {
   getOrganizationByIdOrSlugReadDefinition,
   listAthenaUserOrganizationsReadDefinition,
 } from "../operationAdmission/readDefinitions";
-import type { OperationQueryCtx } from "../operationAdmission/types";
+import { getOrganizationByIdReadDefinition } from "../operationAdmission/domains/inventoryIdentity_readDefinitions";
+import {
+  createOrganizationOperationDefinition,
+  removeOrganizationOperationDefinition,
+  updateOrganizationOperationDefinition,
+} from "../operationAdmission/domains/inventoryIdentity_definitions";
+import type {
+  OperationMutationCtx,
+  OperationQueryCtx,
+} from "../operationAdmission/types";
 import type { Id } from "../_generated/dataModel";
 import { deleteWeeklyReportingForStoreWithCtx } from "./stores";
 
@@ -89,7 +100,7 @@ export const getAll = query({
   args: {
     userId: v.id("athenaUser"),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     listAthenaUserOrganizationsReadDefinition,
     async (ctx: OperationQueryCtx, args: { userId: Id<"athenaUser"> }) => {
       const admittedActor = ctx.operationAdmission.actor;
@@ -118,17 +129,20 @@ export const getById = query({
   args: {
     id: v.id(entity),
   },
-  handler: async (ctx, args) => {
-    const organization = await ctx.db.get("organization", args.id);
-    return organization ? [organization] : [];
-  },
+  handler: admitPublicQuery(
+    getOrganizationByIdReadDefinition,
+    async (ctx: OperationQueryCtx, args: { id: Id<"organization"> }) => {
+      const organization = await ctx.db.get("organization", args.id);
+      return organization ? [organization] : [];
+    },
+  ),
 });
 
 export const getByIdOrSlug = query({
   args: {
     identifier: v.union(v.id(entity), v.string()),
   },
-  handler: withOperationReadAdmission(
+  handler: admitPublicQuery(
     getOrganizationByIdOrSlugReadDefinition,
     async (
       ctx: OperationQueryCtx,
@@ -161,8 +175,19 @@ export const getByIdOrSlug = query({
 
 export const create = mutation({
   args: organizationSchema,
-  handler: async (ctx, args) => {
-    requireNonDemoFoundationMutation({ athenaUserId: args.createdByUserId });
+  // `requireNonDemoFoundationMutation({ athenaUserId: createdByUserId })`
+  // retired here and re-expressed as `target.protectDemoFoundation` bound to
+  // `createdByUserId`, so the guard still runs for every actor kind.
+  handler: admitPublicMutation(
+    createOrganizationOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: {
+        name: string;
+        slug: string;
+        createdByUserId: Id<"athenaUser">;
+      },
+    ) => {
     const id = await ctx.db.insert(entity, args);
 
     await ctx.db.insert("organizationMember", {
@@ -172,7 +197,8 @@ export const create = mutation({
     });
 
     return await ctx.db.get("organization", id);
-  },
+    },
+  ),
 });
 
 export const update = mutation({
@@ -180,22 +206,33 @@ export const update = mutation({
     id: v.id(entity),
     name: v.string(),
   },
-  handler: async (ctx, args) => {
-    requireNonDemoFoundationMutation({ organizationId: args.id });
-    await ctx.db.patch("organization", args.id, { name: args.name });
+  // `requireNonDemoFoundationMutation({ organizationId: id })` retired here and
+  // re-expressed as `target.protectDemoFoundation` bound to `id`.
+  handler: admitPublicMutation(
+    updateOrganizationOperationDefinition,
+    async (
+      ctx: OperationMutationCtx,
+      args: { id: Id<"organization">; name: string },
+    ) => {
+      await ctx.db.patch("organization", args.id, { name: args.name });
 
-    return await ctx.db.get("organization", args.id);
-  },
+      return await ctx.db.get("organization", args.id);
+    },
+  ),
 });
 
 export const remove = mutation({
   args: {
     id: v.id(entity),
   },
-  handler: async (ctx, args) => {
-    requireNonDemoFoundationMutation({ organizationId: args.id });
-    await removeOrganizationWithCtx(ctx, args.id);
+  // `requireNonDemoFoundationMutation({ organizationId: id })` retired here and
+  // re-expressed as `target.protectDemoFoundation` bound to `id`.
+  handler: admitPublicMutation(
+    removeOrganizationOperationDefinition,
+    async (ctx: OperationMutationCtx, args: { id: Id<"organization"> }) => {
+      await removeOrganizationWithCtx(ctx, args.id);
 
-    return { message: "OK" };
-  },
+      return { message: "OK" };
+    },
+  ),
 });

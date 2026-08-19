@@ -40,11 +40,18 @@ import { requireReportsStoreAccess } from "./access";
 const actualAccess =
   await vi.importActual<typeof import("./access")>("./access");
 
-vi.mock("../sharedDemo/actor", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../sharedDemo/actor")>()),
-  requireSharedDemoCapabilityIfApplicable: vi.fn(),
+/**
+ * The admission rail's identity port. convex-test has no auth provider, so
+ * without a stub every exported handler is an anonymous denial and these
+ * suites would test admission rather than the fenced state machine. The rail's
+ * behaviour on these five functions is covered end to end, with real
+ * identities and a real demo principal, in `reportsAdmission.test.ts`.
+ */
+vi.mock("../lib/athenaUserAuth", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/athenaUserAuth")>()),
+  requireAuthenticatedAthenaUserWithCtx: vi.fn(),
 }));
-import { requireSharedDemoCapabilityIfApplicable } from "../sharedDemo/actor";
+import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
 
 import {
   REPORTS_FOLD_VERSION,
@@ -58,9 +65,12 @@ import {
   mixUnitsSoldSortKey,
 } from "../../shared/reportsContract";
 import {
-  classifyAthenaPublicWrite,
   isSharedDemoCapabilityAllowed,
 } from "../platform/capabilityCatalog";
+import {
+  ensureMixRangeOperationDefinition,
+  retryMixRangeOperationDefinition,
+} from "../operationAdmission/domains/reports_definitions";
 import { REPORTS_SWEEP_STORE_ALLOWLIST_ENV } from "./sweeper";
 import { cleanupExpiredRangeSnapshots } from "./rangeSnapshotLifecycle";
 import { listRangeSkuMix } from "./queries";
@@ -138,7 +148,9 @@ beforeEach(() => {
   vi.mocked(requireReportsStoreAccess).mockResolvedValue({
     athenaUser: { _id: "principal-1" },
   } as never);
-  vi.mocked(requireSharedDemoCapabilityIfApplicable).mockResolvedValue(null);
+  vi.mocked(requireAuthenticatedAthenaUserWithCtx).mockResolvedValue({
+    _id: "principal-1" as Id<"athenaUser">,
+  } as never);
 });
 
 afterEach(() => {
@@ -1550,36 +1562,39 @@ describe("terminal retry", () => {
 
 describe("public boundary", () => {
   it("both public mutations are registered for the generation capability, which the shared demo may never hold", () => {
-    expect(
-      classifyAthenaPublicWrite("reports/skuMixRange:ensureMixRange"),
-    ).toEqual({ capability: "reporting.generate", decision: "classified" });
-    expect(
-      classifyAthenaPublicWrite("reports/skuMixRange:retryMixRange"),
-    ).toEqual({ capability: "reporting.generate", decision: "classified" });
+    // Was `classifyAthenaPublicWrite(...)` against a hand-maintained
+    // module -> capability map. The map is deleted; the definition IS the
+    // registration, so the capability is read off it directly.
+    for (const definition of [
+      ensureMixRangeOperationDefinition,
+      retryMixRangeOperationDefinition,
+    ]) {
+      expect(definition.capability, definition.functionName).toBe(
+        "reporting.generate",
+      );
+      expect(definition.actors.sharedDemo, definition.functionName).toBe(
+        "deny",
+      );
+    }
     expect(isSharedDemoCapabilityAllowed("reporting.generate")).toBe(false);
   });
 
-  it("denies shared-demo generation server-side before any other work", async () => {
-    const t = convexTest(schema, modules);
-    const { storeId } = await seedStore(t);
-    allow(storeId);
-    vi.mocked(requireSharedDemoCapabilityIfApplicable).mockRejectedValueOnce(
-      new Error("This action is unavailable in the demo."),
-    );
-    await expect(
-      t.run((ctx) =>
-        handlerOf(ensureMixRange)(ctx, {
-          storeId,
-          startDate: "2026-07-01",
-          endDate: "2026-07-01",
-        }),
-      ),
-    ).rejects.toThrow("This action is unavailable in the demo.");
-    expect(requireSharedDemoCapabilityIfApplicable).toHaveBeenCalledWith(
-      expect.anything(),
-      "reporting.generate",
-    );
-    expect(requireReportsStoreAccess).not.toHaveBeenCalled();
+  /**
+   * The retired `requireSharedDemoCapabilityIfApplicable(ctx,
+   * "reporting.generate")` call site. Its successor is a definition field, so
+   * the assertion is on the declaration; the demo principal is denied end to
+   * end against the real adapter chain in `reportsAdmission.test.ts`.
+   */
+  it("declares the demo denial that the retired handler check used to perform", () => {
+    for (const definition of [
+      ensureMixRangeOperationDefinition,
+      retryMixRangeOperationDefinition,
+    ]) {
+      expect(definition.capability).toBe("reporting.generate");
+      expect(definition.actors.sharedDemo).toBe("deny");
+      expect(definition.actors.public).toBe("deny");
+      expect(definition.actors.normalUser).toBe("admit");
+    }
   });
 
   it("fails closed for an unauthenticated caller through the real access gate", async () => {
@@ -1589,6 +1604,11 @@ describe("public boundary", () => {
     vi.mocked(requireReportsStoreAccess).mockImplementation(
       actualAccess.requireReportsStoreAccess,
     );
+    // Identity resolution is the rail's, so an absent Athena user is an
+    // admission denial now rather than a gate denial. Either way nothing runs.
+    vi.mocked(requireAuthenticatedAthenaUserWithCtx).mockResolvedValue(
+      null as never,
+    );
     await expect(
       t.run((ctx) =>
         handlerOf(ensureMixRange)(ctx, {
@@ -1597,7 +1617,7 @@ describe("public boundary", () => {
           endDate: "2026-07-01",
         }),
       ),
-    ).rejects.toThrow("Reports access unavailable.");
+    ).rejects.toThrow("Sign in again to continue.");
   });
 
   it("cross-store substitution returns no data", async () => {
