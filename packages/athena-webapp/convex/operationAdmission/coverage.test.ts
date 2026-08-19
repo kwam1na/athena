@@ -55,6 +55,14 @@ async function loadChecker() {
   );
 }
 
+// These three walk the WHOLE convex tree through the admission checker — 605
+// ingress points, every route module, every definition module resolved by
+// import. That is ~70-85s locally and materially slower on CI hardware under
+// v8 coverage instrumentation, so the budget is generous on purpose: the old
+// 120s passed on margin rather than by design and tipped over once CI got
+// slower. If these start timing out again, the checker got slower — measure it
+// (`bun scripts/convex-operation-admission-check.ts`) rather than raising this
+// again.
 describe("operation admission coverage", () => {
   it("has no unadmitted backend ingress anywhere under convex/", async () => {
     const { collectOperationAdmissionCheckResult } = await loadChecker();
@@ -66,14 +74,14 @@ describe("operation admission coverage", () => {
           `${finding.filePath}${finding.line ? `:${finding.line}` : ""} ${finding.id}`,
       ),
     ).toEqual([]);
-  }, 120_000);
+  }, 300_000);
 
   it("assigns every ingress-bearing file to exactly one ownership unit", async () => {
     const { collectOperationAdmissionCheckResult } = await loadChecker();
     const result = await collectOperationAdmissionCheckResult(REPO_ROOT);
 
     expect(result.orphanFiles).toEqual([]);
-  }, 120_000);
+  }, 300_000);
 
   it("keeps the generated caller table and downstream-write list current", async () => {
     const { readFile } = await import("node:fs/promises");
@@ -97,7 +105,7 @@ describe("operation admission coverage", () => {
         "utf8",
       ),
     ).resolves.toBe(formatDownstreamWrites(result.downstreamWrites));
-  }, 120_000);
+  }, 300_000);
 });
 
 /**

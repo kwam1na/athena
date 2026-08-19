@@ -53339,7 +53339,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_operationadmission_coverage_test_ts",
       "source_file": "packages/athena-webapp/convex/operationAdmission/coverage.test.ts",
-      "source_location": "L113",
+      "source_location": "L121",
       "target": "coverage_test_plainobjectswithin",
       "weight": 1
     },
@@ -293257,7 +293257,7 @@
       "label": "plainObjectsWithin()",
       "norm_label": "plainobjectswithin()",
       "source_file": "packages/athena-webapp/convex/operationAdmission/coverage.test.ts",
-      "source_location": "L113"
+      "source_location": "L121"
     },
     {
       "community": 731,
