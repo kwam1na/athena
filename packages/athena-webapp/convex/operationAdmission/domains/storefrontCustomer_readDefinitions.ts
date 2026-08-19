@@ -6,7 +6,7 @@ import type {
 import { defineReadOperation } from "./_shapes";
 
 /**
- * U6 - storeFront customer modules - read (query/http_read) operation definitions.
+ * StoreFront customer modules - read (query/http_read) operation definitions.
  *
  * Scaffolded by U1a so the composing arrays in `readDefinitions.ts` never need
  * to change again: the owning unit fills this array and edits nothing else.
@@ -27,7 +27,7 @@ import { defineReadOperation } from "./_shapes";
  *
  * `actors.storefrontCustomer` is absent throughout: a shopper's cookie is a
  * claim boundary only at HTTP ingress, and the rail rejects the actor on
- * `query` kinds. Shopper-facing reads reach these handlers through U10's
+ * `query` kinds. Shopper-facing reads reach these handlers through the httpCustomer domain's
  * `http_read` definitions and the internal siblings declared alongside each
  * public query.
  */

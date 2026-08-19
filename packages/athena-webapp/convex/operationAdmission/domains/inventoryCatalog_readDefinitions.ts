@@ -7,7 +7,7 @@ import type {
 import { defineInventoryCatalogRead, defineReadOperation } from "./_shapes";
 
 /**
- * U3 - inventory catalog modules - read (query/http_read) operation definitions.
+ * Inventory catalog modules - read (query/http_read) operation definitions.
  *
  * Intent choice follows the closed catalog:
  *  - `inventory.catalog.view` is the operator's catalog. It is granted to the

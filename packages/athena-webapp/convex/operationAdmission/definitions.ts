@@ -786,7 +786,7 @@ const OPERATION_ADMISSION_BASE_DEFINITIONS = [
  * Every write/action/http definition in the backend.
  *
  * Per-unit domain modules are composed here once (U1a) so no Phase B unit ever
- * edits this file: an owning unit fills its own `domains/uN-*.definitions.ts`
+ * edits this file: an owning unit fills its own `domains/<domain>_definitions.ts`
  * array and nothing else.
  */
 /**

@@ -2,7 +2,7 @@ import type { OperationReadDefinition } from "../types";
 import { defineReadOperation } from "./_shapes";
 
 /**
- * U8 - reports and the auth bridge retirement - read (query/http_read) operation definitions.
+ * Reports and the auth bridge retirement - read (query/http_read) operation definitions.
  *
  * Every reports query used to open with `requireReportsStoreAccess`, which ran
  * `requireSharedDemoStoreCapabilityIfApplicable(ctx, "reports.read", storeId)`

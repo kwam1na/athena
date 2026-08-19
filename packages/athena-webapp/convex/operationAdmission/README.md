@@ -705,15 +705,17 @@ capture. The origin allowlist is `convex/platform/storefrontOrigins.ts`:
 env-backed, exact-match, and fail-closed — absent, `null`, or unlisted origins
 deny, and an unset allowlist allows nothing.
 
-## Per-unit domain modules
+## Domain modules
 
-`domains/_shapes.ts` holds the shared definition shapes and `domains/uN_<name>_definitions.ts` / `domains/uN_<name>_readDefinitions.ts` hold one array per
-migration unit (underscored — Convex module path components allow only alphanumerics, underscores, periods), composed once
-into `definitions.ts` / `readDefinitions.ts`.
+`domains/_shapes.ts` holds the shared definition shapes and
+`domains/<domain>_definitions.ts` / `domains/<domain>_readDefinitions.ts` hold one
+array per domain (underscored — Convex module path components allow only
+alphanumerics, underscores, periods), composed once into `definitions.ts` /
+`readDefinitions.ts`.
 
-The `uN_` prefixes are historical — they name the delivery unit that migrated
-each group, not a runtime concept. Add a new definition to the domain module
-that owns its area; the composing registries need no edit.
+Modules are named for the area they cover — `pos`, `inventoryCatalog`,
+`storefrontCustomer`, `httpCore`, and so on. Add a new definition to the domain
+module that owns its area; the composing registries need no edit.
 
 ## The definition set is dynamic
 

@@ -2,7 +2,7 @@ import type { OperationReadDefinition } from "../types";
 import { defineReadOperation, definePosRead } from "./_shapes";
 
 /**
- * U2 - pos/** - read (query/http_read) operation definitions.
+ * Pos/** - read (query/http_read) operation definitions.
  *
  * Scaffolded by U1a so the composing arrays in `readDefinitions.ts` never need
  * to change again: the owning unit fills this array and edits nothing else.

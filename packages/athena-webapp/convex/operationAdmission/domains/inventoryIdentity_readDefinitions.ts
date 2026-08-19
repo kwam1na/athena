@@ -6,7 +6,7 @@ import type {
 import { defineOrganizationRead, defineReadOperation } from "./_shapes";
 
 /**
- * U4 - inventory sessions/stores/orgs/identity - read (query/http_read) operation definitions.
+ * Inventory sessions/stores/orgs/identity - read (query/http_read) operation definitions.
  *
  * Scaffolded by U1a so the composing arrays in `readDefinitions.ts` never need
  * to change again: the owning unit fills this array and edits nothing else.

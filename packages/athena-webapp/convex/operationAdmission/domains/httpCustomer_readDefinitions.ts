@@ -3,7 +3,7 @@ import type { OperationReadDefinition } from "../types";
 import { defineReadOperation } from "./_shapes";
 
 /**
- * U10 - HTTP customer channel routes - read (`http_read`) operation definitions.
+ * HTTP customer channel routes - read (`http_read`) operation definitions.
  *
  * Two shapes, split by whether the response is scoped to one shopper:
  *

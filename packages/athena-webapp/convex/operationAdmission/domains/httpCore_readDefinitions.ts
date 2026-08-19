@@ -4,7 +4,7 @@ import type { OperationReadDefinition } from "../types";
 import { defineReadOperation } from "./_shapes";
 
 /**
- * U11 - HTTP core, messaging and money-movement routes - read (http_read)
+ * HTTP core, messaging and money-movement routes - read (http_read)
  * operation definitions.
  *
  * Two shapes:

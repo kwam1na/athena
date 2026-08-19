@@ -2,7 +2,7 @@ import type { OperationDefinition, OperationScopeResolver } from "../types";
 import { defineOperation } from "./_shapes";
 
 /**
- * U9 - platform/misc modules - write/action/http operation definitions.
+ * Platform/misc modules - write/action/http operation definitions.
  *
  * Scaffolded by U1a so the composing arrays in `definitions.ts` never need to
  * change again: the owning unit fills this array and edits nothing else.

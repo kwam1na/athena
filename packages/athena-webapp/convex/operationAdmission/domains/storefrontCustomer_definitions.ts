@@ -6,7 +6,7 @@ import type {
 import { defineOperation } from "./_shapes";
 
 /**
- * U6 - storeFront customer modules - write/action/http operation definitions.
+ * StoreFront customer modules - write/action/http operation definitions.
  *
  * Scaffolded by U1a so the composing arrays in `definitions.ts` never need to
  * change again: the owning unit fills this array and edits nothing else.
@@ -26,7 +26,7 @@ import { defineOperation } from "./_shapes";
  *    a claim boundary only at HTTP ingress; a plain Convex argument is not, and
  *    the rail rejects the actor on `mutation`/`query`/`action` kinds. Storefront
  *    shoppers reach these modules exclusively through the `http`/`http_read`
- *    definitions U10 owns, which propagate the admitted identity to the internal
+ *    definitions the httpCustomer domain owns, which propagate the admitted identity to the internal
  *    siblings declared in `convex/storeFront/**` as an `owner` parameter.
  *
  * `actors.public: "admit"` appears only on the two pre-auth OTP operations

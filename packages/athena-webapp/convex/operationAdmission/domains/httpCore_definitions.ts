@@ -10,7 +10,7 @@ import type { OperationDefinition } from "../types";
 import { defineOperation } from "./_shapes";
 
 /**
- * U11 - HTTP core, messaging and money-movement routes - write/action/http
+ * HTTP core, messaging and money-movement routes - write/action/http
  * operation definitions.
  *
  * Four shapes cover the whole non-GET surface of

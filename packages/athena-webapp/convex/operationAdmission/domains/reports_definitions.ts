@@ -2,7 +2,7 @@ import type { OperationDefinition } from "../types";
 import { defineOperation } from "./_shapes";
 
 /**
- * U8 - reports and the auth bridge retirement - write/action/http operation definitions.
+ * Reports and the auth bridge retirement - write/action/http operation definitions.
  *
  * All five range mutations carry `reporting.generate`, which is the capability
  * `classifyAthenaPublicWrite` already assigns to every `reports/*` module and

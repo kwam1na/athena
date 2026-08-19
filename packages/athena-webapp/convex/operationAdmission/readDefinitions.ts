@@ -767,7 +767,7 @@ const OPERATION_READ_ADMISSION_BASE_DEFINITIONS = [
 /**
  * Every read (query/http_read) definition in the backend.
  *
- * Composed once in U1a from the per-unit domain modules so no Phase B unit
+ * Composed once from the domain modules so no Phase B unit
  * edits this file.
  */
 /** The read registry. Frozen for the same reason as its write sibling. */

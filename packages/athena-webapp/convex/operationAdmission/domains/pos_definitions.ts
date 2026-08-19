@@ -2,7 +2,7 @@ import type { OperationDefinition } from "../types";
 import { defineOperation, storeWriteOperation } from "./_shapes";
 
 /**
- * U2 - pos/** - write/action/http operation definitions.
+ * Pos/** - write/action/http operation definitions.
  *
  * Scaffolded by U1a so the composing arrays in `definitions.ts` never need to
  * change again: the owning unit fills this array and edits nothing else.

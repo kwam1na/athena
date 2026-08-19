@@ -7,7 +7,7 @@ import type {
 import { defineOperation } from "./_shapes";
 
 /**
- * U7 - storeFront operator/content modules - write/action/http operation definitions.
+ * StoreFront operator/content modules - write/action/http operation definitions.
  *
  * Scaffolded by U1a so the composing arrays in `definitions.ts` never need to
  * change again: the owning unit fills this array and edits nothing else.

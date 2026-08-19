@@ -2,7 +2,7 @@ import type { OperationDefinition, OperationScopeResolver } from "../types";
 import { defineOperation } from "./_shapes";
 
 /**
- * U5 - operations, cash controls, stock ops, service ops, messaging, notifications - write/action/http operation definitions.
+ * Operations, cash controls, stock ops, service ops, messaging, notifications - write/action/http operation definitions.
  *
  * Scaffolded by U1a so the composing arrays in `definitions.ts` never need to
  * change again: the owning unit fills this array and edits nothing else.

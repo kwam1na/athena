@@ -4,7 +4,7 @@ import type { OperationDefinition } from "../types";
 import { defineOperation } from "./_shapes";
 
 /**
- * U10 - HTTP customer channel routes - write/action/http operation definitions.
+ * HTTP customer channel routes - write/action/http operation definitions.
  *
  * Every route under `convex/http/domains/customerChannel/**` that is not a GET
  * declares one definition here and is wrapped with `admitHttpRoute`.

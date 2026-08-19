@@ -7,7 +7,7 @@ import type {
 } from "../types";
 
 /**
- * Shared definition shapes for the per-unit domain modules.
+ * Shared definition shapes for the domain modules.
  *
  * Domain modules import only `../types`, this file, the platform catalogs, and
  * `_generated/dataModel`. Scope/target resolvers use `ctx.db` directly.

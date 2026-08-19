@@ -7,7 +7,7 @@ import type {
 import { defineOperation } from "./_shapes";
 
 /**
- * U3 - inventory catalog modules - write/action/http operation definitions.
+ * Inventory catalog modules - write/action/http operation definitions.
  *
  * Every capability here (`catalog.manage`, `storefront.content.manage`,
  * `store.configure`, `inventory.import`, `administration.maintenance`,
