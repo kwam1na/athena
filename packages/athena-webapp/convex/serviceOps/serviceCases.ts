@@ -37,11 +37,11 @@ import {
   recordServiceInventoryUsageOperationDefinition,
   recordServicePaymentOperationDefinition,
   updateServiceCaseStatusOperationDefinition,
-} from "../operationAdmission/domains/u5_operations_definitions";
+} from "../operationAdmission/domains/operations_definitions";
 import {
   getServiceCaseDetailsReadDefinition,
   listActiveServiceCasesReadDefinition,
-} from "../operationAdmission/domains/u5_operations_readDefinitions";
+} from "../operationAdmission/domains/operations_readDefinitions";
 
 export const SERVICE_CASE_STATUSES = [
   "intake",

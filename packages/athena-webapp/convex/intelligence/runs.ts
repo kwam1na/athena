@@ -11,12 +11,12 @@ import {
 import type { Doc, Id } from "../_generated/dataModel";
 import {
   dismissIntelligenceArtifactOperationDefinition,
-} from "../operationAdmission/domains/u9_platform_definitions";
+} from "../operationAdmission/domains/platform_definitions";
 import {
   latestArtifactBySubjectReadDefinition,
   latestArtifactReadDefinition,
   latestRunDebugReadDefinition,
-} from "../operationAdmission/domains/u9_platform_readDefinitions";
+} from "../operationAdmission/domains/platform_readDefinitions";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import {
   admitPublicMutation,

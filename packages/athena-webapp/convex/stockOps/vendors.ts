@@ -6,8 +6,8 @@ import { commandResultValidator } from "../lib/commandResultValidators";
 import {
   createVendorCommandOperationDefinition,
   createVendorOperationDefinition,
-} from "../operationAdmission/domains/u5_operations_definitions";
-import { listVendorsReadDefinition } from "../operationAdmission/domains/u5_operations_readDefinitions";
+} from "../operationAdmission/domains/operations_definitions";
+import { listVendorsReadDefinition } from "../operationAdmission/domains/operations_readDefinitions";
 import {
   admitPublicMutation,
   admitPublicQuery,

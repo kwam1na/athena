@@ -8,8 +8,8 @@ import {
   admitHttpRead,
   admitHttpRoute,
 } from "../../../../platform/operationAdmission";
-import { createOfferRouteOperationDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_definitions";
-import { getOffersRouteReadDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
+import { createOfferRouteOperationDefinition } from "../../../../operationAdmission/domains/httpCustomer_definitions";
+import { getOffersRouteReadDefinition } from "../../../../operationAdmission/domains/httpCustomer_readDefinitions";
 import {
   admittedCustomerId,
   parseIngressJson,

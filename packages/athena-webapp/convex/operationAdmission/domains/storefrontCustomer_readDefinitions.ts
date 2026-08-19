@@ -333,7 +333,7 @@ export const getStoreFrontUsersByIdsReadDefinition = storefrontRead({
   scope: { kind: "none" },
 });
 
-export const U6_STOREFRONT_CUSTOMER_READ_OPERATION_DEFINITIONS: readonly OperationReadDefinition[] =
+export const STOREFRONT_CUSTOMER_READ_DEFINITIONS: readonly OperationReadDefinition[] =
   [
     getAllBagsReadDefinition,
     getBagByIdReadDefinition,

@@ -201,7 +201,7 @@ export const createSupportTicketOperationDefinition = storefrontWrite({
   sharedDemo: "admit",
 });
 
-export const U6_STOREFRONT_CUSTOMER_OPERATION_DEFINITIONS: readonly OperationDefinition[] =
+export const STOREFRONT_CUSTOMER_DEFINITIONS: readonly OperationDefinition[] =
   [
     deleteBagOperationDefinition,
     deleteGuestOperationDefinition,

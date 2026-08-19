@@ -5,7 +5,7 @@ import { internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
 import { ActionCtx } from "../../../../_generated/server";
 import { isAllowedTrackingOrigin } from "../../../../operationAdmission/ingressVerification";
-import { appendStorefrontTrackingEventRouteOperationDefinition } from "../../../../operationAdmission/domains/u11_httpCore_definitions";
+import { appendStorefrontTrackingEventRouteOperationDefinition } from "../../../../operationAdmission/domains/httpCore_definitions";
 import { admitHttpRoute } from "../../../../platform/operationAdmission";
 import { SYNTHETIC_MONITOR_ORIGIN } from "../../../../storeFront/syntheticMonitor";
 import { getStoreDataFromRequest } from "../../../utils";

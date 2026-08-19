@@ -9,8 +9,8 @@ import type { WaiverCandidate } from "../../../../harnessWaiver/passkeyPolicy";
 import {
   consumeHarnessWaiverRouteOperationDefinition,
   createHarnessWaiverRequestRouteOperationDefinition,
-} from "../../../../operationAdmission/domains/u11_httpCore_definitions";
-import { getHarnessWaiverApprovalRouteReadDefinition } from "../../../../operationAdmission/domains/u11_httpCore_readDefinitions";
+} from "../../../../operationAdmission/domains/httpCore_definitions";
+import { getHarnessWaiverApprovalRouteReadDefinition } from "../../../../operationAdmission/domains/httpCore_readDefinitions";
 import {
   admitHttpRead,
   admitHttpRoute,

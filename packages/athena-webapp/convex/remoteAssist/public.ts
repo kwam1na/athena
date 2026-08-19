@@ -10,11 +10,11 @@ import {
 import {
   remoteAssistEndSupportSessionOperationDefinition,
   remoteAssistStartSessionOperationDefinition,
-} from "../operationAdmission/domains/u9_platform_definitions";
+} from "../operationAdmission/domains/platform_definitions";
 import {
   getClientByRuntimeReadDefinition,
   getCurrentSessionByClientReadDefinition,
-} from "../operationAdmission/domains/u9_platform_readDefinitions";
+} from "../operationAdmission/domains/platform_readDefinitions";
 import {
   admitPublicMutation,
   admitPublicQuery,

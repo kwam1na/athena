@@ -12,8 +12,8 @@ import {
   deleteSavedBagItemRouteOperationDefinition,
   updateSavedBagItemRouteOperationDefinition,
   updateSavedBagOwnerRouteOperationDefinition,
-} from "../../../../operationAdmission/domains/u10_httpCustomer_definitions";
-import { getSavedBagRouteReadDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
+} from "../../../../operationAdmission/domains/httpCustomer_definitions";
+import { getSavedBagRouteReadDefinition } from "../../../../operationAdmission/domains/httpCustomer_readDefinitions";
 import {
   admittedCustomerId,
   guestMergeErrorResponse,

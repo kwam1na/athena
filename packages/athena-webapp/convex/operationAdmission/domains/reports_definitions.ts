@@ -78,7 +78,7 @@ export const retryMovementRangeOperationDefinition =
     "reports/skuMovementRange.retryMovementRange",
   );
 
-export const U8_REPORTS_OPERATION_DEFINITIONS: readonly OperationDefinition[] = [
+export const REPORTS_DEFINITIONS: readonly OperationDefinition[] = [
   requestRangeOperationDefinition,
   ensureMixRangeOperationDefinition,
   retryMixRangeOperationDefinition,

@@ -508,7 +508,7 @@ export const sendPosReceiptLinkOperationDefinition = storeScopedWrite({
   },
 });
 
-export const U5_OPERATIONS_OPERATION_DEFINITIONS: readonly OperationDefinition[] =
+export const OPERATIONS_DEFINITIONS: readonly OperationDefinition[] =
   [
     completeDailyCloseOperationDefinition,
     resolveDailyCloseCarryForwardOperationDefinition,

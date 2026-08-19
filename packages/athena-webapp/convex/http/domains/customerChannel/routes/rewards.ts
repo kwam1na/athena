@@ -11,14 +11,14 @@ import {
   awardGuestOrderPointsRouteOperationDefinition,
   awardPastOrderPointsRouteOperationDefinition,
   redeemRewardPointsRouteOperationDefinition,
-} from "../../../../operationAdmission/domains/u10_httpCustomer_definitions";
+} from "../../../../operationAdmission/domains/httpCustomer_definitions";
 import {
   getEligiblePastOrdersRouteReadDefinition,
   getOrderRewardPointsRouteReadDefinition,
   getRewardHistoryRouteReadDefinition,
   getRewardPointsRouteReadDefinition,
   getRewardTiersRouteReadDefinition,
-} from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
+} from "../../../../operationAdmission/domains/httpCustomer_readDefinitions";
 import {
   guestMergeErrorResponse,
   parseIngressJson,

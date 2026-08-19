@@ -18,7 +18,7 @@ import {
 import {
   mtnMomoCollectionsPostRouteOperationDefinition,
   mtnMomoCollectionsPutRouteOperationDefinition,
-} from "../../../../operationAdmission/domains/u11_httpCore_definitions";
+} from "../../../../operationAdmission/domains/httpCore_definitions";
 import { admitHttpRoute } from "../../../../platform/operationAdmission";
 import type { AdmittedHttpContext } from "../../../../operationAdmission/rail";
 

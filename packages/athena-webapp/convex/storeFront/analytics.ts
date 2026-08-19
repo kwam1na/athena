@@ -12,7 +12,7 @@ import {
   admitPublicMutation,
   admitPublicQuery,
 } from "../platform/operationAdmission";
-import { clearAnalyticsOperationDefinition } from "../operationAdmission/domains/u7_storefrontOperator_definitions";
+import { clearAnalyticsOperationDefinition } from "../operationAdmission/domains/storefrontOperator_definitions";
 import {
   getAnalyticsByPromoCodeReadDefinition,
   getAnalyticsEventReadDefinition,
@@ -26,7 +26,7 @@ import {
   getVisitorInsightsReadDefinition,
   listAnalyticsPagedReadDefinition,
   listAnalyticsReadDefinition,
-} from "../operationAdmission/domains/u7_storefrontOperator_readDefinitions";
+} from "../operationAdmission/domains/storefrontOperator_readDefinitions";
 import {
   buildStorefrontObservabilityReport,
   STOREFRONT_OBSERVABILITY_ACTION,

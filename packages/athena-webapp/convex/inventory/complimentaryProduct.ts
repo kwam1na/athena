@@ -15,13 +15,13 @@ import {
   createComplimentaryProductOperationDefinition,
   toggleComplimentaryCollectionActiveOperationDefinition,
   toggleComplimentaryProductActiveOperationDefinition,
-} from "../operationAdmission/domains/u3_inventoryCatalog_definitions";
+} from "../operationAdmission/domains/inventoryCatalog_definitions";
 import {
   listActiveComplimentaryCollectionsReadDefinition,
   listActiveComplimentaryProductsReadDefinition,
   listAllComplimentaryProductsReadDefinition,
   listComplimentaryProductsByCollectionReadDefinition,
-} from "../operationAdmission/domains/u3_inventoryCatalog_readDefinitions";
+} from "../operationAdmission/domains/inventoryCatalog_readDefinitions";
 import type {
   OperationMutationCtx,
   OperationQueryCtx,

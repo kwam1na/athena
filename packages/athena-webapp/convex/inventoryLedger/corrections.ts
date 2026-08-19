@@ -2,7 +2,7 @@ import { v } from "convex/values";
 
 import { mutation } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
-import { correctSkuValuationOperationDefinition } from "../operationAdmission/domains/u5_operations_definitions";
+import { correctSkuValuationOperationDefinition } from "../operationAdmission/domains/operations_definitions";
 import { admitPublicMutation } from "../platform/operationAdmission";
 import { requireReportsStoreAccess } from "../reports/access";
 import { resolveReportingOperatingPeriodWithCtx } from "../storeTime/operatingPeriods";

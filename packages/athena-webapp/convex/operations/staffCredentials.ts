@@ -16,11 +16,11 @@ import {
 import {
   createStaffCredentialOperationDefinition,
   updateStaffCredentialOperationDefinition,
-} from "../operationAdmission/domains/u5_operations_definitions";
+} from "../operationAdmission/domains/operations_definitions";
 import {
   getStaffCredentialUsernameAvailabilityReadDefinition,
   listStaffCredentialsByStoreReadDefinition,
-} from "../operationAdmission/domains/u5_operations_readDefinitions";
+} from "../operationAdmission/domains/operations_readDefinitions";
 import type { OperationMutationCtx } from "../operationAdmission/types";
 import {
   admitPublicMutation,

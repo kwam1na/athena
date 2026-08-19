@@ -5,7 +5,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import {
   getCurrentUserIdentityReadDefinition,
   getCurrentUserReadDefinition,
-} from "./operationAdmission/domains/u9_platform_readDefinitions";
+} from "./operationAdmission/domains/platform_readDefinitions";
 import { admitPublicQuery } from "./platform/operationAdmission";
 
 /**

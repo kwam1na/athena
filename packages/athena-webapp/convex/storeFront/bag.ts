@@ -10,13 +10,13 @@ import {
 import { v } from "convex/values";
 import { loadBagWithItems } from "./helpers/bag";
 import type { Id } from "../_generated/dataModel";
-import { deleteBagOperationDefinition } from "../operationAdmission/domains/u6_storefrontCustomer_definitions";
+import { deleteBagOperationDefinition } from "../operationAdmission/domains/storefrontCustomer_definitions";
 import {
   getAllBagsReadDefinition,
   getBagByIdReadDefinition,
   getBagByUserIdReadDefinition,
   getPaginatedBagsReadDefinition,
-} from "../operationAdmission/domains/u6_storefrontCustomer_readDefinitions";
+} from "../operationAdmission/domains/storefrontCustomer_readDefinitions";
 import {
   admitPublicMutation,
   admitPublicQuery,

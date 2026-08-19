@@ -7,7 +7,7 @@ import {
   getOrganizationMemberPermissionsReadDefinition,
   getOrganizationMemberRoleReadDefinition,
   listOrganizationMembersReadDefinition,
-} from "../operationAdmission/domains/u4_inventoryIdentity_readDefinitions";
+} from "../operationAdmission/domains/inventoryIdentity_readDefinitions";
 import type { OperationQueryCtx } from "../operationAdmission/types";
 import type { Id } from "../_generated/dataModel";
 

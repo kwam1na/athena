@@ -3,7 +3,7 @@ import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
 import { internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
-import { bannerMessageRouteReadDefinition } from "../../../../operationAdmission/domains/u11_httpCore_readDefinitions";
+import { bannerMessageRouteReadDefinition } from "../../../../operationAdmission/domains/httpCore_readDefinitions";
 import { admitHttpRead } from "../../../../platform/operationAdmission";
 import { getStoreDataFromRequest } from "../../../utils";
 

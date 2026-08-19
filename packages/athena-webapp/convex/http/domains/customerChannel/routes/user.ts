@@ -7,8 +7,8 @@ import {
   admitHttpRead,
   admitHttpRoute,
 } from "../../../../platform/operationAdmission";
-import { updateStorefrontUserRouteOperationDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_definitions";
-import { getStorefrontUserRouteReadDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
+import { updateStorefrontUserRouteOperationDefinition } from "../../../../operationAdmission/domains/httpCustomer_definitions";
+import { getStorefrontUserRouteReadDefinition } from "../../../../operationAdmission/domains/httpCustomer_readDefinitions";
 import {
   isCustomerOwnershipDenial,
   parseIngressJson,

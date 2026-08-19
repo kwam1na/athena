@@ -18,13 +18,13 @@ import {
   createPromoCodeOperationDefinition,
   removePromoCodeOperationDefinition,
   updatePromoCodeOperationDefinition,
-} from "../operationAdmission/domains/u3_inventoryCatalog_definitions";
+} from "../operationAdmission/domains/inventoryCatalog_definitions";
 import {
   getPromoCodeByIdReadDefinition,
   listPromoCodeItemsLightweightReadDefinition,
   listPromoCodeItemsReadDefinition,
   listPromoCodesReadDefinition,
-} from "../operationAdmission/domains/u3_inventoryCatalog_readDefinitions";
+} from "../operationAdmission/domains/inventoryCatalog_readDefinitions";
 import type {
   OperationMutationCtx,
   OperationQueryCtx,

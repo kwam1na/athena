@@ -17,7 +17,7 @@ import {
   sendVerificationCodeViaProviderOperationDefinition,
   syncAuthenticatedAthenaUserOperationDefinition,
   verifyCodeOperationDefinition,
-} from "../operationAdmission/domains/u4_inventoryIdentity_definitions";
+} from "../operationAdmission/domains/inventoryIdentity_definitions";
 import type { OperationMutationCtx } from "../operationAdmission/types";
 
 const expirationTimeInMinutes = 10;

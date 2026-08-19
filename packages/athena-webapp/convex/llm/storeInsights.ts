@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
-import { llmStoreInsightsGetStoreInsightsOperationDefinition } from "../operationAdmission/domains/u9_platform_definitions";
+import { llmStoreInsightsGetStoreInsightsOperationDefinition } from "../operationAdmission/domains/platform_definitions";
 import { admitPublicAction } from "../platform/operationAdmission";
 
 type GetStoreInsightsFromLlmArgs = {

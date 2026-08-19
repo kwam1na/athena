@@ -189,7 +189,7 @@ export const getSharedDemoRegisterBootstrapReadDefinition = demoContextRead(
   "sharedDemo/public.getRegisterBootstrap.read",
 );
 
-export const U9_PLATFORM_READ_OPERATION_DEFINITIONS: readonly OperationReadDefinition[] =
+export const PLATFORM_READ_DEFINITIONS: readonly OperationReadDefinition[] =
   [
     getCurrentUserReadDefinition,
     getCurrentUserIdentityReadDefinition,

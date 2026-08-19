@@ -34,7 +34,7 @@ import {
   type ScheduledCronFamily,
 } from "../automation/scheduledRunLedger";
 
-import { refundPaymentOperationDefinition } from "../operationAdmission/domains/u6_storefrontCustomer_definitions";
+import { refundPaymentOperationDefinition } from "../operationAdmission/domains/storefrontCustomer_definitions";
 import { admitPublicAction } from "../platform/operationAdmission";
 import {
   assertCustomerOwnsRow,

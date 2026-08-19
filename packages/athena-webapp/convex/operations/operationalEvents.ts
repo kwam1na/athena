@@ -8,7 +8,7 @@ import {
 import { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { buildOperationalEventMessage } from "./helpers/eventBuilders";
-import { listProductOperationalTimelineReadDefinition } from "../operationAdmission/domains/u5_operations_readDefinitions";
+import { listProductOperationalTimelineReadDefinition } from "../operationAdmission/domains/operations_readDefinitions";
 import { admitPublicQuery } from "../platform/operationAdmission";
 
 const PRODUCT_OPERATIONAL_EVENT_LIMIT = 100;

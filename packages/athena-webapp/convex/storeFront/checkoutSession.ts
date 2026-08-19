@@ -38,7 +38,7 @@ import { applyCommerceInventoryEffectWithCtx } from "../inventoryLedger/commerce
 import {
   getActiveCheckoutSessionReadDefinition,
   getActiveCheckoutSessionsForStoreReadDefinition,
-} from "../operationAdmission/domains/u6_storefrontCustomer_readDefinitions";
+} from "../operationAdmission/domains/storefrontCustomer_readDefinitions";
 import { admitPublicQuery } from "../platform/operationAdmission";
 import {
   assertCustomerOwnsRow,

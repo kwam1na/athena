@@ -6,8 +6,8 @@ import {
   admitHttpRead,
   admitHttpRoute,
 } from "../../../../platform/operationAdmission";
-import { updateMeRouteOperationDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_definitions";
-import { getMeRouteReadDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
+import { updateMeRouteOperationDefinition } from "../../../../operationAdmission/domains/httpCustomer_definitions";
+import { getMeRouteReadDefinition } from "../../../../operationAdmission/domains/httpCustomer_readDefinitions";
 import {
   parseIngressJson,
   requireAdmittedCustomerOwner,

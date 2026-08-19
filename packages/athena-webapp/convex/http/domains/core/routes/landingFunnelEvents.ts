@@ -6,7 +6,7 @@ import {
   landingFunnelHourlyLimit,
   walkthroughAllowedOrigins,
 } from "../../../../marketing/walkthroughConfig";
-import { appendLandingFunnelEventRouteOperationDefinition } from "../../../../operationAdmission/domains/u11_httpCore_definitions";
+import { appendLandingFunnelEventRouteOperationDefinition } from "../../../../operationAdmission/domains/httpCore_definitions";
 import { admitHttpRoute } from "../../../../platform/operationAdmission";
 import { boundRequestBody } from "./boundedBody";
 

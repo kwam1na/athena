@@ -13,7 +13,7 @@ import {
   type ReportSkuDayMetrics,
 } from "../../shared/reportsContract";
 import { requireReportsStoreAccess } from "./access";
-import { requestRangeOperationDefinition } from "../operationAdmission/domains/u8_reports_definitions";
+import { requestRangeOperationDefinition } from "../operationAdmission/domains/reports_definitions";
 import { admitPublicMutation } from "../platform/operationAdmission";
 import type { OperationMutationCtx } from "../operationAdmission/types";
 import { stableStringHash } from "./fingerprint";

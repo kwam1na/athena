@@ -38,7 +38,7 @@ import { savedBagRoutes } from "./http/domains/customerChannel/routes/savedBag";
 import { mtnMomoRoutes } from "./http/domains/moneyMovement/routes";
 import { whatsappMessagingRoutes } from "./http/domains/customerMessaging/routes/whatsapp";
 import { harnessWaiverRoutes } from "./http/domains/core/routes/harnessWaivers";
-import { healthRouteReadDefinition } from "./operationAdmission/domains/u11_httpCore_readDefinitions";
+import { healthRouteReadDefinition } from "./operationAdmission/domains/httpCore_readDefinitions";
 import { admitHttpRead } from "./platform/operationAdmission";
 import { readStorefrontOriginAllowlist } from "./platform/storefrontOrigins";
 

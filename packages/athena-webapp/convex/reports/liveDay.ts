@@ -13,7 +13,7 @@ import { requireReportsStoreAccess } from "./access";
 import {
   getLiveOperatingDayReadDefinition,
   listLiveSkuStockReadDefinition,
-} from "../operationAdmission/domains/u8_reports_readDefinitions";
+} from "../operationAdmission/domains/reports_readDefinitions";
 import { admitPublicQuery } from "../platform/operationAdmission";
 import type { OperationQueryCtx } from "../operationAdmission/types";
 

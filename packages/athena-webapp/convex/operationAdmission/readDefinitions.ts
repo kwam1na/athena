@@ -13,16 +13,16 @@ import {
   defineReadOperation,
   defineStockAdjustmentsRead,
 } from "./domains/_shapes";
-import { U2_POS_READ_OPERATION_DEFINITIONS } from "./domains/u2_pos_readDefinitions";
-import { U3_INVENTORY_CATALOG_READ_OPERATION_DEFINITIONS } from "./domains/u3_inventoryCatalog_readDefinitions";
-import { U4_INVENTORY_IDENTITY_READ_OPERATION_DEFINITIONS } from "./domains/u4_inventoryIdentity_readDefinitions";
-import { U5_OPERATIONS_READ_OPERATION_DEFINITIONS } from "./domains/u5_operations_readDefinitions";
-import { U6_STOREFRONT_CUSTOMER_READ_OPERATION_DEFINITIONS } from "./domains/u6_storefrontCustomer_readDefinitions";
-import { U7_STOREFRONT_OPERATOR_READ_OPERATION_DEFINITIONS } from "./domains/u7_storefrontOperator_readDefinitions";
-import { U8_REPORTS_READ_OPERATION_DEFINITIONS } from "./domains/u8_reports_readDefinitions";
-import { U9_PLATFORM_READ_OPERATION_DEFINITIONS } from "./domains/u9_platform_readDefinitions";
-import { U10_HTTP_CUSTOMER_READ_OPERATION_DEFINITIONS } from "./domains/u10_httpCustomer_readDefinitions";
-import { U11_HTTP_CORE_READ_OPERATION_DEFINITIONS } from "./domains/u11_httpCore_readDefinitions";
+import { POS_READ_DEFINITIONS } from "./domains/pos_readDefinitions";
+import { INVENTORY_CATALOG_READ_DEFINITIONS } from "./domains/inventoryCatalog_readDefinitions";
+import { INVENTORY_IDENTITY_READ_DEFINITIONS } from "./domains/inventoryIdentity_readDefinitions";
+import { OPERATIONS_READ_DEFINITIONS } from "./domains/operations_readDefinitions";
+import { STOREFRONT_CUSTOMER_READ_DEFINITIONS } from "./domains/storefrontCustomer_readDefinitions";
+import { STOREFRONT_OPERATOR_READ_DEFINITIONS } from "./domains/storefrontOperator_readDefinitions";
+import { REPORTS_READ_DEFINITIONS } from "./domains/reports_readDefinitions";
+import { PLATFORM_READ_DEFINITIONS } from "./domains/platform_readDefinitions";
+import { HTTP_CUSTOMER_READ_DEFINITIONS } from "./domains/httpCustomer_readDefinitions";
+import { HTTP_CORE_READ_DEFINITIONS } from "./domains/httpCore_readDefinitions";
 
 export { defineReadOperation };
 
@@ -774,16 +774,16 @@ const OPERATION_READ_ADMISSION_BASE_DEFINITIONS = [
 export const OPERATION_READ_ADMISSION_DEFINITIONS: readonly OperationReadDefinition[] =
   Object.freeze([
     ...OPERATION_READ_ADMISSION_BASE_DEFINITIONS,
-    ...U2_POS_READ_OPERATION_DEFINITIONS,
-    ...U3_INVENTORY_CATALOG_READ_OPERATION_DEFINITIONS,
-    ...U4_INVENTORY_IDENTITY_READ_OPERATION_DEFINITIONS,
-    ...U5_OPERATIONS_READ_OPERATION_DEFINITIONS,
-    ...U6_STOREFRONT_CUSTOMER_READ_OPERATION_DEFINITIONS,
-    ...U7_STOREFRONT_OPERATOR_READ_OPERATION_DEFINITIONS,
-    ...U8_REPORTS_READ_OPERATION_DEFINITIONS,
-    ...U9_PLATFORM_READ_OPERATION_DEFINITIONS,
-    ...U10_HTTP_CUSTOMER_READ_OPERATION_DEFINITIONS,
-    ...U11_HTTP_CORE_READ_OPERATION_DEFINITIONS,
+    ...POS_READ_DEFINITIONS,
+    ...INVENTORY_CATALOG_READ_DEFINITIONS,
+    ...INVENTORY_IDENTITY_READ_DEFINITIONS,
+    ...OPERATIONS_READ_DEFINITIONS,
+    ...STOREFRONT_CUSTOMER_READ_DEFINITIONS,
+    ...STOREFRONT_OPERATOR_READ_DEFINITIONS,
+    ...REPORTS_READ_DEFINITIONS,
+    ...PLATFORM_READ_DEFINITIONS,
+    ...HTTP_CUSTOMER_READ_DEFINITIONS,
+    ...HTTP_CORE_READ_DEFINITIONS,
   ] as const);
 
 export function validateReadOperationDefinition(

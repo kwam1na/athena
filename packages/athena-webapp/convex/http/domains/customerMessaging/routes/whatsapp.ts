@@ -14,8 +14,8 @@ import {
   getWhatsAppWebhookAppSecret,
   getWhatsAppWebhookVerifyToken,
 } from "../../../../customerMessaging/whatsappConfig";
-import { whatsappWebhookRouteOperationDefinition } from "../../../../operationAdmission/domains/u11_httpCore_definitions";
-import { whatsappWebhookVerificationRouteReadDefinition } from "../../../../operationAdmission/domains/u11_httpCore_readDefinitions";
+import { whatsappWebhookRouteOperationDefinition } from "../../../../operationAdmission/domains/httpCore_definitions";
+import { whatsappWebhookVerificationRouteReadDefinition } from "../../../../operationAdmission/domains/httpCore_readDefinitions";
 import {
   admitHttpRead,
   admitHttpRoute,

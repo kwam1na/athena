@@ -2,7 +2,7 @@ import { v } from "convex/values";
 
 import { mutation } from "../_generated/server";
 import { getAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
-import { recordDocsWorkspaceVisitOperationDefinition } from "../operationAdmission/domains/u9_platform_definitions";
+import { recordDocsWorkspaceVisitOperationDefinition } from "../operationAdmission/domains/platform_definitions";
 import { admitPublicMutation } from "../platform/operationAdmission";
 import { appendContextEventWithCtx } from "./contextEvents";
 

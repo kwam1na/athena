@@ -34,18 +34,18 @@ import { validateReadOperationDefinition } from "../operationAdmission/readDefin
 import { SHARED_DEMO_ALLOWED_CAPABILITIES } from "../platform/capabilityCatalog";
 import { SHARED_DEMO_ALLOWED_READ_INTENTS } from "../sharedDemo/policy";
 import {
-  U8_REPORTS_OPERATION_DEFINITIONS,
+  REPORTS_DEFINITIONS,
   ensureMixRangeOperationDefinition,
   ensureMovementRangeOperationDefinition,
   requestRangeOperationDefinition,
   retryMixRangeOperationDefinition,
   retryMovementRangeOperationDefinition,
-} from "../operationAdmission/domains/u8_reports_definitions";
+} from "../operationAdmission/domains/reports_definitions";
 import {
-  U8_REPORTS_READ_OPERATION_DEFINITIONS,
+  REPORTS_READ_DEFINITIONS,
   getAuthenticatedUserReadDefinition,
   getUserByIdReadDefinition,
-} from "../operationAdmission/domains/u8_reports_readDefinitions";
+} from "../operationAdmission/domains/reports_readDefinitions";
 
 const modules = Object.fromEntries(
   Object.entries(import.meta.glob("../**/*.ts")).map(([path, loader]) => [
@@ -65,16 +65,16 @@ const DEMO_DENIED = /demo/i;
 describe("U8 operation definitions", () => {
   it("declares 5 mutations and 19 reads", () => {
     expect(
-      U8_REPORTS_OPERATION_DEFINITIONS.map((definition) => definition.kind),
+      REPORTS_DEFINITIONS.map((definition) => definition.kind),
     ).toEqual(Array.from({ length: 5 }, () => "mutation"));
-    expect(U8_REPORTS_READ_OPERATION_DEFINITIONS).toHaveLength(19);
-    for (const definition of U8_REPORTS_READ_OPERATION_DEFINITIONS) {
+    expect(REPORTS_READ_DEFINITIONS).toHaveLength(19);
+    for (const definition of REPORTS_READ_DEFINITIONS) {
       expect(definition.kind).toBe("query");
     }
   });
 
   it("passes rail definition validation and declares every actor explicitly", () => {
-    for (const definition of U8_REPORTS_OPERATION_DEFINITIONS) {
+    for (const definition of REPORTS_DEFINITIONS) {
       expect({
         errors: validateOperationDefinition(definition),
         id: definition.operationId,
@@ -86,7 +86,7 @@ describe("U8 operation definitions", () => {
       expect(definition.actors.storefrontCustomer).toBeUndefined();
     }
 
-    for (const definition of U8_REPORTS_READ_OPERATION_DEFINITIONS) {
+    for (const definition of REPORTS_READ_DEFINITIONS) {
       expect({
         errors: validateReadOperationDefinition(definition),
         id: definition.operationId,
@@ -110,14 +110,14 @@ describe("U8 operation definitions", () => {
    * `sharedDemo/readIntentGrants.test.ts` fails on the same missing line.
    */
   it("never widens shared-demo reach beyond the closed grant sets", () => {
-    for (const definition of U8_REPORTS_OPERATION_DEFINITIONS) {
+    for (const definition of REPORTS_DEFINITIONS) {
       if (definition.actors.sharedDemo !== "admit") continue;
       expect(SHARED_DEMO_ALLOWED_CAPABILITIES).toContain(
         definition.capability as never,
       );
     }
 
-    for (const definition of U8_REPORTS_READ_OPERATION_DEFINITIONS) {
+    for (const definition of REPORTS_READ_DEFINITIONS) {
       if (definition.actors.sharedDemo !== "admit") continue;
       expect(SHARED_DEMO_ALLOWED_READ_INTENTS).toContain(
         definition.access.intent as never,
@@ -126,7 +126,7 @@ describe("U8 operation definitions", () => {
   });
 
   it("scopes every reporting read to the store named in its arguments", () => {
-    for (const definition of U8_REPORTS_READ_OPERATION_DEFINITIONS) {
+    for (const definition of REPORTS_READ_DEFINITIONS) {
       if (definition.access.intent !== "reports.view") continue;
       expect(definition.scope).toEqual({
         kind: "store",
@@ -141,13 +141,13 @@ describe("U8 operation definitions", () => {
   // entirely, so the set is enumerated rather than spot-checked.
   it("admits anonymous callers on exactly the identity probe", () => {
     expect(
-      U8_REPORTS_READ_OPERATION_DEFINITIONS.filter(
+      REPORTS_READ_DEFINITIONS.filter(
         (definition) => definition.actors.public === "admit",
       ).map((definition) => definition.functionName),
     ).toEqual(["inventory/athenaUser:getAuthenticatedUser"]);
 
     expect(
-      U8_REPORTS_OPERATION_DEFINITIONS.filter(
+      REPORTS_DEFINITIONS.filter(
         (definition) => definition.actors.public === "admit",
       ),
     ).toEqual([]);
@@ -194,7 +194,7 @@ describe("U8 retired guard successors", () => {
     // capability check plus a server-owned store clamp. The successor is the
     // demo-granted `reports.view` intent on a store-scoped read definition,
     // which the shared-demo read adapter clamps to the demo's own store.
-    const reportsReads = U8_REPORTS_READ_OPERATION_DEFINITIONS.filter(
+    const reportsReads = REPORTS_READ_DEFINITIONS.filter(
       (definition) => definition.access.intent === "reports.view",
     );
     expect(reportsReads).toHaveLength(17);

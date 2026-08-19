@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { healthRouteReadDefinition } from "../operationAdmission/domains/u11_httpCore_readDefinitions";
+import { healthRouteReadDefinition } from "../operationAdmission/domains/httpCore_readDefinitions";
 import { validateReadOperationDefinition } from "../operationAdmission/readDefinitions";
 
 const projectRoot = process.cwd();

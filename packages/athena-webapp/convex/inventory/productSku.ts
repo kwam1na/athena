@@ -20,10 +20,10 @@ import {
   nukeProblematicImagesOperationDefinition,
   updateProductSkuOperationDefinition,
   uploadProductSkuImagesOperationDefinition,
-} from "../operationAdmission/domains/u3_inventoryCatalog_definitions";
+} from "../operationAdmission/domains/inventoryCatalog_definitions";
 import {
   getProductSkuByIdReadDefinition,
-} from "../operationAdmission/domains/u3_inventoryCatalog_readDefinitions";
+} from "../operationAdmission/domains/inventoryCatalog_readDefinitions";
 import type { OperationActionCtx } from "../operationAdmission/rail";
 import type {
   OperationMutationCtx,

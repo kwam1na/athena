@@ -27,16 +27,16 @@ import { validateReadOperationDefinition } from "../operationAdmission/readDefin
 import { SHARED_DEMO_ALLOWED_READ_INTENTS } from "../sharedDemo/policy";
 import { SHARED_DEMO_ALLOWED_CAPABILITIES } from "../platform/capabilityCatalog";
 import {
-  U6_STOREFRONT_CUSTOMER_OPERATION_DEFINITIONS,
+  STOREFRONT_CUSTOMER_DEFINITIONS,
   checkTransactionStatusOperationDefinition,
   findOrderTransactionsOperationDefinition,
   getAllTransactionsOperationDefinition,
   refundPaymentOperationDefinition,
-} from "../operationAdmission/domains/u6_storefrontCustomer_definitions";
+} from "../operationAdmission/domains/storefrontCustomer_definitions";
 import {
-  U6_STOREFRONT_CUSTOMER_READ_OPERATION_DEFINITIONS,
+  STOREFRONT_CUSTOMER_READ_DEFINITIONS,
   getActiveCheckoutSessionsForStoreReadDefinition,
-} from "../operationAdmission/domains/u6_storefrontCustomer_readDefinitions";
+} from "../operationAdmission/domains/storefrontCustomer_readDefinitions";
 
 const modules = Object.fromEntries(
   Object.entries(import.meta.glob("../**/*.ts")).map(([path, loader]) => [
@@ -53,7 +53,7 @@ const DENIED_ANONYMOUSLY = /Sign in again to continue\./;
 
 describe("U6 operation definitions", () => {
   it("declares 5 mutations, 4 actions, and 28 reads", () => {
-    const byKind = U6_STOREFRONT_CUSTOMER_OPERATION_DEFINITIONS.reduce<
+    const byKind = STOREFRONT_CUSTOMER_DEFINITIONS.reduce<
       Record<string, number>
     >((counts, definition) => {
       counts[definition.kind] = (counts[definition.kind] ?? 0) + 1;
@@ -61,11 +61,11 @@ describe("U6 operation definitions", () => {
     }, {});
 
     expect(byKind).toEqual({ action: 4, mutation: 5 });
-    expect(U6_STOREFRONT_CUSTOMER_READ_OPERATION_DEFINITIONS).toHaveLength(28);
+    expect(STOREFRONT_CUSTOMER_READ_DEFINITIONS).toHaveLength(28);
   });
 
   it("passes rail definition validation and declares every actor explicitly", () => {
-    for (const definition of U6_STOREFRONT_CUSTOMER_OPERATION_DEFINITIONS) {
+    for (const definition of STOREFRONT_CUSTOMER_DEFINITIONS) {
       expect({
         errors: validateOperationDefinition(definition),
         id: definition.operationId,
@@ -75,7 +75,7 @@ describe("U6 operation definitions", () => {
       expect(definition.actors.public).toBeDefined();
     }
 
-    for (const definition of U6_STOREFRONT_CUSTOMER_READ_OPERATION_DEFINITIONS) {
+    for (const definition of STOREFRONT_CUSTOMER_READ_DEFINITIONS) {
       expect({
         errors: validateReadOperationDefinition(definition),
         id: definition.operationId,
@@ -93,8 +93,8 @@ describe("U6 operation definitions", () => {
    */
   it("never admits storefront customers on a Convex-function kind", () => {
     for (const definition of [
-      ...U6_STOREFRONT_CUSTOMER_OPERATION_DEFINITIONS,
-      ...U6_STOREFRONT_CUSTOMER_READ_OPERATION_DEFINITIONS,
+      ...STOREFRONT_CUSTOMER_DEFINITIONS,
+      ...STOREFRONT_CUSTOMER_READ_DEFINITIONS,
     ]) {
       expect({
         id: definition.operationId,
@@ -104,14 +104,14 @@ describe("U6 operation definitions", () => {
   });
 
   it("never widens shared-demo reach beyond the closed grant sets", () => {
-    for (const definition of U6_STOREFRONT_CUSTOMER_OPERATION_DEFINITIONS) {
+    for (const definition of STOREFRONT_CUSTOMER_DEFINITIONS) {
       if (definition.actors.sharedDemo !== "admit") continue;
       expect(SHARED_DEMO_ALLOWED_CAPABILITIES).toContain(
         definition.capability as never,
       );
     }
 
-    for (const definition of U6_STOREFRONT_CUSTOMER_READ_OPERATION_DEFINITIONS) {
+    for (const definition of STOREFRONT_CUSTOMER_READ_DEFINITIONS) {
       if (definition.actors.sharedDemo !== "admit") continue;
       expect(SHARED_DEMO_ALLOWED_READ_INTENTS).toContain(
         definition.access.intent as never,
@@ -125,13 +125,13 @@ describe("U6 operation definitions", () => {
   // so no U6 Convex operation gives up identity any more.
   it("admits anonymous callers on no U6 operation", () => {
     expect(
-      U6_STOREFRONT_CUSTOMER_OPERATION_DEFINITIONS.filter(
+      STOREFRONT_CUSTOMER_DEFINITIONS.filter(
         (definition) => definition.actors.public === "admit",
       ).map((definition) => definition.functionName),
     ).toEqual([]);
 
     expect(
-      U6_STOREFRONT_CUSTOMER_READ_OPERATION_DEFINITIONS.filter(
+      STOREFRONT_CUSTOMER_READ_DEFINITIONS.filter(
         (definition) => definition.actors.public === "admit",
       ),
     ).toEqual([]);
@@ -142,7 +142,7 @@ describe("U6 operation definitions", () => {
   // deliberate edit to this list rather than a quiet extra "admit".
   it("grants the shared demo exactly one read", () => {
     expect(
-      U6_STOREFRONT_CUSTOMER_READ_OPERATION_DEFINITIONS.filter(
+      STOREFRONT_CUSTOMER_READ_DEFINITIONS.filter(
         (definition) => definition.actors.sharedDemo === "admit",
       ),
     ).toEqual([getActiveCheckoutSessionsForStoreReadDefinition]);
@@ -199,7 +199,7 @@ describe("U6 retired guard successors", () => {
   // No U6 handler called requireNonDemoFoundation*, so no definition may
   // silently acquire a target guard it never had.
   it("declares no target guards, because no foundation guard existed here", () => {
-    for (const definition of U6_STOREFRONT_CUSTOMER_OPERATION_DEFINITIONS) {
+    for (const definition of STOREFRONT_CUSTOMER_DEFINITIONS) {
       expect({
         id: definition.operationId,
         target: definition.target,

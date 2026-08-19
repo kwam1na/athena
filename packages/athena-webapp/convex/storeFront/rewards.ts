@@ -9,8 +9,8 @@ import {
 } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import { recordStoreFrontCustomerMilestone } from "./helpers/customerEngagementEvents";
-import { createRewardTierOperationDefinition } from "../operationAdmission/domains/u6_storefrontCustomer_definitions";
-import { getRewardTiersReadDefinition } from "../operationAdmission/domains/u6_storefrontCustomer_readDefinitions";
+import { createRewardTierOperationDefinition } from "../operationAdmission/domains/storefrontCustomer_definitions";
+import { getRewardTiersReadDefinition } from "../operationAdmission/domains/storefrontCustomer_readDefinitions";
 import {
   admitPublicMutation,
   admitPublicQuery,

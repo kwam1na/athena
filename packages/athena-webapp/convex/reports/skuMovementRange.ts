@@ -28,11 +28,11 @@ import { requireReportsStoreAccess } from "./access";
 import {
   ensureMovementRangeOperationDefinition,
   retryMovementRangeOperationDefinition,
-} from "../operationAdmission/domains/u8_reports_definitions";
+} from "../operationAdmission/domains/reports_definitions";
 import {
   getMovementRangeReadDefinition,
   getMovementRangePageReadDefinition,
-} from "../operationAdmission/domains/u8_reports_readDefinitions";
+} from "../operationAdmission/domains/reports_readDefinitions";
 import {
   admitPublicMutation,
   admitPublicQuery,

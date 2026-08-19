@@ -44,7 +44,7 @@ import {
   resolvePosCustomerStoreFrontUserMatchOperationDefinition,
   updatePosCustomerOperationDefinition,
   updatePosCustomerStatsOperationDefinition,
-} from "../../operationAdmission/domains/u2_pos_definitions";
+} from "../../operationAdmission/domains/pos_definitions";
 import {
   findPotentialPosCustomerMatchesReadDefinition,
   findPosCustomerByStoreFrontUserReadDefinition,

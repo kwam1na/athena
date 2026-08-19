@@ -10,7 +10,7 @@ import {
   streamGetDirectUploadUrlOperationDefinition,
   streamGetVideoStatusOperationDefinition,
   streamSetActiveStreamReelOperationDefinition,
-} from "../operationAdmission/domains/u9_platform_definitions";
+} from "../operationAdmission/domains/platform_definitions";
 import { admitPublicAction } from "../platform/operationAdmission";
 
 const CLOUDFLARE_API_BASE = "https://api.cloudflare.com/client/v4";

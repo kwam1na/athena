@@ -18,11 +18,11 @@ import {
   admitPublicMutation,
   admitPublicQuery,
 } from "../platform/operationAdmission";
-import { voidExpenseTransactionOperationDefinition } from "../operationAdmission/domains/u4_inventoryIdentity_definitions";
+import { voidExpenseTransactionOperationDefinition } from "../operationAdmission/domains/inventoryIdentity_definitions";
 import {
   getExpenseTransactionByIdReadDefinition,
   listExpenseTransactionsReadDefinition,
-} from "../operationAdmission/domains/u4_inventoryIdentity_readDefinitions";
+} from "../operationAdmission/domains/inventoryIdentity_readDefinitions";
 import type {
   OperationMutationCtx,
   OperationQueryCtx,

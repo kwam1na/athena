@@ -7,11 +7,11 @@ import {
   createSubcategoryRouteOperationDefinition,
   deleteSubcategoryRouteOperationDefinition,
   updateSubcategoryRouteOperationDefinition,
-} from "../../../../operationAdmission/domains/u11_httpCore_definitions";
+} from "../../../../operationAdmission/domains/httpCore_definitions";
 import {
   getSubcategoryRouteReadDefinition,
   listSubcategoriesRouteReadDefinition,
-} from "../../../../operationAdmission/domains/u11_httpCore_readDefinitions";
+} from "../../../../operationAdmission/domains/httpCore_readDefinitions";
 import {
   admitHttpRead,
   admitHttpRoute,

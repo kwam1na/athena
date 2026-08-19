@@ -15,8 +15,8 @@ import {
   archiveServiceCatalogItemOperationDefinition,
   createServiceCatalogItemOperationDefinition,
   updateServiceCatalogItemOperationDefinition,
-} from "../operationAdmission/domains/u5_operations_definitions";
-import { listServiceCatalogItemsReadDefinition } from "../operationAdmission/domains/u5_operations_readDefinitions";
+} from "../operationAdmission/domains/operations_definitions";
+import { listServiceCatalogItemsReadDefinition } from "../operationAdmission/domains/operations_readDefinitions";
 
 type ServiceCatalogPricingModel =
   "fixed" | "starting_at" | "quote_after_consultation";

@@ -322,7 +322,7 @@ export const paystackWebhookRouteOperationDefinition = publicWriteRoute({
   path: "/webhooks/paystack",
 });
 
-export const U10_HTTP_CUSTOMER_OPERATION_DEFINITIONS: readonly OperationDefinition[] =
+export const HTTP_CUSTOMER_DEFINITIONS: readonly OperationDefinition[] =
   [
     addBagItemRouteOperationDefinition,
     updateBagOwnerRouteOperationDefinition,

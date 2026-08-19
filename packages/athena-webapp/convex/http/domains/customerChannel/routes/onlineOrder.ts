@@ -7,11 +7,11 @@ import {
   admitHttpRead,
   admitHttpRoute,
 } from "../../../../platform/operationAdmission";
-import { updateOrderOwnerRouteOperationDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_definitions";
+import { updateOrderOwnerRouteOperationDefinition } from "../../../../operationAdmission/domains/httpCustomer_definitions";
 import {
   getOrderRouteReadDefinition,
   getOrdersRouteReadDefinition,
-} from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
+} from "../../../../operationAdmission/domains/httpCustomer_readDefinitions";
 import {
   guestMergeErrorResponse,
   isCustomerOwnershipDenial,

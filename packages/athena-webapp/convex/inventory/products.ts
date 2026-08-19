@@ -43,7 +43,7 @@ import {
   unarchiveProductOperationDefinition,
   updateProductOperationDefinition,
   updateProductSkuFieldsOperationDefinition,
-} from "../operationAdmission/domains/u3_inventoryCatalog_definitions";
+} from "../operationAdmission/domains/inventoryCatalog_definitions";
 import { listInventoryProductsReadDefinition } from "../operationAdmission/readDefinitions";
 import {
   batchGetProductsReadDefinition,
@@ -52,7 +52,7 @@ import {
   getProductByIdReadDefinition,
   getProductBySlugReadDefinition,
   getProductSkuReadDefinition,
-} from "../operationAdmission/domains/u3_inventoryCatalog_readDefinitions";
+} from "../operationAdmission/domains/inventoryCatalog_readDefinitions";
 import type {
   OperationMutationCtx,
   OperationQueryCtx,

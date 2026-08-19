@@ -34,7 +34,7 @@ import {
   getStoreByIdReadDefinition,
   getStoreImageAssetsReadDefinition,
   preflightStoreConfigKeysReadDefinition,
-} from "../operationAdmission/domains/u4_inventoryIdentity_readDefinitions";
+} from "../operationAdmission/domains/inventoryIdentity_readDefinitions";
 import {
   cleanupLegacyStoreConfigKeysPageOperationDefinition,
   createStoreOperationDefinition,
@@ -47,7 +47,7 @@ import {
   updateStoreLandingPageReelOperationDefinition,
   updateStoreOperationDefinition,
   uploadStoreImageAssetsOperationDefinition,
-} from "../operationAdmission/domains/u4_inventoryIdentity_definitions";
+} from "../operationAdmission/domains/inventoryIdentity_definitions";
 import type {
   OperationMutationCtx,
   OperationQueryCtx,

@@ -24,7 +24,7 @@ import {
 import {
   generateStoreInsightsOperationDefinition,
   generateUserInsightsOperationDefinition,
-} from "../../operationAdmission/domains/u9_platform_definitions";
+} from "../../operationAdmission/domains/platform_definitions";
 import { admitPublicAction } from "../../platform/operationAdmission";
 import {
   buildStoreInsightsPromptFromContextBundle,

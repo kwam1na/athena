@@ -6,8 +6,8 @@ import {
   SHARED_DEMO_ALLOWED_CAPABILITIES,
 } from "../platform/capabilityCatalog";
 import { SHARED_DEMO_ALLOWED_READ_INTENTS } from "../sharedDemo/policy";
-import { U7_STOREFRONT_OPERATOR_OPERATION_DEFINITIONS } from "../operationAdmission/domains/u7_storefrontOperator_definitions";
-import { U7_STOREFRONT_OPERATOR_READ_OPERATION_DEFINITIONS } from "../operationAdmission/domains/u7_storefrontOperator_readDefinitions";
+import { STOREFRONT_OPERATOR_DEFINITIONS } from "../operationAdmission/domains/storefrontOperator_definitions";
+import { STOREFRONT_OPERATOR_READ_DEFINITIONS } from "../operationAdmission/domains/storefrontOperator_readDefinitions";
 import {
   sendOrderUpdateEmailOperationDefinition,
   updateOnlineOrderOperationDefinition,
@@ -166,12 +166,12 @@ describe("U7 storefront operator operation definitions", () => {
   );
 
   it("declares 7 write definitions and 20 read definitions", () => {
-    expect(U7_STOREFRONT_OPERATOR_OPERATION_DEFINITIONS.length).toBe(7);
-    expect(U7_STOREFRONT_OPERATOR_READ_OPERATION_DEFINITIONS.length).toBe(20);
+    expect(STOREFRONT_OPERATOR_DEFINITIONS.length).toBe(7);
+    expect(STOREFRONT_OPERATOR_READ_DEFINITIONS.length).toBe(20);
   });
 
   it("validates every write definition against the rail contract", () => {
-    for (const definition of U7_STOREFRONT_OPERATOR_OPERATION_DEFINITIONS) {
+    for (const definition of STOREFRONT_OPERATOR_DEFINITIONS) {
       expect(
         validateOperationDefinition(definition),
         definition.operationId,
@@ -181,7 +181,7 @@ describe("U7 storefront operator operation definitions", () => {
   });
 
   it("validates every read definition against the rail contract", () => {
-    for (const definition of U7_STOREFRONT_OPERATOR_READ_OPERATION_DEFINITIONS) {
+    for (const definition of STOREFRONT_OPERATOR_READ_DEFINITIONS) {
       expect(
         validateReadOperationDefinition(definition),
         definition.operationId,
@@ -191,7 +191,7 @@ describe("U7 storefront operator operation definitions", () => {
 
   it("derives actors.sharedDemo from the capability grant set, never widening it", () => {
     const granted = new Set<string>(SHARED_DEMO_ALLOWED_CAPABILITIES);
-    for (const definition of U7_STOREFRONT_OPERATOR_OPERATION_DEFINITIONS) {
+    for (const definition of STOREFRONT_OPERATOR_DEFINITIONS) {
       expect(
         definition.actors.sharedDemo === "admit",
         definition.operationId,
@@ -201,7 +201,7 @@ describe("U7 storefront operator operation definitions", () => {
 
   it("admits the demo on a read only when its intent is granted", () => {
     const granted = new Set<string>(SHARED_DEMO_ALLOWED_READ_INTENTS);
-    for (const definition of U7_STOREFRONT_OPERATOR_READ_OPERATION_DEFINITIONS) {
+    for (const definition of STOREFRONT_OPERATOR_READ_DEFINITIONS) {
       if (definition.actors.sharedDemo !== "admit") continue;
       expect(granted.has(definition.access.intent), definition.operationId).toBe(
         true,
@@ -211,7 +211,7 @@ describe("U7 storefront operator operation definitions", () => {
 
   it("keeps every migrated read on the three unit intents", () => {
     const intents = new Set(
-      U7_STOREFRONT_OPERATOR_READ_OPERATION_DEFINITIONS.map(
+      STOREFRONT_OPERATOR_READ_DEFINITIONS.map(
         (definition) => definition.access.intent,
       ),
     );
@@ -225,7 +225,7 @@ describe("U7 storefront operator operation definitions", () => {
   // The storefront-reached writes now enter only through their HTTP routes and
   // their `internal.*` siblings, so no U7 write gives up identity any more.
   it("admits anonymous writers on no operator write", () => {
-    const anonymous = U7_STOREFRONT_OPERATOR_OPERATION_DEFINITIONS.filter(
+    const anonymous = STOREFRONT_OPERATOR_DEFINITIONS.filter(
       (definition) => definition.actors.public === "admit",
     ).map((definition) => definition.functionName);
 
@@ -243,7 +243,7 @@ describe("U7 storefront operator operation definitions", () => {
       "storeFront/reviews:unpublish",
     ];
     for (const functionName of operatorOnly) {
-      const definition = U7_STOREFRONT_OPERATOR_OPERATION_DEFINITIONS.find(
+      const definition = STOREFRONT_OPERATOR_DEFINITIONS.find(
         (candidate) => candidate.functionName === functionName,
       );
       expect(definition?.actors.public, functionName).toBe("deny");
@@ -252,7 +252,7 @@ describe("U7 storefront operator operation definitions", () => {
   });
 
   it("admits anonymous readers only on the reads storefront routes serve", () => {
-    const anonymous = U7_STOREFRONT_OPERATOR_READ_OPERATION_DEFINITIONS.filter(
+    const anonymous = STOREFRONT_OPERATOR_READ_DEFINITIONS.filter(
       (definition) => definition.actors.public === "admit",
     ).map((definition) => definition.functionName);
 
@@ -265,8 +265,8 @@ describe("U7 storefront operator operation definitions", () => {
 
   it("resolves every store scope, so no migrated operation admits unscoped", () => {
     for (const definition of [
-      ...U7_STOREFRONT_OPERATOR_OPERATION_DEFINITIONS,
-      ...U7_STOREFRONT_OPERATOR_READ_OPERATION_DEFINITIONS,
+      ...STOREFRONT_OPERATOR_DEFINITIONS,
+      ...STOREFRONT_OPERATOR_READ_DEFINITIONS,
     ]) {
       expect(definition.scope.kind, definition.operationId).toBe("store");
     }
@@ -430,7 +430,7 @@ describe("review moderation admission", () => {
     // `reviews.manage` IS granted, so the demo actor passes capability and
     // scope; what stops this fixture is the store_write restore fence, which
     // is exactly the ordering the rail promises.
-    const definition = U7_STOREFRONT_OPERATOR_OPERATION_DEFINITIONS.find(
+    const definition = STOREFRONT_OPERATOR_DEFINITIONS.find(
       (candidate) => candidate.functionName === "storeFront/reviews:publish",
     );
     expect(definition?.actors.sharedDemo).toBe("admit");

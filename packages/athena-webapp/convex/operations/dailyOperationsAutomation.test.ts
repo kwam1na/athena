@@ -31,7 +31,7 @@ import {
   updateEodAutoCompletePolicyOperationDefinition,
   updateOpeningAutoStartPolicyOperationDefinition,
   updateRegisterCloseoutApprovalPolicyOperationDefinition,
-} from "../operationAdmission/domains/u5_operations_definitions";
+} from "../operationAdmission/domains/operations_definitions";
 
 const modules = Object.fromEntries(
   Object.entries(import.meta.glob("../**/*.ts")).map(([path, loader]) => [

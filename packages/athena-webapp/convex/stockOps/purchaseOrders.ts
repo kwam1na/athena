@@ -12,11 +12,11 @@ import {
   createPurchaseOrderOperationDefinition,
   updatePurchaseOrderStatusCommandOperationDefinition,
   updatePurchaseOrderStatusOperationDefinition,
-} from "../operationAdmission/domains/u5_operations_definitions";
+} from "../operationAdmission/domains/operations_definitions";
 import {
   getPurchaseOrderReadDefinition,
   listPurchaseOrdersReadDefinition,
-} from "../operationAdmission/domains/u5_operations_readDefinitions";
+} from "../operationAdmission/domains/operations_readDefinitions";
 import {
   admitPublicMutation,
   admitPublicQuery,

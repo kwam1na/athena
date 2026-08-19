@@ -12,16 +12,16 @@ import {
   storeWriteOperation,
   transactionStoreWriteOperation,
 } from "./domains/_shapes";
-import { U2_POS_OPERATION_DEFINITIONS } from "./domains/u2_pos_definitions";
-import { U3_INVENTORY_CATALOG_OPERATION_DEFINITIONS } from "./domains/u3_inventoryCatalog_definitions";
-import { U4_INVENTORY_IDENTITY_OPERATION_DEFINITIONS } from "./domains/u4_inventoryIdentity_definitions";
-import { U5_OPERATIONS_OPERATION_DEFINITIONS } from "./domains/u5_operations_definitions";
-import { U6_STOREFRONT_CUSTOMER_OPERATION_DEFINITIONS } from "./domains/u6_storefrontCustomer_definitions";
-import { U7_STOREFRONT_OPERATOR_OPERATION_DEFINITIONS } from "./domains/u7_storefrontOperator_definitions";
-import { U8_REPORTS_OPERATION_DEFINITIONS } from "./domains/u8_reports_definitions";
-import { U9_PLATFORM_OPERATION_DEFINITIONS } from "./domains/u9_platform_definitions";
-import { U10_HTTP_CUSTOMER_OPERATION_DEFINITIONS } from "./domains/u10_httpCustomer_definitions";
-import { U11_HTTP_CORE_OPERATION_DEFINITIONS } from "./domains/u11_httpCore_definitions";
+import { POS_DEFINITIONS } from "./domains/pos_definitions";
+import { INVENTORY_CATALOG_DEFINITIONS } from "./domains/inventoryCatalog_definitions";
+import { INVENTORY_IDENTITY_DEFINITIONS } from "./domains/inventoryIdentity_definitions";
+import { OPERATIONS_DEFINITIONS } from "./domains/operations_definitions";
+import { STOREFRONT_CUSTOMER_DEFINITIONS } from "./domains/storefrontCustomer_definitions";
+import { STOREFRONT_OPERATOR_DEFINITIONS } from "./domains/storefrontOperator_definitions";
+import { REPORTS_DEFINITIONS } from "./domains/reports_definitions";
+import { PLATFORM_DEFINITIONS } from "./domains/platform_definitions";
+import { HTTP_CUSTOMER_DEFINITIONS } from "./domains/httpCustomer_definitions";
+import { HTTP_CORE_DEFINITIONS } from "./domains/httpCore_definitions";
 
 export { defineOperation };
 
@@ -801,16 +801,16 @@ const OPERATION_ADMISSION_BASE_DEFINITIONS = [
  */
 export const OPERATION_ADMISSION_DEFINITIONS: readonly OperationDefinition[] = Object.freeze([
   ...OPERATION_ADMISSION_BASE_DEFINITIONS,
-  ...U2_POS_OPERATION_DEFINITIONS,
-  ...U3_INVENTORY_CATALOG_OPERATION_DEFINITIONS,
-  ...U4_INVENTORY_IDENTITY_OPERATION_DEFINITIONS,
-  ...U5_OPERATIONS_OPERATION_DEFINITIONS,
-  ...U6_STOREFRONT_CUSTOMER_OPERATION_DEFINITIONS,
-  ...U7_STOREFRONT_OPERATOR_OPERATION_DEFINITIONS,
-  ...U8_REPORTS_OPERATION_DEFINITIONS,
-  ...U9_PLATFORM_OPERATION_DEFINITIONS,
-  ...U10_HTTP_CUSTOMER_OPERATION_DEFINITIONS,
-  ...U11_HTTP_CORE_OPERATION_DEFINITIONS,
+  ...POS_DEFINITIONS,
+  ...INVENTORY_CATALOG_DEFINITIONS,
+  ...INVENTORY_IDENTITY_DEFINITIONS,
+  ...OPERATIONS_DEFINITIONS,
+  ...STOREFRONT_CUSTOMER_DEFINITIONS,
+  ...STOREFRONT_OPERATOR_DEFINITIONS,
+  ...REPORTS_DEFINITIONS,
+  ...PLATFORM_DEFINITIONS,
+  ...HTTP_CUSTOMER_DEFINITIONS,
+  ...HTTP_CORE_DEFINITIONS,
 ] as const);
 
 export function validateOperationDefinition(

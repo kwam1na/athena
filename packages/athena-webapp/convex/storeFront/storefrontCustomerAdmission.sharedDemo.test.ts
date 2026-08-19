@@ -32,7 +32,7 @@ import {
   findOrderTransactionsOperationDefinition,
   getAllTransactionsOperationDefinition,
   refundPaymentOperationDefinition,
-} from "../operationAdmission/domains/u6_storefrontCustomer_definitions";
+} from "../operationAdmission/domains/storefrontCustomer_definitions";
 
 const DEMO_PRINCIPAL = {
   admissionExpiresAt: Number.MAX_SAFE_INTEGER,

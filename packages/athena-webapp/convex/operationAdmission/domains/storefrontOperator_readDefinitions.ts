@@ -285,7 +285,7 @@ export const getUnapprovedReviewsCountReadDefinition = reviewRead({
   operationId: "storeFront/reviews.getUnapprovedReviewsCount.read",
 });
 
-export const U7_STOREFRONT_OPERATOR_READ_OPERATION_DEFINITIONS: readonly OperationReadDefinition[] =
+export const STOREFRONT_OPERATOR_READ_DEFINITIONS: readonly OperationReadDefinition[] =
   [
     listAnalyticsReadDefinition,
     listAnalyticsPagedReadDefinition,

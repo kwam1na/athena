@@ -277,7 +277,7 @@ export const getReceiptShareRouteReadDefinition = browseRead({
   path: "/pos-transactions/receipt-shares/:token",
 });
 
-export const U10_HTTP_CUSTOMER_READ_OPERATION_DEFINITIONS: readonly OperationReadDefinition[] =
+export const HTTP_CUSTOMER_READ_DEFINITIONS: readonly OperationReadDefinition[] =
   [
     getBagRouteReadDefinition,
     getSavedBagRouteReadDefinition,

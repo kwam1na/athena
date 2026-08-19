@@ -645,7 +645,7 @@ export const getStoreReelVersionsOperationDefinition = storeProviderAction({
   target: { protectDemoFoundation: { storeIdArg: "storeId" } },
 });
 
-export const U4_INVENTORY_IDENTITY_OPERATION_DEFINITIONS: readonly OperationDefinition[] =
+export const INVENTORY_IDENTITY_DEFINITIONS: readonly OperationDefinition[] =
   [
     verifyCodeOperationDefinition,
     syncAuthenticatedAthenaUserOperationDefinition,

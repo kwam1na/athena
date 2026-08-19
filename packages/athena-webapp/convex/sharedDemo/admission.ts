@@ -13,7 +13,7 @@ import {
   SHARED_DEMO_TICKET_DURATION_MS,
   SHARED_DEMO_BASELINE_VERSION,
 } from "./config";
-import { issueSharedDemoTicketOperationDefinition } from "../operationAdmission/domains/u9_platform_definitions";
+import { issueSharedDemoTicketOperationDefinition } from "../operationAdmission/domains/platform_definitions";
 import { admitPublicAction } from "../platform/operationAdmission";
 import { createOpaqueTicket, hashSharedDemoTicket } from "./crypto";
 

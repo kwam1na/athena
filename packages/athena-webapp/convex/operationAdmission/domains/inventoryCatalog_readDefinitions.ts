@@ -372,7 +372,7 @@ export const getSubcategoryByIdReadDefinition = defineInventoryCatalogRead(
   "inventory.subcategories.getById.read",
 );
 
-export const U3_INVENTORY_CATALOG_READ_OPERATION_DEFINITIONS: readonly OperationReadDefinition[] =
+export const INVENTORY_CATALOG_READ_DEFINITIONS: readonly OperationReadDefinition[] =
   [
     getBannerMessageReadDefinition,
     getPublicActiveBannerMessageReadDefinition,

@@ -30,7 +30,7 @@ import { validateReadOperationDefinition } from "../operationAdmission/readDefin
 import { SHARED_DEMO_ALLOWED_READ_INTENTS } from "../sharedDemo/policy";
 import { SHARED_DEMO_ALLOWED_CAPABILITIES } from "../platform/capabilityCatalog";
 import {
-  U4_INVENTORY_IDENTITY_OPERATION_DEFINITIONS,
+  INVENTORY_IDENTITY_DEFINITIONS,
   createInviteCodeOperationDefinition,
   createOrganizationOperationDefinition,
   createStoreOperationDefinition,
@@ -48,8 +48,8 @@ import {
   updateStoreOperationDefinition,
   uploadStoreImageAssetsOperationDefinition,
   verifyCodeOperationDefinition,
-} from "../operationAdmission/domains/u4_inventoryIdentity_definitions";
-import { U4_INVENTORY_IDENTITY_READ_OPERATION_DEFINITIONS } from "../operationAdmission/domains/u4_inventoryIdentity_readDefinitions";
+} from "../operationAdmission/domains/inventoryIdentity_definitions";
+import { INVENTORY_IDENTITY_READ_DEFINITIONS } from "../operationAdmission/domains/inventoryIdentity_readDefinitions";
 
 const modules = Object.fromEntries(
   Object.entries(import.meta.glob("../**/*.ts")).map(([path, loader]) => [
@@ -66,7 +66,7 @@ const DENIED_ANONYMOUSLY = /Sign in again to continue\./;
 
 describe("U4 operation definitions", () => {
   it("declares 39 mutations, 5 actions, and 18 reads", () => {
-    const byKind = U4_INVENTORY_IDENTITY_OPERATION_DEFINITIONS.reduce<
+    const byKind = INVENTORY_IDENTITY_DEFINITIONS.reduce<
       Record<string, number>
     >((counts, definition) => {
       counts[definition.kind] = (counts[definition.kind] ?? 0) + 1;
@@ -74,11 +74,11 @@ describe("U4 operation definitions", () => {
     }, {});
 
     expect(byKind).toEqual({ action: 5, mutation: 39 });
-    expect(U4_INVENTORY_IDENTITY_READ_OPERATION_DEFINITIONS).toHaveLength(18);
+    expect(INVENTORY_IDENTITY_READ_DEFINITIONS).toHaveLength(18);
   });
 
   it("passes rail definition validation and declares every actor explicitly", () => {
-    for (const definition of U4_INVENTORY_IDENTITY_OPERATION_DEFINITIONS) {
+    for (const definition of INVENTORY_IDENTITY_DEFINITIONS) {
       expect({
         errors: validateOperationDefinition(definition),
         id: definition.operationId,
@@ -90,7 +90,7 @@ describe("U4 operation definitions", () => {
       expect(definition.actors.storefrontCustomer).toBeUndefined();
     }
 
-    for (const definition of U4_INVENTORY_IDENTITY_READ_OPERATION_DEFINITIONS) {
+    for (const definition of INVENTORY_IDENTITY_READ_DEFINITIONS) {
       expect({
         errors: validateReadOperationDefinition(definition),
         id: definition.operationId,
@@ -101,7 +101,7 @@ describe("U4 operation definitions", () => {
   });
 
   it("never widens shared-demo reach beyond the closed grant sets", () => {
-    for (const definition of U4_INVENTORY_IDENTITY_OPERATION_DEFINITIONS) {
+    for (const definition of INVENTORY_IDENTITY_DEFINITIONS) {
       if (definition.actors.sharedDemo !== "admit") continue;
       expect(typeof definition.capability).toBe("string");
       expect(SHARED_DEMO_ALLOWED_CAPABILITIES).toContain(
@@ -109,7 +109,7 @@ describe("U4 operation definitions", () => {
       );
     }
 
-    for (const definition of U4_INVENTORY_IDENTITY_READ_OPERATION_DEFINITIONS) {
+    for (const definition of INVENTORY_IDENTITY_READ_DEFINITIONS) {
       if (definition.actors.sharedDemo !== "admit") continue;
       expect(SHARED_DEMO_ALLOWED_READ_INTENTS).toContain(
         definition.access.intent as never,
@@ -121,7 +121,7 @@ describe("U4 operation definitions", () => {
   // so the set is enumerated rather than merely spot-checked.
   it("admits anonymous callers on exactly the four pre-auth operations", () => {
     expect(
-      U4_INVENTORY_IDENTITY_OPERATION_DEFINITIONS.filter(
+      INVENTORY_IDENTITY_DEFINITIONS.filter(
         (definition) => definition.actors.public === "admit",
       ).map((definition) => definition.functionName),
     ).toEqual([
@@ -132,7 +132,7 @@ describe("U4 operation definitions", () => {
     ]);
 
     expect(
-      U4_INVENTORY_IDENTITY_READ_OPERATION_DEFINITIONS.filter(
+      INVENTORY_IDENTITY_READ_DEFINITIONS.filter(
         (definition) => definition.actors.public === "admit",
       ),
     ).toEqual([]);

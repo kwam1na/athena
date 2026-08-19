@@ -12,11 +12,11 @@ import {
   createColorOperationDefinition,
   removeColorOperationDefinition,
   updateColorOperationDefinition,
-} from "../operationAdmission/domains/u3_inventoryCatalog_definitions";
+} from "../operationAdmission/domains/inventoryCatalog_definitions";
 import {
   getColorByIdReadDefinition,
   listColorsReadDefinition,
-} from "../operationAdmission/domains/u3_inventoryCatalog_readDefinitions";
+} from "../operationAdmission/domains/inventoryCatalog_readDefinitions";
 import type {
   OperationMutationCtx,
   OperationQueryCtx,

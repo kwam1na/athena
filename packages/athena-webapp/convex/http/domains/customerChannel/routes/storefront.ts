@@ -14,8 +14,8 @@ import {
   admitHttpRead,
   admitHttpRoute,
 } from "../../../../platform/operationAdmission";
-import { storefrontInventoryBatchRouteOperationDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_definitions";
-import { getStorefrontRouteReadDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
+import { storefrontInventoryBatchRouteOperationDefinition } from "../../../../operationAdmission/domains/httpCustomer_definitions";
+import { getStorefrontRouteReadDefinition } from "../../../../operationAdmission/domains/httpCustomer_readDefinitions";
 import { parseIngressJson } from "./admittedCustomer";
 
 const storefrontRoutes: HonoWithConvex<ActionCtx> = new Hono();

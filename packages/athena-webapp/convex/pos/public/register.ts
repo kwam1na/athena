@@ -8,7 +8,7 @@ import {
   admitPublicQuery,
 } from "../../platform/operationAdmission";
 import { getPosRegisterStateReadDefinition } from "../../operationAdmission/readDefinitions";
-import { openRegisterDrawerOperationDefinition } from "../../operationAdmission/domains/u2_pos_definitions";
+import { openRegisterDrawerOperationDefinition } from "../../operationAdmission/domains/pos_definitions";
 import { getRegisterState } from "../application/queries/getRegisterState";
 import { openDrawer as openDrawerCommand } from "../application/commands/register";
 

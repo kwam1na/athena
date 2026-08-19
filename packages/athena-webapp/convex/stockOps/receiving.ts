@@ -5,7 +5,7 @@ import { v } from "convex/values";
 import { markCatalogSummaryNeedsRefresh } from "../inventory/catalogSummary";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
-import { receivePurchaseOrderBatchOperationDefinition } from "../operationAdmission/domains/u5_operations_definitions";
+import { receivePurchaseOrderBatchOperationDefinition } from "../operationAdmission/domains/operations_definitions";
 import { admitPublicMutation } from "../platform/operationAdmission";
 import { requireStoreFullAdminAccess } from "./access";
 import { bestEffortRecordPurchaseOrderReceivingTraceWithCtx } from "./purchaseOrderTracing";

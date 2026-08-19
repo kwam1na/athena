@@ -101,7 +101,7 @@ export const listTerminalRecoveryCommandsReadDefinition = terminalProofPosRead(
   "pos/public/terminals.listTerminalRecoveryCommands",
 );
 
-export const U2_POS_READ_OPERATION_DEFINITIONS: readonly OperationReadDefinition[] =
+export const POS_READ_DEFINITIONS: readonly OperationReadDefinition[] =
   [
     listPendingCheckoutItemsForReviewReadDefinition,
     listPendingCheckoutProductPageBindingReadDefinition,

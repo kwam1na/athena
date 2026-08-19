@@ -9,7 +9,7 @@ import {
   admitPublicQuery,
 } from "../../platform/operationAdmission";
 import { listPosClientEventsReadDefinition } from "../../operationAdmission/readDefinitions";
-import { recordPosClientEventsOperationDefinition } from "../../operationAdmission/domains/u2_pos_definitions";
+import { recordPosClientEventsOperationDefinition } from "../../operationAdmission/domains/pos_definitions";
 import type {
   OperationMutationCtx,
   OperationQueryCtx,

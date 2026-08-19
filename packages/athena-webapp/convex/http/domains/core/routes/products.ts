@@ -9,7 +9,7 @@ import {
   listFeaturedProductsRouteReadDefinition,
   listProductColorsRouteReadDefinition,
   listProductsRouteReadDefinition,
-} from "../../../../operationAdmission/domains/u11_httpCore_readDefinitions";
+} from "../../../../operationAdmission/domains/httpCore_readDefinitions";
 import { admitHttpRead } from "../../../../platform/operationAdmission";
 import { getStoreDataFromRequest } from "../../../utils";
 

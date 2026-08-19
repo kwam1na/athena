@@ -159,7 +159,7 @@ export const unpublishReviewOperationDefinition = reviewModerationOperation(
   "storeFront/reviews.unpublish",
 );
 
-export const U7_STOREFRONT_OPERATOR_OPERATION_DEFINITIONS: readonly OperationDefinition[] =
+export const STOREFRONT_OPERATOR_DEFINITIONS: readonly OperationDefinition[] =
   [
     clearAnalyticsOperationDefinition,
     createOnlineOrderOperationDefinition,

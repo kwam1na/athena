@@ -27,11 +27,11 @@ import { requireReportsStoreAccess } from "./access";
 import {
   ensureMixRangeOperationDefinition,
   retryMixRangeOperationDefinition,
-} from "../operationAdmission/domains/u8_reports_definitions";
+} from "../operationAdmission/domains/reports_definitions";
 import {
   getMixRangeReadDefinition,
   getMixRangeVisibleReadDefinition,
-} from "../operationAdmission/domains/u8_reports_readDefinitions";
+} from "../operationAdmission/domains/reports_readDefinitions";
 import {
   admitPublicMutation,
   admitPublicQuery,

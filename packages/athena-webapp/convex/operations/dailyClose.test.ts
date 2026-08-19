@@ -34,8 +34,8 @@ import {
   completeDailyCloseOperationDefinition,
   reopenDailyCloseOperationDefinition,
   resolveDailyCloseCarryForwardOperationDefinition,
-} from "../operationAdmission/domains/u5_operations_definitions";
-import { getDailyCloseOpeningContextReadDefinition } from "../operationAdmission/domains/u5_operations_readDefinitions";
+} from "../operationAdmission/domains/operations_definitions";
+import { getDailyCloseOpeningContextReadDefinition } from "../operationAdmission/domains/operations_readDefinitions";
 
 vi.mock("../lib/athenaUserAuth", () => ({
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),

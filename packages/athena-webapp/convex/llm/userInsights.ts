@@ -6,7 +6,7 @@ import type { Id } from "../_generated/dataModel";
 import {
   llmUserInsightsGetStoreInsightsOperationDefinition,
   llmUserInsightsGetUserInsightsOperationDefinition,
-} from "../operationAdmission/domains/u9_platform_definitions";
+} from "../operationAdmission/domains/platform_definitions";
 import { admitPublicAction } from "../platform/operationAdmission";
 
 type GetUserInsightsFromLlmArgs = {

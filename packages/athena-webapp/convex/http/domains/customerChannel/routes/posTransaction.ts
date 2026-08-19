@@ -3,7 +3,7 @@ import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
 import { internal } from "../../../../_generated/api";
 import { admitHttpRead } from "../../../../platform/operationAdmission";
-import { getReceiptShareRouteReadDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
+import { getReceiptShareRouteReadDefinition } from "../../../../operationAdmission/domains/httpCustomer_readDefinitions";
 
 const posTransactionRoutes: HonoWithConvex<ActionCtx> = new Hono();
 

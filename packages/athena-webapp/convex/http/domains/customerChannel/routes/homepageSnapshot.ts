@@ -5,7 +5,7 @@ import { ActionCtx } from "../../../../_generated/server";
 import { internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
 import { admitHttpRead } from "../../../../platform/operationAdmission";
-import { getHomepageSnapshotRouteReadDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
+import { getHomepageSnapshotRouteReadDefinition } from "../../../../operationAdmission/domains/httpCustomer_readDefinitions";
 
 const COOKIE_DOMAIN = "wigclub.store";
 const COOKIE_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;

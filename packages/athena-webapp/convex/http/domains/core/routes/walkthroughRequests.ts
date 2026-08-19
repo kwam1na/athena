@@ -11,7 +11,7 @@ import {
 } from "../../../../marketing/walkthroughConfig";
 import { getWalkthroughHmacVerificationKeys } from "../../../../marketing/walkthroughHmac";
 import { normalizeWalkthroughEmail, normalizeWalkthroughText } from "../../../../marketing/walkthroughNormalization";
-import { acceptWalkthroughRequestRouteOperationDefinition } from "../../../../operationAdmission/domains/u11_httpCore_definitions";
+import { acceptWalkthroughRequestRouteOperationDefinition } from "../../../../operationAdmission/domains/httpCore_definitions";
 import { admitHttpRoute } from "../../../../platform/operationAdmission";
 import { boundRequestBody } from "./boundedBody";
 

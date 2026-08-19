@@ -17,7 +17,7 @@ import { searchProductSkusReadDefinition } from "../operationAdmission/readDefin
 import {
   removeStaleProductSkuSearchPageOperationDefinition,
   repairProductSkuSearchPageOperationDefinition,
-} from "../operationAdmission/domains/u3_inventoryCatalog_definitions";
+} from "../operationAdmission/domains/inventoryCatalog_definitions";
 import type {
   OperationMutationCtx,
   OperationQueryCtx,

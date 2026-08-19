@@ -5361,20 +5361,20 @@ Cohesion: 0.5
 Nodes (2): mtnMomoCollectionsRoute(), publicWriteRoute()
 
 ### Community 603 - "Community 603"
+Cohesion: 0.4
+Nodes (0):
+
+### Community 604 - "Community 604"
+Cohesion: 0.4
+Nodes (0):
+
+### Community 605 - "Community 605"
 Cohesion: 0.5
 Nodes (2): paystackLedgerAction(), storefrontWrite()
 
-### Community 604 - "Community 604"
+### Community 606 - "Community 606"
 Cohesion: 0.6
 Nodes (3): reviewModerationOperation(), rowStoreScope(), storeFrontWrite()
-
-### Community 605 - "Community 605"
-Cohesion: 0.4
-Nodes (0):
-
-### Community 606 - "Community 606"
-Cohesion: 0.4
-Nodes (0):
 
 ### Community 607 - "Community 607"
 Cohesion: 0.6
@@ -14729,11 +14729,11 @@ Nodes (0):
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 1273`** (2 nodes): `transport.ts`, `sendNotificationEmail()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1274`** (2 nodes): `u2_pos_readDefinitions.ts`, `terminalProofPosRead()`
+- **Thin community `Community 1274`** (2 nodes): `pos_readDefinitions.ts`, `terminalProofPosRead()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1275`** (2 nodes): `u8_reports_definitions.ts`, `defineRangeGenerationOperation()`
+- **Thin community `Community 1275`** (2 nodes): `reports_definitions.ts`, `defineRangeGenerationOperation()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 1276`** (2 nodes): `u8_reports_readDefinitions.ts`, `defineReportsRead()`
+- **Thin community `Community 1276`** (2 nodes): `reports_readDefinitions.ts`, `defineReportsRead()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 1277`** (2 nodes): `declaresProtectedGateway()`, `effects.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.

@@ -8,11 +8,11 @@ import {
 } from "../_generated/server";
 import { v } from "convex/values";
 import type { Id } from "../_generated/dataModel";
-import { deleteSavedBagOperationDefinition } from "../operationAdmission/domains/u6_storefrontCustomer_definitions";
+import { deleteSavedBagOperationDefinition } from "../operationAdmission/domains/storefrontCustomer_definitions";
 import {
   getAllSavedBagsReadDefinition,
   getSavedBagByIdReadDefinition,
-} from "../operationAdmission/domains/u6_storefrontCustomer_readDefinitions";
+} from "../operationAdmission/domains/storefrontCustomer_readDefinitions";
 import {
   admitPublicMutation,
   admitPublicQuery,

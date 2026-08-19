@@ -11,13 +11,13 @@ import {
   createOrReusePendingCheckoutItemForSaleOperationDefinition,
   finalizePendingCheckoutTrustedInventoryFromProductPageOperationDefinition,
   resolvePendingCheckoutItemReviewOperationDefinition,
-} from "../../operationAdmission/domains/u2_pos_definitions";
+} from "../../operationAdmission/domains/pos_definitions";
 import {
   listLinkedPendingCheckoutAliasesBySkuReadDefinition,
   listLinkedPendingCheckoutProvisionalBindingsBySkuReadDefinition,
   listPendingCheckoutItemsForReviewReadDefinition,
   listPendingCheckoutProductPageBindingReadDefinition,
-} from "../../operationAdmission/domains/u2_pos_readDefinitions";
+} from "../../operationAdmission/domains/pos_readDefinitions";
 import {
   admitPublicMutation,
   admitPublicQuery,

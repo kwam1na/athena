@@ -21,8 +21,8 @@ import {
   revokePosRecoveryCodeOperationDefinition,
   rotatePosRecoveryCodeOperationDefinition,
   unlockPosRecoveryCodeOperationDefinition,
-} from "../../operationAdmission/domains/u2_pos_definitions";
-import { getPosRecoveryCodeStatusReadDefinition } from "../../operationAdmission/domains/u2_pos_readDefinitions";
+} from "../../operationAdmission/domains/pos_definitions";
+import { getPosRecoveryCodeStatusReadDefinition } from "../../operationAdmission/domains/pos_readDefinitions";
 
 const POS_RECOVERY_ACCOUNT_EMAIL = "pos@wigclub.store";
 const POS_RECOVERY_CODE_VERSION = 1;

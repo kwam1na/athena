@@ -15,11 +15,11 @@ import {
 } from "../lib/athenaUserAuth";
 import { ok, userError } from "../../shared/commandResult";
 import { validateServiceIntakeInput } from "../../shared/serviceIntake";
-import { createServiceIntakeOperationDefinition } from "../operationAdmission/domains/u5_operations_definitions";
+import { createServiceIntakeOperationDefinition } from "../operationAdmission/domains/operations_definitions";
 import {
   listAssignableStaffReadDefinition,
   searchServiceIntakeCustomersReadDefinition,
-} from "../operationAdmission/domains/u5_operations_readDefinitions";
+} from "../operationAdmission/domains/operations_readDefinitions";
 import {
   admitPublicMutation,
   admitPublicQuery,

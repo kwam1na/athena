@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 
 import { mutation } from "../_generated/server";
-import { recordSharedDemoActivityOperationDefinition } from "../operationAdmission/domains/u9_platform_definitions";
+import { recordSharedDemoActivityOperationDefinition } from "../operationAdmission/domains/platform_definitions";
 import { admitPublicMutation } from "../platform/operationAdmission";
 import { appendContextEventWithCtx } from "./contextEvents";
 

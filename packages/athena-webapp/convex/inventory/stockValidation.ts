@@ -6,7 +6,7 @@ import { admitPublicQuery } from "../platform/operationAdmission";
 import {
   getSkusReservedInCheckoutReadDefinition,
   getSkusReservedInPosSessionReadDefinition,
-} from "../operationAdmission/domains/u3_inventoryCatalog_readDefinitions";
+} from "../operationAdmission/domains/inventoryCatalog_readDefinitions";
 import type { OperationQueryCtx } from "../operationAdmission/types";
 
 const MAX_SKUS_PER_REQUEST = 50;

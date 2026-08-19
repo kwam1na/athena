@@ -186,7 +186,7 @@ export const getUserByIdReadDefinition = defineReadOperation({
   },
 });
 
-export const U8_REPORTS_READ_OPERATION_DEFINITIONS: readonly OperationReadDefinition[] =
+export const REPORTS_READ_DEFINITIONS: readonly OperationReadDefinition[] =
   [
     getLiveOperatingDayReadDefinition,
     listLiveSkuStockReadDefinition,

@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 import { query, type QueryCtx } from "../_generated/server";
-import { listReplenishmentRecommendationsReadDefinition } from "../operationAdmission/domains/u5_operations_readDefinitions";
+import { listReplenishmentRecommendationsReadDefinition } from "../operationAdmission/domains/operations_readDefinitions";
 import { admitPublicQuery } from "../platform/operationAdmission";
 import { requireStoreFullAdminAccess } from "./access";
 

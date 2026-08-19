@@ -19,7 +19,7 @@ import {
   resolveTerminalCloudRepairOperationDefinition,
   submitTerminalRuntimeStatusOperationDefinition,
   updateTerminalOperationDefinition,
-} from "../../operationAdmission/domains/u2_pos_definitions";
+} from "../../operationAdmission/domains/pos_definitions";
 import {
   getRegisterLifecycleAuthorityAcknowledgementReadDefinition,
   getRegisterLifecycleAuthorityReadDefinition,
@@ -28,7 +28,7 @@ import {
   getTerminalRuntimeConfigReadDefinition,
   listTerminalRecoveryCommandsReadDefinition,
   previewTerminalRecoveryReadDefinition,
-} from "../../operationAdmission/domains/u2_pos_readDefinitions";
+} from "../../operationAdmission/domains/pos_readDefinitions";
 import {
   admitPublicMutation,
   admitPublicQuery,

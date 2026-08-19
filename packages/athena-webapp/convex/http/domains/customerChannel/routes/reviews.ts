@@ -12,7 +12,7 @@ import {
   deleteReviewRouteOperationDefinition,
   markReviewHelpfulRouteOperationDefinition,
   updateReviewRouteOperationDefinition,
-} from "../../../../operationAdmission/domains/u10_httpCustomer_definitions";
+} from "../../../../operationAdmission/domains/httpCustomer_definitions";
 import {
   getReviewByOrderItemRouteReadDefinition,
   getReviewsByProductRouteReadDefinition,
@@ -21,7 +21,7 @@ import {
   getUserReviewsRouteReadDefinition,
   reviewExistsForOrderItemRouteReadDefinition,
   userReviewExistsForOrderItemRouteReadDefinition,
-} from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
+} from "../../../../operationAdmission/domains/httpCustomer_readDefinitions";
 import {
   parseIngressJson,
   requireAdmittedCustomerOwner,

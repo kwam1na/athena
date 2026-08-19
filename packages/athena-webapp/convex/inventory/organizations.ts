@@ -11,12 +11,12 @@ import {
   getOrganizationByIdOrSlugReadDefinition,
   listAthenaUserOrganizationsReadDefinition,
 } from "../operationAdmission/readDefinitions";
-import { getOrganizationByIdReadDefinition } from "../operationAdmission/domains/u4_inventoryIdentity_readDefinitions";
+import { getOrganizationByIdReadDefinition } from "../operationAdmission/domains/inventoryIdentity_readDefinitions";
 import {
   createOrganizationOperationDefinition,
   removeOrganizationOperationDefinition,
   updateOrganizationOperationDefinition,
-} from "../operationAdmission/domains/u4_inventoryIdentity_definitions";
+} from "../operationAdmission/domains/inventoryIdentity_definitions";
 import type {
   OperationMutationCtx,
   OperationQueryCtx,

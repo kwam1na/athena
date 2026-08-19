@@ -2,7 +2,7 @@ import { v } from "convex/values";
 
 import { env, mutation } from "../_generated/server";
 import { requireAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
-import { waiverAuthorizeRegistrationOperationDefinition } from "../operationAdmission/domains/u9_platform_definitions";
+import { waiverAuthorizeRegistrationOperationDefinition } from "../operationAdmission/domains/platform_definitions";
 import { admitPublicMutation } from "../platform/operationAdmission";
 import {
   requireConfiguredReviewer,

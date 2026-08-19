@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  U11_HTTP_CORE_OPERATION_DEFINITIONS,
+  HTTP_CORE_DEFINITIONS,
   appendStorefrontTrackingEventRouteOperationDefinition,
   createAnalyticsEventRouteOperationDefinition,
   verifyStorefrontAuthCodeRouteOperationDefinition,
-} from "../../../../operationAdmission/domains/u11_httpCore_definitions";
+} from "../../../../operationAdmission/domains/httpCore_definitions";
 import {
-  U11_HTTP_CORE_READ_OPERATION_DEFINITIONS,
+  HTTP_CORE_READ_DEFINITIONS,
   listRedeemedPromoCodesRouteReadDefinition,
-} from "../../../../operationAdmission/domains/u11_httpCore_readDefinitions";
+} from "../../../../operationAdmission/domains/httpCore_readDefinitions";
 import { validateOperationDefinition } from "../../../../operationAdmission/definitions";
 import { validateReadOperationDefinition } from "../../../../operationAdmission/readDefinitions";
 import {
@@ -66,13 +66,13 @@ const domainCalls = (mock: ReturnType<typeof vi.fn>) =>
 
 describe("U11 route definitions", () => {
   it("declares every core, messaging and money-movement route validly", () => {
-    for (const definition of U11_HTTP_CORE_OPERATION_DEFINITIONS) {
+    for (const definition of HTTP_CORE_DEFINITIONS) {
       expect({
         operationId: definition.operationId,
         errors: validateOperationDefinition(definition),
       }).toEqual({ operationId: definition.operationId, errors: [] });
     }
-    for (const definition of U11_HTTP_CORE_READ_OPERATION_DEFINITIONS) {
+    for (const definition of HTTP_CORE_READ_DEFINITIONS) {
       expect({
         operationId: definition.operationId,
         errors: validateReadOperationDefinition(definition),
@@ -82,8 +82,8 @@ describe("U11 route definitions", () => {
 
   it("never widens shared demo reach", () => {
     for (const definition of [
-      ...U11_HTTP_CORE_OPERATION_DEFINITIONS,
-      ...U11_HTTP_CORE_READ_OPERATION_DEFINITIONS,
+      ...HTTP_CORE_DEFINITIONS,
+      ...HTTP_CORE_READ_DEFINITIONS,
     ]) {
       expect([definition.operationId, definition.actors.sharedDemo]).toEqual([
         definition.operationId,
@@ -93,7 +93,7 @@ describe("U11 route definitions", () => {
   });
 
   it("gives every anonymous write a declared verifier and every customer write the origin allowlist", () => {
-    for (const definition of U11_HTTP_CORE_OPERATION_DEFINITIONS) {
+    for (const definition of HTTP_CORE_DEFINITIONS) {
       if (definition.actors.public === "admit") {
         expect([
           definition.operationId,

@@ -5,7 +5,7 @@ import {
   checkTransactionStatusOperationDefinition,
   findOrderTransactionsOperationDefinition,
   getAllTransactionsOperationDefinition,
-} from "../operationAdmission/domains/u6_storefrontCustomer_definitions";
+} from "../operationAdmission/domains/storefrontCustomer_definitions";
 import { admitPublicAction } from "../platform/operationAdmission";
 
 /**

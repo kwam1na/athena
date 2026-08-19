@@ -25,7 +25,7 @@ import {
 import {
   addOrUpdatePosSessionItemOperationDefinition,
   removePosSessionItemOperationDefinition,
-} from "../operationAdmission/domains/u4_inventoryIdentity_definitions";
+} from "../operationAdmission/domains/inventoryIdentity_definitions";
 import { getPosSessionItemsReadDefinition } from "../operationAdmission/readDefinitions";
 import type {
   OperationMutationCtx,

@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internalMutation, mutation } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
-import { createSupportTicketOperationDefinition } from "../operationAdmission/domains/u6_storefrontCustomer_definitions";
+import { createSupportTicketOperationDefinition } from "../operationAdmission/domains/storefrontCustomer_definitions";
 import { admitPublicMutation } from "../platform/operationAdmission";
 import {
   assertCustomerOwnsRow,

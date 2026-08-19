@@ -352,7 +352,7 @@ export const createTransactionFromSessionOperationDefinition = defineOperation({
   actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
 });
 
-export const U2_POS_OPERATION_DEFINITIONS: readonly OperationDefinition[] = [
+export const POS_DEFINITIONS: readonly OperationDefinition[] = [
   createOrReusePendingCheckoutItemForSaleOperationDefinition,
   finalizePendingCheckoutTrustedInventoryFromProductPageOperationDefinition,
   resolvePendingCheckoutItemReviewOperationDefinition,

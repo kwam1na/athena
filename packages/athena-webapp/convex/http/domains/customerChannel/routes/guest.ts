@@ -18,8 +18,8 @@ import {
 import {
   createGuestRouteOperationDefinition,
   updateGuestRouteOperationDefinition,
-} from "../../../../operationAdmission/domains/u10_httpCustomer_definitions";
-import { getGuestRouteReadDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
+} from "../../../../operationAdmission/domains/httpCustomer_definitions";
+import { getGuestRouteReadDefinition } from "../../../../operationAdmission/domains/httpCustomer_readDefinitions";
 import {
   parseIngressJson,
   requireAdmittedCustomerOwner,

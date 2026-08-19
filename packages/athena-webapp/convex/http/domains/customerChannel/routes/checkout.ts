@@ -18,13 +18,13 @@ import {
 import {
   checkoutSessionActionRouteOperationDefinition,
   createCheckoutSessionRouteOperationDefinition,
-} from "../../../../operationAdmission/domains/u10_httpCustomer_definitions";
+} from "../../../../operationAdmission/domains/httpCustomer_definitions";
 import {
   getActiveCheckoutSessionRouteReadDefinition,
   getCheckoutSessionRouteReadDefinition,
   getPendingCheckoutSessionsRouteReadDefinition,
   verifyCheckoutPaymentRouteReadDefinition,
-} from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
+} from "../../../../operationAdmission/domains/httpCustomer_readDefinitions";
 import {
   admittedCustomerId,
   parseIngressJson,

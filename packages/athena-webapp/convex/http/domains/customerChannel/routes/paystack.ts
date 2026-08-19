@@ -10,7 +10,7 @@ import {
 } from "../../../../storeFront/helpers/paymentHelpers";
 import { isDuplicateChargeSuccess } from "./security";
 import { admitHttpRoute } from "../../../../platform/operationAdmission";
-import { paystackWebhookRouteOperationDefinition } from "../../../../operationAdmission/domains/u10_httpCustomer_definitions";
+import { paystackWebhookRouteOperationDefinition } from "../../../../operationAdmission/domains/httpCustomer_definitions";
 
 const paystackRoutes: HonoWithConvex<ActionCtx> = new Hono();
 

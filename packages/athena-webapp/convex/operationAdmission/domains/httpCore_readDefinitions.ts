@@ -237,7 +237,7 @@ export const listMyOrganizationsRouteReadDefinition = operatorReadRoute({
   path: "/organizations/users/me/organizations",
 });
 
-export const U11_HTTP_CORE_READ_OPERATION_DEFINITIONS: readonly OperationReadDefinition[] =
+export const HTTP_CORE_READ_DEFINITIONS: readonly OperationReadDefinition[] =
   [
     healthRouteReadDefinition,
     bannerMessageRouteReadDefinition,

@@ -12,7 +12,7 @@ vi.mock("../lib/athenaUserAuth", () => ({
  * fail-closed assertions, retargeted at requireReportsStoreAccess.
  *
  * The shared-demo half of this gate moved to the admission rail in U8 (see
- * `operationAdmission/domains/u8_reports_readDefinitions.ts`), so the gate now
+ * `operationAdmission/domains/reports_readDefinitions.ts`), so the gate now
  * has exactly one dependency: "who is the authenticated Athena user", which
  * the rail answers for a demo principal and a normal user alike. The
  * membership rule below is unchanged and still applies to both.

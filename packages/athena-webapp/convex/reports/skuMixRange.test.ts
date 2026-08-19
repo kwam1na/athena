@@ -70,7 +70,7 @@ import {
 import {
   ensureMixRangeOperationDefinition,
   retryMixRangeOperationDefinition,
-} from "../operationAdmission/domains/u8_reports_definitions";
+} from "../operationAdmission/domains/reports_definitions";
 import { REPORTS_SWEEP_STORE_ALLOWLIST_ENV } from "./sweeper";
 import { cleanupExpiredRangeSnapshots } from "./rangeSnapshotLifecycle";
 import { listRangeSkuMix } from "./queries";

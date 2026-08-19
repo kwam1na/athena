@@ -68,8 +68,8 @@ import {
   completeDailyCloseOperationDefinition,
   reopenDailyCloseOperationDefinition,
   resolveDailyCloseCarryForwardOperationDefinition,
-} from "../operationAdmission/domains/u5_operations_definitions";
-import { getDailyCloseOpeningContextReadDefinition } from "../operationAdmission/domains/u5_operations_readDefinitions";
+} from "../operationAdmission/domains/operations_definitions";
+import { getDailyCloseOpeningContextReadDefinition } from "../operationAdmission/domains/operations_readDefinitions";
 import type { OperationMutationCtx } from "../operationAdmission/types";
 import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
 import type { AutomationDecisionEvidence } from "../automation/runLedger";

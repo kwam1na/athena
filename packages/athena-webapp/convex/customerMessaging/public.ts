@@ -7,7 +7,7 @@ import { commandResultValidator } from "../lib/commandResultValidators";
 import { ok, userError } from "../../shared/commandResult";
 import { getTransactionById as getTransactionByIdQuery } from "../pos/application/queries/getTransactions";
 import { admitPublicAction } from "../platform/operationAdmission";
-import { sendPosReceiptLinkOperationDefinition } from "../operationAdmission/domains/u5_operations_definitions";
+import { sendPosReceiptLinkOperationDefinition } from "../operationAdmission/domains/operations_definitions";
 import { buildReceiptShareUrl, getWhatsAppReceiptConfig } from "./whatsappConfig";
 import { sendWhatsAppReceiptTemplate } from "./whatsappClient";
 import { maskReceiptPhone, normalizeReceiptPhone } from "./domain";

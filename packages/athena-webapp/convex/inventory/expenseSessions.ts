@@ -36,12 +36,12 @@ import {
   resumeExpenseSessionOperationDefinition,
   updateExpenseSessionOperationDefinition,
   voidExpenseSessionOperationDefinition,
-} from "../operationAdmission/domains/u4_inventoryIdentity_definitions";
+} from "../operationAdmission/domains/inventoryIdentity_definitions";
 import {
   getActiveExpenseSessionReadDefinition,
   getExpenseSessionByIdReadDefinition,
   listStoreExpenseSessionsReadDefinition,
-} from "../operationAdmission/domains/u4_inventoryIdentity_readDefinitions";
+} from "../operationAdmission/domains/inventoryIdentity_readDefinitions";
 import type {
   OperationMutationCtx,
   OperationQueryCtx,

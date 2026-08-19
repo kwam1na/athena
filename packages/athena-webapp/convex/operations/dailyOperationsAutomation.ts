@@ -51,7 +51,7 @@ import {
   updateEodAutoCompletePolicyOperationDefinition,
   updateOpeningAutoStartPolicyOperationDefinition,
   updateRegisterCloseoutApprovalPolicyOperationDefinition,
-} from "../operationAdmission/domains/u5_operations_definitions";
+} from "../operationAdmission/domains/operations_definitions";
 import type {
   OperationMutationCtx,
   OperationQueryCtx,

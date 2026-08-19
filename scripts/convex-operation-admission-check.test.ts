@@ -2639,13 +2639,13 @@ describe("round 5: the definition handed to the wrapper must be the registered o
     await convexFixture(rootDir, "http.ts", ADMITTED_ROUTER);
     await convexFixture(
       rootDir,
-      "operationAdmission/domains/u1_example_definitions.ts",
+      "operationAdmission/domains/example_definitions.ts",
       `export const writeDefinition = ${JSON.stringify(registered)};\nexport const U1_DEFINITIONS = [writeDefinition];`,
     );
     await convexFixture(
       rootDir,
       "operationAdmission/definitions.ts",
-      `import { U1_DEFINITIONS } from "./domains/u1_example_definitions";\nexport const OPERATION_ADMISSION_DEFINITIONS = [...U1_DEFINITIONS];`,
+      `import { U1_DEFINITIONS } from "./domains/example_definitions";\nexport const OPERATION_ADMISSION_DEFINITIONS = [...U1_DEFINITIONS];`,
     );
     await convexFixture(
       rootDir,
@@ -2655,7 +2655,7 @@ describe("round 5: the definition handed to the wrapper must be the registered o
     await convexFixture(
       rootDir,
       "example/x.ts",
-      INGRESS(`import { writeDefinition } from "../operationAdmission/domains/u1_example_definitions";`),
+      INGRESS(`import { writeDefinition } from "../operationAdmission/domains/example_definitions";`),
     );
     const result = await collectOperationAdmissionCheckResult(rootDir);
     expect(result.findings).toEqual([]);
@@ -3316,7 +3316,7 @@ describe("round 6: the definition handed to the wrapper must be the registered I
     }`;
     await convexFixture(
       rootDir,
-      "operationAdmission/domains/u1_example_definitions.ts",
+      "operationAdmission/domains/example_definitions.ts",
       `export const writeDefinition = ${definition("(ctx, args) => ({ storeId: args.storeId })")};\nexport const U1_DEFINITIONS = [writeDefinition];`,
     );
     await convexFixture(
@@ -3327,7 +3327,7 @@ describe("round 6: the definition handed to the wrapper must be the registered I
     await convexFixture(
       rootDir,
       "operationAdmission/definitions.ts",
-      `import { U1_DEFINITIONS } from "./domains/u1_example_definitions";\nexport const OPERATION_ADMISSION_DEFINITIONS = [...U1_DEFINITIONS];`,
+      `import { U1_DEFINITIONS } from "./domains/example_definitions";\nexport const OPERATION_ADMISSION_DEFINITIONS = [...U1_DEFINITIONS];`,
     );
     await convexFixture(
       rootDir,
@@ -3355,7 +3355,7 @@ describe("round 6: the definition handed to the wrapper must be the registered I
     await convexFixture(rootDir, "http.ts", ADMITTED_ROUTER);
     await convexFixture(
       rootDir,
-      "operationAdmission/domains/u1_example_definitions.ts",
+      "operationAdmission/domains/example_definitions.ts",
       `export const registeredWrite = { kind: "mutation", functionName: "example/x:write", operationId: "example.x.write", capability: "catalog.manage" };
        export const writeDefinition = { ...registeredWrite };
        export const U1_DEFINITIONS = [registeredWrite];`,
@@ -3363,7 +3363,7 @@ describe("round 6: the definition handed to the wrapper must be the registered I
     await convexFixture(
       rootDir,
       "operationAdmission/definitions.ts",
-      `import { U1_DEFINITIONS } from "./domains/u1_example_definitions";\nexport const OPERATION_ADMISSION_DEFINITIONS = [...U1_DEFINITIONS];`,
+      `import { U1_DEFINITIONS } from "./domains/example_definitions";\nexport const OPERATION_ADMISSION_DEFINITIONS = [...U1_DEFINITIONS];`,
     );
     await convexFixture(
       rootDir,
@@ -3375,7 +3375,7 @@ describe("round 6: the definition handed to the wrapper must be the registered I
       "example/x.ts",
       `import { mutation } from "../_generated/server";
        import { admitPublicMutation } from "../platform/operationAdmission";
-       import { writeDefinition } from "../operationAdmission/domains/u1_example_definitions";
+       import { writeDefinition } from "../operationAdmission/domains/example_definitions";
        export const write = mutation({ args: {}, handler: admitPublicMutation(writeDefinition, async () => null) });`,
     );
     const result = await collectOperationAdmissionCheckResult(rootDir);
@@ -4098,7 +4098,7 @@ describe("round 7: CORS, tsconfig aliases, and environment-free definition modul
     await writeBaselineTree(rootDir);
     await convexFixture(
       rootDir,
-      "operationAdmission/domains/u1_example_definitions.ts",
+      "operationAdmission/domains/example_definitions.ts",
       `export const writeDefinition = {
          kind: "mutation",
          functionName: "example/x:write",
@@ -4111,8 +4111,8 @@ describe("round 7: CORS, tsconfig aliases, and environment-free definition modul
     );
     const result = await collectOperationAdmissionCheckResult(rootDir);
     expect(result.findings.map((finding) => finding.id)).toEqual([
-      expect.stringMatching(/^definition-module-reads-environment-operationadmission-domains-u1-example-definitions-ts-6/),
-      expect.stringMatching(/^definition-module-reads-environment-operationadmission-domains-u1-example-definitions-ts-8/),
+      expect.stringMatching(/^definition-module-reads-environment-operationadmission-domains-example-definitions-ts-6/),
+      expect.stringMatching(/^definition-module-reads-environment-operationadmission-domains-example-definitions-ts-8/),
     ]);
     expect(result.findings.every((finding) => finding.severity === "high")).toBe(true);
   });
@@ -4946,7 +4946,7 @@ describe("round 8: factory-built routers, dynamically imported router modules, w
     await writeBaselineTree(rootDir);
     await convexFixture(
       rootDir,
-      "operationAdmission/domains/u1_example_definitions.ts",
+      "operationAdmission/domains/example_definitions.ts",
       `import { env } from "node:process";
        import os from "os";
        import type { Env } from "node:process";

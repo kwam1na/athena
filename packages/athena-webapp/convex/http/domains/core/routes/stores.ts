@@ -3,13 +3,13 @@ import { HonoWithConvex } from "convex-helpers/server/hono";
 import { ActionCtx } from "../../../../_generated/server";
 import { internal } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
-import { redeemPromoCodeRouteOperationDefinition } from "../../../../operationAdmission/domains/u11_httpCore_definitions";
+import { redeemPromoCodeRouteOperationDefinition } from "../../../../operationAdmission/domains/httpCore_definitions";
 import {
   getStoreRouteReadDefinition,
   listPromoCodeItemsRouteReadDefinition,
   listPromoCodesRouteReadDefinition,
   listRedeemedPromoCodesRouteReadDefinition,
-} from "../../../../operationAdmission/domains/u11_httpCore_readDefinitions";
+} from "../../../../operationAdmission/domains/httpCore_readDefinitions";
 import {
   admitHttpRead,
   admitHttpRoute,

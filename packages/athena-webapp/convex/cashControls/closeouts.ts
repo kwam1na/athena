@@ -8,8 +8,8 @@ import {
   reviewRegisterSessionCloseoutOperationDefinition,
   submitRegisterSessionCloseoutOperationDefinition,
 } from "../operationAdmission/definitions";
-import { finalizeRegisterSessionCloseoutOperationDefinition } from "../operationAdmission/domains/u5_operations_definitions";
-import { getCloseoutSnapshotReadDefinition } from "../operationAdmission/domains/u5_operations_readDefinitions";
+import { finalizeRegisterSessionCloseoutOperationDefinition } from "../operationAdmission/domains/operations_definitions";
+import { getCloseoutSnapshotReadDefinition } from "../operationAdmission/domains/operations_readDefinitions";
 import {
   admitPublicMutation,
   admitPublicQuery,

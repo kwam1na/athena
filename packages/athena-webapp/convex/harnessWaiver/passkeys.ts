@@ -20,7 +20,7 @@ import {
   waiverCompleteApprovalOperationDefinition,
   waiverCompleteRegistrationOperationDefinition,
   waiverGetApprovalOptionsOperationDefinition,
-} from "../operationAdmission/domains/u9_platform_definitions";
+} from "../operationAdmission/domains/platform_definitions";
 import { admitPublicAction } from "../platform/operationAdmission";
 import { waiverPasskeyConfig } from "./config";
 import {

@@ -44,13 +44,13 @@ import {
   admitPublicMutation,
   admitPublicQuery,
 } from "../platform/operationAdmission";
-import { upsertStoreScheduleCommandOperationDefinition } from "../operationAdmission/domains/u3_inventoryCatalog_definitions";
+import { upsertStoreScheduleCommandOperationDefinition } from "../operationAdmission/domains/inventoryCatalog_definitions";
 import {
   getStoreDayContextReadDefinition,
   getStoreScheduleForAdminReadDefinition,
   getStoreScheduleSummaryReadDefinition,
   listStoreScheduleVersionsReadDefinition,
-} from "../operationAdmission/domains/u3_inventoryCatalog_readDefinitions";
+} from "../operationAdmission/domains/inventoryCatalog_readDefinitions";
 import type {
   OperationMutationCtx,
   OperationQueryCtx,

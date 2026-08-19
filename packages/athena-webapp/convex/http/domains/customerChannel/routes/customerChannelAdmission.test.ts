@@ -39,8 +39,8 @@ import {
   PAYSTACK_SIGNATURE_VERIFIER,
   createPaystackSignatureVerifier,
 } from "../../../../operationAdmission/ingressVerification";
-import { U10_HTTP_CUSTOMER_OPERATION_DEFINITIONS } from "../../../../operationAdmission/domains/u10_httpCustomer_definitions";
-import { U10_HTTP_CUSTOMER_READ_OPERATION_DEFINITIONS } from "../../../../operationAdmission/domains/u10_httpCustomer_readDefinitions";
+import { HTTP_CUSTOMER_DEFINITIONS } from "../../../../operationAdmission/domains/httpCustomer_definitions";
+import { HTTP_CUSTOMER_READ_DEFINITIONS } from "../../../../operationAdmission/domains/httpCustomer_readDefinitions";
 
 import {
   GUEST_COOKIE_NAME,
@@ -80,10 +80,10 @@ const ADMIT_READ = getFunctionName(
 
 describe("U10 route definitions", () => {
   it("covers 26 write routes and 29 read routes and validates", () => {
-    expect(U10_HTTP_CUSTOMER_OPERATION_DEFINITIONS).toHaveLength(26);
-    expect(U10_HTTP_CUSTOMER_READ_OPERATION_DEFINITIONS).toHaveLength(29);
+    expect(HTTP_CUSTOMER_DEFINITIONS).toHaveLength(26);
+    expect(HTTP_CUSTOMER_READ_DEFINITIONS).toHaveLength(29);
 
-    for (const definition of U10_HTTP_CUSTOMER_OPERATION_DEFINITIONS) {
+    for (const definition of HTTP_CUSTOMER_DEFINITIONS) {
       expect({
         operationId: definition.operationId,
         errors: validateOperationDefinition(definition),
@@ -92,7 +92,7 @@ describe("U10 route definitions", () => {
       expect(definition.route).toBeDefined();
     }
 
-    for (const definition of U10_HTTP_CUSTOMER_READ_OPERATION_DEFINITIONS) {
+    for (const definition of HTTP_CUSTOMER_READ_DEFINITIONS) {
       expect({
         operationId: definition.operationId,
         errors: validateReadOperationDefinition(definition),
@@ -103,7 +103,7 @@ describe("U10 route definitions", () => {
   });
 
   it("makes every customer write claim-only and origin-fenced", () => {
-    const customerWrites = U10_HTTP_CUSTOMER_OPERATION_DEFINITIONS.filter(
+    const customerWrites = HTTP_CUSTOMER_DEFINITIONS.filter(
       (definition) => definition.actors.storefrontCustomer === "admit",
     );
 
@@ -121,7 +121,7 @@ describe("U10 route definitions", () => {
   });
 
   it("declares a verifier on every public write and signs only the webhook", () => {
-    const publicWrites = U10_HTTP_CUSTOMER_OPERATION_DEFINITIONS.filter(
+    const publicWrites = HTTP_CUSTOMER_DEFINITIONS.filter(
       (definition) => definition.actors.public === "admit",
     );
 
@@ -147,10 +147,10 @@ describe("U10 route definitions", () => {
   });
 
   it("keeps customer-scoped reads claim-only and browse reads anonymous", () => {
-    const claimOnly = U10_HTTP_CUSTOMER_READ_OPERATION_DEFINITIONS.filter(
+    const claimOnly = HTTP_CUSTOMER_READ_DEFINITIONS.filter(
       (definition) => definition.actors.storefrontCustomer === "admit",
     );
-    const browse = U10_HTTP_CUSTOMER_READ_OPERATION_DEFINITIONS.filter(
+    const browse = HTTP_CUSTOMER_READ_DEFINITIONS.filter(
       (definition) => definition.actors.public === "admit",
     );
 
@@ -163,14 +163,14 @@ describe("U10 route definitions", () => {
     }
     // Claim-only and browse partition the read surface: no read is both.
     expect(claimOnly.length + browse.length).toBe(
-      U10_HTTP_CUSTOMER_READ_OPERATION_DEFINITIONS.length,
+      HTTP_CUSTOMER_READ_DEFINITIONS.length,
     );
   });
 
   it("never admits the shared demo anywhere in the customer channel", () => {
     for (const definition of [
-      ...U10_HTTP_CUSTOMER_OPERATION_DEFINITIONS,
-      ...U10_HTTP_CUSTOMER_READ_OPERATION_DEFINITIONS,
+      ...HTTP_CUSTOMER_DEFINITIONS,
+      ...HTTP_CUSTOMER_READ_DEFINITIONS,
     ]) {
       expect({
         operationId: definition.operationId,

@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 
 import { query } from "../_generated/server";
-import { checkAppLoginEmailApprovalReadDefinition } from "../operationAdmission/domains/u9_platform_readDefinitions";
+import { checkAppLoginEmailApprovalReadDefinition } from "../operationAdmission/domains/platform_readDefinitions";
 import { admitPublicQuery } from "../platform/operationAdmission";
 
 export const ATHENA_APP_LOGIN_EMAIL_ALLOWLIST = [

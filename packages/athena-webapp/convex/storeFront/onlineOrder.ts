@@ -19,7 +19,7 @@ import {
 import {
   createOnlineOrderOperationDefinition,
   updateOnlineOrderItemsOperationDefinition,
-} from "../operationAdmission/domains/u7_storefrontOperator_definitions";
+} from "../operationAdmission/domains/storefrontOperator_definitions";
 import {
   getOnlineOrderByCheckoutSessionReadDefinition,
   getOnlineOrderByExternalReferenceReadDefinition,
@@ -27,7 +27,7 @@ import {
   getReturnExchangeOverviewReadDefinition,
   isDuplicateOnlineOrderReadDefinition,
   listOnlineOrdersByStoreFrontUserReadDefinition,
-} from "../operationAdmission/domains/u7_storefrontOperator_readDefinitions";
+} from "../operationAdmission/domains/storefrontOperator_readDefinitions";
 import {
   consumeGuestMergeGrant,
   denyCustomerOwnership,

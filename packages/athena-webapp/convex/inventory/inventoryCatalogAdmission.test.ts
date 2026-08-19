@@ -4,8 +4,8 @@ import { AthenaUnauthenticatedError } from "../lib/athenaUnauthenticated";
 import { ATHENA_CAPABILITY_CATALOG } from "../platform/capabilityCatalog";
 import { SHARED_DEMO_ALLOWED_CAPABILITIES } from "../platform/capabilityCatalog";
 import { SHARED_DEMO_ALLOWED_READ_INTENTS } from "../sharedDemo/policy";
-import { U3_INVENTORY_CATALOG_OPERATION_DEFINITIONS } from "../operationAdmission/domains/u3_inventoryCatalog_definitions";
-import { U3_INVENTORY_CATALOG_READ_OPERATION_DEFINITIONS } from "../operationAdmission/domains/u3_inventoryCatalog_readDefinitions";
+import { INVENTORY_CATALOG_DEFINITIONS } from "../operationAdmission/domains/inventoryCatalog_definitions";
+import { INVENTORY_CATALOG_READ_DEFINITIONS } from "../operationAdmission/domains/inventoryCatalog_readDefinitions";
 import { validateOperationDefinition } from "../operationAdmission/definitions";
 import { validateReadOperationDefinition } from "../operationAdmission/readDefinitions";
 
@@ -159,12 +159,12 @@ describe("U3 inventory catalog operation definitions", () => {
   );
 
   it("declares 50 write definitions and 38 read definitions", () => {
-    expect(U3_INVENTORY_CATALOG_OPERATION_DEFINITIONS.length).toBe(50);
-    expect(U3_INVENTORY_CATALOG_READ_OPERATION_DEFINITIONS.length).toBe(38);
+    expect(INVENTORY_CATALOG_DEFINITIONS.length).toBe(50);
+    expect(INVENTORY_CATALOG_READ_DEFINITIONS.length).toBe(38);
   });
 
   it("validates every write definition against the rail contract", () => {
-    for (const definition of U3_INVENTORY_CATALOG_OPERATION_DEFINITIONS) {
+    for (const definition of INVENTORY_CATALOG_DEFINITIONS) {
       expect(
         validateOperationDefinition(definition),
         definition.operationId,
@@ -174,7 +174,7 @@ describe("U3 inventory catalog operation definitions", () => {
   });
 
   it("validates every read definition against the rail contract", () => {
-    for (const definition of U3_INVENTORY_CATALOG_READ_OPERATION_DEFINITIONS) {
+    for (const definition of INVENTORY_CATALOG_READ_DEFINITIONS) {
       expect(
         validateReadOperationDefinition(definition),
         definition.operationId,
@@ -184,7 +184,7 @@ describe("U3 inventory catalog operation definitions", () => {
 
   it("denies the shared demo on every catalog write", () => {
     const granted = new Set<string>(SHARED_DEMO_ALLOWED_CAPABILITIES);
-    for (const definition of U3_INVENTORY_CATALOG_OPERATION_DEFINITIONS) {
+    for (const definition of INVENTORY_CATALOG_DEFINITIONS) {
       expect(definition.actors.sharedDemo, definition.operationId).toBe("deny");
       // The denial is not arbitrary: none of these capabilities is granted.
       expect(granted.has(definition.capability as string)).toBe(false);
@@ -192,13 +192,13 @@ describe("U3 inventory catalog operation definitions", () => {
   });
 
   it("denies anonymous callers on every catalog write", () => {
-    for (const definition of U3_INVENTORY_CATALOG_OPERATION_DEFINITIONS) {
+    for (const definition of INVENTORY_CATALOG_DEFINITIONS) {
       expect(definition.actors.public, definition.operationId).toBe("deny");
     }
   });
 
   it("admits anonymous readers only on the reads storefront routes serve", () => {
-    const anonymous = U3_INVENTORY_CATALOG_READ_OPERATION_DEFINITIONS.filter(
+    const anonymous = INVENTORY_CATALOG_READ_DEFINITIONS.filter(
       (definition) => definition.actors.public === "admit",
     ).map((definition) => definition.functionName);
 
@@ -218,7 +218,7 @@ describe("U3 inventory catalog operation definitions", () => {
 
   it("only admits the demo on reads whose intent is granted", () => {
     const granted = new Set<string>(SHARED_DEMO_ALLOWED_READ_INTENTS);
-    for (const definition of U3_INVENTORY_CATALOG_READ_OPERATION_DEFINITIONS) {
+    for (const definition of INVENTORY_CATALOG_READ_DEFINITIONS) {
       if (definition.actors.sharedDemo !== "admit") continue;
       expect(granted.has(definition.access.intent), definition.operationId).toBe(
         true,
@@ -227,7 +227,7 @@ describe("U3 inventory catalog operation definitions", () => {
   });
 
   it("binds a target guard on every write that used to call requireNonDemoFoundation*", () => {
-    const guarded = U3_INVENTORY_CATALOG_OPERATION_DEFINITIONS.filter(
+    const guarded = INVENTORY_CATALOG_DEFINITIONS.filter(
       (definition) => definition.target !== undefined,
     ).map((definition) => definition.functionName);
 

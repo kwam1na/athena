@@ -1,7 +1,7 @@
 import { query } from "../_generated/server";
 import { v } from "convex/values";
 import type { Id } from "../_generated/dataModel";
-import { getStoreFrontUsersByIdsReadDefinition } from "../operationAdmission/domains/u6_storefrontCustomer_readDefinitions";
+import { getStoreFrontUsersByIdsReadDefinition } from "../operationAdmission/domains/storefrontCustomer_readDefinitions";
 import { admitPublicQuery } from "../platform/operationAdmission";
 
 export const getByIds = query({

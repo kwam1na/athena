@@ -11,8 +11,8 @@ import {
 import {
   createInviteCodeOperationDefinition,
   redeemInviteCodeOperationDefinition,
-} from "../operationAdmission/domains/u4_inventoryIdentity_definitions";
-import { listInviteCodesReadDefinition } from "../operationAdmission/domains/u4_inventoryIdentity_readDefinitions";
+} from "../operationAdmission/domains/inventoryIdentity_definitions";
+import { listInviteCodesReadDefinition } from "../operationAdmission/domains/inventoryIdentity_readDefinitions";
 import type {
   OperationMutationCtx,
   OperationQueryCtx,

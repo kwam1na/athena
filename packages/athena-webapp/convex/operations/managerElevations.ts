@@ -16,8 +16,8 @@ import { ok, userError } from "../../shared/commandResult";
 import {
   endManagerElevationOperationDefinition,
   startManagerElevationOperationDefinition,
-} from "../operationAdmission/domains/u5_operations_definitions";
-import { getActiveManagerElevationReadDefinition } from "../operationAdmission/domains/u5_operations_readDefinitions";
+} from "../operationAdmission/domains/operations_definitions";
+import { getActiveManagerElevationReadDefinition } from "../operationAdmission/domains/operations_readDefinitions";
 import {
   admitPublicMutation,
   admitPublicQuery,

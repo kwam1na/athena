@@ -22,11 +22,11 @@ import {
   publishReviewOperationDefinition,
   rejectReviewOperationDefinition,
   unpublishReviewOperationDefinition,
-} from "../operationAdmission/domains/u7_storefrontOperator_definitions";
+} from "../operationAdmission/domains/storefrontOperator_definitions";
 import {
   getUnapprovedReviewsCountReadDefinition,
   listStoreReviewsReadDefinition,
-} from "../operationAdmission/domains/u7_storefrontOperator_readDefinitions";
+} from "../operationAdmission/domains/storefrontOperator_readDefinitions";
 import { sendFeedbackRequestEmail } from "../mailersend";
 import { getProductName } from "../utils";
 import { ok, userError } from "../../shared/commandResult";

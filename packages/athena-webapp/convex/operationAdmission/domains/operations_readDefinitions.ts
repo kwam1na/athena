@@ -183,7 +183,7 @@ export const getServiceCaseDetailsReadDefinition = storeScopedRead({
   },
 });
 
-export const U5_OPERATIONS_READ_OPERATION_DEFINITIONS: readonly OperationReadDefinition[] =
+export const OPERATIONS_READ_DEFINITIONS: readonly OperationReadDefinition[] =
   [
     getDailyCloseOpeningContextReadDefinition,
     getActiveManagerElevationReadDefinition,

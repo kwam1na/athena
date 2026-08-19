@@ -14,11 +14,11 @@ import {
   createSubcategoryOperationDefinition,
   removeSubcategoryOperationDefinition,
   updateSubcategoryOperationDefinition,
-} from "../operationAdmission/domains/u3_inventoryCatalog_definitions";
+} from "../operationAdmission/domains/inventoryCatalog_definitions";
 import {
   getSubcategoryByIdReadDefinition,
   listSubcategoriesReadDefinition,
-} from "../operationAdmission/domains/u3_inventoryCatalog_readDefinitions";
+} from "../operationAdmission/domains/inventoryCatalog_readDefinitions";
 import type {
   OperationMutationCtx,
   OperationQueryCtx,

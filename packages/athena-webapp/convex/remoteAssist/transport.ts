@@ -9,7 +9,7 @@ import type { Id } from "../_generated/dataModel";
 import {
   remoteAssistRequestRuntimeCredentialOperationDefinition,
   remoteAssistRequestSupportCredentialOperationDefinition,
-} from "../operationAdmission/domains/u9_platform_definitions";
+} from "../operationAdmission/domains/platform_definitions";
 import { admitPublicAction } from "../platform/operationAdmission";
 import { type CommandResult, userError } from "../../shared/commandResult";
 // eslint-disable-next-line @convex-dev/import-wrong-runtime -- this public action is explicitly Node-runtime and owns the provider SDK boundary.

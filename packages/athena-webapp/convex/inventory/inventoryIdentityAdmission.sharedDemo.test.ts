@@ -39,7 +39,7 @@ import {
   removeOrganizationOperationDefinition,
   removeStoreOperationDefinition,
   sendVerificationCodeViaProviderOperationDefinition,
-} from "../operationAdmission/domains/u4_inventoryIdentity_definitions";
+} from "../operationAdmission/domains/inventoryIdentity_definitions";
 
 const DEMO_PRINCIPAL = {
   admissionExpiresAt: Number.MAX_SAFE_INTEGER,

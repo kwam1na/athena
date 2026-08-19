@@ -20,11 +20,11 @@ import {
 import {
   removeBannerMessageOperationDefinition,
   upsertBannerMessageOperationDefinition,
-} from "../operationAdmission/domains/u3_inventoryCatalog_definitions";
+} from "../operationAdmission/domains/inventoryCatalog_definitions";
 import {
   getBannerMessageReadDefinition,
   getPublicActiveBannerMessageReadDefinition,
-} from "../operationAdmission/domains/u3_inventoryCatalog_readDefinitions";
+} from "../operationAdmission/domains/inventoryCatalog_readDefinitions";
 import type {
   OperationMutationCtx,
   OperationQueryCtx,

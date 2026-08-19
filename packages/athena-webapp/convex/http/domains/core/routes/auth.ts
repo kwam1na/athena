@@ -5,7 +5,7 @@ import { internal } from "../../../../_generated/api";
 import {
   logoutStorefrontUserRouteOperationDefinition,
   verifyStorefrontAuthCodeRouteOperationDefinition,
-} from "../../../../operationAdmission/domains/u11_httpCore_definitions";
+} from "../../../../operationAdmission/domains/httpCore_definitions";
 import { admitHttpRoute } from "../../../../platform/operationAdmission";
 import {
   getStoreDataFromRequest,

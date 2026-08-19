@@ -5,11 +5,11 @@ import {
   createOrganizationRouteOperationDefinition,
   deleteOrganizationRouteOperationDefinition,
   updateOrganizationRouteOperationDefinition,
-} from "../../../../operationAdmission/domains/u11_httpCore_definitions";
+} from "../../../../operationAdmission/domains/httpCore_definitions";
 import {
   getOrganizationRouteReadDefinition,
   listMyOrganizationsRouteReadDefinition,
-} from "../../../../operationAdmission/domains/u11_httpCore_readDefinitions";
+} from "../../../../operationAdmission/domains/httpCore_readDefinitions";
 import {
   admitHttpRead,
   admitHttpRoute,

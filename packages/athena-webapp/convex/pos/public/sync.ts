@@ -9,7 +9,7 @@ import {
   ingestRegisterSessionActivityOperationDefinition,
   reportLocalSyncDeadLetterOperationDefinition,
 } from "../../operationAdmission/definitions";
-import { resolveLocalSyncReviewOperationDefinition } from "../../operationAdmission/domains/u2_pos_definitions";
+import { resolveLocalSyncReviewOperationDefinition } from "../../operationAdmission/domains/pos_definitions";
 import { recordLocalSyncDeadLetter } from "../application/sync/deadLetter";
 import {
   admitPublicMutation,

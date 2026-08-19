@@ -416,7 +416,7 @@ export const issueSharedDemoTicketOperationDefinition = defineOperation({
   },
 });
 
-export const U9_PLATFORM_OPERATION_DEFINITIONS: readonly OperationDefinition[] =
+export const PLATFORM_DEFINITIONS: readonly OperationDefinition[] =
   [
     streamGetDirectUploadUrlOperationDefinition,
     streamGetVideoStatusOperationDefinition,

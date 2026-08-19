@@ -18,8 +18,8 @@ import { listPosStaffProfilesReadDefinition } from "../operationAdmission/readDe
 import {
   createStaffProfileOperationDefinition,
   updateStaffProfileOperationDefinition,
-} from "../operationAdmission/domains/u5_operations_definitions";
-import { getStaffProfileByIdReadDefinition } from "../operationAdmission/domains/u5_operations_readDefinitions";
+} from "../operationAdmission/domains/operations_definitions";
+import { getStaffProfileByIdReadDefinition } from "../operationAdmission/domains/operations_readDefinitions";
 import { normalizePhoneNumber } from "./helpers/linking";
 import {
   createStaffCredentialWithCtx,

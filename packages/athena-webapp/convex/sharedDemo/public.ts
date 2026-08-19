@@ -15,7 +15,7 @@ import {
 import {
   getSharedDemoContextReadDefinition,
   getSharedDemoRegisterBootstrapReadDefinition,
-} from "../operationAdmission/domains/u9_platform_readDefinitions";
+} from "../operationAdmission/domains/platform_readDefinitions";
 import {
   admitPublicMutation,
   admitPublicQuery,

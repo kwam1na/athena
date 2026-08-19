@@ -9,13 +9,13 @@ import {
 import { v } from "convex/values";
 import { Id } from "../_generated/dataModel";
 import { hashGuestMarker, isRecoverableGuestMarker } from "../http/utils";
-import { deleteGuestOperationDefinition } from "../operationAdmission/domains/u6_storefrontCustomer_definitions";
+import { deleteGuestOperationDefinition } from "../operationAdmission/domains/storefrontCustomer_definitions";
 import {
   getAllGuestsReadDefinition,
   getReturningVisitorsForDayReadDefinition,
   getUniqueVisitorsForDayReadDefinition,
   getUniqueVisitorsReadDefinition,
-} from "../operationAdmission/domains/u6_storefrontCustomer_readDefinitions";
+} from "../operationAdmission/domains/storefrontCustomer_readDefinitions";
 import {
   admitPublicMutation,
   admitPublicQuery,

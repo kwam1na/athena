@@ -5,7 +5,7 @@ import { action, internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { ValkeyClient } from "../cache";
 import { admitPublicAction } from "../platform/operationAdmission";
-import { clearAllProductCacheOperationDefinition } from "../operationAdmission/domains/u3_inventoryCatalog_definitions";
+import { clearAllProductCacheOperationDefinition } from "../operationAdmission/domains/inventoryCatalog_definitions";
 import type { OperationActionCtx } from "../operationAdmission/rail";
 
 export function buildAllProductsCacheKey(args: {

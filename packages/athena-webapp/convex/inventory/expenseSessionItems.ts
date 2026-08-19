@@ -18,8 +18,8 @@ import {
 import {
   addOrUpdateExpenseItemOperationDefinition,
   removeExpenseItemOperationDefinition,
-} from "../operationAdmission/domains/u4_inventoryIdentity_definitions";
-import { getExpenseSessionItemsReadDefinition } from "../operationAdmission/domains/u4_inventoryIdentity_readDefinitions";
+} from "../operationAdmission/domains/inventoryIdentity_definitions";
+import { getExpenseSessionItemsReadDefinition } from "../operationAdmission/domains/inventoryIdentity_readDefinitions";
 import type {
   OperationMutationCtx,
   OperationQueryCtx,

@@ -17,7 +17,7 @@ import {
 import {
   createTransactionFromSessionOperationDefinition,
   updatePosInventoryOperationDefinition,
-} from "../../operationAdmission/domains/u2_pos_definitions";
+} from "../../operationAdmission/domains/pos_definitions";
 import {
   getPosCompletedTransactionsReadDefinition,
   getPosRecentTransactionsWithCustomersReadDefinition,

@@ -332,7 +332,7 @@ export const deleteSubcategoryRouteOperationDefinition = operatorWriteRoute({
   path: "/subcategories/:subcategoryId",
 });
 
-export const U11_HTTP_CORE_OPERATION_DEFINITIONS: readonly OperationDefinition[] =
+export const HTTP_CORE_DEFINITIONS: readonly OperationDefinition[] =
   [
     createAnalyticsEventRouteOperationDefinition,
     updateAnalyticsOwnerRouteOperationDefinition,

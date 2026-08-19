@@ -52,8 +52,8 @@ import {
   syncPosSessionCheckoutStateOperationDefinition,
   updatePosSessionOperationDefinition,
   voidPosSessionOperationDefinition,
-} from "../operationAdmission/domains/u4_inventoryIdentity_definitions";
-import { getPosSessionByIdReadDefinition } from "../operationAdmission/domains/u4_inventoryIdentity_readDefinitions";
+} from "../operationAdmission/domains/inventoryIdentity_definitions";
+import { getPosSessionByIdReadDefinition } from "../operationAdmission/domains/inventoryIdentity_readDefinitions";
 import type {
   OperationMutationCtx,
   OperationQueryCtx,

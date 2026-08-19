@@ -1,7 +1,7 @@
 import { internalMutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import { loadBagWithItems } from "./helpers/bag";
-import { getBagItemsForStoreReadDefinition } from "../operationAdmission/domains/u6_storefrontCustomer_readDefinitions";
+import { getBagItemsForStoreReadDefinition } from "../operationAdmission/domains/storefrontCustomer_readDefinitions";
 import { admitPublicQuery } from "../platform/operationAdmission";
 import {
   assertCustomerOwnsRow,

@@ -277,7 +277,7 @@ export const preflightStoreConfigKeysReadDefinition = defineReadOperation({
   },
 });
 
-export const U4_INVENTORY_IDENTITY_READ_OPERATION_DEFINITIONS: readonly OperationReadDefinition[] =
+export const INVENTORY_IDENTITY_READ_DEFINITIONS: readonly OperationReadDefinition[] =
   [
     listStoreExpenseSessionsReadDefinition,
     getExpenseSessionByIdReadDefinition,

@@ -832,7 +832,7 @@ export const removeSubcategoryOperationDefinition = defineOperation({
   actors: CATALOG_ACTORS,
 });
 
-export const U3_INVENTORY_CATALOG_OPERATION_DEFINITIONS: readonly OperationDefinition[] =
+export const INVENTORY_CATALOG_DEFINITIONS: readonly OperationDefinition[] =
   [
     upsertBannerMessageOperationDefinition,
     removeBannerMessageOperationDefinition,
