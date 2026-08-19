@@ -2869,14 +2869,18 @@ export function middlewareGrammarViolation(
    *   - `throw <name>`;
    *   - a condition (`if` / `while` / `?:`), `!` / `typeof` / `void` operand,
    *     either operand of a non-assignment binary (`===`, `instanceof`, `in`,
-   *     `&&`, `||`, `??`), the RIGHT side of an assignment;
+   *     `&&`, `||`, `??`);
    *   - a property / element READ off it (`error.code`) in one of the
    *     positions above, recursively — never the callee of a call, an
    *     assignment target, or a `delete` operand;
-   *   - the argument of a call whose result is only TESTED (`isX(error)` as a
-   *     condition, `!isX(error)`, `isX(error) && ...`, `isX(error) === true`).
+   *   - the argument of a call whose callee is a BARE IDENTIFIER (an imported
+   *     or module-local predicate) AND whose result is only TESTED
+   *     (`isX(error)` as a condition, `!isX(error)`, `isX(error) && ...`,
+   *     `isX(error) === true`).
    * Everything else — `error = ...`, `[error] = ...`, `({ error } = ...)`,
-   * `const e = error`, `Object.assign(error, ...)`, `error.x = ...`,
+   * `const e = error`, `seen = error` (the right side of ANY assignment),
+   * `Object.assign(error, ...)` / `Reflect.set(error, ...)` / `x.decorate(error)`
+   * (a property-access callee, tested or not), `error.x = ...`,
    * `error.setStatus(...)`, `{ error }`, a template / return / throw of a
    * derived value, a redeclaration of the name — is a misuse.
    */
@@ -2947,7 +2951,12 @@ export function middlewareGrammarViolation(
         return true;
       }
       if (ts.isBinaryExpression(parent)) {
-        if (isAssignmentOperator(parent)) return parent.right === expression;
+        // Round 11: the RIGHT side of an assignment is a misuse too, symmetric
+        // with the already-rejected `const e = error`. `seen = error;
+        // seen.getResponse = ...; throw error` mutates the caught value
+        // through an alias and rethrows it, which is exactly what this rule
+        // exists to stop.
+        if (isAssignmentOperator(parent)) return false;
         return true;
       }
       if (
@@ -2965,6 +2974,15 @@ export function middlewareGrammarViolation(
         parent.expression !== expression &&
         parent.arguments.some((argument) => argument === expression)
       ) {
+        // Round 11: only a BARE IDENTIFIER callee — an imported or
+        // module-local predicate — may take the caught value, and only when
+        // its result is tested. A property-access callee
+        // (`Object.assign(error, {...})`, `Reflect.set(error, ...)`,
+        // `x.decorate(error)`) is a mutation dressed as a test: its result is
+        // truthy, so `if (Object.assign(error, { getResponse }))` passed the
+        // "tested" requirement while rewriting the value about to be rethrown.
+        const callee = unwrapTypeOnly(parent.expression);
+        if (!ts.isIdentifier(callee)) return false;
         return isTested(parent);
       }
       return false;
@@ -3269,18 +3287,71 @@ function calleeMember(
  */
 type RouterClass = "Hono" | "HttpRouterWithHono" | "HonoWithConvex";
 
-const HONO_PACKAGE_SPECIFIERS: ReadonlySet<string> = new Set([
-  "hono",
-  "hono/quick",
-  "hono/tiny",
-]);
 const CONVEX_HELPERS_HONO_SPECIFIER = "convex-helpers/server/hono";
+
+/**
+ * The `hono` package is judged by PREFIX (round 11), not by an allow-list of
+ * entry points: `hono`, `hono/quick`, `hono/tiny` are the documented presets,
+ * but `hono/hono-base` (`HonoBase`, the class `Hono` extends), `hono/factory`
+ * (`createFactory().createApp()`), and every other subpath of the package can
+ * hand a router or a router factory to a module just as well. An allow-list of
+ * three spellings left the rest of the package as an unwalked door, so the rule
+ * is now: any specifier that IS `hono` or starts with `hono/` is a router-class
+ * package unless it is one of the few entry points that export no router and
+ * that other rules already judge.
+ */
+const NON_ROUTER_HONO_ENTRY_POINTS: ReadonlySet<string> = new Set([
+  // Judged by `assertCorsAllowlist` (the one accepted library middleware).
+  "hono/cors",
+  // The error class the `.onError` rule is written around; exports no router.
+  "hono/http-exception",
+  // Cookie read/write helpers used by the real route modules; no router.
+  "hono/cookie",
+]);
+
+/**
+ * `hono/factory` is called out by name in the failure message because it is the
+ * subpath whose whole purpose is to build routers indirectly
+ * (`createFactory().createApp()`), which is exactly the shape the walk cannot
+ * follow.
+ */
+const HONO_FACTORY_SPECIFIER = "hono/factory";
+
+/**
+ * A relative path that dives into `node_modules` reaches the very same package
+ * under a specifier the prefix test would otherwise miss
+ * (`import { Hono } from "../../node_modules/hono"`). Normalize such a path back
+ * to the package specifier it names before any of the tests below run.
+ */
+function normalizeModuleSpecifierForRouterClass(specifier: string): string {
+  const match = /(?:^|\/)node_modules\/(.+)$/.exec(specifier);
+  return match ? match[1] : specifier;
+}
+
+/** Is this specifier the `hono` package or any subpath of it? */
+function isHonoPackageSpecifier(specifier: string): boolean {
+  const normalized = normalizeModuleSpecifierForRouterClass(specifier);
+  return normalized === "hono" || normalized.startsWith("hono/");
+}
+
+/**
+ * A `hono` specifier the checker must judge: the package or any subpath of it,
+ * except the non-router entry points other rules already own.
+ */
+function isJudgedHonoSpecifier(specifier: string): boolean {
+  const normalized = normalizeModuleSpecifierForRouterClass(specifier);
+  return (
+    isHonoPackageSpecifier(normalized) &&
+    !NON_ROUTER_HONO_ENTRY_POINTS.has(normalized)
+  );
+}
 
 /** Does this module specifier name a package that exports a router class? */
 function isRouterClassPackageSpecifier(specifier: string): boolean {
+  const normalized = normalizeModuleSpecifierForRouterClass(specifier);
   return (
-    HONO_PACKAGE_SPECIFIERS.has(specifier) ||
-    specifier === CONVEX_HELPERS_HONO_SPECIFIER
+    isJudgedHonoSpecifier(normalized) ||
+    normalized === CONVEX_HELPERS_HONO_SPECIFIER
   );
 }
 
@@ -3289,10 +3360,18 @@ function routerClassOfExport(
   specifier: string,
   imported: string,
 ): RouterClass | undefined {
-  if (HONO_PACKAGE_SPECIFIERS.has(specifier)) {
-    return imported === "Hono" ? "Hono" : undefined;
+  const normalized = normalizeModuleSpecifierForRouterClass(specifier);
+  if (isJudgedHonoSpecifier(normalized)) {
+    // `HonoBase` (`hono/hono-base`) IS the router class — `Hono` is a thin
+    // preset subclass of it — so `new HonoBase({ router })` builds a router the
+    // walk must treat exactly like `new Hono()`.
+    return imported === "Hono" || imported === "HonoBase" ? "Hono" : undefined;
   }
-  if (specifier === CONVEX_HELPERS_HONO_SPECIFIER) {
+  if (normalized === CONVEX_HELPERS_HONO_SPECIFIER) {
+    // `convex-helpers/server/hono` RE-EXPORTS `Hono` (`export { Hono }` in its
+    // entry point), so an import of `Hono` from there is the same router class
+    // as an import of it from `hono` and must resolve identically.
+    if (imported === "Hono") return "Hono";
     return imported === "HttpRouterWithHono" || imported === "HonoWithConvex"
       ? imported
       : undefined;
@@ -3325,11 +3404,13 @@ function collectRouterClassBindings(sourceFile: ts.SourceFile): RouterClassBindi
     ) {
       continue;
     }
-    const specifier = statement.moduleSpecifier.text;
+    const specifier = normalizeModuleSpecifierForRouterClass(
+      statement.moduleSpecifier.text,
+    );
     if (!isRouterClassPackageSpecifier(specifier)) continue;
     const clause = statement.importClause;
     if (!clause) continue;
-    const packageKind = HONO_PACKAGE_SPECIFIERS.has(specifier) ? "hono" : "helpers";
+    const packageKind = isJudgedHonoSpecifier(specifier) ? "hono" : "helpers";
     if (clause.name) {
       // Neither package has a default export; a default binding is a value
       // the checker cannot resolve to a class, so it may only fail closed.
@@ -3456,9 +3537,24 @@ function isHonoRouterDeclaration(
 function collectRouterCandidateNames(
   sourceFile: ts.SourceFile,
   topLevelNames: ReadonlySet<string>,
+  classBindings: RouterClassBindings,
 ) {
   const candidates = new Set<string>();
   const visit = (node: ts.Node) => {
+    // `new HttpRouterWithHono(root)` names the root router of the module, so
+    // `root` is a router candidate even if it carries no textual registration
+    // of its own (round 11): its initializer must still resolve.
+    if (
+      ts.isNewExpression(node) &&
+      isHonoClassReference(node.expression, classBindings, "HttpRouterWithHono")
+    ) {
+      for (const argument of node.arguments ?? []) {
+        const value = unwrapTypeOnly(argument);
+        if (ts.isIdentifier(value) && topLevelNames.has(value.text)) {
+          candidates.add(value.text);
+        }
+      }
+    }
     if (
       ts.isCallExpression(node) &&
       ts.isPropertyAccessExpression(node.expression)
@@ -3542,10 +3638,19 @@ function collectRouteModuleFacts(
       topLevelNonVariableNames.add(statement.name.text);
     }
   }
-  const candidateNames = collectRouterCandidateNames(sourceFile, topLevelNames);
+  const candidateNames = collectRouterCandidateNames(
+    sourceFile,
+    topLevelNames,
+    classBindings,
+  );
   const routerLikeLocals = new Set<string>();
   const nestedRouterDeclarations: ts.VariableDeclaration[] = [];
   const uninitializedRouterCandidates: ts.VariableDeclaration[] = [];
+  /**
+   * Top-level router candidates whose initializer is not exactly
+   * `new <resolved Hono>()` (round 11) — see `judgeCandidateInitializers`.
+   */
+  const unresolvableRouterInitializers: ts.VariableDeclaration[] = [];
   const collectNestedRouters = (node: ts.Node, nested: boolean) => {
     if (
       nested &&
@@ -3596,6 +3701,26 @@ function collectRouteModuleFacts(
           // walk cannot bind (round 9); it is a router key with no
           // registrations, and mounting it would pass an empty subtree.
           uninitializedRouterCandidates.push(declaration);
+        } else if (
+          !isConstructionOf(declaration.initializer, "Hono", classBindings) &&
+          !isConstructionOf(
+            declaration.initializer,
+            "HttpRouterWithHono",
+            classBindings,
+          )
+        ) {
+          // Round 11: a top-level router candidate — one that carries
+          // registrations, is `.route`-mounted, or is handed to
+          // `new HttpRouterWithHono(...)` — must be built by an initializer
+          // that is exactly `new <resolved Hono>()`. A CALL initializer
+          // (`export const sub = reg(x)`, `createFactory().createApp()`), a
+          // `new` of a class the checker could NOT resolve to the Hono class
+          // (a local shim, a relative import of a module that re-exports the
+          // package), an `await`, a conditional — each yields a router built
+          // somewhere the walk never opened, so the candidate is walked as
+          // only its own textual registrations while the real router may carry
+          // more. Those fail closed at the declaration.
+          unresolvableRouterInitializers.push(declaration);
         }
         routerVariables.add(declaration.name.text);
         routerLikeLocals.add(declaration.name.text);
@@ -4407,7 +4532,7 @@ function collectRouteModuleFacts(
     if (
       ts.isIdentifier(node) &&
       classBindings.valueLocals.has(node.text) &&
-      isValueReference(node) &&
+      (isValueReference(node) || isRouterClassExportReference(node)) &&
       !isShadowedReference(node) &&
       !isAcceptedRouterClassUse(node)
     ) {
@@ -4433,6 +4558,35 @@ function collectRouteModuleFacts(
    * (`new H()`, `new (H)()`), or the root of `<ns>.<Class>` (`new hono.Hono()`).
    * The construction rule then judges the position of that `new`.
    */
+  /**
+   * `export { Hono }` / `export { Hono as H }` / `export default Hono` re-emit
+   * the router class from THIS module, so an importer of this module obtains it
+   * under a specifier no router-class rule recognizes and every `new Hono()`
+   * built from it is invisible to the walk. `isValueReference` deliberately
+   * says "not a value" for an `ExportSpecifier` (it is a binding-list entry),
+   * so for router-class bindings the export position is counted here instead
+   * (round 11). `export type { Hono }` is not a value re-emission.
+   */
+  function isRouterClassExportReference(identifier: ts.Identifier): boolean {
+    const parent = identifier.parent;
+    if (ts.isExportAssignment(parent)) return !parent.isExportEquals;
+    if (!ts.isExportSpecifier(parent)) return false;
+    if (parent.isTypeOnly) return false;
+    const clause = parent.parent;
+    const declaration = clause.parent;
+    if (ts.isExportDeclaration(declaration) && declaration.isTypeOnly) {
+      return false;
+    }
+    // `export { Hono } from "hono"` carries its own module specifier and is
+    // judged as a re-export by `judgeHonoPackageBindings`, not here.
+    if (ts.isExportDeclaration(declaration) && declaration.moduleSpecifier) {
+      return false;
+    }
+    return parent.propertyName === undefined
+      ? parent.name === identifier
+      : parent.propertyName === identifier;
+  }
+
   function isAcceptedRouterClassUse(identifier: ts.Identifier): boolean {
     let expression: ts.Node = identifier;
     if (
@@ -4544,6 +4698,105 @@ function collectRouteModuleFacts(
       `the middleware is \`${handler.getText(sourceFile).slice(0, 60)}\`; only an inline \`(c, next) => {...}\`, the \`hono/cors\` factory call, or a named-import factory call is accepted, because anything else is a handler the checker cannot see into`,
     );
   }
+  /**
+   * Round 11: the `hono` package is judged by PREFIX. Every static import,
+   * re-export, or namespace binding on a `hono` specifier (or a relative path
+   * into `node_modules/hono`) other than the non-router entry points
+   * (`hono/cors`, `hono/http-exception`, `hono/cookie`) fails closed unless
+   * every binding it creates is the router class itself — which the round-10
+   * class-binding rule then confines to a resolved `new` callee — or is never
+   * referenced as a value at all (an effectively type-only binding such as
+   * `import { Context } from "hono"`).
+   *
+   * This is what closes `hono/factory` (`createFactory().createApp()` builds a
+   * router through a call the walk cannot open), `hono/hono-base` under any
+   * export other than the class, and every convex-module shim that re-exports
+   * the package (`export { Hono } from "hono"`, `export * from "hono"`,
+   * `export * as hono from "hono"`) — a shim makes the class reachable under a
+   * relative specifier no router-class rule recognizes.
+   */
+  const hasValueReference = (localName: string): boolean => {
+    let seen = false;
+    const scan = (node: ts.Node) => {
+      if (seen || ts.isTypeNode(node)) return;
+      if (
+        ts.isIdentifier(node) &&
+        node.text === localName &&
+        isValueReference(node)
+      ) {
+        seen = true;
+        return;
+      }
+      ts.forEachChild(node, scan);
+    };
+    scan(sourceFile);
+    return seen;
+  };
+  const honoEntryNote = (specifier: string) =>
+    normalizeModuleSpecifierForRouterClass(specifier) ===
+    HONO_FACTORY_SPECIFIER
+      ? ` \`${HONO_FACTORY_SPECIFIER}\` in particular builds routers indirectly (\`createFactory().createApp()\`), which the walk cannot open.`
+      : "";
+  for (const statement of sourceFile.statements) {
+    if (
+      ts.isExportDeclaration(statement) &&
+      statement.moduleSpecifier &&
+      ts.isStringLiteral(statement.moduleSpecifier) &&
+      isJudgedHonoSpecifier(statement.moduleSpecifier.text) &&
+      !statement.isTypeOnly
+    ) {
+      const specifier = statement.moduleSpecifier.text;
+      flag(
+        statement,
+        "reexport",
+        `this module re-exports the \`hono\` package (\`${statement.getText(sourceFile).slice(0, 60)}\`); a shim that forwards the router class makes it reachable under a relative specifier no router-class rule recognizes, so routers built from it are invisible to the walk.${honoEntryNote(specifier)}`,
+        `\`${specifier}\``,
+      );
+      continue;
+    }
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      !isJudgedHonoSpecifier(statement.moduleSpecifier.text)
+    ) {
+      continue;
+    }
+    const specifier = statement.moduleSpecifier.text;
+    const clause = statement.importClause;
+    if (!clause || clause.isTypeOnly) continue;
+    const rejectBinding = (node: ts.Node, local: string, what: string) =>
+      flag(
+        node,
+        "import",
+        `\`${local}\` is imported from the \`hono\` package (\`${specifier}\`) as ${what}; only the router class itself — used solely as the callee of a resolved \`new\` — or a binding never referenced as a value may be imported from \`hono\` or any of its subpaths, because any other binding can build or hand out a router the walk never sees.${honoEntryNote(specifier)}`,
+        `\`${local}\``,
+      );
+    if (clause.name) {
+      rejectBinding(
+        clause.name,
+        clause.name.text,
+        "a default import (the package has no default export, so the binding resolves to no class the checker can follow)",
+      );
+    }
+    const named = clause.namedBindings;
+    if (!named || ts.isNamespaceImport(named)) {
+      // A namespace binding is already confined by the round-10 class-binding
+      // rule: `<ns>` is a `valueLocals` entry, so every use other than the
+      // callee of `new <ns>.Hono(...)` is flagged at the reference.
+      continue;
+    }
+    for (const element of named.elements) {
+      if (element.isTypeOnly) continue;
+      const imported = element.propertyName?.text ?? element.name.text;
+      if (routerClassOfExport(specifier, imported)) continue;
+      if (!hasValueReference(element.name.text)) continue;
+      rejectBinding(
+        element,
+        element.name.text,
+        `the non-router export \`${imported}\``,
+      );
+    }
+  }
   for (const declaration of uninitializedRouterCandidates) {
     flag(
       declaration,
@@ -4553,6 +4806,18 @@ function collectRouteModuleFacts(
     );
   }
   visit(sourceFile);
+  // Flagged AFTER the main sweep so that per-line dedupe prefers the more
+  // specific construction / reference finding when a declaration and its
+  // initializer share a line (`export const sub = reg(new H())`).
+  for (const declaration of unresolvableRouterInitializers) {
+    const name = (declaration.name as ts.Identifier).text;
+    flag(
+      declaration,
+      "initializer",
+      `the router \`${name}\` is declared as \`${declaration.getText(sourceFile).slice(0, 60)}\`; a top-level router candidate must be initialized by exactly \`new <Hono>()\` (the class resolved through its import), because a call, an unresolved \`new\`, an \`await\`, or a conditional produces a router built where the walk never looked, and the candidate is then walked as only its own textual registrations`,
+      `\`${name}\``,
+    );
+  }
 
   return {
     routers,

@@ -1728,6 +1728,9 @@ describe("collectOperationAdmissionCheckResult", () => {
       ".mount(...)",
       ".on(...)",
       ".post(...)",
+      // Round 11: the fixture's `sub` is a router candidate whose initializer
+      // is not `new Hono()`, so its declaration fails closed as well.
+      "`sub`",
     ]);
     expect(unresolvable.every((finding) => finding.severity === "high")).toBe(true);
     expect(unresolvable.map((finding) => finding.rationale).join("\n")).toContain(
@@ -4209,6 +4212,8 @@ describe("round 8: factory-built routers, dynamically imported router modules, w
     expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual([
       [9, ".get(...)"],
       [10, "`r`"],
+      // Round 11: the `export const sub = make()` call initializer.
+      [12, "`sub`"],
     ]);
     expect(unresolvable(result)[0].rationale).toContain("cannot resolve to a router");
     expect(unresolvable(result)[1].rationale).toContain("built inside a function or block");
@@ -4237,6 +4242,8 @@ describe("round 8: factory-built routers, dynamically imported router modules, w
     expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual([
       [8, ".get(...)"],
       [9, "`r`"],
+      // Round 11: the `export const sub = make("evil")` call initializer.
+      [11, "`sub`"],
     ]);
   });
 
@@ -4258,6 +4265,9 @@ describe("round 8: factory-built routers, dynamically imported router modules, w
     expect(unresolvable(result).map((finding) => finding.functionName)).toEqual([
       ".get(...)",
       "`r`",
+      // Round 11: `const child = make()` — a call initializer on a router
+      // candidate (it is `.route`-mounted) — fails closed at the declaration.
+      "`child`",
     ]);
     expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
   });
@@ -4393,9 +4403,12 @@ describe("round 8: factory-built routers, dynamically imported router modules, w
       });
       // Line 6: the construction (a parameter default is not a binding the
       // walk opens). Line 8: the registration on the now-opaque parameter.
+      // Line 11 (round 11): `export const sub = make()` is a router candidate
+      // whose initializer is a CALL, so the declaration fails closed too.
       expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual([
         [6, "`new Hono(...)`"],
         [8, ".get(...)"],
+        [11, "`sub`"],
       ]);
       expect(unresolvable(result)[0].rationale).toContain("constructed in a position the walk cannot bind");
       expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
@@ -4419,10 +4432,12 @@ describe("round 8: factory-built routers, dynamically imported router modules, w
         `,
       });
       // Line 7: the construction inside an array literal. Line 9: the
-      // registration on a binding-pattern local (opaque: any path).
+      // registration on a binding-pattern local (opaque: any path). Line 12
+      // (round 11): the `export const sub = make()` call initializer.
       expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual([
         [7, "`new Hono(...)`"],
         [9, ".get(...)"],
+        [12, "`sub`"],
       ]);
       expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
     });
@@ -4445,9 +4460,11 @@ describe("round 8: factory-built routers, dynamically imported router modules, w
       });
       // Line 8: the class-property construction. Line 9: a `this`-rooted
       // receiver is judged like a module-scoped one — any path is a route.
+      // Line 11 (round 11): the `export const sub = ...` call initializer.
       expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual([
         [8, "`new Hono(...)`"],
         [9, ".get(...)"],
+        [11, "`sub`"],
       ]);
       expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
     });
@@ -4574,6 +4591,8 @@ describe("round 8: factory-built routers, dynamically imported router modules, w
         expect(unresolvable(result).map((finding) => [finding.line, finding.functionName])).toEqual([
           [8, "`new Hono(...)`"],
           [9, ".get(...)"],
+          // Round 11: the `export const sub = make()` call initializer.
+          [13, "`sub`"],
         ]);
         expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
       });
@@ -4651,6 +4670,194 @@ describe("round 8: factory-built routers, dynamically imported router modules, w
           export const keep = 1;
         `);
         expect(result.findings).toEqual([]);
+      });
+    });
+
+    describe("round 11: the `hono` package is judged by prefix, and a router candidate must be `new Hono()`", () => {
+      it("walks `import { Hono } from \"convex-helpers/server/hono\"` — the package re-exports the class (positive control)", async () => {
+        const result = await check(`export {};`, "", {
+          subRouter: `
+            import { Hono } from "convex-helpers/server/hono";
+            import { admitHttpRead } from "../../../../platform/operationAdmission";
+            import { subHealth } from "../../../../operationAdmission/readDefinitions";
+            export const sub = new Hono();
+            sub.get("/health", admitHttpRead(subHealth, async (c) => c.json({})));
+          `,
+        });
+        expect(result.findings).toEqual([]);
+        expect(routes(result)).toEqual(["GET /health", "GET /sub/health"]);
+      });
+
+      it("resolves the class re-exported by `convex-helpers/server/hono`, so an unadmitted route on it is discovered", async () => {
+        const result = await check(`export {};`, "", {
+          subRouter: `
+            import { Hono } from "convex-helpers/server/hono";
+            import { admitHttpRead } from "../../../../platform/operationAdmission";
+            import { subHealth } from "../../../../operationAdmission/readDefinitions";
+            export const sub = new Hono();
+            sub.get("/health", admitHttpRead(subHealth, async (c) => c.json({})));
+            sub.post("/evil", async (c) => c.json({ pwned: true }));
+          `,
+        });
+        // The `POST /sub/evil` registration is only visible because the walk
+        // resolved the re-exported class and opened `sub`; before round 11 the
+        // class did not resolve, `sub` was never a router, and the route was
+        // served with no finding at all.
+        expect(routes(result)).toEqual(["GET /health", "GET /sub/health", "POST /sub/evil"]);
+        expect(result.findings.length).toBeGreaterThan(0);
+      });
+
+      it("fails closed on `new HonoBase(...)` from `hono/hono-base` handed to a factory", async () => {
+        const result = await check(`export {};`, "", {
+          subRouter: `
+            import { HonoBase } from "hono/hono-base";
+            import { admitHttpRead } from "../../../../platform/operationAdmission";
+            import { subHealth } from "../../../../operationAdmission/readDefinitions";
+            const h = async (c) => c.json({ pwned: true });
+            const P = "/evil";
+            function reg(r) { r.get(P, h); return r; }
+            export const sub = reg(new HonoBase({}));
+            sub.get("/health", admitHttpRead(subHealth, async (c) => c.json({})));
+          `,
+        });
+        // `HonoBase` IS the router class, so the construction rule now sees the
+        // `new` in a call-argument position, and the call initializer fails at
+        // the declaration.
+        expect(unresolvable(result).map((finding) => finding.functionName)).toEqual([
+          "`new Hono(...)`",
+        ]);
+      });
+
+      it("fails closed on `hono/factory` — a non-router binding of the package", async () => {
+        const result = await check(`export {};`, "", {
+          subRouter: `
+            import { createFactory } from "hono/factory";
+            import { admitHttpRead } from "../../../../platform/operationAdmission";
+            import { subHealth } from "../../../../operationAdmission/readDefinitions";
+            export const sub = createFactory().createApp();
+            sub.get("/health", admitHttpRead(subHealth, async (c) => c.json({})));
+          `,
+        });
+        const rationales = unresolvable(result).map((finding) => finding.rationale).join("\n");
+        expect(unresolvable(result).map((finding) => finding.functionName).sort()).toEqual([
+          "`createFactory`",
+          "`sub`",
+        ]);
+        expect(rationales).toContain("hono/factory");
+        expect(rationales).toContain("must be initialized by exactly");
+      });
+
+      it.each([
+        ['export { Hono } from "hono";', "`hono`"],
+        ['export * from "hono";', "`hono`"],
+        ['export * as hono from "hono";', "`hono`"],
+        ['export { HonoBase as Hono } from "hono/hono-base";', "`hono/hono-base`"],
+      ])("fails closed on the convex-module shim %s", async (late, label) => {
+        const result = await check(late);
+        expect(unresolvable(result).map((finding) => finding.functionName)).toEqual([label]);
+        expect(unresolvable(result)[0].rationale).toContain("re-exports the `hono` package");
+      });
+
+      it.each([
+        ['import { Hono } from "hono";\nexport { Hono };', "`Hono`"],
+        ['import { Hono } from "hono";\nexport { Hono as Router };', "`Hono`"],
+        ['import { Hono } from "hono";\nexport default Hono;', "`Hono`"],
+      ])("fails closed on an import-then-export of the router class (%s)", async (late, label) => {
+        const result = await check(late);
+        expect(unresolvable(result).map((finding) => finding.functionName)).toEqual([label]);
+        expect(unresolvable(result)[0].rationale).toContain("referenced as a value");
+      });
+
+      it("keeps `export type { Hono }` — a type-only re-emission is not a value escape", async () => {
+        const result = await check('import type { Hono } from "hono";\nexport type { Hono };');
+        expect(result.findings).toEqual([]);
+      });
+
+      it("sees the package through a relative path into node_modules", async () => {
+        const viaFactory = await check(
+          'import { createFactory } from "../../../../../node_modules/hono/factory";\nexport const make = createFactory;',
+        );
+        expect(unresolvable(viaFactory).map((finding) => finding.functionName)).toEqual([
+          "`createFactory`",
+        ]);
+        const viaClass = await check(
+          'import { Hono } from "../../../../../node_modules/hono";\nconst H = Hono;\nexport const sub = new H();',
+        );
+        expect(unresolvable(viaClass).map((finding) => finding.functionName)).toEqual([
+          "`Hono`",
+        ]);
+      });
+
+      it("keeps the non-router entry points the other rules own (`hono/cookie`, `hono/cors`, `hono/http-exception`) and effectively type-only bindings", async () => {
+        const result = await check(
+          'import { getCookie, setCookie } from "hono/cookie";\nimport { Context } from "hono";\nexport const read = (c) => getCookie(c, "x") ?? setCookie(c, "x", "y");\nexport type Ctx = Context;',
+        );
+        expect(result.findings).toEqual([]);
+      });
+
+      it("fails closed on a top-level router candidate with a CALL initializer, even with no other escape in the module", async () => {
+        const result = await check(`export {};`, "", {
+          subRouter: `
+            import { admitHttpRead } from "../../../../platform/operationAdmission";
+            import { subHealth } from "../../../../operationAdmission/readDefinitions";
+            import { build } from "./builder";
+            export const sub = build();
+            sub.get("/health", admitHttpRead(subHealth, async (c) => c.json({})));
+          `,
+          extraModules: {
+            "http/domains/core/routes/builder.ts": `export function build() { return null; }`,
+          },
+        });
+        expect(unresolvable(result).map((finding) => finding.functionName)).toEqual(["`sub`"]);
+        expect(unresolvable(result)[0].rationale).toContain("must be initialized by exactly");
+      });
+
+      it("fails closed on a router candidate built by `new` of a class the checker could not resolve (a local shim)", async () => {
+        const result = await check(`export {};`, "", {
+          subRouter: `
+            import { admitHttpRead } from "../../../../platform/operationAdmission";
+            import { subHealth } from "../../../../operationAdmission/readDefinitions";
+            import { Hono } from "./shim";
+            export const sub = new Hono();
+            sub.get("/health", admitHttpRead(subHealth, async (c) => c.json({})));
+          `,
+          extraModules: {
+            "http/domains/core/routes/shim.ts": `export { Hono } from "hono";`,
+          },
+        });
+        expect(unresolvable(result).map((finding) => finding.functionName)).toContain("`sub`");
+      });
+
+      it("fails closed on an `await` initializer for a router candidate", async () => {
+        const result = await check(`export {};`, "", {
+          subRouter: `
+            import { admitHttpRead } from "../../../../platform/operationAdmission";
+            import { subHealth } from "../../../../operationAdmission/readDefinitions";
+            import { load } from "./builder";
+            export const sub = await load();
+            sub.get("/health", admitHttpRead(subHealth, async (c) => c.json({})));
+          `,
+          extraModules: {
+            "http/domains/core/routes/builder.ts": `export async function load() { return null; }`,
+          },
+        });
+        expect(unresolvable(result).map((finding) => finding.functionName)).toEqual(["`sub`"]);
+      });
+
+      it("fails closed on the root handed to `new HttpRouterWithHono(...)` when its initializer is a call", async () => {
+        const result = await check(
+          `import { HttpRouterWithHono } from "convex-helpers/server/hono";
+           import { build } from "./builder";
+           export const root = build();
+           export default new HttpRouterWithHono(root);`,
+          "",
+          {
+            extraModules: {
+              "http/domains/core/routes/builder.ts": `export function build() { return null; }`,
+            },
+          },
+        );
+        expect(unresolvable(result).map((finding) => finding.functionName)).toContain("`root`");
       });
     });
 
@@ -4930,6 +5137,14 @@ describe("round 9: router middleware is pass-through-or-deny", () => {
     ["a rethrow of a catch binding ALIASED into a local (round 10)", `sub.use("*", async (c, next) => { try { c.req.header("x"); } catch (error) { const e = error; e.getResponse = () => new Response("pwned"); throw error; } await next(); });`, "used other than as the thrown value"],
     ["a rethrow of a catch binding handed to a call whose result is not tested (round 10)", `import { decorate } from "./decorate";\nsub.use("*", async (c, next) => { try { c.req.header("x"); } catch (error) { decorate(error); throw error; } await next(); });`, "used other than as the thrown value"],
     ["a rethrow of a catch binding whose method is called (round 10)", `sub.use("*", async (c, next) => { try { c.req.header("x"); } catch (error) { error.setStatus(200); throw error; } await next(); });`, "used other than as the thrown value"],
+    // Round 11: a call whose result IS tested still fails when the callee is a
+    // property access — `Object.assign` / `Reflect.set` / `x.decorate` return
+    // truthy, so "tested" was a free pass to mutate the value before rethrow.
+    ["a rethrow of a catch binding mutated by a TESTED `Object.assign` (round 11)", `sub.use("*", async (c, next) => { try { c.req.header("x"); } catch (error) { if (Object.assign(error, { getResponse: () => new Response("pwned") })) { throw error; } throw error; } await next(); });`, "used other than as the thrown value"],
+    ["a rethrow of a catch binding mutated by an or-ed `Object.assign` beside a real predicate (round 11)", `import { isA } from "./preds";
+sub.use("*", async (c, next) => { try { c.req.header("x"); } catch (error) { if (isA(error) && Object.assign(error, { getResponse: () => new Response("pwned") })) { throw error; } throw error; } await next(); });`, "used other than as the thrown value"],
+    ["a rethrow of a catch binding mutated by a negated `Reflect.set` (round 11)", `sub.use("*", async (c, next) => { try { c.req.header("x"); } catch (error) { if (!Reflect.set(error, "getResponse", () => new Response("pwned"))) { throw error; } throw error; } await next(); });`, "used other than as the thrown value"],
+    ["a rethrow of a catch binding ALIASED by an assignment's right side (round 11)", `sub.use("*", async (c, next) => { let seen; try { c.req.header("x"); } catch (error) { seen = error; seen.getResponse = () => new Response("pwned"); throw error; } await next(); });`, "used other than as the thrown value"],
     ["a throw of an outer local, not the catch binding", `sub.use("*", async (c, next) => { let saved; try { c.req.header("x"); } catch (error) { saved = error; } if (saved) throw saved; await next(); });`, "throws a value it constructs or obtains"],
     ["`try { return next() } catch` — observing the admitted handler's failure", `sub.use("*", async (c, next) => { try { return next(); } catch (e) { return c.json({ leaked: String(e) }, 500); } await next(); });`, "called inside a `try`"],
     ["`return next()` inside a try's finally", `sub.use("*", async (c, next) => { try { c.req.header("x"); } finally { return next(); } await next(); });`, "called inside a `try`"],
@@ -4978,11 +5193,10 @@ describe("round 9: router middleware is pass-through-or-deny", () => {
     expect(result.findings).toEqual([]);
   });
 
-  it("accepts a rethrow whose catch binding is only read: tested predicates (negated, or-ed, compared), `instanceof`, a property read in a condition, and the right side of an assignment (round 10)", async () => {
+  it("accepts a rethrow whose catch binding is only read: tested predicates (negated, or-ed, compared), `instanceof`, and a property read in a condition (round 11: the right side of an assignment is NO LONGER accepted)", async () => {
     const result = await check(`
       import { isA, isB } from "./preds";
       sub.use("*", async (c, next) => {
-        let seen;
         try {
           c.req.header("x");
         } catch (error) {
@@ -4992,7 +5206,6 @@ describe("round 9: router middleware is pass-through-or-deny", () => {
           if (error instanceof TypeError && typeof error.code === "string" && error.code !== "x") {
             return c.json({ error: { code: "b" } }, 400);
           }
-          seen = error;
           throw error;
         }
         await next();
