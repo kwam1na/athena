@@ -135,7 +135,7 @@ export const getBagItemsForStoreReadDefinition = storefrontRead({
 // --- storeFront/checkoutSession -------------------------------------------
 
 /**
- * The only U6 read that satisfies both halves of the demo rule:
+ * The only storefront-customer read that satisfies both halves of the demo rule:
  * `online_orders.view` is granted AND the store comes from an argument, so the
  * demo adapter clamps a store the caller cannot choose out from under it.
  */

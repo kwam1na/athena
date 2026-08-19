@@ -13,7 +13,7 @@ applies_when:
   - "A check enumerates bad shapes rather than accepting a closed set of good ones"
   - "A checker walks files, imports, or references with globs, suffix regexes, or name comparison"
   - "Someone argues a new predicate is safe because it accepts everything the old one accepted"
-delivery_diff_fingerprint: db9edecbe4979dfcc5ecde04b96449aa4cc9753d90d3375578e97c3c70fe405a
+delivery_diff_fingerprint: a74b06c5c4e61ce533c1cac4775d54fb41ac310cb1f29bd47292a4c90d3073a6
 tags: [static-analysis, security, ast, fail-closed, code-review, tooling]
 ---
 
