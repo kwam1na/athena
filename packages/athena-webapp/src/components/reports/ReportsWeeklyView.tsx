@@ -21,6 +21,7 @@ import type {
   ReportWeekSummary,
   ReportPaymentMix,
 } from "~/shared/reportsContract";
+import { addWeekMetrics } from "~/shared/reportsContract";
 import { formatProductDisplayName } from "~/shared/productDisplayName";
 import {
   formatOperatingDate,
@@ -191,6 +192,18 @@ type WeeklyEvidenceCoverage = {
   usableDayCount: number;
   scheduledDayCount: number;
 };
+
+function transactionComparison(current: number, prior: number) {
+  if (current === prior) return "In line with prior week";
+  if (prior === 0) {
+    return `${Math.abs(current).toLocaleString("en-US")} ${current > 0 ? "higher" : "lower"} than prior week`;
+  }
+
+  const percent = Math.round(
+    (Math.abs(current - prior) / Math.abs(prior)) * 100,
+  );
+  return `${percent}% ${current > prior ? "higher" : "lower"} than prior week`;
+}
 
 type WeeklyExpenseProduct = {
   productSkuId: string;
@@ -526,6 +539,14 @@ export function ReportsWeeklyView({
     scheduled.unitsReturned !== 0 ||
     scheduled.paymentsCollectedMinor !== 0;
   const priorNetSalesChange = report.priorPeriod?.netSalesChange ?? null;
+  const foldedTransactionCount = addWeekMetrics(
+    report.included,
+    report.outsideSchedule,
+  ).transactionCount;
+  const priorTransactionCount =
+    report.priorPeriod?.comparabilityReason === "comparable"
+      ? report.priorPeriod.totalSummary?.transactionCount
+      : undefined;
   const inventoryAttentionResolved =
     report.inventoryAttention?.completeness === "complete" &&
     report.inventoryAttention.newCount === 0 &&
@@ -616,6 +637,30 @@ export function ReportsWeeklyView({
                   ? `Lower than the prior period by ${formatReportMoney(priorNetSalesChange.amountMinor, currency)}`
                   : "No change from the prior period"}
             </p>
+          ) : null}
+          {foldedTransactionCount !== undefined ? (
+            <div className="mt-layout-lg">
+              <h2 className="text-sm font-medium text-muted-foreground">
+                Transactions
+              </h2>
+              <p
+                className="mt-1 font-numeric text-3xl font-semibold leading-none tracking-tight text-foreground"
+                data-testid="weekly-transaction-count"
+              >
+                {foldedTransactionCount.toLocaleString("en-US")}
+              </p>
+              {priorTransactionCount !== undefined ? (
+                <p
+                  className="mt-layout-xs text-sm font-medium text-foreground"
+                  data-testid="weekly-prior-transaction-delta"
+                >
+                  {transactionComparison(
+                    foldedTransactionCount,
+                    priorTransactionCount,
+                  )}
+                </p>
+              ) : null}
+            </div>
           ) : null}
           <dl className="mt-layout-md flex flex-wrap gap-x-layout-xl gap-y-layout-xs text-sm">
             <div>

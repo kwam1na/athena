@@ -193,6 +193,8 @@ export type ReportPaymentPosture = {
  * presents an omitted total of zero as source-proven.
  */
 export type ReportWeekMetrics = ReportDayMetrics & {
+  /** Completed POS transactions folded across this weekly lane. */
+  transactionCount?: number;
   paymentUnsettledMinor: number | null;
   paymentAllocationCoverage: "complete" | "unknown";
   paymentAllocationOmittedMinor?: number;
@@ -216,6 +218,7 @@ export type ReportWeekSummary = {
   refundsMinor: number;
   unitsReturned: number;
   unitsSold: number;
+  transactionCount?: number;
 };
 
 export const REPORT_WEEK_METRIC_KEYS = [
@@ -226,6 +229,7 @@ export const REPORT_WEEK_METRIC_KEYS = [
 
 /** Weekly payment posture fields still rolling out as optional-then-required. */
 export const REPORT_WEEK_ROLLOUT_METRIC_KEYS = [
+  "transactionCount",
   "paymentAllocationOmittedMinor",
   "paymentHasInvalidAllocation",
 ] as const satisfies readonly (keyof ReportWeekMetrics)[];
@@ -303,6 +307,10 @@ export function addWeekMetrics(
       left.paymentAllocationOmittedMinor + right.paymentAllocationOmittedMinor,
     paymentHasInvalidAllocation:
       left.paymentHasInvalidAllocation || right.paymentHasInvalidAllocation,
+    ...(left.transactionCount === undefined ||
+    right.transactionCount === undefined
+      ? {}
+      : { transactionCount: left.transactionCount + right.transactionCount }),
   };
 }
 
@@ -570,6 +578,8 @@ export type ReportWeekPriorPeriod = {
   currentScheduledPositionCount: number;
   equivalentScheduledPositions: boolean;
   priorScheduledPositionCount: number;
+  /** Completed transactions across the comparable scheduled positions. */
+  transactionCount?: number;
   values: ReportWeekMetrics | null;
   /**
    * The prior week's outside-schedule lane. Optional only while prior-period
@@ -1574,6 +1584,7 @@ export type ReportDayRow = ReportDayMetrics & {
  */
 export type ReportSkuIdentity = {
   displayName: string;
+  barcode?: string;
   /** Current owning-product availability, when the product still exists. */
   productAvailability?: "archived" | "draft" | "live";
   sku?: string;

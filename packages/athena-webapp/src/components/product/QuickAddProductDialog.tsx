@@ -42,6 +42,7 @@ import {
 } from "./quickAddProductDialogUtils";
 
 export type QuickAddProductVariantInput = {
+  unitCost?: number;
   lookupCode?: string;
   price: number;
   quantityAvailable: number;
@@ -75,6 +76,7 @@ type QuickAddReferenceVariant = {
 };
 
 type QuickAddVariantDraft = {
+  cost: string;
   id: string;
   lookupCode: string;
   price: string;
@@ -82,6 +84,7 @@ type QuickAddVariantDraft = {
 };
 
 type ParsedQuickAddVariant = {
+  unitCost?: number;
   lookupCode: string;
   price: number;
   quantityAvailable: number;
@@ -376,6 +379,7 @@ export function QuickAddProductDialog({
 }: QuickAddProductDialogProps) {
   const [quickAddName, setQuickAddName] = useState("");
   const [quickAddLookupCode, setQuickAddLookupCode] = useState("");
+  const [quickAddCost, setQuickAddCost] = useState("");
   const [quickAddPrice, setQuickAddPrice] = useState("");
   const [quickAddQuantity, setQuickAddQuantity] = useState("1");
   const [quickAddUsesMultipleVariants, setQuickAddUsesMultipleVariants] =
@@ -407,6 +411,7 @@ export function QuickAddProductDialog({
   const resetQuickAddForm = useCallback(() => {
     setQuickAddName(initialName);
     setQuickAddLookupCode(initialLookupCode);
+    setQuickAddCost("");
     setQuickAddPrice("");
     setQuickAddQuantity("1");
     setQuickAddUsesMultipleVariants(false);
@@ -427,6 +432,7 @@ export function QuickAddProductDialog({
     nextQuickAddVariantIdRef.current += 1;
 
     return {
+      cost: "",
       id: `quick-add-variant-${variantId}`,
       lookupCode: "",
       price: "",
@@ -495,6 +501,7 @@ export function QuickAddProductDialog({
 
     const variantDrafts: QuickAddVariantDraft[] = [
       {
+        cost: quickAddCost,
         id: "primary",
         lookupCode: quickAddLookupCode,
         price: quickAddPrice,
@@ -538,6 +545,14 @@ export function QuickAddProductDialog({
         return;
       }
 
+      const parsedUnitCost = variant.cost.trim()
+        ? parseDisplayAmountInput(variant.cost)
+        : undefined;
+      if (variant.cost.trim() && (parsedUnitCost === undefined || parsedUnitCost < 0)) {
+        setQuickAddError(`${variantLabel}: Enter a valid unit cost`);
+        return;
+      }
+
       const parsedQuantity = variant.quantity.trim() ? +variant.quantity : 0;
       if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
         setQuickAddError(
@@ -570,6 +585,7 @@ export function QuickAddProductDialog({
       }
 
       parsedVariants.push({
+        unitCost: parsedUnitCost,
         lookupCode: normalizedLookupCode,
         price: parsedPrice,
         quantityAvailable: roundedQuantity,
@@ -590,6 +606,7 @@ export function QuickAddProductDialog({
       const submitResult = await onSubmit({
         name: parsedName,
         variants: parsedVariants.map((variant) => ({
+          unitCost: variant.unitCost,
           lookupCode: variant.lookupCode || undefined,
           price: variant.price,
           quantityAvailable: variant.quantityAvailable,
@@ -961,7 +978,7 @@ export function QuickAddProductDialog({
                       Variant 1
                     </p>
                   )}
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.25fr)_repeat(3,minmax(0,1fr))]">
                     <div className="space-y-2">
                       <Label htmlFor="quick-add-lookup-code">Barcode</Label>
                       <div className="relative">
@@ -999,6 +1016,18 @@ export function QuickAddProductDialog({
                           setQuickAddPrice(event.target.value)
                         }
                         placeholder="0.00"
+                        disabled={isSaving}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="quick-add-cost">Unit cost</Label>
+                      <Input
+                        id="quick-add-cost"
+                        inputMode="decimal"
+                        value={quickAddCost}
+                        onChange={(event) => setQuickAddCost(event.target.value)}
+                        placeholder="Optional"
                         disabled={isSaving}
                       />
                     </div>
@@ -1044,7 +1073,7 @@ export function QuickAddProductDialog({
                         </Button>
                       </div>
 
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.25fr)_repeat(3,minmax(0,1fr))]">
                         <div className="space-y-2">
                           <Label htmlFor={`${variant.id}-lookup-code`}>
                             Barcode
@@ -1076,6 +1105,24 @@ export function QuickAddProductDialog({
                               })
                             }
                             placeholder="0.00"
+                            disabled={isSaving}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor={`${variant.id}-cost`}>
+                            Unit cost
+                          </Label>
+                          <Input
+                            id={`${variant.id}-cost`}
+                            inputMode="decimal"
+                            value={variant.cost}
+                            onChange={(event) =>
+                              updateQuickAddExtraVariant(variant.id, {
+                                cost: event.target.value,
+                              })
+                            }
+                            placeholder="Optional"
                             disabled={isSaving}
                           />
                         </div>

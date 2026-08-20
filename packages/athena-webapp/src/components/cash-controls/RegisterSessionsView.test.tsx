@@ -67,6 +67,7 @@ describe("RegisterSessionsViewContent", () => {
             openingFloat: 25000,
             registerNumber: "Register 3",
             status: "active",
+            terminalName: "Front counter",
             totalDeposited: 400000,
             variance: 0,
           },
@@ -102,6 +103,11 @@ describe("RegisterSessionsViewContent", () => {
     expect(screen.getByText("Discrepancy")).toBeInTheDocument();
     expect(screen.getByText("Register 3")).toBeInTheDocument();
     expect(screen.getByText("Register 2")).toBeInTheDocument();
+    expect(screen.getByText("Front counter")).toHaveClass(
+      "text-xs",
+      "font-normal",
+      "text-muted-foreground",
+    );
     expect(screen.getByText("Active")).toBeInTheDocument();
     expect(screen.getAllByText("Closed").length).toBeGreaterThan(0);
     expect(screen.getByText("Kwamina M.")).toBeInTheDocument();
@@ -116,7 +122,9 @@ describe("RegisterSessionsViewContent", () => {
     expect(screen.getByText(expectedTimelineRange)).toBeInTheDocument();
     expect(screen.getByText("10 hr 50 min")).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /Register 3 ACTIVE/i }),
+      screen.getByRole("link", {
+        name: /Register 3 Front counter ACTIVE/i,
+      }),
     ).toHaveAttribute(
       "href",
       "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId?o=%252F",

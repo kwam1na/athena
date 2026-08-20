@@ -136,6 +136,7 @@ async function seedSku(
       subcategoryId,
     });
     return ctx.db.insert("productSku", {
+      barcode: "1234567890123",
       images,
       inventoryCount: 10,
       ...(netPrice !== undefined ? { netPrice } : {}),
@@ -1332,6 +1333,7 @@ describe("getSkuDetail", () => {
     // the `productSku` document this resolver already reads, so publishing it
     // costs no extra read and keeps the field from being demo-only.
     expect(result?.identity?.quantityAvailable).toBe(10);
+    expect(result?.identity?.barcode).toBe("1234567890123");
   });
 
   it("includes the archived catalog status in SKU identity", async () => {

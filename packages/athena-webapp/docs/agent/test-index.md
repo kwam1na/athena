@@ -103,6 +103,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/inventory/catalogImport.test.ts`](../../convex/inventory/catalogImport.test.ts)
 - [`convex/inventory/catalogSummary.test.ts`](../../convex/inventory/catalogSummary.test.ts)
 - [`convex/inventory/expenseSessions.test.ts`](../../convex/inventory/expenseSessions.test.ts)
+- [`convex/inventory/expenseTransactions.query.test.ts`](../../convex/inventory/expenseTransactions.query.test.ts)
 - [`convex/inventory/expenseTransactions.test.ts`](../../convex/inventory/expenseTransactions.test.ts)
 - [`convex/inventory/featuredItem.test.ts`](../../convex/inventory/featuredItem.test.ts)
 - [`convex/inventory/helpers/inventoryHolds.test.ts`](../../convex/inventory/helpers/inventoryHolds.test.ts)
@@ -189,6 +190,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/operations/inventoryMovements.test.ts`](../../convex/operations/inventoryMovements.test.ts)
 - [`convex/operations/logicalOperationalWork.test.ts`](../../convex/operations/logicalOperationalWork.test.ts)
 - [`convex/operations/managerElevations.test.ts`](../../convex/operations/managerElevations.test.ts)
+- [`convex/operations/managerReportExpenseSections.test.ts`](../../convex/operations/managerReportExpenseSections.test.ts)
 - [`convex/operations/openWorkInventoryReviews.test.ts`](../../convex/operations/openWorkInventoryReviews.test.ts)
 - [`convex/operations/operationalEvents.test.ts`](../../convex/operations/operationalEvents.test.ts)
 - [`convex/operations/operationalWorkItems.test.ts`](../../convex/operations/operationalWorkItems.test.ts)
@@ -398,6 +400,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/workflowTraces/adapters/registerSession.test.ts`](../../convex/workflowTraces/adapters/registerSession.test.ts)
 - [`convex/workflowTraces/adapters/serviceCase.test.ts`](../../convex/workflowTraces/adapters/serviceCase.test.ts)
 - [`convex/workflowTraces/presentation.test.ts`](../../convex/workflowTraces/presentation.test.ts)
+- [`convex/workflowTraces/public.test.ts`](../../convex/workflowTraces/public.test.ts)
 - [`convex/workflowTraces/queryUsage.test.ts`](../../convex/workflowTraces/queryUsage.test.ts)
 - [`convex/workflowTraces/schemaIndexes.test.ts`](../../convex/workflowTraces/schemaIndexes.test.ts)
 

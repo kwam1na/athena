@@ -836,6 +836,7 @@ export const quickAddSku = mutation({
     productId: v.optional(v.id("product")),
     productSkuId: v.optional(v.id("productSku")),
     price: v.number(),
+    unitCost: v.optional(v.number()),
     quantityAvailable: v.number(),
     registerSessionId: v.optional(v.id("registerSession")),
     terminalId: v.optional(v.id("posTerminal")),

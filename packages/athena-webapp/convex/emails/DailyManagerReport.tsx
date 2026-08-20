@@ -103,6 +103,7 @@ export interface DailyManagerReportProps {
   cashMetrics?: DailyManagerReportMetric[];
   paymentTotals?: DailyManagerReportPaymentTotal[];
   rankedSections?: DailyManagerReportRankedSection[];
+  rankedSectionSummary?: DailyManagerReportMetric;
   notes?: string;
   presentation?: DailyManagerReportPresentation;
   attentionItems?: DailyManagerReportItem[];
@@ -126,6 +127,8 @@ export interface DailyManagerReportPresentation {
   summaryMetricLayout?: "stacked" | "lead";
   paymentSectionPlacement?: "after-summary" | "after-cash";
   topItemsPlacement?: "after-summary" | "after-cash";
+  rankedSectionPlacement?: "before-cash" | "after-payment";
+  rankedSectionTitle?: string;
 }
 
 const previewMoney = formatReportAmount("GHS");
@@ -149,6 +152,8 @@ export const dailyManagerReportPreviewProps = {
     { name: 'Silk Press 18"', detail: "SP18-NAT", unitsSold: 8 },
     { name: 'Body Wave 20"', detail: "BW20-1B", unitsSold: 6 },
     { name: "HD Lace Closure", detail: "HDLC-14", unitsSold: 4 },
+    { name: 'Deep Wave 22"', detail: "DW22-1B", unitsSold: 3 },
+    { name: 'Kinky Straight 16"', detail: "KS16-NAT", unitsSold: 2 },
   ],
   topItemsUrl:
     "https://athena-os.app/wigclub/store/wigclub/reports?daysStart=2026-08-08&daysEnd=2026-08-08&daysTableStart=2026-08-08&daysTableEnd=2026-08-08&selectedDay=2026-08-08&units=true",
@@ -227,6 +232,7 @@ export default function DailyManagerReport({
   cashMetrics = [],
   paymentTotals = [],
   rankedSections = [],
+  rankedSectionSummary,
   notes,
   presentation,
   attentionItems: suppliedAttentionItems,
@@ -376,6 +382,14 @@ export default function DailyManagerReport({
             <TopItemsSection items={topItems} url={topItemsUrl} />
           ) : null}
 
+          {presentation?.rankedSectionPlacement === "before-cash" ? (
+            <RankedDetailsSection
+              sections={rankedSections}
+              summary={rankedSectionSummary}
+              title={presentation?.rankedSectionTitle}
+            />
+          ) : null}
+
           <Section style={styles.separatedSection}>
             <SectionHeading
               title={presentation?.cashSectionTitle ?? "Cash position"}
@@ -411,17 +425,37 @@ export default function DailyManagerReport({
             </Section>
             )}
 
-          {rankedSections.map((section) => (
-            <RankedSection key={section.title} section={section} />
-          ))}
+          {presentation?.rankedSectionPlacement !== "before-cash" ? (
+            <RankedDetailsSection
+              sections={rankedSections}
+              summary={rankedSectionSummary}
+              title={presentation?.rankedSectionTitle}
+            />
+          ) : null}
 
-          {reportSections.map((section) => (
-            <Section key={section.title} style={styles.separatedSection}>
-              <SectionHeading title={section.title} quietTitle />
-              <Text style={styles.reportSectionMessage}>{section.message}</Text>
-              {section.meta ? (
-                <Text style={styles.reportSectionMeta}>{section.meta}</Text>
-              ) : null}
+          {groupReportSections(reportSections).map((group) => (
+            <Section key={group.title} style={styles.separatedSection}>
+              <SectionHeading title={group.title} quietTitle />
+              <Section style={styles.reportSectionPanel}>
+                {group.sections.map((section, index) => (
+                  <Section
+                    key={section.title}
+                    style={index === 0 ? undefined : styles.reportSectionItem}
+                  >
+                    {section.title !== group.title ? (
+                      <Text style={styles.reportSectionLabel}>
+                        {section.title}
+                      </Text>
+                    ) : null}
+                    <Text style={styles.reportSectionMessage}>
+                      {section.message}
+                    </Text>
+                    {section.meta ? (
+                      <Text style={styles.reportSectionMeta}>{section.meta}</Text>
+                    ) : null}
+                  </Section>
+                ))}
+              </Section>
             </Section>
           ))}
 
@@ -547,8 +581,8 @@ function sampleSummaryMetricsFor(
 ): DailyManagerReportMetric[] {
   return [
     { label: "Net sales", value: money(1935) },
-    { label: "Units sold", value: "23" },
     { label: "Transactions", value: "5" },
+    { label: "Units sold", value: "23" },
   ];
 }
 
@@ -699,7 +733,7 @@ function TopItemsSection({
     <Section style={styles.separatedSection}>
       <SectionHeading title="Top items by units sold" quietTitle />
       <Section style={styles.topItemsList}>
-        {items.slice(0, 3).map((item, index) => (
+        {items.slice(0, 5).map((item, index) => (
           <Row key={`${item.name}-${index}`} style={styles.topItemRow}>
             <Column>
               <Text style={styles.topItemName}>
@@ -864,12 +898,16 @@ function PaymentMeta({ payment }: { payment: DailyManagerReportPaymentTotal }) {
 }
 
 function RankedSection({
+  nested = false,
   section,
 }: {
+  nested?: boolean;
   section: DailyManagerReportRankedSection;
 }) {
   return (
-    <Section style={styles.separatedSection}>
+    <Section
+      style={nested ? styles.rankedNestedSection : styles.separatedSection}
+    >
       <SectionHeading
         detail={section.coverage}
         title={section.title}
@@ -889,6 +927,42 @@ function RankedSection({
       </Section>
     </Section>
   );
+}
+
+function RankedDetailsSection({
+  sections,
+  summary,
+  title,
+}: {
+  sections: DailyManagerReportRankedSection[];
+  summary?: DailyManagerReportMetric;
+  title?: string;
+}) {
+  if (sections.length === 0 && !summary) return null;
+
+  return (
+    <Section style={styles.separatedSection}>
+      <SectionHeading title={title ?? "Ranked details"} quietTitle />
+      {summary ? <OperatingMetric metric={summary} /> : null}
+      {sections.map((section) => (
+        <RankedSection key={section.title} section={section} nested />
+      ))}
+    </Section>
+  );
+}
+
+function groupReportSections(sections: DailyManagerReportSection[]) {
+  const groups: Array<{
+    title: string;
+    sections: DailyManagerReportSection[];
+  }> = [];
+  for (const section of sections) {
+    const title = /variance/i.test(section.title) ? "Variance" : section.title;
+    const existing = groups.find((group) => group.title === title);
+    if (existing) existing.sections.push(section);
+    else groups.push({ title, sections: [section] });
+  }
+  return groups;
 }
 
 function RankedRow({
@@ -972,7 +1046,7 @@ function compactComparison(comparison: string, label?: string) {
 }
 
 function comparisonDetailLabel(detail?: string) {
-  return detail?.replace(/^\d+\s+/, "").toLowerCase();
+  return detail?.replace(/^(?:\d+\s+|no\s+)/i, "").toLowerCase();
 }
 
 function capitalize(value: string) {
@@ -1209,7 +1283,22 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 500,
     letterSpacing: "-0.01em",
     lineHeight: "25px",
-    margin: "18px 0 0",
+    margin: "6px 0 0",
+  },
+  reportSectionLabel: {
+    color: colors.muted,
+    fontSize: "11px",
+    fontWeight: 600,
+    lineHeight: "16px",
+    margin: 0,
+  },
+  reportSectionPanel: {
+    marginTop: "16px",
+  },
+  reportSectionItem: {
+    borderTop: `1px solid ${colors.border}`,
+    marginTop: "18px",
+    paddingTop: "18px",
   },
   reportSectionMeta: {
     color: colors.muted,
@@ -1278,6 +1367,9 @@ const styles: Record<string, CSSProperties> = {
   separatedSection: {
     borderTop: `1px solid ${colors.border}`,
     padding: "28px 32px 24px",
+  },
+  rankedNestedSection: {
+    marginTop: "26px",
   },
   shell: {
     backgroundColor: colors.raised,

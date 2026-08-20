@@ -1022,7 +1022,15 @@ function ClosedSessionsSummary({
                       search={{ o: getOrigin() }}
                       to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
                     >
-                      {formatRegisterName(session.registerNumber)}
+                      <span className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                        <span>{formatRegisterName(session.registerNumber)}</span>
+                        {session.terminalName?.trim() ? (
+                          <span className="min-w-0 truncate text-xs font-normal text-muted-foreground">
+                            <span aria-hidden="true">/ </span>
+                            {session.terminalName.trim()}
+                          </span>
+                        ) : null}
+                      </span>
                     </Link>
                   </TableCell>
                   <TableCell className="p-0 text-xs text-muted-foreground">
@@ -1172,8 +1180,14 @@ function ClosedSessionsSnapshot({
             to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
           >
             <div className="min-w-0 space-y-1">
-              <p className="font-medium text-foreground">
-                {formatRegisterName(session.registerNumber)}
+              <p className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 font-medium text-foreground">
+                <span>{formatRegisterName(session.registerNumber)}</span>
+                {session.terminalName?.trim() ? (
+                  <span className="min-w-0 truncate text-xs font-normal text-muted-foreground">
+                    <span aria-hidden="true">/ </span>
+                    {session.terminalName.trim()}
+                  </span>
+                ) : null}
               </p>
               <p className="text-xs text-muted-foreground">
                 Closed{" "}

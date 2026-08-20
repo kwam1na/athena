@@ -1,6 +1,7 @@
 ---
 title: Athena Workflow Investigation Evidence
 date: 2026-06-21
+last_updated: 2026-08-20
 category: architecture
 module: athena-webapp
 problem_type: cross_domain_workflow_investigation
@@ -15,6 +16,7 @@ tags:
   - service-cases
   - online-orders
   - automation
+delivery_diff_fingerprint: b5a6232af5bf00ae9fdbdf2ced27c0b4379af43bdd5f4a0e4311699e574dd13f
 ---
 
 # Athena Workflow Investigation Evidence
@@ -103,6 +105,16 @@ and Daily Operations expose links or summaries from their existing records using
 the shared trace route and `WorkflowTraceRouteLink`. Empty or missing evidence
 means the source record still stands; it does not make the workflow invalid.
 
+Register-session traces also keep transaction value separate from drawer
+impact. A card or mobile-money void is operationally significant even when its
+cash delta is zero. The POS command therefore records the original transaction
+total as sale evidence and the drawer delta as a separate value. Presentation
+may say both “GH₵600 void” and “No drawer impact”; it must never use the drawer
+delta as the transaction amount. Actor and approver names, register identity,
+terminal label, and store currency are hydrated from store-scoped source
+records at read time. Stored trace details remain compact and do not become a
+second staff, transaction, or register ledger.
+
 ## Regression Targets
 
 - Shared workflow trace tests should prove `eventKey` dedupe, lookup
@@ -124,6 +136,10 @@ means the source record still stands; it does not make the workflow invalid.
   failure rows.
 - Surface tests should prove trace links and scheduled-run summaries appear only
   where the current source read model can already expose the underlying record.
+- Register-session trace tests should cover zero-cash card and mobile-money
+  voids end to end. Assert the transaction total independently from the drawer
+  delta, preserve actor and approver attribution when available, and verify that
+  missing or deleted staff records fall back to generic operator wording.
 
 ## Prevention
 
@@ -142,6 +158,12 @@ means the source record still stands; it does not make the workflow invalid.
   through the reusable public route.
 - Prefer existing surface links and read models over a new investigation
   dashboard until source-specific evidence patterns prove insufficient.
+- Treat trace eligibility and trace meaning as separate invariants. An event can
+  require investigation evidence even when it has no cash impact, and one
+  numeric field must not stand in for both business value and ledger delta.
+- Hydrate human-readable identity at the authorized read boundary. Keep joins
+  store-scoped, retain generic fallbacks, and never expose raw internal ids as
+  operator copy.
 - After changing workflow trace schemas, adapters, generated Convex APIs, agent
   docs, or graph files, regenerate through the repo scripts rather than editing
   generated artifacts by hand.

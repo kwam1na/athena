@@ -281,6 +281,7 @@ import type * as operations_helpers_linking from "../operations/helpers/linking.
 import type * as operations_inventoryMovements from "../operations/inventoryMovements.js";
 import type * as operations_logicalOperationalWork from "../operations/logicalOperationalWork.js";
 import type * as operations_managerElevations from "../operations/managerElevations.js";
+import type * as operations_managerReportExpenseSections from "../operations/managerReportExpenseSections.js";
 import type * as operations_managerReportTopItems from "../operations/managerReportTopItems.js";
 import type * as operations_openWorkInventoryReviews from "../operations/openWorkInventoryReviews.js";
 import type * as operations_operationalEvents from "../operations/operationalEvents.js";
@@ -935,6 +936,7 @@ declare const fullApi: ApiFromModules<{
   "operations/inventoryMovements": typeof operations_inventoryMovements;
   "operations/logicalOperationalWork": typeof operations_logicalOperationalWork;
   "operations/managerElevations": typeof operations_managerElevations;
+  "operations/managerReportExpenseSections": typeof operations_managerReportExpenseSections;
   "operations/managerReportTopItems": typeof operations_managerReportTopItems;
   "operations/openWorkInventoryReviews": typeof operations_openWorkInventoryReviews;
   "operations/operationalEvents": typeof operations_operationalEvents;

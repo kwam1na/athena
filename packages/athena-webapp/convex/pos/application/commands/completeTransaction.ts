@@ -1151,6 +1151,8 @@ async function resolveExistingOnlineCompletion(
 async function recordRegisterSessionVoid(
   ctx: MutationCtx,
   args: {
+    actorStaffProfileId?: Id<"staffProfile">;
+    approvedByStaffProfileId?: Id<"staffProfile">;
     changeGiven?: number;
     idempotencyKey: string;
     payments: PosPaymentInput[];
@@ -1158,12 +1160,17 @@ async function recordRegisterSessionVoid(
     registerNumber?: string;
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;
+    transactionTotal?: number;
+    transactionId?: Id<"posTransaction">;
+    transactionNumber?: string;
   },
 ) {
   await ctx.runMutation(
     internal.operations.registerSessions.recordRegisterSessionTransaction,
     {
       adjustmentKind: "void",
+      actorStaffProfileId: args.actorStaffProfileId,
+      approvedByStaffProfileId: args.approvedByStaffProfileId,
       changeGiven: args.changeGiven,
       idempotencyKey: args.idempotencyKey,
       payments: args.payments,
@@ -1171,6 +1178,9 @@ async function recordRegisterSessionVoid(
       registerNumber: args.registerNumber,
       storeId: args.storeId,
       terminalId: args.terminalId,
+      saleTotal: args.transactionTotal,
+      transactionId: args.transactionId,
+      transactionNumber: args.transactionNumber,
     },
   );
 }
@@ -2147,6 +2157,8 @@ async function applyApprovedTransactionVoid(
   });
 
   await recordRegisterSessionVoid(ctx, {
+    actorStaffProfileId: args.requesterStaffProfileId,
+    approvedByStaffProfileId: args.approverStaffProfileId,
     changeGiven: args.transaction.changeGiven,
     idempotencyKey: `posTransaction:${args.transaction._id}:void`,
     payments: args.transaction.payments,
@@ -2154,6 +2166,9 @@ async function applyApprovedTransactionVoid(
     registerNumber: args.transaction.registerNumber,
     storeId: args.transaction.storeId,
     terminalId,
+    transactionTotal: args.transaction.total,
+    transactionId: args.transaction._id,
+    transactionNumber: args.transaction.transactionNumber,
   });
 
   const store = await getStoreById(ctx, args.transaction.storeId);

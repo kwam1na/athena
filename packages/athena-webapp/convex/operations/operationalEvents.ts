@@ -7,11 +7,55 @@ import {
 } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
+import { formatProductDisplayName } from "../../shared/productDisplayName";
 import { buildOperationalEventMessage } from "./helpers/eventBuilders";
 import { listProductOperationalTimelineReadDefinition } from "../operationAdmission/domains/operations_readDefinitions";
 import { admitPublicQuery } from "../platform/operationAdmission";
 
 const PRODUCT_OPERATIONAL_EVENT_LIMIT = 100;
+
+function replaceDelimitedLabel(
+  message: string,
+  rawLabel: string,
+  displayLabel: string,
+) {
+  const escapedLabel = rawLabel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const delimitedLabel = new RegExp(
+    `(^|[^\\p{L}\\p{N}])${escapedLabel}(?=$|[^\\p{L}\\p{N}])`,
+    "u",
+  );
+  return message.replace(delimitedLabel, (_match, prefix: string) =>
+    `${prefix}${displayLabel}`,
+  );
+}
+
+function presentProductOperationalEvent<
+  Event extends {
+  eventType: string;
+  message: string;
+  subjectLabel?: string;
+  },
+>(event: Event) {
+  const shouldNormalizeProductName =
+    event.eventType.startsWith("pos_quick_add_") ||
+    event.eventType.startsWith("stock_adjustment_") ||
+    event.eventType.startsWith("cycle_count_");
+  if (!shouldNormalizeProductName) return event;
+
+  const rawLabel = event.subjectLabel;
+  if (!rawLabel) return event;
+
+  const displayLabel = formatProductDisplayName(rawLabel);
+
+  return {
+    ...event,
+    message:
+      displayLabel && displayLabel !== rawLabel
+        ? replaceDelimitedLabel(event.message, rawLabel, displayLabel)
+        : event.message,
+    subjectLabel: displayLabel || rawLabel,
+  };
+}
 
 export type RecordOperationalEventArgs = {
   storeId: Id<"store">;
@@ -373,6 +417,7 @@ export async function listProductOperationalTimelineWithCtx(
   return Array.from(eventsById.values())
     .sort((left, right) => right.createdAt - left.createdAt)
     .slice(0, PRODUCT_OPERATIONAL_EVENT_LIMIT)
+    .map(presentProductOperationalEvent)
     .map((event) => ({
       createdAt: event.createdAt,
       id: event._id,

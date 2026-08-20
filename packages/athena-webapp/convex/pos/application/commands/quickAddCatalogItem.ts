@@ -4,7 +4,10 @@ import { markCatalogSummaryNeedsRefresh } from "../../../inventory/catalogSummar
 import { upsertProductSkuSearchProjection } from "../../../inventory/skuSearch";
 import { recordOperationalEventWithCtx } from "../../../operations/operationalEvents";
 import { applyInventoryEffectWithCtx } from "../../../inventoryLedger/effects";
-import { uncostedBasis } from "../../../inventoryLedger/valuation";
+import {
+  knownUnitCostBasis,
+  uncostedBasis,
+} from "../../../inventoryLedger/valuation";
 import { toSlug } from "../../../utils";
 
 type CatalogResult = {
@@ -238,6 +241,7 @@ async function recordQuickAddOperationalEvent(
       actorLabel,
       barcode: args.sku.barcode,
       price: args.sku.netPrice ?? args.sku.price,
+      unitCost: args.sku.unitCost,
       productId: args.product._id,
       productName: args.product.name,
       productSkuId: args.sku._id,
@@ -265,6 +269,7 @@ export async function quickAddCatalogItem(
     productId?: Id<"product">;
     productSkuId?: Id<"productSku">;
     price: number;
+    unitCost?: number;
     quantityAvailable: number;
     registerSessionId?: Id<"registerSession">;
     terminalId?: Id<"posTerminal">;
@@ -273,6 +278,13 @@ export async function quickAddCatalogItem(
   const store = await ctx.db.get("store", args.storeId);
   if (!store) {
     throw new Error("Store not found");
+  }
+
+  if (
+    args.unitCost !== undefined &&
+    (!Number.isSafeInteger(args.unitCost) || args.unitCost < 0)
+  ) {
+    throw new Error("Unit cost must be a nonnegative amount in minor units");
   }
 
   const lookupCode = args.lookupCode?.trim();
@@ -396,6 +408,7 @@ export async function quickAddCatalogItem(
     isVisible: true,
     netPrice: args.price,
     price: args.price,
+    unitCost: args.unitCost,
     productId,
     productName,
     quantityAvailable: 0,
@@ -420,7 +433,7 @@ export async function quickAddCatalogItem(
         sellableQuantity: quantityAvailable,
       },
       completeness: "partial",
-      contentFingerprint: `quantity:${quantityAvailable}:cost:unknown`,
+      contentFingerprint: `quantity:${quantityAvailable}:cost:${args.unitCost ?? "unknown"}`,
       effectType: "baseline",
       movementType: "opening_stock",
       notes: "Opening stock recorded from POS quick add.",
@@ -436,7 +449,14 @@ export async function quickAddCatalogItem(
       sourceType: "product_sku",
       storeId: args.storeId,
       valuation: {
-        costBasis: uncostedBasis(),
+        costBasis:
+          args.unitCost === undefined
+            ? uncostedBasis()
+            : knownUnitCostBasis({
+                currency: store.currency,
+                quantity: quantityAvailable,
+                unitCost: args.unitCost,
+              }),
         deficitLots: [],
         kind: "inbound",
         quantity: quantityAvailable,

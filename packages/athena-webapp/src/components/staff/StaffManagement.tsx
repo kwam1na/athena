@@ -48,11 +48,7 @@ interface StaffManagementProps {
 }
 
 type OperationalRole =
-  | "manager"
-  | "front_desk"
-  | "stylist"
-  | "technician"
-  | "cashier";
+  "manager" | "front_desk" | "stylist" | "technician" | "cashier";
 
 type StaffProfileRow = {
   _id: Id<"staffProfile">;
@@ -153,7 +149,7 @@ const CredentialStatusBadge = ({ staff }: { staff: StaffProfileRow }) => {
       return (
         <Badge
           variant="outline"
-          className="border-emerald-200 bg-emerald-50 text-emerald-700"
+          className="border-success/30 bg-success/10 text-success"
         >
           Active
         </Badge>
@@ -361,9 +357,9 @@ function StaffProvisionForm({
         mode === "create"
           ? createStaffProfile(payload)
           : updateStaffProfile({
-            ...payload,
-            staffProfileId: staff?._id as Id<"staffProfile">,
-          })
+              ...payload,
+              staffProfileId: staff?._id as Id<"staffProfile">,
+            }),
       );
 
       if (result.kind !== "ok" || !result.data?._id) {
@@ -388,9 +384,9 @@ function StaffProvisionForm({
     } catch (error) {
       toast.error(
         (error as Error).message ||
-        (mode === "create"
-          ? "Failed to add staff member"
-          : "Failed to update staff member"),
+          (mode === "create"
+            ? "Failed to add staff member"
+            : "Failed to update staff member"),
       );
       console.error(error);
     } finally {
@@ -439,8 +435,8 @@ function StaffProvisionForm({
             {mode === "create" ? "Add staff member" : "Edit staff member"}
           </DialogTitle>
           <DialogDescription>
-            Capture the profile details staff use across POS, services, and
-            cash controls. PIN setup happens after the profile is saved.
+            Capture the profile details staff use across POS, services, and cash
+            controls. PIN setup happens after the profile is saved.
           </DialogDescription>
         </div>
       </DialogHeader>
@@ -671,7 +667,7 @@ function CredentialPinDialog({
           staffProfileId: state.staff._id,
           status: "active",
           storeId,
-        })
+        }),
       );
 
       if (result.kind !== "ok") {
@@ -764,6 +760,9 @@ export const StaffManagement = ({
   const [staffToDeactivate, setStaffToDeactivate] =
     useState<StaffProfileRow | null>(null);
   const [isDeactivating, setIsDeactivating] = useState(false);
+  const [reactivatingStaffId, setReactivatingStaffId] = useState<
+    Id<"staffProfile"> | null
+  >(null);
 
   const staffProfiles = useQuery(
     api.operations.staffProfiles.listStaffProfiles,
@@ -778,12 +777,18 @@ export const StaffManagement = ({
   const updateStaffCredential = useMutation(
     api.operations.staffCredentials.updateStaffCredential,
   );
+  const reactivateStaffProfile = useMutation(
+    api.operations.staffProfiles.reactivateStaffProfile,
+  );
 
   const roster = useMemo(
     () =>
-      [...(staffProfiles ?? [])].sort((left, right) =>
-        left.fullName.localeCompare(right.fullName),
-      ),
+      [...(staffProfiles ?? [])].sort((left, right) => {
+        if (left.status !== right.status) {
+          return left.status === "active" ? -1 : 1;
+        }
+        return left.fullName.localeCompare(right.fullName);
+      }),
     [staffProfiles],
   );
 
@@ -801,7 +806,7 @@ export const StaffManagement = ({
             staffProfileId: staffToDeactivate._id,
             status: "inactive",
             storeId,
-          })
+          }),
         ),
         runCommand(() =>
           updateStaffCredential({
@@ -809,7 +814,7 @@ export const StaffManagement = ({
             staffProfileId: staffToDeactivate._id,
             status: "revoked",
             storeId,
-          })
+          }),
         ),
       ]);
 
@@ -835,6 +840,29 @@ export const StaffManagement = ({
     }
   };
 
+  const handleReactivate = async (staff: StaffProfileRow) => {
+    setReactivatingStaffId(staff._id);
+    try {
+      const result = await runCommand(() =>
+        reactivateStaffProfile({
+          organizationId,
+          staffProfileId: staff._id,
+          storeId,
+        }),
+      );
+      if (result.kind !== "ok") {
+        presentCommandToast(result);
+        return;
+      }
+      toast.success("Staff member reactivated.");
+    } catch (error) {
+      toast.error("Staff member not reactivated. Try again.");
+      console.error(error);
+    } finally {
+      setReactivatingStaffId(null);
+    }
+  };
+
   return (
     <div className="space-y-10">
       <div className="space-y-2">
@@ -853,7 +881,9 @@ export const StaffManagement = ({
                 {/* <TableHead>Role</TableHead> */}
                 {/* <TableHead>Start date</TableHead> */}
                 <TableHead>Status</TableHead>
-                <TableHead className="w-[240px]">Actions</TableHead>
+                <TableHead className="w-[300px] whitespace-nowrap">
+                  Actions
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -896,7 +926,7 @@ export const StaffManagement = ({
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
                         {canSetPin ? (
                           <Button
                             variant="outline"
@@ -917,18 +947,30 @@ export const StaffManagement = ({
                           </Button>
                         ) : null}
 
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setFormState({
-                              mode: "edit",
-                              staff,
-                            })
-                          }
-                        >
-                          Edit
-                        </Button>
+                        {staff.status === "active" ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setFormState({ mode: "edit", staff })
+                            }
+                          >
+                            Edit
+                          </Button>
+                        ) : (
+                          <LoadingButton
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleReactivate(staff)}
+                            isLoading={reactivatingStaffId === staff._id}
+                            data-remote-assist-control="staff-reactivate"
+                            data-remote-assist-control-id={`staff-reactivate-${staff._id}`}
+                            data-remote-assist-control-label={`Reactivate ${staff.fullName}`}
+                            data-remote-assist-control-role="button"
+                          >
+                            Reactivate
+                          </LoadingButton>
+                        )}
 
                         {canDeactivate ? (
                           <Button
@@ -937,12 +979,9 @@ export const StaffManagement = ({
                             onClick={() => setStaffToDeactivate(staff)}
                           >
                             <UserMinus className="mr-2 h-4 w-4" />
+                            Deactivate
                           </Button>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">
-                            No actions
-                          </span>
-                        )}
+                        ) : null}
                       </div>
                     </TableCell>
                   </TableRow>

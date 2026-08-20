@@ -204,6 +204,9 @@ export default function Products() {
       name,
       lookupCode: primaryVariant.lookupCode,
       price: primaryVariant.price,
+      ...(primaryVariant.unitCost !== undefined
+        ? { unitCost: primaryVariant.unitCost }
+        : {}),
       quantityAvailable: primaryVariant.quantityAvailable,
     });
 
@@ -218,6 +221,7 @@ export default function Products() {
         name,
         lookupCode: variant.lookupCode,
         price: variant.price,
+        ...(variant.unitCost !== undefined ? { unitCost: variant.unitCost } : {}),
         quantityAvailable: variant.quantityAvailable,
         productId: createdProduct.productId,
       });

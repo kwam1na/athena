@@ -873,6 +873,8 @@ export const recordRegisterSessionTransaction = internalMutation({
     registerSessionId: v.id("registerSession"),
     storeId: v.id("store"),
     adjustmentKind: v.union(v.literal("sale"), v.literal("void")),
+    actorStaffProfileId: v.optional(v.id("staffProfile")),
+    approvedByStaffProfileId: v.optional(v.id("staffProfile")),
     payments: v.array(
       v.object({
         method: v.string(),
@@ -938,6 +940,7 @@ export const recordRegisterSessionTransaction = internalMutation({
 
     if (
       amount > 0 ||
+      args.adjustmentKind === "void" ||
       (args.adjustmentKind === "sale" && args.saleTotal !== undefined)
     ) {
       const occurredAt = Date.now();
@@ -947,7 +950,10 @@ export const recordRegisterSessionTransaction = internalMutation({
         session: updatedSession,
         occurredAt,
         amount,
-        cashDelta: args.adjustmentKind === "sale" ? amount : undefined,
+        actorStaffProfileId: args.actorStaffProfileId,
+        approvedByStaffProfileId: args.approvedByStaffProfileId,
+        cashDelta:
+          args.adjustmentKind === "void" && amount > 0 ? -amount : amount,
         paymentCount: args.paymentCount,
         paymentMethodLabels: args.paymentMethodLabels,
         saleTotal: args.saleTotal,

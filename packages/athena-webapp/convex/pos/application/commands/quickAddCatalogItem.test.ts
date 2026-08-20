@@ -173,6 +173,23 @@ describe("quickAddCatalogItem", () => {
     mocks.upsertProductSkuSearchProjection.mockReset();
   });
 
+  it("rejects invalid unit costs before creating a SKU", async () => {
+    const { ctx, tables } = createQuickAddCtx(baseSeed);
+
+    await expect(
+      quickAddCatalogItem(ctx, {
+        storeId: "storezzzz" as Id<"store">,
+        createdByUserId: "user0001" as Id<"athenaUser">,
+        name: "Invalid cost item",
+        price: 115000,
+        quantityAvailable: 2,
+        unitCost: -1,
+      }),
+    ).rejects.toThrow("Unit cost must be a nonnegative amount in minor units");
+
+    expect(tables.productSku.size).toBe(0);
+  });
+
   it("creates hidden quick-add products, visible SKUs, and saves numeric lookup codes as barcodes", async () => {
     const { ctx, tables } = createQuickAddCtx(baseSeed);
 
@@ -183,6 +200,7 @@ describe("quickAddCatalogItem", () => {
       name: "",
       lookupCode: "123456789012",
       price: 115000,
+      unitCost: 60000,
       quantityAvailable: 2.7,
       registerSessionId: "register-session-1" as Id<"registerSession">,
       terminalId: "terminal-1" as Id<"posTerminal">,
@@ -201,6 +219,7 @@ describe("quickAddCatalogItem", () => {
       barcode: "123456789012",
       isVisible: true,
       price: 115000,
+      unitCost: 60000,
       quantityAvailable: 2,
     });
     expect(sku.sku).toMatch(/^[A-Z0-9]+-[A-Z0-9]+-[A-Z0-9]+$/);
@@ -222,7 +241,13 @@ describe("quickAddCatalogItem", () => {
         physicalQuantityDelta: 2,
         sellableQuantityDelta: 2,
         valuation: expect.objectContaining({
-          costBasis: { kind: "uncosted" },
+          costBasis: {
+            currency: "GHS",
+            kind: "known",
+            quantity: 2,
+            totalCost: 120000,
+            unitCost: 60000,
+          },
           kind: "inbound",
           quantity: 2,
         }),
@@ -253,6 +278,7 @@ describe("quickAddCatalogItem", () => {
           productId: product._id,
           productSkuId: sku._id,
           quantityAvailable: 2,
+          unitCost: 60000,
           registerSessionId: "register-session-1",
           sku: sku.sku,
           terminalId: "terminal-1",

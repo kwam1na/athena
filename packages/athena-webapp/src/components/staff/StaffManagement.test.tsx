@@ -102,6 +102,7 @@ const mockedUseQuery = vi.mocked(useQuery);
 const createStaffProfile = vi.fn();
 const updateStaffProfile = vi.fn();
 const updateStaffCredential = vi.fn();
+const reactivateStaffProfile = vi.fn();
 
 const defaultStaffProfiles = [
   {
@@ -161,6 +162,13 @@ function mockConvex({
   mockedUseMutation.mockImplementation(
     () =>
       ((args: Record<string, unknown>) => {
+        if (
+          "staffProfileId" in args &&
+          !("status" in args) &&
+          !("requestedRoles" in args)
+        ) {
+          return reactivateStaffProfile(args);
+        }
         if ("staffProfileId" in args && "requestedRoles" in args) {
           return updateStaffProfile(args);
         }
@@ -195,6 +203,7 @@ describe("StaffManagement", () => {
     createStaffProfile.mockResolvedValue(ok({ _id: "staff-2" }));
     updateStaffProfile.mockResolvedValue(ok({ _id: "staff-1" }));
     updateStaffCredential.mockResolvedValue(ok({ _id: "credential-1" }));
+    reactivateStaffProfile.mockResolvedValue(ok({ _id: "staff-1" }));
   });
 
   it("renders pending PIN roster rows with the set PIN action", () => {
@@ -212,6 +221,90 @@ describe("StaffManagement", () => {
     expect(
       screen.getByRole("button", { name: /set pin/i }),
     ).toBeInTheDocument();
+  });
+
+  it("uses the semantic success treatment for active staff in dark mode", () => {
+    mockConvex({
+      staffProfiles: [
+        {
+          ...defaultStaffProfiles[0],
+          credentialStatus: "active",
+        },
+      ] as never,
+    });
+
+    render(
+      <StaffManagement
+        organizationId={"org-1" as Id<"organization">}
+        storeId={"store-1" as Id<"store">}
+      />,
+    );
+
+    expect(screen.getByText("Active")).toHaveClass(
+      "border-success/30",
+      "bg-success/10",
+      "text-success",
+    );
+  });
+
+  it("sorts inactive staff last and offers reactivation without edit actions", async () => {
+    mockConvex({
+      staffProfiles: [
+        {
+          ...defaultStaffProfiles[0],
+          _id: "staff-inactive" as Id<"staffProfile">,
+          fullName: "Aaron Inactive",
+          status: "inactive",
+          credentialStatus: "revoked",
+        },
+        {
+          ...defaultStaffProfiles[0],
+          _id: "staff-active" as Id<"staffProfile">,
+          fullName: "Zara Active",
+          credentialStatus: "active",
+        },
+      ] as never,
+    });
+    const user = userEvent.setup();
+
+    render(
+      <StaffManagement
+        organizationId={"org-1" as Id<"organization">}
+        storeId={"store-1" as Id<"store">}
+      />,
+    );
+
+    const rows = screen.getAllByRole("row");
+    expect(rows[1]).toHaveTextContent("Zara Active");
+    expect(rows[2]).toHaveTextContent("Aaron Inactive");
+    expect(screen.queryByText("No actions")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Edit" })).toHaveLength(1);
+    const deactivateButton = screen.getByRole("button", {
+      name: "Deactivate",
+    });
+    expect(deactivateButton.parentElement).toHaveClass(
+      "flex-nowrap",
+      "whitespace-nowrap",
+    );
+
+    const reactivateButton = screen.getByRole("button", {
+      name: "Reactivate",
+    });
+    expect(reactivateButton).toHaveAttribute(
+      "data-remote-assist-control-id",
+      "staff-reactivate-staff-inactive",
+    );
+
+    await user.click(reactivateButton);
+
+    await waitFor(() =>
+      expect(reactivateStaffProfile).toHaveBeenCalledWith({
+        organizationId: "org-1",
+        staffProfileId: "staff-inactive",
+        storeId: "store-1",
+      }),
+    );
+    expect(toast.success).toHaveBeenCalledWith("Staff member reactivated.");
   });
 
   it("provisions staff with username and role before PIN setup", async () => {
@@ -373,7 +466,7 @@ describe("StaffManagement", () => {
       userError({
         code: "conflict",
         message: "Username is already in use for this store.",
-      })
+      }),
     );
     mockConvex({
       staffProfiles: [],
@@ -401,7 +494,7 @@ describe("StaffManagement", () => {
 
     await waitFor(() => expect(createStaffProfile).toHaveBeenCalledTimes(1));
     expect(toast.error).toHaveBeenCalledWith(
-      "Username is already in use for this store."
+      "Username is already in use for this store.",
     );
   });
 

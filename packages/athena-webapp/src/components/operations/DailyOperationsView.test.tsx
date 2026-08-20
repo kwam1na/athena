@@ -1130,7 +1130,9 @@ describe("DailyOperationsViewContent — sheet return", () => {
     await waitFor(() => expect(onSheetReturnComplete).toHaveBeenCalledTimes(1));
     expect(document.body).not.toHaveFocus();
     expect(
-      within(screen.getByRole("dialog")).getByRole("link", { name: /Vitamilk/ }),
+      within(screen.getByRole("dialog")).getByRole("link", {
+        name: /Vitamilk/,
+      }),
     ).not.toHaveFocus();
   });
 
@@ -2670,6 +2672,53 @@ describe("DailyOperationsViewContent", () => {
     expect(registerStatus).not.toHaveClass("border-t");
   });
 
+  it("treats an empty live register query as authoritative over snapshot blockers", () => {
+    const currentBlockedSnapshot = {
+      ...blockedSnapshot,
+      operatingDate: getCurrentLocalOperatingDate(),
+    };
+
+    renderContent(currentBlockedSnapshot, {
+      openRegisterSessionsSnapshot: {
+        operatingDate: currentBlockedSnapshot.operatingDate,
+        sessions: [],
+      },
+    });
+
+    expect(
+      screen.queryByRole("heading", { name: "Open register sessions" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Codex / Register 1")).not.toBeInTheDocument();
+  });
+
+  it("identifies open register sessions carried over from a prior operating day", () => {
+    const operatingDate = getCurrentLocalOperatingDate();
+
+    renderContent(
+      {
+        ...blockedSnapshot,
+        operatingDate,
+      },
+      {
+        openRegisterSessionsSnapshot: {
+          operatingDate,
+          sessions: [
+            {
+              displayLabel: "Front Counter / Register 2",
+              id: "register-2",
+              openedOperatingDate: "2026-08-18",
+            },
+          ],
+        },
+      },
+    );
+
+    expect(screen.getByText("Front Counter / Register 2")).toBeInTheDocument();
+    expect(
+      screen.getByText("Carried over from Tuesday, August 18, 2026"),
+    ).toBeInTheDocument();
+  });
+
   it("surfaces pending approval requests on the leading side of the action strip", () => {
     renderContent({
       ...blockedSnapshot,
@@ -2873,10 +2922,13 @@ describe("DailyOperationsViewContent", () => {
       "lg:divide-x",
     );
     expect(
-      screen.queryByRole("link", {
+      screen.getByRole("link", {
         name: "Open register session Codex / Register 2",
       }),
-    ).not.toBeInTheDocument();
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/cash-controls/registers/register-2?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    );
     expect(
       screen.getByRole("link", { name: "Open Registers" }),
     ).toHaveAttribute(

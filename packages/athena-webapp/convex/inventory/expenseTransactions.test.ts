@@ -20,6 +20,7 @@ import {
   formatExpenseStaffProfileName,
   getExpenseTransactionById,
   getExpenseTransactions,
+  requireExpenseTransactionLimit,
   voidExpenseTransaction,
   voidExpenseTransactionHandler,
 } from "./expenseTransactions";
@@ -49,6 +50,17 @@ beforeEach(() => {
 });
 
 describe("formatExpenseStaffProfileName", () => {
+  it("accepts only bounded expense history limits", () => {
+    expect(requireExpenseTransactionLimit(1)).toBe(1);
+    expect(requireExpenseTransactionLimit(100)).toBe(100);
+    expect(() => requireExpenseTransactionLimit(0)).toThrow(
+      "Expense transaction limit must be a positive safe integer.",
+    );
+    expect(requireExpenseTransactionLimit(101)).toBe(100);
+    expect(() => requireExpenseTransactionLimit(1.5)).toThrow(
+      "Expense transaction limit must be a positive safe integer.",
+    );
+  });
   it("accepts representative public return contracts", () => {
     assertConformsToExportedReturns(getExpenseTransactions, [
       {

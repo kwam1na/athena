@@ -53,6 +53,7 @@ type RegisterSessionTraceArgs = {
   occurredAt?: number;
   amount?: number;
   adjustmentId?: Id<"posTransactionAdjustment">;
+  approvedByStaffProfileId?: Id<"staffProfile">;
   approvalRequestId?: Id<"approvalRequest">;
   actorStaffProfileId?: Id<"staffProfile">;
   actorUserId?: Id<"athenaUser">;
@@ -239,6 +240,13 @@ function buildTraceEvent(args: {
       : {}),
     ...(args.input.approvalRequestId
       ? { approvalRequestId: String(args.input.approvalRequestId) }
+      : {}),
+    ...(args.input.approvedByStaffProfileId
+      ? {
+          approvedByStaffProfileId: String(
+            args.input.approvedByStaffProfileId,
+          ),
+        }
       : {}),
     ...(args.input.transactionId
       ? { posTransactionId: String(args.input.transactionId) }

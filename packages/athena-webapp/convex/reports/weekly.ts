@@ -76,7 +76,7 @@ export function acceptedTopSkuLeaders(args: {
         right.unitsSold - left.unitsSold ||
         String(left.productSkuId).localeCompare(String(right.productSkuId)),
     )
-    .slice(0, 3);
+    .slice(0, 5);
 }
 
 export function frozenCatalogLabel(value?: string | null) {
@@ -170,6 +170,7 @@ export const ZERO_WEEK_METRICS: ReportWeekMetrics = {
   paymentAllocationCoverage: "complete",
   paymentAllocationOmittedMinor: 0,
   paymentHasInvalidAllocation: false,
+  transactionCount: 0,
 };
 
 type WeekDay = Pick<
@@ -190,6 +191,7 @@ type WeekDay = Pick<
   | "paymentsRefundedMinor"
   | "refundsMinor"
   | "status"
+  | "transactionCount"
   | "uncostedRevenueMinor"
   | "unitsReturned"
   | "unitsSold"
@@ -283,6 +285,9 @@ function addDay(total: ReportWeekMetrics, day: WeekDay): ReportWeekMetrics {
     paymentHasInvalidAllocation:
       (total.paymentHasInvalidAllocation ?? false) ||
       (payment?.hasInvalidAllocation ?? false),
+    ...(total.transactionCount === undefined || day.transactionCount === undefined
+      ? {}
+      : { transactionCount: total.transactionCount + day.transactionCount }),
   };
 }
 
@@ -658,6 +663,14 @@ export function weekTruthFingerprint(args: {
   counterpartPaymentMix?: ReportPaymentMix;
   counterpartOutsideSchedulePaymentMix?: ReportPaymentMix;
 }) {
+  // `transactionCount` was added after accepted-week snapshots already
+  // existed and remains rollout-optional when any contributing day lacks the
+  // fact. Keep it out of the immutable amendment fingerprint: gaining or
+  // losing coverage is not evidence that an accepted financial week moved.
+  const amendmentMetrics = (metrics: ReportWeekMetrics) => {
+    const { transactionCount: _transactionCount, ...stableMetrics } = metrics;
+    return stableMetrics;
+  };
   /**
    * Hash the lane's KNOWABLE TRUTH, which is what the amendment gate compares.
    *
@@ -679,8 +692,8 @@ export function weekTruthFingerprint(args: {
       : { [key]: mix?.status === "complete" ? mix : counterpart };
   return stableStringHash(
     JSON.stringify({
-      included: args.included,
-      outsideSchedule: args.outsideSchedule,
+      included: amendmentMetrics(args.included),
+      outsideSchedule: amendmentMetrics(args.outsideSchedule),
       // Part of weekly truth: an approved method correction moves no total, so
       // without this the amendment path would never notice it happened.
       ...knownMix(args.paymentMix, args.counterpartPaymentMix, "paymentMix"),
@@ -1083,6 +1096,17 @@ async function priorPeriodPosture(args: {
   const outsideScheduleComplete =
     folded.completeness.complete &&
     (folded.completeness.outsideSchedule?.complete ?? false);
+  const priorScheduledDays = comparisonDays.filter((day) =>
+    selected.has(day.operatingDate),
+  );
+  const transactionCount = priorScheduledDays.every(
+    (day) => day.transactionCount !== undefined,
+  )
+    ? priorScheduledDays.reduce(
+        (total, day) => total + (day.transactionCount ?? 0),
+        0,
+      )
+    : undefined;
   return {
     cycleStartDate: prior.startDate,
     cycleEndDate: prior.endDate,
@@ -1090,6 +1114,7 @@ async function priorPeriodPosture(args: {
     currentScheduledPositionCount: currentDates.length,
     equivalentScheduledPositions,
     priorScheduledPositionCount: priorDates.length,
+    ...(transactionCount === undefined ? {} : { transactionCount }),
     values: folded.completeness.complete ? folded.included : null,
     // The same fold already carries this lane — no extra read — and it is what
     // makes the headline's total-vs-total comparison like-for-like.

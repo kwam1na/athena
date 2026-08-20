@@ -882,7 +882,7 @@ describe("sealed Wigclub Aug 3-9 repair commands", () => {
 
   it("refuses more leaders than the sealed top-sales bound", async () => {
     const t = convexTest(schema, modules);
-    await seedWigclubWeek(t, { leaderCount: 4 });
+    await seedWigclubWeek(t, { leaderCount: 6 });
 
     await expect(preview(t)).rejects.toThrow(
       "top sales leader probe exceeded its sealed bound",

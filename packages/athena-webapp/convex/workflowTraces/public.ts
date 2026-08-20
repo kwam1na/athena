@@ -16,11 +16,21 @@ import {
   getWorkflowTraceViewByIdReadDefinition,
 } from "../operationAdmission/readDefinitions";
 import type { OperationQueryCtx } from "../operationAdmission/types";
+import { MAX_WORKFLOW_TRACE_EVENTS } from "../../shared/operationalEvidenceLimits";
 
 const SHARED_DEMO_READABLE_WORKFLOW_TYPES = new Set([
   "register_session",
   "online_order",
 ]);
+
+export function selectWorkflowTraceEventWindow<TraceEvent>(
+  events: TraceEvent[],
+) {
+  return {
+    events: events.slice(0, MAX_WORKFLOW_TRACE_EVENTS),
+    eventsTruncated: events.length > MAX_WORKFLOW_TRACE_EVENTS,
+  };
+}
 
 export type WorkflowTraceAccessAuthorizer = (
   ctx: QueryCtx,
@@ -171,12 +181,31 @@ async function getRegisterSessionTraceIdentity(
       continue;
     }
 
-    const terminal = registerSession.terminalId
-      ? await ctx.db.get("posTerminal", registerSession.terminalId)
-      : null;
+    const [terminal, openedByStaff, closedByStaff] = await Promise.all([
+      registerSession.terminalId
+        ? ctx.db.get("posTerminal", registerSession.terminalId)
+        : null,
+      registerSession.openedByStaffProfileId
+        ? ctx.db.get("staffProfile", registerSession.openedByStaffProfileId)
+        : null,
+      registerSession.closedByStaffProfileId
+        ? ctx.db.get("staffProfile", registerSession.closedByStaffProfileId)
+        : null,
+    ]);
 
     return {
       _id: registerSession._id,
+      closedAt: registerSession.closedAt ?? null,
+      closedByName:
+        closedByStaff?.storeId === trace.storeId
+          ? closedByStaff.fullName
+          : null,
+      openedAt: registerSession.openedAt,
+      openedByName:
+        openedByStaff?.storeId === trace.storeId
+          ? openedByStaff.fullName
+          : null,
+      openingFloat: registerSession.openingFloat,
       registerNumber: registerSession.registerNumber ?? null,
       terminalName:
         terminal?.storeId === trace.storeId
@@ -227,17 +256,106 @@ export async function getWorkflowTraceViewByIdWithCtx(
     });
   }
 
-  const [events, registerSession] = await Promise.all([
+  const [eventCandidates, registerSession, store] = await Promise.all([
     listWorkflowTraceEventsWithCtx(ctx as never, {
+      limit: MAX_WORKFLOW_TRACE_EVENTS + 1,
       storeId: args.storeId,
       traceId: trace.traceId,
     }),
     getRegisterSessionTraceIdentity(ctx, trace),
+    ctx.db.get("store", args.storeId),
   ]);
+  const { events, eventsTruncated } =
+    selectWorkflowTraceEventWindow(eventCandidates);
+  const actorStaffProfileIds = Array.from(
+    new Set(
+      events
+        .flatMap((event) => [
+          event.actorRefs?.actorStaffProfileId,
+          event.subjectRefs?.approvedByStaffProfileId,
+        ])
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  const actorStaffProfiles = await Promise.all(
+    actorStaffProfileIds.map(async (staffProfileId) => {
+      const normalizedId = ctx.db.normalizeId("staffProfile", staffProfileId);
+      if (!normalizedId) return null;
+      const profile = await ctx.db.get("staffProfile", normalizedId);
+      return profile?.storeId === args.storeId ? profile : null;
+    }),
+  );
+  const actorNamesByStaffProfileId = new Map(
+    actorStaffProfiles
+      .filter((profile) => profile !== null)
+      .map((profile) => [String(profile._id), profile.fullName]),
+  );
   const view = buildWorkflowTraceViewModel({ trace, events });
+  const contextualEvents = view.events.map((event) => {
+    if (!registerSession) return event;
+
+    const actorStaffProfileId = event.actorRefs?.actorStaffProfileId;
+    const actorName = actorStaffProfileId
+      ? actorNamesByStaffProfileId.get(actorStaffProfileId)
+      : undefined;
+    const approvedByStaffProfileId =
+      event.subjectRefs?.approvedByStaffProfileId;
+    const approvedByName = approvedByStaffProfileId
+      ? actorNamesByStaffProfileId.get(approvedByStaffProfileId)
+      : undefined;
+
+    if (event.step === "register_session_opened") {
+      return {
+        ...event,
+        details: {
+          ...event.details,
+          openingFloat: registerSession.openingFloat,
+          openedBy: registerSession.openedByName,
+          registerNumber: registerSession.registerNumber,
+          terminal: registerSession.terminalName,
+        },
+      };
+    }
+
+    if (
+      event.step === "register_session_closed" ||
+      event.step === "register_session_closeout_approved"
+    ) {
+      return {
+        ...event,
+        details: {
+          ...event.details,
+          closedBy: registerSession.closedByName,
+          registerNumber: registerSession.registerNumber,
+        },
+      };
+    }
+
+    if (
+      event.step === "register_session_sale_recorded" ||
+      event.step === "register_session_void_recorded" ||
+      event.step === "register_session_closeout_submitted"
+    ) {
+      return {
+        ...event,
+        details: {
+          ...event.details,
+          actorName,
+          approvedByName,
+          registerNumber: registerSession.registerNumber,
+        },
+      };
+    }
+
+    return event;
+  });
 
   return {
     ...view,
+    currency: store?.currency?.trim() || "GHS",
+    events: contextualEvents,
+    eventLimit: MAX_WORKFLOW_TRACE_EVENTS,
+    eventsTruncated,
     header: {
       ...view.header,
       registerSession,

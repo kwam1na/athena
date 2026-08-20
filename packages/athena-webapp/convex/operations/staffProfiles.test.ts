@@ -16,6 +16,8 @@ import {
   getStaffProfileByIdWithCtx,
   listStaffProfiles,
   listStaffProfilesWithCtx,
+  reactivateStaffProfile,
+  reactivateStaffProfileWithCtx,
   updateStaffProfile,
   updateStaffProfileWithCtx,
 } from "./staffProfiles";
@@ -179,6 +181,103 @@ describe("staff profile helpers", () => {
       kind: "user_error",
       error: { code: "not_found", message: "Staff profile not found." },
     });
+    assertConformsToExportedReturns(reactivateStaffProfile, {
+      kind: "user_error",
+      error: { code: "not_found", message: "Staff profile not found." },
+    });
+  });
+
+  it("reactivates an inactive profile and restores its existing PIN credential", async () => {
+    const { ctx, tables } = createStaffProfilesMutationCtx({
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          firstName: "Ama",
+          fullName: "Ama Mensah",
+          lastName: "Mensah",
+          organizationId: "org_1",
+          status: "inactive",
+          storeId: "store_1",
+        },
+      ],
+      credentials: [
+        {
+          _id: "credential_1",
+          organizationId: "org_1",
+          pinHash: "hashed-pin",
+          staffProfileId: "staff_profile_1",
+          status: "revoked",
+          storeId: "store_1",
+          username: "amens",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          isPrimary: true,
+          organizationId: "org_1",
+          role: "cashier",
+          staffProfileId: "staff_profile_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    const result = await reactivateStaffProfileWithCtx(ctx, {
+      organizationId: "org_1" as Id<"organization">,
+      staffProfileId: "staff_profile_1" as Id<"staffProfile">,
+      storeId: "store_1" as Id<"store">,
+    });
+
+    expect(result).toMatchObject({
+      credentialStatus: "active",
+      status: "active",
+    });
+    expect(tables.staffCredential.get("credential_1")?.status).toBe("active");
+    expect(tables.staffProfile.get("staff_profile_1")?.status).toBe("active");
+  });
+
+  it("reactivates staff without an existing PIN into pending PIN status", async () => {
+    const { ctx, tables } = createStaffProfilesMutationCtx({
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          organizationId: "org_1",
+          status: "inactive",
+          storeId: "store_1",
+        },
+      ],
+      credentials: [
+        {
+          _id: "credential_1",
+          organizationId: "org_1",
+          staffProfileId: "staff_profile_1",
+          status: "revoked",
+          storeId: "store_1",
+          username: "amens",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          isPrimary: true,
+          organizationId: "org_1",
+          role: "cashier",
+          staffProfileId: "staff_profile_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    await reactivateStaffProfileWithCtx(ctx, {
+      organizationId: "org_1" as Id<"organization">,
+      staffProfileId: "staff_profile_1" as Id<"staffProfile">,
+      storeId: "store_1" as Id<"store">,
+    });
+
+    expect(tables.staffCredential.get("credential_1")?.status).toBe("pending");
   });
 
   it("admits same-store shared-demo POS staff roster reads without normal auth fallback", async () => {
@@ -367,10 +466,10 @@ describe("staff profile helpers", () => {
 
     const result = await createStaffProfileWithCtx(ctx, {
       createdByUserId: "user_1" as Id<"athenaUser">,
-      firstName: " Adjoa ",
+      firstName: " adJOA ",
       hiredAt: 1710000000000,
       jobTitle: " Senior Stylist ",
-      lastName: " Tetteh ",
+      lastName: " tETTEH ",
       organizationId: "org_1" as Id<"organization">,
       phoneNumber: " +233200000000 ",
       requestedRoles: ["stylist", "technician"],
@@ -481,8 +580,9 @@ describe("staff profile helpers", () => {
     });
 
     const result = await updateStaffProfileWithCtx(ctx, {
-      firstName: "Lead Adjoa",
+      firstName: "lead adJOA",
       jobTitle: "Lead Stylist",
+      lastName: "mENSAH",
       organizationId: "org_1" as Id<"organization">,
       requestedRoles: ["manager", "stylist"],
       staffProfileId: "staff_profile_1" as Id<"staffProfile">,
@@ -492,8 +592,10 @@ describe("staff profile helpers", () => {
     });
 
     expect(result).toMatchObject({
-      fullName: "Lead Adjoa Tetteh",
+      firstName: "Lead Adjoa",
+      fullName: "Lead Adjoa Mensah",
       jobTitle: "Lead Stylist",
+      lastName: "Mensah",
       primaryRole: "manager",
       roles: ["stylist", "manager"],
       updatedByUserId: "user_2",
