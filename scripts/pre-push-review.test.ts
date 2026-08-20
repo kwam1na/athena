@@ -1051,10 +1051,16 @@ describe("repo harness ergonomics", () => {
   );
 
   it("schedules a recurring harness drift check in GitHub Actions", async () => {
-    const workflow = await readFile(
-      path.join(ROOT_DIR, ".github/workflows/athena-pr-tests.yml"),
-      "utf8",
-    );
+    const [workflow, webappPackage] = await Promise.all([
+      readFile(
+        path.join(ROOT_DIR, ".github/workflows/athena-pr-tests.yml"),
+        "utf8",
+      ),
+      readFile(
+        path.join(ROOT_DIR, "packages/athena-webapp/package.json"),
+        "utf8",
+      ),
+    ]);
 
     expect(workflow).toContain("schedule:");
     expect(workflow).toContain("- cron:");
@@ -1080,6 +1086,9 @@ describe("repo harness ergonomics", () => {
     );
     expect(workflow).toContain('ATHENA_COVERAGE_MAX_WORKERS: "1"');
     expect(workflow).toContain("/usr/bin/time -v bun run test:coverage");
+    expect(JSON.parse(webappPackage).scripts["test:coverage"]).toBe(
+      "vitest run --coverage --maxWorkers=${ATHENA_COVERAGE_MAX_WORKERS:-2}",
+    );
     expect(workflow).toContain("run: bun run --filter '@athena/webapp' build");
     expect(workflow).toContain(
       "run: bun run --filter '@athena/storefront-webapp' build",
