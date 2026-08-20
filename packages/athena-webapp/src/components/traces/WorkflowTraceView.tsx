@@ -266,8 +266,25 @@ export function WorkflowTraceTimeline({
             typeof event.details?.transactionId === "string"
               ? event.details.transactionId
               : null;
+          const linkableStatement =
+            transactionStatement ||
+            lifecycleStatement ||
+            event.message ||
+            formatTraceLabel(event.step);
+          const transactionReference = transactionNumber
+            ? `#${transactionNumber}`
+            : null;
+          const transactionReferenceIndex = transactionReference
+            ? linkableStatement.indexOf(transactionReference)
+            : -1;
+          const transactionReferenceEnd =
+            transactionReferenceIndex + (transactionReference?.length ?? 0);
           const canLinkTransaction = Boolean(
-            transactionId && transactionNumber && orgUrlSlug && storeUrlSlug,
+            transactionId &&
+              transactionReference &&
+              transactionReferenceIndex >= 0 &&
+              orgUrlSlug &&
+              storeUrlSlug,
           );
           return (
             <li
@@ -280,10 +297,7 @@ export function WorkflowTraceTimeline({
                   <p className="text-sm text-muted-foreground">
                     {canLinkTransaction ? (
                       <>
-                        {transactionStatement ||
-                          lifecycleStatement ||
-                          event.message ||
-                          formatTraceLabel(event.step)}{" "}
+                        {linkableStatement.slice(0, transactionReferenceIndex)}
                         <Link
                           className="inline-flex items-center gap-0.5 font-medium text-foreground underline-offset-2 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           data-remote-assist-control="workflow-trace-transaction"
@@ -298,12 +312,13 @@ export function WorkflowTraceTimeline({
                           search={{ o: getOrigin() }}
                           to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId"
                         >
-                          Open #{transactionNumber}
+                          {transactionReference}
                           <ArrowUpRight
                             aria-hidden="true"
                             className="h-3 w-3"
                           />
                         </Link>
+                        {linkableStatement.slice(transactionReferenceEnd)}
                       </>
                     ) : (
                       lifecycleStatement ||
