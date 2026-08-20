@@ -190,7 +190,7 @@ function fact(overrides: Partial<Doc<"reportFact">> = {}) {
 }
 
 describe("accepted weekly SKU leaders", () => {
-  it("freezes the top three sold SKUs from cutoff facts", () => {
+  it("freezes up to five sold SKUs from cutoff facts", () => {
     const skuA = "sku-a" as Id<"productSku">;
     const skuB = "sku-b" as Id<"productSku">;
     const skuC = "sku-c" as Id<"productSku">;
@@ -222,6 +222,7 @@ describe("accepted weekly SKU leaders", () => {
       { productSkuId: skuA, unitsSold: 7 },
       { productSkuId: skuB, unitsSold: 5 },
       { productSkuId: skuC, unitsSold: 4 },
+      { productSkuId: skuD, unitsSold: 1 },
     ]);
   });
 });
@@ -230,11 +231,20 @@ describe("foldWeekFromDays", () => {
   it("synthesizes missing scheduled report days as complete zero-activity slots", () => {
     const result = foldWeekFromDays({
       period: period(),
-      days: [day(), day({ operatingDate: "2026-07-05", netSalesMinor: 25 })],
+      days: [
+        day({ transactionCount: 7 }),
+        day({
+          operatingDate: "2026-07-05",
+          netSalesMinor: 25,
+          transactionCount: 2,
+        }),
+      ],
     });
 
     expect(result.included.netSalesMinor).toBe(100);
     expect(result.outsideSchedule.netSalesMinor).toBe(25);
+    expect(result.included.transactionCount).toBe(7);
+    expect(result.outsideSchedule.transactionCount).toBe(2);
     expect(result.completeness).toEqual({
       complete: true,
       reason: "complete",
@@ -1182,10 +1192,14 @@ describe("weekly materialization", () => {
       outsideSchedule: { ...ZERO_WEEK_METRICS },
       scheduleLineage: [] as ReportWeekLineage[],
     };
+    const { transactionCount: _includedCount, ...legacyIncluded } =
+      legacyPayload.included;
+    const { transactionCount: _outsideCount, ...legacyOutside } =
+      legacyPayload.outsideSchedule;
     const preMixHash = stableStringHash(
       JSON.stringify({
-        included: legacyPayload.included,
-        outsideSchedule: legacyPayload.outsideSchedule,
+        included: legacyIncluded,
+        outsideSchedule: legacyOutside,
         scheduleLineage: [],
       }),
     );

@@ -27,6 +27,16 @@ import type {
   OperationMutationCtx,
   OperationQueryCtx,
 } from "../operationAdmission/types";
+import { MAX_EXPENSE_TRANSACTION_RESULTS } from "../../shared/operationalEvidenceLimits";
+
+export function requireExpenseTransactionLimit(limit: number) {
+  if (!Number.isSafeInteger(limit) || limit < 1) {
+    throw new Error(
+      "Expense transaction limit must be a positive safe integer.",
+    );
+  }
+  return Math.min(limit, MAX_EXPENSE_TRANSACTION_RESULTS);
+}
 
 const expenseTransactionCreationValidator = v.object({
   transactionId: v.id("expenseTransaction"),
@@ -345,55 +355,60 @@ export const getExpenseTransactions = query({
         limit?: number;
       },
     ) => {
-    const { storeId, status, limit = 50 } = args;
+      const { storeId, status } = args;
+      const requestedLimit = requireExpenseTransactionLimit(args.limit ?? 50);
 
-    let transactionsQuery = ctx.db
-      .query("expenseTransaction")
-      .withIndex("by_storeId", (q) => q.eq("storeId", storeId));
-
-    if (status) {
-      transactionsQuery = ctx.db
+      let transactionsQuery = ctx.db
         .query("expenseTransaction")
-        .withIndex("by_status", (q) => q.eq("status", status));
-    }
+        .withIndex("by_storeId", (q) => q.eq("storeId", storeId));
 
-    let transactions = await transactionsQuery.order("desc").take(limit);
+      if (status) {
+        transactionsQuery = ctx.db
+          .query("expenseTransaction")
+          .withIndex("by_storeId_status_completedAt", (q) =>
+            q.eq("storeId", storeId).eq("status", status),
+          );
+      }
 
-    if (args.staffProfileId) {
-      transactions = transactions.filter(
-        (transaction) => transaction.staffProfileId === args.staffProfileId,
-      );
-    }
+      let transactions = await transactionsQuery
+        .order("desc")
+        .take(requestedLimit);
 
-    // Enrich with staff profile name and item count
-    const enrichedTransactions = await Promise.all(
-      transactions.map(async (transaction) => {
-        const staffProfile = await ctx.db.get(
-          "staffProfile",
-          transaction.staffProfileId,
+      if (args.staffProfileId) {
+        transactions = transactions.filter(
+          (transaction) => transaction.staffProfileId === args.staffProfileId,
         );
-        const staffProfileName = formatExpenseStaffProfileName(staffProfile);
+      }
 
-        // Individual transactions have a bounded item count, so reading all items is safe here.
-        // eslint-disable-next-line @convex-dev/no-collect-in-query
-        const items = await ctx.db
-          .query("expenseTransactionItem")
-          .withIndex("by_transactionId", (q) =>
-            q.eq("transactionId", transaction._id),
-          )
-          .collect();
+      // Enrich with staff profile name and item count
+      const enrichedTransactions = await Promise.all(
+        transactions.map(async (transaction) => {
+          const staffProfile = await ctx.db.get(
+            "staffProfile",
+            transaction.staffProfileId,
+          );
+          const staffProfileName = formatExpenseStaffProfileName(staffProfile);
 
-        const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+          // Individual transactions have a bounded item count, so reading all items is safe here.
+          // eslint-disable-next-line @convex-dev/no-collect-in-query
+          const items = await ctx.db
+            .query("expenseTransactionItem")
+            .withIndex("by_transactionId", (q) =>
+              q.eq("transactionId", transaction._id),
+            )
+            .collect();
 
-        return {
-          ...transaction,
-          staffProfileName,
-          itemCount,
-        };
-      }),
-    );
+          const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
-    return enrichedTransactions;
+          return {
+            ...transaction,
+            staffProfileName,
+            itemCount,
+          };
+        }),
+      );
+
+      return enrichedTransactions;
     },
   ),
 });
@@ -434,40 +449,40 @@ export const getExpenseTransactionById = query({
       ctx: OperationQueryCtx,
       args: { transactionId: Id<"expenseTransaction"> },
     ) => {
-    const transaction = await ctx.db.get(
-      "expenseTransaction",
-      args.transactionId,
-    );
-    if (!transaction) return null;
+      const transaction = await ctx.db.get(
+        "expenseTransaction",
+        args.transactionId,
+      );
+      if (!transaction) return null;
 
-    // Get staff profile information
-    const staffProfile = await ctx.db.get(
-      "staffProfile",
-      transaction.staffProfileId,
-    );
+      // Get staff profile information
+      const staffProfile = await ctx.db.get(
+        "staffProfile",
+        transaction.staffProfileId,
+      );
 
-    // Get transaction items
-    // Individual transactions have a bounded item count, so reading all items is safe here.
-    // eslint-disable-next-line @convex-dev/no-collect-in-query
-    const items = await ctx.db
-      .query("expenseTransactionItem")
-      .withIndex("by_transactionId", (q) =>
-        q.eq("transactionId", transaction._id),
-      )
-      .collect();
+      // Get transaction items
+      // Individual transactions have a bounded item count, so reading all items is safe here.
+      // eslint-disable-next-line @convex-dev/no-collect-in-query
+      const items = await ctx.db
+        .query("expenseTransactionItem")
+        .withIndex("by_transactionId", (q) =>
+          q.eq("transactionId", transaction._id),
+        )
+        .collect();
 
-    return {
-      ...transaction,
-      staffProfile: staffProfile
-        ? {
-            _id: staffProfile._id,
-            fullName: staffProfile.fullName,
-            firstName: staffProfile.firstName,
-            lastName: staffProfile.lastName,
-          }
-        : null,
-      items,
-    };
+      return {
+        ...transaction,
+        staffProfile: staffProfile
+          ? {
+              _id: staffProfile._id,
+              fullName: staffProfile.fullName,
+              firstName: staffProfile.firstName,
+              lastName: staffProfile.lastName,
+            }
+          : null,
+        items,
+      };
     },
   ),
 });

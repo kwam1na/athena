@@ -394,6 +394,7 @@ describe("CashControlsDashboardContent", () => {
               openingFloat: 5000,
               registerNumber: "Register 4",
               status: "closed",
+              terminalName: "Front counter",
               totalDeposited: 0,
               variance: 0,
               workflowTraceId: "register_session:reg-4",
@@ -508,6 +509,11 @@ describe("CashControlsDashboardContent", () => {
     );
     expect(screen.getAllByText("Register 1").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Register 3").length).toBeGreaterThan(0);
+    expect(screen.getByText("Front counter")).toHaveClass(
+      "text-xs",
+      "font-normal",
+      "text-muted-foreground",
+    );
     expect(screen.getByText("N-OPEN")).toBeInTheDocument();
     expect(screen.getByText("Back counter / LOSING")).toBeInTheDocument();
     expect(screen.getAllByText("Needs review").length).toBeGreaterThan(0);
@@ -554,7 +560,9 @@ describe("CashControlsDashboardContent", () => {
     expect(activeDrawerCard).not.toHaveTextContent("Variance");
     expect(screen.getByText("Register 4")).toBeInTheDocument();
     expect(screen.getByText(expectedClosedAt)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Register 4" })).toHaveAttribute(
+    expect(
+      screen.getByRole("link", { name: "Register 4 Front counter" }),
+    ).toHaveAttribute(
       "href",
       "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId?o=%252F",
     );
@@ -721,6 +729,7 @@ describe("CashControlsDashboardContent", () => {
               openingFloat: 5000,
               registerNumber: "Register 3",
               status: "closed",
+              terminalName: "Front counter",
               totalDeposited: 1000,
               variance: 0,
             },
@@ -747,6 +756,11 @@ describe("CashControlsDashboardContent", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Register 3/i })).not.toHaveClass(
       "hover:bg-muted/40",
+    );
+    expect(screen.getByText("Front counter")).toHaveClass(
+      "text-xs",
+      "font-normal",
+      "text-muted-foreground",
     );
     expect(screen.queryByText("Latest drawers")).not.toBeInTheDocument();
     expect(screen.queryByText("Cash variance")).not.toBeInTheDocument();

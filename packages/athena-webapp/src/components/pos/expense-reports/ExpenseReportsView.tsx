@@ -8,6 +8,7 @@ import { FadeIn } from "../../common/FadeIn";
 import { EmptyState } from "../../states/empty/empty-state";
 import { GenericDataTable } from "../../base/table/data-table";
 import { PageLevelHeader, PageWorkspace } from "../../common/PageLevelHeader";
+import { Button } from "../../ui/button";
 import { useExpenseLocalRuntime } from "@/hooks/useExpenseLocalRuntime";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useGetTerminal } from "@/hooks/useGetTerminal";
@@ -18,6 +19,7 @@ import { toExpenseReportRows } from "./expenseReportRows";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { RelativeTimestamp } from "../../ui/relative-timestamp";
+import { MAX_EXPENSE_TRANSACTION_RESULTS } from "~/shared/operationalEvidenceLimits";
 
 // Helper to check if timestamp is today
 const isToday = (timestamp: number) => {
@@ -43,11 +45,30 @@ function isOnOperatingDate(timestamp: number, operatingDateStartAt: number) {
 }
 
 type ExpenseReportTimeFilter = "today" | "operatingDate" | "all";
+const expenseReportBatchSize = 50;
+const expenseReportPageSize = 10;
+const maxExpenseReportPageIndex =
+  MAX_EXPENSE_TRANSACTION_RESULTS / expenseReportPageSize - 1;
 
 function getPageIndexFromSearch(page?: unknown) {
   const parsedPage = typeof page === "number" ? page : Number(page);
 
-  return Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage - 1 : 0;
+  return Number.isInteger(parsedPage) && parsedPage > 0
+    ? Math.min(parsedPage - 1, maxExpenseReportPageIndex)
+    : 0;
+}
+
+function getExpenseReportLimitForPage(pageIndex: number) {
+  const requestedRows = (pageIndex + 1) * expenseReportPageSize;
+
+  return Math.min(
+    MAX_EXPENSE_TRANSACTION_RESULTS,
+    Math.max(
+      expenseReportBatchSize,
+      Math.ceil(requestedRows / expenseReportBatchSize) *
+        expenseReportBatchSize,
+    ),
+  );
 }
 
 function getExpenseReportTimeFilter({
@@ -184,10 +205,14 @@ export function ExpenseReportsView() {
     getExpenseReportTimeFilter({ operatingDateStartAt, timeRange }),
   );
   const tablePageIndex = getPageIndexFromSearch(page);
+  const minimumLoadedLimit = getExpenseReportLimitForPage(tablePageIndex);
+  const [loadedLimit, setLoadedLimit] = useState(minimumLoadedLimit);
 
   const expenseTransactions = useQuery(
     api.inventory.expenseTransactions.getExpenseTransactions,
-    activeStore?._id ? { storeId: activeStore._id } : "skip",
+    activeStore?._id
+      ? { limit: loadedLimit, storeId: activeStore._id }
+      : "skip",
   );
 
   const formatter = useMemo(
@@ -212,10 +237,22 @@ export function ExpenseReportsView() {
     return tableData.filter((t) => isToday(t.completedAt));
   }, [tableData, filter, operatingDateStartAt]);
   const isLoadingExpenseReports = expenseTransactions === undefined;
+  const isExpenseReportBatchFull =
+    (expenseTransactions?.length ?? 0) >= loadedLimit;
 
   useEffect(() => {
     setFilter(getExpenseReportTimeFilter({ operatingDateStartAt, timeRange }));
   }, [operatingDateStartAt, timeRange]);
+
+  useEffect(() => {
+    setLoadedLimit(minimumLoadedLimit);
+  }, [filter, minimumLoadedLimit, operatingDateStartAt]);
+
+  useEffect(() => {
+    setLoadedLimit((currentLimit) =>
+      Math.max(currentLimit, minimumLoadedLimit),
+    );
+  }, [minimumLoadedLimit]);
   const handleTablePageIndexChange = useCallback(
     (pageIndex: number) => {
       void navigate({
@@ -241,13 +278,17 @@ export function ExpenseReportsView() {
   );
 
   useEffect(() => {
-    if (isLoadingExpenseReports || tablePageIndex === 0) {
+    if (
+      isLoadingExpenseReports ||
+      isExpenseReportBatchFull ||
+      tablePageIndex === 0
+    ) {
       return;
     }
 
     const maxPageIndex = Math.max(
       0,
-      Math.ceil(filteredData.length / 10) - 1,
+      Math.ceil(filteredData.length / expenseReportPageSize) - 1,
     );
 
     if (tablePageIndex <= maxPageIndex) {
@@ -258,6 +299,7 @@ export function ExpenseReportsView() {
   }, [
     filteredData.length,
     handleTablePageIndexChange,
+    isExpenseReportBatchFull,
     isLoadingExpenseReports,
     tablePageIndex,
   ]);
@@ -278,10 +320,37 @@ export function ExpenseReportsView() {
           />
 
           <section className="space-y-layout-md">
-            <Tabs
-              value={filter}
-              onValueChange={handleFilterChange}
-            >
+            {!isLoadingExpenseReports &&
+            isExpenseReportBatchFull &&
+            loadedLimit < MAX_EXPENSE_TRANSACTION_RESULTS ? (
+              <div className="flex flex-col gap-layout-sm rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                <span>
+                  Showing latest {loadedLimit.toLocaleString()} completed
+                  expense reports.
+                </span>
+                <Button
+                  data-remote-assist-control="pos-expense-report-history"
+                  data-remote-assist-control-id="pos-expense-reports-load-more"
+                  data-remote-assist-control-label="Load more expense report history"
+                  data-remote-assist-control-role="button"
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    setLoadedLimit((currentLimit) =>
+                      Math.min(
+                        MAX_EXPENSE_TRANSACTION_RESULTS,
+                        currentLimit + expenseReportBatchSize,
+                      ),
+                    )
+                  }
+                >
+                  Load more history
+                </Button>
+              </div>
+            ) : null}
+
+            <Tabs value={filter} onValueChange={handleFilterChange}>
               <TabsList>
                 {operatingDateStartAt !== null ? (
                   <TabsTrigger
@@ -321,6 +390,9 @@ export function ExpenseReportsView() {
                 columns={expenseReportColumns}
                 pageIndex={tablePageIndex}
                 onPageIndexChange={handleTablePageIndexChange}
+                paginationItemLabel={
+                  isExpenseReportBatchFull ? undefined : "expense report"
+                }
                 renderMobileCard={(report) => (
                   <ExpenseReportMobileCard report={report} />
                 )}

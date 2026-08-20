@@ -48,6 +48,7 @@ export const weeklyManagerReportPreviewProps = {
     notesLabel: "Reporting note",
     paymentSectionPlacement: "after-summary",
     paymentSectionTitle: "Payment mix",
+    rankedSectionTitle: "Expenses",
     previewText:
       "Wigclub weekly report accepted · GH₵27,455 net sales · Aug 3–8, 2026",
     summarySectionTitle: "Weekly performance",
@@ -107,6 +108,7 @@ export const weeklyManagerReportPreviewProps = {
       title: "Top expense products by quantity",
     },
   ],
+  rankedSectionSummary: { label: "Total expenses", value: "GH₵625" },
   status: "applied",
   statusLabel: "Week complete",
   statusSummary:
@@ -124,13 +126,15 @@ export const weeklyManagerReportPreviewProps = {
     {
       label: "Transactions",
       value: "78",
-      detail: "Completed POS transactions",
+      detail: "Completed POS transactions · 11% higher than prior week",
     },
   ],
   topItems: [
     { name: "Silk Press 18\"", detail: "SP18-NAT", unitsSold: 38 },
     { name: "Body Wave 20\"", detail: "BW20-1B", unitsSold: 31 },
     { name: "HD Lace Closure", detail: "HDLC-14", unitsSold: 24 },
+    { name: 'Deep Wave 22"', detail: "DW22-1B", unitsSold: 19 },
+    { name: 'Kinky Straight 16"', detail: "KS16-NAT", unitsSold: 17 },
   ],
   topItemsUrl:
     "https://athena-os.app/wigclub/store/wigclub/reports/weekly?reportId=week%3A2026-08-03&units=true",

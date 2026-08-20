@@ -2504,6 +2504,58 @@ describe("daily operations overview read model", () => {
     ).not.toHaveBeenCalled();
   });
 
+  it("returns still-open register sessions from prior operating days", async () => {
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "user-1" as Id<"athenaUser">,
+      email: "manager@wigclub.store",
+    });
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "member-1" as Id<"organizationMember">,
+      organizationId: "org-1" as Id<"organization">,
+      role: "full_admin",
+      userId: "user-1" as Id<"athenaUser">,
+    });
+
+    const snapshot = await getHandler(
+      getDailyOperationsOpenRegisterSessionsSnapshot,
+    )(
+      buildCtx({
+        registerSession: [
+          {
+            _id: "register-carried-over",
+            expectedCash: 50000,
+            openedAt: Date.UTC(2026, 7, 18, 9),
+            openedOperatingDate: "2026-08-18",
+            openingFloat: 50000,
+            registerNumber: "2",
+            status: "active",
+            storeId: "store-1",
+          },
+        ],
+        store: [store],
+      }) as never,
+      {
+        operatingDate: "2026-08-19",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-08-22",
+      },
+    );
+
+    expect(snapshot.sessions).toEqual([
+      {
+        displayLabel: "Register 2",
+        id: "register-carried-over",
+        openedOperatingDate: "2026-08-18",
+      },
+    ]);
+  });
+
   it("returns a redacted daily operations snapshot for POS-only store members", async () => {
     vi.mocked(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
@@ -3899,16 +3951,17 @@ describe("daily operations overview read model", () => {
             _id: "event-quick-add",
             createdAt: Date.UTC(2026, 4, 8, 12),
             eventType: "pos_quick_add_product_created",
-            message: "Kwamina Nuh quick added Vitamilk with quantity 100.",
+            message:
+              "Kwamina Nuh quick added GOLD BRACELET with quantity 100.",
             metadata: {
               productId: "product-1",
-              productName: "Vitamilk",
+              productName: "GOLD BRACELET",
               productSkuId: "sku-1",
               sku: "VITAMILK-001",
             },
             storeId: "store-1",
             subjectId: "sku-1",
-            subjectLabel: "Vitamilk",
+            subjectLabel: "GOLD BRACELET",
             subjectType: "product_sku",
           },
           {
@@ -4105,7 +4158,7 @@ describe("daily operations overview read model", () => {
       snapshot.timeline.find((event) => event.id === "event-quick-add")
         ?.productLink,
     ).toEqual({
-      label: "Vitamilk",
+      label: "Gold Bracelet",
       params: {
         productSlug: "product-1",
       },
@@ -4114,6 +4167,10 @@ describe("daily operations overview read model", () => {
       },
       to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
     });
+    expect(
+      snapshot.timeline.find((event) => event.id === "event-quick-add")
+        ?.message,
+    ).toBe("Kwamina Nuh quick added Gold Bracelet with quantity 100.");
     expect(
       snapshot.timeline.find(
         (event) => event.id === "event-pending-checkout-item",

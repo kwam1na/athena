@@ -1,7 +1,7 @@
 ---
 title: "Daily Operations review and cash closeout continuity"
 date: 2026-07-11
-last_updated: 2026-07-15
+last_updated: 2026-08-20
 category: architecture-patterns
 module: athena-webapp
 problem_type: architecture_pattern
@@ -14,7 +14,7 @@ applies_when:
   - "Open Work contains repeated synced-sale inventory reviews for one product SKU"
   - "EOD Review and Opening Handoff must preserve exact logical-work membership across store days"
 tags: [athena, daily-operations, cash-controls, closeout, open-work, local-sync, logical-groups, eod-snapshot]
-delivery_diff_fingerprint: fe76fccea7917f55e2d5fa687cef14fd82034e7c9e03d4782d8cca7a9c80ffb3
+delivery_diff_fingerprint: a8af10b6fa05f0b0cb9c289692643f828734e98e1941d67bf04f3d75c4fe555f
 ---
 
 # Daily Operations review and cash closeout continuity
@@ -31,9 +31,12 @@ cash closeout and inventory work that must follow.
 Treat Daily Operations as a routing surface and preserve the authoritative
 workflows behind it:
 
-- Query open register sessions for the requested operating date with the same
-  store authorization as the daily snapshot. Link each session to its Cash
-  Controls closeout route, including a terminal and register label.
+- Query every still-open store register session (`open`, `active`, or
+  `closing`) that existed by the requested operating-day boundary, including
+  sessions carried over from an earlier day. Treat this live query as
+  authoritative over stale snapshot blockers. Link each session to its Cash
+  Controls closeout route, including its session code, terminal, register, and
+  opened operating date when carried over.
 - Keep cash detail behind the existing manager/full-admin capability. The
   register-session view may show a sales and payment summary only after that
   capability permits the protected snapshot.
@@ -92,9 +95,10 @@ evidence.
 
 ## Prevention
 
-- Test current and historical operating dates separately. The current snapshot
-  can expose live open sessions, while a historical day needs its own bounded
-  session query.
+- Test current and historical operating dates separately. Still-open sessions
+  from earlier operating days must remain visible until closed; sessions first
+  opened after the selected day boundary must not appear. Test that the live
+  blocker query wins when a snapshot's register state is stale.
 - Test the manager-visible financial summary and the cashier-redacted state
   together whenever session data is added to a Cash Controls read model.
 - Test selected-conflict filtering, missing-register-session mapping repair,
@@ -124,7 +128,8 @@ An open session is a navigation aid, not a second closeout implementation:
 
 ```ts
 getDailyOperationsOpenRegisterSessionsSnapshot({ storeId, operatingDate });
-// Each result links to the existing cash-controls register-session route.
+// Includes still-open carried-over sessions that existed by this day boundary;
+// each result links to the existing cash-controls register-session route.
 ```
 
 A logical inventory card represents many durable reviews while retaining one

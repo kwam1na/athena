@@ -21,6 +21,7 @@ export type RegisterSessionRow = {
   sessionCode: string;
   status: string;
   statusLabel: string;
+  terminalName?: string | null;
   timelineDateLabel: string;
   timelineDurationLabel: string;
   timelineRangeLabel: string;
@@ -84,7 +85,15 @@ export const registerSessionColumns: ColumnDef<RegisterSessionRow>[] = [
         className="space-y-1.5 text-foreground hover:text-primary"
         row={row.original}
       >
-        <span className="block font-medium">{row.original.registerLabel}</span>
+        <span className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+          <span className="font-medium">{row.original.registerLabel}</span>
+          {row.original.terminalName ? (
+            <span className="min-w-0 truncate text-xs font-normal text-muted-foreground">
+              <span aria-hidden="true">/ </span>
+              {row.original.terminalName}
+            </span>
+          ) : null}
+        </span>
         <span className="inline-flex rounded-md border border-border/70 bg-muted/30 px-1.5 py-0.5 font-sans text-xs text-muted-foreground">
           {row.original.sessionCode}
         </span>

@@ -3,7 +3,6 @@ import { internalQuery, type QueryCtx } from "../_generated/server";
 import type { Doc } from "../_generated/dataModel";
 import type {
   DailyManagerReportProps,
-  DailyManagerReportRankedRow,
   DailyManagerReportTopItem,
 } from "../emails/DailyManagerReport";
 import { resolveAppUrl } from "./dailyManagerReportEmail";
@@ -12,7 +11,7 @@ import {
   addWeekMetrics,
   combineRevisionPaymentMix,
 } from "../../shared/reportsContract";
-import { formatProductDisplayName } from "../../shared/productDisplayName";
+import { buildManagerReportExpenseSections } from "./managerReportExpenseSections";
 import type {
   ReportPaymentMix,
   ReportWeekCloseEvidence,
@@ -198,6 +197,10 @@ export function buildAcceptedWeeklyManagerReportPayload(args: {
   const netSalesComparison = prior
     ? amountComparison(total.netSalesMinor, prior.netSalesMinor, money)
     : undefined;
+  const priorTransactionCount =
+    accepted.priorPeriod?.comparabilityReason === "comparable"
+      ? accepted.priorPeriod.transactionCount
+      : undefined;
   const allScheduledDaysClosed =
     scheduledDayCount > 0 && closedDayCount === scheduledDayCount;
   const executiveSummary = [
@@ -309,6 +312,7 @@ export function buildAcceptedWeeklyManagerReportPayload(args: {
       timestampDate: formatShortDate(args.correctedAt ?? accepted.acceptedAt, args.timezone),
       timestampLabel: args.correctedAt ? "Corrected" : "Accepted",
       topItemsPlacement: "after-cash",
+      rankedSectionTitle: "Expenses",
     },
     reportSections: [
       ...(variance
@@ -403,6 +407,12 @@ export function buildAcceptedWeeklyManagerReportPayload(args: {
             {
               detail: [
                 "Completed POS transactions",
+                priorTransactionCount === undefined
+                  ? undefined
+                  : percentageComparison(
+                      evidence.transactions.transactionCount,
+                      priorTransactionCount,
+                    ),
                 coverageLabel(evidence.transactions.coverage),
               ]
                 .filter(Boolean)
@@ -425,8 +435,21 @@ export function buildAcceptedWeeklyManagerReportPayload(args: {
       evidence?.expenses.coverage.status === "unavailable"
         ? []
         : evidence
-          ? expenseRankedSections(evidence.expenses, money)
+          ? buildManagerReportExpenseSections(
+              evidence.expenses,
+              money,
+              coverageLabel(evidence.expenses.coverage),
+            )
           : [],
+    rankedSectionSummary:
+      evidence?.expenses.coverage.status === "unavailable"
+        ? undefined
+        : evidence
+          ? {
+              label: "Total expenses",
+              value: money(evidence.expenses.coveredSpendMinor),
+            }
+          : undefined,
     topItems: args.topItems,
     topItemsUrl: args.topItemsUrl,
     notes: reportingNotes.length > 0 ? reportingNotes.join(" ") : undefined,
@@ -521,65 +544,6 @@ function scheduledCoverageLabel(
     return undefined;
   }
   return `Based on ${coveredDayCount} of ${scheduledDayCount} scheduled days`;
-}
-
-/** Reports says "1 unit"; the ranked rows must not say "1 units" beside it. */
-function formatUnits(quantity: number): string {
-  return `${quantity.toLocaleString("en-US")} ${quantity === 1 ? "unit" : "units"}`;
-}
-
-function expenseRankedSections(
-  expenses: ReportWeekCloseEvidence["expenses"],
-  money: (minor: number) => string,
-): NonNullable<DailyManagerReportProps["rankedSections"]> {
-  const coverage = coverageLabel(expenses.coverage);
-  const row = (
-    product: ReportWeekCloseEvidence["expenses"]["bySpend"][number],
-    rankBy: "spend" | "quantity",
-  ): DailyManagerReportRankedRow => ({
-    label: formatProductDisplayName(product.productName),
-    detail: product.productSku,
-    primary:
-      rankBy === "spend"
-        ? money(product.spendMinor)
-        : formatUnits(product.quantity),
-    secondary:
-      rankBy === "spend"
-        ? formatUnits(product.quantity)
-        : money(product.spendMinor),
-  });
-  const remainder = (
-    value: ReportWeekCloseEvidence["expenses"]["spendRemainder"],
-    rankBy: "spend" | "quantity",
-  ): DailyManagerReportRankedRow | undefined =>
-    value
-      ? {
-          label: `${value.productCount.toLocaleString("en-US")} other ${value.productCount === 1 ? "product" : "products"}`,
-          primary:
-            rankBy === "spend"
-              ? money(value.spendMinor)
-              : formatUnits(value.quantity),
-          secondary:
-            rankBy === "spend"
-              ? formatUnits(value.quantity)
-              : money(value.spendMinor),
-        }
-      : undefined;
-
-  return [
-    {
-      coverage,
-      remainder: remainder(expenses.spendRemainder, "spend"),
-      rows: expenses.bySpend.map((product) => row(product, "spend")),
-      title: "Top expense products by spend",
-    },
-    {
-      coverage,
-      remainder: remainder(expenses.quantityRemainder, "quantity"),
-      rows: expenses.byQuantity.map((product) => row(product, "quantity")),
-      title: "Top expense products by quantity",
-    },
-  ];
 }
 
 function titleCase(value: string): string {

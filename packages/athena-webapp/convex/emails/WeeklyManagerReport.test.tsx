@@ -16,8 +16,9 @@ describe("WeeklyManagerReport preview", () => {
     );
     expect(html).toContain(weeklyManagerReportPreviewProps.storeName);
     expect(html).toContain("GH₵27,455");
-    expect(html).toContain("Completed POS transactions");
     expect(html).toContain("78");
+    expect(html).toContain("Completed POS transactions");
+    expect(html).toContain("11% higher than prior week");
     expect(html).toContain("18 more units than prior week");
     expect(html).toContain("Close variance");
     expect(html).toContain("Counted cash variance");
@@ -27,6 +28,8 @@ describe("WeeklyManagerReport preview", () => {
     expect(html).toContain(weeklyManagerReportPreviewProps.reportUrl);
     expect(html).toContain("Top items by units sold");
     expect(html).toContain("Silk Press 18");
+    expect(html).toContain("Deep Wave 22");
+    expect(html).toContain("Kinky Straight 16");
     expect(html).toContain("View all top movers");
     expect(html).toContain(
       weeklyManagerReportPreviewProps.topItemsUrl.replaceAll("&", "&amp;"),
@@ -64,6 +67,13 @@ describe("WeeklyManagerReport preview", () => {
     expect(html).toContain("tender uses");
     expect(html).toContain("Top expense products by spend");
     expect(html).toContain("Top expense products by quantity");
+    expect(html).toContain("Expenses");
+    expect(html).toContain("Total expenses");
+    expect(html).toContain("GH₵625");
+    expect(html.indexOf("Total expenses")).toBeLessThan(
+      html.indexOf("Top expense products by spend"),
+    );
+    expect(html).toContain("Variance");
     expect(html).toContain("other products");
     expect(html.indexOf("Payment mix")).toBeLessThan(
       html.indexOf("Top expense products by spend"),

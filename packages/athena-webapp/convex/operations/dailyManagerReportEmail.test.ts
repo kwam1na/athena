@@ -13,6 +13,7 @@ import {
 } from "../operationAdmission/domains/operations_definitions";
 import {
   buildCashMetrics,
+  buildDailyExpensePresentation,
   buildDailyTopMoversUrl,
   buildPaymentTotals,
   buildPreparedBlockers,
@@ -126,7 +127,7 @@ describe("daily manager report email URLs", () => {
         },
         money,
       ).map((metric) => metric.label),
-    ).toEqual(["Sales", "Expenses"]);
+    ).toEqual(["Sales", "Transactions"]);
     expect(
       buildSummaryMetrics(
         {
@@ -178,14 +179,33 @@ describe("daily manager report email URLs", () => {
           currentDayCashTotal: 162500,
           expectedCashTotal: 178000,
           netCashVariance: 30000,
+          openingFloatTotal: 15500,
         },
         money,
       ),
     ).toEqual([
-      { label: "Expected cash", value: "GHS 178000" },
+      {
+        detail: "Includes GHS 15500 opening float",
+        label: "Expected cash",
+        value: "GHS 178000",
+      },
       { label: "Counted cash", value: "GHS 208000" },
       { label: "Net variance", value: "GHS 30000" },
     ]);
+  });
+
+  it("states when no opening float was recorded", () => {
+    const [expectedCash] = buildCashMetrics(
+      {
+        countedCashTotal: 0,
+        expectedCashTotal: 0,
+        netCashVariance: 0,
+        openingFloatTotal: 0,
+      },
+      (amount) => `GHS ${amount}`,
+    );
+
+    expect(expectedCash?.detail).toBe("No opening float recorded");
   });
 
   it("compares every operating summary metric with the prior day", () => {
@@ -212,22 +232,75 @@ describe("daily manager report email URLs", () => {
     ).toEqual([
       {
         comparison: "20% higher vs prior day",
-        detail: "10 transactions",
-        detailComparison: "25% higher vs prior day",
         label: "Sales",
         value: "GHS 12000",
       },
       {
-        comparison: "20% lower vs prior day",
-        detail: "3 reports",
-        detailComparison: "50% higher vs prior day",
-        label: "Expenses",
-        value: "GHS 400",
+        comparison: "25% higher vs prior day",
+        label: "Transactions",
+        value: "10",
       },
       {
         comparison: "100% higher vs prior day",
         label: "Voids",
         value: "2",
+      },
+    ]);
+  });
+
+  it("builds a separate daily expense section with ranked product lists", () => {
+    const presentation = buildDailyExpensePresentation(
+      {
+        contractVersion: 1,
+        expenseTotal: 5_000,
+        products: [
+          {
+            productName: "lace remover",
+            productSku: "LR-02",
+            productSkuId: "sku-1" as Id<"productSku">,
+            quantity: 2,
+            spend: 5_000,
+          },
+        ],
+        sourceItemCount: 1,
+        sourceTransactionCount: 1,
+        status: "complete",
+      },
+      { expenseTotal: 5_000, expenseTransactionCount: 1 },
+      (amount) => `GHS ${amount}`,
+    );
+
+    expect(presentation.summary).toMatchObject({
+      detail: "1 report",
+      label: "Total expenses",
+      value: "GHS 5000",
+    });
+    expect(presentation.rankedSections).toEqual([
+      {
+        coverage: undefined,
+        remainder: undefined,
+        rows: [
+          {
+            detail: "LR-02",
+            label: "Lace Remover",
+            primary: "GHS 5000",
+            secondary: "2 units",
+          },
+        ],
+        title: "Top expense products by spend",
+      },
+      {
+        coverage: undefined,
+        remainder: undefined,
+        rows: [
+          {
+            detail: "LR-02",
+            label: "Lace Remover",
+            primary: "2 units",
+            secondary: "GHS 5000",
+          },
+        ],
+        title: "Top expense products by quantity",
       },
     ]);
   });
@@ -331,7 +404,7 @@ describe("daily manager report email URLs", () => {
         unitsSold: 1240,
         priorUnitsSold: 992,
       }).map((metric) => metric.label),
-    ).toEqual(["Sales", "Units sold", "Expenses"]);
+    ).toEqual(["Sales", "Transactions", "Units sold"]);
     expect(
       buildSummaryMetrics(summary, money, undefined, {
         unitsSold: 1240,
@@ -356,12 +429,12 @@ describe("daily manager report email URLs", () => {
 
     expect(
       buildSummaryMetrics(summary, money).map((metric) => metric.label),
-    ).toEqual(["Sales", "Expenses"]);
+    ).toEqual(["Sales", "Transactions"]);
     expect(
       buildSummaryMetrics(summary, money, undefined, {}).map(
         (metric) => metric.label,
       ),
-    ).toEqual(["Sales", "Expenses"]);
+    ).toEqual(["Sales", "Transactions"]);
   });
 
   it("drops the comparison rather than reading an unknown prior day as zero", () => {
@@ -830,7 +903,7 @@ describe("units sold in the closed-day report payload", () => {
     });
   });
 
-  it("includes the three top items and links to Top movers for the report day", async () => {
+  it("includes the five top items and links to Top movers for the report day", async () => {
     process.env.ATHENA_BASE_URL = "https://athena.example.com";
     const t = convexTest(schema, modules);
     const seeded = await t.run(seedStore);
@@ -841,6 +914,7 @@ describe("units sold in the closed-day report payload", () => {
       await insertSkuDay(ctx, seeded, "Body Wave", "BW-20", 6);
       await insertSkuDay(ctx, seeded, "Lace Closure", "LC-14", 4);
       await insertSkuDay(ctx, seeded, "Deep Wave", "DW-22", 2);
+      await insertSkuDay(ctx, seeded, "Kinky Straight", "KS-16", 1);
     });
 
     const [payload] = await askForDay(t, seeded.storeId);
@@ -848,6 +922,8 @@ describe("units sold in the closed-day report payload", () => {
       { name: "Silk Press", detail: "SP-18", unitsSold: 8 },
       { name: "Body Wave", detail: "BW-20", unitsSold: 6 },
       { name: "Lace Closure", detail: "LC-14", unitsSold: 4 },
+      { name: "Deep Wave", detail: "DW-22", unitsSold: 2 },
+      { name: "Kinky Straight", detail: "KS-16", unitsSold: 1 },
     ]);
     expect(payload.topItemsUrl).toBe(
       buildDailyTopMoversUrl({

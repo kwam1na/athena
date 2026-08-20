@@ -8,7 +8,7 @@ import {
 } from "./dailyClose";
 import { buildDailyOpeningSnapshotWithCtx } from "./dailyOpening";
 import { toDisplayAmount } from "../lib/currency";
-import { currencyFormatter } from "../utils";
+import { capitalizeWords, currencyFormatter } from "../utils";
 import { listAutomationRunsForStoreDayActionWithCtx } from "../automation/runLedger";
 import {
   getStorePulseSummaryForWindow,
@@ -130,6 +130,7 @@ type DailyOperationsOpenRegisterSessionsSnapshot = {
   sessions: Array<{
     displayLabel: string;
     id: Id<"registerSession">;
+    openedOperatingDate?: string;
   }>;
 };
 
@@ -1129,6 +1130,17 @@ async function mapOperationalTimelineEvent(
     typeof metadata.productName === "string"
       ? metadata.productName
       : (pendingCheckoutItem?.name ?? event.subjectLabel);
+  const shouldNormalizeProductName =
+    event.eventType.startsWith("pos_quick_add_") ||
+    event.eventType.startsWith("stock_adjustment_") ||
+    event.eventType.startsWith("cycle_count_");
+  const displayProductName = productName && shouldNormalizeProductName
+    ? capitalizeWords(productName.trim())
+    : productName;
+  const displayMessage =
+    productName && displayProductName && productName !== displayProductName
+      ? event.message.replaceAll(productName, displayProductName)
+      : event.message;
   const productSkuLabel =
     typeof metadata.productSkuLabel === "string"
       ? metadata.productSkuLabel
@@ -1143,12 +1155,16 @@ async function mapOperationalTimelineEvent(
   const productLinkProductId = productId ?? productSku?.productId;
   const productSkuDisplayLabel =
     productSku?.productName && sku
-      ? `${productSku.productName} (${sku})`
-      : productSku?.productName || productName;
+      ? `${shouldNormalizeProductName ? capitalizeWords(productSku.productName.trim()) : productSku.productName} (${sku})`
+      : productSku?.productName
+        ? shouldNormalizeProductName
+          ? capitalizeWords(productSku.productName.trim())
+          : productSku.productName
+        : displayProductName;
   const productLinkLabel = isPendingCheckoutItemEvent
-    ? productName
+    ? displayProductName
     : event.subjectType === "product_sku"
-      ? productName
+      ? displayProductName
       : productSkuLabel || productSkuDisplayLabel;
   const canLinkProduct =
     event.subjectType === "product_sku" ||
@@ -1263,7 +1279,7 @@ async function mapOperationalTimelineEvent(
     ...(approvedProductLink ? { approvedProductLink } : {}),
     createdAt: event.createdAt,
     id: event._id,
-    message: normalizeTimelineEventMessage(event.message, {
+    message: normalizeTimelineEventMessage(displayMessage, {
       actorName: actorStaffProfile?.fullName,
       approvalSubjectLabel,
       currency: args.currency,
@@ -2955,17 +2971,15 @@ export const getDailyOperationsOpenRegisterSessionsSnapshot = query({
       args: DailyOperationsSnapshotArgs,
     ): Promise<DailyOperationsOpenRegisterSessionsSnapshot> => {
       await authorizeDailyOperationsSnapshot(ctx, args);
+      const range = resolveRange(args);
       const statuses = ["open", "active", "closing"] as const;
       const [sessionPages, terminalNamesById] = await Promise.all([
         Promise.all(
           statuses.map((status) =>
             ctx.db
               .query("registerSession")
-              .withIndex("by_storeId_status_openedOperatingDate", (q) =>
-                q
-                  .eq("storeId", args.storeId)
-                  .eq("status", status)
-                  .eq("openedOperatingDate", args.operatingDate),
+              .withIndex("by_storeId_status", (q) =>
+                q.eq("storeId", args.storeId).eq("status", status),
               )
               .order("asc")
               .take(MAX_OPERATIONS_QUERY_LIMIT),
@@ -2976,19 +2990,27 @@ export const getDailyOperationsOpenRegisterSessionsSnapshot = query({
 
       return {
         operatingDate: args.operatingDate,
-        sessions: sessionPages.flat().map((session) => {
-          const registerLabel = registerSessionLabel(session);
-          const terminalLabel = session.terminalId
-            ? terminalNamesById.get(session.terminalId)
-            : undefined;
+        sessions: sessionPages
+          .flat()
+          .filter((session) =>
+            session.openedOperatingDate
+              ? session.openedOperatingDate <= args.operatingDate
+              : session.openedAt < range.endAt,
+          )
+          .map((session) => {
+            const registerLabel = registerSessionLabel(session);
+            const terminalLabel = session.terminalId
+              ? terminalNamesById.get(session.terminalId)
+              : undefined;
 
-          return {
-            displayLabel: terminalLabel
-              ? `${terminalLabel} / ${registerLabel}`
-              : registerLabel,
-            id: session._id,
-          };
-        }),
+            return {
+              displayLabel: terminalLabel
+                ? `${terminalLabel} / ${registerLabel}`
+                : registerLabel,
+              id: session._id,
+              openedOperatingDate: session.openedOperatingDate,
+            };
+          }),
       };
     },
   ),

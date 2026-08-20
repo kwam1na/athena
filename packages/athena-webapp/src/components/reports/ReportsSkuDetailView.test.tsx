@@ -289,6 +289,7 @@ describe("ReportsSkuDetailView", () => {
       totals: null,
       identity: {
         displayName: "oshe",
+        barcode: "1234567890123",
         sku: "6N2Y-JY3-5G6",
         netPriceMinor: 12_500,
         unitCostMinor: 7_250,
@@ -335,6 +336,8 @@ describe("ReportsSkuDetailView", () => {
     const details = screen.getByTestId("reports-sku-details");
     expect(within(details).getByText("SKU")).toBeInTheDocument();
     expect(within(details).getByText("6N2Y-JY3-5G6")).toBeInTheDocument();
+    expect(within(details).getByText("Barcode")).toBeInTheDocument();
+    expect(within(details).getByText("1234567890123")).toBeInTheDocument();
     expect(details).toHaveClass("space-y-layout-xs");
 
     const pricing = screen.getByRole("group", { name: "Pricing and stock" });
@@ -370,6 +373,31 @@ describe("ReportsSkuDetailView", () => {
       "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
     );
     expect(productHref.searchParams.get("variant")).toBe("6N2Y-JY3-5G6");
+
+    const adjustStockLink = within(identityMedia).getByRole("link", {
+      name: "Adjust stock",
+    });
+    const adjustStockHref = new URL(
+      adjustStockLink.getAttribute("href")!,
+      "http://localhost",
+    );
+    expect(adjustStockHref.pathname).toBe(
+      "/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments",
+    );
+    expect(adjustStockHref.searchParams.get("mode")).toBe("cycle_count");
+    expect(adjustStockHref.searchParams.get("sku")).toBe("sku-1");
+    expect(adjustStockLink).toHaveAttribute(
+      "data-remote-assist-control",
+      "reports-sku-adjust-stock",
+    );
+    expect(adjustStockLink).toHaveAttribute(
+      "data-remote-assist-control-id",
+      "reports-sku-adjust-stock-sku-1",
+    );
+    expect(link).not.toHaveAttribute(
+      "data-remote-assist-control",
+      "reports-sku-adjust-stock",
+    );
   });
 
   it("shows a quiet archived status beside an archived SKU identity", () => {

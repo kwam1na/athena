@@ -212,6 +212,7 @@ const outsideSchedule = {
   paymentAllocatedMinor: 4_000,
   paymentUnsettledMinor: 0,
   paymentAllocationCoverage: "complete" as const,
+  transactionCount: 3,
 };
 
 const outsideScheduleSummary = {
@@ -261,6 +262,7 @@ const report: WeeklyReportProjection = {
     paymentAllocatedMinor: 100_000,
     paymentUnsettledMinor: 0,
     paymentAllocationCoverage: "complete",
+    transactionCount: 75,
   },
   summary,
   outsideSchedule,
@@ -349,6 +351,7 @@ const report: WeeklyReportProjection = {
       paymentsCollectedMinor: 94_000,
       unitsReturned: 1,
       unitsSold: 17,
+      transactionCount: 70,
     },
     // Total vs total: 104,000 − 94,000.
     netSalesChange: { amountMinor: 10_000, direction: "higher" },
@@ -393,6 +396,14 @@ const closeEvidence = {
       status: "complete" as const,
       usableDayCount: 6,
     },
+  },
+  transactions: {
+    coverage: {
+      scheduledDayCount: 6,
+      status: "complete" as const,
+      usableDayCount: 6,
+    },
+    transactionCount: 78,
   },
   payments: {
     coveredTenderValueMinor: 2_502_500,
@@ -479,6 +490,11 @@ describe("ReportsWeeklyView", () => {
     );
 
     expect(screen.getByText("Counted cash variance")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Transactions" })).toBeInTheDocument();
+    expect(screen.getByTestId("weekly-transaction-count")).toHaveTextContent("78");
+    expect(screen.getByTestId("weekly-prior-transaction-delta")).toHaveTextContent(
+      "11% higher than prior week",
+    );
     expect(screen.getByText("$320 over")).toBeInTheDocument();
     expect(screen.getByText("Payment mix")).toBeInTheDocument();
     const paymentMethods = screen.getByRole("region", {
@@ -1038,6 +1054,7 @@ describe("ReportsWeeklyView", () => {
       screen.getAllByRole("heading").map((heading) => heading.textContent),
     ).toEqual([
       "Net sales",
+      "Transactions",
       "Sales breakdown",
       "Item movement",
       "Payments",
@@ -1417,6 +1434,7 @@ describe("ReportsWeeklyView", () => {
         screen.getAllByRole("heading").map((heading) => heading.textContent),
       ).toEqual([
         "Net sales",
+        "Transactions",
         "Sales breakdown",
         "Item movement",
         "Payments",

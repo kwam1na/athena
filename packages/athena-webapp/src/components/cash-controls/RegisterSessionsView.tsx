@@ -179,6 +179,7 @@ export function RegisterSessionsViewContent({
         sessionCode: formatRegisterSessionCode(session._id) ?? "n/a",
         status: session.status,
         statusLabel: formatStatusLabel(session.status),
+        terminalName: session.terminalName?.trim() || null,
         timelineDateLabel: formatTimelineDate(session.openedAt),
         timelineDurationLabel: formatDuration(session.openedAt, session.closedAt),
         timelineRangeLabel: formatTimelineRange(

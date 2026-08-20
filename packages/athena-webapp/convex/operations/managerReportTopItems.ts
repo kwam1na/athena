@@ -10,7 +10,7 @@ export function managerReportTopItemsFromMix(
       (row): row is typeof row & { productSkuId: string } =>
         row.productSkuId !== undefined,
     )
-    .slice(0, 3)
+    .slice(0, 5)
     .map((row) => {
       const name =
         row.identity?.displayName ?? row.identity?.sku ?? row.label;

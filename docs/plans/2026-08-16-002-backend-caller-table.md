@@ -113,9 +113,9 @@ parameter, never as a request-body field.
 | `llm/userInsights:getStoreInsightsFromLlm` | action | packages/athena-webapp/convex/llm/userInsights.ts:57 | `internal.intelligence.capabilities.actions
           .internalGenerateStoreInsights` | internal | — | already-internal |
 | `llm/userInsights:getUserInsightsFromLlm` | action | packages/athena-webapp/convex/llm/userInsights.ts:39 | `internal.intelligence.capabilities.actions.internalGenerateUserInsights` | internal | — | already-internal |
-| `operations/dailyManagerReportEmail:sendDailyManagerReportsForDateRange` | action | packages/athena-webapp/convex/operations/dailyManagerReportEmail.ts:483 | `internal.operations.dailyManagerReportEmail
+| `operations/dailyManagerReportEmail:sendDailyManagerReportsForDateRange` | action | packages/athena-webapp/convex/operations/dailyManagerReportEmail.ts:490 | `internal.operations.dailyManagerReportEmail
           .getDailyManagerReportPayloadsForDateRange` | internal | `storeId` (client-supplied) | already-internal |
-| `operations/dailyManagerReportEmail:sendMostRecentDailyManagerReport` | action | packages/athena-webapp/convex/operations/dailyManagerReportEmail.ts:431 | `internal.operations.dailyManagerReportEmail
+| `operations/dailyManagerReportEmail:sendMostRecentDailyManagerReport` | action | packages/athena-webapp/convex/operations/dailyManagerReportEmail.ts:438 | `internal.operations.dailyManagerReportEmail
           .getMostRecentDailyManagerReportPayload` | internal | `storeId` (client-supplied) | already-internal |
 | `PATCH /reviews/:id` | http | packages/athena-webapp/convex/http/domains/customerChannel/routes/reviews.ts:222 | `internal.storeFront.reviews.updateInternal` | internal | `id` (client-supplied) | already-internal |
 | `POST /analytics` | http | packages/athena-webapp/convex/http/domains/core/routes/analytics.ts:40 | `internal.storeFront.analytics.createInternal` | internal | `productId` (client-supplied) | already-internal |

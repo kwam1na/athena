@@ -847,7 +847,9 @@ describe("RegisterSessionViewContent", () => {
 
     expect(
       screen.getByTestId("register-session-page-header"),
-    ).toHaveTextContent(/Register 3\s*\/\s*Front counter\s*\/\s*POS activity/);
+    ).toHaveTextContent(
+      /Register 3\s*\/\s*Front counter\s*\/\s*REG-3\s*\/\s*POS activity/,
+    );
     expect(screen.getByTestId("register-session-page-header")).toHaveClass(
       "flex-col",
       "items-stretch",

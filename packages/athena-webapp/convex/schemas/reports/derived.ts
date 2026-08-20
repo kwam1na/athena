@@ -121,6 +121,9 @@ const weeklyMetrics = {
     v.literal("complete"),
     v.literal("unknown"),
   ),
+  // Optional while accepted/current weeks written before folded transaction
+  // totals are refreshed.
+  transactionCount: v.optional(v.number()),
   // Optional-then-required: weekly documents written before weekly payment
   // posture landed carry neither field. See normalizeWeekMetrics.
   paymentAllocationOmittedMinor: v.optional(v.number()),
@@ -256,6 +259,7 @@ const weeklyPriorPeriod = v.object({
   currentScheduledPositionCount: v.number(),
   equivalentScheduledPositions: v.boolean(),
   priorScheduledPositionCount: v.number(),
+  transactionCount: v.optional(v.number()),
   values: v.union(v.object(weeklyMetrics), v.null()),
   // The prior week's outside-schedule lane, so the total-vs-total comparison
   // has a like-for-like counterpart. Optional only while rows written before

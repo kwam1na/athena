@@ -89,11 +89,11 @@ export function ReportsSkuDetailView({
     api.reports.queries.getSkuDetail,
     activeStore?._id && useLiveQuery
       ? {
-        storeId: activeStore._id,
-        productSkuId: productSkuId as Id<"productSku">,
-        startDate,
-        endDate,
-      }
+          storeId: activeStore._id,
+          productSkuId: productSkuId as Id<"productSku">,
+          startDate,
+          endDate,
+        }
       : "skip",
   );
   const demoDetail = useMemo(
@@ -163,8 +163,8 @@ export function ReportsSkuDetailView({
   };
   const daysNewestFirst = detail
     ? [...detail.days].sort((left, right) =>
-      right.operatingDate.localeCompare(left.operatingDate),
-    )
+        right.operatingDate.localeCompare(left.operatingDate),
+      )
     : [];
   const totalDays = daysNewestFirst.length;
   const pageCount = Math.max(
@@ -189,13 +189,15 @@ export function ReportsSkuDetailView({
       : undefined;
   const liveTransactionEvidence = useQuery(
     api.reports.queries.listSkuDayTransactions,
-    activeStore?._id && transactionDate && (useLiveQuery || demoLiveEvidenceSkuId)
+    activeStore?._id &&
+      transactionDate &&
+      (useLiveQuery || demoLiveEvidenceSkuId)
       ? {
-        storeId: activeStore._id,
-        productSkuId: (demoLiveEvidenceSkuId ??
-          productSkuId) as Id<"productSku">,
-        operatingDate: transactionDate,
-      }
+          storeId: activeStore._id,
+          productSkuId: (demoLiveEvidenceSkuId ??
+            productSkuId) as Id<"productSku">,
+          operatingDate: transactionDate,
+        }
       : "skip",
   );
   const demoTransactionEvidence = useMemo(
@@ -228,14 +230,14 @@ export function ReportsSkuDetailView({
     : null;
   const transactionSheetProductName =
     resolvedProductName &&
-      resolvedProductName !== productSkuId &&
-      resolvedProductName !== detail?.identity?.sku
+    resolvedProductName !== productSkuId &&
+    resolvedProductName !== detail?.identity?.sku
       ? resolvedProductName
       : "Product";
   const skuImageUrl = detail?.identity?.imageUrl;
   const unitMarginMinor =
     typeof detail?.identity?.netPriceMinor === "number" &&
-      typeof detail.identity.unitCostMinor === "number"
+    typeof detail.identity.unitCostMinor === "number"
       ? detail.identity.netPriceMinor - detail.identity.unitCostMinor
       : undefined;
 
@@ -248,10 +250,7 @@ export function ReportsSkuDetailView({
         data-testid="reports-sku-detail"
       >
         <div className="space-y-layout-xl">
-          <PageLevelHeader
-            showBackButton
-            title="Reports"
-          />
+          <PageLevelHeader showBackButton title="Reports" />
 
           <header
             className="flex min-w-0 items-start gap-layout-md"
@@ -279,28 +278,56 @@ export function ReportsSkuDetailView({
               </div>
 
               {detail?.identity?.productId ? (
-                <Button
-                  asChild
-                  className="h-8 w-full gap-1 px-2 text-xs [&_svg]:size-3.5"
-                  size="sm"
-                  variant="utility"
-                >
-                  <Link
-                    params={{
-                      orgUrlSlug: orgUrlSlug!,
-                      storeUrlSlug: storeUrlSlug!,
-                      productSlug: detail.identity.productId,
-                    }}
-                    search={{
-                      o: getOrigin(),
-                      variant: detail.identity.sku,
-                    }}
-                    to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+                <div className="flex w-max items-center gap-layout-xs">
+                  <Button
+                    asChild
+                    className="h-8 gap-1 px-2 text-xs [&_svg]:size-3.5"
+                    size="sm"
+                    variant="utility"
                   >
-                    View product
-                    <ArrowUpRight aria-hidden="true" />
-                  </Link>
-                </Button>
+                    <Link
+                      params={{
+                        orgUrlSlug: orgUrlSlug!,
+                        storeUrlSlug: storeUrlSlug!,
+                        productSlug: detail.identity.productId,
+                      }}
+                      search={{
+                        o: getOrigin(),
+                        variant: detail.identity.sku,
+                      }}
+                      to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+                    >
+                      View product
+                      <ArrowUpRight aria-hidden="true" />
+                    </Link>
+                  </Button>
+                  <Button
+                    asChild
+                    className="h-8 gap-1 px-2 text-xs [&_svg]:size-3.5"
+                    size="sm"
+                    variant="utility"
+                  >
+                    <Link
+                      data-remote-assist-control="reports-sku-adjust-stock"
+                      data-remote-assist-control-id={`reports-sku-adjust-stock-${productSkuId}`}
+                      data-remote-assist-control-label="Adjust stock"
+                      data-remote-assist-control-role="link"
+                      params={{
+                        orgUrlSlug: orgUrlSlug!,
+                        storeUrlSlug: storeUrlSlug!,
+                      }}
+                      search={{
+                        mode: "cycle_count",
+                        o: getOrigin(),
+                        sku: productSkuId,
+                      }}
+                      to="/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments"
+                    >
+                      Adjust stock
+                      <ArrowUpRight aria-hidden="true" />
+                    </Link>
+                  </Button>
+                </div>
               ) : null}
             </div>
 
@@ -343,6 +370,19 @@ export function ReportsSkuDetailView({
                     <span className="truncate text-foreground">
                       {formatSkuSubtitle(detail.identity, productSkuId)}
                     </span>
+                    {detail.identity?.barcode ? (
+                      <>
+                        <span aria-hidden="true" className="text-border">
+                          ·
+                        </span>
+                        <span className="font-medium tracking-wide">
+                          Barcode
+                        </span>
+                        <span className="truncate font-numeric text-foreground">
+                          {detail.identity.barcode}
+                        </span>
+                      </>
+                    ) : null}
                   </p>
                   <div aria-label="Pricing and stock" role="group">
                     <dl className="flex min-w-0 flex-wrap items-baseline gap-x-layout-lg gap-y-layout-xs">
@@ -404,10 +444,7 @@ export function ReportsSkuDetailView({
           </header>
         </div>
 
-        <div
-          className="space-y-layout-sm"
-          data-testid="reports-sku-summary"
-        >
+        <div className="space-y-layout-sm" data-testid="reports-sku-summary">
           <div className="flex flex-wrap">
             <ReportDateRangeField
               align="start"
@@ -427,15 +464,13 @@ export function ReportsSkuDetailView({
               )}
             >
               <OperationsSummaryMetric
-                formatValue={(value) =>
-                  formatOptionalMoney(value, currency)
-                }
+                formatValue={(value) => formatOptionalMoney(value, currency)}
                 helper={
                   detail.totals
                     ? comparisonHelper(
-                      detail.totals.netSalesMinor,
-                      detail.priorPeriodTotals?.netSalesMinor,
-                    )
+                        detail.totals.netSalesMinor,
+                        detail.priorPeriodTotals?.netSalesMinor,
+                      )
                     : undefined
                 }
                 label="Net sales"
@@ -447,9 +482,9 @@ export function ReportsSkuDetailView({
                 helper={
                   detail.totals
                     ? comparisonHelper(
-                      detail.totals.unitsSold,
-                      detail.priorPeriodTotals?.unitsSold,
-                    )
+                        detail.totals.unitsSold,
+                        detail.priorPeriodTotals?.unitsSold,
+                      )
                     : undefined
                 }
                 label="Units sold"
@@ -457,9 +492,7 @@ export function ReportsSkuDetailView({
                 valueTransitionFromZero="fade"
               />
               <OperationsSummaryMetric
-                formatValue={(value) =>
-                  formatReportProfit(value, currency)
-                }
+                formatValue={(value) => formatReportProfit(value, currency)}
                 helper={grossProfitHelper()}
                 label="Gross profit"
                 value={detail.totals?.grossProfitMinor ?? "—"}
@@ -572,10 +605,11 @@ export function ReportsSkuDetailView({
               <SheetDescription>
                 {transactionEvidence ? (
                   <>
-                    {`${transactionEvidence.transactions.length} ${transactionEvidence.transactions.length === 1
-                      ? "transaction"
-                      : "transactions"
-                      } attached to `}
+                    {`${transactionEvidence.transactions.length} ${
+                      transactionEvidence.transactions.length === 1
+                        ? "transaction"
+                        : "transactions"
+                    } attached to `}
                     <span className="font-medium text-foreground">
                       {transactionSheetProductName}
                     </span>{" "}
@@ -651,17 +685,17 @@ export function ReportsSkuDetailView({
                                 params={
                                   isPos
                                     ? {
-                                      orgUrlSlug: orgUrlSlug!,
-                                      storeUrlSlug: storeUrlSlug!,
-                                      transactionId:
-                                        transaction.sourceId as Id<"posTransaction">,
-                                    }
+                                        orgUrlSlug: orgUrlSlug!,
+                                        storeUrlSlug: storeUrlSlug!,
+                                        transactionId:
+                                          transaction.sourceId as Id<"posTransaction">,
+                                      }
                                     : {
-                                      orgUrlSlug: orgUrlSlug!,
-                                      storeUrlSlug: storeUrlSlug!,
-                                      orderSlug:
-                                        transaction.sourceId as Id<"onlineOrder">,
-                                    }
+                                        orgUrlSlug: orgUrlSlug!,
+                                        storeUrlSlug: storeUrlSlug!,
+                                        orderSlug:
+                                          transaction.sourceId as Id<"onlineOrder">,
+                                      }
                                 }
                                 search={{ o: getOrigin() }}
                                 to={
@@ -684,7 +718,7 @@ export function ReportsSkuDetailView({
                               ) : null}
                             </div>
                             {transaction.hasRefunds ||
-                              transaction.hasAdjustments ? (
+                            transaction.hasAdjustments ? (
                               <p className="mt-1 text-xs text-muted-foreground">
                                 {[
                                   transaction.hasRefunds

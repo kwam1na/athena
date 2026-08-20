@@ -337,6 +337,7 @@ describe("voidTransaction", () => {
     status: "completed",
     storeId: "store-1" as Id<"store">,
     terminalId: "terminal-1" as Id<"posTerminal">,
+    total: 10,
     transactionNumber: "POS-0001",
   };
 
@@ -691,9 +692,14 @@ describe("voidTransaction", () => {
       expect.anything(),
       expect.objectContaining({
         adjustmentKind: "void",
+        actorStaffProfileId: "staff-1",
+        approvedByStaffProfileId: "manager-1",
         changeGiven: 2,
         idempotencyKey: "posTransaction:txn-1:void",
         registerSessionId: "register-1",
+        saleTotal: 10,
+        transactionId: "txn-1",
+        transactionNumber: "POS-0001",
       }),
     );
     expect(recordRetailVoidPaymentAllocations).toHaveBeenCalledWith(

@@ -125,8 +125,11 @@ function createTestCtx(seed?: Partial<WorkflowTraceTables>) {
 
   const db = {
     get: async () => null,
-    normalizeId: (_tableName: string, id: string) =>
-      id.startsWith("register-session-") ? id : null,
+    normalizeId: (tableName: string, id: string) =>
+      (tableName === "registerSession" && id.startsWith("register-session-")) ||
+      (tableName === "staffProfile" && id.startsWith("staff-"))
+        ? id
+        : null,
     insert(
       tableName: keyof WorkflowTraceTables,
       value: Record<string, unknown>,
@@ -201,6 +204,7 @@ function createTestCtx(seed?: Partial<WorkflowTraceTables>) {
           return {
             collect: async () => rows,
             first: async () => rows[0] ?? null,
+            take: async (limit: number) => rows.slice(0, limit),
             unique: async () => rows[0] ?? null,
             order(direction: "asc" | "desc") {
               const ordered = direction === "desc" ? [...rows].reverse() : rows;
@@ -223,6 +227,10 @@ function createAdminTraceReadCtx(
   identitySeed?: {
     registerSessions?: Array<{
       _id: string;
+      closedByStaffProfileId?: string;
+      openedByStaffProfileId?: string;
+      openedAt?: number;
+      openingFloat?: number;
       registerNumber?: string;
       storeId: string;
       terminalId?: string;
@@ -232,6 +240,11 @@ function createAdminTraceReadCtx(
       displayName: string;
       storeId: string;
     }>;
+    staffProfiles?: Array<{
+      _id: string;
+      fullName: string;
+      storeId: string;
+    }>;
   },
 ) {
   const ctx = createTestCtx(seed);
@@ -239,6 +252,8 @@ function createAdminTraceReadCtx(
   const registerSessions = identitySeed?.registerSessions ?? [
     {
       _id: "register-session-1",
+      openedAt: 100,
+      openingFloat: 5000,
       registerNumber: "07",
       storeId: "store-a",
       terminalId: "terminal-1",
@@ -259,7 +274,7 @@ function createAdminTraceReadCtx(
       }
 
       if (tableName === "store" && id === "store-a") {
-        return { _id: id, organizationId: "org-1" };
+        return { _id: id, currency: "USD", organizationId: "org-1" };
       }
 
       if (tableName === "registerSession") {
@@ -268,6 +283,13 @@ function createAdminTraceReadCtx(
 
       if (tableName === "posTerminal") {
         return terminals.find((terminal) => terminal._id === id) ?? null;
+      }
+
+      if (tableName === "staffProfile") {
+        return (
+          identitySeed?.staffProfiles?.find((profile) => profile._id === id) ??
+          null
+        );
       }
 
       return null;
@@ -730,6 +752,111 @@ describe("workflow trace core and public helpers", () => {
           terminalName: "Olorin",
         },
       },
+    });
+  });
+
+  it("enriches register events with store-scoped actor and currency context", async () => {
+    authMock.getAuthUserId.mockResolvedValue("auth-user-1");
+    const storeId = "store-a" as Id<"store">;
+    const ctx = createAdminTraceReadCtx(undefined, "full_admin", {
+      registerSessions: [
+        {
+          _id: "register-session-1",
+          closedByStaffProfileId: "staff-manager-1",
+          openedByStaffProfileId: "staff-foreign-1",
+          openedAt: 100,
+          openingFloat: 5000,
+          registerNumber: "07",
+          storeId: "store-a",
+          terminalId: "terminal-1",
+        },
+      ],
+      staffProfiles: [
+        { _id: "staff-cashier-1", fullName: "Ama Mensah", storeId: "store-a" },
+        { _id: "staff-manager-1", fullName: "Kojo Owusu", storeId: "store-a" },
+        { _id: "staff-foreign-1", fullName: "Wrong Store", storeId: "store-b" },
+      ],
+    });
+
+    await createWorkflowTraceWithCtx(ctx as never, {
+      storeId,
+      traceId: "register_session:register-session-1",
+      workflowType: "register_session",
+      title: "Register session 07",
+      status: "started",
+      health: "healthy",
+      startedAt: 100,
+      primaryLookupType: "register_session_id",
+      primaryLookupValue: "register-session-1",
+      primarySubjectType: "register_session",
+      primarySubjectId: "register-session-1",
+    });
+    await appendWorkflowTraceEventWithCtx(ctx as never, {
+      storeId,
+      traceId: "register_session:register-session-1",
+      workflowType: "register_session",
+      kind: "milestone",
+      step: "register_session_opened",
+      status: "succeeded",
+      message: "Register opened",
+      occurredAt: 110,
+      source: "cash_controls.register_session",
+    });
+    await appendWorkflowTraceEventWithCtx(ctx as never, {
+      storeId,
+      traceId: "register_session:register-session-1",
+      workflowType: "register_session",
+      kind: "milestone",
+      step: "register_session_closed",
+      status: "succeeded",
+      message: "Register closed",
+      occurredAt: 120,
+      source: "cash_controls.register_session",
+    });
+    await appendWorkflowTraceEventWithCtx(ctx as never, {
+      storeId,
+      traceId: "register_session:register-session-1",
+      workflowType: "register_session",
+      kind: "system_action",
+      step: "register_session_void_recorded",
+      status: "succeeded",
+      message: "Void recorded",
+      occurredAt: 200,
+      source: "pos.transaction",
+      actorRefs: { actorStaffProfileId: "staff-cashier-1" },
+      subjectRefs: { approvedByStaffProfileId: "staff-manager-1" },
+    });
+
+    await expect(
+      getWorkflowTraceViewByIdWithCtx(ctx as never, {
+        storeId,
+        traceId: "register_session:register-session-1",
+      }),
+    ).resolves.toMatchObject({
+      currency: "USD",
+      events: [
+        {
+          details: {
+            openedBy: null,
+            openingFloat: 5000,
+            registerNumber: "07",
+            terminal: "Olorin",
+          },
+        },
+        {
+          details: {
+            closedBy: "Kojo Owusu",
+            registerNumber: "07",
+          },
+        },
+        {
+          details: {
+            actorName: "Ama Mensah",
+            approvedByName: "Kojo Owusu",
+            registerNumber: "07",
+          },
+        },
+      ],
     });
   });
 

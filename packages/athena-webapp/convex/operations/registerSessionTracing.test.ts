@@ -180,6 +180,46 @@ describe("recordRegisterSessionTraceBestEffort", () => {
     );
   });
 
+  it("records the void actor, approver, and transaction identity for future trace events", async () => {
+    vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue("trace-1" as never);
+    vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(
+      "lookup-1" as never,
+    );
+    vi.mocked(appendWorkflowTraceEventWithCtx).mockResolvedValue(
+      "event-1" as never,
+    );
+    const { ctx } = buildCtx();
+
+    await recordRegisterSessionTraceBestEffort(ctx, {
+      stage: "void_recorded",
+      session: buildSession(),
+      occurredAt: 222,
+      amount: 1_250_000,
+      actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+      approvedByStaffProfileId: "manager-1" as Id<"staffProfile">,
+      transactionId: "transaction-1" as Id<"posTransaction">,
+      transactionNumber: "155431",
+    });
+
+    expect(appendWorkflowTraceEventWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actorRefs: {
+          actorStaffProfileId: "staff-1",
+        },
+        details: expect.objectContaining({
+          amount: 1_250_000,
+          transactionId: "transaction-1",
+          transactionNumber: "155431",
+        }),
+        subjectRefs: expect.objectContaining({
+          approvedByStaffProfileId: "manager-1",
+          posTransactionId: "transaction-1",
+        }),
+      }),
+    );
+  });
+
   it("uses the register session store currency when formatting trace money", async () => {
     vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue("trace-1" as never);
     vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(

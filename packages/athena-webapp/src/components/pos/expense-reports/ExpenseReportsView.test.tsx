@@ -1,9 +1,4 @@
-import {
-  fireEvent,
-  render,
-  screen,
-  within,
-} from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ExpenseReportsView } from "./ExpenseReportsView";
@@ -92,6 +87,7 @@ vi.mock("../../base/table/data-table", () => ({
     data,
     onPageIndexChange,
     pageIndex,
+    paginationItemLabel,
     renderMobileCard,
   }: {
     data: Array<{
@@ -100,6 +96,7 @@ vi.mock("../../base/table/data-table", () => ({
     }>;
     onPageIndexChange?: (pageIndex: number) => void;
     pageIndex?: number;
+    paginationItemLabel?: string;
     renderMobileCard?: (row: {
       _id?: string;
       transactionNumber: string;
@@ -108,6 +105,15 @@ vi.mock("../../base/table/data-table", () => ({
     <div>
       <div data-testid="expense-reports-table-page-index">
         {pageIndex ?? "local"}
+      </div>
+      <div data-testid="expense-reports-count-summary">
+        {paginationItemLabel
+          ? `${data.length} ${
+              data.length === 1
+                ? paginationItemLabel
+                : `${paginationItemLabel}s`
+            }`
+          : null}
       </div>
       {renderMobileCard ? (
         <div data-testid="expense-report-mobile-cards">
@@ -231,6 +237,73 @@ describe("ExpenseReportsView", () => {
     });
   });
 
+  it("shows the filtered expense report count in the table footer", () => {
+    useQueryMock.mockReturnValue([
+      {
+        _id: "expense-1",
+        transactionNumber: "EXP-1",
+        totalValue: 19800,
+        staffProfileName: "Ada L.",
+        itemCount: 2,
+        completedAt: Date.now(),
+        notes: null,
+      },
+      {
+        _id: "expense-2",
+        transactionNumber: "EXP-2",
+        totalValue: 4200,
+        staffProfileName: "Kojo M.",
+        itemCount: 1,
+        completedAt: Date.now() - 1,
+        notes: null,
+      },
+    ]);
+
+    render(<ExpenseReportsView />);
+
+    expect(
+      screen.getByTestId("expense-reports-count-summary"),
+    ).toHaveTextContent("2 expense reports");
+  });
+
+  it("lets operators load more history without presenting a capped batch as the total", () => {
+    useSearchMock.mockReturnValue({ timeRange: "all" });
+    useQueryMock.mockReturnValue(
+      Array.from({ length: 50 }, (_, index) => ({
+        _id: `expense-${index}`,
+        transactionNumber: `EXP-${index}`,
+        totalValue: 1000,
+        staffProfileName: "Ada L.",
+        itemCount: 1,
+        completedAt: Date.now() - index,
+        notes: null,
+      })),
+    );
+
+    render(<ExpenseReportsView />);
+
+    expect(
+      screen.getByText("Showing latest 50 completed expense reports."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("expense-reports-count-summary"),
+    ).toBeEmptyDOMElement();
+
+    fireEvent.click(screen.getByRole("button", { name: "Load more history" }));
+
+    expect(
+      useQueryMock.mock.calls.some(
+        ([, args]) =>
+          typeof args === "object" &&
+          args !== null &&
+          "limit" in args &&
+          args.limit === 100 &&
+          "storeId" in args &&
+          args.storeId === "store-1",
+      ),
+    ).toBe(true);
+  });
+
   it("renders expense reports as scan-friendly mobile cards", () => {
     useQueryMock.mockReturnValue([
       {
@@ -331,6 +404,23 @@ describe("ExpenseReportsView", () => {
     ).toHaveTextContent("2");
   });
 
+  it("clamps extreme URL pages to the bounded history window", () => {
+    useSearchMock.mockReturnValue({ page: 10_000, timeRange: "all" });
+    useQueryMock.mockReturnValue([]);
+
+    render(<ExpenseReportsView />);
+
+    expect(
+      useQueryMock.mock.calls.some(
+        ([, args]) =>
+          typeof args === "object" &&
+          args !== null &&
+          "limit" in args &&
+          args.limit === 100,
+      ),
+    ).toBe(true);
+  });
+
   it("clamps stale expense report route pages after filtering", async () => {
     useSearchMock.mockReturnValue({ page: 3, timeRange: "all" });
     useQueryMock.mockReturnValue([
@@ -377,9 +467,9 @@ describe("ExpenseReportsView", () => {
 
     render(<ExpenseReportsView />);
 
-    expect(screen.getByTestId("expense-reports-filter-value")).toHaveTextContent(
-      "all",
-    );
+    expect(
+      screen.getByTestId("expense-reports-filter-value"),
+    ).toHaveTextContent("all");
     expect(screen.getByText("EXP-ALL")).toBeInTheDocument();
   });
 

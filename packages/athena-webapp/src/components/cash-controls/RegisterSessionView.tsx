@@ -1061,6 +1061,7 @@ export function RegisterSessionActivityViewContent({
               <RegisterSessionIdentity
                 fallbackTitle="POS activity"
                 registerSession={activity?.registerSession}
+                showSessionCode
               />
               {activity?.registerSession ? (
                 <span className="min-w-0 truncate text-xs text-muted-foreground sm:whitespace-nowrap sm:text-sm">

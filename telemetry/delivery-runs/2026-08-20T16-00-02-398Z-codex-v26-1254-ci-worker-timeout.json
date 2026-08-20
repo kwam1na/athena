@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-20T16:00:02.398Z",
+  "branch": "codex/v26-1254-ci-worker-timeout",
+  "headSha": "2a5945a3dd1bf193bc96cbf4785b56d73f520102",
+  "deliverableDiffFingerprint": "a8af10b6fa05f0b0cb9c289692643f828734e98e1941d67bf04f3d75c4fe555f",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 13,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 771055.851792
+  },
+  "reviewLoop": {
+    "providerId": "ce-code-review",
+    "runId": "v26-1254-final-2",
+    "finalPassId": "pass-2",
+    "recordedAt": "2026-08-20T15:44:28.898Z",
+    "iterationCount": 2,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 0,
+      "P3": 0
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}

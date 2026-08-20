@@ -156,6 +156,9 @@ function weeklySummary(metrics: ReportWeekMetrics): ReportWeekSummary {
     refundsMinor: metrics.refundsMinor,
     unitsReturned: metrics.unitsReturned,
     unitsSold: metrics.unitsSold,
+    ...(metrics.transactionCount === undefined
+      ? {}
+      : { transactionCount: metrics.transactionCount }),
   };
 }
 
@@ -1599,6 +1602,7 @@ export async function resolveSkuIdentity(
       ? cleanMetadataValue(product.name)
       : undefined;
   const code = cleanMetadataValue(sku.sku);
+  const barcode = cleanMetadataValue(sku.barcode);
   const size = cleanMetadataValue(sku.size);
   const imageUrl = cleanMetadataValue(sku.images[0]);
   const unitCostMinor = sku.unitCost;
@@ -1617,6 +1621,7 @@ export async function resolveSkuIdentity(
     // Stock on hand. Required on the `productSku` document already read
     // above, so it is free — no extra read, no widened budget.
     quantityAvailable: sku.quantityAvailable,
+    ...(barcode ? { barcode } : {}),
     ...(code ? { sku: code } : {}),
     ...(size ? { size } : {}),
     ...(imageUrl ? { imageUrl } : {}),

@@ -47,7 +47,7 @@ const REPAIR_ITEM_PROBE_LIMIT = 201;
  * one SKU plus one product per leader, so an over-long list is refused rather
  * than truncated — a truncated correction would silently drop a leader.
  */
-const REPAIR_TOP_SKU_LEADER_LIMIT = 3;
+const REPAIR_TOP_SKU_LEADER_LIMIT = 5;
 
 type CorrectionClose = {
   _id: Id<"dailyClose">;

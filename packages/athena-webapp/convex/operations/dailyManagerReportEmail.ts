@@ -9,6 +9,7 @@ import { getStoreScheduleContextForStoreAtWithCtx } from "../inventory/storeSche
 import {
   buildDailyCloseSnapshotWithCtx,
   getPriorCompletedDailyClose,
+  type DailyCloseExpenseProductEvidence,
 } from "./dailyClose";
 import type {
   DailyManagerReportItem,
@@ -24,6 +25,10 @@ import {
 } from "../operationAdmission/domains/operations_definitions";
 import { readRangeSkuMixWithCtx } from "../reports/queries";
 import { managerReportTopItemsFromMix } from "./managerReportTopItems";
+import {
+  buildManagerReportExpenseSections,
+  rankManagerReportExpenseProducts,
+} from "./managerReportExpenseSections";
 
 type DailyCloseReportItem = {
   category: string;
@@ -43,6 +48,7 @@ type DailyCloseReportSnapshot = {
     startAt?: number;
     notes?: string;
   };
+  expenseProductEvidence?: DailyCloseExpenseProductEvidence;
   carryForwardItems: DailyCloseReportItem[];
   readiness: {
     blockerCount: number;
@@ -74,6 +80,7 @@ type RegisterCashPositionSummary = {
   countedCashTotal: number;
   expectedCashTotal: number;
   netCashVariance: number;
+  openingFloatTotal: number;
   registerCount: number;
   registerVarianceCount: number;
 };
@@ -643,6 +650,12 @@ function buildDailyManagerReportPayload(args: {
   const priorDaySummary = snapshot.priorDaySummary ?? undefined;
   const operatingDate = snapshot.closeMetadata.operatingDate;
   const reportUrl = `${resolveAppUrl()}/${args.store.slug}/store/${args.store.slug}/operations/daily-close?operatingDate=${encodeURIComponent(operatingDate)}`;
+  const expenses = buildDailyExpensePresentation(
+    snapshot.expenseProductEvidence,
+    summary,
+    money,
+    priorDaySummary,
+  );
   return {
     dailyCloseId: args.dailyClose._id,
     operatingDateValue: operatingDate,
@@ -673,6 +686,12 @@ function buildDailyManagerReportPayload(args: {
     reviewedItems: buildReviewedItems(snapshot, money, priorDaySummary),
     carryForwardItems: buildCarryForwardItems(snapshot),
     blockers: buildBlockers(snapshot),
+    presentation: {
+      rankedSectionPlacement: "before-cash",
+      rankedSectionTitle: "Expenses",
+    },
+    rankedSections: expenses.rankedSections,
+    rankedSectionSummary: expenses.summary,
     summaryMetrics: buildSummaryMetrics(
       summary,
       money,
@@ -718,6 +737,12 @@ function buildOpenDailyManagerReportPayload(args: {
   };
   const priorDaySummary = args.snapshot.priorDaySummary ?? undefined;
   const reportUrl = `${resolveAppUrl()}/${args.store.slug}/store/${args.store.slug}/operations/daily-close?operatingDate=${encodeURIComponent(args.snapshot.operatingDate)}`;
+  const expenses = buildDailyExpensePresentation(
+    args.snapshot.expenseProductEvidence,
+    summary,
+    money,
+    priorDaySummary,
+  );
 
   return {
     operatingDateValue: args.snapshot.operatingDate,
@@ -731,6 +756,12 @@ function buildOpenDailyManagerReportPayload(args: {
     reviewedItems: buildPreparedReviewItems(args.snapshot),
     carryForwardItems: buildPreparedCarryForwardItems(args.snapshot),
     blockers: buildPreparedBlockers(args.snapshot),
+    presentation: {
+      rankedSectionPlacement: "before-cash",
+      rankedSectionTitle: "Expenses",
+    },
+    rankedSections: expenses.rankedSections,
+    rankedSectionSummary: expenses.summary,
     summaryMetrics: buildSummaryMetrics(summary, money, priorDaySummary),
     cashMetrics: buildCashMetrics(summary, money, priorDaySummary),
     paymentTotals: buildPaymentTotals(summary, money, priorDaySummary),
@@ -819,6 +850,10 @@ async function buildRegisterCashPositionSummary(
     ),
     netCashVariance: sessions.reduce(
       (sum, session) => sum + (session.variance ?? 0),
+      0,
+    ),
+    openingFloatTotal: sessions.reduce(
+      (sum, session) => sum + session.openingFloat,
       0,
     ),
     registerCount: sessions.length,
@@ -1023,6 +1058,50 @@ export function buildPaymentTotals(
   });
 }
 
+export function buildDailyExpensePresentation(
+  evidence: DailyCloseExpenseProductEvidence | undefined,
+  summary: Record<string, unknown>,
+  money: (amount: number) => string,
+  priorDaySummary?: Record<string, unknown>,
+) {
+  const expenseTotal = numberFromSummary(summary, "expenseTotal");
+  const expenseTransactionCount = numberFromSummary(
+    summary,
+    "expenseTransactionCount",
+  );
+  const ranked =
+    evidence?.status === "complete"
+      ? rankManagerReportExpenseProducts(
+          evidence.products.map((product) => ({
+            ...product,
+            spendMinor: product.spend,
+          })),
+        )
+      : undefined;
+
+  return {
+    rankedSections:
+      ranked && ranked.bySpend.length > 0
+        ? buildManagerReportExpenseSections(ranked, money)
+        : [],
+    summary: {
+      label: "Total expenses",
+      value: money(expenseTotal),
+      comparison: comparisonFromSummary(
+        expenseTotal,
+        priorDaySummary,
+        "expenseTotal",
+      ),
+      detail: expenseReportCountLabel(expenseTransactionCount),
+      detailComparison: comparisonFromSummary(
+        expenseTransactionCount,
+        priorDaySummary,
+        "expenseTransactionCount",
+      ),
+    },
+  };
+}
+
 export function buildSummaryMetrics(
   summary: Record<string, unknown>,
   money: (amount: number) => string,
@@ -1043,11 +1122,13 @@ export function buildSummaryMetrics(
         priorDaySummary,
         "salesTotal",
       ),
-      detail: countLabel(
-        numberFromSummary(summary, "transactionCount"),
-        "transaction",
+    },
+    {
+      label: "Transactions",
+      value: numberFromSummary(summary, "transactionCount").toLocaleString(
+        "en-US",
       ),
-      detailComparison: comparisonFromSummary(
+      comparison: comparisonFromSummary(
         numberFromSummary(summary, "transactionCount"),
         priorDaySummary,
         "transactionCount",
@@ -1071,24 +1152,6 @@ export function buildSummaryMetrics(
           },
         ]
       : []),
-    {
-      label: "Expenses",
-      value: money(numberFromSummary(summary, "expenseTotal")),
-      comparison: comparisonFromSummary(
-        numberFromSummary(summary, "expenseTotal"),
-        priorDaySummary,
-        "expenseTotal",
-      ),
-      detail: countLabel(
-        numberFromSummary(summary, "expenseTransactionCount"),
-        "report",
-      ),
-      detailComparison: comparisonFromSummary(
-        numberFromSummary(summary, "expenseTransactionCount"),
-        priorDaySummary,
-        "expenseTransactionCount",
-      ),
-    },
     ...(voidedTransactionCount > 0
       ? [
           {
@@ -1117,11 +1180,18 @@ export function buildCashMetrics(
     "countedCashTotal",
     expectedCash + netCashVariance,
   );
+  const openingFloat = optionalNumberFromSummary(summary, "openingFloatTotal");
 
   return [
     {
       label: "Expected cash",
       value: money(expectedCash),
+      detail:
+        openingFloat === undefined
+          ? undefined
+          : openingFloat === 0
+            ? "No opening float recorded"
+            : `Includes ${money(openingFloat)} opening float`,
       comparison: comparisonFromSummary(
         expectedCash,
         priorDaySummary,
@@ -1174,6 +1244,14 @@ function numberFromSummary(summary: Record<string, unknown>, key: string) {
   return typeof value === "number" ? value : 0;
 }
 
+function optionalNumberFromSummary(
+  summary: Record<string, unknown>,
+  key: string,
+) {
+  const value = summary[key];
+  return typeof value === "number" ? value : undefined;
+}
+
 function numberFromSummaryWithFallback(
   summary: Record<string, unknown>,
   key: string,
@@ -1221,6 +1299,10 @@ function formatUnitCount(units: number) {
 
 function countLabel(count: number, singular: string) {
   return `${count} ${singular}${count === 1 ? "" : "s"}`;
+}
+
+function expenseReportCountLabel(count: number) {
+  return count === 0 ? "No reports" : countLabel(count, "report");
 }
 
 function normalizeCurrency(currency?: string) {

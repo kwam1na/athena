@@ -187,10 +187,10 @@ describe("operational events", () => {
           _id: "event-sku",
           createdAt: 200,
           eventType: "pos_quick_add_product_created",
-          message: "Kwamina Nuh quick added Vitamilk with quantity 100.",
+          message: "Kwamina Nuh quick added GOLD BRACELET with quantity 100.",
           storeId: "store-1",
           subjectId: "sku-1",
-          subjectLabel: "Vitamilk",
+          subjectLabel: "GOLD BRACELET",
           subjectType: "product_sku",
         },
         {
@@ -215,14 +215,48 @@ describe("operational events", () => {
       "event-product",
     ]);
     expect(result[0]).toMatchObject({
-      message: "Kwamina Nuh quick added Vitamilk with quantity 100.",
+      message: "Kwamina Nuh quick added Gold Bracelet with quantity 100.",
       subject: {
         id: "sku-1",
-        label: "Vitamilk",
+        label: "Gold Bracelet",
         sku: "SKU-001",
         type: "product_sku",
       },
     });
+  });
+
+  it("normalizes only a delimited product label in audit copy", async () => {
+    const ctx = createCtx({
+      product: [{ _id: "product-1", storeId: "store-1" }],
+      productSku: [
+        {
+          _id: "sku-1",
+          productId: "product-1",
+          sku: "PEN-001",
+        },
+      ],
+      operationalEvent: [
+        {
+          _id: "event-sku",
+          createdAt: 200,
+          eventType: "pos_quick_add_product_created",
+          message: "The drawer opened before PEN was quick added.",
+          storeId: "store-1",
+          subjectId: "sku-1",
+          subjectLabel: "PEN",
+          subjectType: "product_sku",
+        },
+      ],
+    });
+
+    const result = await listProductOperationalTimelineWithCtx(ctx, {
+      productId: "product-1" as Id<"product">,
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result[0]?.message).toBe(
+      "The drawer opened before Pen was quick added.",
+    );
   });
 
   it("includes pending checkout item events anchored to a provisional product SKU", async () => {

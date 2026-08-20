@@ -379,6 +379,21 @@ export const postStaffMessageOperationDefinition = storeWriteOperation({
   expectedEpochArg: "expectedDemoRestoreEpoch",
 });
 
+export const reactivateStaffProfileOperationDefinition = defineOperation({
+  kind: "mutation" as const,
+  functionName: "operations/staffProfiles:reactivateStaffProfile",
+  operationId: "operations/staffProfiles.reactivateStaffProfile",
+  capability: "staff.manage",
+  scope: { kind: "store" as const, storeIdArg: "storeId" },
+  readiness: { kind: "store_write" as const },
+  effects: { mode: "none" as const },
+  actors: {
+    normalUser: "admit" as const,
+    sharedDemo: "deny" as const,
+    public: "deny" as const,
+  },
+});
+
 export const submitStockAdjustmentBatchOperationDefinition =
   storeWriteOperation({
     functionName: "stockOps/adjustments:submitStockAdjustmentBatch",
@@ -751,6 +766,7 @@ const OPERATION_ADMISSION_BASE_DEFINITIONS = [
   refreshTerminalStaffAuthorityOperationDefinition,
   authenticateStaffCredentialForApprovalOperationDefinition,
   postStaffMessageOperationDefinition,
+  reactivateStaffProfileOperationDefinition,
   submitStockAdjustmentBatchOperationDefinition,
   ensureCycleCountDraftOperationDefinition,
   saveCycleCountDraftLineOperationDefinition,

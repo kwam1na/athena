@@ -67,14 +67,14 @@ export default function DailyManagerReportComparisonPreview() {
           value: money.format(1935),
         },
         {
-          comparison: "70% lower vs prior day",
-          label: "Units sold",
-          value: "23",
-        },
-        {
           comparison: "74% lower vs prior day",
           label: "Transactions",
           value: "5",
+        },
+        {
+          comparison: "70% lower vs prior day",
+          label: "Units sold",
+          value: "23",
         },
       ]}
     />

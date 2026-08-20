@@ -71,17 +71,22 @@ export async function getWorkflowTraceByLookupWithCtx(
 export async function listWorkflowTraceEventsWithCtx(
   ctx: WorkflowTraceReaderCtx,
   input: {
+    limit?: number;
     storeId: Id<"store">;
     traceId: string;
   }
 ) {
-  // eslint-disable-next-line @convex-dev/no-collect-in-query -- Trace timelines are loaded one trace at a time and stay bounded by a single workflow instance.
-  return ctx.db
+  const query = ctx.db
     .query("workflowTraceEvent")
     .withIndex("by_storeId_traceId_sequence", (q) =>
       q.eq("storeId", input.storeId).eq("traceId", input.traceId)
-    )
-    .collect();
+    );
+  if (input.limit !== undefined) {
+    return query.take(input.limit);
+  }
+
+  // eslint-disable-next-line @convex-dev/no-collect-in-query -- Trace timelines are loaded one trace at a time and stay bounded by a single workflow instance.
+  return query.collect();
 }
 
 export async function createWorkflowTraceWithCtx(

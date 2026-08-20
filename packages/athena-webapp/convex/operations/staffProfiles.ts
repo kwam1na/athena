@@ -14,6 +14,7 @@ import {
   admitPublicMutation,
   admitPublicQuery,
 } from "../platform/operationAdmission";
+import { reactivateStaffProfileOperationDefinition } from "../operationAdmission/definitions";
 import { listPosStaffProfilesReadDefinition } from "../operationAdmission/readDefinitions";
 import {
   createStaffProfileOperationDefinition,
@@ -21,6 +22,7 @@ import {
 } from "../operationAdmission/domains/operations_definitions";
 import { getStaffProfileByIdReadDefinition } from "../operationAdmission/domains/operations_readDefinitions";
 import { normalizePhoneNumber } from "./helpers/linking";
+import { capitalizeWords } from "../utils";
 import {
   createStaffCredentialWithCtx,
   getStaffCredentialByStaffProfileIdWithCtx,
@@ -35,6 +37,7 @@ import {
   type OperationalRole,
   uniqueOperationalRoles,
 } from "./staffRoles";
+import { staffProfileSchema } from "../schemas/operations/staffProfile";
 
 const MAX_STAFF_PROFILE_RESULTS = 100;
 const MAX_STAFF_ROLE_ASSIGNMENTS = 20;
@@ -44,6 +47,22 @@ const staffProfileStatusValidator = v.union(
   v.literal("active"),
   v.literal("inactive"),
 );
+
+const staffProfileResultValidator = v.object({
+  ...staffProfileSchema.fields,
+  _creationTime: v.number(),
+  _id: v.id("staffProfile"),
+  credentialStatus: v.union(
+    v.literal("pending"),
+    v.literal("active"),
+    v.literal("suspended"),
+    v.literal("revoked"),
+    v.null(),
+  ),
+  primaryRole: v.union(operationalRoleValidator, v.null()),
+  roles: v.array(operationalRoleValidator),
+  username: v.union(v.string(), v.null()),
+});
 
 type StaffProfileStatus = "active" | "inactive";
 type StaffProfileReaderCtx = Pick<QueryCtx, "db"> | Pick<MutationCtx, "db">;
@@ -63,7 +82,7 @@ function requireNameSegment(
     throw new Error(`Staff ${fieldName} is required.`);
   }
 
-  return normalizedValue;
+  return capitalizeWords(normalizedValue);
 }
 
 function buildStaffFullName(firstName: string, lastName: string) {
@@ -727,6 +746,85 @@ export const updateStaffProfile = mutation({
           });
         }
 
+        throw error;
+      }
+    },
+  ),
+});
+
+export async function reactivateStaffProfileWithCtx(
+  ctx: Pick<MutationCtx, "db">,
+  args: {
+    organizationId: Id<"organization">;
+    staffProfileId: Id<"staffProfile">;
+    storeId: Id<"store">;
+  },
+) {
+  const staffProfile = await ctx.db.get("staffProfile", args.staffProfileId);
+  if (!staffProfile) {
+    throw new Error("Staff profile not found.");
+  }
+  if (
+    staffProfile.organizationId !== args.organizationId ||
+    staffProfile.storeId !== args.storeId
+  ) {
+    throw new Error("Staff profile does not belong to this store.");
+  }
+  if (staffProfile.status !== "inactive") {
+    throw new Error("Staff profile is already active.");
+  }
+
+  const credential = await getStaffCredentialByStaffProfileIdWithCtx(
+    ctx,
+    args.staffProfileId,
+  );
+  if (!credential) {
+    throw new Error("Staff credential not found.");
+  }
+
+  await ctx.db.patch("staffProfile", args.staffProfileId, {
+    status: "active",
+  });
+  await updateStaffCredentialWithCtx(ctx, {
+    organizationId: args.organizationId,
+    staffProfileId: args.staffProfileId,
+    status: credential.pinHash ? "active" : "pending",
+    storeId: args.storeId,
+  });
+
+  return getStaffProfileByIdWithCtx(ctx, {
+    staffProfileId: args.staffProfileId,
+  });
+}
+
+export const reactivateStaffProfile = mutation({
+  args: {
+    organizationId: v.id("organization"),
+    staffProfileId: v.id("staffProfile"),
+    storeId: v.id("store"),
+  },
+  returns: commandResultValidator(
+    v.union(staffProfileResultValidator, v.null()),
+  ),
+  handler: admitPublicMutation(
+    reactivateStaffProfileOperationDefinition,
+    async (ctx, args) => {
+      try {
+        return ok(await reactivateStaffProfileWithCtx(ctx, args));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        if (
+          message === "Staff profile not found." ||
+          message === "Staff credential not found."
+        ) {
+          return userError({ code: "not_found", message });
+        }
+        if (message === "Staff profile does not belong to this store.") {
+          return userError({ code: "conflict", message });
+        }
+        if (message === "Staff profile is already active.") {
+          return userError({ code: "validation_failed", message });
+        }
         throw error;
       }
     },

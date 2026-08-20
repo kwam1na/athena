@@ -7,9 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  findScrollableAncestor,
-} from "@/hooks/useSheetScrollPreservation";
+import { findScrollableAncestor } from "@/hooks/useSheetScrollPreservation";
 import { useSheetReturnPosition } from "@/hooks/useSheetReturnPosition";
 import {
   encodeSheetReturn,
@@ -250,6 +248,7 @@ export type DailyOperationsSnapshot = {
     registerSession?: {
       displayLabel: string;
       isOpenedForOperatingDate: boolean;
+      openedOperatingDate?: string;
     };
     source: {
       id: string;
@@ -432,6 +431,7 @@ type DailyOperationsOpenRegisterSessionsSnapshot = {
   sessions: Array<{
     displayLabel: string;
     id: string;
+    openedOperatingDate?: string;
   }>;
 };
 
@@ -1514,15 +1514,28 @@ function OpenRegisterSessionsPanel({
             session.registerSession?.displayLabel ??
             session.source.label ??
             session.label;
+          const isCarriedOver =
+            session.registerSession?.isOpenedForOperatingDate === false;
 
           return (
             <article
               className="flex min-w-0 items-center justify-between gap-layout-md py-layout-sm first:pt-0 last:pb-0"
               key={session.id}
             >
-              <p className="min-w-0 truncate text-sm font-medium text-foreground">
-                {sessionLabel}
-              </p>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-foreground">
+                  {sessionLabel}
+                </p>
+                {isCarriedOver ? (
+                  <p className="mt-0.5 truncate text-[11px] leading-4 text-muted-foreground">
+                    {session.registerSession?.openedOperatingDate
+                      ? `Carried over from ${formatOperatingDateWithWeekday(
+                          session.registerSession.openedOperatingDate,
+                        )}`
+                      : "Carried over from a prior operating day"}
+                  </p>
+                ) : null}
+              </div>
               <Button
                 asChild
                 className="h-7 shrink-0 px-2 text-xs"
@@ -3668,31 +3681,41 @@ export function DailyOperationsViewContent({
     ? (snapshot?.attentionItems.filter(
         (item) =>
           item.source.type === "register_session" &&
-          item.registerSession?.isOpenedForOperatingDate === true &&
+          item.registerSession !== undefined &&
           item.params?.sessionId !== undefined &&
           item.to !== undefined,
       ) ?? [])
     : [];
-  const openRegisterSessions =
+  const currentOpenRegisterSessionsSnapshot =
     openRegisterSessionsSnapshot &&
     snapshot &&
     Array.isArray(openRegisterSessionsSnapshot.sessions) &&
     openRegisterSessionsSnapshot.operatingDate === snapshot.operatingDate
-      ? openRegisterSessionsSnapshot.sessions.map((session) => ({
-          id: session.id,
-          label: "Register session is still open",
-          message: "",
-          owner: "daily_close" as const,
-          params: { sessionId: session.id },
-          registerSession: {
-            displayLabel: session.displayLabel,
-            isOpenedForOperatingDate: true,
-          },
-          severity: "critical" as const,
-          source: { id: session.id, type: "register_session" },
-          to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
-        }))
-      : snapshotOpenRegisterSessions;
+      ? openRegisterSessionsSnapshot
+      : undefined;
+  const queriedOpenRegisterSessions = currentOpenRegisterSessionsSnapshot
+    ? currentOpenRegisterSessionsSnapshot.sessions.map((session) => ({
+        id: session.id,
+        label: "Register session is still open",
+        message: "",
+        owner: "daily_close" as const,
+        params: { sessionId: session.id },
+        registerSession: {
+          displayLabel: session.displayLabel,
+          isOpenedForOperatingDate:
+            session.openedOperatingDate === undefined ||
+            session.openedOperatingDate ===
+              currentOpenRegisterSessionsSnapshot.operatingDate,
+          openedOperatingDate: session.openedOperatingDate,
+        },
+        severity: "critical" as const,
+        source: { id: session.id, type: "register_session" },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+      }))
+    : [];
+  const openRegisterSessions = currentOpenRegisterSessionsSnapshot
+    ? queriedOpenRegisterSessions
+    : snapshotOpenRegisterSessions;
   const shouldShowCurrentStoreDayStatus =
     !isHistoricalDate &&
     (shouldShowCurrentAutomationBand || openRegisterSessions.length > 0);
@@ -3701,8 +3724,7 @@ export function DailyOperationsViewContent({
     shouldShowHistoricalAutomationCompletion,
     isHistoricalDate && openRegisterSessions.length > 0,
   ].filter(Boolean).length;
-  const shouldShowHistoricalStoreDayStatus =
-    historicalStatusSectionCount > 0;
+  const shouldShowHistoricalStoreDayStatus = historicalStatusSectionCount > 0;
   const actionableLanes = operationLanes.filter(isActionableLane);
   const hasAutomationReviewEvidence = Boolean(
     snapshot?.automationStatuses?.some(

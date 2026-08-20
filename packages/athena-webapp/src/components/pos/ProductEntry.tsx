@@ -640,6 +640,9 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
         name,
         lookupCode: primaryVariant.lookupCode,
         price: primaryVariant.price,
+        ...(primaryVariant.unitCost !== undefined
+          ? { unitCost: primaryVariant.unitCost }
+          : {}),
         quantityAvailable: primaryVariant.quantityAvailable,
         productId: quickAddSourceProduct?.productId,
         registerSessionId: pendingCheckoutContext?.registerSessionId,
@@ -665,6 +668,9 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
             name,
             lookupCode: variant.lookupCode,
             price: variant.price,
+            ...(variant.unitCost !== undefined
+              ? { unitCost: variant.unitCost }
+              : {}),
             quantityAvailable: variant.quantityAvailable,
             productId,
             registerSessionId: pendingCheckoutContext?.registerSessionId,

@@ -24,6 +24,9 @@ export type WorkflowTracePresentationInput = {
       | "status"
       | "message"
       | "source"
+      | "details"
+      | "actorRefs"
+      | "subjectRefs"
     >
   >;
 };

@@ -6,6 +6,7 @@ import DailyManagerReport, {
   type DailyManagerReportProps,
 } from "./DailyManagerReport";
 import DailyManagerReportComparisonPreview from "./DailyManagerReportComparisonPreview";
+import DailyManagerReportUnbordered from "./DailyManagerReportUnbordered";
 import { currencyFormatter } from "../utils";
 
 const ghs = currencyFormatter("GHS");
@@ -37,12 +38,48 @@ const baseProps: DailyManagerReportProps = {
     { name: '  silk   press 18" ', detail: "SP18-NAT", unitsSold: 8 },
     { name: 'body wave 20"', detail: "BW20-1B", unitsSold: 6 },
     { name: "HD Lace Closure", detail: "HDLC-14", unitsSold: 4 },
+    { name: 'Deep Wave 22"', detail: "DW22-1B", unitsSold: 3 },
+    { name: 'Kinky Straight 16"', detail: "KS16-NAT", unitsSold: 2 },
   ],
   topItemsUrl:
     "https://athena-os.app/wigclub/store/wigclub/reports?daysStart=2026-07-03&daysEnd=2026-07-03&daysTableStart=2026-07-03&daysTableEnd=2026-07-03&selectedDay=2026-07-03&units=true",
 };
 
 describe("DailyManagerReport", () => {
+  it("renders the representative Wigclub production close preview", async () => {
+    const html = await render(<DailyManagerReportUnbordered />);
+
+    expect(html).toContain("Monday, August 17");
+    expect(html).toContain("GH₵8,010");
+    expect(html).toContain(">18<");
+    expect(html).toContain("57");
+    expect(html).toContain("Expenses");
+    expect(html).toContain("Total expenses");
+    expect(html).toContain("No reports");
+    expect(html).toContain("No reports on prior day");
+    expect(html).not.toContain("No no reports on prior day");
+    expect(html).toContain("GH₵119");
+    expect(html).toContain("Includes GH₵1 opening float");
+    expect(html).toContain("65 items for the next opening");
+    expect(html).toContain("Deepwave Faether 24");
+    expect(html).toContain("Tweezers");
+    expect(html).toContain("Got2b Glued Blasting Freeze Hairspray 300ml");
+    const salesStart = html.indexOf(">Sales<");
+    const transactionsStart = html.indexOf(">Transactions<", salesStart);
+    const unitsSoldStart = html.indexOf(">Units sold<", salesStart);
+    const topItemsStart = html.indexOf(">Top items by units sold<");
+    const expensesStart = html.indexOf(">Expenses<", topItemsStart);
+    const cashPositionStart = html.indexOf(">Cash position<", topItemsStart);
+    expect(transactionsStart).toBeGreaterThan(salesStart);
+    expect(transactionsStart).toBeLessThan(unitsSoldStart);
+    expect(html.slice(salesStart, topItemsStart)).not.toContain(">Expenses<");
+    expect(expensesStart).toBeGreaterThan(topItemsStart);
+    expect(expensesStart).toBeLessThan(cashPositionStart);
+    expect(html.slice(salesStart, transactionsStart)).not.toContain(
+      "18 transactions",
+    );
+  });
+
   it("shows top items in the comparison preview", async () => {
     const html = await render(<DailyManagerReportComparisonPreview />);
 
@@ -77,6 +114,8 @@ describe("DailyManagerReport", () => {
     expect(html).toContain("Top items by units sold");
     expect(html).toContain("Silk Press 18");
     expect(html).toContain("Body Wave 20");
+    expect(html).toContain("Deep Wave 22");
+    expect(html).toContain("Kinky Straight 16");
     expect(html).not.toContain("  silk   press 18");
     expect(html).toContain("8 units");
     expect(html).toContain("View all top movers");

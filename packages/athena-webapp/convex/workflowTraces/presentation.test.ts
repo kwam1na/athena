@@ -16,6 +16,7 @@ describe("buildWorkflowTraceViewModel", () => {
       },
       events: [
         {
+          details: { transactionNumber: "TX-42" },
           traceId: "repair_order:job-42",
           workflowType: "repair_order",
           occurredAt: 200,
@@ -46,5 +47,6 @@ describe("buildWorkflowTraceViewModel", () => {
       "Workflow started",
       "Repair order persisted",
     ]);
+    expect(view.events[1]?.details).toEqual({ transactionNumber: "TX-42" });
   });
 });

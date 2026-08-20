@@ -238,6 +238,55 @@ function countedCashSection(payload: DailyManagerReportProps) {
 }
 
 describe("accepted weekly manager report payload", () => {
+  it("compares completed transaction count with the prior week", () => {
+    const payload = buildPayload({
+      accepted: {
+        priorPeriod: {
+          comparabilityReason: "comparable",
+          currentScheduledPositionCount: 6,
+          cycleEndDate: "2026-08-02",
+          cycleStartDate: "2026-07-27",
+          equivalentScheduledPositions: true,
+          outsideScheduleValues: metrics,
+          priorScheduledPositionCount: 6,
+          transactionCount: 70,
+          values: metrics,
+        },
+      },
+      closeEvidence: makeCloseEvidence(),
+    });
+
+    expect(payload.summaryMetrics).toContainEqual({
+      detail: "Completed POS transactions · 11% higher than prior week",
+      label: "Transactions",
+      value: "78",
+    });
+  });
+
+  it("does not compare transactions when the prior period is not comparable", () => {
+    const payload = buildPayload({
+      accepted: {
+        priorPeriod: {
+          comparabilityReason: "scheduled_membership_changed",
+          currentScheduledPositionCount: 6,
+          cycleEndDate: "2026-08-02",
+          cycleStartDate: "2026-07-27",
+          equivalentScheduledPositions: false,
+          priorScheduledPositionCount: 5,
+          transactionCount: 70,
+          values: metrics,
+        },
+      },
+      closeEvidence: makeCloseEvidence(),
+    });
+
+    expect(payload.summaryMetrics).toContainEqual({
+      detail: "Completed POS transactions",
+      label: "Transactions",
+      value: "78",
+    });
+  });
+
   it("keeps full-coverage closed-day copy when a 6-day lineage is fully closed", () => {
     const payload = buildPayload({
       scheduleLineage: [
@@ -367,6 +416,10 @@ describe("accepted weekly manager report payload", () => {
     expect(byQuantity?.rows[0]?.label).toBe("Ebin Tint Spray Big");
     expect(byQuantity?.rows[0]?.primary).toBe("1 unit");
     expect(bySpend?.rows[0]?.secondary).toBe("1 unit");
+    expect(payload.rankedSectionSummary).toEqual({
+      label: "Total expenses",
+      value: "GH₵185",
+    });
   });
 
   it("never lets the sales-fold card claim cash matched while counted cash differs", () => {

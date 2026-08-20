@@ -698,13 +698,17 @@ describe("register session workflow trace handlers", () => {
     const updatedSession = await getHandler(recordRegisterSessionTransaction)(
       ctx as never,
       {
+        actorStaffProfileId: "staff-1",
         registerSessionId: "session-1",
         storeId: "store-1",
         adjustmentKind: "void",
+        approvedByStaffProfileId: "manager-1",
         payments: [{ method: "cash", amount: 4_000, timestamp: 1 }],
         changeGiven: 500,
         registerNumber: "A1",
         terminalId: "terminal-1",
+        transactionId: "transaction-1",
+        transactionNumber: "R-001",
       },
     );
 
@@ -718,10 +722,66 @@ describe("register session workflow trace handlers", () => {
     expect(mocks.traceRecord).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
+        actorStaffProfileId: "staff-1",
+        approvedByStaffProfileId: "manager-1",
         stage: "void_recorded",
         occurredAt: 999,
         amount: 3_500,
+        transactionId: "transaction-1",
+        transactionNumber: "R-001",
       }),
     );
   });
+
+  it.each(["card", "mobile_money"])(
+    "records a %s void trace without changing expected cash",
+    async (paymentMethod) => {
+    const ctx = createMutationCtx({
+      sessions: [buildRegisterSession({ expectedCash: 13_000 })],
+    });
+
+    const updatedSession = await getHandler(recordRegisterSessionTransaction)(
+      ctx as never,
+      {
+        actorStaffProfileId: "staff-1",
+        registerSessionId: "session-1",
+        storeId: "store-1",
+        adjustmentKind: "void",
+        approvedByStaffProfileId: "manager-1",
+        payments: [{ method: paymentMethod, amount: 9_000, timestamp: 1 }],
+        paymentCount: 1,
+        paymentMethodLabels: [paymentMethod],
+        registerNumber: "A1",
+        saleTotal: 9_000,
+        terminalId: "terminal-1",
+        transactionId: "transaction-1",
+        transactionNumber: "R-001",
+      },
+    );
+
+    expect(updatedSession).toEqual(
+      expect.objectContaining({
+        _id: "session-1",
+        expectedCash: 13_000,
+        status: "open",
+      }),
+    );
+    expect(mocks.traceRecord).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actorStaffProfileId: "staff-1",
+        approvedByStaffProfileId: "manager-1",
+        amount: 0,
+        cashDelta: 0,
+        occurredAt: 999,
+        paymentCount: 1,
+        paymentMethodLabels: [paymentMethod],
+        saleTotal: 9_000,
+        stage: "void_recorded",
+        transactionId: "transaction-1",
+        transactionNumber: "R-001",
+      }),
+    );
+    },
+  );
 });

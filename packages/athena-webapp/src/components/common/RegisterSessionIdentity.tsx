@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 
+import { formatRegisterSessionCode } from "@/lib/pos/presentation/registerSessionCode";
 import { formatRegisterHeaderName } from "./registerSessionIdentityPresentation";
 
 const IDENTITY_TRANSITION = {
@@ -16,11 +17,16 @@ export type RegisterSessionIdentityModel = {
 export function RegisterSessionIdentity({
   fallbackTitle = "Register detail",
   registerSession,
+  showSessionCode = false,
 }: {
   fallbackTitle?: string;
   registerSession?: RegisterSessionIdentityModel | null;
+  showSessionCode?: boolean;
 }) {
   const terminalName = registerSession?.terminalName?.trim();
+  const sessionCode = showSessionCode
+    ? formatRegisterSessionCode(registerSession?._id)
+    : undefined;
 
   return (
     <div
@@ -42,6 +48,18 @@ export function RegisterSessionIdentity({
         >
           <span className="hidden sm:inline">/ </span>
           {terminalName}
+        </motion.span>
+      ) : null}
+      {sessionCode ? (
+        <motion.span
+          animate={{ opacity: 1, y: 0 }}
+          className="whitespace-nowrap text-xs text-muted-foreground sm:text-sm"
+          initial={{ opacity: 0, y: 2 }}
+          key={`session-${registerSession?._id}-${sessionCode}`}
+          transition={IDENTITY_TRANSITION}
+        >
+          <span className="hidden sm:inline">/ </span>
+          {sessionCode}
         </motion.span>
       ) : null}
     </div>

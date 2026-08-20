@@ -145,9 +145,11 @@ describe("QuickAddProductDialog", () => {
     renderQuickAddDialog({ onOpenChange, onSubmit });
 
     await user.type(screen.getByLabelText(/selling price/i), "25");
+    await user.type(screen.getByLabelText(/unit cost/i), "15");
     await user.click(screen.getByLabelText(/add multiple variants/i));
     await user.click(screen.getByRole("button", { name: /add variant/i }));
     await user.type(screen.getAllByLabelText(/selling price/i)[1], "30");
+    await user.type(screen.getAllByLabelText(/unit cost/i)[1], "20");
     await user.click(
       screen.getByRole("button", { name: /add product variants/i }),
     );
@@ -160,11 +162,13 @@ describe("QuickAddProductDialog", () => {
             lookupCode: "999999999999",
             price: 2500,
             quantityAvailable: 1,
+            unitCost: 1500,
           },
           {
             lookupCode: undefined,
             price: 3000,
             quantityAvailable: 1,
+            unitCost: 2000,
           },
         ],
         usesMultipleVariants: true,

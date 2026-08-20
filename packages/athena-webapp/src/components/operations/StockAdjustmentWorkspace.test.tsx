@@ -440,6 +440,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
 
     await user.type(dialog.getByLabelText(/barcode/i), "123456789012");
     await user.type(dialog.getByLabelText(/selling price/i), "45");
+    await user.type(dialog.getByLabelText(/unit cost/i), "30");
     await user.click(dialog.getByRole("button", { name: /^add product$/i }));
 
     await waitFor(() =>
@@ -449,6 +450,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
         name: "skillz",
         lookupCode: "123456789012",
         price: 4500,
+        unitCost: 3000,
         quantityAvailable: 1,
       }),
     );
