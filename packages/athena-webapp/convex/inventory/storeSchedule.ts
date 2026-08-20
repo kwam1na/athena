@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 
 import {
+  internalQuery,
   mutation,
   query,
   type MutationCtx,
@@ -190,6 +191,18 @@ const storeScheduleContextValidator = v.union(
 const storeScheduleSummaryResultValidator = v.object({
   schedule: v.union(storeScheduleSummaryValidator, v.null()),
   context: storeScheduleContextValidator,
+});
+
+export const getActiveStoreScheduleForEmail = internalQuery({
+  args: {
+    at: v.number(),
+    storeId: v.id("store"),
+  },
+  returns: v.union(storeScheduleSummaryValidator, v.null()),
+  handler: async (ctx, args) => {
+    const schedule = await findActiveScheduleForStoreAt(ctx, args);
+    return schedule ? toSummary(schedule) : null;
+  },
 });
 
 const storeScheduleAdminResultValidator = v.object({
@@ -627,23 +640,23 @@ export const listStoreScheduleVersions = query({
         status?: "active" | "superseded" | "candidate";
       },
     ) => {
-    const schedules = await ctx.db
-      .query(entity)
-      .withIndex("by_organizationId_storeId_status", (schedule) =>
-        args.status
-          ? schedule
-              .eq("organizationId", args.organizationId)
-              .eq("storeId", args.storeId)
-              .eq("status", args.status)
-          : schedule
-              .eq("organizationId", args.organizationId)
-              .eq("storeId", args.storeId),
-      )
-      .take(STORE_SCHEDULE_VERSION_READ_LIMIT);
+      const schedules = await ctx.db
+        .query(entity)
+        .withIndex("by_organizationId_storeId_status", (schedule) =>
+          args.status
+            ? schedule
+                .eq("organizationId", args.organizationId)
+                .eq("storeId", args.storeId)
+                .eq("status", args.status)
+            : schedule
+                .eq("organizationId", args.organizationId)
+                .eq("storeId", args.storeId),
+        )
+        .take(STORE_SCHEDULE_VERSION_READ_LIMIT);
 
-    return schedules
-      .sort((left, right) => right.effectiveFrom - left.effectiveFrom)
-      .map(toSummary);
+      return schedules
+        .sort((left, right) => right.effectiveFrom - left.effectiveFrom)
+        .map(toSummary);
     },
   ),
 });

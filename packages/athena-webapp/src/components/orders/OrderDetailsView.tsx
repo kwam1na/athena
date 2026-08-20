@@ -31,7 +31,7 @@ const VerifiedBadge = ({
   return (
     <Badge
       variant={"outline"}
-      className="flex items-center gap-2 border-success/20 bg-success/10 text-success"
+      className="flex items-center gap-layout-xs border-success/20 bg-success/10 text-success"
     >
       <p className="text-xs">{status}</p>
       {withCheck && <Check className="h-4 w-4" />}
@@ -122,86 +122,98 @@ export function OrderDetailsView() {
       fullHeight={false}
       lockDocumentScroll={false}
       className="w-full"
-      header={
-        <div className="flex items-center gap-2">
-          <p className="text-sm text-sm text-muted-foreground">Payment</p>{" "}
-          {order.hasVerifiedPayment && (
-            <div className="flex gap-1 items-center">
-              <BadgeCheckIcon className="h-3 w-3 text-success" />
-              <p className="text-xs font-medium text-success">Verified</p>
-            </div>
-          )}
-        </div>
-      }
+      header={<p className="text-sm font-medium text-foreground">Payment</p>}
     >
-      <div className="py-4">
-        <div className="space-y-4">
+      <div className="pt-layout-md">
+        <div className="space-y-layout-md">
           {/* Payment Method Display */}
-          <div className="flex items-center gap-1">
-            <div className="space-y-2">
-              {isPODOrder ? (
-                <div className="flex items-center gap-2">
-                  {podMethod === "mobile_money" ? (
-                    <Smartphone className="w-4 h-4" />
+          <div className="flex items-start justify-between gap-layout-md">
+            <div className="flex min-w-0 items-start gap-layout-sm">
+              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted/60 text-muted-foreground">
+                {isPODOrder ? (
+                  podMethod === "mobile_money" ? (
+                    <Smartphone className="h-4 w-4" />
                   ) : (
-                    <Banknote className="w-4 h-4" />
-                  )}
-                  <p className="text-sm">
-                    {podMethod === "mobile_money"
-                      ? "Mobile Money on Delivery"
-                      : "Cash on Delivery"}
-                  </p>
-                </div>
-              ) : (
-                <p className="text-sm">{`${paymentMethod?.bank} ${paymentChannel}`}</p>
-              )}
-            </div>
-            {!isPODOrder && paymentMethod?.last4 ? (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">{`ending in ${paymentMethod.last4}`}</p>
-              </div>
-            ) : null}
-
-            {/* Payment Status Badges */}
-            {isPODOrder ? (
-              // POD Payment Status
-              <div className="flex items-center gap-4">
-                {order.paymentCollected ? (
-                  <Badge
-                    variant="outline"
-                    className="flex items-center gap-2 border-success/20 bg-success/10 text-success"
-                  >
-                    <CircleCheck className="w-3 h-3" />
-                    <p className="text-xs">Payment Collected</p>
-                  </Badge>
+                    <Banknote className="h-4 w-4" />
+                  )
                 ) : (
-                  <Button variant="link" onClick={handleMarkPaymentCollected}>
-                    Mark as collected
-                  </Button>
+                  <Smartphone className="h-4 w-4" />
                 )}
               </div>
+
+              <div className="min-w-0 space-y-layout-2xs">
+                <p className="text-sm font-medium leading-5 text-foreground">
+                  {isPODOrder
+                    ? podMethod === "mobile_money"
+                      ? "Mobile Money on Delivery"
+                      : "Cash on Delivery"
+                    : `${paymentMethod?.bank} ${paymentChannel}`}
+                </p>
+                {!isPODOrder && paymentMethod?.last4 ? (
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Account ending in {paymentMethod.last4}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
+            {isPODOrder ? (
+              order.paymentCollected ? (
+                <Badge
+                  variant="outline"
+                  className="shrink-0 gap-layout-xs border-success/20 bg-success/10 text-success"
+                >
+                  <CircleCheck className="h-3 w-3" />
+                  <span>Collected</span>
+                </Badge>
+              ) : null
+            ) : order.hasVerifiedPayment ? (
+              <Badge
+                variant="outline"
+                className="shrink-0 gap-layout-xs border-success/20 bg-success/10 text-success"
+              >
+                <BadgeCheckIcon className="h-3 w-3" />
+                <span>Verified</span>
+              </Badge>
             ) : (
-              // Regular Payment Status
-              !order.hasVerifiedPayment && (
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant="outline"
-                    className="text-yellow-600 bg-yellow-50"
-                  >
-                    <p className="text-xs">Not verified</p>
-                  </Badge>
-                  {!order.autoVerifiedAt && (
-                    <p className="text-xs text-muted-foreground italic">
-                      Auto-verification hasn't been attempted yet
-                    </p>
-                  )}
-                </div>
-              )
+              <Badge
+                variant="outline"
+                className="shrink-0 border-warning/25 bg-warning/10 text-warning-foreground"
+              >
+                <span>Not verified</span>
+              </Badge>
             )}
           </div>
 
+          {isPODOrder && !order.paymentCollected ? (
+            <Button
+              variant="utility"
+              size="sm"
+              className="w-full active:scale-[0.98]"
+              onClick={handleMarkPaymentCollected}
+            >
+              Mark payment as collected
+            </Button>
+          ) : null}
+
+          {!isPODOrder &&
+            !order.hasVerifiedPayment &&
+            !order.autoVerifiedAt && (
+              <div className="flex items-start gap-layout-sm rounded-md border border-warning/20 bg-warning/5 p-layout-sm">
+                <Clock className="mt-0.5 h-4 w-4 shrink-0 text-warning-foreground" />
+                <div className="space-y-layout-2xs">
+                  <p className="text-xs font-medium text-foreground">
+                    Verification pending
+                  </p>
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Automatic verification has not run yet.
+                  </p>
+                </div>
+              </div>
+            )}
+
           {order.hasVerifiedPayment && (
-            <div className="flex">
+            <div className="flex border-t border-border/70 pt-layout-md">
               <VerifiedBadge
                 status={`Paid ${formatter.format(toDisplayAmount(amountPaid))}`}
                 withCheck={false}
@@ -238,18 +250,18 @@ export function OrderDetailsView() {
 
           {/* POD Payment Instructions */}
           {isPODOrder && !order.paymentCollected && (
-            <div className="space-y-4 pt-8">
-              <p className="text-sm text-muted-foreground">
+            <div className="space-y-layout-sm border-t border-border/70 pt-layout-md">
+              <p className="text-xs font-medium text-muted-foreground">
                 Payment Instructions
               </p>
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <Clock className="w-4 h-4 text-amber-600 mt-0.5" />
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-amber-800">
+              <div className="rounded-md border border-warning/20 bg-warning/5 p-layout-sm">
+                <div className="flex items-start gap-layout-sm">
+                  <Clock className="mt-0.5 h-4 w-4 shrink-0 text-warning-foreground" />
+                  <div className="space-y-layout-xs">
+                    <p className="text-sm font-medium text-foreground">
                       Payment collection required
                     </p>
-                    <p className="text-sm text-amber-700">
+                    <p className="text-sm leading-5 text-muted-foreground">
                       Collect payment via{" "}
                       {podMethod === "mobile_money" ? "mobile money" : "cash"}{" "}
                       when the order is{" "}

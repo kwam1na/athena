@@ -1,12 +1,18 @@
 import { PAYMENT_CONSTANTS } from "../constants/payment";
 import { sendNewOrderEmail, sendOrderEmail } from "../mailersend";
 import { Address } from "../../types";
-import { currencyFormatter, formatDate, getAddressString } from "../utils";
+import {
+  capitalizeWords,
+  currencyFormatter,
+  formatDate,
+  getAddressString,
+} from "../utils";
 import { formatOrderItems } from "../storeFront/onlineOrderUtilFns";
 import { Id } from "../_generated/dataModel";
 import { getDiscountValue } from "../inventory/utils";
 import { toDisplayAmount } from "../lib/currency";
 import { TEST_EMAIL_ACCOUNTS } from "../constants/email";
+import { formatPickupLocation } from "../emails/fulfillmentDetails";
 
 type OrderDetails = {
   _id: Id<"onlineOrder">;
@@ -28,6 +34,7 @@ type OrderDetails = {
 };
 
 type StoreDetails = {
+  name?: string;
   currency?: string;
   config?: {
     contactInfo?: {
@@ -77,10 +84,14 @@ export function buildOrderStatusMessage(params: {
 export function buildPickupDetails(params: {
   deliveryMethod: string;
   deliveryDetails: any;
+  storeName?: string;
   storeLocation?: string;
 }): string {
   if (params.deliveryMethod === "pickup") {
-    return params.storeLocation || "Store location";
+    return formatPickupLocation({
+      storeName: params.storeName || PAYMENT_CONSTANTS.STORE_NAME,
+      storeLocation: params.storeLocation,
+    });
   }
 
   if (params.deliveryDetails) {
@@ -103,6 +114,9 @@ export async function sendPODOrderEmails(params: {
   adminNotificationSent: boolean;
 }> {
   const formatter = currencyFormatter(params.store?.currency || "GHS");
+  const storeName = capitalizeWords(
+    params.store?.name || PAYMENT_CONSTANTS.STORE_NAME,
+  );
 
   const orderStatusMessaging = buildOrderStatusMessage({
     deliveryMethod: params.order.deliveryMethod,
@@ -114,6 +128,7 @@ export async function sendPODOrderEmails(params: {
   const deliveryAddress = buildPickupDetails({
     deliveryMethod: params.order.deliveryMethod,
     deliveryDetails: params.order.deliveryDetails,
+    storeName,
     storeLocation: params.store?.config?.contactInfo?.location,
   });
 
@@ -144,7 +159,7 @@ export async function sendPODOrderEmails(params: {
       discount: params.order.discount
         ? formatter.format(toDisplayAmount(discountValue))
         : undefined,
-      store_name: PAYMENT_CONSTANTS.STORE_NAME,
+      store_name: storeName,
       order_number: params.order.orderNumber,
       order_date: formatDate(params.order._creationTime),
       order_status_messaging: orderStatusMessaging,
@@ -176,7 +191,7 @@ export async function sendPODOrderEmails(params: {
       const paymentMethodDisplay =
         params.podPaymentMethod === "mobile_money" ? "Mobile Money" : "Cash";
       const adminEmailResponse = await sendNewOrderEmail({
-        store_name: PAYMENT_CONSTANTS.STORE_NAME,
+        store_name: storeName,
         order_amount: formatter.format(toDisplayAmount(params.amount)),
         order_status: `Payment on Delivery (${paymentMethodDisplay})`,
         order_date: formatDate(params.order._creationTime),
@@ -226,12 +241,16 @@ export async function sendPaymentVerificationEmails(params: {
   adminNotificationSent: boolean;
 }> {
   const formatter = currencyFormatter(params.store?.currency || "GHS");
+  const storeName = capitalizeWords(
+    params.store?.name || PAYMENT_CONSTANTS.STORE_NAME,
+  );
   let confirmationSent = false;
   let adminNotificationSent = false;
 
   const pickupDetails = buildPickupDetails({
     deliveryMethod: params.order.deliveryMethod,
     deliveryDetails: params.order.deliveryDetails,
+    storeName,
     storeLocation: params.store?.config?.contactInfo?.location,
   });
 
@@ -258,7 +277,7 @@ export async function sendPaymentVerificationEmails(params: {
   ) {
     try {
       const emailResponse = await sendNewOrderEmail({
-        store_name: PAYMENT_CONSTANTS.STORE_NAME,
+        store_name: storeName,
         order_amount: formatter.format(toDisplayAmount(params.orderAmount)),
         order_status: "Paid",
         order_date: formatDate(params.order._creationTime),
@@ -310,7 +329,7 @@ export async function sendPaymentVerificationEmails(params: {
         discount: discountValue
           ? formatter.format(toDisplayAmount(discountValue))
           : undefined,
-        store_name: PAYMENT_CONSTANTS.STORE_NAME,
+        store_name: storeName,
         order_number: params.order.orderNumber,
         order_date: formatDate(params.order._creationTime),
         order_status_messaging: orderStatusMessaging,

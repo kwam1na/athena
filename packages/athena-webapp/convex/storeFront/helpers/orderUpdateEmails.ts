@@ -14,10 +14,18 @@ import {
   getDiscountValue,
   getProductDiscountValue,
 } from "../../inventory/utils";
+import {
+  buildReadyForPickupMessage,
+  formatPickupLocation,
+  formatStoreScheduleHours,
+  type StoreHoursRow,
+  type StoreScheduleHoursSource,
+} from "../../emails/fulfillmentDetails";
 
 const ORDER_STATUS = {
   OPEN: "open",
   READY_FOR_PICKUP: "ready-for-pickup",
+  READY_FOR_DELIVERY: "ready-for-delivery",
   OUT_FOR_DELIVERY: "out-for-delivery",
   DELIVERED: "delivered",
   PICKED_UP: "picked-up",
@@ -39,18 +47,24 @@ export type UpdateEmailResult = {
 type EmailResult = {
   didSendConfirmationEmail?: boolean;
   didSendReadyEmail?: boolean;
+  didSendReadyForDeliveryEmail?: boolean;
   didSendCompletedEmail?: boolean;
   didSendCancelledEmail?: boolean;
 };
 
 type EmailConfig = {
+  pickupHours?: StoreHoursRow[];
+  statusTitle?: string;
   type: OrderEmailType;
   statusMessaging: string;
   pickupDetails: string;
 };
 
 const getPickupLocation = (store: Store): string =>
-  store.config?.contactInfo?.location || "Location not available";
+  formatPickupLocation({
+    storeName: store.name,
+    storeLocation: store.config?.contactInfo?.location,
+  });
 
 const getDeliveryAddress = (deliveryDetails?: Address): string =>
   deliveryDetails ? getAddressString(deliveryDetails) : "Details not available";
@@ -115,16 +129,18 @@ export const formatOrderItems = (
   });
 };
 
-async function handleOrderStatusUpdate({
+export async function handleOrderStatusUpdate({
   order,
   newStatus,
   simulateExternalEffects = false,
   store,
+  storeSchedule,
 }: {
   order: OnlineOrder;
   newStatus: string;
   simulateExternalEffects?: boolean;
   store: Store;
+  storeSchedule?: StoreScheduleHoursSource | null;
 }): Promise<EmailResult | undefined> {
   console.info(
     `handling order status update: ${newStatus} for order #${order.orderNumber}`,
@@ -134,6 +150,8 @@ async function handleOrderStatusUpdate({
   const { firstName, email } = order.customerDetails;
 
   async function sendEmail({
+    pickupHours,
+    statusTitle,
     type,
     statusMessaging,
     pickupDetails,
@@ -155,7 +173,7 @@ async function handleOrderStatusUpdate({
     const emailResponse = await sendOrderEmail({
       type,
       customerEmail: email,
-      store_name: "Wigclub",
+      store_name: capitalizeWords(store.name || "Wigclub"),
       order_number: order.orderNumber,
       delivery_fee: deliveryFee
         ? formatter.format(toDisplayAmount(deliveryFee))
@@ -164,6 +182,7 @@ async function handleOrderStatusUpdate({
           : undefined,
       order_date: formatDate(order._creationTime),
       order_status_messaging: statusMessaging,
+      status_title: statusTitle,
       total: formatter.format(toDisplayAmount(amountPaid)),
       subtotal: formatter.format(toDisplayAmount(order.amount)),
       discount: discountValue
@@ -172,6 +191,7 @@ async function handleOrderStatusUpdate({
       items,
       pickup_type: order.deliveryMethod,
       pickup_details: pickupDetails,
+      pickup_hours: pickupHours,
       customer_name: firstName,
     });
 
@@ -212,14 +232,34 @@ async function handleOrderStatusUpdate({
     return undefined;
   }
 
+  if (
+    newStatus === ORDER_STATUS.READY_FOR_DELIVERY &&
+    !order.didSendReadyForDeliveryEmail
+  ) {
+    try {
+      const emailSent = await sendEmail({
+        type: "ready",
+        statusTitle: "Your order is ready for delivery",
+        statusMessaging: "We’ll let you know as soon as it’s on the way.",
+        pickupDetails: getDeliveryAddress(order.deliveryDetails as Address),
+      });
+
+      if (emailSent) return { didSendReadyForDeliveryEmail: true };
+    } catch (error) {
+      console.log("Failed to send ready-for-delivery email:", error);
+    }
+    return undefined;
+  }
+
   if (!order.didSendReadyEmail) {
     if (newStatus === ORDER_STATUS.READY_FOR_PICKUP) {
       try {
         const emailSent = await sendEmail({
           type: "ready",
-          statusMessaging:
-            "Your order is ready for pickup. Visit our store any time during our business hours to pick up your items.",
+          statusTitle: "Your order is ready for pickup",
+          statusMessaging: buildReadyForPickupMessage(store.name),
           pickupDetails: getPickupLocation(store),
+          pickupHours: formatStoreScheduleHours(storeSchedule),
         });
 
         if (emailSent) {
@@ -235,7 +275,8 @@ async function handleOrderStatusUpdate({
       try {
         const emailSent = await sendEmail({
           type: "ready",
-          statusMessaging: "Your order is out for delivery.",
+          statusTitle: "Your order is on the way",
+          statusMessaging: "It’s headed to your delivery address.",
           pickupDetails: getDeliveryAddress(order.deliveryDetails as Address),
         });
 
@@ -338,11 +379,23 @@ export async function processOrderUpdateEmail(
     `sending order update: ${args.newStatus} email for order #${order.orderNumber}`,
   );
 
+  const storeSchedule =
+    args.newStatus === ORDER_STATUS.READY_FOR_PICKUP
+      ? await ctx.runQuery(
+          internal.inventory.storeSchedule.getActiveStoreScheduleForEmail,
+          {
+            at: Date.now(),
+            storeId: order.storeId,
+          },
+        )
+      : null;
+
   const emailResult = await handleOrderStatusUpdate({
     order,
     newStatus: args.newStatus,
     simulateExternalEffects: options.simulateExternalEffects,
     store,
+    storeSchedule,
   });
 
   if (!emailResult) {
@@ -355,6 +408,7 @@ export async function processOrderUpdateEmail(
   const {
     didSendConfirmationEmail,
     didSendReadyEmail,
+    didSendReadyForDeliveryEmail,
     didSendCompletedEmail,
     didSendCancelledEmail,
   } = emailResult;
@@ -385,6 +439,17 @@ export async function processOrderUpdateEmail(
       },
     });
     return { success: true, message: "Ready email sent" };
+  }
+
+  if (didSendReadyForDeliveryEmail) {
+    await ctx.runMutation(internal.storeFront.onlineOrder.updateInternal, {
+      demoCapability: options.simulateExternalEffects
+        ? "customer.messaging.send"
+        : undefined,
+      orderId: order._id,
+      update: { didSendReadyForDeliveryEmail },
+    });
+    return { success: true, message: "Ready-for-delivery email sent" };
   }
 
   if (didSendCompletedEmail) {

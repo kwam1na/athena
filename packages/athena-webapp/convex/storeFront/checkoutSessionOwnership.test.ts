@@ -172,6 +172,47 @@ describe("checkoutSession.createInternal ownership", () => {
     expect(sessions[0].storeId).toBe(f.storeId);
   });
 
+  it.each([true, false])(
+    "returns product visibility %s on the internal session read model",
+    async (isVisible) => {
+    const f = await seed();
+
+    await f.t.run(async (ctx) => {
+      await ctx.db.patch("product", f.productId, { isVisible: true });
+    });
+
+    const created = await f.t.mutation(
+      internal.storeFront.checkoutSession.createInternal,
+      {
+        amount: 1_000,
+        bagId: f.aliceBag,
+        owner: { guestId: f.alice, storeId: f.storeId },
+        products: products(f),
+        storeFrontUserId: f.alice,
+        storeId: f.storeId,
+      },
+    );
+
+    expect(created.success).toBe(true);
+    if (!created.success) throw new Error("Expected checkout session creation");
+
+    await f.t.run(async (ctx) => {
+      await ctx.db.patch("product", f.productId, { isVisible });
+    });
+
+    const session = await f.t.query(
+      internal.storeFront.checkoutSession.getByIdInternal,
+      {
+        owner: { guestId: f.alice, storeId: f.storeId },
+        sessionId: created.session?._id as Id<"checkoutSession">,
+      },
+    );
+
+    expect(session?.items).toHaveLength(1);
+      expect(session?.items[0].isVisible).toBe(isVisible);
+    },
+  );
+
   it("refuses to open a session on another shopper's bag and writes nothing", async () => {
     const f = await seed();
 

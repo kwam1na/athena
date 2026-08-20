@@ -2301,6 +2301,7 @@ export const getByIdInternal = internalQuery({
         return {
           ...item,
           productCategory: category,
+          isVisible: product?.isVisible,
           length: productSku?.length,
           price: productSku?.price,
           colorName,

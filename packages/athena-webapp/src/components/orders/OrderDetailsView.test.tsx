@@ -15,4 +15,15 @@ describe("OrderDetailsView payment details", () => {
   it("does not fetch unused live Paystack transactions when the view mounts", () => {
     expect(source).not.toContain("paystackActions.getAllTransactions");
   });
+
+  it("keeps method, status, and pending guidance readable in the narrow rail", () => {
+    expect(source).toContain(
+      'className="flex items-start justify-between gap-layout-md"',
+    );
+    expect(source).toContain("Account ending in {paymentMethod.last4}");
+    expect(source).toContain("Verification pending");
+    expect(source).toContain("Automatic verification has not run yet.");
+    expect(source).toContain("border-warning/20 bg-warning/5");
+    expect(source).not.toContain("text-yellow-600 bg-yellow-50");
+  });
 });

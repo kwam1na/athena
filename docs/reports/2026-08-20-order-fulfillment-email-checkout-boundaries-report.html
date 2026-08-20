@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Order Fulfillment Email and Checkout Boundary Delivery</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="39532bd28e16984d391a218307c4c67eab37df07bcbe61e7aaed5b3c453b7ba8">
+  <header data-report-section="header">
+    <h1>Order Fulfillment Email and Checkout Boundary Delivery</h1>
+    <p>How order state, store truth, and shopper ownership now stay aligned</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Merged PR finish line</li>
+      <li>No production deploy</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Branch</dt><dd>codex/order-fulfillment-email-delivery</dd>
+      <dt>Status</dt><dd>Validation pending</dd>
+      <dt>Deploy</dt><dd>Not authorized / not performed</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive Summary</h2>
+      <p>This candidate delivers the complete dirty tree as one coherent order-fulfillment update. Customer emails now reflect real fulfillment milestones, canonical store hours, and the actual store identity; checkout and payment verification preserve product availability and shopper ownership.</p>
+      <p>The finish line is a merged pull request into main. Production deployment and local root alignment are intentionally outside this delivery.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Problem and Context</h2>
+      <p>The previous behavior crossed several boundaries without carrying all required truth. The checkout read model dropped product visibility, Paystack references could reach an ID-shaped lookup, email previews described states that runtime dispatch did not send, and some paid-order paths still rendered Wigclub defaults for other stores.</p>
+      <p>A template-only fix would leave these runtime gaps intact. The delivery therefore follows the full path from status transition and owner-scoped lookup through persisted send markers and final email rendering.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental Model</h2>
+      <p>Think of each email as the final projection of four authorities: the order owns the lifecycle state, Store Schedule owns recurring opening hours, the store owns identity and pickup location, and the admitted shopper scopes local order resolution and mutation after provider verification.</p>
+      <p>The renderer receives already-resolved display facts. It does not invent hours, infer ownership, or decide which transition deserves an email.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and After</h2>
+      <ul>
+        <li>Before: ready-for-delivery existed as a preview but was not scheduled or dispatched. After: it has a runtime branch and an independent sent marker.</li>
+        <li>Before: one readiness marker could suppress a later delivery milestone. After: ready-for-delivery and out-for-delivery remain independently reachable.</li>
+        <li>Before: paid confirmations could mix dynamic store data with Wigclub defaults. After: both POD and paid paths use the resolved store name and pickup location.</li>
+        <li>Before: checkout finalization could interpret missing isVisible as unavailable. After: the internal session read model preserves the product visibility fact.</li>
+        <li>Before: payment verification used a less-specific order lookup. After: the external reference is resolved through the admitted owner&#x27;s scoped lookup.</li>
+      </ul>
+  </section>
+  <section data-report-section="changes">
+    <h2>What Changed and What Did Not</h2>
+      <p>The shared OrderEmail component now renders fulfillment-specific status bands, optional pickup hours, dynamic branding, and dedicated preview fixtures. Fulfillment dispatch resolves an active schedule only for pickup-ready mail and persists successful sends. The operator payment rail has clearer method, verification, collection, and pending states.</p>
+      <ul>
+        <li>MailerSend remains the provider and the existing sending address remains unchanged.</li>
+        <li>Missing schedules remain non-fatal and omit the hours block.</li>
+        <li>Store-hour email rows use recurring weekly windows; date exceptions are not expanded into this message.</li>
+        <li>No production deploy is authorized by this delivery.</li>
+      </ul>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure Boundaries</h2>
+      <ul>
+        <li>MailerSend failure does not persist a sent marker.</li>
+        <li>Missing order or store data stops dispatch before the external effect.</li>
+        <li>A successful Store Schedule lookup returning null still allows pickup-ready mail without invented hours; a schedule-query exception aborts before MailerSend.</li>
+        <li>Shared-demo effects remain simulated through the existing capability boundary.</li>
+        <li>Payment verification rejects mismatched shopper identity up front; after Paystack verification, the owner-scoped query protects local order resolution and mutation.</li>
+      </ul>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and Review</h2>
+      <p>`bun run pr:athena:prepare` refreshed Convex API, Graphify, harness docs, and caller-table artifacts; architecture lint, changed frontend and Convex lint, and TypeScript passed. A broad root `bun run test` invocation ran 9,212 Athena webapp tests: 9,211 passed and the single generated caller-table drift was repaired with `bun scripts/convex-operation-admission-check.ts --callers` before preparation passed again.</p>
+      <p>Three diff-scoped reviews covered fulfillment correctness, payment ownership security, and test coverage. Their blocking findings were fixed and correctness/security approved the updated candidate. The final `bun run pr:athena` gate remains pending after documentation refresh. Production deploy is not authorized and has not been performed; merge and GitHub checks remain pending at report generation time.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Next-Time Guidance</h2>
+      <ul>
+        <li>Add orchestration coverage whenever a lifecycle preview or status branch is added.</li>
+        <li>Give independently meaningful customer milestones independent persisted send markers.</li>
+        <li>Use Store Schedule rather than automation settings for store-local hours.</li>
+        <li>After provider verification, resolve the local order with an owner-scoped indexed reference query, never raw document lookup.</li>
+        <li>Regenerate Convex API, operation-admission callers, and Graphify after changing these paths.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>packages/athena-webapp/convex/storeFront/helpers/orderUpdateEmails.ts</code></td><td>Owns fulfillment-email dispatch, suppression, and persistence results.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/emails/OrderEmail.tsx</code></td><td>Renders the production customer email and lifecycle preview variants.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/emails/fulfillmentDetails.ts</code></td><td>Centralizes pickup identity and weekly schedule formatting.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/services/orderEmailService.ts</code></td><td>Builds POD and paid confirmation payloads from store and order truth.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/storeFront/payment.ts</code></td><td>Verifies Paystack references through the admitted shopper boundary.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/storeFront/checkoutSession.ts</code></td><td>Preserves product visibility in the internal checkout read model.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/orders/OrderDetailsView.tsx</code></td><td>Presents payment method, status, collection action, and pending guidance.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which layer decides whether a fulfillment transition sends an email?</p>
+        <ol data-quiz-options>
+          <li>The React Email template</li>
+          <li data-quiz-correct>The order transition and dispatch path</li>
+          <li>MailerSend</li>
+          <li>The operator payment card</li>
+        </ol>
+        <p data-quiz-explanation>Dispatch belongs to the order lifecycle path; the template only renders resolved facts.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does ready-for-delivery have its own sent marker?</p>
+        <ol data-quiz-options>
+          <li>To change the currency</li>
+          <li data-quiz-correct>To keep the later out-for-delivery message independently reachable</li>
+          <li>To bypass MailerSend</li>
+          <li>To replace completion email</li>
+        </ol>
+        <p data-quiz-explanation>Independent customer milestones must not suppress one another through a shared marker.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens when the schedule lookup succeeds but returns no active schedule?</p>
+        <ol data-quiz-options>
+          <li>The email fails</li>
+          <li>Default hours are invented</li>
+          <li data-quiz-correct>The pickup email sends without an hours block</li>
+          <li>The order is canceled</li>
+        </ol>
+        <p data-quiz-explanation>A null schedule result is optional presentation context; a thrown query error is different and aborts dispatch.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where does recurring store-hours truth come from?</p>
+        <ol data-quiz-options>
+          <li>Automation policy</li>
+          <li data-quiz-correct>Store Schedule</li>
+          <li>The email preview</li>
+          <li>Payment metadata</li>
+        </ol>
+        <p data-quiz-explanation>Store Schedule is the canonical reusable store-local business-time authority.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does the owner-scoped lookup protect after Paystack verification?</p>
+        <ol data-quiz-options>
+          <li>Provider network access</li>
+          <li data-quiz-correct>Local order resolution and mutation</li>
+          <li>Email CSS</li>
+          <li>Store Schedule writes</li>
+        </ol>
+        <p data-quiz-explanation>Paystack is contacted first; the admitted owner then scopes which local order can be resolved and mutated.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>When is a sent marker persisted?</p>
+        <ol data-quiz-options>
+          <li>Before calling MailerSend</li>
+          <li data-quiz-correct>Only after MailerSend reports success</li>
+          <li>Whenever a preview renders</li>
+          <li>At checkout creation</li>
+        </ol>
+        <p data-quiz-explanation>A failed external send must remain retryable and cannot be recorded as delivered.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What did the checkout read-model fix preserve?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Product visibility</li>
+          <li>Store timezone</li>
+          <li>Email subject</li>
+          <li>Order discount</li>
+        </ol>
+        <p data-quiz-explanation>Finalization needs the product visibility fact to distinguish available from hidden items.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A Paystack reference belongs to another shopper&#x27;s local order. What prevents local mutation?</p>
+        <ol data-quiz-options>
+          <li>The email preview</li>
+          <li data-quiz-correct>The owner-scoped order query</li>
+          <li>The subject line</li>
+          <li>Graphify</li>
+        </ol>
+        <p data-quiz-explanation>The admitted owner is carried into local order resolution, so the other shopper&#x27;s row is not returned for mutation.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>The schedule query throws instead of returning null. What happens next?</p>
+        <ol data-quiz-options>
+          <li>Default hours are sent</li>
+          <li data-quiz-correct>Dispatch aborts before MailerSend</li>
+          <li>The email sends without hours</li>
+          <li>The order is completed</li>
+        </ol>
+        <p data-quiz-explanation>Only a successful null result is non-fatal; a query exception prevents the send path from continuing.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the delivery finish line?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Merged PR with no production deploy</li>
+          <li>Production deploy only</li>
+          <li>Local uncommitted changes</li>
+          <li>Preview server running</li>
+        </ol>
+        <p data-quiz-explanation>The user authorized merge into main and explicitly excluded production deployment.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>Session context historian</dt><dd>Recovered the checkout, payment-reference, email-preview, pickup-detail, store-hours, and finish-line decisions from the directly relevant prior sessions.</dd>
+      <dt>Delivered diff reviewer</dt><dd>Mapped the staged changes by behavior layer and verified failure boundaries, generated artifacts, tests, and intentionally unchanged behavior.</dd>
+      <dt>Correctness, security, and testing reviewers</dt><dd>Reviewed only this delivery diff, found unreachable lifecycle and branding/test gaps, and verified the resulting fixes.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>
