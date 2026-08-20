@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-20T22:25:38.830Z",
+  "branch": "codex/order-fulfillment-email-delivery",
+  "headSha": "a1e37e839d09b6fe45c9d0722cd562d7484aacfa",
+  "deliverableDiffFingerprint": "819cac2c12d17c1159140ff04ba98360c28b0cb357f0a59358ef1313506bbcac",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 3,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 757663.34875
+  },
+  "reviewLoop": {
+    "providerId": "ce-code-review",
+    "runId": "order-email-core-final-20260820",
+    "finalPassId": "core-final-green",
+    "recordedAt": "2026-08-20T22:08:02.774Z",
+    "iterationCount": 4,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 4,
+      "P2": 2,
+      "P3": 1
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}

@@ -12,7 +12,7 @@ applies_when:
   - Rendering pickup hours or store identity in order messages
   - Resolving paid orders by an external payment reference
 tags: [order-email, fulfillment, store-schedule, payment-ownership, mailersend]
-delivery_diff_fingerprint: 39532bd28e16984d391a218307c4c67eab37df07bcbe61e7aaed5b3c453b7ba8
+delivery_diff_fingerprint: 88114bd1cd93a231333f5a1d199fba23609ee833a40942101f7e264939a2d5c6
 ---
 
 # Order fulfillment emails preserve state and store truth
@@ -44,6 +44,7 @@ An email preview proves presentation, not dispatch. The transition scheduler, se
 - Use Store Schedule for reusable store-local hours, never automation policy fields.
 - Verify external payment references through an owner-scoped internal lookup before mutating an order.
 - Regenerate Convex API, operation-admission caller tables, and Graphify artifacts after changing these call paths.
+- When Vitest completes the suite but its worker RPC times out while reporting results, patch the pinned runtime deadline at the dependency boundary; do not trade away test concurrency or coverage as a workaround.
 
 ## Examples
 

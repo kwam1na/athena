@@ -1051,7 +1051,8 @@ describe("repo harness ergonomics", () => {
   );
 
   it("schedules a recurring harness drift check in GitHub Actions", async () => {
-    const [workflow, webappPackage] = await Promise.all([
+    const [workflow, webappPackage, rootPackage, vitestPatch] =
+      await Promise.all([
       readFile(
         path.join(ROOT_DIR, ".github/workflows/athena-pr-tests.yml"),
         "utf8",
@@ -1060,6 +1061,8 @@ describe("repo harness ergonomics", () => {
         path.join(ROOT_DIR, "packages/athena-webapp/package.json"),
         "utf8",
       ),
+      readFile(path.join(ROOT_DIR, "package.json"), "utf8"),
+      readFile(path.join(ROOT_DIR, "patches/vitest@3.2.4.patch"), "utf8"),
     ]);
 
     expect(workflow).toContain("schedule:");
@@ -1089,6 +1092,10 @@ describe("repo harness ergonomics", () => {
     expect(JSON.parse(webappPackage).scripts["test:coverage"]).toBe(
       "vitest run --coverage --maxWorkers=${ATHENA_COVERAGE_MAX_WORKERS:-2}",
     );
+    expect(JSON.parse(rootPackage).patchedDependencies).toEqual({
+      "vitest@3.2.4": "patches/vitest@3.2.4.patch",
+    });
+    expect(vitestPatch).toContain("+\t\ttimeout: -1,");
     expect(workflow).toContain("run: bun run --filter '@athena/webapp' build");
     expect(workflow).toContain(
       "run: bun run --filter '@athena/storefront-webapp' build",

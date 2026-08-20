@@ -5,7 +5,7 @@
   <title>Order Fulfillment Email and Checkout Boundary Delivery</title>
 </head>
 <body>
-<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="39532bd28e16984d391a218307c4c67eab37df07bcbe61e7aaed5b3c453b7ba8">
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="88114bd1cd93a231333f5a1d199fba23609ee833a40942101f7e264939a2d5c6">
   <header data-report-section="header">
     <h1>Order Fulfillment Email and Checkout Boundary Delivery</h1>
     <p>How order state, store truth, and shopper ownership now stay aligned</p>
@@ -48,10 +48,12 @@
   <section data-report-section="changes">
     <h2>What Changed and What Did Not</h2>
       <p>The shared OrderEmail component now renders fulfillment-specific status bands, optional pickup hours, dynamic branding, and dedicated preview fixtures. Fulfillment dispatch resolves an active schedule only for pickup-ready mail and persists successful sends. The operator payment rail has clearer method, verification, collection, and pending states.</p>
+      <p>The CI suite twice completed all 9,212 tests before Vitest 3.2.4 timed out reporting the final task update. The delivery now applies the narrow upstream runtime RPC fix through Bun&#x27;s pinned dependency patch: the reporting RPC has no artificial deadline, while test execution timeouts and the one-worker coverage policy remain unchanged.</p>
       <ul>
         <li>MailerSend remains the provider and the existing sending address remains unchanged.</li>
         <li>Missing schedules remain non-fatal and omit the hours block.</li>
         <li>Store-hour email rows use recurring weekly windows; date exceptions are not expanded into this message.</li>
+        <li>The prior one-worker coverage setting remains intact; this delivery fixes the reporting boundary instead of reversing that policy.</li>
         <li>No production deploy is authorized by this delivery.</li>
       </ul>
   </section>
@@ -67,8 +69,8 @@
   </section>
   <section data-report-section="validation">
     <h2>Validation and Review</h2>
-      <p>`bun run pr:athena:prepare` refreshed Convex API, Graphify, harness docs, and caller-table artifacts; architecture lint, changed frontend and Convex lint, and TypeScript passed. A broad root `bun run test` invocation ran 9,212 Athena webapp tests: 9,211 passed and the single generated caller-table drift was repaired with `bun scripts/convex-operation-admission-check.ts --callers` before preparation passed again.</p>
-      <p>Three diff-scoped reviews covered fulfillment correctness, payment ownership security, and test coverage. Their blocking findings were fixed and correctness/security approved the updated candidate. The final `bun run pr:athena` gate remains pending after documentation refresh. Production deploy is not authorized and has not been performed; merge and GitHub checks remain pending at report generation time.</p>
+      <p>`bun run pr:athena:prepare` refreshed Convex API, Graphify, harness docs, and caller-table artifacts; architecture lint, changed frontend and Convex lint, and TypeScript passed. GitHub&#x27;s application-coverage job twice completed all 9,212 tests successfully, then failed in Vitest&#x27;s result-reporting RPC with `Timeout calling onTaskUpdate`; this was a harness failure after test completion, not a failed assertion.</p>
+      <p>The core fix was verified with a frozen reinstall, inspection of the installed Vitest runtime chunk, a focused patch-contract test, and diff check. Correctness, security, and testing reviewers scoped their final pass to the patch declaration, lockfile binding, upstream-equivalent payload, and regression contract; all reported no P0/P1 blocker. The final `bun run pr:athena` gate remains pending after documentation refresh. Production deploy is not authorized and has not been performed; merge and GitHub checks remain pending at report generation time.</p>
   </section>
   <section data-report-section="guidance">
     <h2>Next-Time Guidance</h2>
@@ -92,6 +94,8 @@
         <tr><td><code>packages/athena-webapp/convex/storeFront/payment.ts</code></td><td>Verifies Paystack references through the admitted shopper boundary.</td></tr>
         <tr><td><code>packages/athena-webapp/convex/storeFront/checkoutSession.ts</code></td><td>Preserves product visibility in the internal checkout read model.</td></tr>
         <tr><td><code>packages/athena-webapp/src/components/orders/OrderDetailsView.tsx</code></td><td>Presents payment method, status, collection action, and pending guidance.</td></tr>
+        <tr><td><code>patches/vitest@3.2.4.patch</code></td><td>Backports Vitest&#x27;s upstream no-deadline runtime RPC behavior without changing coverage concurrency or test timeouts.</td></tr>
+        <tr><td><code>scripts/pre-push-review.test.ts</code></td><td>Pins the dependency patch declaration and payload as a merge-gate contract.</td></tr>
       </tbody>
     </table>
   </section>
