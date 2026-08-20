@@ -1078,7 +1078,8 @@ describe("repo harness ergonomics", () => {
     expect(workflow).toContain(
       "Confirm consolidated storefront validation coverage",
     );
-    expect(workflow).toContain("run: bun run test:coverage");
+    expect(workflow).toContain('ATHENA_COVERAGE_MAX_WORKERS: "1"');
+    expect(workflow).toContain("/usr/bin/time -v bun run test:coverage");
     expect(workflow).toContain("run: bun run --filter '@athena/webapp' build");
     expect(workflow).toContain(
       "run: bun run --filter '@athena/storefront-webapp' build",

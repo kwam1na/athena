@@ -224,7 +224,14 @@ jobs:
         run: bun run --filter '@athena/storefront-webapp' build
 
       - name: Run repo coverage policy
-        run: bun run test:coverage
+        env:
+          # GitHub-hosted runners have limited memory. A single coverage worker
+          # keeps the Vitest main process responsive while it acknowledges the
+          # full suite's task-update RPCs; local runs retain two workers.
+          ATHENA_COVERAGE_MAX_WORKERS: "1"
+        run: |
+          echo "Coverage worker limit: ${ATHENA_COVERAGE_MAX_WORKERS}"
+          /usr/bin/time -v bun run test:coverage
 
   athena-prod-pos-e2e:
     name: Athena POS E2E against Production Backend
