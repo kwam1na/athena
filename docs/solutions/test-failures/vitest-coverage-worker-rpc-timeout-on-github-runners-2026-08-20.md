@@ -12,7 +12,7 @@ root_cause: async_timing
 resolution_type: config_change
 severity: high
 tags: [vitest, coverage, github-actions, worker-rpc, ci]
-delivery_diff_fingerprint: ee0d567007309b867f4fa71dcc40b4fad367037d34a9104c16bf0d3ad8ea06af
+delivery_diff_fingerprint: a8af10b6fa05f0b0cb9c289692643f828734e98e1941d67bf04f3d75c4fe555f
 ---
 
 # Stabilize Vitest coverage worker RPC on GitHub runners
