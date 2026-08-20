@@ -5,40 +5,47 @@
   <title>Operational Evidence and Recovery Convergence</title>
 </head>
 <body>
-<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="b5a6232af5bf00ae9fdbdf2ced27c0b4379af43bdd5f4a0e4311699e574dd13f">
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="ee0d567007309b867f4fa71dcc40b4fad367037d34a9104c16bf0d3ad8ea06af">
   <header data-report-section="header">
     <h1>Operational Evidence and Recovery Convergence</h1>
     <p>How Athena now carries operational facts into manager reports, register investigations, inventory setup, and staff recovery</p>
     <ul data-report-pills>
       <li>Delivery candidate</li>
       <li>Branch codex/fix-pos-sync-review-convergence</li>
+      <li>9,191 Athena tests completed without worker RPC timeout</li>
       <li>No production deploy</li>
     </ul>
     <dl data-report-meta>
-      <dt>Candidate</dt><dd>a80897e8</dd>
+      <dt>PR</dt><dd>#777</dd>
+      <dt>Linear</dt><dd>V26-1254</dd>
+      <dt>Local candidate</dt><dd>8bf36977 (not yet pushed)</dd>
       <dt>Base</dt><dd>origin/main at 50bf2711</dd>
-      <dt>Status</dt><dd>Merge gate in progress</dd>
+      <dt>Status</dt><dd>Local coverage green; GitHub validation pending</dd>
     </dl>
   </header>
   <section data-report-section="summary">
     <h2>Executive summary</h2>
       <p>This candidate closes a set of operator-review gaps where Athena already held the underlying fact but did not carry enough context into the surface where a manager had to act. Reports now expose transaction and expense evidence more explicitly, still-open registers remain visible across operating dates, workflow traces explain actors and cash impact, quick-add can preserve known unit cost, and inactive staff can be restored through a new command on the existing operation-admission rail.</p>
       <p>The implementation extends existing contracts, ledgers, and read models. It does not introduce a second reporting system, a new audit ledger, or a production backfill.</p>
+      <p>The candidate also stabilizes the GitHub-hosted coverage boundary that blocked this already-validated product work. CI now runs the same full coverage policy with one Athena worker and GNU resource diagnostics; local coverage retains its two-worker default.</p>
   </section>
   <section data-report-section="problem">
     <h2>Why this mattered</h2>
       <p>Several workflows forced operators to reconstruct meaning from adjacent screens: expenses were compressed into a summary metric, prior-day open drawers could disappear from today&#x27;s close posture, register traces used generic event text, weekly reports omitted transaction comparison, and known quick-add cost could still become uncosted inventory.</p>
       <p>The sharpest failure was a non-cash void. Eligibility originally depended on positive cash impact, so card and mobile-money voids could have no register trace. Reusing drawer delta as transaction value then risked describing a real void as zero.</p>
+      <p>Delivery then hit a separate infrastructure failure: two GitHub attempts completed all 768 Athena test files and 9,191 tests before Vitest timed out waiting for an <code>onTaskUpdate</code> acknowledgement. Reporter-only tuning was already active, so another blind retry could not make the job structurally reliable.</p>
   </section>
   <section data-report-section="mental-model">
     <h2>Mental model: carry the fact to the decision</h2>
       <p>Think of each source record as the ledger and each operator surface as a lens. The lens may rank, label, compare, and link facts, but it must not invent a value or replace the ledger.</p>
       <p>Command and source ledger → explicit optional contract fields → bounded read-model enrichment → operator presentation. Missing rollout evidence stays missing; it is not coerced to zero.</p>
+      <p>For CI, think of workers as producers and the Vitest main process as the acknowledgement lane. Two coverage workers can saturate a constrained runner while the main process still owes time-bounded RPC replies; one worker lowers concurrent pressure without shrinking the work.</p>
   </section>
   <section data-report-section="before-after">
     <h2>Before and after</h2>
       <p>Before: manager emails mixed expenses into general metrics, open-register checks were day-scoped, trace rows lacked usable identity and financial context, and recovery actions required workarounds.</p>
       <p>After: expense totals and ranked product evidence have their own section; all still-open store register sessions (open, active, or closing) that existed by the selected day boundary can block close with carried-over labeling; register events explain value, tender, actor, approver, and drawer impact; quick-add can establish known cost basis; inactive staff have an explicit reactivation action.</p>
+      <p>CI before: the same hard-coded two-worker coverage pool ran locally and on GitHub, and a fully passing suite could fail during worker reporting. CI after: GitHub explicitly selects one worker, logs the selected limit, and records elapsed time and peak resident memory around the unchanged root coverage policy.</p>
   </section>
   <section data-report-section="changes">
     <h2>What changed and what did not</h2>
@@ -49,7 +56,9 @@
         <li>Quick-add accepts an optional validated minor-unit cost and selects known versus uncosted inventory basis accordingly.</li>
         <li>Staff reactivation uses the existing operation-admission rail and restores credential status based on whether a PIN exists.</li>
         <li>Adjacent convergence fixes add progressive expense loading, SKU barcode and Adjust Stock navigation, shared register session-code identity, opening-float explanations, and scoped product-name normalization.</li>
+        <li>GitHub coverage uses one Athena worker through <code>ATHENA_COVERAGE_MAX_WORKERS</code>; the package default remains two workers, and the root harness test pins both the limit and resource-diagnostic command.</li>
         <li>Intentionally unchanged: source ledgers remain authoritative, trace writes remain best-effort, omitted unit cost remains uncosted, and no historical trace backfill or production deployment is included.</li>
+        <li>Also unchanged: every test file, coverage threshold, failure exit code, and root coverage phase remains authoritative. The change adds no retry and suppresses no Vitest error.</li>
       </ul>
   </section>
   <section data-report-section="failure-boundaries">
@@ -60,11 +69,14 @@
         <li>Trace identity joins stay store-scoped and fall back to generic wording when a profile is unavailable.</li>
         <li>A void&#x27;s transaction total and drawer delta are separate facts; zero cash impact does not make the void ineligible for evidence.</li>
         <li>Unit cost must be a nonnegative safe integer in minor units. Omitting it preserves the existing uncosted path.</li>
+        <li>For this incident, the repeated post-suite RPC timeout is investigated separately because the logs prove every file and test completed. Future RPC errors still require evidence-based classification; named test timeouts and assertion failures remain genuine blockers.</li>
+        <li>One worker may increase wall time, so GitHub logs the limit and GNU time resource summary; duration and maximum RSS are the evidence for any later concurrency change.</li>
       </ul>
   </section>
   <section data-report-section="validation">
     <h2>Validation and delivery status</h2>
-      <p>The repository preparation phase passed changed-file linting, architecture checks, generated Convex API coverage, Graphify regeneration, and the Athena TypeScript check. The full merge-grade test and review phases are pending on this exact candidate because this report and solution note are required gate inputs.</p>
+      <p>The representative <code>CI=true</code> run completed all 768 Athena files and 9,191 tests in 1,020 seconds with no worker RPC timeout. Storefront coverage also passed. The enclosing root sensor then failed on the deliberately stale workflow-contract assertion, proving a genuine downstream failure still propagates; after updating that assertion, the root harness suite passed 1,380 tests.</p>
+      <p>Workflow parsing, focused contract coverage, solution frontmatter, compound validation, and Graphify regeneration passed. Independent review evidence, the full <code>bun run pr:athena</code> gate, and the representative GitHub-hosted reruns remain pending on this exact delivery candidate.</p>
       <p>Production deployment is intentionally excluded from this delivery. Root alignment is pending the merged PR.</p>
   </section>
   <section data-report-section="guidance">
@@ -75,6 +87,8 @@
         <li>Keep transaction value, payment allocation, and drawer movement as distinct fields even when one screen presents them together.</li>
         <li>Prefer live blocker reads over frozen snapshots for current operational authority, while retaining snapshots for historical explanation.</li>
         <li>Normalize human-facing labels at the authorized presentation boundary when stored audit evidence must remain unchanged.</li>
+        <li>When all tests pass before <code>onTaskUpdate</code> times out, measure worker/main-process pressure before changing test budgets; reporter formatting alone may stop being sufficient as the suite grows.</li>
+        <li>Do not raise GitHub coverage concurrency without comparing wall time and maximum RSS from the timed authoritative command.</li>
       </ul>
   </section>
   <section data-report-section="key-files">
@@ -89,12 +103,15 @@
         <tr><td><code>packages/athena-webapp/src/components/traces/WorkflowTraceView.tsx</code></td><td>Turns compact trace facts into operator-readable lifecycle and transaction statements with safe links.</td></tr>
         <tr><td><code>packages/athena-webapp/convex/pos/application/commands/quickAddCatalogItem.ts</code></td><td>Validates optional unit cost and establishes known or uncosted opening inventory basis.</td></tr>
         <tr><td><code>packages/athena-webapp/convex/operations/staffProfiles.ts</code></td><td>Implements admitted, store-scoped staff reactivation while preserving inactive audit history.</td></tr>
+        <tr><td><code>.github/workflows/athena-pr-tests.yml</code></td><td>Selects one Athena coverage worker on GitHub and captures GNU time resource diagnostics around the full root policy.</td></tr>
+        <tr><td><code>packages/athena-webapp/package.json</code></td><td>Exposes the CI worker limit while retaining the two-worker local default.</td></tr>
+        <tr><td><code>scripts/pre-push-review.test.ts</code></td><td>Pins the constrained GitHub coverage contract so workflow drift fails locally.</td></tr>
       </tbody>
     </table>
   </section>
-  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+  <section data-report-section="quiz" data-quiz-pass-threshold="10">
     <h2>Comprehension quiz</h2>
-    <p>Pass required: 8 of 10.</p>
+    <p>Pass required: 10 of 12.</p>
     <ol data-quiz>
       <li data-quiz-question>
         <p data-quiz-prompt>What remains authoritative after this change?</p>
@@ -167,14 +184,14 @@
         <p data-quiz-explanation>Read-time hydration improves operator copy while preserving compact stored evidence and authorization boundaries.</p>
       </li>
       <li data-quiz-question>
-        <p data-quiz-prompt>What is intentionally excluded from this delivery?</p>
+        <p data-quiz-prompt>What remains before this delivery reaches its finish line?</p>
         <ol data-quiz-options>
-          <li>Focused tests</li>
-          <li>Generated API updates</li>
-          <li data-quiz-correct>Production deployment and historical trace backfill</li>
-          <li>Staff reactivation</li>
+          <li>Reducing coverage thresholds</li>
+          <li>Adding a blind retry</li>
+          <li data-quiz-correct>Consistently green GitHub reruns with no RPC timeout, PR #777 merged, then local root alignment</li>
+          <li>Rewriting historical trace rows</li>
         </ol>
-        <p data-quiz-explanation>The finish line is a merged PR, with no production deploy and no rewrite of historical trace rows.</p>
+        <p data-quiz-explanation>The representative local coverage proof is complete, but the candidate still needs repeated representative GitHub success, a clean merge, and the post-merge local alignment required by the execution workflow.</p>
       </li>
       <li data-quiz-question>
         <p data-quiz-prompt>What should a regression test for a card void assert?</p>
@@ -196,6 +213,26 @@
         </ol>
         <p data-quiz-explanation>Scoped read-time normalization improves human copy without mutating historical audit evidence.</p>
       </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does the GitHub coverage fix reduce?</p>
+        <ol data-quiz-options>
+          <li>The number of test files</li>
+          <li>The coverage thresholds</li>
+          <li data-quiz-correct>Concurrent Athena coverage workers on the constrained runner</li>
+          <li>The Vitest RPC timeout value</li>
+        </ol>
+        <p data-quiz-explanation>The full suite and policy remain unchanged; only GitHub worker concurrency drops from two to one so the main process can acknowledge task updates.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which failure still blocks after the CI change?</p>
+        <ol data-quiz-options>
+          <li>A named test timeout can be ignored after one retry</li>
+          <li data-quiz-correct>Any genuine test, assertion, coverage, or downstream harness failure</li>
+          <li>An <code>onTaskUpdate</code> error is always ignored</li>
+          <li>Only product tests can fail the root command</li>
+        </ol>
+        <p data-quiz-explanation>The change neither retries nor suppresses failures; the local run demonstrated this when the stale workflow assertion failed after Athena and Storefront coverage passed.</p>
+      </li>
     </ol>
   </section>
   <section data-report-section="subagent-evidence">
@@ -204,6 +241,8 @@
       <dt>session context historian</dt><dd>Reconstructed prior decisions and reviewer corrections, including the non-cash void value-versus-drawer-impact bug and the explicit no-deploy finish line.</dd>
       <dt>delivered diff explorer</dt><dd>Mapped the actual code changes, architectural boundaries, operator behavior, test coverage, and intentionally unchanged paths.</dd>
       <dt>institutional learnings researcher</dt><dd>Searched the solution corpus and identified the workflow-investigation evidence note as the strongest reusable home.</dd>
+      <dt>V26-1254 session historian</dt><dd>Separated genuine named-test budgets from post-suite RPC coordination failures and recovered the bounded retry policy that led to this structural fix.</dd>
+      <dt>V26-1254 delivered diff explorer</dt><dd>Verified that the fix changes only CI concurrency and diagnostics while preserving suite scope, thresholds, local defaults, and product behavior.</dd>
     </dl>
   </section>
 </article>
