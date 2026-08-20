@@ -375,6 +375,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/storeFront/errorFoundation.test.ts`](../../convex/storeFront/errorFoundation.test.ts)
 - [`convex/storeFront/helperOrchestration.test.ts`](../../convex/storeFront/helperOrchestration.test.ts)
 - [`convex/storeFront/helpers/customerEngagementEvents.test.ts`](../../convex/storeFront/helpers/customerEngagementEvents.test.ts)
+- [`convex/storeFront/helpers/orderUpdateEmails.test.ts`](../../convex/storeFront/helpers/orderUpdateEmails.test.ts)
 - [`convex/storeFront/homepageSnapshot.test.ts`](../../convex/storeFront/homepageSnapshot.test.ts)
 - [`convex/storeFront/offers.test.ts`](../../convex/storeFront/offers.test.ts)
 - [`convex/storeFront/onlineOrder.test.ts`](../../convex/storeFront/onlineOrder.test.ts)

@@ -544,6 +544,74 @@ describe("payment internal siblings assert checkout-session ownership", () => {
 
     expect(paystackMock.verifyTransaction).not.toHaveBeenCalled();
   });
+
+  it("verifies an admitted shopper order by Paystack reference", async () => {
+    const f = await seedPaymentFixture();
+    const externalReference = "reference-1";
+
+    const orderId = await f.t.run(async (ctx) => {
+      const session = await ctx.db.get("checkoutSession", f.aliceSession);
+      if (!session) throw new Error("Expected checkout session fixture");
+
+      const id = await ctx.db.insert("onlineOrder", {
+        amount: 10_000,
+        bagId: session.bagId,
+        billingDetails: null,
+        checkoutSessionId: f.aliceSession,
+        customerDetails: {
+          email: "shopper@test.com",
+          firstName: "Alice",
+          lastName: "Shopper",
+          phoneNumber: "0000000000",
+        },
+        deliveryDetails: "Osu, Accra",
+        deliveryFee: 0,
+        deliveryInstructions: null,
+        deliveryMethod: "delivery",
+        deliveryOption: null,
+        discount: null,
+        externalReference,
+        hasVerifiedPayment: false,
+        orderNumber: "ORDER-1",
+        pickupLocation: null,
+        status: "open",
+        storeFrontUserId: f.alice,
+        storeId: f.storeId,
+      });
+
+      await ctx.db.patch("checkoutSession", f.aliceSession, {
+        externalReference,
+        hasCompletedCheckoutSession: true,
+        hasCompletedPayment: true,
+        placedOrderId: id,
+      });
+
+      return id;
+    });
+
+    paystackMock.verifyTransaction.mockResolvedValueOnce({
+      data: { amount: 10_000, status: "success" },
+    });
+    emailMock.sendPaymentVerificationEmails.mockResolvedValueOnce({
+      adminNotificationSent: false,
+      confirmationSent: false,
+    });
+
+    await expect(
+      f.t.action(internal.storeFront.payment.verifyPaymentInternal, {
+        externalReference,
+        storeFrontUserId: f.alice,
+        owner: { guestId: f.alice, storeId: f.storeId },
+      }),
+    ).resolves.toEqual({ verified: true });
+
+    const verified = await f.t.run(async (ctx) => ({
+      order: await ctx.db.get("onlineOrder", orderId),
+      session: await ctx.db.get("checkoutSession", f.aliceSession),
+    }));
+    expect(verified.order?.hasVerifiedPayment).toBe(true);
+    expect(verified.session?.hasVerifiedPayment).toBe(true);
+  });
 });
 
 describe("payment internal sibling return contracts", () => {

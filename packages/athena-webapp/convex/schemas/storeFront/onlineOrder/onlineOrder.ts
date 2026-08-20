@@ -70,6 +70,7 @@ export const onlineOrderSchema = v.object({
   didRefundDeliveryFee: v.optional(v.boolean()),
   didSendCompletedEmail: v.optional(v.boolean()),
   didSendReadyEmail: v.optional(v.boolean()),
+  didSendReadyForDeliveryEmail: v.optional(v.boolean()),
   didSendCancelledEmail: v.optional(v.boolean()),
   didSendNewOrderReceivedEmail: v.optional(v.boolean()),
   discount: v.union(v.record(v.string(), v.any()), v.null()),

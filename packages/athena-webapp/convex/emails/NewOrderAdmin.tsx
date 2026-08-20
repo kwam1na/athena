@@ -14,6 +14,7 @@ import {
   Text,
 } from "@react-email/components";
 import { ArrowUpRight } from "lucide-react";
+import { operationalEmailOutlineButton } from "./emailOperationalCtaStyles";
 
 interface OrderItem {
   text: string;
@@ -50,8 +51,7 @@ export const newOrderAdminPreviewProps = {
   order_date: "July 17, 2026",
   customer_name: "John Doe",
   order_id: "order-001",
-  appUrl:
-    "http://localhost:5173/wigclub/store/wigclub/orders/order-001",
+  appUrl: "http://localhost:5173/wigclub/store/wigclub/orders/order-001",
   order_number: "WC-001",
   items: [
     {
@@ -209,7 +209,7 @@ export function NewOrderAdmin({
               <span style={styles.buttonLabel}>View order</span>
               <ArrowUpRight
                 aria-hidden="true"
-                color={colors.raised}
+                color={colors.foreground}
                 size={14}
                 strokeWidth={2}
                 style={styles.buttonIcon}
@@ -304,19 +304,7 @@ const styles: Record<string, CSSProperties> = {
     margin: 0,
     padding: "36px 0",
   },
-  button: {
-    backgroundColor: colors.foreground,
-    border: `1px solid ${colors.foreground}`,
-    borderRadius: "6px",
-    color: colors.raised,
-    display: "inline-block",
-    fontFamily: fontSans,
-    fontSize: "13px",
-    fontWeight: 600,
-    lineHeight: "20px",
-    padding: "10px 14px",
-    textDecoration: "none",
-  },
+  button: { ...operationalEmailOutlineButton },
   buttonIcon: {
     display: "inline-block",
     marginLeft: "8px",
@@ -360,7 +348,11 @@ const styles: Record<string, CSSProperties> = {
     objectFit: "cover",
     width: "56px",
   },
-  itemImageColumn: { padding: "12px 0", verticalAlign: "middle", width: "56px" },
+  itemImageColumn: {
+    padding: "12px 0",
+    verticalAlign: "middle",
+    width: "56px",
+  },
   itemMetadata: {
     color: colors.muted,
     fontSize: "11px",
@@ -390,7 +382,11 @@ const styles: Record<string, CSSProperties> = {
     margin: 0,
     textAlign: "right",
   },
-  itemPriceColumn: { padding: "15px 0", verticalAlign: "middle", width: "92px" },
+  itemPriceColumn: {
+    padding: "15px 0",
+    verticalAlign: "middle",
+    width: "92px",
+  },
   itemRow: { width: "100%" },
   itemsList: { marginTop: "10px" },
   section: { padding: "24px 32px" },

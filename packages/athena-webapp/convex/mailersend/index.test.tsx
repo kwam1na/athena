@@ -22,8 +22,7 @@ function getRequestBody(fetchMock: ReturnType<typeof vi.fn>) {
 function getRenderedVerificationEmailProps() {
   const calls = mockedRender.mock.calls as unknown as Array<[unknown]>;
   const renderedElement = calls[0]?.[0] as
-    | { props?: Record<string, unknown> }
-    | undefined;
+    { props?: Record<string, unknown> } | undefined;
 
   expect(renderedElement).toBeDefined();
   return renderedElement?.props ?? {};
@@ -101,30 +100,34 @@ describe("MailerSend customer order delivery", () => {
     await sendOrderEmail({
       type: "confirmation",
       customerEmail: "customer@example.com",
-      store_name: "Wigclub",
+      store_name: "osu flagship",
       order_number: "WC-100",
       order_date: "July 17, 2026",
       order_status_messaging: "We received your order.",
+      status_title: "Order received",
       total: "GH₵500",
       subtotal: "GH₵500",
       items: [],
       pickup_type: "Pickup",
       pickup_details: "East Legon",
+      pickup_hours: [{ dayLabel: "Mon–Fri", hoursLabel: "9:00 AM–6:00 PM" }],
       customer_name: "Ama",
     });
 
-    const calls = mockedRender.mock.calls as unknown as Array<[
-      { props?: Record<string, unknown> },
-    ]>;
+    const calls = mockedRender.mock.calls as unknown as Array<
+      [{ props?: Record<string, unknown> }]
+    >;
     expect(calls[0]?.[0].props).toMatchObject({
       customerEmail: "customer@example.com",
       items: [],
       order_number: "WC-100",
       total: "GH₵500",
       type: "confirmation",
+      status_title: "Order received",
+      pickup_hours: [{ dayLabel: "Mon–Fri", hoursLabel: "9:00 AM–6:00 PM" }],
     });
     expect(getRequestBody(fetchMock)).toMatchObject({
-      subject: "Your Wigclub order",
+      subject: "Your Osu Flagship order",
       to: [{ email: "customer@example.com", name: "Ama" }],
     });
   });
@@ -150,9 +153,9 @@ describe("MailerSend customer order delivery", () => {
       subtotal: "GH₵500",
     });
 
-    const calls = mockedRender.mock.calls as unknown as Array<[
-      { props?: Record<string, unknown> },
-    ]>;
+    const calls = mockedRender.mock.calls as unknown as Array<
+      [{ props?: Record<string, unknown> }]
+    >;
     expect(calls[0]?.[0].props).toMatchObject({
       appUrl: expect.stringContaining("/orders/order-100"),
       items: [],

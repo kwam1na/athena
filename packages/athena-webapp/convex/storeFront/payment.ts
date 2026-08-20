@@ -39,6 +39,7 @@ import { admitPublicAction } from "../platform/operationAdmission";
 import {
   assertCustomerOwnsRow,
   customerOwnerValidator,
+  type CustomerOwner,
 } from "./customerOwnership";
 
 /**
@@ -577,6 +578,7 @@ const verifyPaymentArgs = {
 type VerifyPaymentArgs = {
   storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">;
   externalReference: string;
+  owner: CustomerOwner;
   signedInAthenaUser?: { id: Id<"athenaUser">; email: string };
 };
 
@@ -602,12 +604,13 @@ async function verifyPaymentWithCtx(
         },
       );
 
-      // `api.storeFront.onlineOrder.get` re-entered the public boundary from
-      // inside an admitted action; the internal twin U7 owns is called instead.
+      // Resolve the Paystack reference through the internal query that safely
+      // distinguishes external references from Convex document ids.
       const order: OnlineOrder | null = await ctx.runQuery(
-        internal.storeFront.onlineOrder.getInternal,
+        internal.storeFront.onlineOrder.getForCustomerInternal,
         {
           identifier: args.externalReference,
+          owner: args.owner,
         },
       );
 
@@ -772,11 +775,11 @@ export const verifyPaymentInternal = internalAction({
   }),
   handler: async (
     ctx,
-    { owner, ...args },
+    args,
   ): Promise<PaymentVerificationResult> => {
     if (
       String(args.storeFrontUserId) !==
-      String(owner.storeFrontUserId ?? owner.guestId)
+      String(args.owner.storeFrontUserId ?? args.owner.guestId)
     ) {
       throw new Error(
         "This storefront resource is not available for this shopper.",

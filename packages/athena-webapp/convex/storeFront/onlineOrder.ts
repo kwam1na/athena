@@ -480,6 +480,7 @@ async function applyOnlineOrderUpdate(
     [
       ...completedStatuses,
       "ready-for-pickup",
+      "ready-for-delivery",
       "out-for-delivery",
       "cancelled",
     ].includes(nextStatus!);

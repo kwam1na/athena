@@ -12,6 +12,11 @@ import {
   Section,
   Text,
 } from "@react-email/components";
+import {
+  buildReadyForPickupMessage,
+  formatStoreScheduleHours,
+  type StoreHoursRow,
+} from "./fulfillmentDetails";
 
 export type OrderEmailType = "confirmation" | "ready" | "complete" | "canceled";
 
@@ -33,6 +38,7 @@ export interface OrderEmailProps {
   order_number: string;
   order_date: string;
   order_status_messaging: string;
+  status_title?: string;
   total: string;
   subtotal: string;
   delivery_fee?: string;
@@ -40,6 +46,7 @@ export interface OrderEmailProps {
   items: OrderItem[];
   pickup_type: string;
   pickup_details: string;
+  pickup_hours?: StoreHoursRow[];
   customer_name: string;
 }
 
@@ -81,27 +88,74 @@ export const orderEmailPreviewProps = {
   customer_name: "John",
 } satisfies OrderEmailProps;
 
+export const orderEmailPreviewVariants = {
+  confirmation: orderEmailPreviewProps,
+  readyPickup: {
+    ...orderEmailPreviewProps,
+    type: "ready",
+    status_title: "Your order is ready for pickup",
+    order_status_messaging: buildReadyForPickupMessage("Wigclub"),
+    pickup_type: "Pickup",
+    pickup_details: "Wigclub · 2 Jungle Avenue, East Legon, Accra",
+    pickup_hours: formatStoreScheduleHours({
+      weeklyClosedDays: [0],
+      weeklyWindows: [
+        ...[1, 2, 3, 4, 5].map((dayOfWeek) => ({
+          dayOfWeek,
+          startMinute: 9 * 60,
+          endMinute: 18 * 60,
+        })),
+        { dayOfWeek: 6, startMinute: 10 * 60, endMinute: 14 * 60 },
+      ],
+    }),
+  },
+  readyDelivery: {
+    ...orderEmailPreviewProps,
+    type: "ready",
+    status_title: "Your order is ready for delivery",
+    order_status_messaging: "We’ll let you know as soon as it’s on the way.",
+    pickup_type: "Delivery",
+    pickup_details: "9 Cashew Link, Adjiriganor, Greater Accra, Ghana",
+  },
+  outForDelivery: {
+    ...orderEmailPreviewProps,
+    type: "ready",
+    status_title: "Your order is on the way",
+    order_status_messaging: "It’s headed to your delivery address.",
+    pickup_type: "Delivery",
+    pickup_details: "9 Cashew Link, Adjiriganor, Greater Accra, Ghana",
+  },
+  complete: {
+    ...orderEmailPreviewProps,
+    type: "complete",
+    order_status_messaging:
+      "Your order has been delivered. We hope you enjoy your purchase.",
+  },
+  canceled: {
+    ...orderEmailPreviewProps,
+    type: "canceled",
+    order_status_messaging:
+      "Your order has been canceled. Contact us if you have any questions.",
+  },
+} satisfies Record<string, OrderEmailProps>;
+
 const statusContent: Record<
   OrderEmailType,
-  { accent: string; greeting: (name: string) => string; title: string }
+  { greeting: (name: string) => string; title: string }
 > = {
   confirmation: {
-    accent: "#2d7d4f",
     greeting: (name) => `Thanks for your order, ${name}`,
     title: "Order confirmed",
   },
   ready: {
-    accent: "#2867b2",
-    greeting: (name) => `Your order is ready, ${name}`,
+    greeting: (name) => `Get excited, ${name}`,
     title: "Your order is ready",
   },
   complete: {
-    accent: "#2d7d4f",
     greeting: (name) => `Thanks for shopping with us, ${name}`,
     title: "Order complete",
   },
   canceled: {
-    accent: "#b5483f",
     greeting: (name) => `An update about your order, ${name}`,
     title: "Order canceled",
   },
@@ -114,6 +168,7 @@ export function OrderEmail({
   order_number,
   order_date,
   order_status_messaging,
+  status_title,
   total,
   subtotal,
   delivery_fee,
@@ -121,11 +176,13 @@ export function OrderEmail({
   items,
   pickup_type,
   pickup_details,
+  pickup_hours,
   customer_name,
 }: OrderEmailProps) {
   const status = statusContent[type];
+  const statusTitle = status_title?.trim() || status.title;
   const customerName = customer_name.trim() || "there";
-  const previewText = `${store_name}: ${status.title} · ${order_number}`;
+  const previewText = `${store_name}: ${statusTitle} · ${order_number}`;
   const fulfillmentHeading = `${pickup_type} details`;
 
   return (
@@ -139,13 +196,8 @@ export function OrderEmail({
             <Text style={styles.greeting}>{status.greeting(customerName)}</Text>
           </Section>
 
-          <Section
-            style={{
-              ...styles.statusPanel,
-              borderLeft: `3px solid ${status.accent}`,
-            }}
-          >
-            <Text style={styles.statusTitle}>{status.title}</Text>
+          <Section style={styles.statusPanel}>
+            <Text style={styles.statusTitle}>{statusTitle}</Text>
             <Text style={styles.statusMessage}>{order_status_messaging}</Text>
           </Section>
 
@@ -224,6 +276,26 @@ export function OrderEmail({
           <Section style={styles.separatedSection}>
             <SectionHeading>{fulfillmentHeading}</SectionHeading>
             <Text style={styles.fulfillmentDetails}>{pickup_details}</Text>
+            {pickup_type.toLowerCase() === "pickup" && pickup_hours?.length ? (
+              <Section style={styles.storeHours}>
+                <Text style={styles.storeHoursHeading}>Store hours</Text>
+                {pickup_hours.map((row) => (
+                  <Row
+                    key={`${row.dayLabel}-${row.hoursLabel}`}
+                    style={styles.storeHoursRow}
+                  >
+                    <Column>
+                      <Text style={styles.storeHoursDay}>{row.dayLabel}</Text>
+                    </Column>
+                    <Column style={styles.storeHoursValueColumn}>
+                      <Text style={styles.storeHoursValue}>
+                        {row.hoursLabel}
+                      </Text>
+                    </Column>
+                  </Row>
+                ))}
+              </Section>
+            ) : null}
           </Section>
 
           <Section style={styles.summarySection}>
@@ -245,7 +317,6 @@ export function OrderEmail({
             </Text>
             <Text style={styles.footerText}>
               This order update was sent to {customerEmail}.
-              <br />2 Jungle Avenue, East Legon · Accra, Ghana
             </Text>
           </Section>
         </Container>
@@ -294,7 +365,7 @@ function SummaryRow({
 }
 
 export default function OrderEmailPreview() {
-  return <OrderEmail {...orderEmailPreviewProps} />;
+  return <OrderEmail {...orderEmailPreviewVariants.confirmation} />;
 }
 
 const fontSans =
@@ -402,7 +473,11 @@ const styles: Record<string, CSSProperties> = {
     objectFit: "cover",
     width: "56px",
   },
-  itemImageColumn: { padding: "12px 0", verticalAlign: "middle", width: "56px" },
+  itemImageColumn: {
+    padding: "12px 0",
+    verticalAlign: "middle",
+    width: "56px",
+  },
   itemMetadata: {
     color: colors.muted,
     fontSize: "11px",
@@ -432,7 +507,11 @@ const styles: Record<string, CSSProperties> = {
     margin: 0,
     textAlign: "right",
   },
-  itemPriceColumn: { padding: "15px 0", verticalAlign: "middle", width: "92px" },
+  itemPriceColumn: {
+    padding: "15px 0",
+    verticalAlign: "middle",
+    width: "92px",
+  },
   itemRow: { width: "100%" },
   itemsList: { marginTop: "10px" },
   section: { padding: "26px 32px" },
@@ -465,7 +544,7 @@ const styles: Record<string, CSSProperties> = {
     backgroundColor: colors.surface,
     borderBottom: `1px solid ${colors.border}`,
     borderTop: `1px solid ${colors.border}`,
-    padding: "20px 32px 21px 29px",
+    padding: "20px 32px 21px",
   },
   statusTitle: {
     color: colors.foreground,
@@ -483,6 +562,34 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: "35px",
     margin: 0,
   },
+  storeHours: {
+    borderTop: `1px solid ${colors.border}`,
+    marginTop: "18px",
+    paddingTop: "16px",
+  },
+  storeHoursDay: {
+    color: colors.muted,
+    fontSize: "12px",
+    lineHeight: "18px",
+    margin: 0,
+  },
+  storeHoursHeading: {
+    color: colors.foreground,
+    fontSize: "12px",
+    fontWeight: 600,
+    lineHeight: "18px",
+    margin: "0 0 8px",
+  },
+  storeHoursRow: { marginTop: "5px" },
+  storeHoursValue: {
+    color: colors.foreground,
+    fontSize: "12px",
+    fontWeight: 500,
+    lineHeight: "18px",
+    margin: 0,
+    textAlign: "right",
+  },
+  storeHoursValueColumn: { textAlign: "right", width: "190px" },
   summaryDivider: { borderColor: colors.border, margin: "15px 0" },
   summaryLabel: {
     color: colors.muted,

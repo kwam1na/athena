@@ -5,9 +5,7 @@ import { NewOrderAdmin, newOrderAdminPreviewProps } from "./NewOrderAdmin";
 
 describe("NewOrderAdmin", () => {
   it("renders a compact operational new-order report", async () => {
-    const html = await render(
-      <NewOrderAdmin {...newOrderAdminPreviewProps} />,
-    );
+    const html = await render(<NewOrderAdmin {...newOrderAdminPreviewProps} />);
 
     expect(html).toContain("font-family:Inter, -apple-system");
     expect(html).toContain("max-width:640px;background-color:#ffffff");
@@ -24,7 +22,10 @@ describe("NewOrderAdmin", () => {
     expect(html).toContain("GH₵150");
     expect(html).toContain("View order");
     expect(html).toContain(newOrderAdminPreviewProps.appUrl);
-    expect(html).toContain("background-color:#1b1c1f");
+    expect(html).toContain("background-color:transparent");
+    expect(html).toContain("border:1px solid #e2e3e6");
+    expect(html).toContain("color:#1b1c1f");
+    expect(html).not.toContain("background-color:#1b1c1f");
     expect(html).not.toContain("#faeaf0");
     expect(html).not.toContain("border-radius:999px");
   });

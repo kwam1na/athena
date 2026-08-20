@@ -74,6 +74,7 @@ export const sendOrderEmail = async (params: {
   order_number: string;
   order_date: string;
   order_status_messaging: string;
+  status_title?: string;
   total: string;
   subtotal: string;
   delivery_fee?: string;
@@ -90,6 +91,7 @@ export const sendOrderEmail = async (params: {
   }>;
   pickup_type: string;
   pickup_details: string;
+  pickup_hours?: Array<{ dayLabel: string; hoursLabel: string }>;
   customer_name: string;
 }) => {
   const html = await render(
@@ -100,6 +102,7 @@ export const sendOrderEmail = async (params: {
       order_number={params.order_number}
       order_date={params.order_date}
       order_status_messaging={params.order_status_messaging}
+      status_title={params.status_title}
       total={params.total}
       subtotal={params.subtotal}
       delivery_fee={params.delivery_fee}
@@ -107,6 +110,7 @@ export const sendOrderEmail = async (params: {
       items={params.items}
       pickup_type={params.pickup_type}
       pickup_details={params.pickup_details}
+      pickup_hours={params.pickup_hours}
       customer_name={params.customer_name}
     />,
   );
@@ -122,7 +126,7 @@ export const sendOrderEmail = async (params: {
         name: params.customer_name,
       },
     ],
-    subject: `Your Wigclub order`,
+    subject: `Your ${capitalizeWords(params.store_name)} order`,
     html,
   };
 

@@ -17,6 +17,7 @@ import {
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import { backfillStoreSchedulesFromLegacyPolicyWithCtx } from "../migrations/backfillStoreSchedules";
 import {
+  getActiveStoreScheduleForEmail,
   getStoreScheduleContextForStoreAtWithCtx,
   getStoreScheduleForAdmin,
   getStoreDayContext,
@@ -103,6 +104,9 @@ describe("store schedule resolver", () => {
         currentWindow: null,
         nextWindow: null,
       }),
+    ).not.toThrow();
+    expect(() =>
+      assertConformsToExportedReturns(getActiveStoreScheduleForEmail, schedule),
     ).not.toThrow();
     expect(() =>
       assertConformsToExportedReturns(getStoreScheduleSummary, {
