@@ -80,6 +80,7 @@ describe("WorkflowTraceView", () => {
         primaryLookupValue: "register-session-42",
         registerSession: {
           _id: "register-session-42",
+          openedOperatingDate: "2026-04-21",
           registerNumber: "07",
           terminalName: "Olorin",
         },
@@ -104,7 +105,10 @@ describe("WorkflowTraceView", () => {
       traceId: "register_session:register-session-42",
     });
     expect(screen.getByTestId("workflow-trace-page-header")).toHaveTextContent(
-      /Register 07\s*\/\s*Olorin\s*\/\s*ION-42\s*\/\s*History/,
+      /Register 07\s*\/\s*Olorin\s*\/\s*Tue, Apr 21, 2026\s*\/\s*History/,
+    );
+    expect(screen.getByTestId("workflow-trace-page-header")).not.toHaveTextContent(
+      "ION-42",
     );
     expect(
       screen.getByTestId("workflow-trace-page-header"),

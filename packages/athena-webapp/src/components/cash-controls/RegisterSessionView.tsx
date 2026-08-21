@@ -277,7 +277,7 @@ type RegisterSessionActivity = {
   isDone: boolean;
   registerSession: Pick<
     RegisterSessionDetail,
-    "_id" | "registerNumber" | "terminalName"
+    "_id" | "openedOperatingDate" | "registerNumber" | "terminalName"
   >;
   page: Array<{
     _id: string;
@@ -1061,7 +1061,7 @@ export function RegisterSessionActivityViewContent({
               <RegisterSessionIdentity
                 fallbackTitle="POS activity"
                 registerSession={activity?.registerSession}
-                showSessionCode
+                showOperatingDate
               />
               {activity?.registerSession ? (
                 <span className="min-w-0 truncate text-xs text-muted-foreground sm:whitespace-nowrap sm:text-sm">
@@ -1305,7 +1305,12 @@ type RegisterSessionHeaderIdentityProps = {
   fallbackTitle?: string;
   registerSession?: Pick<
     RegisterSessionDetail,
-    "_id" | "localSyncStatus" | "registerNumber" | "status" | "terminalName"
+    | "_id"
+    | "localSyncStatus"
+    | "openedOperatingDate"
+    | "registerNumber"
+    | "status"
+    | "terminalName"
   > | null;
   statusLabel?: string;
   syncStatus?: PosSyncStatusPresentation;
@@ -1340,6 +1345,7 @@ function RegisterSessionHeaderIdentity({
         <RegisterSessionIdentity
           fallbackTitle={fallbackTitle}
           registerSession={registerSession}
+          showOperatingDate
         />
         {registerSession ? (
           <motion.span
