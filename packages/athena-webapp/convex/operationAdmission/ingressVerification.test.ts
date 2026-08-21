@@ -87,7 +87,9 @@ describe("missing verifier configuration", () => {
     await createMtnMomoCallbackVerifier({})(input("{}", {}));
     await createHarnessWaiverBrokerVerifier({})(input("", {}));
 
-    const reported = consoleError.mock.calls.map((call) => String(call[0]));
+    const reported = consoleError.mock.calls.map((call: unknown[]) =>
+      String(call[0]),
+    );
     expect(reported).toHaveLength(4);
     for (const variable of [
       PAYSTACK_SECRET_ENV,
@@ -95,7 +97,9 @@ describe("missing verifier configuration", () => {
       MTN_MOMO_CALLBACK_SECRET_ENV,
       HARNESS_WAIVER_BROKER_SECRET_ENV,
     ]) {
-      expect(reported.some((line) => line.includes(variable))).toBe(true);
+      expect(reported.some((line: string) => line.includes(variable))).toBe(
+        true,
+      );
     }
   });
 

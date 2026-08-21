@@ -16,7 +16,7 @@ related_components:
   - Athena webapp Vitest configuration
   - storefront webapp Vitest configuration
 tags: [vitest, vitest-4, coverage, github-actions, worker-rpc, ci]
-delivery_diff_fingerprint: 6f624f948858559f8d36b5ed6e5a03a54b32dabbfd0a17a11ec8612c27b638c7
+delivery_diff_fingerprint: 36c7f4782501f0b645e9c0a4c6e48131068f725032c6af0eee0d32b994412bf0
 ---
 
 # Stabilize Vitest coverage worker RPC on GitHub runners
