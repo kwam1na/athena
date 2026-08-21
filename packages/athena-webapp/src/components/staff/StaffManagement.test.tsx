@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useMutation, useQuery } from "convex/react";
@@ -277,6 +277,11 @@ describe("StaffManagement", () => {
     const rows = screen.getAllByRole("row");
     expect(rows[1]).toHaveTextContent("Zara Active");
     expect(rows[2]).toHaveTextContent("Aaron Inactive");
+    expect(within(rows[2]).getByText("Aaron Inactive")).toHaveClass(
+      "text-gray-400",
+    );
+    expect(within(rows[2]).getByText("amens")).toHaveClass("text-gray-400");
+    expect(within(rows[2]).getByText("Cashier")).toHaveClass("text-gray-400");
     expect(screen.queryByText("No actions")).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Edit" })).toHaveLength(1);
     const deactivateButton = screen.getByRole("button", {

@@ -249,10 +249,11 @@ describe("WorkflowTraceTimeline", () => {
     expect(screen.getByRole("listitem")).toHaveTextContent(
       "Ato Kwamina recorded transaction #047206, a GH₵240 cash sale. Drawer +GH₵240.",
     );
-    expect(screen.getByRole("link", { name: /#047206/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "#047206" })).toHaveAttribute(
       "href",
       "/transactions/transaction-1",
     );
+    expect(screen.getByRole("listitem")).not.toHaveTextContent("Open #047206");
   });
 
   it("identifies who recorded and approved a future transaction void", () => {
@@ -286,10 +287,11 @@ describe("WorkflowTraceTimeline", () => {
     expect(screen.getByRole("listitem")).toHaveTextContent(
       "Ato Kwamina recorded a GH₵12,500 void for transaction #155431. Approved by Kwamina Mensah. No drawer impact.",
     );
-    expect(screen.getByRole("link", { name: /#155431/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "#155431" })).toHaveAttribute(
       "href",
       "/transactions/transaction-1",
     );
+    expect(screen.getByRole("listitem")).not.toHaveTextContent("Open #155431");
   });
 
   it("adds cash context to closeout submission statements", () => {

@@ -895,17 +895,28 @@ export const StaffManagement = ({
                 const canDeactivate =
                   staff.status === "active" &&
                   staff.credentialStatus !== "revoked";
+                const inactiveDetailClass =
+                  staff.status === "inactive" ? "text-gray-400" : undefined;
 
                 return (
                   <TableRow key={staff._id}>
                     <TableCell className="flex items-center gap-4">
                       <div className="flex gap-2 items-center">
-                        <div className="font-medium">{staff.fullName}</div>
-                        <p className="text-muted-foreground text-sm">
+                        <div
+                          className={`font-medium ${inactiveDetailClass ?? ""}`}
+                        >
+                          {staff.fullName}
+                        </div>
+                        <p
+                          className={`text-sm ${inactiveDetailClass ?? "text-muted-foreground"}`}
+                        >
                           {staff.username ?? "—"}
                         </p>
                       </div>
-                      <Badge variant="outline">
+                      <Badge
+                        variant="outline"
+                        className={inactiveDetailClass}
+                      >
                         {formatRoleLabel(staff.primaryRole)}
                       </Badge>
                     </TableCell>
