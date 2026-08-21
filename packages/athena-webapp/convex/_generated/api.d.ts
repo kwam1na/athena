@@ -8,6 +8,10 @@
  * @module
  */
 
+import type * as agentHarness_lifecycle from "../agentHarness/lifecycle.js";
+import type * as agentHarness_retention from "../agentHarness/retention.js";
+import type * as agentHarness_testSupport from "../agentHarness/testSupport.js";
+import type * as agentHarness_turnBindings from "../agentHarness/turnBindings.js";
 import type * as app from "../app.js";
 import type * as auth from "../auth.js";
 import type * as auth_PosRecoveryCode from "../auth/PosRecoveryCode.js";
@@ -445,6 +449,7 @@ import type * as reports_weeklyCloseEvidence from "../reports/weeklyCloseEvidenc
 import type * as reports_weeklyInventory from "../reports/weeklyInventory.js";
 import type * as reports_weeklyPeriods from "../reports/weeklyPeriods.js";
 import type * as reports_weeklyRepair from "../reports/weeklyRepair.js";
+import type * as schemas_agentHarness from "../schemas/agentHarness.js";
 import type * as schemas_automation from "../schemas/automation.js";
 import type * as schemas_contextTracking from "../schemas/contextTracking.js";
 import type * as schemas_customerMessaging_customerMessageDelivery from "../schemas/customerMessaging/customerMessageDelivery.js";
@@ -669,6 +674,10 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "agentHarness/lifecycle": typeof agentHarness_lifecycle;
+  "agentHarness/retention": typeof agentHarness_retention;
+  "agentHarness/testSupport": typeof agentHarness_testSupport;
+  "agentHarness/turnBindings": typeof agentHarness_turnBindings;
   app: typeof app;
   auth: typeof auth;
   "auth/PosRecoveryCode": typeof auth_PosRecoveryCode;
@@ -1106,6 +1115,7 @@ declare const fullApi: ApiFromModules<{
   "reports/weeklyInventory": typeof reports_weeklyInventory;
   "reports/weeklyPeriods": typeof reports_weeklyPeriods;
   "reports/weeklyRepair": typeof reports_weeklyRepair;
+  "schemas/agentHarness": typeof schemas_agentHarness;
   "schemas/automation": typeof schemas_automation;
   "schemas/contextTracking": typeof schemas_contextTracking;
   "schemas/customerMessaging/customerMessageDelivery": typeof schemas_customerMessaging_customerMessageDelivery;

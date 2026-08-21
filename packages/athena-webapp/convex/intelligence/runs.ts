@@ -151,8 +151,14 @@ export function shouldSupersedeArtifact(
   );
 }
 
-function isActiveRunStatus(status: Doc<"intelligenceRun">["status"]) {
+export function isActiveRunStatus(status: Doc<"intelligenceRun">["status"]) {
   return status !== "completed" && status !== "failed" && status !== "canceled";
+}
+
+export function isAgentHarnessRun(
+  run: Pick<Doc<"intelligenceRun">, "harnessKind">,
+): boolean {
+  return run.harnessKind === "agent";
 }
 
 export function isActiveRunStale(
@@ -416,6 +422,39 @@ export const failRun = internalMutation({
   },
   handler: async (ctx, args) => {
     await transitionRun(ctx, args.runId, "failed", { error: args.error });
+  },
+});
+
+/**
+ * Cancel a provider-backed intelligence run. Idempotent on an already
+ * canceled run; a run that ended differently is left as it is and reported.
+ * Agent-harness runs (`harnessKind: "agent"`) must be canceled through
+ * `agentHarness/lifecycle.cancelAgentRun`, which also clamps their child
+ * attempts, calls, reservations, and turn binding.
+ */
+export const cancelRun = internalMutation({
+  args: {
+    runId: v.id("intelligenceRun"),
+    reason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const run = await ctx.db.get("intelligenceRun", args.runId);
+    if (!run) throw new Error("Intelligence run not found");
+    if (isAgentHarnessRun(run)) {
+      throw new Error("Agent harness runs are canceled through the harness lifecycle.");
+    }
+    if (!isActiveRunStatus(run.status)) {
+      return { runId: run._id, status: run.status, canceled: false as const };
+    }
+    await transitionRun(ctx, run._id, "canceled", {
+      error: {
+        code: "canceled",
+        message: "The intelligence run was canceled.",
+        diagnostic: args.reason,
+        retryable: false,
+      },
+    });
+    return { runId: run._id, status: "canceled" as const, canceled: true as const };
   },
 });
 

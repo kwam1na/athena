@@ -18,6 +18,9 @@ This index enumerates the current automated test files and ties them back to the
 
 ## Section `convex`
 
+- [`convex/agentHarness/lifecycle.test.ts`](../../convex/agentHarness/lifecycle.test.ts)
+- [`convex/agentHarness/retention.test.ts`](../../convex/agentHarness/retention.test.ts)
+- [`convex/agentHarness/turnBindings.test.ts`](../../convex/agentHarness/turnBindings.test.ts)
 - [`convex/app.test.ts`](../../convex/app.test.ts)
 - [`convex/auth.test.ts`](../../convex/auth.test.ts)
 - [`convex/auth/PosRecoveryCode.test.ts`](../../convex/auth/PosRecoveryCode.test.ts)
@@ -407,6 +410,7 @@ This index enumerates the current automated test files and ties them back to the
 
 ## Section `shared`
 
+- [`shared/agentHarness/execution.test.ts`](../../shared/agentHarness/execution.test.ts)
 - [`shared/commandResult.test.ts`](../../shared/commandResult.test.ts)
 - [`shared/currencyFormatter.test.ts`](../../shared/currencyFormatter.test.ts)
 - [`shared/homepageRanking.test.ts`](../../shared/homepageRanking.test.ts)
