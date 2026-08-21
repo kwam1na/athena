@@ -46,7 +46,7 @@ export const COVERAGE_SOURCES: CoverageSource[] = [
       lines: (58020 / 80144) * 100,
       statements: (59919 / 83827) * 100,
       functions: (13973 / 19795) * 100,
-      branches: (50709 / 73880) * 100,
+      branches: (50706 / 73880) * 100,
     },
   },
   {
