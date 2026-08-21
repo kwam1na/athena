@@ -121,9 +121,9 @@ describe("QuickAddProductDialog", () => {
     mockedScanner.BrowserMultiFormatReader.mockReset();
     mockedScanner.decodeFromConstraints.mockReset();
     mockedScanner.stop.mockReset();
-    mockedScanner.BrowserMultiFormatReader.mockImplementation(() => ({
-      decodeFromConstraints: mockedScanner.decodeFromConstraints,
-    }));
+    mockedScanner.BrowserMultiFormatReader.mockImplementation(class {
+      decodeFromConstraints = mockedScanner.decodeFromConstraints;
+    });
   });
 
   it("does not seed an extra variant when multiple variants are enabled", async () => {

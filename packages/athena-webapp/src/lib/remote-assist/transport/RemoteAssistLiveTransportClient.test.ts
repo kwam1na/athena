@@ -21,15 +21,15 @@ const liveKitMocks = vi.hoisted(() => ({
 
 vi.mock("livekit-client", () => ({
   DataPacket_Kind: { RELIABLE: 0 },
-  Room: vi.fn(() => ({
-    connect: liveKitMocks.connect,
-    disconnect: liveKitMocks.disconnect,
-    localParticipant: {
-      publishData: liveKitMocks.publishData,
+  Room: vi.fn(
+    class {
+      connect = liveKitMocks.connect;
+      disconnect = liveKitMocks.disconnect;
+      localParticipant = { publishData: liveKitMocks.publishData };
+      off = liveKitMocks.off;
+      on = liveKitMocks.on;
     },
-    off: liveKitMocks.off,
-    on: liveKitMocks.on,
-  })),
+  ),
   RoomEvent: {
     DataReceived: "DataReceived",
     Disconnected: "Disconnected",

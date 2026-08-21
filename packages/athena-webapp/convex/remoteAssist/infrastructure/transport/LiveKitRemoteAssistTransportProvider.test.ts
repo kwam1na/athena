@@ -23,9 +23,12 @@ import {
 describe("LiveKit Remote Assist transport provider", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    mocks.AccessToken.mockReturnValue(mocks.accessToken);
-    mocks.RoomServiceClient.mockReturnValue({
-      createRoom: mocks.createRoom,
+    mocks.AccessToken.mockImplementation(class {
+      addGrant = mocks.accessToken.addGrant;
+      toJwt = mocks.accessToken.toJwt;
+    });
+    mocks.RoomServiceClient.mockImplementation(class {
+      createRoom = mocks.createRoom;
     });
   });
 

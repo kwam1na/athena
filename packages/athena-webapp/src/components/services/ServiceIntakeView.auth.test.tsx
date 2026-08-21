@@ -75,11 +75,13 @@ async function chooseSelectOption(
 describe("ServiceIntakeView auth readiness", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
-    globalThis.ResizeObserver = vi.fn().mockImplementation(() => ({
-      disconnect: vi.fn(),
-      observe: vi.fn(),
-      unobserve: vi.fn(),
-    }));
+    globalThis.ResizeObserver = vi.fn().mockImplementation(
+      class {
+        disconnect = vi.fn();
+        observe = vi.fn();
+        unobserve = vi.fn();
+      },
+    );
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.clearAllMocks();
     mockedHooks.useAuth.mockReturnValue({
