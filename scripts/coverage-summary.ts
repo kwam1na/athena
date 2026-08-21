@@ -43,10 +43,10 @@ export const COVERAGE_SOURCES: CoverageSource[] = [
     name: "@athena/webapp",
     summaryPath: "packages/athena-webapp/coverage/coverage-summary.json",
     minimumPercent: {
-      lines: (36789 / 99096) * 100,
-      statements: (36789 / 99096) * 100,
-      functions: (1150 / 2604) * 100,
-      branches: (4730 / 6479) * 100,
+      lines: (58020 / 80144) * 100,
+      statements: (59919 / 83827) * 100,
+      functions: (13973 / 19795) * 100,
+      branches: (50709 / 73880) * 100,
     },
   },
   {
@@ -54,10 +54,10 @@ export const COVERAGE_SOURCES: CoverageSource[] = [
     name: "@athena/storefront-webapp",
     summaryPath: "packages/storefront-webapp/coverage/coverage-summary.json",
     minimumPercent: {
-      lines: (3071 / 23048) * 100,
-      statements: (3071 / 23048) * 100,
-      functions: (100 / 481) * 100,
-      branches: (371 / 665) * 100,
+      lines: (914 / 5652) * 100,
+      statements: (947 / 5877) * 100,
+      functions: (193 / 1636) * 100,
+      branches: (692 / 4460) * 100,
     },
   },
   {
