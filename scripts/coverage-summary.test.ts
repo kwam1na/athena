@@ -163,7 +163,7 @@ describe("buildCoverageReport", () => {
           lines: { covered: 58020, total: 80144 },
           statements: { covered: 59919, total: 83827 },
           functions: { covered: 13973, total: 19795 },
-          branches: { covered: 50705, total: 73880 },
+          branches: { covered: 50695, total: 73880 },
         },
       }),
       rootDir

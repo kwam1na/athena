@@ -1093,11 +1093,11 @@ describe("repo harness ergonomics", () => {
     expect(workflow).toContain("coverage_workers:");
     expect(workflow).toContain("default: \"2\"");
     expect(workflow).toContain(
-      "ATHENA_COVERAGE_MAX_WORKERS: ${{ inputs.coverage_workers || '2' }}",
+      "ATHENA_COVERAGE_MAX_WORKERS: ${{ inputs.coverage_workers || '1' }}",
     );
     expect(workflow).toContain("/usr/bin/time -v bun run test:coverage");
     expect(JSON.parse(webappPackage).scripts["test:coverage"]).toBe(
-      "vitest run --coverage --maxWorkers=${ATHENA_COVERAGE_MAX_WORKERS:-2}",
+      "vitest run --coverage --maxWorkers=${ATHENA_COVERAGE_MAX_WORKERS:-1}",
     );
     const athenaDependencies = JSON.parse(webappPackage).devDependencies;
     const storefrontDependencies = JSON.parse(storefrontPackage).devDependencies;

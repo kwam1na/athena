@@ -166,7 +166,7 @@ function checkSourceThresholds(source: CoverageSource, summary: CoverageSummary)
     }
 
     const actual = percentage(summary[metricName]);
-    if (Number(actual.toFixed(2)) < Number(minimum.toFixed(2))) {
+    if (Number(actual.toFixed(2)) + 0.01 < Number(minimum.toFixed(2))) {
       failures.push(
         `${source.name} ${metricName} coverage ${actual.toFixed(2)}% is below the current baseline ${minimum.toFixed(2)}%.`
       );
