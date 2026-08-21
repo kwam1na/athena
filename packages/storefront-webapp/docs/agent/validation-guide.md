@@ -16,7 +16,7 @@ Start here for most layout, component, and route behavior changes that do not al
 
 ## Route runtime or build-pipeline edits
 
-Touched surfaces: `index.html`, `package.json`, `tsconfig.json`, `src/main.tsx`, `src/router.tsx`, `src/routeTree.gen.ts`, `vite.config.ts`
+Touched surfaces: `index.html`, `package.json`, `tsconfig.json`, `src/main.tsx`, `src/router.tsx`, `src/routeTree.gen.ts`, `vitest.config.ts`, `vite.config.ts`
 
 Run:
 
