@@ -58,7 +58,7 @@ describe("validateWorktreeBootstrap", () => {
     await expect(validateWorktreeBootstrap(rootDir)).resolves.toBeUndefined();
   });
 
-  it("blocks a linked worktree until the setup marker exists", async () => {
+  it("blocks a linked worktree through the runtime-neutral Git runner until the setup marker exists", async () => {
     const { worktreeDir } = await createFixtureRepo();
 
     await expect(validateWorktreeBootstrap(worktreeDir)).rejects.toThrow(

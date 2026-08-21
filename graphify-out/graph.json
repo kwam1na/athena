@@ -172679,7 +172679,7 @@
       "relation": "contains",
       "source": "scripts_worktree_bootstrap_check_ts",
       "source_file": "scripts/worktree-bootstrap-check.ts",
-      "source_location": "L27",
+      "source_location": "L32",
       "target": "worktree_bootstrap_check_resolvegitpath",
       "weight": 1
     },
@@ -172691,7 +172691,7 @@
       "relation": "contains",
       "source": "scripts_worktree_bootstrap_check_ts",
       "source_file": "scripts/worktree-bootstrap-check.ts",
-      "source_location": "L6",
+      "source_location": "L7",
       "target": "worktree_bootstrap_check_rungit",
       "weight": 1
     },
@@ -172703,7 +172703,7 @@
       "relation": "contains",
       "source": "scripts_worktree_bootstrap_check_ts",
       "source_file": "scripts/worktree-bootstrap-check.ts",
-      "source_location": "L31",
+      "source_location": "L36",
       "target": "worktree_bootstrap_check_validateworktreebootstrap",
       "weight": 1
     },
@@ -192503,7 +192503,7 @@
       "relation": "calls",
       "source": "worktree_bootstrap_check_resolvegitpath",
       "source_file": "scripts/worktree-bootstrap-check.ts",
-      "source_location": "L38",
+      "source_location": "L43",
       "target": "worktree_bootstrap_check_validateworktreebootstrap",
       "weight": 1
     },
@@ -192515,7 +192515,7 @@
       "relation": "calls",
       "source": "worktree_bootstrap_check_rungit",
       "source_file": "scripts/worktree-bootstrap-check.ts",
-      "source_location": "L33",
+      "source_location": "L38",
       "target": "worktree_bootstrap_check_validateworktreebootstrap",
       "weight": 1
     },
@@ -305344,7 +305344,7 @@
       "label": "resolveGitPath()",
       "norm_label": "resolvegitpath()",
       "source_file": "scripts/worktree-bootstrap-check.ts",
-      "source_location": "L27"
+      "source_location": "L32"
     },
     {
       "community": 912,
@@ -305353,7 +305353,7 @@
       "label": "runGit()",
       "norm_label": "rungit()",
       "source_file": "scripts/worktree-bootstrap-check.ts",
-      "source_location": "L6"
+      "source_location": "L7"
     },
     {
       "community": 912,
@@ -305362,7 +305362,7 @@
       "label": "validateWorktreeBootstrap()",
       "norm_label": "validateworktreebootstrap()",
       "source_file": "scripts/worktree-bootstrap-check.ts",
-      "source_location": "L31"
+      "source_location": "L36"
     },
     {
       "community": 913,
