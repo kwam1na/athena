@@ -34,6 +34,7 @@
         "packages/storefront-webapp/src/main.tsx",
         "packages/storefront-webapp/src/router.tsx",
         "packages/storefront-webapp/src/routeTree.gen.ts",
+        "packages/storefront-webapp/vitest.config.ts",
         "packages/storefront-webapp/vite.config.ts"
       ],
       "commands": [

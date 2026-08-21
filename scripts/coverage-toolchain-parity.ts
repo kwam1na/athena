@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -24,7 +25,7 @@ type CoverageToolchainOptions = {
   repair?: boolean;
 };
 
-export const VITEST_TOOLCHAIN_VERSION = "3.2.4";
+export const VITEST_TOOLCHAIN_VERSION = "4.1.11";
 
 export const COVERAGE_TOOLCHAIN_MANIFESTS: ManifestCheck[] = [
   {
@@ -147,17 +148,16 @@ function formatFailureMessage(failures: CoverageToolchainFailure[]) {
 }
 
 function runFrozenInstall(rootDir: string, installCommand: string[]) {
-  const result = Bun.spawnSync(installCommand, {
+  const result = spawnSync(installCommand[0], installCommand.slice(1), {
     cwd: rootDir,
-    stderr: "inherit",
-    stdout: "inherit",
+    stdio: "inherit",
   });
 
-  if (result.exitCode !== 0) {
+  if (result.status !== 0) {
     throw new Error(
       `Coverage toolchain repair failed: ${installCommand.join(
         " "
-      )} exited with code ${result.exitCode ?? "unknown"}.`
+      )} exited with code ${result.status ?? "unknown"}.`
     );
   }
 }

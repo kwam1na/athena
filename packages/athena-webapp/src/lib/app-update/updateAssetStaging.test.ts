@@ -205,7 +205,11 @@ describe("update asset staging", () => {
     };
     const fakeChannel = new FakeMessageChannel();
     const win = {
-      MessageChannel: vi.fn(() => fakeChannel),
+      MessageChannel: vi.fn(class {
+        constructor() {
+          return fakeChannel;
+        }
+      }),
       caches: {},
       clearTimeout: globalThis.clearTimeout.bind(globalThis),
       location: { origin },

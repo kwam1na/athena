@@ -95,11 +95,13 @@ async function chooseServiceCatalogOption(
 describe("ServiceIntakeViewContent", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
-    globalThis.ResizeObserver = vi.fn().mockImplementation(() => ({
-      disconnect: vi.fn(),
-      observe: vi.fn(),
-      unobserve: vi.fn(),
-    }));
+    globalThis.ResizeObserver = vi.fn().mockImplementation(
+      class {
+        disconnect = vi.fn();
+        observe = vi.fn();
+        unobserve = vi.fn();
+      } as never,
+    );
     vi.clearAllMocks();
   });
 

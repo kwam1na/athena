@@ -1051,7 +1051,7 @@ describe("repo harness ergonomics", () => {
   );
 
   it("schedules a recurring harness drift check in GitHub Actions", async () => {
-    const [workflow, webappPackage, rootPackage, vitestPatch] =
+    const [workflow, webappPackage, storefrontPackage, rootPackage] =
       await Promise.all([
       readFile(
         path.join(ROOT_DIR, ".github/workflows/athena-pr-tests.yml"),
@@ -1061,8 +1061,11 @@ describe("repo harness ergonomics", () => {
         path.join(ROOT_DIR, "packages/athena-webapp/package.json"),
         "utf8",
       ),
+      readFile(
+        path.join(ROOT_DIR, "packages/storefront-webapp/package.json"),
+        "utf8",
+      ),
       readFile(path.join(ROOT_DIR, "package.json"), "utf8"),
-      readFile(path.join(ROOT_DIR, "patches/vitest@3.2.4.patch"), "utf8"),
     ]);
 
     expect(workflow).toContain("schedule:");
@@ -1087,15 +1090,28 @@ describe("repo harness ergonomics", () => {
     expect(workflow).toContain(
       "Confirm consolidated storefront validation coverage",
     );
-    expect(workflow).toContain('ATHENA_COVERAGE_MAX_WORKERS: "1"');
+    expect(workflow).toContain("coverage_workers:");
+    expect(workflow).toContain("default: \"2\"");
+    expect(workflow).toContain(
+      "ATHENA_COVERAGE_MAX_WORKERS: ${{ inputs.coverage_workers || '2' }}",
+    );
     expect(workflow).toContain("/usr/bin/time -v bun run test:coverage");
     expect(JSON.parse(webappPackage).scripts["test:coverage"]).toBe(
       "vitest run --coverage --maxWorkers=${ATHENA_COVERAGE_MAX_WORKERS:-2}",
     );
-    expect(JSON.parse(rootPackage).patchedDependencies).toEqual({
-      "vitest@3.2.4": "patches/vitest@3.2.4.patch",
-    });
-    expect(vitestPatch).toContain("+\t\ttimeout: -1,");
+    const athenaDependencies = JSON.parse(webappPackage).devDependencies;
+    const storefrontDependencies = JSON.parse(storefrontPackage).devDependencies;
+    const rootDependencies = JSON.parse(rootPackage).devDependencies;
+
+    expect(athenaDependencies.vitest).toBe("4.1.11");
+    expect(athenaDependencies["@vitest/coverage-v8"]).toBe("4.1.11");
+    expect(athenaDependencies["@vitest/ui"]).toBe("4.1.11");
+    expect(storefrontDependencies.vitest).toBe("4.1.11");
+    expect(storefrontDependencies["@vitest/coverage-v8"]).toBe("4.1.11");
+    expect(rootDependencies.vitest).toBe("4.1.11");
+    expect(athenaDependencies.vite).toMatch(/^\^6\./);
+    expect(storefrontDependencies.vite).toMatch(/^\^6\./);
+    expect(JSON.parse(rootPackage).patchedDependencies).toBeUndefined();
     expect(workflow).toContain("run: bun run --filter '@athena/webapp' build");
     expect(workflow).toContain(
       "run: bun run --filter '@athena/storefront-webapp' build",

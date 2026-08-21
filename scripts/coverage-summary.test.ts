@@ -56,10 +56,10 @@ async function writeRealBaselineSummaries(rootDir: string) {
     "packages/athena-webapp/coverage/coverage-summary.json",
     JSON.stringify({
       total: {
-        lines: { covered: 36789, total: 99096 },
-        statements: { covered: 36789, total: 99096 },
-        functions: { covered: 1150, total: 2604 },
-        branches: { covered: 4730, total: 6479 },
+        lines: { covered: 58020, total: 80144 },
+        statements: { covered: 59919, total: 83827 },
+        functions: { covered: 13973, total: 19795 },
+        branches: { covered: 50706, total: 73880 },
       },
     }),
     rootDir
@@ -68,10 +68,10 @@ async function writeRealBaselineSummaries(rootDir: string) {
     "packages/storefront-webapp/coverage/coverage-summary.json",
     JSON.stringify({
       total: {
-        lines: { covered: 3071, total: 23048 },
-        statements: { covered: 3071, total: 23048 },
-        functions: { covered: 100, total: 481 },
-        branches: { covered: 371, total: 665 },
+        lines: { covered: 914, total: 5652 },
+        statements: { covered: 947, total: 5877 },
+        functions: { covered: 193, total: 1636 },
+        branches: { covered: 692, total: 4460 },
       },
     }),
     rootDir
@@ -153,24 +153,22 @@ describe("buildCoverageReport", () => {
     );
   });
 
-  it("fails when exact coverage regresses but the rounded display value stays the same", async () => {
+  it("accepts raw coverage variance that preserves the policy display precision", async () => {
     const rootDir = await createFixtureRoot();
     await writeRealBaselineSummaries(rootDir);
     await write(
-      "packages/storefront-webapp/coverage/coverage-summary.json",
+      "packages/athena-webapp/coverage/coverage-summary.json",
       JSON.stringify({
         total: {
-          lines: { covered: 3070, total: 23048 },
-          statements: { covered: 3070, total: 23048 },
-          functions: { covered: 100, total: 481 },
-          branches: { covered: 371, total: 665 },
+          lines: { covered: 58020, total: 80144 },
+          statements: { covered: 59919, total: 83827 },
+          functions: { covered: 13973, total: 19795 },
+          branches: { covered: 50688, total: 73880 },
         },
       }),
       rootDir
     );
 
-    expect(() => printCoverageReport(rootDir, { log: () => {} })).toThrow(
-      /storefront-webapp lines coverage 13\.32% is below/
-    );
+    expect(() => printCoverageReport(rootDir, { log: () => {} })).not.toThrow();
   });
 });

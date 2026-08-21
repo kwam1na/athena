@@ -1,27 +1,32 @@
+import { spawn } from "node:child_process";
 import { access, realpath } from "node:fs/promises";
 import path from "node:path";
 
 export const WORKTREE_BOOTSTRAP_MARKER_PATH = "codex/worktree-bootstrap.json";
 
 async function runGit(rootDir: string, ...args: string[]) {
-  const proc = Bun.spawn(["git", ...args], {
+  const proc = spawn("git", args, {
     cwd: rootDir,
-    stdout: "pipe",
-    stderr: "pipe",
+    stdio: ["ignore", "pipe", "pipe"],
   });
-  const [exitCode, stdout, stderr] = await Promise.all([
-    proc.exited,
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ]);
+  const stdout: Buffer[] = [];
+  const stderr: Buffer[] = [];
+  proc.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
+  proc.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
+  const exitCode = await new Promise<number>((resolve, reject) => {
+    proc.once("error", reject);
+    proc.once("close", (code) => resolve(code ?? 1));
+  });
+  const stdoutText = Buffer.concat(stdout).toString();
+  const stderrText = Buffer.concat(stderr).toString();
 
   if (exitCode !== 0) {
     throw new Error(
-      stderr.trim() || `git ${args.join(" ")} failed (exit ${exitCode})`,
+      stderrText.trim() || `git ${args.join(" ")} failed (exit ${exitCode})`,
     );
   }
 
-  return stdout.trim();
+  return stdoutText.trim();
 }
 
 function resolveGitPath(rootDir: string, gitPath: string) {

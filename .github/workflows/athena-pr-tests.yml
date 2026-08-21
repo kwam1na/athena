@@ -13,6 +13,11 @@ on:
         required: false
         type: string
         default: ""
+      coverage_workers:
+        description: Athena coverage worker count for a controlled hosted-runner benchmark.
+        required: false
+        type: string
+        default: "2"
 
 permissions:
   actions: read
@@ -225,10 +230,9 @@ jobs:
 
       - name: Run repo coverage policy
         env:
-          # GitHub-hosted runners have limited memory. A single coverage worker
-          # keeps the Vitest main process responsive while it acknowledges the
-          # full suite's task-update RPCs; local runs retain two workers.
-          ATHENA_COVERAGE_MAX_WORKERS: "1"
+          # The default is the evidence-backed policy; workflow_dispatch can
+          # override it only for a controlled benchmark of the same full suite.
+          ATHENA_COVERAGE_MAX_WORKERS: ${{ inputs.coverage_workers || '2' }}
         run: |
           echo "Coverage worker limit: ${ATHENA_COVERAGE_MAX_WORKERS}"
           /usr/bin/time -v bun run test:coverage

@@ -343,6 +343,20 @@ describe("runHarnessSelfReview", () => {
     expect(first.markdown).toContain("READY");
   });
 
+  it("uses the default git command runner without requiring Bun globals", async () => {
+    const rootDir = await createFixtureRepo();
+
+    const result = await runHarnessSelfReview(rootDir, {
+      baseRef: "missing-base",
+      runHarnessCheck: async () => {},
+    });
+
+    expect(result.blockers.join("\n")).toContain(
+      "Unable to compute changed files:",
+    );
+    expect(result.blockers.join("\n")).not.toContain("Bun is not defined");
+  });
+
   it("fails with a hard blocker when changed files are not covered by validation surfaces", async () => {
     const rootDir = await createFixtureRepo();
 

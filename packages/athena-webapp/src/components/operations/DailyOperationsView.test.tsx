@@ -1150,13 +1150,13 @@ describe("DailyOperationsViewContent — sheet return", () => {
 });
 
 describe("DailyOperationsViewContent", () => {
-  let scrollIntoViewMock: ReturnType<typeof vi.fn>;
+  let scrollIntoViewMock: (arg?: boolean | ScrollIntoViewOptions) => void;
 
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 4, 10, 12));
     window.scrollTo = vi.fn();
-    scrollIntoViewMock = vi.fn();
+    scrollIntoViewMock = vi.fn<(arg?: boolean | ScrollIntoViewOptions) => void>();
     Element.prototype.scrollIntoView = scrollIntoViewMock;
     HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
     window.history.pushState({}, "", "/wigclub/store/osu/operations");

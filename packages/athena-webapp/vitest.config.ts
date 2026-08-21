@@ -25,7 +25,7 @@ export default defineConfig({
       provider: "v8",
       reportsDirectory: "./coverage",
       // The `html` reporter walks and writes an HTML tree for every included
-      // file (with `all: true`, that is the whole 600+ file source set) in one
+      // file across the configured source set in one
       // synchronous end-of-run burst on the main thread — long enough to stall
       // the worker->main `onTaskUpdate` RPC past its timeout and fail the run.
       // CI only consumes the machine summaries (json-summary + lcov via the
@@ -34,7 +34,6 @@ export default defineConfig({
       reporter: process.env.CI
         ? ["text-summary", "json-summary", "lcov"]
         : ["text-summary", "json-summary", "html", "lcov"],
-      all: true,
       include: [
         "src/**/*.{ts,tsx}",
         "convex/**/*.{ts,tsx}",
