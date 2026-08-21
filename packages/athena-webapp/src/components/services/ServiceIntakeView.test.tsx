@@ -100,7 +100,7 @@ describe("ServiceIntakeViewContent", () => {
         disconnect = vi.fn();
         observe = vi.fn();
         unobserve = vi.fn();
-      },
+      } as never,
     );
     vi.clearAllMocks();
   });

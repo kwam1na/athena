@@ -37,9 +37,9 @@ function renderQuickAddDialog(input?: {
   render(
     <QuickAddProductDialog
       open
-      onOpenChange={onOpenChange}
-      onSubmit={onSubmit}
-      onAttachBarcode={input?.onAttachBarcode}
+      onOpenChange={onOpenChange as (open: boolean) => void}
+      onSubmit={onSubmit as (payload: Parameters<typeof QuickAddProductDialog>[0]["onSubmit"] extends (payload: infer T) => unknown ? T : never) => Promise<boolean>}
+      onAttachBarcode={input?.onAttachBarcode as Parameters<typeof QuickAddProductDialog>[0]["onAttachBarcode"]}
       existingSkuOptions={[
         {
           productSkuId: "sku-1",
@@ -121,9 +121,9 @@ describe("QuickAddProductDialog", () => {
     mockedScanner.BrowserMultiFormatReader.mockReset();
     mockedScanner.decodeFromConstraints.mockReset();
     mockedScanner.stop.mockReset();
-    mockedScanner.BrowserMultiFormatReader.mockImplementation(class {
+    mockedScanner.BrowserMultiFormatReader.mockImplementation((class {
       decodeFromConstraints = mockedScanner.decodeFromConstraints;
-    });
+    }) as never);
   });
 
   it("does not seed an extra variant when multiple variants are enabled", async () => {

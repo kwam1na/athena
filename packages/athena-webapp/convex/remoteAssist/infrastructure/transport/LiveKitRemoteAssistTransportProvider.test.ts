@@ -23,13 +23,13 @@ import {
 describe("LiveKit Remote Assist transport provider", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    mocks.AccessToken.mockImplementation(class {
+    mocks.AccessToken.mockImplementation((class {
       addGrant = mocks.accessToken.addGrant;
       toJwt = mocks.accessToken.toJwt;
-    });
-    mocks.RoomServiceClient.mockImplementation(class {
+    }) as never);
+    mocks.RoomServiceClient.mockImplementation((class {
       createRoom = mocks.createRoom;
-    });
+    }) as never);
   });
 
   it("creates a bounded room and mints a scoped support token", async () => {

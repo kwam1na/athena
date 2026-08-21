@@ -175,13 +175,13 @@ describe("StockAdjustmentWorkspaceContent", () => {
 
   beforeEach(() => {
     mockedHandlers.hasFullAdminAccess = true;
-    mockedScanner.BrowserMultiFormatReader.mockImplementation(class {
+    mockedScanner.BrowserMultiFormatReader.mockImplementation((class {
       decode = mockedScanner.decode;
       decodeFromCanvas = mockedScanner.decodeFromCanvas;
       decodeFromConstraints = mockedScanner.decodeFromConstraints;
       decodeFromImageUrl = mockedScanner.decodeFromImageUrl;
       scan = mockedScanner.scan;
-    });
+    }) as never);
     mockedHandlers.onSubmitBatch.mockResolvedValue(ok({ _id: "batch-1" }));
     mockedHandlers.quickAddProductSku.mockResolvedValue({
       productId: "product-quick",
@@ -2054,9 +2054,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
     });
     Object.defineProperty(window, "ImageCapture", {
       configurable: true,
-      value: vi.fn().mockImplementation(class {
+      value: vi.fn().mockImplementation((class {
         grabFrame = grabFrame;
-      }),
+      }) as never),
     });
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
       drawImage,

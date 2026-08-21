@@ -80,7 +80,7 @@ describe("ServiceIntakeView auth readiness", () => {
         disconnect = vi.fn();
         observe = vi.fn();
         unobserve = vi.fn();
-      },
+      } as never,
     );
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.clearAllMocks();
