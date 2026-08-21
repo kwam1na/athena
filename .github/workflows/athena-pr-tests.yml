@@ -232,7 +232,7 @@ jobs:
         env:
           # The default is the evidence-backed policy; workflow_dispatch can
           # override it only for a controlled benchmark of the same full suite.
-          ATHENA_COVERAGE_MAX_WORKERS: ${{ inputs.coverage_workers || '1' }}
+          ATHENA_COVERAGE_MAX_WORKERS: ${{ inputs.coverage_workers || '2' }}
         run: |
           echo "Coverage worker limit: ${ATHENA_COVERAGE_MAX_WORKERS}"
           /usr/bin/time -v bun run test:coverage
