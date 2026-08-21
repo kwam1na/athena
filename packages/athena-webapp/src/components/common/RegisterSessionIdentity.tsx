@@ -1,7 +1,10 @@
 import { motion } from "framer-motion";
 
 import { formatRegisterSessionCode } from "@/lib/pos/presentation/registerSessionCode";
-import { formatRegisterHeaderName } from "./registerSessionIdentityPresentation";
+import {
+  formatRegisterHeaderName,
+  formatRegisterOperatingDate,
+} from "./registerSessionIdentityPresentation";
 
 const IDENTITY_TRANSITION = {
   duration: 0.14,
@@ -10,6 +13,7 @@ const IDENTITY_TRANSITION = {
 
 export type RegisterSessionIdentityModel = {
   _id: string;
+  openedOperatingDate?: string | null;
   registerNumber?: string | null;
   terminalName?: string | null;
 };
@@ -17,13 +21,18 @@ export type RegisterSessionIdentityModel = {
 export function RegisterSessionIdentity({
   fallbackTitle = "Register detail",
   registerSession,
+  showOperatingDate = false,
   showSessionCode = false,
 }: {
   fallbackTitle?: string;
   registerSession?: RegisterSessionIdentityModel | null;
+  showOperatingDate?: boolean;
   showSessionCode?: boolean;
 }) {
   const terminalName = registerSession?.terminalName?.trim();
+  const operatingDate = showOperatingDate
+    ? formatRegisterOperatingDate(registerSession?.openedOperatingDate)
+    : null;
   const sessionCode = showSessionCode
     ? formatRegisterSessionCode(registerSession?._id)
     : undefined;
@@ -60,6 +69,18 @@ export function RegisterSessionIdentity({
         >
           <span className="hidden sm:inline">/ </span>
           {sessionCode}
+        </motion.span>
+      ) : null}
+      {operatingDate ? (
+        <motion.span
+          animate={{ opacity: 1, y: 0 }}
+          className="whitespace-nowrap text-xs text-muted-foreground sm:text-sm"
+          initial={{ opacity: 0, y: 2 }}
+          key={`operating-date-${registerSession?._id}-${operatingDate}`}
+          transition={IDENTITY_TRANSITION}
+        >
+          <span className="hidden sm:inline">/ </span>
+          {operatingDate}
         </motion.span>
       ) : null}
     </div>

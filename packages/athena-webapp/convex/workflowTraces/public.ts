@@ -201,6 +201,7 @@ async function getRegisterSessionTraceIdentity(
           ? closedByStaff.fullName
           : null,
       openedAt: registerSession.openedAt,
+      openedOperatingDate: registerSession.openedOperatingDate ?? null,
       openedByName:
         openedByStaff?.storeId === trace.storeId
           ? openedByStaff.fullName

@@ -303,6 +303,7 @@ describe("listRegisterSessionActivity", () => {
     );
     expect(page.registerSession).toEqual({
       _id: "session-1",
+      openedOperatingDate: null,
       registerNumber: null,
       terminalName: null,
     });
@@ -457,6 +458,7 @@ describe("listRegisterSessionActivity", () => {
           if (table === "registerSession") {
             return {
               _id: "session-1",
+              openedOperatingDate: "2026-04-21",
               registerNumber: "07",
               storeId: "store-1",
               terminalId: "terminal-1",
@@ -518,6 +520,7 @@ describe("listRegisterSessionActivity", () => {
     });
     expect(page.registerSession).toEqual({
       _id: "session-1",
+      openedOperatingDate: "2026-04-21",
       registerNumber: "07",
       terminalName: "Front counter",
     });
@@ -609,6 +612,7 @@ describe("listRegisterSessionActivity", () => {
     expect(orderCalls).toContain("desc");
     expect(page.registerSession).toEqual({
       _id: "session-1",
+      openedOperatingDate: null,
       registerNumber: "07",
       terminalName: null,
     });

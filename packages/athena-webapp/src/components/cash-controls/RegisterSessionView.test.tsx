@@ -259,6 +259,7 @@ const baseSnapshot = {
     expectedCash: 17600,
     netExpectedCash: 17600,
     openedAt: new Date("2026-04-21T09:15:00.000Z").getTime(),
+    openedOperatingDate: "2026-04-21",
     openedByStaffName: "Ama Mensah",
     openingFloat: 5000,
     pendingApprovalRequest: null,
@@ -368,7 +369,7 @@ describe("RegisterSessionViewContent", () => {
       "sm:flex-row",
     );
     expect(header).toHaveTextContent(
-      /Register 3\s*\/\s*Front counter\s*synced\s*·\s*Closing/,
+      /Register 3\s*\/\s*Front counter\s*\/\s*Tue, Apr 21, 2026\s*synced\s*·\s*Closing/,
     );
     expect(header).toHaveTextContent("Closing");
     expect(header).toHaveTextContent("synced");
@@ -715,6 +716,7 @@ describe("RegisterSessionViewContent", () => {
           isDone: true,
           registerSession: {
             _id: "reg-3",
+            openedOperatingDate: "2026-04-21",
             registerNumber: "3",
             terminalName: "Front counter",
           },
@@ -848,7 +850,10 @@ describe("RegisterSessionViewContent", () => {
     expect(
       screen.getByTestId("register-session-page-header"),
     ).toHaveTextContent(
-      /Register 3\s*\/\s*Front counter\s*\/\s*REG-3\s*\/\s*POS activity/,
+      /Register 3\s*\/\s*Front counter\s*\/\s*Tue, Apr 21, 2026\s*\/\s*POS activity/,
+    );
+    expect(screen.getByTestId("register-session-page-header")).not.toHaveTextContent(
+      "REG-3",
     );
     expect(screen.getByTestId("register-session-page-header")).toHaveClass(
       "flex-col",
@@ -984,7 +989,7 @@ describe("RegisterSessionViewContent", () => {
     expect(
       screen.getByTestId("register-session-page-header"),
     ).toHaveTextContent(
-      /Register 3\s*\/\s*Front counter\s*pending reconciliation/,
+      /Register 3\s*\/\s*Front counter\s*\/\s*Tue, Apr 21, 2026\s*pending reconciliation/,
     );
     expect(
       within(screen.getByTestId("register-session-page-header")).getByText(
@@ -1021,7 +1026,9 @@ describe("RegisterSessionViewContent", () => {
 
     expect(
       screen.getByTestId("register-session-page-header"),
-    ).toHaveTextContent(/Register 3\s*\/\s*Front counter\s*pending sync/);
+    ).toHaveTextContent(
+      /Register 3\s*\/\s*Front counter\s*\/\s*Tue, Apr 21, 2026\s*pending sync/,
+    );
     expect(screen.queryByText("Support evidence")).not.toBeInTheDocument();
     expect(
       within(screen.getByTestId("register-session-page-header")).getByText(

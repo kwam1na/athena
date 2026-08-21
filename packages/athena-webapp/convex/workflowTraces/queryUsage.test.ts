@@ -230,6 +230,7 @@ function createAdminTraceReadCtx(
       closedByStaffProfileId?: string;
       openedByStaffProfileId?: string;
       openedAt?: number;
+      openedOperatingDate?: string;
       openingFloat?: number;
       registerNumber?: string;
       storeId: string;
@@ -873,6 +874,7 @@ describe("workflow trace core and public helpers", () => {
         },
         {
           _id: "register-session-1",
+          openedOperatingDate: "2026-04-21",
           registerNumber: "07",
           storeId: "store-a",
           terminalId: "terminal-1",
@@ -903,6 +905,7 @@ describe("workflow trace core and public helpers", () => {
       header: {
         registerSession: {
           _id: "register-session-1",
+          openedOperatingDate: "2026-04-21",
           registerNumber: "07",
           terminalName: "Olorin",
         },
