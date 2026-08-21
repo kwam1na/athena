@@ -609,6 +609,7 @@ async function createFixtureRepo() {
               "packages/storefront-webapp/src/router.tsx",
               "packages/storefront-webapp/src/routeTree.gen.ts",
               "packages/storefront-webapp/src/routes/",
+              "packages/storefront-webapp/vitest.config.ts",
               "packages/storefront-webapp/vite.config.ts",
               "packages/storefront-webapp/playwright.config.ts",
             ],
@@ -1832,6 +1833,11 @@ async function createFixtureRepo() {
     rootDir,
   );
   await write(
+    "packages/storefront-webapp/vitest.config.ts",
+    "export default {};\n",
+    rootDir,
+  );
+  await write(
     "packages/storefront-webapp/vite.config.ts",
     "export default {};\n",
     rootDir,
@@ -2059,6 +2065,7 @@ describe("runHarnessAudit", () => {
                 "packages/storefront-webapp/tsconfig.json",
                 "packages/storefront-webapp/src/main.tsx",
                 "packages/storefront-webapp/playwright.config.ts",
+                "packages/storefront-webapp/vitest.config.ts",
                 "packages/storefront-webapp/vite.config.ts",
                 "packages/storefront-webapp/src/router.tsx",
                 "packages/storefront-webapp/src/routeTree.gen.ts",

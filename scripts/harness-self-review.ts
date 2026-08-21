@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -155,21 +156,24 @@ async function readJsonFile<T>(filePath: string) {
 }
 
 async function runCommand(rootDir: string, command: string[]) {
-  const process = Bun.spawn(command, {
+  const process = spawn(command[0], command.slice(1), {
     cwd: rootDir,
-    stdout: "pipe",
-    stderr: "pipe",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const stdout: Buffer[] = [];
+  const stderr: Buffer[] = [];
+
+  process.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
+  process.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
+
+  const exitCode = await new Promise<number>((resolve, reject) => {
+    process.once("error", reject);
+    process.once("close", (code) => resolve(code ?? 1));
   });
 
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(process.stdout).text(),
-    new Response(process.stderr).text(),
-    process.exited,
-  ]);
-
   return {
-    stdout,
-    stderr,
+    stdout: Buffer.concat(stdout).toString(),
+    stderr: Buffer.concat(stderr).toString(),
     exitCode,
   };
 }
@@ -975,7 +979,7 @@ export async function runHarnessSelfReview(
 
 if (import.meta.main) {
   try {
-    const parsedArgs = parseCliArguments(Bun.argv.slice(2));
+    const parsedArgs = parseCliArguments(process.argv.slice(2));
 
     if (parsedArgs.help) {
       console.log("Usage: bun run harness:self-review --base <ref>");

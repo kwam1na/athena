@@ -1,4 +1,5 @@
-import { mkdir } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { runHarnessAudit } from "./harness-audit";
@@ -56,24 +57,27 @@ export async function runFocusedContractTests(rootDir: string) {
     "scripts/harness-audit.test.ts",
     "scripts/harness-app-registry.test.ts",
   ];
-  const process = Bun.spawn(command, {
+  const process = spawn(command[0], command.slice(1), {
     cwd: rootDir,
-    stdout: "pipe",
-    stderr: "pipe",
-    stdin: "inherit",
+    stdio: ["inherit", "pipe", "pipe"],
   });
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(process.stdout).text(),
-    new Response(process.stderr).text(),
-    process.exited,
-  ]);
+  const stdout: Buffer[] = [];
+  const stderr: Buffer[] = [];
+
+  process.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
+  process.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
+
+  const exitCode = await new Promise<number>((resolve, reject) => {
+    process.once("error", reject);
+    process.once("close", (code) => resolve(code ?? 1));
+  });
 
   if (exitCode !== 0) {
     throw new Error(
       [
         `Focused harness contract tests exited with code ${exitCode}.`,
-        stdout.trim(),
-        stderr.trim(),
+        Buffer.concat(stdout).toString().trim(),
+        Buffer.concat(stderr).toString().trim(),
       ]
         .filter(Boolean)
         .join("\n"),
@@ -198,7 +202,7 @@ export async function runHarnessContractPreflight(
       options.machineOutputPath ?? DEFAULT_MACHINE_OUTPUT_PATH,
     );
     await mkdir(path.dirname(outputPath), { recursive: true });
-    await Bun.write(outputPath, `${JSON.stringify(machine, null, 2)}\n`);
+    await writeFile(outputPath, `${JSON.stringify(machine, null, 2)}\n`);
   }
 
   return {

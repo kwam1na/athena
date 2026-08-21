@@ -16,7 +16,7 @@ related_components:
   - Athena webapp Vitest configuration
   - storefront webapp Vitest configuration
 tags: [vitest, vitest-4, coverage, github-actions, worker-rpc, ci]
-delivery_diff_fingerprint: e9e877d3923101bac56cb7e16a36141f1345e6e7ce21f292767b8a7f8621c137
+delivery_diff_fingerprint: fbbda15a9e0b97ba7c1a458f9613c4c8605306024821f12990e48b6353c228b0
 ---
 
 # Stabilize Vitest coverage worker RPC on GitHub runners
@@ -30,11 +30,6 @@ Athena's GitHub coverage job completed the entire webapp suite and generated the
 - GitHub Actions reported `768 passed` files and `9191 passed` tests before emitting `[vitest-worker]: Timeout calling "onTaskUpdate"`.
 - A retry failed at the same post-suite boundary even though CI already used the dot reporter and omitted HTML coverage generation.
 - Local `bun run pr:athena` remained green, so the failure depended on GitHub-hosted runner resources rather than product behavior.
-
-## What Didn't Work
-
-- Reducing reporter rendering and skipping the CI-only HTML report lowered main-thread work but did not remain sufficient as the suite grew.
-- Retrying the unchanged two-worker job reproduced the same timeout, so an unclassified blanket retry would only spend another full coverage cycle without addressing resource contention.
 
 ## What Didn't Work
 

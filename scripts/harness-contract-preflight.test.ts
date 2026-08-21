@@ -205,7 +205,7 @@ describe("runHarnessContractPreflight", () => {
     }
   });
 
-  it("passes through every default adapter on the current consistent tree", async () => {
+  it("runs every default adapter under Vitest without relying on Bun globals", async () => {
     const result = await runHarnessContractPreflight(process.cwd(), {
       baseRef: "HEAD",
       writeMachineOutput: false,
