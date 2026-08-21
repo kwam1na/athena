@@ -172655,7 +172655,7 @@
       "relation": "contains",
       "source": "scripts_worktree_bootstrap_check_test_ts",
       "source_file": "scripts/worktree-bootstrap-check.test.ts",
-      "source_location": "L29",
+      "source_location": "L27",
       "target": "worktree_bootstrap_check_test_createfixturerepo",
       "weight": 1
     },
@@ -172667,7 +172667,7 @@
       "relation": "contains",
       "source": "scripts_worktree_bootstrap_check_test_ts",
       "source_file": "scripts/worktree-bootstrap-check.test.ts",
-      "source_location": "L14",
+      "source_location": "L12",
       "target": "worktree_bootstrap_check_test_rungit",
       "weight": 1
     },
@@ -192491,7 +192491,7 @@
       "relation": "calls",
       "source": "worktree_bootstrap_check_test_rungit",
       "source_file": "scripts/worktree-bootstrap-check.test.ts",
-      "source_location": "L34",
+      "source_location": "L31",
       "target": "worktree_bootstrap_check_test_createfixturerepo",
       "weight": 1
     },
@@ -205192,7 +205192,7 @@
       "label": "createFixtureRepo()",
       "norm_label": "createfixturerepo()",
       "source_file": "scripts/worktree-bootstrap-check.test.ts",
-      "source_location": "L29"
+      "source_location": "L27"
     },
     {
       "community": 1209,
@@ -205201,7 +205201,7 @@
       "label": "runGit()",
       "norm_label": "rungit()",
       "source_file": "scripts/worktree-bootstrap-check.test.ts",
-      "source_location": "L14"
+      "source_location": "L12"
     },
     {
       "community": 121,
