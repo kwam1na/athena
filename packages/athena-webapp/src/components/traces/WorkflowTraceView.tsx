@@ -216,7 +216,7 @@ export function WorkflowTraceHeader({
           {header.registerSession ? (
             <RegisterSessionIdentity
               registerSession={header.registerSession}
-              showSessionCode
+              showOperatingDate
             />
           ) : (
             <h1 className="min-w-0 truncate text-base font-semibold leading-5 text-foreground sm:text-sm">

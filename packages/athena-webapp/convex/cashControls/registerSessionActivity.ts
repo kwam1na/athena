@@ -106,6 +106,7 @@ export type RegisterSessionActivityPage = {
   isDone: boolean;
   registerSession?: {
     _id: Id<"registerSession">;
+    openedOperatingDate: string | null;
     registerNumber: string | null;
     terminalName: string | null;
   };
@@ -1177,6 +1178,7 @@ function attachRegisterSessionHeader(
     ...page,
     registerSession: {
       _id: registerSession._id,
+      openedOperatingDate: registerSession.openedOperatingDate ?? null,
       registerNumber: registerSession.registerNumber ?? null,
       terminalName,
     },
