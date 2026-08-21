@@ -141,11 +141,11 @@ describe("checkCoverageToolchainParity", () => {
 
   it("rejects semver ranges because CI and local can resolve different coverage tooling", async () => {
     const rootDir = await createFixtureRoot();
-    await writeFixtureManifests(rootDir, "^3.2.4");
+    await writeFixtureManifests(rootDir, "^4.1.11");
     await installFixtureToolchain(rootDir);
 
     expect(checkCoverageToolchainParity(rootDir)).toContain(
-      "package.json declares vitest@^3.2.4; expected exact 3.2.4."
+      "package.json declares vitest@^4.1.11; expected exact 4.1.11."
     );
   });
 
@@ -155,7 +155,7 @@ describe("checkCoverageToolchainParity", () => {
     await installFixtureToolchain(rootDir, "3.1.4");
 
     expect(checkCoverageToolchainParity(rootDir)).toContain(
-      "packages/athena-webapp resolves vitest@3.1.4; run bun install so coverage uses 3.2.4."
+      "packages/athena-webapp resolves vitest@3.1.4; run bun install so coverage uses 4.1.11."
     );
   });
 
@@ -174,7 +174,7 @@ describe("checkCoverageToolchainParity", () => {
 
   it("does not repair manifest version drift", async () => {
     const rootDir = await createFixtureRoot();
-    await writeFixtureManifests(rootDir, "^3.2.4");
+    await writeFixtureManifests(rootDir, "^4.1.11");
     const installerPath = await writeFixtureInstaller(rootDir);
 
     expect(() =>
@@ -183,7 +183,7 @@ describe("checkCoverageToolchainParity", () => {
         repair: true,
       })
     ).toThrow(
-      "package.json declares vitest@^3.2.4; expected exact 3.2.4."
+      "package.json declares vitest@^4.1.11; expected exact 4.1.11."
     );
   });
 });

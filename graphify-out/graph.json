@@ -10883,7 +10883,7 @@
       "relation": "calls",
       "source": "coverage_toolchain_parity_collectcoveragetoolchainfailures",
       "source_file": "scripts/coverage-toolchain-parity.ts",
-      "source_location": "L138",
+      "source_location": "L139",
       "target": "coverage_toolchain_parity_checkcoveragetoolchainparity",
       "weight": 1
     },
@@ -10895,7 +10895,7 @@
       "relation": "calls",
       "source": "coverage_toolchain_parity_declaredversion",
       "source_file": "scripts/coverage-toolchain-parity.ts",
-      "source_location": "L100",
+      "source_location": "L101",
       "target": "coverage_toolchain_parity_collectcoveragetoolchainfailures",
       "weight": 1
     },
@@ -10907,7 +10907,7 @@
       "relation": "calls",
       "source": "coverage_toolchain_parity_installedversion",
       "source_file": "scripts/coverage-toolchain-parity.ts",
-      "source_location": "L113",
+      "source_location": "L114",
       "target": "coverage_toolchain_parity_collectcoveragetoolchainfailures",
       "weight": 1
     },
@@ -10919,7 +10919,7 @@
       "relation": "calls",
       "source": "coverage_toolchain_parity_readmanifest",
       "source_file": "scripts/coverage-toolchain-parity.ts",
-      "source_location": "L97",
+      "source_location": "L98",
       "target": "coverage_toolchain_parity_collectcoveragetoolchainfailures",
       "weight": 1
     },
@@ -162203,7 +162203,7 @@
       "relation": "contains",
       "source": "scripts_coverage_toolchain_parity_ts",
       "source_file": "scripts/coverage-toolchain-parity.ts",
-      "source_location": "L137",
+      "source_location": "L138",
       "target": "coverage_toolchain_parity_checkcoveragetoolchainparity",
       "weight": 1
     },
@@ -162215,7 +162215,7 @@
       "relation": "contains",
       "source": "scripts_coverage_toolchain_parity_ts",
       "source_file": "scripts/coverage-toolchain-parity.ts",
-      "source_location": "L93",
+      "source_location": "L94",
       "target": "coverage_toolchain_parity_collectcoveragetoolchainfailures",
       "weight": 1
     },
@@ -162227,7 +162227,7 @@
       "relation": "contains",
       "source": "scripts_coverage_toolchain_parity_ts",
       "source_file": "scripts/coverage-toolchain-parity.ts",
-      "source_location": "L51",
+      "source_location": "L52",
       "target": "coverage_toolchain_parity_declaredversion",
       "weight": 1
     },
@@ -162239,7 +162239,7 @@
       "relation": "contains",
       "source": "scripts_coverage_toolchain_parity_ts",
       "source_file": "scripts/coverage-toolchain-parity.ts",
-      "source_location": "L143",
+      "source_location": "L144",
       "target": "coverage_toolchain_parity_formatfailuremessage",
       "weight": 1
     },
@@ -162251,7 +162251,7 @@
       "relation": "contains",
       "source": "scripts_coverage_toolchain_parity_ts",
       "source_file": "scripts/coverage-toolchain-parity.ts",
-      "source_location": "L59",
+      "source_location": "L60",
       "target": "coverage_toolchain_parity_installedversion",
       "weight": 1
     },
@@ -162263,7 +162263,7 @@
       "relation": "contains",
       "source": "scripts_coverage_toolchain_parity_ts",
       "source_file": "scripts/coverage-toolchain-parity.ts",
-      "source_location": "L47",
+      "source_location": "L48",
       "target": "coverage_toolchain_parity_readmanifest",
       "weight": 1
     },
@@ -162275,7 +162275,7 @@
       "relation": "contains",
       "source": "scripts_coverage_toolchain_parity_ts",
       "source_file": "scripts/coverage-toolchain-parity.ts",
-      "source_location": "L149",
+      "source_location": "L150",
       "target": "coverage_toolchain_parity_runfrozeninstall",
       "weight": 1
     },
@@ -260227,7 +260227,7 @@
       "label": "checkCoverageToolchainParity()",
       "norm_label": "checkcoveragetoolchainparity()",
       "source_file": "scripts/coverage-toolchain-parity.ts",
-      "source_location": "L137"
+      "source_location": "L138"
     },
     {
       "community": 341,
@@ -260236,7 +260236,7 @@
       "label": "collectCoverageToolchainFailures()",
       "norm_label": "collectcoveragetoolchainfailures()",
       "source_file": "scripts/coverage-toolchain-parity.ts",
-      "source_location": "L93"
+      "source_location": "L94"
     },
     {
       "community": 341,
@@ -260245,7 +260245,7 @@
       "label": "declaredVersion()",
       "norm_label": "declaredversion()",
       "source_file": "scripts/coverage-toolchain-parity.ts",
-      "source_location": "L51"
+      "source_location": "L52"
     },
     {
       "community": 341,
@@ -260254,7 +260254,7 @@
       "label": "formatFailureMessage()",
       "norm_label": "formatfailuremessage()",
       "source_file": "scripts/coverage-toolchain-parity.ts",
-      "source_location": "L143"
+      "source_location": "L144"
     },
     {
       "community": 341,
@@ -260263,7 +260263,7 @@
       "label": "installedVersion()",
       "norm_label": "installedversion()",
       "source_file": "scripts/coverage-toolchain-parity.ts",
-      "source_location": "L59"
+      "source_location": "L60"
     },
     {
       "community": 341,
@@ -260272,7 +260272,7 @@
       "label": "readManifest()",
       "norm_label": "readmanifest()",
       "source_file": "scripts/coverage-toolchain-parity.ts",
-      "source_location": "L47"
+      "source_location": "L48"
     },
     {
       "community": 341,
@@ -260281,7 +260281,7 @@
       "label": "runFrozenInstall()",
       "norm_label": "runfrozeninstall()",
       "source_file": "scripts/coverage-toolchain-parity.ts",
-      "source_location": "L149"
+      "source_location": "L150"
     },
     {
       "community": 341,
