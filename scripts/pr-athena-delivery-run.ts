@@ -28,6 +28,7 @@ import { collectDeliverableDiffFingerprint } from "./delivery-diff-fingerprint";
 import {
   createHarnessBlocker,
   formatHarnessBlockers,
+  formatHarnessCommand,
   HarnessBlockedError,
   runHarnessCliBoundary,
   HARNESS_BLOCKER_SCHEMA_VERSION,
@@ -106,14 +107,6 @@ const PR_ATHENA_SCORECARD_PHASE: PrAthenaPhase = {
 
 const PROVIDER_EVIDENCE_COMMAND = "write-provider-evidence";
 const PROOF_GIT_PATH = "codex/pre-push-pr-athena-proof.json";
-
-function commandToString(command: string[]) {
-  return command
-    .map((part) =>
-      /\s/.test(part) ? `'${part.replaceAll("'", "'\\''")}'` : part,
-    )
-    .join(" ");
-}
 
 async function runProcess(
   command: string[],
@@ -704,7 +697,7 @@ export async function runPrAthenaDeliveryRun(
     const endedMs = monotonicMs();
     commandSpans.push({
       phase: step.phase,
-      command: commandToString(step.command),
+      command: formatHarnessCommand(step.command),
       startedAt,
       endedAt: nowIso(),
       durationMs: Math.max(0, endedMs - startedMs),
