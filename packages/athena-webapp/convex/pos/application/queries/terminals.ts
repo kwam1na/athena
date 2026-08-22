@@ -1,6 +1,8 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { QueryCtx } from "../../../_generated/server";
-import { getRegisterSessionAuthoritativeCloseBoundary } from "../../../../shared/registerSessionLifecyclePolicy";
+import {
+  getRegisterSessionAuthoritativeCloseBoundary,
+} from "../../../../shared/registerSessionLifecyclePolicy";
 import {
   isRegisterSessionConflictBlockingStatus,
 } from "../../../../shared/registerSessionStatus";
@@ -20,8 +22,10 @@ import {
 import {
   buildTerminalCloudRepairPreview,
   canProjectRegisterOpenForTerminalCloudRepair,
+  classifyRegisterOpenRepairLifecycle,
   classifyTerminalCloudRepairConflict,
   skipTerminalCloudRepairConflict,
+  type TerminalCloudRepairLifecycleRead,
   type TerminalCloudRepairConflictClassification,
   type TerminalCloudRepairProjectionEligibilityRepository,
 } from "../terminalRecovery/cloudRepairPolicy";
@@ -143,6 +147,8 @@ type TerminalHealthEvidenceMode = "detail" | "roster";
 
 const EMPTY_TERMINAL_CLOUD_REPAIR_PREVIEW: TerminalRecoveryPreview["cloudRepair"] =
   {
+    hasMoreCandidates: false,
+    obsoleteConflictIds: [],
     preconditionHash: "terminal-cloud-repair:none",
     safeConflictIds: [],
     skippedConflictIds: [],
@@ -730,56 +736,115 @@ async function buildTerminalRecoveryCloudRepairPreview(
   ctx: QueryCtx,
   args: {
     now: number;
+    registerNumber?: string | null;
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;
   },
 ) {
-  const conflicts = (
+  const { candidates, isIncomplete } =
     await listTerminalRecoveryConflictsForRepair(ctx, {
       storeId: args.storeId,
       terminalId: args.terminalId,
-    })
-  ).filter((conflict) => conflict.conflictType !== "inventory");
+    });
+  const registerCandidates = candidates.filter(
+    (candidate) => candidate.conflict.conflictType !== "inventory",
+  );
   const repository = createTerminalCloudRepairQueryRepository(ctx);
-  const classified = await Promise.all(
-    conflicts.map(async (conflict): Promise<TerminalCloudRepairConflictClassification> => {
-      const sourceEvent = await getTerminalRecoverySourceEvent(ctx, {
-        storeId: args.storeId,
-        terminalId: args.terminalId,
-        localEventId: conflict.localEventId,
-      });
-      const classification = classifyTerminalCloudRepairConflict({
-        conflict,
-        now: args.now,
-        sourceEvent,
-        storeId: args.storeId,
-        terminalId: args.terminalId,
-      });
-      if (classification.kind !== "safe_duplicate_register_opened") {
-        return classification;
-      }
-      if (!sourceEvent) {
-        return classification;
-      }
+  const terminalRegisterNumber =
+    typeof args.registerNumber === "string" &&
+    args.registerNumber.trim().length > 0
+      ? args.registerNumber.trim()
+      : undefined;
 
-      const parsed = parseStoredLocalSyncEvent(
-        repository as unknown as LocalSyncIngestionRepository,
-        sourceEvent,
-      );
-      if (
-        !parsed.ok ||
-        !(await canProjectRegisterOpenForTerminalCloudRepair(repository, {
+  // One source-event read and one lifecycle decision per distinct local event.
+  // A single obsolete register open can carry more than a thousand duplicate
+  // conflict rows, so this must never be a per-row lookup.
+  const sourceEventByLocalEventId = new Map<
+    string,
+    Doc<"posLocalSyncEvent"> | null
+  >();
+  const lifecycleByLocalEventId = new Map<
+    string,
+    TerminalCloudRepairLifecycleRead | undefined
+  >();
+  const projectionSafeByLocalEventId = new Map<string, boolean>();
+  for (const localEventId of new Set(
+    registerCandidates.map((candidate) => candidate.conflict.localEventId),
+  )) {
+    const sourceEvent = await getTerminalRecoverySourceEvent(ctx, {
+      storeId: args.storeId,
+      terminalId: args.terminalId,
+      localEventId,
+    });
+    sourceEventByLocalEventId.set(localEventId, sourceEvent);
+    if (sourceEvent?.eventType !== "register_opened") continue;
+
+    const lifecycle = await classifyRegisterOpenRepairLifecycle(
+      repository,
+      {
+        event: {
+          localRegisterSessionId: sourceEvent.localRegisterSessionId,
+          occurredAt: sourceEvent.occurredAt,
+        },
+        registerNumber: terminalRegisterNumber,
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+      },
+    );
+    lifecycleByLocalEventId.set(localEventId, lifecycle);
+    if (lifecycle.disposition.disposition !== "fresh") continue;
+
+    const parsed = parseStoredLocalSyncEvent(
+      repository as unknown as LocalSyncIngestionRepository,
+      sourceEvent,
+    );
+    projectionSafeByLocalEventId.set(
+      localEventId,
+      parsed.ok &&
+        (await canProjectRegisterOpenForTerminalCloudRepair(repository, {
           event: parsed.event,
           now: sourceEvent.acceptedAt ?? args.now,
           storeId: args.storeId,
           terminalId: args.terminalId,
-        }))
-      ) {
-        return skipTerminalCloudRepairConflict(classification, "not_projection_safe");
-      }
+        })),
+    );
+  }
 
-      return classification;
-    }),
+  const classified = registerCandidates.flatMap(
+    (candidate): TerminalCloudRepairConflictClassification[] => {
+      const localEventId = candidate.conflict.localEventId;
+      const lifecycle = lifecycleByLocalEventId.get(localEventId);
+      const classification = classifyTerminalCloudRepairConflict({
+        blockerStatus: lifecycle?.hasBlockingRegisterSession
+          ? "current"
+          : candidate.blockerStatus,
+        conflict: candidate.conflict,
+        lifecycleDisposition: lifecycle?.disposition,
+        now: args.now,
+        sourceEvent: sourceEventByLocalEventId.get(localEventId) ?? null,
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+      });
+      if (classification.kind === "skipped") {
+        // A conflict behind an already-settled drawer is not terminal review
+        // debt: keeping it out of the preview preserves the cautious current
+        // work posture while repair still settles it durably.
+        return candidate.blockerStatus === "settled" ? [] : [classification];
+      }
+      if (classification.kind !== "safe_duplicate_register_opened") {
+        return [classification];
+      }
+      // Only the fresh projection path needs the projection-safety gate; an
+      // obsolete open is settled without ever touching projection.
+      return [
+        projectionSafeByLocalEventId.get(localEventId) === true
+          ? classification
+          : skipTerminalCloudRepairConflict(
+              classification,
+              "not_projection_safe",
+            ),
+      ];
+    },
   );
   const preview = buildTerminalCloudRepairPreview({
     classified,
@@ -788,6 +853,8 @@ async function buildTerminalRecoveryCloudRepairPreview(
   });
 
   return {
+    hasMoreCandidates: isIncomplete,
+    obsoleteConflictIds: preview.obsoleteConflictIds,
     preconditionHash: preview.preconditionHash,
     safeConflictIds: preview.safeConflictIds,
     skippedConflictIds: preview.skipped.map((item) => item.conflictId),
@@ -812,6 +879,19 @@ function createTerminalCloudRepairQueryRepository(
   };
 
   return {
+    async findMappingForTerminal(args) {
+      const mapping = await ctx.db
+        .query("posLocalSyncMapping")
+        .withIndex("by_store_terminal_localKindId", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("terminalId", args.terminalId)
+            .eq("localIdKind", args.localIdKind)
+            .eq("localId", args.localId),
+        )
+        .first();
+      return (mapping ?? null) as never;
+    },
     async findScopedRegisterSessionLifecycle(args) {
       const terminalRows = await ctx.db
         .query("registerSession")

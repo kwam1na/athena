@@ -143,6 +143,10 @@ export type TerminalRecoveryPreview = {
     activeRegisterSession: boolean;
   };
   cloudRepair: {
+    /** True while bounded batches still hide repair work; repeat repair. */
+    hasMoreCandidates: boolean;
+    /** Repairable rows that settle without replaying the register open. */
+    obsoleteConflictIds: Array<Id<"posLocalSyncConflict">>;
     preconditionHash: string;
     safeConflictIds: Array<Id<"posLocalSyncConflict">>;
     skippedConflictIds: Array<Id<"posLocalSyncConflict">>;

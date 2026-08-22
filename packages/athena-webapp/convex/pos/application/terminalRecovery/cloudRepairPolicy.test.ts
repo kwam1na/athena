@@ -5,6 +5,7 @@ import type { Doc, Id } from "../../../_generated/dataModel";
 import {
   buildTerminalCloudRepairPreview,
   canProjectRegisterOpenForTerminalCloudRepair,
+  classifyRegisterOpenRepairLifecycle,
   classifyTerminalCloudRepairConflict,
 } from "./cloudRepairPolicy";
 import type { TerminalCloudRepairProjectionEligibilityRepository } from "./cloudRepairPolicy";
@@ -175,6 +176,206 @@ describe("terminal cloud repair policy", () => {
     ).not.toBe(preview.preconditionHash);
   });
 
+
+  it("resolves an obsolete register open behind a settled close boundary without projection", () => {
+    const conflict = buildConflict();
+
+    expect(
+      classifyTerminalCloudRepairConflict({
+        blockerStatus: "settled",
+        conflict,
+        lifecycleDisposition: {
+          candidateOccurredAt: 10,
+          disposition: "obsolete",
+          latestAuthoritativeCloseAt: 20,
+          reason: "at_or_before_authoritative_boundary",
+        },
+        now,
+        sourceEvent: buildEvent({ eventType: "register_opened" }),
+        storeId,
+        terminalId,
+      }),
+    ).toEqual({
+      candidateOccurredAt: 10,
+      conflictId: conflict._id,
+      disposition: "obsolete",
+      kind: "obsolete_register_opened",
+      latestAuthoritativeCloseAt: 20,
+      localEventId: "event-1",
+      localRegisterSessionId: "register-1",
+      reason: "at_or_before_authoritative_boundary",
+      sequence: 1,
+    });
+  });
+
+  it("settles an already-projected duplicate source event without projection", () => {
+    expect(
+      classifyTerminalCloudRepairConflict({
+        blockerStatus: "settled",
+        conflict: buildConflict(),
+        lifecycleDisposition: {
+          disposition: "duplicate",
+          reason: "existing_projection",
+        },
+        now,
+        sourceEvent: buildEvent({ eventType: "register_opened" }),
+        storeId,
+        terminalId,
+      }),
+    ).toMatchObject({
+      disposition: "duplicate",
+      kind: "obsolete_register_opened",
+      reason: "existing_projection",
+    });
+  });
+
+  it("fails closed on ambiguous lifecycle chronology and on an active blocker", () => {
+    expect(
+      classifyTerminalCloudRepairConflict({
+        blockerStatus: "settled",
+        conflict: buildConflict(),
+        lifecycleDisposition: {
+          disposition: "unsafe",
+          reason: "ambiguous_close_evidence",
+        },
+        now,
+        sourceEvent: buildEvent({ eventType: "register_opened" }),
+        storeId,
+        terminalId,
+      }),
+    ).toMatchObject({
+      kind: "skipped",
+      reason: "ambiguous_lifecycle_evidence",
+    });
+
+    expect(
+      classifyTerminalCloudRepairConflict({
+        blockerStatus: "current",
+        conflict: buildConflict(),
+        lifecycleDisposition: {
+          candidateOccurredAt: 10,
+          disposition: "obsolete",
+          latestAuthoritativeCloseAt: 20,
+          reason: "at_or_before_authoritative_boundary",
+        },
+        now,
+        sourceEvent: buildEvent({ eventType: "register_opened" }),
+        storeId,
+        terminalId,
+      }),
+    ).toMatchObject({
+      kind: "skipped",
+      reason: "active_blocker",
+    });
+  });
+
+  it("keeps a genuinely fresh replacement event on the safe projection path", () => {
+    expect(
+      classifyTerminalCloudRepairConflict({
+        blockerStatus: "settled",
+        conflict: buildConflict(),
+        lifecycleDisposition: {
+          disposition: "fresh",
+          reason: "after_authoritative_boundary",
+        },
+        now,
+        sourceEvent: buildEvent({ eventType: "register_opened" }),
+        storeId,
+        terminalId,
+      }),
+    ).toMatchObject({
+      kind: "safe_duplicate_register_opened",
+    });
+  });
+
+  it("covers obsolete conflicts in the preview precondition hash", () => {
+    const obsolete = classifyTerminalCloudRepairConflict({
+      blockerStatus: "settled",
+      conflict: buildConflict({
+        _id: "obsolete-conflict" as Id<"posLocalSyncConflict">,
+      }),
+      lifecycleDisposition: {
+        candidateOccurredAt: 10,
+        disposition: "obsolete",
+        latestAuthoritativeCloseAt: 20,
+        reason: "at_or_before_authoritative_boundary",
+      },
+      now,
+      sourceEvent: buildEvent({ eventType: "register_opened" }),
+      storeId,
+      terminalId,
+    });
+
+    const preview = buildTerminalCloudRepairPreview({
+      classified: [obsolete],
+      storeId,
+      terminalId,
+    });
+
+    expect(preview.safeConflictIds).toEqual(["obsolete-conflict"]);
+    expect(preview.obsoleteConflictIds).toEqual(["obsolete-conflict"]);
+    expect(preview.preconditionHash).toContain("obsolete-conflict");
+  });
+
+  it("classifies register-open lifecycle from mapping evidence, not projectedAt", async () => {
+    const repository = createRepairProjectionRepository({
+      blockingRegisterSession: null,
+      closedRegisterSessions: [
+        {
+          _id: "register-closed",
+          closedAt: 500,
+          status: "closed",
+          storeId,
+          terminalId,
+        },
+      ],
+    });
+    const event = {
+      localEventId: "event-1",
+      localRegisterSessionId: "register-1",
+      sequence: 2,
+      eventType: "register_opened" as const,
+      occurredAt: 100,
+      staffProfileId: "staff-1" as Id<"staffProfile">,
+      staffProofToken: "proof-token-1",
+      payload: { openingFloat: 100, registerNumber: "A1" },
+    };
+
+    await expect(
+      classifyRegisterOpenRepairLifecycle(repository, {
+        event,
+        registerNumber: "A1",
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toMatchObject({
+      disposition: {
+        disposition: "obsolete",
+        latestAuthoritativeCloseAt: 500,
+      },
+      hasBlockingRegisterSession: false,
+    });
+
+    const mappedRepository = createRepairProjectionRepository({
+      blockingRegisterSession: null,
+      mappedLocalRegisterSessionIds: new Set(["register-1"]),
+    });
+
+    await expect(
+      classifyRegisterOpenRepairLifecycle(mappedRepository, {
+        event,
+        registerNumber: "A1",
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toMatchObject({
+      disposition: {
+        disposition: "duplicate",
+        reason: "existing_projection",
+      },
+    });
+  });
+
   it("rejects direct cloud register repair projection while closeout review is open", async () => {
     const repository = createRepairProjectionRepository({
       registerSession: {
@@ -299,10 +500,26 @@ function createRepairProjectionRepository(overrides: {
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;
   } | null;
+  closedRegisterSessions?: Array<Record<string, unknown>>;
+  mappedLocalRegisterSessionIds?: Set<string>;
   reviewRegisterSessionIds?: Set<string>;
   validCloudIds?: Set<string>;
 } = {}): TerminalCloudRepairProjectionEligibilityRepository {
   return {
+    async findMappingForTerminal(args) {
+      return overrides.mappedLocalRegisterSessionIds?.has(args.localId) === true
+        ? ({
+            _id: "mapping-1",
+            cloudId: "register-cloud-1",
+            cloudTable: "registerSession",
+            localId: args.localId,
+            localIdKind: "registerSession",
+            localRegisterSessionId: args.localId,
+            storeId: args.storeId,
+            terminalId: args.terminalId,
+          } as never)
+        : null;
+    },
     async findScopedRegisterSessionLifecycle() {
       const blockingRegisterSession = overrides.blockingRegisterSession
         ? ({
@@ -317,6 +534,7 @@ function createRepairProjectionRepository(overrides: {
         blockingRegisterSession,
         ...getRegisterSessionAuthoritativeCloseBoundary([
           blockingRegisterSession,
+          ...((overrides.closedRegisterSessions ?? []) as never[]),
         ]),
       };
     },
