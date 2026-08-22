@@ -5,6 +5,7 @@ import {
   buildTerminalRecoveryPresentation,
   classifyTerminalHealth,
   formatAge,
+  hasAuthoritativeTerminalOperationalExplanation,
   formatTerminalTimestamp,
   getPrimaryTerminalAttentionReason,
   getTerminalAttentionReasons,
@@ -24,7 +25,7 @@ describe("terminal health presentation", () => {
             count: 12,
             source: "cloud_sync",
             summary: "Review backlog sample for Store conflict-raw-001",
-            type: "synced_sale_inventory_review",
+            type: "cloud_held",
           },
         ],
         headline: "Back office review needed",
@@ -78,7 +79,7 @@ describe("terminal health presentation", () => {
         count: 12,
         label: "Review evidence",
         source: "cloud_sync",
-        type: "synced_sale_inventory_review",
+        type: "cloud_held",
       }),
     ]);
     expect(renderedCopy).not.toMatch(/conflict-raw-001|payment payload/i);
@@ -162,7 +163,7 @@ describe("terminal health presentation", () => {
     );
   });
 
-  it("falls back to legacy evidence for sale-ready review backlog", () => {
+  it("does not reconstruct operational state when the server aggregate is missing", () => {
     const presentation = buildTerminalOperationalExplanationPresentation({
       health: "needs_attention",
       recovery: {
@@ -190,22 +191,96 @@ describe("terminal health presentation", () => {
 
     expect(presentation).toEqual(
       expect.objectContaining({
-        detail: "Sales can continue.",
-        headline: "Review needed",
-        label: "Review needed",
-        lane: "sale_ready_with_review_backlog",
-        nextStep:
-          "Review the open work or cash-control backlog. Do not block new sales from this terminal.",
-        ownerLabel: "Operations",
-        saleImpactLabel: "Sales can continue",
+        detail: "Athena has not received a health summary for this terminal.",
+        headline: "Health status unavailable",
+        label: "Health unavailable",
+        lane: "unknown",
+        nextStep: "Refresh terminal health or wait for the next check-in.",
+        ownerLabel: "No owner",
+        saleImpactLabel: "Sale impact unknown",
+        source: "missing_aggregate",
+        supportActionLabel: "No support action",
       }),
     );
-    expect(presentation.evidenceReferences).toEqual([
+    expect(presentation.evidenceReferences).toEqual([]);
+  });
+
+  it("scopes inventory-only review out of terminal health for list and detail alike", () => {
+    const summary = {
+      health: "needs_attention",
+      operationalExplanation: {
+        blockingDomain: "sync_review" as const,
+        detail: "Inventory counts need review before close.",
+        evidenceReferences: [
+          {
+            count: 4,
+            source: "cloud_sync" as const,
+            summary: "Inventory review backlog",
+            type: "synced_sale_inventory_review",
+          },
+        ],
+        headline: "Review needed",
+        lane: "sale_ready_with_review_backlog" as const,
+        nextStep: "Use the linked review workspace to clear the backlog.",
+        primaryOwner: "operations" as const,
+        saleImpact: "can_transact_now" as const,
+        secondaryActions: [],
+        severity: "warning" as const,
+        summaryMeta: {
+          hasSecondarySafeRepair: false,
+          reviewBacklogCount: 4,
+          targetResolutionIncomplete: false,
+        },
+        supportAction: "manual_review" as const,
+      },
+      runtimeStatus: null,
+      syncEvidence: {},
+      terminal: { status: "active" as const },
+    };
+
+    expect(hasAuthoritativeTerminalOperationalExplanation(summary)).toBe(false);
+    expect(
+      buildTerminalOperationalExplanationPresentation(summary),
+    ).toEqual(
       expect.objectContaining({
-        count: 5,
-        label: "Review backlog",
+        detail: "Inventory review is tracked in Operations.",
+        label: "Healthy",
+        lane: "healthy_idle",
+        source: "inventory_scoped",
       }),
-    ]);
+    );
+  });
+
+  it("marks a rendered server explanation as the authoritative source", () => {
+    const summary = {
+      health: "online",
+      operationalExplanation: {
+        blockingDomain: "none" as const,
+        detail: "Fresh runtime evidence reports sale authority.",
+        evidenceReferences: [],
+        headline: "Ready for sales",
+        lane: "able_to_transact_now" as const,
+        nextStep: "No support action needed.",
+        primaryOwner: "none" as const,
+        saleImpact: "can_transact_now" as const,
+        secondaryActions: [],
+        severity: "info" as const,
+        summaryMeta: {
+          hasSecondarySafeRepair: false,
+          reviewBacklogCount: 0,
+          targetResolutionIncomplete: false,
+        },
+        supportAction: "none" as const,
+      },
+      runtimeStatus: null,
+      syncEvidence: {},
+      terminal: { status: "active" as const },
+    };
+
+    expect(hasAuthoritativeTerminalOperationalExplanation(summary)).toBe(true);
+    expect(
+      buildTerminalOperationalExplanationPresentation(summary).source,
+    ).toBe("server_aggregate");
   });
 
   it("derives app-update state from fresh runtime evidence without creating support blockers", () => {

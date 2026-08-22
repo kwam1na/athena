@@ -581,6 +581,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/pos/terminals/POSTerminalHealthView.test.tsx`](../../src/components/pos/terminals/POSTerminalHealthView.test.tsx)
 - [`src/components/pos/terminals/PosClientErrorsPanel.test.tsx`](../../src/components/pos/terminals/PosClientErrorsPanel.test.tsx)
 - [`src/components/pos/terminals/terminalHealthPresentation.test.ts`](../../src/components/pos/terminals/terminalHealthPresentation.test.ts)
+- [`src/components/pos/terminals/terminalHealthServerPolicyParity.test.ts`](../../src/components/pos/terminals/terminalHealthServerPolicyParity.test.ts)
 - [`src/components/pos/transactions/TransactionView.test.tsx`](../../src/components/pos/transactions/TransactionView.test.tsx)
 - [`src/components/pos/transactions/TransactionsView.test.tsx`](../../src/components/pos/transactions/TransactionsView.test.tsx)
 - [`src/components/pos/transactions/transactionColumns.test.tsx`](../../src/components/pos/transactions/transactionColumns.test.tsx)
