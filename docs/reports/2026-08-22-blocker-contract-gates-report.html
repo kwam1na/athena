@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Blocker Contract &amp; Gates: closing the typed-blocker gaps (V26-1307)</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="cf37f29ea47bde778030b3892553950a1ac5041ad48a02b50db7bcfde6e988fc">
+  <header data-report-section="header">
+    <h1>Blocker Contract &amp; Gates: closing the typed-blocker gaps (V26-1307)</h1>
+    <p>Seven tickets that made every harness non-zero exit carry code, source, and remediation</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch codex/v26-1307-blocker-contract-gates</li>
+      <li>Linear epic V26-1307</li>
+      <li>7 ticket commits vs origin/main</li>
+      <li>222 focused harness tests green</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Status</dt><dd>Delivery candidate (not merged)</dd>
+      <dt>Branch</dt><dd>codex/v26-1307-blocker-contract-gates vs origin/main</dd>
+      <dt>Tickets</dt><dd>V26-1274, V26-1276, V26-1277, V26-1278, V26-1279, V26-1284, V26-1285 under epic V26-1307</dd>
+      <dt>Deploy</dt><dd>Not applicable (repo tooling only, no production deploy)</dd>
+      <dt>Root alignment</dt><dd>Pending final delivery-documentation-check pass on this branch</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive Summary</h2>
+      <p>This batch completes the typed blocker contract for the Athena delivery harness. The contract&#x27;s promise is that every blocking exit a harness CLI can produce renders a structured blocker with a stable code, a registry-owned source, and at least one remediation. Before this batch, that promise had known holes: three reachable CLIs were explicitly excluded from coverage, one blocker source id had no producer, an inventory sensor ignored a suppression flag that had already let prose-only failures ship twice, new provider finding codes could silently void human waivers, interrupted and usage-error exits rendered as crashes or bare prose, and documentation findings carried generic repair-everything guidance instead of pointing at the artifact that actually needs to change.</p>
+      <p>Seven tickets close those holes. Each is small, each pins its boundary with tests, and together they turn &#x27;the harness tells you what blocked you and how to fix it&#x27; from an aspiration into an enforced invariant.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Problem and context</h2>
+      <p>The delivery gate (pr:athena) runs a spine of sensors and private providers. When something fails, the operator sees terminal output. The typed blocker system (scripts/harness-blockers.ts) exists so that output always answers three questions: what failed (code), which component owns the failure (source), and what to do next (remediations). A single constructor, createHarnessBlocker, sanitizes every blocker: secret redaction, control-character stripping, kebab-case id enforcement, registry-owned source validation.</p>
+      <p>The gaps this batch closed were all cases where an exit path bypassed that constructor or the contract was pinned by convention rather than by test:</p>
+      <p>Three live CLIs (delivery:documentation-check, delivery:telemetry-check/record, pr:athena:record-proof) still printed prose and called process.exit directly. The inventory sensor documented them as knowingly outside the contract.</p>
+      <p>HARNESS_PREPARATION_SOURCE_IDS contained mechanical_failed, but no code path ever produced a preparation blocker with that source. Dead vocabulary in a guarded tuple invites drift between the runtime guard and reality.</p>
+      <p>A CLI passing renderNonZero: false to runHarnessCliBoundary suppresses the shared harness_command_failed fallback. That is legitimate only when the file renders its own conformant blocker, but nothing checked it - and prose-only suppressions shipped twice before a human caught them.</p>
+      <p>waivableBlockedObligationIds is all-or-nothing: one finding code missing from WAIVABLE_FINDING_CODES makes the waiver unofferable for the entire run. Nothing pinned which codes an obligation can emit, so a new provider code would default to silence.</p>
+      <p>Interrupted delivery runs and malformed invocations reached the operator as either a bare prose summary or an internal-error stack with a reproduce command for a crash that was not a crash.</p>
+      <p>After obligations moved to typed blockers, LiveProviderFinding narrowed to code | message, so documentation findings lost their provider-specific remediation and fell back to generic repair guidance.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model</h2>
+      <p>Think of the blocker contract as a border checkpoint. Every non-zero exit from a harness CLI must cross the checkpoint, and the checkpoint stamps three things onto whatever passes: a stable lowercase code, a source owned by a registry (gate, obligation, provider, preparation, candidate, or command), and at least one remediation with a stable kebab-case id.</p>
+      <p>This batch closes the smuggling routes around the checkpoint rather than adding new checkpoints:</p>
+      <ul>
+        <li>Registration: every CLI that can block must be listed in HARNESS_BLOCKER_CLI_INVENTORY, the manifest the static sensor walks (V26-1274).</li>
+        <li>Vocabulary hygiene: a source id nobody produces gets removed, and a test asserts every remaining member has a producer (V26-1278).</li>
+        <li>Sensor policing of suppressions: opting out of the shared fallback requires proof that you render your own conformant blocker (V26-1279).</li>
+        <li>Exhaustiveness pins: every emitable finding code must be classified as waivable or intentionally not waivable, enforced by compile-time witnesses and guard tests (V26-1276).</li>
+        <li>Total rendering: even interrupted and usage-error exits get stamped blockers, so no exit path prints unstructured text (V26-1284).</li>
+        <li>Specific guidance: remediations keyed on finding codes tell the operator which artifact to fix, not just that documentation is stale (V26-1285).</li>
+      </ul>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before vs after</h2>
+      <ul>
+        <li>Before: three CLIs printed prose and exited via process.exit, explicitly listed in a sensor comment as knowingly outside the contract. After: they run inside runHarnessCliBoundary, are registered in HARNESS_BLOCKER_CLI_INVENTORY, and bad flags throw HarnessUsageError instead of Error.</li>
+        <li>Before: mechanical_failed sat in HARNESS_PREPARATION_SOURCE_IDS with no producer. After: removed; a test names a producing site for every member of the union.</li>
+        <li>Before: renderNonZero: false was unchecked. After: inspectRenderNonZeroSuppression fails any inventory file carrying the literal suppression without also constructing a blocker via createHarnessBlocker, HarnessBlockedError, or formatHarnessBlockers.</li>
+        <li>Before: WAIVABLE_FINDING_CODES was a hand-maintained list with nothing proving completeness against what obligations emit. After: EMITTABLE_BLOCKED_FINDING_CODES and INTENTIONALLY_NOT_WAIVABLE_FINDING_CODES partition the space exactly; exhaustive Record witnesses make a new provider union member fail to compile until it is classified.</li>
+        <li>Before: an interrupted delivery run exited 1 printing only a prose summary; a bad CLI flag surfaced as harness_internal_error with a stack. After: interrupted runs render a delivery_run_interrupted blocker naming the signal; usage errors render harness_usage_error listing supported flags.</li>
+        <li>Before: both documentation policies shared one repair-delivery-documentation remediation. After: compound-solution points at authoring docs/solutions/ notes (author-compound-solution-note); landed-change-report points at regenerating the report with a current fingerprint (regenerate-landed-change-report).</li>
+        <li>Before: pr-athena-delivery-run defined its own commandToString quoting helper. After: it uses formatHarnessCommand, the canonical quoting used by remediation rendering; span labels are byte-identical for every registered command.</li>
+      </ul>
+  </section>
+  <section data-report-section="mechanics">
+    <h2>Layer-by-layer mechanics</h2>
+      <p>Data flows through four layers. The constructor layer (harness-blockers.ts) owns sanitization and shape: createHarnessBlocker validates sources against the registry at runtime because scripts/ is not typechecked, redacts secrets, bounds details at 8000 characters, and rejects unstable ids. It also now owns two expected-outcome constructors: createHarnessUsageErrorBlocker and the HarnessUsageError class (extending HarnessBlockedError so catch-all wrappers cannot reclassify it), plus the delivery_run_interrupted rendering in the delivery-run spine.</p>
+      <p>The inventory sensor layer (harness-blocker-inventory.ts) polices shape statically. It walks HARNESS_BLOCKER_CLI_INVENTORY, checks that each file runs through runHarnessCliBoundary, does not call console/process.exit at the boundary level, uses no free-form sources, and - new in this batch - proves that renderNonZero: false files construct their own blockers. Its stated residual limit is honest: literal-only detection; runtime indirection stays owned by createHarnessBlocker, and unregistered CLIs are invisible.</p>
+      <p>The admission layer (harness-gate-admission.ts, harness-gate-obligations.ts) evaluates gate obligations per candidate binding. Waivers intersect blockers against WAIVABLE_FINDING_CODES; the new exports pin that intersection&#x27;s inputs. The obligation evaluator maps finding codes to typed remediations, restoring code-specific repair for documentation policies.</p>
+      <p>The provider CLI layer (delivery-documentation-check.ts, delivery-run-telemetry.ts, pre-push-validation-proof.ts) wraps its entrypoint in runHarnessCliBoundary with a source matching its registered command id, so every failure it produces crosses the checkpoint with full structure.</p>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed and what intentionally did not</h2>
+      <ul>
+        <li>Changed: three provider/proof CLIs migrated into the blocker contract and registered in the inventory (V26-1274).</li>
+        <li>Changed: mechanical_failed removed from the preparation source tuple with a producer-exhaustiveness test (V26-1278).</li>
+        <li>Changed: new blocker-emission-missing inventory rule policing renderNonZero: false (V26-1279).</li>
+        <li>Changed: EMITTABLE_BLOCKED_FINDING_CODES and INTENTIONALLY_NOT_WAIVABLE_FINDING_CODES exported with compile-time exhaustiveness witnesses (V26-1276).</li>
+        <li>Changed: HarnessUsageError / harness_usage_error and delivery_run_interrupted paths, adopted across review, janitor, behavior, inferential-review, self-review, runtime-trends, and evidence CLIs (V26-1284); docs/harness.md documents the distinction.</li>
+        <li>Changed: code-keyed documentation remediations author-compound-solution-note and regenerate-landed-change-report (V26-1285).</li>
+        <li>Changed: duplicate shell-quoting helper replaced by formatHarnessCommand (V26-1277).</li>
+        <li>Carried-over workflow/docs commits on the same branch: AGENTS.md rewrite into orientation/commands/validation-ladder form, track-skill epic-posture rules, opencode.json config addition, and a pinned merge-ready guidance sentence. These change agent workflow posture, not harness runtime behavior.</li>
+        <li>Intentionally unchanged: the waiver classification itself (which codes are waivable) - V26-1276 pins existing behavior without widening the waiver. Also unchanged: the runtime sanitizer&#x27;s shape guarantees, the all-or-nothing waiver offer semantics, and ledger span-label content (the quoting collapse is byte-identical for all registered commands).</li>
+        <li>Intentionally unchanged: graphify-out artifacts were rebuilt as required by repo policy but represent generated state, not behavioral change.</li>
+      </ul>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+      <ul>
+        <li>Malformed invocation (unknown flag, missing value): throws HarnessUsageError, which survives catch-all wrapping in CLIs like harness:review and renders as harness_usage_error with a rerun-with-supported-flags remediation - never as an internal-error stack.</li>
+        <li>Interrupted delivery run: non-SIGINT signals exit 1 through the spine and now render delivery_run_interrupted naming the interrupting reason; SIGINT also renders, since a stable code costs nothing and keeps every non-zero exit total.</li>
+        <li>Suppression without emission: a file adding renderNonZero: false without constructing a blocker fails the inventory sensor statically with blocker-emission-missing.</li>
+        <li>New provider finding code: fails to compile until named in the exhaustive Record witness, then fails the classification guard test until placed in the waivable or intentionally-not-waivable set - silence is no longer a default.</li>
+        <li>Unknown blocker source at runtime: createHarnessBlocker throws loudly (&#x27;not registry-owned&#x27;) rather than letting free-form drift serialize.</li>
+        <li>Old data: serialized blocker envelopes keep schemaVersion 1 semantics; the decision event schema remains v2 with the exclusive blockerEnvelope field.</li>
+      </ul>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and status</h2>
+      <ul>
+        <li>Focused bun test runs over the changed surfaces: 99 passing tests across harness-blockers.test.ts, harness-gate-admission.test.ts, harness-gate-obligations.test.ts, harness-blocker-inventory.test.ts (729 expect calls); 123 passing tests across pr-athena-delivery-run.test.ts, harness-review.test.ts, harness-janitor.test.ts, harness-behavior.test.ts, delivery-documentation-check.test.ts, documentation-waiver-command.test.ts. Zero failures.</li>
+        <li>bun run reports:presentation:check passes over the whole report corpus including this report.</li>
+        <li>Deliverable diff fingerprint verified via bun scripts/landed-change-report-check.ts --base origin/main --print-fingerprint: cf37f29ea47bde778030b3892553950a1ac5041ad48a02b50db7bcfde6e988fc, matching the attribute embedded in this report. docs/reports/, docs/solutions/, and other non-deliverable paths are excluded from the fingerprint by design, so adding this report does not move it.</li>
+        <li>Full-surface authority (bun run pr:athena) is the merge-ready gate and remains pending at the delivery-candidate stage; this report resolves the landed-change-report finding that blocked the delivery-documentation-check provider.</li>
+        <li>Deployment status: not applicable - all changes are repository tooling and agent docs; there is no production deploy for this batch.</li>
+        <li>Root alignment status: pending - the branch is a delivery candidate; merge and root alignment happen after the gate passes.</li>
+        <li>Residual risks: the inventory sensor&#x27;s literal-only detection cannot see runtime-computed renderNonZero values or dataflow between blocker construction and the suppressed exit; a new CLI that is neither harness-prefixed nor registered stays invisible to static policing.</li>
+      </ul>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Next-time guidance</h2>
+      <ul>
+        <li>Adding a new harness CLI: route its entrypoint through runHarnessCliBoundary with a source whose kind/id match a registered command, add the file and command ids to HARNESS_BLOCKER_CLI_INVENTORY, and let the inventory sensor police the shapes. Do not print prose and process.exit.</li>
+        <li>Suppressing the shared fallback: pass renderNonZero: false only if the file constructs and formats its own blockers; the sensor will fail otherwise. Prefer keeping the fallback.</li>
+        <li>Adding a provider finding code: add it to the provider&#x27;s code union, name it in the exhaustive Record witness, classify it in exactly one of WAIVABLE_FINDING_CODES or INTENTIONALLY_NOT_WAIVABLE_FINDING_CODES, and let the guard tests tell you what is left. Remember the waiver offer is all-or-nothing per run - an unclassified code voids waivers entirely.</li>
+        <li>Adding a preparation blocker source: extend HARNESS_PREPARATION_SOURCE_IDS and name a producing site in the producer test in harness-blockers.test.ts, or do not add the id.</li>
+        <li>Writing remediations: key remediation ids on the specific repair (see telemetry_record_malformed and the documentation-code precedents); distinct ids survive deduplication, identical ids with divergent bodies confuse operators.</li>
+        <li>Quoting commands anywhere user-facing: use formatHarnessCommand from harness-blockers.ts; never re-implement shell quoting locally.</li>
+        <li>If a landed-change report check blocks delivery: regenerate the report after the final code edit so data-athena-report-diff-fingerprint matches bun scripts/landed-change-report-check.ts --base origin/main --print-fingerprint.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>scripts/harness-blockers.ts</code></td><td>The contract core: createHarnessBlocker sanitizer, registry-owned source validation, HarnessUsageError/harness_usage_error, formatHarnessCommand, and the CLI boundary that turns every non-zero exit or thrown error into rendered blockers.</td></tr>
+        <tr><td><code>scripts/harness-blocker-inventory.ts</code></td><td>Static policing manifest and rules: registers the three previously excluded CLIs (V26-1274) and adds inspectRenderNonZeroSuppression producing blocker-emission-missing (V26-1279).</td></tr>
+        <tr><td><code>scripts/harness-gate-admission.ts</code></td><td>Gate admission flow and waiver machinery: hosts EMITTABLE_BLOCKED_FINDING_CODES and INTENTIONALLY_NOT_WAIVABLE_FINDING_CODES with compile-time exhaustive witnesses pinning waiver classification (V26-1276).</td></tr>
+        <tr><td><code>scripts/harness-gate-obligations.ts</code></td><td>Obligation evaluation: restores code-specific remediations for compound-solution and landed-change-report findings (V26-1285).</td></tr>
+        <tr><td><code>scripts/pr-athena-delivery-run.ts</code></td><td>Delivery spine: renders delivery_run_interrupted for interrupted runs (V26-1284) and collapses the duplicate quoting helper onto formatHarnessCommand (V26-1277).</td></tr>
+        <tr><td><code>scripts/delivery-documentation-check.ts</code></td><td>Live documentation provider CLI migrated into the blocker contract with typed usage errors and boundary rendering (V26-1274/V26-1284).</td></tr>
+        <tr><td><code>scripts/delivery-run-telemetry.ts</code></td><td>Telemetry provider CLI migrated into the contract; telemetryCliContract picks the owning source per subcommand (V26-1274).</td></tr>
+        <tr><td><code>scripts/pre-push-validation-proof.ts</code></td><td>Pre-push proof step migrated into the contract and registered as pr:athena:record-proof (V26-1274).</td></tr>
+        <tr><td><code>scripts/harness-blockers.test.ts</code></td><td>Pins the contract: producer exhaustiveness for every preparation source id (V26-1278) and usage-error survival through catch-all wrappers (V26-1284).</td></tr>
+        <tr><td><code>docs/harness.md</code></td><td>Operator-facing documentation of the internal_error / usage_error / delivery_run_interrupted code distinction (V26-1284).</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does createHarnessBlocker re-validate blocker sources against registries at runtime when the TypeScript types already restrict them?</p>
+        <ol data-quiz-options>
+          <li>Because runtime validation is faster than typechecking</li>
+          <li data-quiz-correct>Because nothing typechecks scripts/, so the discriminated union is only a convention until checked at construction</li>
+          <li>Because providers may send sources over the network</li>
+          <li>To support JavaScript callers that bypass the types</li>
+        </ol>
+        <p data-quiz-explanation>scripts/ is not part of a typechecked build surface, so a free-form source id would otherwise serialize silently; the constructor fails loudly on anything not registry-owned.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What did V26-1274 change about delivery:documentation-check, delivery:telemetry-check/record, and pr:athena:record-proof?</p>
+        <ol data-quiz-options>
+          <li>They were deleted and folded into pr:athena</li>
+          <li data-quiz-correct>They were brought into the blocker contract and registered in HARNESS_BLOCKER_CLI_INVENTORY</li>
+          <li>They were renamed to harness-prefixed commands</li>
+          <li>Their exit codes were inverted to avoid process.exit</li>
+        </ol>
+        <p data-quiz-explanation>The sensor comment explicitly excluding these three CLIs was removed; they now run inside runHarnessCliBoundary and appear in the inventory the static sensor walks.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A file passes renderNonZero: false to runHarnessCliBoundary. What keeps it legitimate?</p>
+        <ol data-quiz-options>
+          <li>Nothing; the flag always disables blocker rendering safely</li>
+          <li>The file must contain a unit test covering the suppressed path</li>
+          <li data-quiz-correct>It must also construct a conformant blocker via createHarnessBlocker, HarnessBlockedError, or formatHarnessBlockers, or the inventory sensor reports blocker-emission-missing</li>
+          <li>It must register the suppression in HARNESS_BLOCKER_CLI_INVENTORY</li>
+        </ol>
+        <p data-quiz-explanation>inspectRenderNonZeroSuppression fails any inventory file carrying the literal suppression without emitting its own blocker, because suppressing the shared fallback twice shipped prose-only failures.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the stated limit of inspectRenderNonZeroSuppression?</p>
+        <ol data-quiz-options>
+          <li>It only runs on CI, not locally</li>
+          <li data-quiz-correct>It detects literal declarations only; runtime-computed suppressions and dataflow to the suppressed exit are invisible, and runtime shape stays owned by createHarnessBlocker</li>
+          <li>It scans git history for prior violations</li>
+          <li>It requires every file in the repo, not just inventory files</li>
+        </ol>
+        <p data-quiz-explanation>The rule reads whole files for literals, like the other shape rules; following indirection or control flow would report drift it could not prove.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does one unclassified finding code void waivers for an entire run?</p>
+        <ol data-quiz-options>
+          <li>Because waivers expire when codes change</li>
+          <li data-quiz-correct>Because waivableBlockedObligationIds uses an all-or-nothing every() check: every blocker on every blocked resolution must match WAIVABLE_FINDING_CODES, so one miss makes the offer impossible</li>
+          <li>Because unclassified codes crash evaluateGateObligations</li>
+          <li>Because waivers require manager approval proofs</li>
+        </ol>
+        <p data-quiz-explanation>The waiver offer returns [] unless every blocked resolution&#x27;s blockers are covered by the allowed-code lists; a single unknown code silently fails that predicate for the whole run.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>You add a new member to a provider&#x27;s finding-code union. What happens under V26-1276&#x27;s pins?</p>
+        <ol data-quiz-options>
+          <li>Nothing until a waiver is attempted, then it is silently waived</li>
+          <li data-quiz-correct>The exhaustive Record witness fails to compile until the code is named, then guard tests fail until it is classified as waivable or intentionally not waivable</li>
+          <li>The code defaults to waivable for interactive humans</li>
+          <li>The inventory sensor removes the provider from the registry</li>
+        </ol>
+        <p data-quiz-explanation>Compile-time witnesses (Records keyed by the full union) force the new member to be enumerated, and the classification guard tests force it into exactly one set instead of defaulting to silence.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>An operator Ctrl-C interrupts a pr:athena delivery run mid-spine. What does the terminal show after V26-1284?</p>
+        <ol data-quiz-options>
+          <li>A Node.js stack trace for SIGINT</li>
+          <li>Only the prose phase summary, as before</li>
+          <li data-quiz-correct>A delivery_run_interrupted blocker naming the interruption reason with a rerun-pr:athena remediation</li>
+          <li>An harness_internal_error blocker with a reproduce command</li>
+        </ol>
+        <p data-quiz-explanation>Interrupted runs now render a typed delivery_run_interrupted blocker so a signaled run never looks like a crash; harness_internal_error is reserved for genuinely unexpected exceptions.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What distinguishes harness_usage_error from harness_internal_error?</p>
+        <ol data-quiz-options>
+          <li>Usage errors exit 0; internal errors exit 1</li>
+          <li data-quiz-correct>Usage errors cover malformed invocations and render supported flags as remediation; internal errors are unexpected exceptions rendering a stack detail and reproduce command</li>
+          <li>Usage errors apply only to Convex functions</li>
+          <li>There is no difference; both share one code</li>
+        </ol>
+        <p data-quiz-explanation>A bad flag or malformed invocation is an expected outcome, not a crash; HarnessUsageError extends HarnessBlockedError so catch-all wrappers cannot reclassify it as an internal error.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>After the typed-blocker migration briefly lost provider-specific documentation remediation, how does the landed-change-report policy guide repair now (V26-1285)?</p>
+        <ol data-quiz-options>
+          <li>With the generic repair-everything-delivery-documentation instruction only</li>
+          <li>By telling the operator to delete docs/reports and rerun</li>
+          <li data-quiz-correct>With a regenerate-landed-change-report remediation pointing at refreshing the report under docs/reports/ with a current diff fingerprint</li>
+          <li>By opening a Linear issue automatically</li>
+        </ol>
+        <p data-quiz-explanation>Each documentation finding code carries a typed remediation: compound-solution points at authoring docs/solutions/ notes; landed-change-report points at regenerating the report with a current fingerprint. The obligation-level remediation remains the fallback for structural codes.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>The delivery-documentation-check provider blocked this branch demanding a report fingerprint of cf37f29e.... When must a report&#x27;s data-athena-report-diff-fingerprint be regenerated?</p>
+        <ol data-quiz-options>
+          <li>Once, when the branch is created</li>
+          <li>Only after merging to main</li>
+          <li data-quiz-correct>After the final code and workflow edits land on the branch - rerun the fingerprint command and re-render the report so the attribute matches, since any deliverable-file change moves the hash</li>
+          <li>Never; the fingerprint is fixed at authorship</li>
+        </ol>
+        <p data-quiz-explanation>The fingerprint hashes the current deliverable diff (excluding docs/reports/, docs/solutions/, and other non-deliverable paths), so it only matches when regenerated after the last code edit - which is why review-loop changes require re-rendering the report.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>SubagentUnavailable</dt><dd>This host environment exposes no subagent-dispatch tool, so the session-context, delivered-diff, and reviewer subagents required by the skill could not be dispatched. The report is therefore less complete than normal: all evidence was gathered directly and read-only by the orchestrator via git log/diff/show over origin/main...HEAD, reading the delivered source and test files, running focused bun test suites, and running the repository&#x27;s own fingerprint and presentation sensors. No Linear ticket bodies or PR closeout comments were available locally beyond commit messages and the epic/ticket ids supplied by the delivery conversation.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>
