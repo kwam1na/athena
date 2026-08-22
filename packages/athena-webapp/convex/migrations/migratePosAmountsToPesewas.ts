@@ -175,6 +175,7 @@ async function upsertMigrationRun(
   input: {
     complete: boolean;
     cutoffTimestamp: number;
+    measurementOnly?: boolean;
     migrated: number;
     now: number;
     remaining: number;
@@ -186,11 +187,26 @@ async function upsertMigrationRun(
     .query("posAmountMigrationRun")
     .withIndex("by_table", (q) => q.eq("table", input.table))
     .first();
+  // Only a dry run can measure how much work is left -- an applying batch
+  // converts what it sees, so its own "pending" is structurally zero. A dry
+  // run therefore still records that measurement, but must never touch the
+  // gate: `complete` and the cumulative `migrated` are carried forward
+  // untouched, so re-inspecting a finished table before cutover cannot clear
+  // it. An applying batch owns the gate and carries the last measurement
+  // forward instead of overwriting it with its structural zero.
   const value = {
-    complete: input.complete,
+    complete: input.measurementOnly
+      ? (existing?.complete ?? false)
+      : input.complete,
     cutoffTimestamp: input.cutoffTimestamp,
-    migrated: (existing?.migrated ?? 0) + input.migrated,
-    remaining: input.remaining,
+    migrated: input.measurementOnly
+      ? (existing?.migrated ?? 0)
+      : (existing?.migrated ?? 0) + input.migrated,
+    remaining: input.measurementOnly
+      ? input.remaining
+      : input.complete
+        ? 0
+        : (existing?.remaining ?? input.remaining),
     skipped: input.skipped,
     table: input.table,
     updatedAt: input.now,
@@ -258,27 +274,16 @@ export async function migratePosAmountTableWithCtx(
   const complete =
     !dryRun && page.isDone && startedAtBeginning && totals.pending === 0;
 
-  // A dry run must never touch the run record: it is the gate a production
-  // cutover reads, and re-inspecting a finished table would otherwise clear it.
-  const run = dryRun
-    ? {
-        complete: false,
-        cutoffTimestamp: args.cutoffTimestamp,
-        migrated: 0,
-        remaining: totals.pending,
-        skipped,
-        table: args.table,
-        updatedAt: now,
-      }
-    : await upsertMigrationRun(ctx, {
-        complete,
-        cutoffTimestamp: args.cutoffTimestamp,
-        migrated,
-        now,
-        remaining: totals.pending,
-        skipped,
-        table: args.table,
-      });
+  const run = await upsertMigrationRun(ctx, {
+    complete,
+    cutoffTimestamp: args.cutoffTimestamp,
+    measurementOnly: dryRun,
+    migrated,
+    now,
+    remaining: totals.pending,
+    skipped,
+    table: args.table,
+  });
 
   console.log(
     `[migratePosAmountsToPesewas] ${JSON.stringify({

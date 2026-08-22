@@ -512,7 +512,7 @@ describe("completion marker coverage guards", () => {
     );
   });
 
-  it("writes no run record when a dry run is the first thing to touch a table", async () => {
+  it("records the dry-run measurement without ever claiming completion", async () => {
     const harness = createCtx({
       posTransaction: [
         {
@@ -534,6 +534,32 @@ describe("completion marker coverage guards", () => {
 
     expect(result.dryRun).toBe(true);
     expect(result.complete).toBe(false);
-    expect(harness.tables!.get("posAmountMigrationRun")!).toHaveLength(0);
+    // A dry run is the only thing that can measure work left, so it records
+    // that -- but it must not claim the table is done or bank any migrations.
+    expect(harness.tables!.get("posAmountMigrationRun")![0]).toEqual(
+      expect.objectContaining({ complete: false, migrated: 0, remaining: 1 }),
+    );
+  });
+
+  it("keeps an applying batch from reporting zero work left before it is done", async () => {
+    const harness = createCtx({
+      posTransaction: sixEligibleTransactions(),
+      posAmountMigrationRun: [],
+    });
+
+    // One applying page of three, leaving three rows unconverted. The batch
+    // has no measurement of its own to contribute, so it must not overwrite
+    // the record with a structural zero that reads as "nothing left".
+    await migratePosAmountTableWithCtx(harness.ctx, {
+      cutoffTimestamp: CUTOFF,
+      dryRun: false,
+      limit: 3,
+      table: "posTransaction",
+    } as never);
+
+    const record = harness.tables!.get("posAmountMigrationRun")![0];
+    expect(record).toEqual(
+      expect.objectContaining({ complete: false, migrated: 3 }),
+    );
   });
 });
