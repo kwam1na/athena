@@ -296,7 +296,11 @@ export async function resolveTerminalCloudRepair(
     repairedSourceEventIds,
     resolvedByDisposition,
     resolvedConflictIds,
-    skippedConflictIds: preview.skipped.map((item) => item.conflictId),
+    // A row classified skipped per-row can still settle with its obsolete
+    // source event; returned evidence must not list one id in both sets.
+    skippedConflictIds: preview.skipped
+      .map((item) => item.conflictId)
+      .filter((conflictId) => !resolvedConflictIdSet.has(conflictId)),
   });
 }
 

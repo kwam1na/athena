@@ -20,7 +20,7 @@ tags:
   - open-work
   - register-lifecycle
   - cloud-repair
-delivery_diff_fingerprint: 28bb8d7f1fa5788d23e9e09cc221134e40cba2ebd8d073defaf8b24212896b1c
+delivery_diff_fingerprint: be3af648a60da1ad1abd9cdf56464891ac18687319f716373e7d847d42cb8a2f
 ---
 
 # Athena Terminal Sync Review Currentness
@@ -88,8 +88,11 @@ same way:
   `closeoutOwnedAt`; a reopen after rejection appends a closeout record), so
   the boundary already represents it.
 - Caps do not move. Candidate reads stay at 100 per conflict type and a single
-  source event settles at most 2,000 rows per invocation; truncation is judged
-  on the raw index window so an event is skipped whole rather than half-settled.
+  source event settles at most 2,000 open rows per invocation. The per-event
+  read is status-scoped (`by_store_terminal_localEvent_status`): only open rows
+  count toward the cap, because conflict rows are never deleted and an event's
+  settled history must not block its convergence; a window that is still
+  truncated fails closed so an event is skipped whole rather than half-settled.
   A capped read reports `hasMoreCandidates` and stays incomplete until repair
   converges, which is the same posture this note already required for
   terminal health.

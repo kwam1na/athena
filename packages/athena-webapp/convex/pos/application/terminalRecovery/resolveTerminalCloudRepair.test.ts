@@ -616,6 +616,63 @@ describe("resolveTerminalCloudRepair", () => {
     });
   });
 
+  it("reports each settled row in exactly one result list when an event mixes per-row classifications", async () => {
+    // Two stale duplicate rows classify obsolete; a third row for the same
+    // event is too recent (`not_stale`) and classifies skipped. The event
+    // settles every open row, so the recent row must not also be reported as
+    // skipped.
+    const staleRows = Array.from({ length: 2 }, (_, index) =>
+      buildConflict({
+        _id: `conflict-stale-${index}` as Id<"posLocalSyncConflict">,
+        details: {
+          blockingRegisterSessionId: "registerSession-closed",
+          reason: "duplicate_register_opened",
+        },
+        sequence: index + 1,
+      }),
+    );
+    const recentRow = buildConflict({
+      _id: "conflict-recent" as Id<"posLocalSyncConflict">,
+      createdAt: now - 60 * 1000,
+      details: {
+        blockingRegisterSessionId: "registerSession-closed",
+        reason: "duplicate_register_opened",
+      },
+      sequence: 3,
+    });
+    const ctx = buildCtx({
+      posLocalSyncConflict: [...staleRows, recentRow],
+      posLocalSyncEvent: [buildEvent({ occurredAt: now - 30 * 60 * 1000 })],
+      registerSession: [buildClosedRegisterSession()],
+    });
+
+    const result = await resolveTerminalCloudRepair(ctx as never, {
+      expectedPreconditionHash: buildTerminalCloudRepairPreconditionHash({
+        safeConflictIds: staleRows.map((row) => row._id).sort(),
+        storeId,
+        terminalId,
+      }),
+      now,
+      resolvedByUserId: "user-1" as Id<"athenaUser">,
+      storeId,
+      terminalId,
+    });
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") return;
+    expect([...result.data.resolvedConflictIds].sort()).toEqual([
+      "conflict-recent",
+      "conflict-stale-0",
+      "conflict-stale-1",
+    ]);
+    expect(result.data.skippedConflictIds).toEqual([]);
+    expect(
+      result.data.resolvedConflictIds.filter((id) =>
+        result.data.skippedConflictIds.includes(id),
+      ),
+    ).toEqual([]);
+  });
+
   it("fails closed for an active blocker and for ambiguous close chronology", async () => {
     const activeBlockerConflict = buildConflict({
       details: {
