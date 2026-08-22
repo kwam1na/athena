@@ -243,6 +243,17 @@ export type LocalSyncRegisterReviewConflictFact = {
   registerSessionMapping: LocalSyncMappingRecord | null;
 };
 
+/**
+ * Scoped register-session read used by the register-open lifecycle decision.
+ * Exposes the latest authoritative close boundary for the terminal even when no
+ * session is currently blocking, so obsolete opens can be rejected.
+ */
+export type ScopedRegisterSessionLifecycleRead = {
+  blockingRegisterSession: Doc<"registerSession"> | null;
+  hasAmbiguousCloseEvidence: boolean;
+  latestAuthoritativeCloseAt: number | null;
+};
+
 export type LocalSyncCursorRecord = {
   _id: string;
   storeId: Id<"store">;
@@ -418,11 +429,11 @@ export type SyncProjectionRepository = {
     expectedCash: number;
     notes?: string;
   }): Promise<Id<"registerSession">>;
-  findBlockingRegisterSession(args: {
+  findScopedRegisterSessionLifecycle(args: {
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;
     registerNumber?: string;
-  }): Promise<Doc<"registerSession"> | null>;
+  }): Promise<ScopedRegisterSessionLifecycleRead>;
   listOpenRegisterReviewConflictFacts(args: {
     registerSessionId: Id<"registerSession">;
     storeId: Id<"store">;

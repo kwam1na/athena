@@ -2,8 +2,11 @@ import type { Doc, Id } from "../../../_generated/dataModel";
 import {
   canReuseCloudRegisterSessionForLocalOpen as canReuseCloudRegisterSessionForLocalOpenPolicy,
   canSupersedeReviewedRegisterSessionForLocalOpen as canSupersedeReviewedRegisterSessionForLocalOpenPolicy,
+  classifyRegisterOpenAgainstLifecycleBoundary,
   isRegisterCloseoutReviewConflict,
+  type RegisterOpenLifecycleDisposition,
 } from "../../../../shared/registerSessionLifecyclePolicy";
+import type { TerminalRecoveryRepairBlockerStatus } from "../../infrastructure/repositories/terminalRecoveryRepository";
 import type {
   LocalSyncRegisterReviewConflictFact,
   ParsedPosLocalSyncEventInput,
@@ -37,10 +40,35 @@ export type SafeTerminalCloudRepairConflict = {
   sequence: number;
 };
 
+/**
+ * A register-open conflict whose drawer is already settled behind the
+ * authoritative close boundary (or already projected). It can reach durable
+ * `resolved` state by settling conflict rows only — never by replaying the
+ * obsolete register open into a new cloud drawer.
+ */
+export type TerminalCloudRepairLifecycleRead = {
+  disposition: RegisterOpenLifecycleDisposition;
+  hasBlockingRegisterSession: boolean;
+};
+
+export type ObsoleteTerminalCloudRepairConflict = {
+  candidateOccurredAt?: number;
+  conflictId: Id<"posLocalSyncConflict">;
+  disposition: "duplicate" | "obsolete";
+  kind: "obsolete_register_opened";
+  latestAuthoritativeCloseAt?: number;
+  localEventId: string;
+  localRegisterSessionId: string;
+  reason: string;
+  sequence: number;
+};
+
 export type SkippedTerminalCloudRepairConflict = {
   conflictId: Id<"posLocalSyncConflict">;
   kind: "skipped";
   reason:
+    | "active_blocker"
+    | "ambiguous_lifecycle_evidence"
     | "contains_business_facts"
     | "missing_source_event"
     | "not_duplicate_register_opened"
@@ -52,11 +80,20 @@ export type SkippedTerminalCloudRepairConflict = {
 };
 
 export type TerminalCloudRepairConflictClassification =
+  | ObsoleteTerminalCloudRepairConflict
   | SafeTerminalCloudRepairConflict
   | SkippedTerminalCloudRepairConflict;
 
+export function isRepairableTerminalCloudRepairConflict(
+  item: TerminalCloudRepairConflictClassification,
+): item is ObsoleteTerminalCloudRepairConflict | SafeTerminalCloudRepairConflict {
+  return item.kind !== "skipped";
+}
+
 export function classifyTerminalCloudRepairConflict(args: {
+  blockerStatus?: TerminalRecoveryRepairBlockerStatus;
   conflict: Doc<"posLocalSyncConflict">;
+  lifecycleDisposition?: RegisterOpenLifecycleDisposition;
   now: number;
   sourceEvent: Doc<"posLocalSyncEvent"> | null;
   storeId: Id<"store">;
@@ -95,6 +132,40 @@ export function classifyTerminalCloudRepairConflict(args: {
     return skipped(conflict, "contains_business_facts");
   }
 
+  const lifecycleDisposition = args.lifecycleDisposition;
+  if (
+    lifecycleDisposition &&
+    lifecycleDisposition.disposition !== "fresh" &&
+    args.blockerStatus === "current"
+  ) {
+    // A drawer that still blocks current work is never repaired from behind.
+    return skipped(conflict, "active_blocker");
+  }
+  if (lifecycleDisposition?.disposition === "unsafe") {
+    return skipped(conflict, "ambiguous_lifecycle_evidence");
+  }
+  if (
+    lifecycleDisposition?.disposition === "obsolete" ||
+    lifecycleDisposition?.disposition === "duplicate"
+  ) {
+    return {
+      ...(lifecycleDisposition.disposition === "obsolete"
+        ? {
+            candidateOccurredAt: lifecycleDisposition.candidateOccurredAt,
+            latestAuthoritativeCloseAt:
+              lifecycleDisposition.latestAuthoritativeCloseAt,
+          }
+        : {}),
+      conflictId: conflict._id,
+      disposition: lifecycleDisposition.disposition,
+      kind: "obsolete_register_opened",
+      localEventId: conflict.localEventId,
+      localRegisterSessionId: conflict.localRegisterSessionId,
+      reason: lifecycleDisposition.reason,
+      sequence: conflict.sequence,
+    };
+  }
+
   return {
     conflictId: conflict._id,
     kind: "safe_duplicate_register_opened",
@@ -104,19 +175,80 @@ export function classifyTerminalCloudRepairConflict(args: {
   };
 }
 
+/**
+ * Single lifecycle decision for one repair candidate source event, reusing the
+ * shared V26-1247 classifier. Projection evidence comes from the durable id
+ * mapping — `projectedAt` alone is not proof that a drawer was created.
+ */
+export async function classifyRegisterOpenRepairLifecycle(
+  repository: TerminalCloudRepairProjectionEligibilityRepository,
+  args: {
+    event: { localRegisterSessionId: string; occurredAt: number };
+    registerNumber?: string;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+): Promise<TerminalCloudRepairLifecycleRead> {
+  const mapping = await repository.findMappingForTerminal({
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+    localIdKind: "registerSession",
+    localId: args.event.localRegisterSessionId,
+  });
+  const lifecycle = await repository.findScopedRegisterSessionLifecycle({
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+    registerNumber: args.registerNumber,
+  });
+
+  return {
+    disposition: classifyRegisterOpenAgainstLifecycleBoundary({
+      boundary: {
+        hasAmbiguousCloseEvidence: lifecycle.hasAmbiguousCloseEvidence,
+        latestAuthoritativeCloseAt: lifecycle.latestAuthoritativeCloseAt,
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+      },
+      candidate: {
+        hasExistingProjection:
+          mapping?.cloudTable === "registerSession" &&
+          typeof mapping.cloudId === "string" &&
+          mapping.cloudId.length > 0,
+        localRegisterSessionId: args.event.localRegisterSessionId,
+        occurredAt: args.event.occurredAt,
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+      },
+    }),
+    // A drawer that still blocks the terminal keeps every settle path closed,
+    // even when the conflict row itself cannot be linked back to it. A drawer
+    // in `closing` has already submitted its closeout, so the shared lifecycle
+    // boundary — not this flag — decides whether the open is still fresh.
+    hasBlockingRegisterSession:
+      lifecycle.blockingRegisterSession !== null &&
+      lifecycle.blockingRegisterSession.status !== "closing",
+  };
+}
+
 export function buildTerminalCloudRepairPreview(args: {
   classified: TerminalCloudRepairConflictClassification[];
   storeId: Id<"store">;
   terminalId: Id<"posTerminal">;
 }) {
   const safeConflictIds = args.classified
-    .filter((item): item is SafeTerminalCloudRepairConflict =>
-      item.kind === "safe_duplicate_register_opened",
+    .filter(isRepairableTerminalCloudRepairConflict)
+    .map((item) => item.conflictId)
+    .sort();
+  const obsoleteConflictIds = args.classified
+    .filter(
+      (item): item is ObsoleteTerminalCloudRepairConflict =>
+        item.kind === "obsolete_register_opened",
     )
     .map((item) => item.conflictId)
     .sort();
 
   return {
+    obsoleteConflictIds,
     preconditionHash: buildTerminalCloudRepairPreconditionHash({
       safeConflictIds,
       storeId: args.storeId,
@@ -130,7 +262,7 @@ export function buildTerminalCloudRepairPreview(args: {
 }
 
 export function skipTerminalCloudRepairConflict(
-  conflict: SafeTerminalCloudRepairConflict,
+  conflict: ObsoleteTerminalCloudRepairConflict | SafeTerminalCloudRepairConflict,
   reason: SkippedTerminalCloudRepairConflict["reason"],
 ): SkippedTerminalCloudRepairConflict {
   return {
@@ -155,7 +287,8 @@ export function buildTerminalCloudRepairPreconditionHash(args: {
 
 export type TerminalCloudRepairProjectionEligibilityRepository = Pick<
   SyncProjectionRepository,
-  | "findBlockingRegisterSession"
+  | "findMappingForTerminal"
+  | "findScopedRegisterSessionLifecycle"
   | "getRegisterSession"
   | "getStaffProfile"
   | "getTerminal"
@@ -232,11 +365,12 @@ export async function canProjectRegisterOpenForTerminalCloudRepair(
     });
   }
 
-  const blockingRegisterSession = await repository.findBlockingRegisterSession({
-    storeId: args.storeId,
-    terminalId: args.terminalId,
-    registerNumber: terminalRegisterNumber,
-  });
+  const { blockingRegisterSession } =
+    await repository.findScopedRegisterSessionLifecycle({
+      storeId: args.storeId,
+      terminalId: args.terminalId,
+      registerNumber: terminalRegisterNumber,
+    });
   if (!blockingRegisterSession) return true;
 
   const reviewState = await getRepairOpenRegisterCloseoutReviewState(repository, {
@@ -296,8 +430,10 @@ function getRepairConflictCloseoutReviewBoundaryAt(
 
 function getRepairRegisterSessionCloseoutBoundaryAt(
   registerSession: Awaited<
-    ReturnType<TerminalCloudRepairProjectionEligibilityRepository["findBlockingRegisterSession"]>
-  >,
+    ReturnType<
+      TerminalCloudRepairProjectionEligibilityRepository["findScopedRegisterSessionLifecycle"]
+    >
+  >["blockingRegisterSession"],
 ) {
   const latestCloseoutRecord = registerSession?.closeoutRecords?.reduce<
     number | undefined

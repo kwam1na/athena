@@ -690,6 +690,8 @@ const terminalHealthSummaryReturnValidator = v.object({
       }),
       appUpdate: terminalAppUpdatePreviewReturnValidator,
       cloudRepair: v.object({
+        hasMoreCandidates: v.boolean(),
+        obsoleteConflictIds: v.array(v.id("posLocalSyncConflict")),
         preconditionHash: v.string(),
         safeConflictIds: v.array(v.id("posLocalSyncConflict")),
         skippedConflictIds: v.array(v.id("posLocalSyncConflict")),
@@ -776,7 +778,15 @@ const terminalRecoveryCommandReturnValidator = v.object({
 });
 
 const terminalCloudRepairResultValidator = v.object({
+  /** True while bounded batches still have repair work left; run repair again. */
+  hasMoreCandidates: v.boolean(),
   preconditionHash: v.string(),
+  repairedSourceEventIds: v.array(v.string()),
+  resolvedByDisposition: v.object({
+    duplicate_resolved: v.number(),
+    fresh_projected: v.number(),
+    obsolete_resolved: v.number(),
+  }),
   resolvedConflictIds: v.array(v.id("posLocalSyncConflict")),
   skippedConflictIds: v.array(v.id("posLocalSyncConflict")),
 });

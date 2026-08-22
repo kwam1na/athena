@@ -10,9 +10,12 @@ import { currencyFormatter, generateTransactionNumber } from "../../../utils";
 import {
   canReuseCloudRegisterSessionForLocalOpen as canReuseCloudRegisterSessionForLocalOpenPolicy,
   canSupersedeReviewedRegisterSessionForLocalOpen as canSupersedeReviewedRegisterSessionForLocalOpenPolicy,
+  classifyRegisterOpenAgainstLifecycleBoundary,
   isRegisterCloseoutReviewConflict,
   isRegisterSessionSaleUsable,
+  OBSOLETE_REGISTER_OPEN_SYNC_REVIEW_SUMMARY,
   REGISTER_CLOSEOUT_VARIANCE_SYNC_REVIEW_SUMMARY,
+  UNSAFE_REGISTER_OPEN_SYNC_REVIEW_SUMMARY,
 } from "../../../../shared/registerSessionLifecyclePolicy";
 import {
   classifyProvisionalImportLineage,
@@ -1216,11 +1219,14 @@ async function projectRegisterOpened(
     return { status: "conflicted", mappings: [], conflicts: [conflict] };
   }
 
-  const blockingRegisterSession = await repository.findBlockingRegisterSession({
-    storeId: args.storeId,
-    terminalId: args.terminalId,
-    registerNumber: terminalRegisterNumber,
-  });
+  const scopedRegisterLifecycle =
+    await repository.findScopedRegisterSessionLifecycle({
+      storeId: args.storeId,
+      terminalId: args.terminalId,
+      registerNumber: terminalRegisterNumber,
+    });
+  const blockingRegisterSession =
+    scopedRegisterLifecycle.blockingRegisterSession;
   if (blockingRegisterSession) {
     if (
       await canReuseCloudRegisterSessionForLocalOpen(
@@ -1257,6 +1263,53 @@ async function projectRegisterOpened(
       });
       return { status: "conflicted", mappings: [], conflicts: [conflict] };
     }
+  }
+
+  // Single lifecycle decision point shared by the blocking-session and
+  // no-blocker paths: a register open at or before the latest authoritative
+  // close boundary must never create a drawer, and ambiguous chronology fails
+  // closed with review evidence.
+  const registerOpenDisposition = classifyRegisterOpenAgainstLifecycleBoundary({
+    boundary: {
+      hasAmbiguousCloseEvidence:
+        scopedRegisterLifecycle.hasAmbiguousCloseEvidence,
+      latestAuthoritativeCloseAt:
+        scopedRegisterLifecycle.latestAuthoritativeCloseAt,
+      storeId: args.storeId,
+      terminalId: args.terminalId,
+    },
+    candidate: {
+      localRegisterSessionId: args.event.localRegisterSessionId,
+      occurredAt: args.event.occurredAt,
+      storeId: args.storeId,
+      terminalId: args.terminalId,
+    },
+  });
+  if (
+    registerOpenDisposition.disposition === "obsolete" ||
+    registerOpenDisposition.disposition === "unsafe"
+  ) {
+    const conflict = await createConflict(repository, args, {
+      conflictType: "permission",
+      summary:
+        registerOpenDisposition.disposition === "obsolete"
+          ? OBSOLETE_REGISTER_OPEN_SYNC_REVIEW_SUMMARY
+          : UNSAFE_REGISTER_OPEN_SYNC_REVIEW_SUMMARY,
+      details: {
+        localRegisterSessionId: args.event.localRegisterSessionId,
+        registerNumber: terminalRegisterNumber,
+        lifecycleDisposition: registerOpenDisposition.disposition,
+        lifecycleReason: registerOpenDisposition.reason,
+        ...(registerOpenDisposition.disposition === "obsolete"
+          ? {
+              candidateOccurredAt: registerOpenDisposition.candidateOccurredAt,
+              latestAuthoritativeCloseAt:
+                registerOpenDisposition.latestAuthoritativeCloseAt,
+            }
+          : {}),
+      },
+    });
+    return { status: "conflicted", mappings: [], conflicts: [conflict] };
   }
 
   const openingFloat = payload.openingFloat ?? 0;
