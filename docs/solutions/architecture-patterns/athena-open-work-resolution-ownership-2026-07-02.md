@@ -20,7 +20,7 @@ tags:
   - resolution
   - convex
   - sync-conflicts
-delivery_diff_fingerprint: 5daec8f94ad4380fb64d4840a95333314d1630084e67e77d31167f010da16459
+delivery_diff_fingerprint: 564a3027e19d5f7a7c3a1c8e6cdedfd72c2fa66d505ac378e21dbbe77b02ef52
 ---
 
 # Athena Open Work Resolution Ownership
