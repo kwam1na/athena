@@ -576,6 +576,32 @@ export type AgentGrantProjectionOptions = {
   readonly enablement?: AgentEnablementOverlay;
 };
 
+export type AgentGrantDigestInput = {
+  readonly profileId: string;
+  readonly profileVersion: string;
+  readonly packages: readonly string[];
+  readonly capabilityIds: readonly string[];
+  readonly grantedProjectionsByCapability: { readonly [capabilityId: string]: readonly string[] };
+  readonly authorityTier: AgentAuthorityTier;
+  readonly registryDigest: string;
+};
+
+/**
+ * The grant digest formula, shared with U4's integrity check so a pinned
+ * grant record can be verified against the digest the run was opened with.
+ */
+export function computeGrantDigest(input: AgentGrantDigestInput): string {
+  return hashCanonical({
+    profileId: input.profileId,
+    profileVersion: input.profileVersion,
+    packages: input.packages,
+    capabilities: input.capabilityIds,
+    grantedProjectionsByCapability: input.grantedProjectionsByCapability,
+    authorityTier: input.authorityTier,
+    registryDigest: input.registryDigest,
+  });
+}
+
 /**
  * Project the registry for one grant: only capabilities in packages selected
  * by the profile AND granted to the operator, enabled in the live overlay, and
@@ -635,11 +661,11 @@ export function projectGrant(
   }
 
   const sdkView: AgentSdkView = { contractVersion: AGENT_HARNESS_CONTRACT_VERSION, packages: viewPackages };
-  const grantDigest = hashCanonical({
+  const grantDigest = computeGrantDigest({
     profileId: profile.profileId,
     profileVersion: profile.profileVersion,
     packages: Object.keys(viewPackages).sort(),
-    capabilities: capabilities.map((capability) => capability.capabilityId),
+    capabilityIds: capabilities.map((capability) => capability.capabilityId),
     grantedProjectionsByCapability,
     authorityTier: grant.authorityTier,
     registryDigest: registry.registryDigest,

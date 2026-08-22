@@ -135,6 +135,9 @@ export function isKernelModule(relative: string): boolean {
   if (relative.startsWith("convex/agentHarness/evals/")) return false;
   if (relative.startsWith("convex/agentHarness/_generated/")) return false;
   if (/\.test\.tsx?$/.test(relative)) return false;
+  // Test-support modules carry a two-dot basename (`x.testPorts.ts`); the Convex
+  // bundler never deploys multi-dot basenames, so they are not kernel modules.
+  if (/\.test[A-Z][A-Za-z]*\.tsx?$/.test(relative)) return false;
   return true;
 }
 
@@ -281,6 +284,8 @@ export const PROFILE_ALLOWED_PREFIXES = [
   "convex/agentHarness/manifestRegistrations",
   "convex/agentHarness/profiles/",
   "convex/platform/readIntentCatalog",
+  // Port modules obtain `defineAgentReadPortQuery` from the admission composition root (U4).
+  "convex/platform/operationAdmission",
 ] as const;
 
 export function findProfileImportViolations(

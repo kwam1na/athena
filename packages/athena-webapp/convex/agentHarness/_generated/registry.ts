@@ -368,7 +368,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       }
     }
   },
-  "compatibilityDigest": "fnv1a64:49008d944b7fc441",
+  "compatibilityDigest": "fnv1a64:d61d3554e87e7b1e",
   "contractVersion": 1,
   "enablement": {
     "capabilities": {
@@ -393,15 +393,15 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
   "portImplementations": {
     "directory.teams": {
       "implementationVersion": "1",
-      "sourceDigest": "absent"
+      "sourceDigest": "sha256:01ae8ebf10e59c831a4fee4d543aefd0a5e27643e65086080344ed03a4455000"
     },
     "fleet.storeHealth": {
       "implementationVersion": "1",
-      "sourceDigest": "absent"
+      "sourceDigest": "sha256:01ae8ebf10e59c831a4fee4d543aefd0a5e27643e65086080344ed03a4455000"
     },
     "fleet.stores": {
       "implementationVersion": "1",
-      "sourceDigest": "absent"
+      "sourceDigest": "sha256:01ae8ebf10e59c831a4fee4d543aefd0a5e27643e65086080344ed03a4455000"
     }
   },
   "profiles": {
@@ -664,7 +664,7 @@ export const AGENT_GENERATED_SOURCE_KEYS: readonly string[] = [
 ];
 
 /** What a run pins; U7 compares it with the durable epoch digest. */
-export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:49008d944b7fc441";
+export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:d61d3554e87e7b1e";
 
 /** Schema identity only; unchanged when a capability is enabled or disabled. */
 export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:09474972f7b32191";

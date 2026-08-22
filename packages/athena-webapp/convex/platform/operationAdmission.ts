@@ -1,4 +1,7 @@
 import { internal } from "../_generated/api";
+import { AGENT_GENERATED_REGISTRY } from "../agentHarness/_generated/registry";
+import { createDelegatedAdmission } from "../agentHarness/delegatedAdmission";
+import { createAgentReadPortRegistry } from "../agentHarness/readPorts";
 import { captureSharedDemoAdmittedActionWithCtx } from "../contextTracking/sharedDemoActionCapture";
 import { getStorefrontClaimFromRequest } from "../http/utils";
 import { isAthenaUnauthenticatedError } from "../lib/athenaUnauthenticated";
@@ -22,6 +25,7 @@ import {
   createWhatsAppSignatureVerifier,
 } from "../operationAdmission/ingressVerification";
 import { walkthroughAllowedOrigins } from "../marketing/walkthroughConfig";
+import { createNormalUserDelegatedAuthorityPort } from "../operationAdmission/delegatedAuthority";
 import { createAdmissionRail } from "../operationAdmission/rail";
 import {
   createNormalUserReadOperationAdapter,
@@ -34,6 +38,7 @@ import type {
   OperationResourceGuards,
   OperationScopeConstraints,
 } from "../operationAdmission/types";
+import { createSharedDemoDelegatedAuthorityPort } from "../sharedDemo/delegatedAuthority";
 import { createSharedDemoOperationAdapter } from "../sharedDemo/operationAdapter";
 import { createSharedDemoReadOperationAdapter } from "../sharedDemo/readOperationAdapter";
 import {
@@ -139,6 +144,61 @@ export const admitReadOperationWithCtx =
   operationAdmissionRail.admitReadOperationWithCtx;
 
 export type { OperationScopeConstraints };
+
+/*
+ * Delegated agent admission (V26-1262) — the second composition here.
+ *
+ * An agent run never becomes an actor of the rail above. It holds a derived
+ * grant: the operator who opened the turn was admitted by the public rail, and
+ * every capability read the run triggers re-reads that operator's CURRENT
+ * authority through the port registered for their kind (normal user →
+ * membership and store scope; shared demo → principal, session, and the demo
+ * read-intent grant), intersects it with the grant pinned at run start and the
+ * live kill switch, and dispatches only to a read port the generated registry
+ * names AND this file binds to an `internal.*` query. Unbound ports are
+ * unreachable; a binding whose function name is not the registered path fails
+ * here, at composition time.
+ *
+ * U8 registers a package's ports by appending `{ portKey, handler: internal.<module>.<export> }`
+ * entries below after `bun run agent-sdk:generate`; the port module itself is
+ * written with `defineAgentReadPortQuery` exported from this file.
+ */
+export const agentReadPorts = createAgentReadPortRegistry({
+  registry: AGENT_GENERATED_REGISTRY,
+  bindings: [
+    // Synthetic second surface (U2/U3). Placeholder handlers until U10.
+    { portKey: "fleet.stores", handler: internal.agentHarness.profiles.syntheticSecondSurfacePorts.listStores },
+    { portKey: "fleet.storeHealth", handler: internal.agentHarness.profiles.syntheticSecondSurfacePorts.getStoreHealth },
+    { portKey: "directory.teams", handler: internal.agentHarness.profiles.syntheticSecondSurfacePorts.listTeams },
+  ],
+});
+
+export const agentDelegatedAdmission = createDelegatedAdmission({
+  registry: AGENT_GENERATED_REGISTRY,
+  readPorts: agentReadPorts,
+  authorityPorts: {
+    normal_user: createNormalUserDelegatedAuthorityPort(),
+    shared_demo: createSharedDemoDelegatedAuthorityPort(),
+  },
+  // The live shrink-only overlay. Until U7 backs the kill switch durably this is
+  // the published baseline; `narrowEnablement` is the only transition it accepts.
+  resolveEnablement: async () => AGENT_GENERATED_REGISTRY.enablement,
+});
+
+/** Run start (U7): pin the grant. `prepareAgentRunGrantWithCtx` feeds `recordTurnIntentWithCtx`. */
+export const prepareAgentRunGrantWithCtx = agentDelegatedAdmission.prepareRunGrantWithCtx;
+export const materializeAgentRunGrantWithCtx = agentDelegatedAdmission.materializeRunGrantWithCtx;
+/** Any time (U6/U7/U9): re-derive the effective grant for a purpose. */
+export const reauthorizeAgentGrantWithCtx = agentDelegatedAdmission.reauthorizeGrantWithCtx;
+export const describeAgentGrantForModel = agentDelegatedAdmission.describeGrantForModel;
+/** Bridge (U6): before dispatch, then before the result becomes program-visible. */
+export const admitAgentCapabilityCallWithCtx = agentDelegatedAdmission.admitCapabilityCallWithCtx;
+export const releaseAgentCapabilityResultWithCtx = agentDelegatedAdmission.releaseCapabilityResultWithCtx;
+/** Citations (U6) and completion (U6/U7): in the same transaction as the mint/commit. */
+export const reauthorizeAgentCitationsWithCtx = agentDelegatedAdmission.reauthorizeCitationsWithCtx;
+export const reauthorizeAgentCompletionWithCtx = agentDelegatedAdmission.reauthorizeCompletionWithCtx;
+/** Port authors (U8/U10): the only way to define a dispatchable read port. */
+export const defineAgentReadPortQuery = agentDelegatedAdmission.defineAgentReadPortQuery;
 
 /*
  * `resolveWriteAdmission` is deliberately NOT re-exported.

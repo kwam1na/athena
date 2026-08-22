@@ -258,6 +258,8 @@ export type CreateAgentRunInput = {
   promptPayloadHash: string;
   runIdempotencyKey: string;
   now: number;
+  /** Delegated-admission provenance (U4); pinned immutably on the grant. */
+  delegation?: Doc<"agentRunGrant">["delegation"];
 };
 
 export function agentRunCapability(profileKey: string) {
@@ -323,6 +325,7 @@ export async function createAgentRunWithCtx(
     promptPayloadState: "stored",
     lifecycle: "retained",
     createdAt: input.now,
+    delegation: input.delegation,
   });
   const ledgerId = await ctx.db.insert("agentBudgetLedger", {
     runId,
@@ -1007,6 +1010,8 @@ export async function admitCapabilityCallWithCtx(
     normalizedArgs?: Record<string, unknown>;
     requested: BudgetVector;
     now: number;
+    /** Delegated-admission evidence (U4); recorded on the call row, never result data. */
+    delegation?: Doc<"agentCapabilityCall">["delegation"];
   },
 ): Promise<AdmitCallResult> {
   const admitted = await admitRunForWork(ctx, input.runId);
@@ -1088,6 +1093,7 @@ export async function admitCapabilityCallWithCtx(
       terminalAt: input.now,
       createdAt: input.now,
       updatedAt: input.now,
+      delegation: input.delegation,
     });
     await ctx.db.patch("agentBudgetReservation", reservationId, { callId });
     await ctx.db.patch("agentBudgetLedger", ledger._id, {
@@ -1131,6 +1137,7 @@ export async function admitCapabilityCallWithCtx(
     sourceRefCount: 0,
     createdAt: input.now,
     updatedAt: input.now,
+    delegation: input.delegation,
   });
   await ctx.db.patch("agentBudgetReservation", reservationId, { callId });
   await ctx.db.patch("agentBudgetLedger", ledger._id, {
@@ -1204,6 +1211,10 @@ export async function settleCapabilityCallWithCtx(
     sourceRefs?: SourceRef[];
     error?: IntelligenceError;
     now: number;
+    /** Delegated release evidence (U4); replaces the admission-time record when given. */
+    delegation?: Doc<"agentCapabilityCall">["delegation"];
+    /** Caller-declared omission (U4 withholds a revoked result); the fence reason still wins. */
+    outputOmittedReason?: string;
   },
 ): Promise<SettleCallResult> {
   const call = await ctx.db.get("agentCapabilityCall", input.callId);
@@ -1238,7 +1249,7 @@ export async function settleCapabilityCallWithCtx(
   }
 
   let replayPayloadId: Id<"agentReplayPayload"> | undefined;
-  let outputOmittedReason: string | undefined;
+  let outputOmittedReason: string | undefined = input.outputOmittedReason;
   if (fenced) {
     outputOmittedReason = "compatibility_epoch_fenced";
   } else if (input.output !== undefined) {
@@ -1273,6 +1284,7 @@ export async function settleCapabilityCallWithCtx(
     error,
     terminalAt: input.now,
     updatedAt: input.now,
+    ...(input.delegation ? { delegation: input.delegation } : {}),
   });
   return { outcome: "settled", status: target, charged, fenced, outputStored: replayPayloadId !== undefined };
 }

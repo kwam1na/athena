@@ -115,6 +115,63 @@ export const agentBudgetPolicyValidator = v.object({
 
 const boundedRecordValidator = v.record(v.string(), v.any());
 
+export const agentDelegatedOperatorKindValidator = v.union(
+  v.literal("normal_user"),
+  v.literal("shared_demo"),
+);
+
+/**
+ * Delegated-admission provenance pinned on the grant (V26-1262): who
+ * delegated, what they held at run start, and the projected capability/field
+ * set the run may never exceed. Immutable; every later call intersects the
+ * operator's CURRENT authority with this record.
+ */
+export const agentRunGrantDelegationValidator = v.object({
+  operatorKind: agentDelegatedOperatorKindValidator,
+  athenaUserId: v.id("athenaUser"),
+  authUserId: v.optional(v.id("users")),
+  membershipRole: v.string(),
+  operationalRoles: v.array(v.string()),
+  authorityTier: v.string(),
+  heldReadIntents: v.array(v.string()),
+  capabilityIds: v.array(v.string()),
+  grantedProjectionsByCapability: v.record(v.string(), v.array(v.string())),
+  authorityDigest: v.string(),
+  authorizationEpoch: v.number(),
+  authorizedAt: v.number(),
+  admissionPolicyVersion: v.string(),
+});
+
+/**
+ * Delegated-admission evidence on a capability call (V26-1262): the grant and
+ * port identity the call was admitted under, the authority observed at
+ * admission, and the release verdict. Never carries result data.
+ */
+export const agentCallDelegationValidator = v.object({
+  grantId: v.id("agentRunGrant"),
+  grantDigest: v.string(),
+  portKey: v.string(),
+  handlerPath: v.string(),
+  operatorKind: agentDelegatedOperatorKindValidator,
+  actorRef: v.string(),
+  authorizationEpoch: v.number(),
+  authorityDigest: v.string(),
+  grantedProjections: v.array(v.string()),
+  admission: v.union(v.literal("authorized"), v.literal("refused")),
+  refusal: v.optional(
+    v.object({ stage: v.string(), code: v.string(), reason: v.string() }),
+  ),
+  release: v.optional(
+    v.object({
+      verdict: v.union(v.literal("released"), v.literal("withheld")),
+      reason: v.optional(v.string()),
+      authorityShrunk: v.boolean(),
+      authorizationEpoch: v.number(),
+      at: v.number(),
+    }),
+  ),
+});
+
 /**
  * Immutable context-metadata snapshot: exactly one per run. Only the
  * lifecycle markers (`promptPayloadState`, `lifecycle`) may change after
@@ -148,6 +205,7 @@ export const agentRunGrantSchema = v.object({
   lifecycle: v.union(v.literal("retained"), v.literal("deleted_by_lifecycle")),
   deletedByLifecycleAt: v.optional(v.number()),
   createdAt: v.number(),
+  delegation: v.optional(agentRunGrantDelegationValidator),
 });
 
 /**
@@ -252,6 +310,7 @@ export const agentCapabilityCallSchema = v.object({
   terminalAt: v.optional(v.number()),
   createdAt: v.number(),
   updatedAt: v.number(),
+  delegation: v.optional(agentCallDelegationValidator),
 });
 
 /** Run-wide counters: one row per run, updated transactionally. */
