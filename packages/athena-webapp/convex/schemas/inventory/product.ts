@@ -43,4 +43,8 @@ export const productSkuSchema = v.object({
   storeId: v.id("store"),
   unitCost: v.optional(v.number()),
   weight: v.optional(v.string()),
+  // Idempotency marker for the cedis->pesewas backfill
+  // (migrations/backfillAmountsToPesewas.ts). Set in the same patch that
+  // converts the money fields; its presence means "already minor units".
+  pesewasMigratedAt: v.optional(v.number()),
 });

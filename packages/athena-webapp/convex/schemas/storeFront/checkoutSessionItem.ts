@@ -8,4 +8,8 @@ export const checkoutSessionItemSchema = v.object({
   productSku: v.string(),
   price: v.number(),
   quantity: v.number(),
+  // Idempotency marker for the cedis->pesewas backfill
+  // (migrations/backfillAmountsToPesewas.ts). Set in the same patch that
+  // converts the money fields; its presence means "already minor units".
+  pesewasMigratedAt: v.optional(v.number()),
 });
