@@ -413,6 +413,7 @@ export const HARNESS_APP_REGISTRY = [
           "convex/sharedDemo/delegatedAuthority.ts",
           "convex/platform/operationAdmission.ts",
           "convex/intelligence/providers/convexAgent.ts",
+          "convex.json",
           "shared/agentHarness",
           "src/components/agent",
           "src/components/operations/dailyOperationsAgentPresentation.ts",

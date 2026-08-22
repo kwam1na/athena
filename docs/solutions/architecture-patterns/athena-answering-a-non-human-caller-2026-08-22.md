@@ -13,7 +13,7 @@ applies_when:
   - "A caller can retry, so a denial has to be machine-actionable"
   - "A deletion cascade has to be audited against what rows actually carry"
 tags: [athena, convex, agent-harness, delegated-authority, field-omission, denials, retention, rendering]
-delivery_diff_fingerprint: 32f5f6d5b067c46d2a4766cf5f892bae7ac7e7b231df75a433f1d40c788fc71c
+delivery_diff_fingerprint: de2898dc54c678c7fe4b3fafae510c5741bec933e410e0d76c1ecd7d3a725267
 ---
 
 # Answering A Caller That Is Not A Person

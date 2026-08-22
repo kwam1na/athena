@@ -1350,6 +1350,7 @@ async function createFixtureRepo() {
     "packages/athena-webapp/convex/sharedDemo/delegatedAuthority.ts",
     "packages/athena-webapp/convex/platform/operationAdmission.ts",
     "packages/athena-webapp/convex/intelligence/providers/convexAgent.ts",
+    "packages/athena-webapp/convex.json",
     "packages/athena-webapp/shared/agentHarness/values.ts",
     "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
     "packages/athena-webapp/src/components/operations/dailyOperationsAgentPresentation.ts",

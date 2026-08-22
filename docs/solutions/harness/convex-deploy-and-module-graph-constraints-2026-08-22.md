@@ -21,7 +21,7 @@ tags:
   - use-node
   - module-graph
   - agent-harness
-delivery_diff_fingerprint: 32f5f6d5b067c46d2a4766cf5f892bae7ac7e7b231df75a433f1d40c788fc71c
+delivery_diff_fingerprint: de2898dc54c678c7fe4b3fafae510c5741bec933e410e0d76c1ecd7d3a725267
 ---
 
 # Convex Deploy And Module-Graph Constraints Are Only Visible From A Push

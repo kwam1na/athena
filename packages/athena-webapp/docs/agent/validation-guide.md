@@ -60,7 +60,7 @@ Use this for the reporting contract, fact ingestion, the day fold, the sweeper a
 
 ## Agent harness, capability packages, and profile edits
 
-Touched surfaces: `convex/agentHarness`, `convex/automation/agentCapabilities`, `convex/cashControls/agentCapabilities`, `convex/operations/agentCapabilities`, `convex/reports/agentCapabilities`, `convex/stockOps/agentCapabilities`, `convex/lib/agentCapabilityManifests.ts`, `convex/lib/agentCapabilitySupport.ts`, `convex/operationAdmission/delegatedAuthority.ts`, `convex/sharedDemo/delegatedAuthority.ts`, `convex/platform/operationAdmission.ts`, `convex/intelligence/providers/convexAgent.ts`, `shared/agentHarness`, `src/components/agent`, `src/components/operations/dailyOperationsAgentPresentation.ts`
+Touched surfaces: `convex/agentHarness`, `convex/automation/agentCapabilities`, `convex/cashControls/agentCapabilities`, `convex/operations/agentCapabilities`, `convex/reports/agentCapabilities`, `convex/stockOps/agentCapabilities`, `convex/lib/agentCapabilityManifests.ts`, `convex/lib/agentCapabilitySupport.ts`, `convex/operationAdmission/delegatedAuthority.ts`, `convex/sharedDemo/delegatedAuthority.ts`, `convex/platform/operationAdmission.ts`, `convex/intelligence/providers/convexAgent.ts`, `convex.json`, `shared/agentHarness`, `src/components/agent`, `src/components/operations/dailyOperationsAgentPresentation.ts`
 
 Run:
 
