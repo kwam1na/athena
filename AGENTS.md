@@ -35,7 +35,7 @@ Webapp tests are Vitest. Do not run test files with `bun test`; it lacks Vitest 
 ## Validation ladder
 
 - While iterating: focused sensors per surface (see `docs/agent/testing.md` escalation lists).
-- Merge-ready: `bun run pr:athena` from repo root is the authority. It owns prerequisite ordering, documentation/generated-artifact checks, expensive provider validation, and reusable pre-push proof. Never assemble your own broad suite as a substitute final gate.
+- Merge-ready: `bun run pr:athena` from repo root is the authority. It owns prerequisite ordering, documentation/generated-artifact checks, expensive provider validation, and reusable pre-push proof. At a merge-ready boundary, run `bun run pr:athena` before assembling or running an independent broad validation suite. Never assemble your own broad suite as a substitute final gate.
 - `bun run harness:test` after changing anything under `scripts/`.
 - Any change under `packages/athena-webapp/convex/`: also run `audit:convex` and `lint:convex:changed` inside that package before handoff.
 - Added/removed/re-wrapped a public Convex function or Hono route: `bun scripts/convex-operation-admission-check.ts` must exit 0 with zero findings.
