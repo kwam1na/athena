@@ -13,7 +13,7 @@ applies_when:
   - "A generated artifact is the identity that running work pins itself to"
   - "A deploy can change what an in-flight run would observe"
 tags: [athena, convex, agent-harness, generated-artifacts, composition-root, compatibility-digest, import-boundary]
-delivery_diff_fingerprint: 4045ad992d1e75757b19b95b03058a765fff64bf1947fb9352a1fe7627de3092
+delivery_diff_fingerprint: f7a916eb8ed76e225542537afdaf1718be485212def2aef000518425a513d72c
 ---
 
 # Publishing A Capability Into A Kernel That May Not Import You
