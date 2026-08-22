@@ -24407,7 +24407,7 @@
       "relation": "calls",
       "source": "harness_gate_admission_waivableblockedobligationids",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L300",
+      "source_location": "L387",
       "target": "harness_gate_admission_canofferinvocationwaiver",
       "weight": 1
     },
@@ -24419,7 +24419,7 @@
       "relation": "calls",
       "source": "harness_gate_admission_runharnessgateadmission",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L895",
+      "source_location": "L982",
       "target": "harness_gate_admission_main",
       "weight": 1
     },
@@ -24431,7 +24431,7 @@
       "relation": "calls",
       "source": "harness_gate_admission_assertsafeinvocationid",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L519",
+      "source_location": "L606",
       "target": "harness_gate_admission_runharnessgateadmission",
       "weight": 1
     },
@@ -24443,7 +24443,7 @@
       "relation": "calls",
       "source": "harness_gate_admission_candidatebinding",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L553",
+      "source_location": "L640",
       "target": "harness_gate_admission_runharnessgateadmission",
       "weight": 1
     },
@@ -24455,7 +24455,7 @@
       "relation": "calls",
       "source": "harness_gate_admission_candidatechangedblocker",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L664",
+      "source_location": "L751",
       "target": "harness_gate_admission_runharnessgateadmission",
       "weight": 1
     },
@@ -24467,7 +24467,7 @@
       "relation": "calls",
       "source": "harness_gate_admission_canofferinvocationwaiver",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L650",
+      "source_location": "L737",
       "target": "harness_gate_admission_runharnessgateadmission",
       "weight": 1
     },
@@ -24479,7 +24479,7 @@
       "relation": "calls",
       "source": "harness_gate_admission_eventfor",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L701",
+      "source_location": "L788",
       "target": "harness_gate_admission_runharnessgateadmission",
       "weight": 1
     },
@@ -24491,7 +24491,7 @@
       "relation": "calls",
       "source": "harness_gate_admission_samecandidate",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L559",
+      "source_location": "L646",
       "target": "harness_gate_admission_runharnessgateadmission",
       "weight": 1
     },
@@ -24503,7 +24503,7 @@
       "relation": "calls",
       "source": "harness_gate_admission_toevaluatorcontext",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L536",
+      "source_location": "L623",
       "target": "harness_gate_admission_runharnessgateadmission",
       "weight": 1
     },
@@ -24515,7 +24515,7 @@
       "relation": "calls",
       "source": "harness_gate_admission_waivableblockedobligationids",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L651",
+      "source_location": "L738",
       "target": "harness_gate_admission_runharnessgateadmission",
       "weight": 1
     },
@@ -24527,7 +24527,7 @@
       "relation": "calls",
       "source": "harness_gate_admission_withblocker",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L787",
+      "source_location": "L874",
       "target": "harness_gate_admission_runharnessgateadmission",
       "weight": 1
     },
@@ -24539,7 +24539,7 @@
       "relation": "calls",
       "source": "harness_gate_admission_withinvocationwaiver",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L674",
+      "source_location": "L761",
       "target": "harness_gate_admission_runharnessgateadmission",
       "weight": 1
     },
@@ -24551,7 +24551,7 @@
       "relation": "calls",
       "source": "harness_gate_admission_test_greenoptions",
       "source_file": "scripts/harness-gate-admission.test.ts",
-      "source_location": "L80",
+      "source_location": "L82",
       "target": "harness_gate_admission_test_humanwaiveroptions",
       "weight": 1
     },
@@ -24563,7 +24563,7 @@
       "relation": "calls",
       "source": "harness_gate_admission_assertsafeinvocationid",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L393",
+      "source_location": "L480",
       "target": "harness_gate_admission_writeharnessgatedecisionevent",
       "weight": 1
     },
@@ -24575,7 +24575,7 @@
       "relation": "calls",
       "source": "harness_gate_admission_containedeventdestination",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L397",
+      "source_location": "L484",
       "target": "harness_gate_admission_writeharnessgatedecisionevent",
       "weight": 1
     },
@@ -24587,7 +24587,7 @@
       "relation": "calls",
       "source": "harness_gate_admission_resolvedecisioneventsdir",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L394",
+      "source_location": "L481",
       "target": "harness_gate_admission_writeharnessgatedecisionevent",
       "weight": 1
     },
@@ -167951,7 +167951,7 @@
       "relation": "contains",
       "source": "scripts_harness_gate_admission_test_ts",
       "source_file": "scripts/harness-gate-admission.test.ts",
-      "source_location": "L42",
+      "source_location": "L44",
       "target": "harness_gate_admission_test_greenoptions",
       "weight": 1
     },
@@ -167963,7 +167963,7 @@
       "relation": "contains",
       "source": "scripts_harness_gate_admission_test_ts",
       "source_file": "scripts/harness-gate-admission.test.ts",
-      "source_location": "L79",
+      "source_location": "L81",
       "target": "harness_gate_admission_test_humanwaiveroptions",
       "weight": 1
     },
@@ -167975,7 +167975,7 @@
       "relation": "contains",
       "source": "scripts_harness_gate_admission_test_ts",
       "source_file": "scripts/harness-gate-admission.test.ts",
-      "source_location": "L322",
+      "source_location": "L384",
       "target": "harness_gate_admission_test_missingtelemetry",
       "weight": 1
     },
@@ -167987,7 +167987,7 @@
       "relation": "contains",
       "source": "scripts_harness_gate_admission_ts",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L370",
+      "source_location": "L457",
       "target": "harness_gate_admission_assertsafeinvocationid",
       "weight": 1
     },
@@ -168011,7 +168011,7 @@
       "relation": "contains",
       "source": "scripts_harness_gate_admission_ts",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L450",
+      "source_location": "L537",
       "target": "harness_gate_admission_candidatechangedblocker",
       "weight": 1
     },
@@ -168023,7 +168023,7 @@
       "relation": "contains",
       "source": "scripts_harness_gate_admission_ts",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L296",
+      "source_location": "L383",
       "target": "harness_gate_admission_canofferinvocationwaiver",
       "weight": 1
     },
@@ -168035,7 +168035,7 @@
       "relation": "contains",
       "source": "scripts_harness_gate_admission_ts",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L378",
+      "source_location": "L465",
       "target": "harness_gate_admission_containedeventdestination",
       "weight": 1
     },
@@ -168047,7 +168047,7 @@
       "relation": "contains",
       "source": "scripts_harness_gate_admission_ts",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L326",
+      "source_location": "L413",
       "target": "harness_gate_admission_defaultprompt",
       "weight": 1
     },
@@ -168059,7 +168059,7 @@
       "relation": "contains",
       "source": "scripts_harness_gate_admission_ts",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L480",
+      "source_location": "L567",
       "target": "harness_gate_admission_defaultscenarios",
       "weight": 1
     },
@@ -168071,7 +168071,7 @@
       "relation": "contains",
       "source": "scripts_harness_gate_admission_ts",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L350",
+      "source_location": "L437",
       "target": "harness_gate_admission_defaultspawnheavy",
       "weight": 1
     },
@@ -168095,7 +168095,7 @@
       "relation": "contains",
       "source": "scripts_harness_gate_admission_ts",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L418",
+      "source_location": "L505",
       "target": "harness_gate_admission_eventfor",
       "weight": 1
     },
@@ -168107,7 +168107,7 @@
       "relation": "contains",
       "source": "scripts_harness_gate_admission_ts",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L894",
+      "source_location": "L981",
       "target": "harness_gate_admission_main",
       "weight": 1
     },
@@ -168143,7 +168143,7 @@
       "relation": "contains",
       "source": "scripts_harness_gate_admission_ts",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L360",
+      "source_location": "L447",
       "target": "harness_gate_admission_resolvedecisioneventsdir",
       "weight": 1
     },
@@ -168167,7 +168167,7 @@
       "relation": "contains",
       "source": "scripts_harness_gate_admission_ts",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L510",
+      "source_location": "L597",
       "target": "harness_gate_admission_runharnessgateadmission",
       "weight": 1
     },
@@ -168215,7 +168215,7 @@
       "relation": "contains",
       "source": "scripts_harness_gate_admission_ts",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L271",
+      "source_location": "L358",
       "target": "harness_gate_admission_waivableblockedobligationids",
       "weight": 1
     },
@@ -168227,7 +168227,7 @@
       "relation": "contains",
       "source": "scripts_harness_gate_admission_ts",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L473",
+      "source_location": "L560",
       "target": "harness_gate_admission_withblocker",
       "weight": 1
     },
@@ -168239,7 +168239,7 @@
       "relation": "contains",
       "source": "scripts_harness_gate_admission_ts",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L303",
+      "source_location": "L390",
       "target": "harness_gate_admission_withinvocationwaiver",
       "weight": 1
     },
@@ -168251,7 +168251,7 @@
       "relation": "contains",
       "source": "scripts_harness_gate_admission_ts",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L389",
+      "source_location": "L476",
       "target": "harness_gate_admission_writeharnessgatedecisionevent",
       "weight": 1
     },
@@ -298759,7 +298759,7 @@
       "label": "assertSafeInvocationId()",
       "norm_label": "assertsafeinvocationid()",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L370"
+      "source_location": "L457"
     },
     {
       "community": 77,
@@ -298777,7 +298777,7 @@
       "label": "candidateChangedBlocker()",
       "norm_label": "candidatechangedblocker()",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L450"
+      "source_location": "L537"
     },
     {
       "community": 77,
@@ -298786,7 +298786,7 @@
       "label": "canOfferInvocationWaiver()",
       "norm_label": "canofferinvocationwaiver()",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L296"
+      "source_location": "L383"
     },
     {
       "community": 77,
@@ -298795,7 +298795,7 @@
       "label": "containedEventDestination()",
       "norm_label": "containedeventdestination()",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L378"
+      "source_location": "L465"
     },
     {
       "community": 77,
@@ -298804,7 +298804,7 @@
       "label": "defaultPrompt()",
       "norm_label": "defaultprompt()",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L326"
+      "source_location": "L413"
     },
     {
       "community": 77,
@@ -298813,7 +298813,7 @@
       "label": "defaultScenarios()",
       "norm_label": "defaultscenarios()",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L480"
+      "source_location": "L567"
     },
     {
       "community": 77,
@@ -298822,7 +298822,7 @@
       "label": "defaultSpawnHeavy()",
       "norm_label": "defaultspawnheavy()",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L350"
+      "source_location": "L437"
     },
     {
       "community": 77,
@@ -298840,7 +298840,7 @@
       "label": "eventFor()",
       "norm_label": "eventfor()",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L418"
+      "source_location": "L505"
     },
     {
       "community": 77,
@@ -298849,7 +298849,7 @@
       "label": "main()",
       "norm_label": "main()",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L894"
+      "source_location": "L981"
     },
     {
       "community": 77,
@@ -298876,7 +298876,7 @@
       "label": "resolveDecisionEventsDir()",
       "norm_label": "resolvedecisioneventsdir()",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L360"
+      "source_location": "L447"
     },
     {
       "community": 77,
@@ -298894,7 +298894,7 @@
       "label": "runHarnessGateAdmission()",
       "norm_label": "runharnessgateadmission()",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L510"
+      "source_location": "L597"
     },
     {
       "community": 77,
@@ -298930,7 +298930,7 @@
       "label": "waivableBlockedObligationIds()",
       "norm_label": "waivableblockedobligationids()",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L271"
+      "source_location": "L358"
     },
     {
       "community": 77,
@@ -298939,7 +298939,7 @@
       "label": "withBlocker()",
       "norm_label": "withblocker()",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L473"
+      "source_location": "L560"
     },
     {
       "community": 77,
@@ -298948,7 +298948,7 @@
       "label": "withInvocationWaiver()",
       "norm_label": "withinvocationwaiver()",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L303"
+      "source_location": "L390"
     },
     {
       "community": 77,
@@ -298957,7 +298957,7 @@
       "label": "writeHarnessGateDecisionEvent()",
       "norm_label": "writeharnessgatedecisionevent()",
       "source_file": "scripts/harness-gate-admission.ts",
-      "source_location": "L389"
+      "source_location": "L476"
     },
     {
       "community": 77,
@@ -308101,7 +308101,7 @@
       "label": "greenOptions()",
       "norm_label": "greenoptions()",
       "source_file": "scripts/harness-gate-admission.test.ts",
-      "source_location": "L42"
+      "source_location": "L44"
     },
     {
       "community": 910,
@@ -308110,7 +308110,7 @@
       "label": "humanWaiverOptions()",
       "norm_label": "humanwaiveroptions()",
       "source_file": "scripts/harness-gate-admission.test.ts",
-      "source_location": "L79"
+      "source_location": "L81"
     },
     {
       "community": 910,
@@ -308119,7 +308119,7 @@
       "label": "missingTelemetry()",
       "norm_label": "missingtelemetry()",
       "source_file": "scripts/harness-gate-admission.test.ts",
-      "source_location": "L322"
+      "source_location": "L384"
     },
     {
       "community": 910,
