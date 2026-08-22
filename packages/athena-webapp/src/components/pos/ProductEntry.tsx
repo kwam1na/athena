@@ -18,7 +18,7 @@ import type {
 } from "@/lib/pos/presentation/register/registerUiState";
 import { usePOSQuickAddProductSku } from "@/hooks/usePOSProducts";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
-import { currencyFormatter } from "~/convex/utils";
+import { currencyFormatter } from "~/shared/currencyFormatter";
 import type { Id } from "~/convex/_generated/dataModel";
 import {
   extractBarcodeFromInput,

@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
 import type { ChangeEvent } from "react";
 import { toast } from "sonner";
 
-import { toDisplayAmount } from "~/convex/lib/currency";
+import { toDisplayAmount } from "~/shared/currency";
 import {
   formatStoredAmount,
   parseDisplayAmountInput,

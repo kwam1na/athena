@@ -4,30 +4,25 @@ import { toast } from "sonner";
 
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
-import { SUBSCRIPTION_RESOLUTION_CAP } from "~/convex/notifications/deliveryPolicy";
-import { notificationCategoryValidator } from "~/convex/schemas/notifications";
+import { SUBSCRIPTION_RESOLUTION_CAP } from "~/shared/notificationDeliveryPolicy";
+import {
+  NOTIFICATION_CATEGORIES,
+  type NotificationCategory,
+} from "~/shared/notificationCategories";
 import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
 import { runCommand } from "~/src/lib/errors/runCommand";
 import { useGetActiveOrganization } from "~/src/hooks/useGetOrganizations";
 
-export type NotificationCategoryKey =
-  (typeof notificationCategoryValidator)["type"];
+export type NotificationCategoryKey = NotificationCategory;
 
 /**
- * Category list is derived from the schema union, never hand-listed: adding a
- * category to convex/schemas/notifications.ts surfaces it here, and the
- * `Record` copy map below turns a missing label into a type error.
+ * Category list is derived from the shared category contract, never
+ * hand-listed: adding a category to shared/notificationCategories.ts surfaces
+ * it here (and in the Convex schema validator derived from the same list), and
+ * the `Record` copy map below turns a missing label into a type error.
  */
-const categoryMembers = notificationCategoryValidator.members as ReadonlyArray<{
-  value?: unknown;
-}>;
-
 export const NOTIFICATION_CATEGORY_KEYS: readonly NotificationCategoryKey[] =
-  categoryMembers
-    .map((member) => member.value)
-    .filter(
-      (value): value is NotificationCategoryKey => typeof value === "string",
-    );
+  NOTIFICATION_CATEGORIES;
 
 export const NOTIFICATION_CATEGORY_COPY: Record<
   NotificationCategoryKey,

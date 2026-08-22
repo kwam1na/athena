@@ -22,7 +22,7 @@ import {
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useState } from "react";
 import { POS_MESSAGES, showValidationError } from "../../lib/pos/toastService";
-import { currencyFormatter } from "~/convex/utils";
+import { currencyFormatter } from "~/shared/currencyFormatter";
 import { POSCustomerSummary } from "~/types";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 import type { Id } from "~/convex/_generated/dataModel";

@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { nextReportingCycleBoundary } from "~/convex/lib/storeScheduleTime";
+import { nextReportingCycleBoundary } from "~/shared/storeScheduleTime";
 import { usePermissions } from "@/hooks/usePermissions";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";

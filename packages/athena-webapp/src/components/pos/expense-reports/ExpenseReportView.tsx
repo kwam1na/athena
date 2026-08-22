@@ -13,7 +13,7 @@ import { api } from "~/convex/_generated/api";
 import { CartItems } from "../CartItems";
 import type { CartItem } from "../types";
 import type { Id } from "~/convex/_generated/dataModel";
-import { currencyFormatter } from "~/convex/utils";
+import { currencyFormatter } from "~/shared/currencyFormatter";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 import { buildExpenseReceiptHtml } from "~/src/lib/pos/expenseReceipt";
 import { usePrint } from "~/src/hooks/usePrint";

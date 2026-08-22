@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import { useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
-import { toDisplayAmount } from "~/convex/lib/currency";
+import { toDisplayAmount } from "~/shared/currency";
 import { PAYSTACK_PROCESSING_FEE } from "~/src/lib/constants";
 import { parseDisplayAmountInput } from "~/src/lib/pos/displayAmounts";
 import { toast } from "sonner";

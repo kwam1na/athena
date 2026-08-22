@@ -4,7 +4,7 @@ import { DataTableColumnHeader } from "~/src/components/base/table/data-table-co
 import { Link } from "@tanstack/react-router";
 import { PromoCode } from "~/types";
 import { capitalizeFirstLetter, slugToWords } from "~/src/lib/utils";
-import { capitalizeWords } from "~/convex/utils";
+import { capitalizeWords } from "~/shared/textCase";
 import { getOrigin } from "~/src/lib/navigationUtils";
 
 export const columns: ColumnDef<PromoCode>[] = [

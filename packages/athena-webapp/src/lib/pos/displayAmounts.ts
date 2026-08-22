@@ -1,4 +1,4 @@
-import { toDisplayAmount, toPesewas } from "~/convex/lib/currency";
+import { toDisplayAmount, toPesewas } from "~/shared/currency";
 import { currencyFormatter } from "~/shared/currencyFormatter";
 
 type FormatStoredCurrencyAmountOptions = {

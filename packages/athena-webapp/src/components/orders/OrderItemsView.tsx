@@ -24,7 +24,7 @@ import { OrderSummary } from "./OrderSummary";
 import { toast } from "sonner";
 import { useAuth } from "~/src/hooks/useAuth";
 import { LowStockStatus, OutOfStockStatus } from "../product/ProductStock";
-import { toDisplayAmount } from "~/convex/lib/currency";
+import { toDisplayAmount } from "~/shared/currency";
 import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
 import { runCommand } from "~/src/lib/errors/runCommand";
 import { ok } from "~/shared/commandResult";

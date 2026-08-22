@@ -6,7 +6,7 @@ import { Search, Plus, Package } from "lucide-react";
 import { Product } from "./types";
 import { usePOSProductSearch } from "@/hooks/usePOSProducts";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
-import { currencyFormatter } from "~/convex/utils";
+import { currencyFormatter } from "~/shared/currencyFormatter";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 
 interface ProductLookupProps {

@@ -65,7 +65,7 @@ import { usePosTerminalAppSessionRecoveryRuntimeInput } from "@/lib/pos/infrastr
 import type { PosTerminalRuntimeAppSessionRecoveryInput } from "@/lib/pos/infrastructure/local/terminalRuntimeStatus";
 import { getOrigin } from "@/lib/navigationUtils";
 import { parseDisplayAmountInput } from "@/lib/pos/displayAmounts";
-import { toDisplayAmount } from "~/convex/lib/currency";
+import { toDisplayAmount } from "~/shared/currency";
 import { currencyDisplaySymbol } from "~/shared/currencyFormatter";
 
 type HealthLinkProps = {

@@ -1,15 +1,6 @@
 /**
- * Convert a major currency unit (GHS/USD) to minor unit (pesewas/cents).
- * Use at data-entry boundaries only.
+ * Implementation lives in `shared/currency` so browser code can import the
+ * conversions without reaching into a Convex module. Convex code keeps
+ * importing them from here.
  */
-export function toPesewas(ghs: number): number {
-  return Math.round(ghs * 100);
-}
-
-/**
- * Convert minor unit (pesewas/cents) to major unit for display.
- * Use at display boundaries only.
- */
-export function toDisplayAmount(pesewas: number): number {
-  return pesewas / 100;
-}
+export { toDisplayAmount, toPesewas } from "../../shared/currency";

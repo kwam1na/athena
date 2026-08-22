@@ -15,7 +15,7 @@ import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 import { Product, ProductSku } from "~/types";
 import { productSchema } from "../lib/schemas/product";
 import { toast } from "sonner";
-import { toDisplayAmount } from "~/convex/lib/currency";
+import { toDisplayAmount } from "~/shared/currency";
 import { useParams } from "@tanstack/react-router";
 import { normalizeSkuAttributeValue } from "@/components/add-product/ProductVariantAttributes";
 

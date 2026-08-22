@@ -1,8 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { CartItem } from "../pos/types";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
-import { currencyFormatter } from "~/convex/utils";
-import { toDisplayAmount } from "~/convex/lib/currency";
+import { currencyFormatter } from "~/shared/currencyFormatter";
+import { toDisplayAmount } from "~/shared/currency";
 import { Check, Plus, Printer } from "lucide-react";
 
 interface ExpenseCompletionProps {

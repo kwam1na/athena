@@ -17,7 +17,7 @@ import { Button } from "../ui/button";
 import { toast } from "sonner";
 import { useAuth } from "~/src/hooks/useAuth";
 import { getAmountPaidForOrder } from "./utils";
-import { toDisplayAmount } from "~/convex/lib/currency";
+import { toDisplayAmount } from "~/shared/currency";
 import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
 import { runCommand } from "~/src/lib/errors/runCommand";
 

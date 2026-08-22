@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Minus, Package, Plus, ShoppingCart } from "lucide-react";
 import { Product } from "./types";
 import { capitalizeWords } from "~/src/lib/utils";
-import { toDisplayAmount } from "~/convex/lib/currency";
+import { toDisplayAmount } from "~/shared/currency";
 import { useEffect, useState } from "react";
 
 interface ProductCardProps {

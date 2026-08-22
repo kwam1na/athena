@@ -110,7 +110,6 @@ import type * as emails_DailyManagerReportComparisonPreview from "../emails/Dail
 import type * as emails_DailyManagerReportUnbordered from "../emails/DailyManagerReportUnbordered.js";
 import type * as emails_DiscountCode from "../emails/DiscountCode.js";
 import type * as emails_DiscountReminder from "../emails/DiscountReminder.js";
-import type * as emails_ExpenseReceiptEmail from "../emails/ExpenseReceiptEmail.js";
 import type * as emails_FeedbackRequest from "../emails/FeedbackRequest.js";
 import type * as emails_NewOrderAdmin from "../emails/NewOrderAdmin.js";
 import type * as emails_OrderEmail from "../emails/OrderEmail.js";
@@ -119,7 +118,6 @@ import type * as emails_OrderEmailComplete from "../emails/OrderEmailComplete.js
 import type * as emails_OrderEmailOutForDelivery from "../emails/OrderEmailOutForDelivery.js";
 import type * as emails_OrderEmailReady from "../emails/OrderEmailReady.js";
 import type * as emails_OrderEmailReadyDelivery from "../emails/OrderEmailReadyDelivery.js";
-import type * as emails_PosReceiptEmail from "../emails/PosReceiptEmail.js";
 import type * as emails_PosTerminalHealthAlert from "../emails/PosTerminalHealthAlert.js";
 import type * as emails_RegisterCloseoutMatchReportPreview from "../emails/RegisterCloseoutMatchReportPreview.js";
 import type * as emails_RegisterCloseoutVarianceAlert from "../emails/RegisterCloseoutVarianceAlert.js";
@@ -843,7 +841,6 @@ declare const fullApi: ApiFromModules<{
   "emails/DailyManagerReportUnbordered": typeof emails_DailyManagerReportUnbordered;
   "emails/DiscountCode": typeof emails_DiscountCode;
   "emails/DiscountReminder": typeof emails_DiscountReminder;
-  "emails/ExpenseReceiptEmail": typeof emails_ExpenseReceiptEmail;
   "emails/FeedbackRequest": typeof emails_FeedbackRequest;
   "emails/NewOrderAdmin": typeof emails_NewOrderAdmin;
   "emails/OrderEmail": typeof emails_OrderEmail;
@@ -852,7 +849,6 @@ declare const fullApi: ApiFromModules<{
   "emails/OrderEmailOutForDelivery": typeof emails_OrderEmailOutForDelivery;
   "emails/OrderEmailReady": typeof emails_OrderEmailReady;
   "emails/OrderEmailReadyDelivery": typeof emails_OrderEmailReadyDelivery;
-  "emails/PosReceiptEmail": typeof emails_PosReceiptEmail;
   "emails/PosTerminalHealthAlert": typeof emails_PosTerminalHealthAlert;
   "emails/RegisterCloseoutMatchReportPreview": typeof emails_RegisterCloseoutMatchReportPreview;
   "emails/RegisterCloseoutVarianceAlert": typeof emails_RegisterCloseoutVarianceAlert;

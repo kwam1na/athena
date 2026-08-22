@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { currencyFormatter } from "~/convex/utils";
+import { currencyFormatter } from "~/shared/currencyFormatter";
 
 import type { CartItem } from "@/components/pos/types";
 

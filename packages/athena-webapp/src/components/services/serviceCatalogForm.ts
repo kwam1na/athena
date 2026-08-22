@@ -1,4 +1,4 @@
-import { toDisplayAmount } from "~/convex/lib/currency";
+import { toDisplayAmount } from "~/shared/currency";
 import { parseDisplayAmountInput } from "~/src/lib/pos/displayAmounts";
 import { toSlug } from "@/lib/utils";
 

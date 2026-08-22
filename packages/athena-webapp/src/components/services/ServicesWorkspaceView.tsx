@@ -35,7 +35,7 @@ import {
 import { cn } from "@/lib/utils";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
-import { toDisplayAmount } from "~/convex/lib/currency";
+import { toDisplayAmount } from "~/shared/currency";
 import {
   currencyDisplaySymbol,
   currencyFormatter,

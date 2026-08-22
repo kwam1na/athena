@@ -15,7 +15,7 @@ import {
   formatDeliveryAddress,
   getDiscountValue,
   getOrderAmount,
-} from "~/convex/inventory/utils";
+} from "~/shared/orderMath";
 import {
   Tooltip,
   TooltipContent,

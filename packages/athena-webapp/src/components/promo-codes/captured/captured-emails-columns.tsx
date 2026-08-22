@@ -2,7 +2,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { Offer } from "~/types";
 import { DataTableColumnHeader } from "../../base/table/data-table-column-header";
 import { formatUserId, getRelativeTime } from "~/src/lib/utils";
-import { formatDate } from "~/convex/utils";
+import { formatDate } from "~/shared/formatDate";
 import { Link } from "@tanstack/react-router";
 import { getOrigin } from "~/src/lib/navigationUtils";
 

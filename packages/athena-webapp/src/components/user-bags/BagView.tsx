@@ -15,7 +15,7 @@ import {
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { FadeIn } from "../common/FadeIn";
 import { SimplePageHeader } from "../common/PageHeader";
-import { toDisplayAmount } from "~/convex/lib/currency";
+import { toDisplayAmount } from "~/shared/currency";
 
 type BagItemViewItem = {
   _id: string;

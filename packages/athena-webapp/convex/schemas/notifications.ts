@@ -1,10 +1,20 @@
 import { v } from "convex/values";
 
+import {
+  NOTIFICATION_CATEGORIES,
+  type NotificationCategory,
+} from "../../shared/notificationCategories";
+
+// Derived from the shared category list so the settings UI can enumerate the
+// categories without importing this Convex module, and the two cannot drift.
 export const notificationCategoryValidator = v.union(
-  v.literal("cash_controls"),
-  v.literal("eod"),
-  v.literal("system_health"),
-  v.literal("approvals"),
+  ...(NOTIFICATION_CATEGORIES.map((category) =>
+    v.literal(category),
+  ) as [
+    ReturnType<typeof v.literal<NotificationCategory>>,
+    ReturnType<typeof v.literal<NotificationCategory>>,
+    ...Array<ReturnType<typeof v.literal<NotificationCategory>>>,
+  ]),
 );
 
 export const notificationChannelValidator = v.union(

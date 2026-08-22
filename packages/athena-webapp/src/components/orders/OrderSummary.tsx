@@ -3,7 +3,7 @@ import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { currencyFormatter } from "~/src/lib/utils";
 import { getAmountPaidForOrder, getDiscountValue } from "./utils";
 import { Tag } from "lucide-react";
-import { toDisplayAmount } from "~/convex/lib/currency";
+import { toDisplayAmount } from "~/shared/currency";
 
 export const OrderSummary = () => {
   const { order } = useOnlineOrder();

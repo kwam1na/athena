@@ -3,6 +3,8 @@ import { ALL_COUNTRIES } from "./constants/countries";
 import { accraNeighborhoods, ghanaRegions } from "./constants/ghana";
 import { currencyFormatter as sharedCurrencyFormatter } from "../shared/currencyFormatter";
 import { capitalizeWords } from "../shared/textCase";
+import { formatDate } from "../shared/formatDate";
+import { generateTransactionNumber } from "../shared/transactionNumber";
 
 export function toSlug(str: string) {
   return str
@@ -57,18 +59,10 @@ export function getAddressString(address: Address) {
   return joinAddressParts(address?.address, address?.city, country);
 }
 
-export { capitalizeWords };
+export { capitalizeWords, formatDate, generateTransactionNumber };
 
 export function currencyFormatter(currency: string) {
   return sharedCurrencyFormatter(currency);
-}
-
-export function formatDate(timestamp: number) {
-  return new Date(timestamp).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
 }
 
 export const getProductName = (item: any) => {
@@ -83,14 +77,3 @@ export const getProductName = (item: any) => {
 
   return capitalizeWords(item.productName || "");
 };
-
-export function generateTransactionNumber(): string {
-  const timestamp = Math.floor(Date.now() / 1000);
-  const baseTransactionNumber = timestamp % 100000;
-  const randomPadding = Math.floor(Math.random() * 10);
-  const transactionNumber = (baseTransactionNumber * 10 + randomPadding)
-    .toString()
-    .padStart(6, "0");
-
-  return transactionNumber;
-}

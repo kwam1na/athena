@@ -1,7 +1,7 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "~/src/components/base/table/data-table-column-header";
 import { Link } from "@tanstack/react-router";
-import { capitalizeWords } from "~/convex/utils";
+import { capitalizeWords } from "~/shared/textCase";
 import { getRelativeTime } from "~/src/lib/utils";
 import { BagItem } from "~/types";
 import { User } from "lucide-react";

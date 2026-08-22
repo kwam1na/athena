@@ -23,7 +23,7 @@ import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 import { getStoreConfigV2 } from "~/src/lib/storeConfig";
 import { capitalizeWords, cn } from "~/src/lib/utils";
 import config from "~/src/config";
-import PosReceiptEmail from "~/convex/emails/PosReceiptEmail";
+import PosReceiptEmail from "~/src/lib/pos/receipts/PosReceiptEmail";
 import { currencyFormatter } from "~/shared/currencyFormatter";
 import type { ReceiptMessagingConfig } from "./receipt/PosReceiptShareControl";
 import type { Id } from "~/convex/_generated/dataModel";

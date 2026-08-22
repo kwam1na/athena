@@ -1,4 +1,4 @@
-import { toDisplayAmount } from "~/convex/lib/currency";
+import { toDisplayAmount } from "~/shared/currency";
 import { parseDisplayAmountInput } from "~/src/lib/pos/displayAmounts";
 import { PAYSTACK_PROCESSING_FEE } from "~/src/lib/constants";
 import type { Id } from "~/convex/_generated/dataModel";
