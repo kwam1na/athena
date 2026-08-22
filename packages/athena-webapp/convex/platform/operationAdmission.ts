@@ -1,7 +1,16 @@
 import { internal } from "../_generated/api";
 import { AGENT_GENERATED_REGISTRY } from "../agentHarness/_generated/registry";
 import { createDelegatedAdmission } from "../agentHarness/delegatedAdmission";
+import { resolveDurableEnablementWithCtx } from "../agentHarness/deploymentState";
 import { createAgentReadPortRegistry } from "../agentHarness/readPorts";
+import type { AgentEvidenceExtractor } from "../agentHarness/conformance";
+import {
+  REGISTER_SESSIONS_EXTRACTOR,
+  REGISTER_SESSIONS_MANIFEST,
+} from "../cashControls/agentCapabilities/registers";
+import { STORE_DAY_EXTRACTOR, STORE_DAY_MANIFEST } from "../operations/agentCapabilities/storeDay";
+import { DAY_SALES_EXTRACTOR, DAY_SALES_MANIFEST } from "../reports/agentCapabilities/sales";
+import { POSITIONS_EXTRACTOR, POSITIONS_MANIFEST } from "../stockOps/agentCapabilities/inventory";
 import { captureSharedDemoAdmittedActionWithCtx } from "../contextTracking/sharedDemoActionCapture";
 import { getStorefrontClaimFromRequest } from "../http/utils";
 import { isAthenaUnauthenticatedError } from "../lib/athenaUnauthenticated";
@@ -170,8 +179,52 @@ export const agentReadPorts = createAgentReadPortRegistry({
     { portKey: "fleet.stores", handler: internal.agentHarness.profiles.syntheticSecondSurfacePorts.listStores },
     { portKey: "fleet.storeHealth", handler: internal.agentHarness.profiles.syntheticSecondSurfacePorts.getStoreHealth },
     { portKey: "directory.teams", handler: internal.agentHarness.profiles.syntheticSecondSurfacePorts.listTeams },
+    // Daily Operations (U8). Each port module is written with
+    // `defineAgentReadPortQuery` below and colocated with its domain read code.
+    { portKey: "operations.storeDay", handler: internal.operations.agentCapabilities.storeDayPorts.getStoreDay },
+    { portKey: "operations.attention", handler: internal.operations.agentCapabilities.workPorts.listAttention },
+    { portKey: "operations.approvals", handler: internal.operations.agentCapabilities.workPorts.listApprovals },
+    { portKey: "operations.activity", handler: internal.operations.agentCapabilities.activityPorts.listActivity },
+    { portKey: "reports.daySales", handler: internal.reports.agentCapabilities.salesPorts.getDaySales },
+    { portKey: "reports.weekPerformance", handler: internal.reports.agentCapabilities.salesPorts.getWeekPerformance },
+    { portKey: "reports.storePulse", handler: internal.reports.agentCapabilities.salesPorts.getStorePulse },
+    {
+      portKey: "cash.registerSessions",
+      handler: internal.cashControls.agentCapabilities.registersPorts.readRegisterSessions,
+    },
+    {
+      portKey: "automation.dailyOperations",
+      handler: internal.automation.agentCapabilities.evidencePorts.listAutomationEvidence,
+    },
+    { portKey: "inventory.positions", handler: internal.stockOps.agentCapabilities.inventoryPorts.readPositions },
+    {
+      portKey: "inventory.replenishment",
+      handler: internal.stockOps.agentCapabilities.inventoryPorts.listReplenishment,
+    },
   ],
 });
+
+/**
+ * Manifest-declared evidence extractors, resolved by capability id.
+ *
+ * The kernel may never import a product domain, and a domain port module must
+ * import THIS file for `defineAgentReadPortQuery`. So the index is built here,
+ * from the DECLARATION half of each package (manifests plus extractors, no
+ * database access), which imports nothing from this module and therefore
+ * creates no cycle. `convex/agentHarness/executorSeams.ts` resolves through it
+ * when it mints claim support at completion; an unregistered capability simply
+ * yields provenance-only evidence, which is the honest fail-closed default.
+ */
+const AGENT_EVIDENCE_EXTRACTORS: { readonly [capabilityId: string]: AgentEvidenceExtractor } = {
+  [STORE_DAY_MANIFEST.capabilityId]: STORE_DAY_EXTRACTOR,
+  [DAY_SALES_MANIFEST.capabilityId]: DAY_SALES_EXTRACTOR,
+  [REGISTER_SESSIONS_MANIFEST.capabilityId]: REGISTER_SESSIONS_EXTRACTOR,
+  [POSITIONS_MANIFEST.capabilityId]: POSITIONS_EXTRACTOR,
+};
+
+export function resolveAgentEvidenceExtractor(capabilityId: string): AgentEvidenceExtractor | undefined {
+  return AGENT_EVIDENCE_EXTRACTORS[capabilityId];
+}
 
 export const agentDelegatedAdmission = createDelegatedAdmission({
   registry: AGENT_GENERATED_REGISTRY,
@@ -180,9 +233,10 @@ export const agentDelegatedAdmission = createDelegatedAdmission({
     normal_user: createNormalUserDelegatedAuthorityPort(),
     shared_demo: createSharedDemoDelegatedAuthorityPort(),
   },
-  // The live shrink-only overlay. Until U7 backs the kill switch durably this is
-  // the published baseline; `narrowEnablement` is the only transition it accepts.
-  resolveEnablement: async () => AGENT_GENERATED_REGISTRY.enablement,
+  // The live shrink-only overlay (U7): the published baseline narrowed by the
+  // durable profile/capability switches, every profile DEFAULT OFF. Read on
+  // every delegated check, so a flipped switch denies immediately.
+  resolveEnablement: (ctx) => resolveDurableEnablementWithCtx(ctx, AGENT_GENERATED_REGISTRY.enablement),
 });
 
 /** Run start (U7): pin the grant. `prepareAgentRunGrantWithCtx` feeds `recordTurnIntentWithCtx`. */

@@ -10,7 +10,7 @@ import type { AgentComponent } from "@convex-dev/agent";
 import { MockLanguageModelV4 } from "ai/test";
 import { convexTest, type TestConvex } from "convex-test";
 
-import type { AgentRuntimeContractHarness, AgentRuntimeScriptStep } from "../../../shared/agentHarness/agentRuntimeHarness";
+import { resolveScriptArgs, type AgentRuntimeContractHarness, type AgentRuntimeScriptArgs, type AgentRuntimeScriptStep } from "../../../shared/agentHarness/agentRuntimeHarness";
 import type { AgentModelSelection, RuntimeTurnRef } from "../../../shared/agentHarness/agentRuntime";
 import { components } from "../../_generated/api";
 import schema from "../../schema";
@@ -43,8 +43,14 @@ const agentComponentModules = import.meta.glob("../../../../../node_modules/@con
 
 export const AGENT_COMPONENT: AgentComponent = components.agent;
 
-export function createConvexTestBackend(): TestConvex<typeof schema> {
-  const t = convexTest(schema, appModules);
+export function createConvexTestBackend(extraModules: Record<string, () => Promise<unknown>> = {}): TestConvex<typeof schema> {
+  const t = convexTest(schema, { ...appModules, ...extraModules });
+  registerAgentComponent(t);
+  return t;
+}
+
+/** Register the mounted Agent component on a backend the caller built (keeps runtime-native paths inside this directory). */
+export function registerAgentComponent(t: TestConvex<typeof schema>): TestConvex<typeof schema> {
   t.registerComponent("agent", agentComponentSchema, agentComponentModules);
   return t;
 }
@@ -96,10 +102,14 @@ export type ConvexAgentContractHarness = AgentRuntimeContractHarness & {
 
 export type ConvexAgentContractHarnessOptions = {
   readonly clock?: () => number;
+  /** Provider id the scripted model answers for (default `fixture`); U7 host tests select the profile's fake provider. */
+  readonly providerId?: string;
+  /** Share a backend with the caller (U7 host parity tests) instead of creating a fresh one. */
+  readonly backend?: TestConvex<typeof schema>;
 };
 
 export function createConvexAgentContractHarness(options: ConvexAgentContractHarnessOptions = {}): ConvexAgentContractHarness {
-  const t = createConvexTestBackend();
+  const t = options.backend ?? createConvexTestBackend();
   const ctx = runtimeCtxFor(t);
   const scripts = new Map<string, readonly AgentRuntimeScriptStep[]>();
   const cursors = new Map<string, number>();
@@ -128,11 +138,11 @@ export function createConvexAgentContractHarness(options: ConvexAgentContractHar
     idempotencyKeys.set(turnKey, map);
   };
 
-  const toolCallPart = (call: { callId: string; toolId: string; args: unknown }): LanguageModelV4Content => ({
+  const toolCallPart = async (call: { callId: string; toolId: string; args: AgentRuntimeScriptArgs }): Promise<LanguageModelV4Content> => ({
     type: "tool-call",
     toolCallId: call.callId,
     toolName: toNativeToolName(call.toolId),
-    input: JSON.stringify(call.args ?? {}),
+    input: JSON.stringify((await resolveScriptArgs(call.args)) ?? {}),
   });
 
   let adapter!: ConvexAgentRuntimeAdapter;
@@ -179,10 +189,10 @@ export function createConvexAgentContractHarness(options: ConvexAgentContractHar
               break;
             case "tool_call":
               rememberKey(turnKey, step.callId, step.idempotencyKey);
-              return { content: [toolCallPart(step)], finishReason: { unified: "tool-calls", raw: "tool_calls" }, usage, warnings: [] };
+              return { content: [await toolCallPart(step)], finishReason: { unified: "tool-calls", raw: "tool_calls" }, usage, warnings: [] };
             case "tool_calls_parallel":
               for (const call of step.calls) rememberKey(turnKey, call.callId, call.idempotencyKey);
-              return { content: step.calls.map(toolCallPart), finishReason: { unified: "tool-calls", raw: "tool_calls" }, usage, warnings: [] };
+              return { content: await Promise.all(step.calls.map(toolCallPart)), finishReason: { unified: "tool-calls", raw: "tool_calls" }, usage, warnings: [] };
             case "complete":
               return { content: [{ type: "text", text: step.narrative }], finishReason: { unified: "stop", raw: "stop" }, usage, warnings: [] };
             case "fail": {
@@ -207,7 +217,7 @@ export function createConvexAgentContractHarness(options: ConvexAgentContractHar
       clock: options.clock,
       resolveModel: (selection, context) => {
         resolved.push(selection);
-        if (selection.providerId !== "fixture") throw new Error(`no model for provider ${selection.providerId}`);
+        if (selection.providerId !== (options.providerId ?? "fixture")) throw new Error(`no model for provider ${selection.providerId}`);
         turnRefsByKey.set(context.turnKey, context.turnRef);
         return scriptedModel(context.turnKey) as unknown as LanguageModelV4;
       },

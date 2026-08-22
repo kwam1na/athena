@@ -24,7 +24,7 @@ import {
   type RuntimeThreadRef,
   type RuntimeTurnRef,
 } from "./agentRuntime";
-import type { AgentRuntimeContractHarness, AgentRuntimeScriptStep } from "./agentRuntimeHarness";
+import { resolveScriptArgs, type AgentRuntimeContractHarness, type AgentRuntimeScriptArgs, type AgentRuntimeScriptStep } from "./agentRuntimeHarness";
 import { opaqueRef, type Timestamp } from "./values";
 
 export type AgentDeterministicClock = {
@@ -141,14 +141,14 @@ export function createAgentRuntimeContractFake(
 
   const runCall = async (
     turn: TurnState,
-    call: { callId: string; toolId: string; args: unknown; idempotencyKey?: string },
+    call: { callId: string; toolId: string; args: AgentRuntimeScriptArgs; idempotencyKey?: string },
   ) => {
     await emit(turn, { kind: "tool_call_requested", callId: call.callId, toolId: call.toolId });
     const result = await turn.hooks.dispatchTool({
       callId: call.callId,
       turnRef: turn.turnRef,
       toolId: call.toolId,
-      rawArgs: call.args,
+      rawArgs: await resolveScriptArgs(call.args),
       idempotencyKey: call.idempotencyKey ?? `${turn.turnKey}:${call.callId}`,
     });
     turn.dispatchResults.push(result);

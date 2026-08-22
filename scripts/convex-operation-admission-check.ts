@@ -460,6 +460,9 @@ export const UNIT_OWNERSHIP: readonly UnitOwnership[] = [
   {
     unit: "U9",
     files: [
+      // Agent harness operator entry points (V26-1265) sit with the
+      // intelligence ingress they extend.
+      "agentHarness/turns.ts",
       "app.ts",
       "cloudflare/stream.ts",
       "contextTracking/athenaWebappEvents.ts",

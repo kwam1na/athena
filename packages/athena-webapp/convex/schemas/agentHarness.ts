@@ -232,6 +232,20 @@ export const agentTurnBindingSchema = v.object({
   operatorReleaseCommittedAt: v.optional(v.number()),
   operatorViewedAt: v.optional(v.number()),
   operatorViewedByActorRef: v.optional(v.string()),
+  // Turn orchestration additions (V26-1265); all optional so U1 rows stay valid.
+  /** Athena-owned thread identity (profile + store + operator + client key); many turns share one. */
+  threadKey: v.optional(v.string()),
+  /** Opaque runtime turn reference recorded once the adapter started the turn. */
+  runtimeTurnRef: v.optional(v.string()),
+  /** Server-authored progress milestones (bounded; the only progress the browser sees). */
+  progress: v.optional(v.array(v.object({ milestone: v.string(), at: v.number() }))),
+  /** Release suppressed after commit because authority shrank before an authorized fetch. */
+  releaseSuppressedAt: v.optional(v.number()),
+  releaseSuppressedReason: v.optional(v.string()),
+  /** Completion outbox bookkeeping: projection retries after `athena_committed`. */
+  outboxAttempts: v.optional(v.number()),
+  outboxNextAttemptAt: v.optional(v.number()),
+  outboxLastError: v.optional(v.string()),
   abandonedAt: v.optional(v.number()),
   abandonReason: v.optional(v.string()),
   runtimeCleanupStatus: agentRuntimeCleanupStatusValidator,
@@ -461,6 +475,35 @@ export const agentEvidenceAccessAuditSchema = v.object({
   purpose: v.string(),
   evidenceState: agentEvidenceStateValidator,
   accessedAt: v.number(),
+});
+
+/**
+ * Durable enablement switch (V26-1265): one row per profile or capability an
+ * operator switched. Profiles are DEFAULT OFF — a profile with no row is
+ * disabled for operator turns even when its published lifecycle is `enabled`;
+ * the switch can never widen beyond the published baseline.
+ */
+export const agentEnablementSwitchSchema = v.object({
+  subjectKind: v.union(v.literal("profile"), v.literal("capability")),
+  subjectKey: v.string(),
+  state: v.union(v.literal("enabled"), v.literal("disabled")),
+  reason: v.optional(v.string()),
+  updatedByActorRef: v.optional(v.string()),
+  updatedAt: v.number(),
+});
+
+/**
+ * Provider-spend window (V26-1265): reserve-then-settle cost units per
+ * operator and per store over a UTC day so run creation can enforce a spend
+ * ceiling before any provider work, exactly like call budgets do.
+ */
+export const agentSpendWindowSchema = v.object({
+  scopeKey: v.string(),
+  windowKey: v.string(),
+  reservedCostUnits: v.number(),
+  settledCostUnits: v.number(),
+  runCount: v.number(),
+  updatedAt: v.number(),
 });
 
 /** Durable compatibility epoch singleton (per scope key, `global` in v1). */

@@ -69,6 +69,8 @@ const PRE_RUNNING_STEPS = AGENT_TURN_BINDING_STEPS.filter(
 export type RecordTurnIntentInput = Omit<CreateAgentRunInput, "runIdempotencyKey" | "promptPayloadHash"> & {
   turnIdempotencyKey: string;
   runtimeThreadRef?: string;
+  /** Athena-owned thread identity (V26-1265): many turns share one key; never a runtime ref. */
+  threadKey?: string;
   promptPayload: Record<string, unknown>;
   promptPayloadHash?: string;
 };
@@ -123,7 +125,7 @@ export async function recordTurnIntentWithCtx(
     };
   }
   const promptPayloadHash = input.promptPayloadHash ?? computeContentDigest(input.promptPayload);
-  const { turnIdempotencyKey, runtimeThreadRef, promptPayload, promptPayloadHash: _hash, ...runInput } = input;
+  const { turnIdempotencyKey, runtimeThreadRef, threadKey, promptPayload, promptPayloadHash: _hash, ...runInput } = input;
   const created = await createAgentRunWithCtx(ctx, {
     ...runInput,
     promptPayloadHash,
@@ -137,6 +139,7 @@ export async function recordTurnIntentWithCtx(
     adapterKind: input.adapterKind,
     adapterVersion: input.adapterVersion,
     runtimeThreadRef,
+    threadKey,
     step: "intent_recorded",
     stepUpdatedAt: input.now,
     stepIdempotencyKey: turnIdempotencyKey,
@@ -509,6 +512,7 @@ export const recordTurnIntent = internalMutation({
     egressClass: v.string(),
     turnIdempotencyKey: v.string(),
     runtimeThreadRef: v.optional(v.string()),
+    threadKey: v.optional(v.string()),
     promptPayload: v.record(v.string(), v.any()),
     promptPayloadHash: v.optional(v.string()),
     now: v.optional(v.number()),

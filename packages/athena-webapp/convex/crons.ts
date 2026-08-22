@@ -61,6 +61,16 @@ crons.interval(
   {},
 );
 
+// Agent harness completion outbox (U7): committed answers whose runtime
+// projection did not land (host crash, adapter hiccup) are projected again with
+// backoff; projection is idempotent and never reopens a run.
+crons.interval(
+  "agent-harness-outbox-repair",
+  { minutes: process.env.STAGE == "prod" ? 5 : 60 },
+  internal.agentHarness.runtimeHost.repairCompletionOutbox,
+  {},
+);
+
 crons.interval("walkthrough-retention-cleanup", { hours: 24 }, internal.marketing.walkthroughRequestRetention.cleanupBatch, {});
 crons.interval("landing-funnel-retention-cleanup", { hours: 24 }, internal.marketing.landingFunnelRetention.cleanupBatch, {});
 crons.interval("walkthrough-notification-recovery", { minutes: 10 }, internal.marketing.walkthroughRequestNotifications.scheduleEligibleBatch, {});

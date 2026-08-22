@@ -6,6 +6,13 @@
  */
 import type { AgentRuntimeAdapter, AgentToolDispatchResult, RuntimeTurnRef } from "./agentRuntime";
 
+export type AgentRuntimeScriptArgs = unknown | (() => unknown | Promise<unknown>);
+
+/** Resolve scripted args: a thunk is evaluated at call time, anything else is used as is. */
+export async function resolveScriptArgs(args: AgentRuntimeScriptArgs): Promise<unknown> {
+  return typeof args === "function" ? (args as () => unknown | Promise<unknown>)() : args;
+}
+
 export type AgentRuntimeScriptStep =
   | {
       readonly kind: "progress";
@@ -15,7 +22,8 @@ export type AgentRuntimeScriptStep =
       readonly kind: "tool_call";
       readonly callId: string;
       readonly toolId: string;
-      readonly args: unknown;
+      /** Static args, or a thunk resolved when the scripted model makes the call (U7 tests cite refs minted earlier in the turn). */
+      readonly args: AgentRuntimeScriptArgs;
       readonly idempotencyKey?: string;
     }
   | {
@@ -23,7 +31,7 @@ export type AgentRuntimeScriptStep =
       readonly calls: readonly {
         readonly callId: string;
         readonly toolId: string;
-        readonly args: unknown;
+        readonly args: AgentRuntimeScriptArgs;
         readonly idempotencyKey?: string;
       }[];
     }

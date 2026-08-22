@@ -37,6 +37,7 @@ import {
   recoverStaleAttemptsWithCtx,
   repairFencedRunsWithCtx,
 } from "./lifecycle";
+import { ensureConvexAgentRuntimeCleanupRegistered } from "./runtimeRetention";
 import { sweepStaleTurnBindingsWithCtx } from "./turnBindings";
 
 export const AGENT_RUNTIME_CLEANUP_BACKOFF_MS = [
@@ -96,6 +97,10 @@ export function resetAgentRuntimeCleanupHooksForTests() {
   cleanupHooks.set(AGENT_NOOP_ADAPTER_KIND, noopHook);
 }
 
+export function hasAgentRuntimeCleanupHook(adapterKind: string): boolean {
+  return cleanupHooks.has(adapterKind);
+}
+
 function backoffForAttempt(attempt: number): number {
   const index = Math.min(Math.max(attempt - 1, 0), AGENT_RUNTIME_CLEANUP_BACKOFF_MS.length - 1);
   return AGENT_RUNTIME_CLEANUP_BACKOFF_MS[index];
@@ -107,6 +112,9 @@ async function attemptRuntimeCleanupWithCtx(
   now: number,
 ): Promise<"succeeded" | "failed"> {
   const attempt = binding.runtimeCleanupAttempts + 1;
+  // Production adapter hooks register lazily (V26-1265): the Convex Agent hook
+  // is bound here, in the same isolate the sweep runs in, before the lookup.
+  ensureConvexAgentRuntimeCleanupRegistered();
   const hook = cleanupHooks.get(binding.adapterKind);
   let result: AgentRuntimeCleanupResult;
   if (!hook) {

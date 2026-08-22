@@ -23,6 +23,7 @@ import { REPORTS_READ_DEFINITIONS } from "./domains/reports_readDefinitions";
 import { PLATFORM_READ_DEFINITIONS } from "./domains/platform_readDefinitions";
 import { HTTP_CUSTOMER_READ_DEFINITIONS } from "./domains/httpCustomer_readDefinitions";
 import { HTTP_CORE_READ_DEFINITIONS } from "./domains/httpCore_readDefinitions";
+import { AGENT_HARNESS_READ_DEFINITIONS } from "./domains/agentHarness_readDefinitions";
 
 export { defineReadOperation };
 
@@ -784,6 +785,7 @@ export const OPERATION_READ_ADMISSION_DEFINITIONS: readonly OperationReadDefinit
     ...PLATFORM_READ_DEFINITIONS,
     ...HTTP_CUSTOMER_READ_DEFINITIONS,
     ...HTTP_CORE_READ_DEFINITIONS,
+    ...AGENT_HARNESS_READ_DEFINITIONS,
   ] as const);
 
 export function validateReadOperationDefinition(

@@ -64,6 +64,7 @@ import {
 } from "../../../shared/agentHarness/agentRuntime";
 import { opaqueRef, type Timestamp } from "../../../shared/agentHarness/values";
 import { cleanupConvexAgentRuntime } from "./convexAgentCleanup";
+import { CONVEX_AGENT_ADAPTER_KIND } from "./convexAgentKind";
 import {
   athenaMetadataOf,
   correlationUserId,
@@ -83,7 +84,9 @@ export { cleanupConvexAgentRuntime, createConvexAgentCleanupHook } from "./conve
 // Identity and version pins
 // ---------------------------------------------------------------------------
 
-export const CONVEX_AGENT_ADAPTER_KIND = "convex_agent" as const;
+// The kind constant lives in a V8-safe module so mutation-side code can name
+// the adapter without loading this Node module.
+export { CONVEX_AGENT_ADAPTER_KIND } from "./convexAgentKind";
 
 /** Exact package versions this adapter was proven against; bump only with the upgrade path in the runtime doc. */
 export const CONVEX_AGENT_PINNED_VERSIONS = Object.freeze({

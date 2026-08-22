@@ -286,6 +286,8 @@ export const PROFILE_ALLOWED_PREFIXES = [
   "convex/platform/readIntentCatalog",
   // Port modules obtain `defineAgentReadPortQuery` from the admission composition root (U4).
   "convex/platform/operationAdmission",
+  // Declaration-side manifest constants shared by domain packages (U8).
+  "convex/lib/agentCapabilityManifests",
 ] as const;
 
 export function findProfileImportViolations(
@@ -475,6 +477,109 @@ describe("agent harness import boundaries", () => {
     for (const file of kernelFiles) {
       expect(file.source, file.path).not.toMatch(/profiles\/syntheticSecondSurface|profiles\/dailyOperations/);
     }
+  });
+
+  /**
+   * Daily Operations (U8) — the first real product package. Three invariants on
+   * top of the general rules above: the kernel never imports a capability
+   * module or a Daily Operations profile; the profile modules reach product
+   * domains only through published capability modules; and the DECLARATION half
+   * of each package (manifests, extractors, port index) imports no composition
+   * root, which is what lets `convex/platform/operationAdmission.ts` build the
+   * evidence-extractor index without an import cycle.
+   */
+  describe("daily operations package", () => {
+    const CAPABILITY_MODULE = /^convex\/[a-zA-Z]+\/agentCapabilities\//;
+    const DECLARATION_MODULES = [
+      "convex/automation/agentCapabilities/evidence.ts",
+      "convex/cashControls/agentCapabilities/registers.ts",
+      "convex/operations/agentCapabilities/activity.ts",
+      "convex/operations/agentCapabilities/storeDay.ts",
+      "convex/operations/agentCapabilities/work.ts",
+      "convex/reports/agentCapabilities/sales.ts",
+      "convex/stockOps/agentCapabilities/inventory.ts",
+    ];
+    /** Modules outside the domains themselves that may reach a capability module. */
+    const CAPABILITY_CONSUMERS = [
+      "convex/agentHarness/evals/dailyOperations.smokeHarness.ts",
+      "convex/agentHarness/profiles/dailyOperations.ts",
+      "convex/agentHarness/profiles/dailyOperationsConformance.ts",
+      "convex/platform/operationAdmission.ts",
+    ];
+
+    it("keeps every Daily Operations import out of the kernel", () => {
+      expect(findKernelImportViolations(kernelFiles)).toEqual([]);
+      for (const file of kernelFiles) {
+        expect(file.source, file.path).not.toMatch(/agentCapabilities\//);
+        expect(file.source, file.path).not.toMatch(/profiles\/dailyOperations/);
+      }
+      expect(
+        findKernelImportViolations([
+          fixture(
+            "convex/agentHarness/executor.ts",
+            'import { STORE_DAY_MANIFEST } from "../operations/agentCapabilities/storeDay";',
+          ),
+        ]),
+      ).toHaveLength(1);
+    });
+
+    it("lets the profile modules reach product domains only through capability modules", () => {
+      const profileModules = collectSources(
+        path.join(HARNESS_DIR, "profiles"),
+        (relative) =>
+          relative.startsWith("convex/agentHarness/profiles/dailyOperations") && !relative.endsWith(".test.ts"),
+      );
+      expect(profileModules.map((file) => file.path).sort()).toEqual([
+        "convex/agentHarness/profiles/dailyOperations.ts",
+        "convex/agentHarness/profiles/dailyOperationsConformance.ts",
+        "convex/agentHarness/profiles/dailyOperationsUiCoverage.ts",
+      ]);
+      expect(findProfileImportViolations(profileModules, { allowProductCapabilityModules: true })).toEqual([]);
+      expect(
+        findProfileImportViolations(
+          [
+            fixture(
+              "convex/agentHarness/profiles/dailyOperations.ts",
+              'import { buildDailyOperationsSnapshotWithCtx } from "../../operations/dailyOperations";',
+            ),
+          ],
+          { allowProductCapabilityModules: true },
+        ),
+      ).toHaveLength(1);
+    });
+
+    it("keeps the declaration half free of the composition root, so the extractor index cannot cycle", () => {
+      const declarations = collectSources(CONVEX_DIR, (relative) => DECLARATION_MODULES.includes(relative));
+      expect(declarations.map((file) => file.path).sort()).toEqual([...DECLARATION_MODULES].sort());
+      for (const file of declarations) {
+        for (const { specifier, resolved } of importsOf(file)) {
+          if (!specifier.startsWith(".")) continue;
+          expect(resolved, `${file.path} imports ${resolved}`).not.toMatch(/^convex\/platform\/operationAdmission/);
+          expect(
+            resolved.startsWith("shared/agentHarness/") ||
+              resolved.startsWith("convex/lib/agentCapabilityManifests") ||
+              resolved.startsWith("convex/agentHarness/conformance"),
+            `${file.path} imports ${resolved}`,
+          ).toBe(true);
+        }
+      }
+    });
+
+    it("names every module outside the domains that reaches a capability module", () => {
+      const everything = [
+        ...collectSources(CONVEX_DIR),
+        ...collectSources(path.join(PACKAGE_DIR, "shared")),
+        ...collectSources(path.join(PACKAGE_DIR, "src")),
+      ];
+      const consumers = everything
+        .filter((file) => !CAPABILITY_MODULE.test(file.path) && !/\.test\.tsx?$/.test(file.path))
+        .filter((file) =>
+          importsOf(file).some(({ specifier, resolved }) => specifier.startsWith(".") && CAPABILITY_MODULE.test(resolved)),
+        )
+        .map((file) => file.path)
+        .sort();
+      expect(consumers).toEqual([...CAPABILITY_CONSUMERS].sort());
+    });
   });
 
   it("keeps the build-time composition root out of every kernel module", () => {

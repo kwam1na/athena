@@ -22,6 +22,15 @@ import {
   SYNTHETIC_SECOND_SURFACE_READ_PORTS,
 } from "./profiles/syntheticSecondSurface";
 import { SYNTHETIC_SECOND_SURFACE_CONFORMANCE } from "./profiles/syntheticSecondSurfaceConformance";
+import {
+  DAILY_OPERATIONS_MANIFESTS,
+  DAILY_OPERATIONS_PROFILE,
+  DAILY_OPERATIONS_READ_PORTS,
+} from "./profiles/dailyOperations";
+import {
+  DAILY_OPERATIONS_CONFORMANCE,
+  DAILY_OPERATIONS_EVIDENCE_EXTRACTORS,
+} from "./profiles/dailyOperationsConformance";
 
 /** Probes and the optional evidence extractor that gate enabling one capability. */
 export type AgentCapabilityConformanceFixture = {
@@ -60,9 +69,32 @@ export const SYNTHETIC_SECOND_SURFACE_REGISTRATION: AgentManifestRegistration = 
   conformance: SYNTHETIC_SECOND_SURFACE_CONFORMANCE,
 };
 
+/**
+ * Daily Operations (V26-1267) — the first real product surface. The manifests,
+ * evidence extractors, and read ports live next to the domain read code; this
+ * registration is the only place that names them for the generator.
+ */
+export const DAILY_OPERATIONS_REGISTRATION: AgentManifestRegistration = {
+  sourceKey: "agentHarness/profiles/dailyOperations",
+  manifests: DAILY_OPERATIONS_MANIFESTS,
+  readPorts: DAILY_OPERATIONS_READ_PORTS,
+  profiles: [DAILY_OPERATIONS_PROFILE],
+  conformance: DAILY_OPERATIONS_CONFORMANCE,
+};
+
+/**
+ * Manifest-declared evidence extractors by capability id. The kernel never
+ * imports a domain, so `convex/platform/operationAdmission.ts` re-exports this
+ * as `resolveAgentEvidenceExtractor` and the executor seams resolve through it.
+ */
+export const AGENT_EVIDENCE_EXTRACTORS: {
+  readonly [capabilityId: string]: AgentEvidenceExtractor;
+} = { ...DAILY_OPERATIONS_EVIDENCE_EXTRACTORS };
+
 /** Every registration point the generator compiles. Order does not matter. */
 export const AGENT_MANIFEST_REGISTRATIONS: readonly AgentManifestRegistration[] = [
   SYNTHETIC_SECOND_SURFACE_REGISTRATION,
+  DAILY_OPERATIONS_REGISTRATION,
 ];
 
 export type AgentRegistrationMerge = {

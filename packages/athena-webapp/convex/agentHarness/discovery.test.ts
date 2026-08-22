@@ -203,7 +203,12 @@ describe("grant-filtered discovery", () => {
  * must be a conscious edit here plus proof that nothing model-visible reaches
  * the module transitively.
  */
-export const PRIVILEGED_REGISTRY_CONSUMERS: readonly string[] = [];
+export const PRIVILEGED_REGISTRY_CONSUMERS: readonly string[] = [
+  // U7: the durable profile switch and the pre-deploy fence read the published
+  // enablement baseline and the deployed compatibility digest. Nothing
+  // model-visible imports it (the reachability test below stays green).
+  "deploymentState.ts",
+];
 
 describe("privileged registry isolation", () => {
   const localImports = (relativePath: string): string[] => {
@@ -291,8 +296,12 @@ describe("privileged registry isolation", () => {
       "fleet.storeHealth",
       "fleet.stores",
     ]);
-    expect(Object.keys(AGENT_CAPABILITY_SCHEMAS.declarations).sort()).toEqual(
-      SYNTHETIC_SECOND_SURFACE_MANIFESTS.map((manifest) => manifest.capabilityId).sort(),
-    );
+    // The generated schemas carry every REGISTERED package (V26-1267 added the
+    // Daily Operations one); the grant above selects only the synthetic
+    // profile's, which is why the summaries above are unchanged.
+    const declared = Object.keys(AGENT_CAPABILITY_SCHEMAS.declarations);
+    for (const manifest of SYNTHETIC_SECOND_SURFACE_MANIFESTS) {
+      expect(declared).toContain(manifest.capabilityId);
+    }
   });
 });

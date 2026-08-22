@@ -30,6 +30,13 @@ describe("Convex cron registration", () => {
     );
     expect(source).toContain('"0 * * * *"');
   });
+  it("registers the agent harness outbox repair next to its retention and repair sweeps", () => {
+    const source = readFileSync("convex/crons.ts", "utf8");
+    expect(source).toContain('"agent-harness-retention-sweep"');
+    expect(source).toContain('"agent-harness-repair-sweep"');
+    expect(source).toContain('"agent-harness-outbox-repair"');
+    expect(source).toContain("internal.agentHarness.runtimeHost.repairCompletionOutbox");
+  });
   it("registers bounded marketing retention jobs", () => {
     const source = readFileSync("convex/crons.ts", "utf8");
     expect(source).toContain('"walkthrough-retention-cleanup"');

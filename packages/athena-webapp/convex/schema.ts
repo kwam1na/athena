@@ -165,6 +165,8 @@ import {
   agentCitationBindingSchema,
   agentClaimSupportSchema,
   agentCompatibilityEpochSchema,
+  agentEnablementSwitchSchema,
+  agentSpendWindowSchema,
   agentEvidenceAccessAuditSchema,
   agentProgramAttemptSchema,
   agentPromptPayloadSchema,
@@ -636,6 +638,8 @@ const schema = defineSchema({
     .index("by_runId", ["runId"])
     .index("by_storeId_turnIdempotencyKey", ["storeId", "turnIdempotencyKey"])
     .index("by_runtimeThreadRef_createdAt", ["runtimeThreadRef", "createdAt"])
+    .index("by_storeId_threadKey_createdAt", ["storeId", "threadKey", "createdAt"])
+    .index("by_step_outboxNextAttemptAt", ["step", "outboxNextAttemptAt"])
     .index("by_step_abandonedAt_stepUpdatedAt", [
       "step",
       "abandonedAt",
@@ -714,6 +718,14 @@ const schema = defineSchema({
   agentCompatibilityEpoch: defineTable(agentCompatibilityEpochSchema).index(
     "by_scopeKey",
     ["scopeKey"],
+  ),
+  agentEnablementSwitch: defineTable(agentEnablementSwitchSchema).index(
+    "by_subjectKind_subjectKey",
+    ["subjectKind", "subjectKey"],
+  ),
+  agentSpendWindow: defineTable(agentSpendWindowSchema).index(
+    "by_scopeKey_windowKey",
+    ["scopeKey", "windowKey"],
   ),
   bag: defineTable(bagSchema)
     .index("by_storeId", ["storeId"])
