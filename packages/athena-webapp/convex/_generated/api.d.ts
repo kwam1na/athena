@@ -8,8 +8,24 @@
  * @module
  */
 
+import type * as agentHarness__generated_registry from "../agentHarness/_generated/registry.js";
+import type * as agentHarness__generated_schemas from "../agentHarness/_generated/schemas.js";
+import type * as agentHarness_agentRuntime_convexAgent from "../agentHarness/agentRuntime/convexAgent.js";
+import type * as agentHarness_agentRuntime_convexAgentCleanup from "../agentHarness/agentRuntime/convexAgentCleanup.js";
+import type * as agentHarness_agentRuntime_convexAgentRefs from "../agentHarness/agentRuntime/convexAgentRefs.js";
+import type * as agentHarness_agentRuntime_convexAgentRegistration from "../agentHarness/agentRuntime/convexAgentRegistration.js";
+import type * as agentHarness_agentRuntime_convexAgentSmoke from "../agentHarness/agentRuntime/convexAgentSmoke.js";
+import type * as agentHarness_agentRuntime_models from "../agentHarness/agentRuntime/models.js";
+import type * as agentHarness_conformance from "../agentHarness/conformance.js";
+import type * as agentHarness_discovery from "../agentHarness/discovery.js";
 import type * as agentHarness_lifecycle from "../agentHarness/lifecycle.js";
+import type * as agentHarness_manifestRegistrations from "../agentHarness/manifestRegistrations.js";
 import type * as agentHarness_profiles_syntheticSecondSurface from "../agentHarness/profiles/syntheticSecondSurface.js";
+import type * as agentHarness_profiles_syntheticSecondSurfaceConformance from "../agentHarness/profiles/syntheticSecondSurfaceConformance.js";
+import type * as agentHarness_programRuntime_outputCeiling from "../agentHarness/programRuntime/outputCeiling.js";
+import type * as agentHarness_programRuntime_programValidation from "../agentHarness/programRuntime/programValidation.js";
+import type * as agentHarness_programRuntime_quickJsRuntime from "../agentHarness/programRuntime/quickJsRuntime.js";
+import type * as agentHarness_programRuntime_types from "../agentHarness/programRuntime/types.js";
 import type * as agentHarness_registry from "../agentHarness/registry.js";
 import type * as agentHarness_retention from "../agentHarness/retention.js";
 import type * as agentHarness_testSupport from "../agentHarness/testSupport.js";
@@ -676,8 +692,24 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "agentHarness/_generated/registry": typeof agentHarness__generated_registry;
+  "agentHarness/_generated/schemas": typeof agentHarness__generated_schemas;
+  "agentHarness/agentRuntime/convexAgent": typeof agentHarness_agentRuntime_convexAgent;
+  "agentHarness/agentRuntime/convexAgentCleanup": typeof agentHarness_agentRuntime_convexAgentCleanup;
+  "agentHarness/agentRuntime/convexAgentRefs": typeof agentHarness_agentRuntime_convexAgentRefs;
+  "agentHarness/agentRuntime/convexAgentRegistration": typeof agentHarness_agentRuntime_convexAgentRegistration;
+  "agentHarness/agentRuntime/convexAgentSmoke": typeof agentHarness_agentRuntime_convexAgentSmoke;
+  "agentHarness/agentRuntime/models": typeof agentHarness_agentRuntime_models;
+  "agentHarness/conformance": typeof agentHarness_conformance;
+  "agentHarness/discovery": typeof agentHarness_discovery;
   "agentHarness/lifecycle": typeof agentHarness_lifecycle;
+  "agentHarness/manifestRegistrations": typeof agentHarness_manifestRegistrations;
   "agentHarness/profiles/syntheticSecondSurface": typeof agentHarness_profiles_syntheticSecondSurface;
+  "agentHarness/profiles/syntheticSecondSurfaceConformance": typeof agentHarness_profiles_syntheticSecondSurfaceConformance;
+  "agentHarness/programRuntime/outputCeiling": typeof agentHarness_programRuntime_outputCeiling;
+  "agentHarness/programRuntime/programValidation": typeof agentHarness_programRuntime_programValidation;
+  "agentHarness/programRuntime/quickJsRuntime": typeof agentHarness_programRuntime_quickJsRuntime;
+  "agentHarness/programRuntime/types": typeof agentHarness_programRuntime_types;
   "agentHarness/registry": typeof agentHarness_registry;
   "agentHarness/retention": typeof agentHarness_retention;
   "agentHarness/testSupport": typeof agentHarness_testSupport;
@@ -1364,4 +1396,6 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  agent: import("@convex-dev/agent/_generated/component.js").ComponentApi<"agent">;
+};

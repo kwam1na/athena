@@ -115,9 +115,22 @@ export const PRODUCT_DOMAIN_PREFIXES = [
   "src/",
 ] as const;
 
+/**
+ * Build-time composition roots (U3). They are not kernel modules: they exist
+ * so the generator can discover profiles and domain capability packages from
+ * explicit registration points. The Convex runtime reads the generated
+ * artifacts instead, so no kernel module may import one.
+ */
+export const AGENT_COMPOSITION_ROOTS = ["convex/agentHarness/manifestRegistrations.ts"] as const;
+
+export function isCompositionRoot(relative: string): boolean {
+  return (AGENT_COMPOSITION_ROOTS as readonly string[]).includes(relative);
+}
+
 export function isKernelModule(relative: string): boolean {
   if (!relative.startsWith("convex/agentHarness/")) return false;
   if (relative.startsWith("convex/agentHarness/profiles/")) return false;
+  if (isCompositionRoot(relative)) return false;
   if (relative.startsWith("convex/agentHarness/agentRuntime/")) return false;
   if (relative.startsWith("convex/agentHarness/evals/")) return false;
   if (relative.startsWith("convex/agentHarness/_generated/")) return false;
@@ -163,7 +176,16 @@ export const RUNTIME_NATIVE_IDENTIFIERS = [
 ] as const;
 
 export const AGENT_RUNTIME_DIR = "convex/agentHarness/agentRuntime/";
-export const AGENT_RUNTIME_SHIM = "convex/agentHarness/agentRuntime/convexAgent.config";
+/** Constants-only module (component mount name); it may not import anything or call `use`. */
+export const AGENT_RUNTIME_SHIM = "convex/agentHarness/agentRuntime/convexAgentRegistration";
+export const ROOT_CONVEX_CONFIG = "convex/convex.config.ts";
+/**
+ * The one runtime-native import allowed outside `agentRuntime/`: the component
+ * definition, imported and mounted directly by the root config. Mounting it
+ * through a local module makes the Convex backend reject the push
+ * (`start_push 500`; U5 deviation, see `docs/agent/agent-harness-runtime.md`).
+ */
+export const AGENT_COMPONENT_CONFIG_SPECIFIER = "@convex-dev/agent/convex.config";
 
 export function isRuntimeNativeSpecifier(specifier: string): boolean {
   return RUNTIME_NATIVE_PACKAGE_PATTERNS.some((pattern) => pattern.test(specifier));
@@ -174,6 +196,7 @@ export function findRuntimeNativeImportViolations(files: readonly SourceFile[]):
   for (const file of files) {
     if (file.path.startsWith(AGENT_RUNTIME_DIR)) continue;
     for (const { specifier } of importsOf(file)) {
+      if (file.path === ROOT_CONVEX_CONFIG && specifier === AGENT_COMPONENT_CONFIG_SPECIFIER) continue;
       if (isRuntimeNativeSpecifier(specifier)) {
         violations.push(`${file.path} imports runtime-native ${specifier}`);
       }
@@ -188,8 +211,31 @@ export function findRootConvexConfigViolations(file: SourceFile): string[] {
     const local = specifier.startsWith(".");
     const allowed = local
       ? resolved === AGENT_RUNTIME_SHIM || resolved === `${AGENT_RUNTIME_SHIM}.ts`
-      : specifier === "convex/server" || specifier === "convex/values";
+      : specifier === "convex/server" || specifier === "convex/values" || specifier === AGENT_COMPONENT_CONFIG_SPECIFIER;
     if (!allowed) violations.push(`${file.path} imports ${specifier}`);
+  }
+  return violations;
+}
+
+/** The registration shim is constants only: no imports, no `use`, no `defineApp`. */
+export function findRegistrationShimViolations(file: SourceFile): string[] {
+  const violations: string[] = [];
+  for (const { specifier } of importsOf(file)) violations.push(`${file.path} imports ${specifier}`);
+  const code = file.source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  if (/\.use\s*\(/.test(code) || /defineApp\s*\(/.test(code)) violations.push(`${file.path} mounts a component`);
+  return violations;
+}
+
+/** Components are mounted only by the root config: nothing else imports a component definition or defines an app. */
+export function findIndirectComponentMountViolations(files: readonly SourceFile[]): string[] {
+  const violations: string[] = [];
+  for (const file of files) {
+    if (file.path === ROOT_CONVEX_CONFIG) continue;
+    for (const { specifier } of importsOf(file)) {
+      if (/\/convex\.config(\.js)?$/.test(specifier)) violations.push(`${file.path} imports component definition ${specifier}`);
+    }
+    const code = file.source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    if (/\bdefineApp\s*\(/.test(code)) violations.push(`${file.path} defines an app`);
   }
   return violations;
 }
@@ -231,6 +277,9 @@ export function findSharedContractViolations(files: readonly SourceFile[]): stri
 export const PROFILE_ALLOWED_PREFIXES = [
   "shared/agentHarness/",
   "convex/agentHarness/registry",
+  "convex/agentHarness/conformance",
+  "convex/agentHarness/manifestRegistrations",
+  "convex/agentHarness/profiles/",
   "convex/platform/readIntentCatalog",
 ] as const;
 
@@ -311,34 +360,56 @@ describe("agent harness import boundaries", () => {
     expect(
       findRuntimeNativeImportViolations([
         fixture("convex/agentHarness/agentRuntime/convexAgent.ts", 'import { Agent } from "@convex-dev/agent";'),
-        fixture("convex/agentHarness/agentRuntime/convexAgent.config.ts", 'import agent from "@convex-dev/agent/convex.config";'),
         fixture("convex/agentHarness/agentRuntime/convexAgent.contract.test.ts", 'import { components } from "../../_generated/api";\nimport { Agent } from "@convex-dev/agent";'),
+        fixture(ROOT_CONVEX_CONFIG, 'import agent from "@convex-dev/agent/convex.config";\nimport { defineApp } from "convex/server";'),
       ]),
     ).toEqual([]);
+    expect(findRuntimeNativeImportViolations([fixture(ROOT_CONVEX_CONFIG, 'import { Agent } from "@convex-dev/agent";')])).toHaveLength(1);
   });
 
-  it("root convex.config.ts imports only convex/* and the local registration shim", () => {
-    const root = collectSources(CONVEX_DIR, (relative) => relative === "convex/convex.config.ts");
+  it("root convex.config.ts imports only convex/*, the component definition, and the constants-only shim", () => {
+    const root = collectSources(CONVEX_DIR, (relative) => relative === ROOT_CONVEX_CONFIG);
     expect(root).toHaveLength(1);
     expect(findRootConvexConfigViolations(root[0])).toEqual([]);
+    // The component must be mounted here directly (U5 deviation; indirect mounts fail to push).
+    expect(root[0].source).toMatch(/import agent from "@convex-dev\/agent\/convex\.config";/);
+    expect(root[0].source).toMatch(/app\.use\(agent, \{ name: CONVEX_AGENT_COMPONENT_NAME \}\)/);
     expect(
       findRootConvexConfigViolations(
-        fixture("convex/convex.config.ts", 'import agent from "@convex-dev/agent/convex.config";\nimport { defineApp } from "convex/server";'),
+        fixture(ROOT_CONVEX_CONFIG, 'import agent from "@convex-dev/agent/convex.config";\nimport { defineApp } from "convex/server";'),
       ),
-    ).toEqual(["convex/convex.config.ts imports @convex-dev/agent/convex.config"]);
+    ).toEqual([]);
+    expect(findRootConvexConfigViolations(fixture(ROOT_CONVEX_CONFIG, 'import { Agent } from "@convex-dev/agent";'))).toEqual([
+      "convex/convex.config.ts imports @convex-dev/agent",
+    ]);
     expect(
       findRootConvexConfigViolations(
-        fixture(
-          "convex/convex.config.ts",
-          'import { defineApp } from "convex/server";\nimport { registerConvexAgent } from "./agentHarness/agentRuntime/convexAgent.config";',
-        ),
+        fixture(ROOT_CONVEX_CONFIG, 'import { defineApp } from "convex/server";\nimport { CONVEX_AGENT_COMPONENT_NAME } from "./agentHarness/agentRuntime/convexAgentRegistration";'),
       ),
     ).toEqual([]);
     expect(
-      findRootConvexConfigViolations(
-        fixture("convex/convex.config.ts", 'import { registerConvexAgent } from "./agentHarness/agentRuntime/convexAgent";'),
-      ),
+      findRootConvexConfigViolations(fixture(ROOT_CONVEX_CONFIG, 'import { registerConvexAgent } from "./agentHarness/agentRuntime/convexAgent";')),
     ).toHaveLength(1);
+  });
+
+  it("mounts components only in root convex.config.ts; the registration shim is constants only", () => {
+    const shim = collectSources(HARNESS_DIR, (relative) => relative === `${AGENT_RUNTIME_SHIM}.ts`);
+    expect(shim).toHaveLength(1);
+    expect(findRegistrationShimViolations(shim[0])).toEqual([]);
+    expect(shim[0].source).toMatch(/export const CONVEX_AGENT_COMPONENT_NAME = "agent" as const;/);
+    expect(
+      findRegistrationShimViolations(
+        fixture(`${AGENT_RUNTIME_SHIM}.ts`, 'import agent from "@convex-dev/agent/convex.config";\nexport function registerConvexAgent(app) { app.use(agent); }'),
+      ),
+    ).toHaveLength(2);
+    const everything = [...collectSources(CONVEX_DIR), ...collectSources(path.join(PACKAGE_DIR, "shared")), ...collectSources(path.join(PACKAGE_DIR, "src"))];
+    expect(findIndirectComponentMountViolations(everything)).toEqual([]);
+    expect(
+      findIndirectComponentMountViolations([
+        fixture("convex/agentHarness/agentRuntime/convexAgentRegistration.ts", 'import agent from "@convex-dev/agent/convex.config";'),
+        fixture("convex/agentHarness/apps.ts", 'import { defineApp } from "convex/server";\nconst app = defineApp();'),
+      ]),
+    ).toHaveLength(2);
   });
 
   it("capability, admission, executor, evidence, completion, and presentation contracts name no runtime-native identifiers", () => {
@@ -398,6 +469,19 @@ describe("agent harness import boundaries", () => {
     ).toEqual([]);
     for (const file of kernelFiles) {
       expect(file.source, file.path).not.toMatch(/profiles\/syntheticSecondSurface|profiles\/dailyOperations/);
+    }
+  });
+
+  it("keeps the build-time composition root out of every kernel module", () => {
+    const roots = collectSources(HARNESS_DIR, isCompositionRoot);
+    expect(roots.map((file) => file.path)).toEqual([...AGENT_COMPOSITION_ROOTS]);
+    // The composition root is exactly where profile imports are allowed ...
+    expect(findProfileImportViolations(roots, { allowProductCapabilityModules: true })).toEqual([]);
+    expect(roots[0].source).toMatch(/profiles\/syntheticSecondSurface/);
+    // ... and no kernel module may reach it, so the runtime keeps reading the
+    // generated artifacts rather than the profiles themselves.
+    for (const file of kernelFiles) {
+      expect(file.source, file.path).not.toMatch(/manifestRegistrations/);
     }
   });
 });

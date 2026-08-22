@@ -18,9 +18,15 @@ This index enumerates the current automated test files and ties them back to the
 
 ## Section `convex`
 
+- [`convex/agentHarness/agentRuntime/convexAgent.contract.test.ts`](../../convex/agentHarness/agentRuntime/convexAgent.contract.test.ts)
+- [`convex/agentHarness/agentRuntime/convexAgentPersistence.test.ts`](../../convex/agentHarness/agentRuntime/convexAgentPersistence.test.ts)
+- [`convex/agentHarness/agentRuntime/convexAgentSmoke.test.ts`](../../convex/agentHarness/agentRuntime/convexAgentSmoke.test.ts)
+- [`convex/agentHarness/conformance.test.ts`](../../convex/agentHarness/conformance.test.ts)
+- [`convex/agentHarness/discovery.test.ts`](../../convex/agentHarness/discovery.test.ts)
 - [`convex/agentHarness/importBoundary.test.ts`](../../convex/agentHarness/importBoundary.test.ts)
 - [`convex/agentHarness/lifecycle.test.ts`](../../convex/agentHarness/lifecycle.test.ts)
 - [`convex/agentHarness/profileConformance.test.ts`](../../convex/agentHarness/profileConformance.test.ts)
+- [`convex/agentHarness/programRuntime/runtimeSpike.test.ts`](../../convex/agentHarness/programRuntime/runtimeSpike.test.ts)
 - [`convex/agentHarness/retention.test.ts`](../../convex/agentHarness/retention.test.ts)
 - [`convex/agentHarness/turnBindings.test.ts`](../../convex/agentHarness/turnBindings.test.ts)
 - [`convex/app.test.ts`](../../convex/app.test.ts)
