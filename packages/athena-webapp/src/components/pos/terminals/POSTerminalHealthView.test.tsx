@@ -778,9 +778,9 @@ describe("POSTerminalHealthViewContent", () => {
             ...baseSummary,
             health: "needs_attention",
             runtimeStatus: {
-              ...baseSummary.runtimeStatus,
+              ...baseSummary.runtimeStatus!,
               sync: {
-                ...baseSummary.runtimeStatus.sync,
+                ...baseSummary.runtimeStatus!.sync,
                 reviewEventCount: 3,
               },
             },
@@ -793,7 +793,7 @@ describe("POSTerminalHealthViewContent", () => {
               primaryOwner: "terminal",
               saleImpact: "can_transact_now",
               severity: "warning",
-              supportAction: "collect_local_review",
+              supportAction: "terminal_command",
             }),
           },
         ]}
