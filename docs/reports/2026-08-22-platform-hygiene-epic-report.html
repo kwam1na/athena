@@ -17,9 +17,9 @@
           <li>Delivery candidate</li>
           <li>Branch codex/v26-1312-platform-hygiene</li>
           <li>Epic V26-1312 — six tickets</li>
-          <li>9,926 webapp tests green</li>
+          <li>9,927 webapp tests green</li>
           <li>204 storefront tests green</li>
-          <li>2 defects found in review and fixed</li>
+          <li>3 defects found in review and fixed</li>
         </ul>
         <dl data-report-meta>
           <dt>Epic</dt><dd>V26-1312 — Platform Hygiene</dd>
@@ -51,12 +51,13 @@
           that had been quietly reporting offline terminals as healthy.
         </p>
         <p>
-          An independent review pass found <strong>two real defects in this
-          branch's own work</strong> — one of them a false "migration
-          complete" signal that gates a money-validator constraint flip. Both
-          are fixed here, each with a regression test that was proven to fail
-          against the unfixed code before being committed. The review is part
-          of the story of this delivery, not a footnote to it.
+          Independent review found <strong>three real defects in this branch's
+          own work</strong> — one of them a false "migration complete" signal
+          that gates a money-validator constraint flip, and one of them a
+          regression introduced by the fix for the first. All three are fixed
+          here, each with a regression test proven to fail against the unfixed
+          code before being committed. The review is part of the story of this
+          delivery, not a footnote to it.
         </p>
       </section>
 
@@ -335,6 +336,27 @@
           the upsert unconditionally, so a sanity dry run before cutover could
           clear an existing <code>complete: true</code>.
         </p>
+        <h3>A fix that broke the field next to it</h3>
+        <p>
+          Re-review of the fix above found that it had gone too far. Only a dry
+          run can measure how much work is left — an applying batch converts
+          what it sees, so its own pending count is structurally zero. By
+          stopping dry runs writing the record at all, the fix removed the only
+          path that ever wrote a truthful <code>remaining</code>, leaving it
+          permanently zero. The gate stayed correct, but the field an operator
+          polls to see outstanding work reported "none left" from the first
+          batch onward.
+        </p>
+        <p>
+          Dry runs now write the record again but never touch the gate:
+          <code>complete</code> and the cumulative <code>migrated</code> carry
+          forward untouched, so a sanity dry run still cannot clear a finished
+          table. Applying batches own the gate and carry the last measurement
+          forward instead of overwriting it. This is the third round of changes
+          on the same handful of lines, which is itself the lesson: a guard, the
+          counter feeding it, and the field reporting it are one mechanism, and
+          changing any of them in isolation moves the bug rather than fixing it.
+        </p>
         <h3>A terminal that appeared in no metric tile</h3>
         <p>
           When badges moved to the server lane, the roster's "Needs review"
@@ -357,7 +379,7 @@
             <tr><th>Check</th><th>Result</th></tr>
           </thead>
           <tbody>
-            <tr><td>Webapp Vitest suite</td><td>826 files, 9,926 tests passed</td></tr>
+            <tr><td>Webapp Vitest suite</td><td>826 files, 9,927 tests passed</td></tr>
             <tr><td>Storefront Vitest suite</td><td>37 files, 204 tests passed</td></tr>
             <tr><td><code>bunx tsc --noEmit</code> (webapp, storefront, contracts)</td><td>clean</td></tr>
             <tr><td><code>bun run architecture:check</code></td><td>passed for both packages</td></tr>
@@ -418,6 +440,13 @@
             <strong>A completion flag must prove coverage, not just
             termination.</strong> "I reached the last page" and "I saw every
             page" are different claims.
+          </li>
+          <li>
+            <strong>A guard, the counter that feeds it, and the field that
+            reports it are one mechanism.</strong> Fixing the guard alone moved
+            the bug into the neighbouring field. Re-review caught it; the first
+            fix would otherwise have shipped a quieter version of the same
+            problem.
           </li>
           <li>
             <strong>A parallel fallback that mirrors a server policy will
