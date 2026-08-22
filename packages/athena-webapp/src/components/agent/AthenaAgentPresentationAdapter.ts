@@ -13,6 +13,7 @@ import {
   type AgentProgressMilestone,
 } from "~/shared/agentHarness/agentRuntime";
 import {
+  AGENT_THREAD_KEY_PATTERN,
   definePresentationAdapter,
   type AgentContextValues,
   type AgentPresentationAdapter,
@@ -32,13 +33,12 @@ export const defineAthenaAgentPresentation = definePresentationAdapter;
 // ---------------------------------------------------------------------------
 
 /**
- * The grammar `startTurn` accepts. The composed key from a presentation adapter
- * is a readable join (`<profileId>|<key>=<value>`) that this grammar rejects,
- * so the host encodes it rather than sending a key the turn contract would
- * deny.
+ * The grammar `startTurn` accepts, shared with the turn contract. The composed
+ * key from a presentation adapter is a readable join (`<profileId>|<key>=<value>`)
+ * that this grammar rejects, so the host encodes it rather than sending a key
+ * the turn contract would deny.
  */
-export const ATHENA_AGENT_THREAD_KEY_PATTERN =
-  /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
+export const ATHENA_AGENT_THREAD_KEY_PATTERN = AGENT_THREAD_KEY_PATTERN;
 
 const THREAD_KEY_MAX_LENGTH = 128;
 const THREAD_KEY_FOLD_PREFIX_LENGTH = 96;

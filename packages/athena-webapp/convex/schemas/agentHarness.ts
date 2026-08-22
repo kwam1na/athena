@@ -16,15 +16,6 @@ import {
   intelligenceSourceRefValidator,
 } from "./intelligence";
 
-export const agentRunStatusValidator = v.union(
-  v.literal("queued"),
-  v.literal("context_captured"),
-  v.literal("running"),
-  v.literal("completed"),
-  v.literal("failed"),
-  v.literal("canceled"),
-);
-
 export const agentProgramAttemptStatusValidator = v.union(
   v.literal("submitted"),
   v.literal("validating"),

@@ -30,6 +30,7 @@ import type { AgentModelSelection, AgentProgressMilestone, AgentProjectedHistory
 import { AGENT_PROGRESS_MILESTONES } from "../../shared/agentHarness/agentRuntime";
 import { sha256Hex } from "../../shared/agentHarness/digest";
 import { isBindingStepAtOrBeyond, isTerminalRunStatus, type AgentTurnBindingStep } from "../../shared/agentHarness/execution";
+import { AGENT_THREAD_KEY_PATTERN } from "../../shared/agentHarness/profile";
 import { egressClassRank, opaqueRef, type AgentEgressClass } from "../../shared/agentHarness/values";
 import {
   acknowledgeTurnAnswerOperationDefinition,
@@ -74,7 +75,6 @@ type ReadCtx = QueryCtx | MutationCtx;
 // Identity helpers
 // ---------------------------------------------------------------------------
 
-export const AGENT_THREAD_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
 export const AGENT_CONTEXT_MAX_KEYS = 8;
 export const AGENT_CONTEXT_VALUE_MAX_BYTES = 256;
 export const AGENT_TURN_PROGRESS_CAP = 24;

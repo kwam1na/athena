@@ -201,6 +201,7 @@ describe("Athena agent operator copy", () => {
       "no_compatible_provider",
       "active_run_limit",
       "thread_busy",
+      "turn_key_conflict",
       "spend_ceiling",
     ];
 

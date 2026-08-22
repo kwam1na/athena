@@ -106235,7 +106235,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_profile_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/profile.ts",
-      "source_location": "L441",
+      "source_location": "L448",
       "target": "profile_assertprofileselection",
       "weight": 1
     },
@@ -106247,7 +106247,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_profile_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/profile.ts",
-      "source_location": "L114",
+      "source_location": "L121",
       "target": "profile_composethreadkey",
       "weight": 1
     },
@@ -106259,7 +106259,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_profile_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/profile.ts",
-      "source_location": "L421",
+      "source_location": "L428",
       "target": "profile_defineagentprofile",
       "weight": 1
     },
@@ -106271,7 +106271,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_profile_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/profile.ts",
-      "source_location": "L125",
+      "source_location": "L132",
       "target": "profile_definepresentationadapter",
       "weight": 1
     },
@@ -106283,7 +106283,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_profile_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/profile.ts",
-      "source_location": "L212",
+      "source_location": "L219",
       "target": "profile_validateprofiledefinition",
       "weight": 1
     },
@@ -163283,7 +163283,7 @@
       "relation": "calls",
       "source": "profile_validateprofiledefinition",
       "source_file": "packages/athena-webapp/shared/agentHarness/profile.ts",
-      "source_location": "L422",
+      "source_location": "L429",
       "target": "profile_defineagentprofile",
       "weight": 1
     },
@@ -304468,7 +304468,7 @@
       "label": "assertProfileSelection()",
       "norm_label": "assertprofileselection()",
       "source_file": "packages/athena-webapp/shared/agentHarness/profile.ts",
-      "source_location": "L441"
+      "source_location": "L448"
     },
     {
       "community": 570,
@@ -304477,7 +304477,7 @@
       "label": "composeThreadKey()",
       "norm_label": "composethreadkey()",
       "source_file": "packages/athena-webapp/shared/agentHarness/profile.ts",
-      "source_location": "L114"
+      "source_location": "L121"
     },
     {
       "community": 570,
@@ -304486,7 +304486,7 @@
       "label": "defineAgentProfile()",
       "norm_label": "defineagentprofile()",
       "source_file": "packages/athena-webapp/shared/agentHarness/profile.ts",
-      "source_location": "L421"
+      "source_location": "L428"
     },
     {
       "community": 570,
@@ -304495,7 +304495,7 @@
       "label": "definePresentationAdapter()",
       "norm_label": "definepresentationadapter()",
       "source_file": "packages/athena-webapp/shared/agentHarness/profile.ts",
-      "source_location": "L125"
+      "source_location": "L132"
     },
     {
       "community": 570,
@@ -304504,7 +304504,7 @@
       "label": "validateProfileDefinition()",
       "norm_label": "validateprofiledefinition()",
       "source_file": "packages/athena-webapp/shared/agentHarness/profile.ts",
-      "source_location": "L212"
+      "source_location": "L219"
     },
     {
       "community": 571,

@@ -13,7 +13,7 @@ applies_when:
   - "A caller can retry, so a denial has to be machine-actionable"
   - "A deletion cascade has to be audited against what rows actually carry"
 tags: [athena, convex, agent-harness, delegated-authority, field-omission, denials, retention, rendering]
-delivery_diff_fingerprint: d7c60d140353d7b1948399bc63ee433f08d2c44c2883084d225e012be64f229f
+delivery_diff_fingerprint: 32f5f6d5b067c46d2a4766cf5f892bae7ac7e7b231df75a433f1d40c788fc71c
 ---
 
 # Answering A Caller That Is Not A Person
@@ -243,11 +243,23 @@ carry store-authored text and a destination must not be steerable by it.
 - Render untrusted model text through a closed vocabulary that cannot emit a
   network-fetching node. Verify it in a real engine with request interception —
   jsdom cannot see it.
+- A thread key names the store context; the run names the operator. Admission
+  and history filter on `run.actorRef`, and the busy check walks the operator's
+  own active runs — never the shared key — so colleagues share a context
+  without sharing a history or blocking each other.
+- Any bounded read over a `createdAt` index walks newest-first and applies the
+  bound after any per-viewer filter; an ascending `.take` freezes on the oldest
+  rows the moment the bound is exceeded (the convention the aggregate read
+  model and the verifier lane already record).
+- When a shared kind validator gains a member that only a reauthorizing surface
+  may serve, grep every legacy reader of that validator and exclude the new
+  kind in its handler; keep the validator, which the schema shares.
 
 ## Related
 
 - [Publishing a capability into a kernel that may not import you](./athena-generated-capability-registry-and-composition-root-2026-08-22.md)
 - [The sensor ladder: what a green suite cannot see](../harness/the-sensor-ladder-what-a-green-suite-cannot-see-2026-08-22.md)
 - [Completing an admission rail](./athena-complete-operation-admission-migration-2026-08-16.md)
+- [Daily Operations aggregate read model](../logic-errors/athena-daily-operations-aggregate-read-model-2026-05-08.md) — newest-first, then bound
 - [Athena manager approval authority is decision evidence](../architecture/athena-manager-approval-authority-standard-2026-07-01.md)
 - Authoring guide: `packages/athena-webapp/docs/agent/capability-authoring.md`

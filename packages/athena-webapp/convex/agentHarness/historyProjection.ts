@@ -227,8 +227,8 @@ export async function projectThreadHistoryWithCtx(
   for (const { binding, run } of own) {
     const grant = run.runGrantId ? await ctx.db.get("agentRunGrant", run.runGrantId) : null;
     if (!grant || grant.profileKey !== input.profileId) continue;
-    // Threads belong to the operator who opened them; a thread key is never
-    // shared across operators. A grant with no delegation names no owner, so it
+    // Ownership was established by the actorRef pre-filter above; this is the
+    // ownerless-grant guard. A grant with no delegation names no owner, so it
     // matches no viewer and is omitted rather than shown to everyone.
     if (!grant.delegation || grant.delegation.athenaUserId !== input.viewer.athenaUserId) continue;
 

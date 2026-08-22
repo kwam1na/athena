@@ -450,7 +450,7 @@ The contract itself is `AgentPresentationAdapterInput` in
 | `mountMode` | `docked_panel` or full screen. |
 | `starterIntents` | Each with `id`, `label`, `prompt`, and `requiresPackages`; every one must be answerable entirely through published resources. |
 | `resolveSourceDestination` | Citation reference **kind** → an in-app destination, or `null`. Total over every kind the selected packages can mint. |
-| `threadKeyPolicy` | The context parts that compose the thread key; `composeThreadKey` derives the key so a context change detaches the thread rather than silently reusing it. |
+| `threadKeyPolicy` | The context parts that compose the thread key; `composeThreadKey` derives the key so a context change detaches the thread rather than silently reusing it. A thread key names the store context, not the person: every operator in the store shares it, but `getThreadHistory` returns only the viewer's own turns (the newest `AGENT_HISTORY_TURN_LIMIT` within a bounded scan) and `thread_busy` is raised only for the operator's own active turn on that key. |
 
 The type lives in `shared/`, but the **value is deliberately declared twice** —
 once on the server profile and once in the browser module — because

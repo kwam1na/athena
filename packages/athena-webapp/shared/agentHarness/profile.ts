@@ -76,6 +76,13 @@ export type AgentActiveTurnPolicy = (typeof AGENT_ACTIVE_TURN_POLICIES)[number];
 
 export const AGENT_THREAD_KEY_PROFILE_PART = "profileId";
 
+/**
+ * The grammar `startTurn` accepts for thread and turn keys. Shared so the
+ * presentation adapter encodes its composed key to exactly what the turn
+ * contract validates, and neither side can drift alone.
+ */
+export const AGENT_THREAD_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
+
 export type AgentThreadKeyPolicyInput = {
   /** `profileId` plus context-binding keys that identify one thread. */
   readonly parts: readonly string[];

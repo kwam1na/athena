@@ -20,7 +20,7 @@ tags:
   - convex-test
   - playwright
   - agent-harness
-delivery_diff_fingerprint: d7c60d140353d7b1948399bc63ee433f08d2c44c2883084d225e012be64f229f
+delivery_diff_fingerprint: 32f5f6d5b067c46d2a4766cf5f892bae7ac7e7b231df75a433f1d40c788fc71c
 ---
 
 # The Sensor Ladder — What A Green Vitest Suite Cannot See
@@ -95,6 +95,11 @@ a cast `{}` throws at runtime:
 ```
 TypeError: Cannot read properties of undefined (reading 'storeDay')
 ```
+
+**Seam-ref typing.** Convex types a mutation whose handler returns `void` as
+`FunctionReference<"mutation", "internal", Args, null>`; a hand-declared seam
+reference type must say `null`, not `void`, or the production binding fails to
+assign under `tsc` while every Vitest suite stays green.
 
 **Ordering note.** `bunx convex dev --once` must run *before* `tsc` whenever new
 Convex modules are referenced through `internal.*`; Vitest passes regardless
