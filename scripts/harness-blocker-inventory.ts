@@ -62,6 +62,18 @@ export const HARNESS_BLOCKER_CLI_INVENTORY = [
   { file: "scripts/harness-test.ts", commands: ["harness:test"] },
   { file: "scripts/pre-push-review.ts", commands: ["pre-push:review"] },
   {
+    file: "scripts/delivery-documentation-check.ts",
+    commands: ["delivery:documentation-check"],
+  },
+  {
+    file: "scripts/delivery-run-telemetry.ts",
+    commands: ["delivery:telemetry-check", "delivery:telemetry-record"],
+  },
+  {
+    file: "scripts/pre-push-validation-proof.ts",
+    commands: ["pr:athena:record-proof"],
+  },
+  {
     file: "scripts/pr-athena-delivery-run.ts",
     // `pr:athena:validate` also targets this file directly, for the
     // write-provider-evidence subcommand.
@@ -201,14 +213,6 @@ export async function discoverHarnessBlockerInventory(
   // Reachability is deliberately *not* used to widen this set: composite
   // aliases such as `pr:athena:validate` chain out to `graphify:rebuild` and
   // other tools that are not harness blocker boundaries.
-  //
-  // Three reachable CLIs are knowingly still outside the contract:
-  // `delivery-documentation-check.ts` and `delivery-run-telemetry.ts` (the CLI
-  // form of the two live gate providers) and `pre-push-validation-proof.ts` (a
-  // `pr:athena` step). They still print prose and call process.exit, and
-  // migrating them is tracked separately rather than claimed here - the
-  // honest statement is that the contract does not yet cover them, not that
-  // they are mere remediation targets.
   //
   // The residual limit, stated rather than papered over: a new CLI that is
   // neither `harness-`-prefixed nor registered here is invisible to this

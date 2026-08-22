@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -39,17 +39,56 @@ afterEach(async () => {
 
 describe("HARNESS_BLOCKER_CLI_INVENTORY", () => {
   it("keeps every direct harness boundary in the explicit inventory", () => {
-    expect(HARNESS_BLOCKER_CLI_INVENTORY).toHaveLength(19);
+    expect(HARNESS_BLOCKER_CLI_INVENTORY).toHaveLength(22);
     expect(
       HARNESS_BLOCKER_CLI_INVENTORY.flatMap((entry) => entry.commands),
-    ).toHaveLength(22);
+    ).toHaveLength(26);
     expect(
       new Set(HARNESS_BLOCKER_CLI_INVENTORY.map((entry) => entry.file)).size,
-    ).toBe(19);
+    ).toBe(22);
     expect(
       new Set(HARNESS_BLOCKER_CLI_INVENTORY.flatMap((entry) => entry.commands))
         .size,
-    ).toBe(22);
+    ).toBe(26);
+  });
+});
+
+// The two live-gate provider CLIs and the pr:athena record-proof step were the
+// last three package-reachable CLIs outside the blocker contract; these checks
+// keep any of them from regressing to free-form prose and process.exit.
+const MIGRATED_CONTRACT_FILES = [
+  "scripts/delivery-documentation-check.ts",
+  "scripts/delivery-run-telemetry.ts",
+  "scripts/pre-push-validation-proof.ts",
+] as const;
+
+describe("formerly excluded harness CLIs", () => {
+  it("registers each migrated CLI in the explicit inventory", () => {
+    const registeredFiles = HARNESS_BLOCKER_CLI_INVENTORY.map(
+      (entry) => entry.file,
+    );
+    for (const file of MIGRATED_CONTRACT_FILES) {
+      expect(registeredFiles).toContain(file);
+    }
+  });
+
+  it("holds each migrated boundary to the shared blocker contract", async () => {
+    for (const file of MIGRATED_CONTRACT_FILES) {
+      const source = await readFile(
+        path.resolve(import.meta.dirname, "..", file),
+        "utf8",
+      );
+      const boundaryFindings = inspectHarnessCliBoundary(file, source);
+      expect(
+        boundaryFindings,
+        boundaryFindings.map((finding) => finding.message).join("\n"),
+      ).toEqual([]);
+      const shapeFindings = inspectHarnessBlockerShapes(file, source);
+      expect(
+        shapeFindings,
+        shapeFindings.map((finding) => finding.message).join("\n"),
+      ).toEqual([]);
+    }
   });
 });
 

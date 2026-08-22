@@ -5,6 +5,7 @@ import {
   assertLandedChangeReportCheck,
 } from "./landed-change-report-check";
 import { collectDeliverableDiffFingerprint } from "./delivery-diff-fingerprint";
+import { runHarnessCliBoundary } from "./harness-blockers";
 
 export type DocumentationPolicyCheckOptions = {
   assertCompoundSolutionCheck?: (
@@ -137,9 +138,20 @@ function changedFiles(rootDir: string, baseRef: string) {
 }
 
 if (import.meta.main) {
-  try {
-    const options = parseArgs(process.argv.slice(2));
-    if (options.printFingerprint) {
+  process.exitCode = await runHarnessCliBoundary({
+    source: { kind: "command", id: "delivery:documentation-check" },
+    reproduce: [
+      "bun",
+      "run",
+      "delivery:documentation-check",
+      ...process.argv.slice(2),
+    ],
+    run: async () => {
+      const options = parseArgs(process.argv.slice(2));
+      if (!options.printFingerprint) {
+        assertDeliveryDocumentationCheck(process.cwd(), options);
+        return;
+      }
       console.log(
         collectDeliverableDiffFingerprint(
           process.cwd(),
@@ -147,11 +159,6 @@ if (import.meta.main) {
           changedFiles(process.cwd(), options.baseRef),
         ),
       );
-    } else {
-      assertDeliveryDocumentationCheck(process.cwd(), options);
-    }
-  } catch (error: unknown) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  }
+    },
+  });
 }

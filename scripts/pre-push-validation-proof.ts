@@ -6,6 +6,7 @@ import { captureStableHarnessCandidate } from "./harness-candidate";
 import { assertDeliveryRunTelemetryCheck } from "./delivery-run-telemetry";
 import type { DeliveryRunTelemetryCheckOptions } from "./delivery-run-telemetry";
 import { isPostGateValidationNeutralPath } from "./harness-review-identity";
+import { runHarnessCliBoundary } from "./harness-blockers";
 
 export const PRE_PUSH_VALIDATION_PROOF_SCHEMA_VERSION = 2;
 export const PR_ATHENA_PROOF_BASE_REF = "origin/main";
@@ -636,21 +637,35 @@ export async function recordPrePushValidationProof(
   }
 }
 
-if (import.meta.main) {
-  const [command] = Bun.argv.slice(2);
-
+/**
+ * Both subcommands are phases of the `pr:athena` ladder, so a failure here
+ * blocks that command; the boundary names it as the typed source. A refusal to
+ * record is an expected outcome, not an internal error, but it still leaves the
+ * boundary through the shared runner so the operator gets the contract's
+ * remediation guidance instead of a bare exit code.
+ */
+async function runPrePushValidationProofCli(command: string | undefined) {
   if (command === "prepare-pr-athena") {
     await assertPrAthenaProofReady(process.cwd());
-    process.exit(0);
+    return;
   }
 
   if (command !== "record-pr-athena") {
-    console.error(
+    throw new Error(
       "Usage: bun scripts/pre-push-validation-proof.ts <prepare-pr-athena|record-pr-athena>",
     );
-    process.exit(1);
   }
 
   const result = await recordPrePushValidationProof(process.cwd());
-  process.exit(result.recorded ? 0 : 1);
+  if (!result.recorded) {
+    throw new Error(result.reason);
+  }
+}
+
+if (import.meta.main) {
+  process.exitCode = await runHarnessCliBoundary({
+    source: { kind: "command", id: "pr:athena" },
+    reproduce: ["bun", "run", "pr:athena:record-proof"],
+    run: async () => runPrePushValidationProofCli(Bun.argv[2]),
+  });
 }
