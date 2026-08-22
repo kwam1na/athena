@@ -258,6 +258,20 @@ export const agentPromptPayloadSchema = v.object({
   createdAt: v.number(),
 });
 
+/**
+ * Provider-egress boundary (V26-1264, plan decision 12): recorded once on the
+ * attempt immediately before its `programResult` is attached to a
+ * provider-visible tool response, after the authorization epoch was
+ * revalidated. `committed` is irreversible — a later revocation cancels and
+ * suppresses, but the prior exposure stays recorded truthfully.
+ */
+export const agentProviderEgressValidator = v.object({
+  state: v.union(v.literal("committed"), v.literal("withheld")),
+  at: v.number(),
+  authorizationEpoch: v.number(),
+  reason: v.optional(v.string()),
+});
+
 export const agentProgramAttemptSchema = v.object({
   runId: v.id("intelligenceRun"),
   storeId: v.id("store"),
@@ -279,6 +293,14 @@ export const agentProgramAttemptSchema = v.object({
   terminalAt: v.optional(v.number()),
   createdAt: v.number(),
   updatedAt: v.number(),
+  // Executor additions (V26-1264); all optional so U1 rows stay valid.
+  /** Hash of the exact validated/stripped source the sandbox executed. */
+  validatedSourceHash: v.optional(v.string()),
+  /** Maximum egress class of every capability input the attempt read. */
+  egressClass: v.optional(v.string()),
+  /** Aggregate completeness derived from every released input envelope. */
+  completeness: v.optional(v.union(v.literal("complete"), v.literal("partial"))),
+  providerEgress: v.optional(agentProviderEgressValidator),
 });
 
 export const agentCapabilityCallSchema = v.object({
@@ -364,6 +386,11 @@ export const agentCitationBindingSchema = v.object({
   sourceRef: intelligenceSourceRefValidator,
   replayPayloadId: v.optional(v.id("agentReplayPayload")),
   claimSupportId: v.optional(v.id("agentClaimSupport")),
+  /**
+   * Immutable authoritative revision the cited source carried (V26-1264);
+   * keeps the citation reconstructible after the copied output expires.
+   */
+  immutableRevisionRef: v.optional(v.string()),
   evidenceLifecycle: agentEvidenceLifecycleValidator,
   retentionClass: v.literal("standard"),
   expiresAt: v.number(),

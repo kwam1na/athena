@@ -286,6 +286,7 @@ export type CitationEvidenceView = {
     completeness?: string;
     sourceRefCount?: number;
     claimSupport?: { extractorKey: string; extractorVersion: string; slice: Record<string, unknown> };
+    immutableRevisionRef?: string;
   };
 };
 
@@ -312,6 +313,7 @@ export async function readCitationEvidenceWithCtx(
     lifecycle: binding.evidenceLifecycle,
     claimSupportAvailable: claimSupport !== null && claimSupport.expiresAt > input.now,
     replayPayloadAvailable: replay !== null && replay.expiresAt > input.now,
+    immutableRevisionAvailable: binding.immutableRevisionRef !== undefined,
   });
   const call = await ctx.db.get("agentCapabilityCall", binding.callId);
   const auditId = await ctx.db.insert("agentEvidenceAccessAudit", {
@@ -346,6 +348,7 @@ export async function readCitationEvidenceWithCtx(
       freshness: call?.freshness,
       completeness: call?.completeness,
       sourceRefCount: call?.sourceRefCount,
+      immutableRevisionRef: binding.immutableRevisionRef,
       ...(state === "reconstructible" && claimSupport
         ? { claimSupport: { extractorKey: claimSupport.extractorKey, extractorVersion: claimSupport.extractorVersion, slice: claimSupport.slice } }
         : {}),

@@ -26,6 +26,7 @@ import { defineAgentReadPort, type AgentReadPortIndex } from "../../shared/agent
 import { opaqueRef } from "../../shared/agentHarness/values";
 import { createNormalUserDelegatedAuthorityPort } from "../operationAdmission/delegatedAuthority";
 import { createSharedDemoDelegatedAuthorityPort } from "../sharedDemo/delegatedAuthority";
+import type { AgentEvidenceExtractor } from "./conformance";
 import { createDelegatedAdmission } from "./delegatedAdmission";
 import type { DelegatedGrantConfig } from "./grants";
 import {
@@ -78,7 +79,8 @@ export const SHIFTS_MANIFEST = defineCapabilityManifest({
     financials: { requires: { tier: "full_admin" }, egressClass: "sensitive", meaning: "Revenue figures, full admins only." },
     managerNotes: { requires: { tier: "manager" }, egressClass: "sensitive", meaning: "Manager notes, managers and up." },
   },
-  freshness: { classes: ["live"], authority: "live_read", rule: "Live shift roster." },
+  // `stale` is declared so the executor tests (V26-1264) can observe a mixed-freshness read.
+  freshness: { classes: ["live", "stale"], authority: "live_read", rule: "Live shift roster." },
   completeness: { rule: "Complete once every page is consumed.", sourceKeys: ["shifts"] },
   citation: { rule: "Cite shift refs.", sourceRefKinds: ["shift"] },
   evidence: { mode: "provenance_only", reason: "Shift rows are references." },
@@ -118,7 +120,8 @@ export const STORE_DAY_MANIFEST = defineCapabilityManifest({
   freshness: { classes: ["live"], authority: "live_read", rule: "Live day state." },
   completeness: { rule: "Complete when the day row is present.", sourceKeys: ["day"] },
   citation: { rule: "Cite the day.", sourceRefKinds: ["store_day"] },
-  evidence: { mode: "provenance_only", reason: "Day rows are references." },
+  // Extractor-mode evidence so the executor tests (V26-1264) can prove claim-slice promotion.
+  evidence: { mode: "extractor", extractorKey: "ops.storeDay", extractorVersion: "1", claimShapes: ["day_status"] },
   cost: { worstCasePerCall: SNAPSHOT_COST },
   egressClass: "operational",
   examples: [{ title: "Today", verb: "get", args: { operatingDate: "2026-08-21" }, description: "Today's day." }],
@@ -299,8 +302,32 @@ export const TEST_DEMO_ENVIRONMENT = { ATHENA_SHARED_DEMO_ENABLED: "true", STAGE
  * prove the kernel fails closed at release.
  */
 export const TEST_PORT_BEHAVIOR: {
-  shifts: "normal" | "leak_unknown_field" | "leak_raw_id" | "unavailable" | "exceed_bounds" | "throw";
+  shifts: "normal" | "leak_unknown_field" | "leak_raw_id" | "unavailable" | "exceed_bounds" | "throw" | "oversized" | "stale" | "partial";
 } = { shifts: "normal" };
+
+/** Manager notes large enough (multibyte) that a full page of ten crosses the 240 KiB evidence ceiling. */
+export const TEST_OVERSIZED_NOTE = "é".repeat(30_000);
+
+/**
+ * Deterministic, field-minimizing extractor for the store-day snapshot: it
+ * copies two already-authorized scalars and nothing else (V26-1264).
+ */
+export const TEST_STORE_DAY_EXTRACTOR: AgentEvidenceExtractor = {
+  extractorKey: "ops.storeDay",
+  extractorVersion: "1",
+  claimShapes: ["day_status"],
+  extract: (input) => {
+    const data = input.data as { readonly operatingDate?: unknown; readonly status?: unknown } | null;
+    if (!data || typeof data.operatingDate !== "string" || typeof data.status !== "string") {
+      return { unsupported: "day_status_not_present_in_result" };
+    }
+    return { claim: { operatingDate: data.operatingDate, status: data.status } };
+  },
+};
+
+export const TEST_EVIDENCE_EXTRACTORS: { readonly [capabilityId: string]: AgentEvidenceExtractor } = {
+  [STORE_DAY_MANIFEST.capabilityId]: TEST_STORE_DAY_EXTRACTOR,
+};
 
 type TestQueryRef = FunctionReference<"query", "internal">;
 const testPortRef = (exportName: string) =>
@@ -404,12 +431,25 @@ export const listShifts = TEST_ADMISSION.defineAgentReadPortQuery({
     if (TEST_PORT_BEHAVIOR.shifts === "exceed_bounds") {
       rows = Array.from({ length: 11 }, (_, index) => ({ ...baseRows[0], shiftRef: opaqueRef("resource", `shift-${index}`) }));
     }
+    if (TEST_PORT_BEHAVIOR.shifts === "oversized") {
+      rows = Array.from({ length: 10 }, (_, index) => ({
+        ...baseRows[index % 2],
+        shiftRef: opaqueRef("resource", `shift-${store.slug}-big-${index}`),
+        label: `${store.name} shift ${index}`,
+        managerNotes: TEST_OVERSIZED_NOTE,
+      }));
+    }
+    const stale = TEST_PORT_BEHAVIOR.shifts === "stale";
     return {
       kind: "data",
       data: rows,
-      observedAt: input.now,
-      freshness: { class: "live", authority: "live_read" },
-      sources: [{ sourceKey: "shifts", status: "complete" }],
+      observedAt: stale ? input.now - 3_600_000 : input.now,
+      freshness: stale ? { class: "stale", authority: "live_read", staleAfter: input.now - 60_000 } : { class: "live", authority: "live_read" },
+      sources: [
+        TEST_PORT_BEHAVIOR.shifts === "partial"
+          ? { sourceKey: "shifts", status: "partial", reason: "register_offline", missing: ["register-2"] }
+          : { sourceKey: "shifts", status: "complete" },
+      ],
       sourceRefs: rows.map((row) => ({
         ref: opaqueRef("source", `shift-${store.slug}-${page}`),
         kind: "shift",
@@ -449,9 +489,10 @@ export const listAuditTrail = TEST_ADMISSION.defineAgentReadPortQuery({
       kind: "data",
       data: [{ entryRef: opaqueRef("source", `audit-${store.slug}-1`), summary: `${store.name} closed the day` }],
       observedAt: input.now,
-      freshness: { class: "accepted", authority: "authoritative_record" },
+      freshness: { class: "accepted", authority: "authoritative_record", sourceVersion: "rev-7" },
       sources: [{ sourceKey: "entries", status: "complete" }],
-      sourceRefs: [{ ref: opaqueRef("source", `audit-${store.slug}-1`), kind: "audit_entry", capturedAt: input.now }],
+      // Accepted records carry an immutable revision (V26-1264: reconstructible after replay expiry).
+      sourceRefs: [{ ref: opaqueRef("source", `audit-${store.slug}-1`), kind: "audit_entry", version: "rev-7", capturedAt: input.now }],
       page: { hasMore: false, rawCursor: null },
     };
   },

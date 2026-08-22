@@ -104,6 +104,13 @@ export const STANDARD_RETENTION_MS = 365 * DAY_MS;
 /** Per-call evidence ceiling that keeps every child row far below 1 MiB. */
 export const AGENT_CALL_EVIDENCE_BYTE_CEILING = 240 * 1024;
 
+/**
+ * Run-wide bridge/evidence ceiling (plan U6): the ledger's `bytes` limit is
+ * clamped to this at run creation so the reservation counter enforces it for
+ * every profile, whatever its budget policy says.
+ */
+export const AGENT_RUN_EVIDENCE_BYTE_CEILING = 2 * 1024 * 1024;
+
 /** Embedded source-ref arrays on a call row are capped; the rest is counted. */
 export const AGENT_CALL_SOURCE_REF_CAP = 64;
 
@@ -431,19 +438,24 @@ export function exceedsBudget(limits: BudgetVector, used: BudgetVector): AgentBu
 // ---------------------------------------------------------------------------
 
 /**
- * `reconstructible` needs either the promoted claim-support slice or the
- * short-lived replay payload; with neither, only provenance remains. Lifecycle
- * markers win over availability so an expired or lifecycle-deleted citation is
- * reported as such even if a stray payload row still exists.
+ * `reconstructible` needs the promoted claim-support slice, the short-lived
+ * replay payload, or an immutable authoritative revision reference (plan U6:
+ * "an immutable authoritative revision reference may replace a copied call
+ * output"); with none of them, only provenance remains. Lifecycle markers win
+ * over availability so an expired or lifecycle-deleted citation is reported
+ * as such even if a stray payload row still exists.
  */
 export function resolveEvidenceState(input: {
   lifecycle: AgentEvidenceLifecycle;
   claimSupportAvailable: boolean;
   replayPayloadAvailable: boolean;
+  immutableRevisionAvailable?: boolean;
 }): AgentEvidenceState {
   if (input.lifecycle === "deleted_by_lifecycle") return "evidence_deleted_by_lifecycle";
   if (input.lifecycle === "expired") return "evidence_expired";
-  if (input.claimSupportAvailable || input.replayPayloadAvailable) return "reconstructible";
+  if (input.claimSupportAvailable || input.replayPayloadAvailable || input.immutableRevisionAvailable === true) {
+    return "reconstructible";
+  }
   return "provenance_only";
 }
 

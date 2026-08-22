@@ -22,6 +22,7 @@ import {
 } from "../_generated/server";
 import {
   AGENT_CALL_SOURCE_REF_CAP,
+  AGENT_RUN_EVIDENCE_BYTE_CEILING,
   AGENT_CAPABILITY_CALL_STATUSES,
   AGENT_CAPABILITY_CALL_TRANSITIONS,
   AGENT_PROGRAM_ATTEMPT_STATUSES,
@@ -327,11 +328,14 @@ export async function createAgentRunWithCtx(
     createdAt: input.now,
     delegation: input.delegation,
   });
+  const runLimits = budgetVector(input.budgetPolicy.runLimits);
   const ledgerId = await ctx.db.insert("agentBudgetLedger", {
     runId,
     storeId: input.storeId,
     organizationId: input.organizationId,
-    limits: budgetVector(input.budgetPolicy.runLimits),
+    // The run-wide evidence ceiling (V26-1264) is enforced by this counter,
+    // whatever the profile policy declares.
+    limits: { ...runLimits, bytes: Math.min(runLimits.bytes, AGENT_RUN_EVIDENCE_BYTE_CEILING) },
     attemptLimits: input.budgetPolicy.attemptLimits
       ? budgetVector(input.budgetPolicy.attemptLimits)
       : undefined,
@@ -667,6 +671,16 @@ export async function beginProgramAttemptWithCtx(
     attemptIdempotencyKey: string;
     programSource: string;
     programSourceHash?: string;
+    /**
+     * Executor additions (V26-1264): the exact validated/stripped source the
+     * sandbox will execute and the facade it was validated against. Stored in
+     * the same short-lived `program_source` payload as the authored text so a
+     * cited attempt promotes both; the hash of the validated text is pinned on
+     * the attempt row.
+     */
+    validatedSource?: string;
+    validatedSourceHash?: string;
+    facade?: unknown;
     now: number;
   },
 ): Promise<BeginAttemptResult> {
@@ -710,12 +724,16 @@ export async function beginProgramAttemptWithCtx(
     cited: false,
     createdAt: input.now,
     updatedAt: input.now,
+    ...(input.validatedSourceHash ? { validatedSourceHash: input.validatedSourceHash } : {}),
   });
   const stored = await storeReplayPayloadWithCtx(ctx, {
     run,
     attemptId,
     subjectKind: "program_source",
-    content: input.programSource,
+    content:
+      input.validatedSource === undefined
+        ? input.programSource
+        : { authored: input.programSource, validated: input.validatedSource, facade: input.facade ?? null },
     contentHash: sourceHash,
     now: input.now,
   });
@@ -1046,8 +1064,18 @@ export async function admitCapabilityCallWithCtx(
     outstanding: ledger.outstanding,
     requested,
   });
+  // Per-attempt caps count outstanding reservations too (V26-1264), so two
+  // concurrent calls of one attempt cannot overshoot the cap by a reservation.
+  let attemptOutstanding = budgetVector({});
+  if (ledger.attemptLimits) {
+    const open = await ctx.db
+      .query("agentBudgetReservation")
+      .withIndex("by_attemptId_status", (q) => q.eq("attemptId", attempt._id).eq("status", "reserved"))
+      .take(AGENT_RUN_CHILD_CLAMP_BATCH);
+    for (const reservation of open) attemptOutstanding = addBudget(attemptOutstanding, reservation.reserved);
+  }
   const attemptExceeded = ledger.attemptLimits
-    ? exceedsBudget(ledger.attemptLimits, addBudget(attempt.charged, requested))
+    ? exceedsBudget(ledger.attemptLimits, addBudget(addBudget(attempt.charged, attemptOutstanding), requested))
     : [];
 
   if (!admission.admitted || attemptExceeded.length > 0) {
@@ -1311,6 +1339,8 @@ export type CompletionCitationInput = {
   sourceRef: SourceRef;
   claimDigest?: string;
   claimSupport?: { extractorKey: string; extractorVersion: string; slice: Record<string, unknown> };
+  /** Immutable authoritative revision of the cited source (V26-1264). */
+  immutableRevisionRef?: string;
 };
 
 export type CompleteAgentRunInput = {
@@ -1458,6 +1488,7 @@ export async function completeAgentRunWithCtx(
       claimDigest: citation.claimDigest,
       sourceRef: citation.sourceRef,
       replayPayloadId: call.replayPayloadId,
+      ...(citation.immutableRevisionRef ? { immutableRevisionRef: citation.immutableRevisionRef } : {}),
       evidenceLifecycle: "retained",
       retentionClass: "standard",
       expiresAt: standardExpiresAt,
