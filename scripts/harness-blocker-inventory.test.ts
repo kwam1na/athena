@@ -8,6 +8,7 @@ import {
   discoverHarnessBlockerInventory,
   HARNESS_BLOCKER_CLI_INVENTORY,
   inspectHarnessCliBoundary,
+  inspectRenderNonZeroSuppression,
   collectRemediationLiterals,
   inspectHarnessBlockerShapes,
 } from "./harness-blocker-inventory";
@@ -215,6 +216,103 @@ describe("inspectHarnessBlockerShapes", () => {
           "});",
         ].join("\n"),
       ),
+    ).toEqual([]);
+  });
+});
+
+describe("inspectRenderNonZeroSuppression", () => {
+  const suppressFallback = [
+    "if (import.meta.main) {",
+    '  await runHarnessCliBoundary({',
+    '    source: { kind: "command", id: "harness:fixture" },',
+    '    reproduce: ["bun", "scripts/harness-fixture.ts"],',
+    "    run: runFixtureCli,",
+    "    renderNonZero: false,",
+    "  });",
+    "}",
+  ].join("\n");
+
+  it("rejects a bare suppression that prints prose instead of a typed blocker", () => {
+    const source = [
+      suppressFallback,
+      "",
+      "async function runFixtureCli() {",
+      '  console.error("2 findings failed");',
+      "  return 1;",
+      "}",
+    ].join("\n");
+    const findings = inspectRenderNonZeroSuppression(
+      "scripts/harness-fixture.ts",
+      source,
+    );
+
+    expect(findings.map((finding) => finding.code)).toEqual([
+      "blocker-emission-missing",
+    ]);
+    expect(findings[0]?.message).toContain("renderNonZero: false");
+  });
+
+  it("accepts a suppression backed by createHarnessBlocker", () => {
+    expect(
+      inspectRenderNonZeroSuppression(
+        "scripts/harness-fixture.ts",
+        [
+          suppressFallback,
+          'createHarnessBlocker({ code: "fixture_failed", source: { kind: "command", id: "harness:fixture" }, summary: "fixture" });',
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+
+  it("accepts suppressions backed by HarnessBlockedError or formatHarnessBlockers", () => {
+    expect(
+      inspectRenderNonZeroSuppression(
+        "scripts/harness-fixture.ts",
+        [suppressFallback, 'throw new HarnessBlockedError(blockers);'].join("\n"),
+      ),
+    ).toEqual([]);
+    expect(
+      inspectRenderNonZeroSuppression(
+        "scripts/harness-fixture.ts",
+        [
+          suppressFallback,
+          "logger.error(formatHarnessBlockers(decision.blockers));",
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+
+  it("leaves files that keep the shared fallback alone", () => {
+    const source = [
+      "if (import.meta.main) {",
+      '  await runHarnessCliBoundary({',
+      '    source: { kind: "command", id: "harness:fixture" },',
+      '    reproduce: ["bun", "scripts/harness-fixture.ts"],',
+      "    run: runFixtureCli,",
+      "  });",
+      "}",
+    ].join("\n");
+
+    expect(
+      inspectRenderNonZeroSuppression("scripts/harness-fixture.ts", source),
+    ).toEqual([]);
+  });
+});
+
+describe("live renderNonZero suppression sites", () => {
+  it.each([
+    "scripts/harness-gate-admission.ts",
+    "scripts/pr-athena-delivery-run.ts",
+  ])("backs each suppression in %s with a typed blocker", async (file) => {
+    const source = await readFile(
+      path.resolve(import.meta.dirname, "..", file),
+      "utf8",
+    );
+    expect(source).toMatch(/renderNonZero:\s*false/);
+    const findings = inspectRenderNonZeroSuppression(file, source);
+    expect(
+      findings,
+      findings.map((finding) => finding.message).join("\n"),
     ).toEqual([]);
   });
 });
