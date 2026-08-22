@@ -2029,7 +2029,7 @@ describe("DailyCloseViewContent", () => {
       within(logicalWorkCard as HTMLElement).getByText("Work type"),
     ).toBeInTheDocument();
     expect(
-      within(logicalWorkCard as HTMLElement).getByText("Synced sale inventory"),
+      within(logicalWorkCard as HTMLElement).getByText("Synced inventory"),
     ).toBeInTheDocument();
     expect(
       within(logicalWorkCard as HTMLElement).queryByText("Member Count"),
@@ -2301,7 +2301,7 @@ describe("DailyCloseViewContent", () => {
     ).not.toBeInTheDocument();
     expect(within(firstRow as HTMLElement).getByText("High")).toBeInTheDocument();
     expect(
-      within(firstRow as HTMLElement).getByText("Synced sale inventory"),
+      within(firstRow as HTMLElement).getByText("Synced inventory"),
     ).toBeInTheDocument();
     expect(
       within(firstRow as HTMLElement).getByText(/open since/i),

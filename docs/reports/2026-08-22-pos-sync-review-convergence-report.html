@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>POS Sync-Review Convergence</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="320dc92f349b9fdfb147f0dbe3c0304557a3c33c76d8f65a5ed3264dc8f17c53">
+  <header data-report-section="header">
+    <h1>POS Sync-Review Convergence</h1>
+    <p>One close boundary for drawers, one mutation for Open Work and its conflicts, one rail for expense shortfalls</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Integration PR for V26-1247, V26-1248, V26-1249, V26-1250</li>
+      <li>Not merged</li>
+      <li>No production deploy</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Branch</dt><dd>codex/v26-1247-1250-pos-sync-review-convergence</dd>
+      <dt>Candidate head</dt><dd>e7893f89 (source tree; report, solution-note and telemetry commits follow on the same branch)</dd>
+      <dt>PR</dt><dd>Draft PR opens after the full merge gate; number recorded in Linear and the PR body</dd>
+      <dt>Status</dt><dd>Delivery candidate; merge, Linear Done, root alignment and deploy pending</dd>
+      <dt>Deploy</dt><dd>Not performed</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+      <p>Four coordinated tickets close the split-brain the M Supplies audit found between POS terminal sync conflicts, register-session projection, and Operations Open Work. They land through one integration PR because they share Convex generated APIs, Graphify output, projection types, and terminal evidence contracts; Linear scope stays per ticket.</p>
+      <p>V26-1247 makes projection classify every register open as fresh, duplicate, obsolete, or unsafe against the latest authoritative close boundary. V26-1250 lets terminal cloud repair durably resolve obsolete drawer conflicts without replaying the open. V26-1248 settles a synced inventory review&#x27;s source conflicts in the same mutation that makes the work terminal. V26-1249 creates expense stock-shortfall Open Work on the existing synced inventory-review rail. The integration adds one seam: expense members settle their conflicts through the same settlement helper, keyed by their own expense identity.</p>
+      <p>This is a delivery candidate. Nothing here is merged, deployed, or marked Done.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Problem and context</h2>
+      <p>A terminal can replay very old local events. Before this change, a historical register_opened event arriving after its drawer had long since closed could create a brand-new cloud register session, because freshness was only checked when some session was still blocking. One terminal accumulated tens of thousands of stale permission conflicts over a couple of dozen events this way.</p>
+      <p>Separately, an operator could complete a synced sale inventory review in Operations while the posLocalSyncConflict rows that created it stayed needs_review forever, so terminal health and Open Work disagreed about whether anything was still owed.</p>
+      <p>Expenses that consumed stock the cloud did not have were projected with the decrement silently skipped and no Open Work at all, so nobody was asked to correct the count.</p>
+      <p>Finally, terminal cloud repair only considered conflicts whose blocking drawer was still unresolved or current; once the drawer settled, the stale rows had no durable path to resolved short of replaying the obsolete open, which is exactly the projection bug above.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model</h2>
+      <p>Think of each scoped drawer (store plus terminal) as having one authoritative close boundary: the latest close occurrence derived from closeout records, then closeoutOwnedAt, then closedAt, never from document insertion order. Any register open at or before that boundary is history, not a new drawer. Projection and repair both ask the same shared policy the same question, so they can never disagree.</p>
+      <p>Think of a synced inventory review as a work item that owns a durable pointer back to its source: the canonical inventoryReviewWorkItem mapping. That mapping is the only key that may settle conflicts. Sale members prove store, terminal, register session, and local id; expense members prove store, terminal, and their local expense event id. The shared synced_sale_inventory_review discriminator is the rail; sourceKind on the member says which proof applies.</p>
+      <p>Settlement is not a separate action. Whenever the work becomes terminal, by hand, by a qualifying stock adjustment, or by a retry of already-terminal work, the same mutation resolves the mapped conflicts and records how many it touched.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+      <ul>
+        <li>Before: projection checked freshness only while a session was blocking. After: findScopedRegisterSessionLifecycle returns the boundary even with no blocker, and classifyRegisterOpenAgainstLifecycleBoundary decides fresh, duplicate, obsolete, or unsafe on both paths; obsolete and unsafe opens create a permission conflict and no session.</li>
+        <li>Before: repair candidates excluded conflicts whose blocker had settled. After: settled-blocker rows are repair candidates; obsolete or duplicate source events settle every row for that event and mark the event rejected or projected without calling projection. Fresh replacements still take the existing safe projection path.</li>
+        <li>Before: completing inventory review work left its source conflicts open. After: settleInventoryReviewSourceConflictsWithCtx runs inside the resolve, group-resolve, and stock-adjustment auto-resolve mutations; retrying terminal work returns already_terminal and settles only lingering rows.</li>
+        <li>Before: an expense with a stock shortfall produced no Open Work. After: projection creates or reuses one synced inventory review keyed by the local expense event, the retry branch backfills it for already-projected expenses, queue and weekly attention include it, and operator copy says expense rather than sale.</li>
+        <li>Before integration: expense members would have reported an unmapped settlement because their mapping carries no register session. After: the settlement identity is source-kind aware and uses the per-terminal mapping index for expense members.</li>
+      </ul>
+  </section>
+  <section data-report-section="mechanics">
+    <h2>Layer-by-layer mechanics</h2>
+      <p>Register open arrives. localSyncRepository.findScopedRegisterSessionLifecycle reads a bounded terminal window, derives the close boundary with getRegisterSessionAuthoritativeCloseBoundary, and reports any blocking session. projectLocalEvents.projectRegisterOpened reuses a duplicate mapping, supersedes when allowed, then runs the shared classifier. A candidate with no occurredAt or an ambiguous boundary is unsafe; one at or before the boundary is obsolete; both produce a permission conflict with the disposition and reason in details.</p>
+      <p>Terminal repair. terminalRecoveryRepository lists candidates including settled blockers. cloudRepairPolicy.classifyTerminalCloudRepairConflict checks source-event presence, store and terminal scope, active blocker, business facts, and then the same lifecycle classifier. resolveTerminalCloudRepair verifies the preview precondition hash, settles obsolete and duplicate events row by row within the row budget, projects only fresh ones, and reports obsolete_resolved, duplicate_resolved, or fresh_projected.</p>
+      <p>Open Work. openWorkInventoryReviews.resolveSyncedSaleInventoryReviewWithCtx validates the member&#x27;s own source context (sale or expense), then either records already_terminal and settles lingering rows, or transitions the work and settles in the same mutation. The settlement helper resolves the canonical mapping, requires it to point at this exact work item, unions the mapping&#x27;s and the item&#x27;s local event ids, and calls resolveLocalSyncReviewWithCtx, which is idempotent and bounded.</p>
+      <p>Expense shortfalls. projectExpenseRecorded keeps the transaction, skips only the unavailable decrement, and creates a synced inventory review with sourceKind expense and a per-terminal mapping. ingestLocalEvents routes an already-projected expense replay through createMissingExpenseInventoryReviewForProjectedExpense so the work target is rebuilt from the open inventory conflicts without duplicating expense facts.</p>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed and what did not</h2>
+      <p>Changed: the shared register lifecycle policy and its repository read; register-open projection; terminal recovery candidate reads, repair policy, repair command, terminal queries and public DTO; the Operations inventory-review resolver and stock-adjustment auto-resolution; expense projection and ingest retry; operational work item and logical group source validation; weekly inventory attention; and four operator-facing copy sites.</p>
+      <ul>
+        <li>No sale, payment, closeout, variance, or inventory fact is rewritten by classification, settlement, or repair.</li>
+        <li>No new work type, workspace, route, repair endpoint, or remediation framework. synced_sale_inventory_review remains the storage and DTO discriminator.</li>
+        <li>Read caps are unchanged: 100 candidates per conflict type in terminal recovery, 2,000 rows per event and per repair, 100 event ids per settlement request. The per-event read is status-scoped (new <code>by_store_terminal_localEvent_status</code> index) so only open rows count toward the cap and an event&#x27;s settled history never blocks convergence. A regression test keeps 5,010 settled rows reporting an incomplete bounded read until repair.</li>
+        <li>closing register sessions are no longer counted as blocking in cloudRepairPolicy because every path into closing leaves close-occurrence evidence (a submitted closeout stamps closeoutOwnedAt; a reopen after rejection appends a closeout record), so the shared boundary already represents them.</li>
+        <li>Skipped settled-blocker rows are omitted from the terminal recovery preview after the bounded read, so a terminal whose stale rows are converging is not newly pushed to manual review; the incomplete flag is computed before that filter.</li>
+        <li>Generated artifacts were regenerated once on the integration tree by the pre-commit hook; the explicit regeneration afterwards was a no-op.</li>
+      </ul>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+      <ul>
+        <li>Missing occurrence time or ambiguous close evidence: the open is unsafe, no session is created, and the conflict keeps the reason.</li>
+        <li>Repair: missing source event, store or terminal mismatch, active blocker, ambiguous lifecycle evidence, or a business-fact conflict is skipped; a changed preview hash rejects apply with no partial repair; repeating repair converges to a no-op.</li>
+        <li>Settlement: a work item whose canonical mapping is missing or points at another row reports unmapped and touches no conflict; an expense member cannot be settled through a sale-shaped mapping and a sale member never consults the expense index.</li>
+        <li>Forged or cross-store context on a first resolution or an already-terminal retry fails validation before any write; a settlement failure rolls back the work transition because both are in one mutation.</li>
+        <li>Expense replay: an identical replay reuses the transaction, mapping, conflict, and work item; a historical replay with an open conflict and no target gains exactly one target.</li>
+      </ul>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and review</h2>
+      <p>Focused suites for every touched file passed on the merged tree (21 files, 854 tests), then the full webapp suite (769 files, 9,271 tests), typecheck, lint, architecture lint, and git diff --check. Three integration tests were added for the merge seam: an expense member settles its conflict on manual completion, on stock-adjustment auto-resolution, and never through a sale-shaped mapping.</p>
+      <p>Independent review checkpoint (execute section 6): twelve reviewers (correctness, testing, maintainability, project-standards, security, performance, reliability, adversarial, kieran-typescript, api-contract, agent-native, learnings) ran twice against prepared trees. Round 1 raised one in-contract P1 that was fixed (a repair row window truncated by already-resolved rows read as complete and could half-settle an event) and one in-contract P2 test gap that was closed (mutation-level obsolete settle behind a closing drawer). Round 2 validated a follow-on P1 from reliability: because conflict rows are never deleted, judging truncation on the unfiltered window let an event&#x27;s settled history exceed the cap and skip it forever; the fix adds a status-scoped event index so only open rows count, with a convergence regression test (2 resolved plus 2,000 open rows settle whole). Five further P1 claims were each classified by an independent validator as outside the acceptance criteria or pre-existing (preview omission of settled-blocker skipped rows, permanent skip of a single event above the 2,000-row cap, clock-domain mixing, all-type settlement per event, preview/apply hash when a fresh open is not projection-safe); they are recorded as residual risks here and deferred to follow-up issues rather than expanded into this delivery. Round 2 re-reviewed the complete changed tree; rounds 3 and 4 re-reviewed the deltas (reliability and correctness). A round-3 scope check promoted one adversarial finding to an in-contract defect: a row classified skipped per-row could settle with its obsolete event and be reported in both the resolved and skipped lists; the repair result now keeps those lists disjoint, with a regression test. Every reviewer approved with zero blocking findings. Out-of-contract suggestions with a concrete rationale were not dropped: they are deferred to follow-up issues V26-1280 (repair preview and apply evidence parity, including the per-event row cap question), V26-1281 (clock-skew posture for the lifecycle boundary), V26-1282 (settlement scoped by conflict type and public settlement evidence), and V26-1283 (two hygiene cleanups). Review evidence was recorded with bun run harness:review-evidence.</p>
+      <p>Full merge gate: bun run pr:athena had not yet run when this report was first rendered; its verbatim [pr:athena] summary lines are appended to this section after it passes, before the final review-and-merge loop.</p>
+      <p>Deploy consideration: this delivery adds a Convex schema index (<code>posLocalSyncConflict.by_store_terminal_localEvent_status</code>); Convex builds it on push, so the Convex deploy must accompany the code. Status at report time: delivery candidate. Merge, Linear Done, local root alignment, and production deploy have not happened and are not claimed here.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Next-time guidance</h2>
+      <ul>
+        <li>When a register lifecycle question appears anywhere new, call classifyRegisterOpenAgainstLifecycleBoundary with a scoped boundary from findScopedRegisterSessionLifecycle; do not add a second freshness rule.</li>
+        <li>When adding a member kind to the synced inventory-review rail, give it its own mapping identity and validation branch, and extend inventoryReviewSourceMappingIdentity rather than special-casing the settlement helper.</li>
+        <li>Treat settledConflictCount and sourceSettlement.disposition in the resolution metadata and operational event as the audit of convergence; unmapped means investigate the mapping, not the conflict.</li>
+        <li>Keep repair previews and applies bound by the precondition hash, and keep caps; make a capped read say incomplete rather than clean.</li>
+        <li>For coordinated batches, merge the branch that carries a dependency first, resolve the shared file semantically, and regenerate generated artifacts once on the integration tree.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>packages/athena-webapp/shared/registerSessionLifecyclePolicy.ts</code></td><td>Single lifecycle decision: authoritative close boundary and fresh, duplicate, obsolete, unsafe classification.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/pos/infrastructure/repositories/localSyncRepository.ts</code></td><td>findScopedRegisterSessionLifecycle exposes the boundary even when nothing is blocking.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts</code></td><td>Register-open projection uses the shared classifier; expense projection creates Open Work on a skipped decrement.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts</code></td><td>Retry branch lets an already-projected expense gain its missing Open Work target.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/pos/application/terminalRecovery/cloudRepairPolicy.ts</code></td><td>Classifies repair candidates, reusing the lifecycle policy; excludes closing drawers from the blocker flag.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.ts</code></td><td>Settles obsolete and duplicate events without projection; fresh events still project; preview drift rejects apply.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts</code></td><td>Repair candidate read includes settled blockers; status-scoped per-event open-row read for whole-event settlement.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/schema.ts</code></td><td>Adds the by_store_terminal_localEvent_status index the per-event repair read depends on.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/pos/application/queries/terminals.ts</code></td><td>Recovery preview reports obsolete, safe, and skipped candidates; omits skipped settled-blocker rows after the bounded read.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/operations/openWorkInventoryReviews.ts</code></td><td>Settles source conflicts in the resolve mutation; source-kind aware mapping identity for sale and expense members.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/pos/application/sync/resolveLocalSyncReview.ts</code></td><td>Bounded, idempotent conflict settlement primitive the resolver reuses.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/operations/logicalOperationalWork.ts</code></td><td>Mixed sale and expense SKU groups validate every member source before any write.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/operations/OperationsQueueView.tsx</code></td><td>Expense inventory reviews render with expense-specific copy and route to the stock-adjustment workspace.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/operations/openWorkInventoryReviews.test.ts</code></td><td>Settlement, retry, forged-context, and the three expense seam tests.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 12.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What decides whether a replayed register_opened event may create a cloud register session?</p>
+        <ol data-quiz-options>
+          <li>Whether any session is currently blocking</li>
+          <li data-quiz-correct>The shared lifecycle classifier comparing occurredAt with the latest authoritative close boundary</li>
+          <li>Document insertion order of register sessions</li>
+          <li>Whether the terminal is online</li>
+        </ol>
+        <p data-quiz-explanation>Both the blocking and no-blocker paths call classifyRegisterOpenAgainstLifecycleBoundary; an open at or before the boundary is obsolete and creates a conflict, not a session.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How is the authoritative close boundary derived?</p>
+        <ol data-quiz-options>
+          <li>From the newest registerSession document</li>
+          <li data-quiz-correct>From closeout records, then closeoutOwnedAt, then closedAt, taking the latest occurrence</li>
+          <li>From the terminal&#x27;s last sync cursor</li>
+          <li>From the register number across all terminals</li>
+        </ol>
+        <p data-quiz-explanation>getRegisterSessionCloseOccurrenceAt reads lifecycle occurrence evidence, never insertion order, and the boundary stays scoped to the terminal.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A register open has no occurredAt and the drawer window has ambiguous close evidence. What happens?</p>
+        <ol data-quiz-options>
+          <li>It projects as fresh</li>
+          <li>It is treated as a duplicate</li>
+          <li data-quiz-correct>It is classified unsafe, creates no session, and keeps a conflict with the reason</li>
+          <li>It is silently dropped</li>
+        </ol>
+        <p data-quiz-explanation>Ambiguous chronology fails closed with review evidence retained.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does terminal cloud repair do with an obsolete register-open conflict behind a closed boundary?</p>
+        <ol data-quiz-options>
+          <li>Replays the open through projection</li>
+          <li data-quiz-correct>Settles every duplicate row for that source event and marks the event rejected without projection</li>
+          <li>Raises the candidate cap so all rows load</li>
+          <li>Moves the terminal to needs_manual_review</li>
+        </ol>
+        <p data-quiz-explanation>Obsolete and duplicate events settle without projection; only genuinely fresh replacements take the existing projection path.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why are closing register sessions no longer counted as blocking in cloudRepairPolicy?</p>
+        <ol data-quiz-options>
+          <li>Closing drawers cannot have conflicts</li>
+          <li data-quiz-correct>Every path into closing leaves close-occurrence evidence, so the shared boundary already represents them</li>
+          <li>The status was removed from the schema</li>
+          <li>Repair never runs while a drawer is closing</li>
+        </ol>
+        <p data-quiz-explanation>A submitted closeout stamps closeoutOwnedAt and a reopen after rejection appends a closeout record; the boundary, not the flag, decides freshness.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which key may settle the source conflicts of a synced inventory review?</p>
+        <ol data-quiz-options>
+          <li>The receipt number</li>
+          <li>The product SKU id</li>
+          <li data-quiz-correct>The canonical inventoryReviewWorkItem mapping that points at this exact work item</li>
+          <li>Any conflict on the same terminal</li>
+        </ol>
+        <p data-quiz-explanation>The mapping proves store, terminal, local identity, and cloud id; anything else reports unmapped and touches no conflict.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How does an expense member&#x27;s settlement identity differ from a sale member&#x27;s?</p>
+        <ol data-quiz-options>
+          <li>It has no identity and cannot settle</li>
+          <li data-quiz-correct>It is keyed by local expense event id through the per-terminal mapping index, with no register session</li>
+          <li>It uses the sale&#x27;s register session</li>
+          <li>It uses the expense transaction number</li>
+        </ol>
+        <p data-quiz-explanation>Expense mappings carry an empty register session, so the helper uses by_store_terminal_localKindId for expense members and the register-session-keyed index for sale members.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>An operator retries completion on a review that is already completed but still has open mapped conflicts. What happens?</p>
+        <ol data-quiz-options>
+          <li>A conflict error is returned</li>
+          <li>The work is re-completed and a duplicate completion event is recorded</li>
+          <li data-quiz-correct>The recorded outcome is kept, lingering conflicts settle, and a settlement-only event is recorded</li>
+          <li>The work is reopened</li>
+        </ol>
+        <p data-quiz-explanation>already_terminal is an idempotent convergence path: only lingering rows are settled and the outcome is unchanged.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens when a zero-stock expense is projected?</p>
+        <ol data-quiz-options>
+          <li>The expense is rejected</li>
+          <li data-quiz-correct>The expense projects, no stock is decremented, and one synced inventory review is created or reused</li>
+          <li>Stock goes negative</li>
+          <li>A new expense_inventory_review work type is created</li>
+        </ol>
+        <p data-quiz-explanation>The transaction is retained, only the unavailable decrement is skipped, and the existing rail carries the work.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does the bounded terminal read stay incomplete with 5,010 settled rows?</p>
+        <ol data-quiz-options>
+          <li>Because caps were raised</li>
+          <li data-quiz-correct>Because a capped read must say incomplete rather than clean until repair converges the rows</li>
+          <li>Because settled rows are deleted</li>
+          <li>Because the terminal is offline</li>
+        </ol>
+        <p data-quiz-explanation>Caps are unchanged; the regression test keeps hasMoreCandidates true and the safe id list within the cap. Only open rows count toward the per-event cap, so settled history never blocks convergence.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the status of this delivery at report time?</p>
+        <ol data-quiz-options>
+          <li>Merged and deployed</li>
+          <li>Merged, Linear Done, deploy pending</li>
+          <li data-quiz-correct>Delivery candidate: not merged, not deployed, tickets not Done</li>
+          <li>Deployed to production without merge</li>
+        </ol>
+        <p data-quiz-explanation>The report is generated before the final review-and-merge loop and does not claim events that have not happened.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A new member kind is added to the synced inventory-review rail next quarter. What is the right move?</p>
+        <ol data-quiz-options>
+          <li>Add a second settlement helper for it</li>
+          <li data-quiz-correct>Give it its own mapping identity and validation branch and extend inventoryReviewSourceMappingIdentity</li>
+          <li>Key it by product name</li>
+          <li>Skip settlement for the new kind</li>
+        </ol>
+        <p data-quiz-explanation>The rail is shared; per-member identity and validation is the pattern, not parallel helpers.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>session context (ce-session-historian equivalent)</dt><dd>Collected the four tickets&#x27; implementer comments, the V26-1252 integration strategy, per-branch heads and postures, and the prior decisions recorded in the two existing solution notes.</dd>
+      <dt>delivered diff (read-only codebase researcher)</dt><dd>Mapped changed files to tickets, traced the before and after of classification, repair, settlement, and expense projection, enumerated skip reasons, caps, and the tests proving each acceptance criterion.</dd>
+      <dt>quiz and report reviewer</dt><dd>Reviewed the draft against the code for unsupported claims, weak quiz questions, status language, and sensitive data; it returned no corrections.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

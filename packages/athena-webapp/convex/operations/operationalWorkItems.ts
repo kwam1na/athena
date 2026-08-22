@@ -343,11 +343,25 @@ function sanitizeOperationalWorkItemDetails(item: Doc<"operationalWorkItem">) {
         "trustedInventoryLines",
       );
 
+      // The rail is shared by synced sale and synced expense shortfalls, so the
+      // row exposes a sanitized source kind plus that kind's local context. No
+      // raw sync payload or staff proof crosses this boundary.
+      const sourceType = metadataString(metadata, "sourceType");
+      const sourceKind =
+        metadataString(metadata, "sourceKind") === "expense"
+          ? "expense"
+          : "sale";
+
       return {
         inventoryReviewLineCount:
           skippedLineCount && skippedLineCount > 0
             ? skippedLineCount
             : trustedLineCount,
+        localExpenseEventId: metadataString(metadata, "localExpenseEventId"),
+        localExpenseSessionId: metadataString(
+          metadata,
+          "localExpenseSessionId",
+        ),
         localRegisterSessionId: metadataString(
           metadata,
           "localRegisterSessionId",
@@ -358,9 +372,10 @@ function sanitizeOperationalWorkItemDetails(item: Doc<"operationalWorkItem">) {
         receiptNumber: metadataString(metadata, "receiptNumber"),
         registerSessionId: metadataString(metadata, "registerSessionId"),
         sourceId:
-          metadataString(metadata, "sourceType") === "posTransaction"
+          sourceType === "posTransaction" || sourceType === "expenseTransaction"
             ? metadataString(metadata, "sourceId")
             : null,
+        sourceKind,
         terminalId: metadataString(metadata, "terminalId"),
       };
     }

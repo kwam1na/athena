@@ -74,6 +74,8 @@ describe("terminal operational state policy", () => {
   it("orders manual review before terminal actions and cloud repair", () => {
     const input = baseInput({
       cloudRepair: {
+        hasMoreCandidates: false,
+        obsoleteConflictIds: [],
         preconditionHash: "hash",
         safeConflictIds: ["conflict-1" as Id<"posLocalSyncConflict">],
         skippedConflictIds: ["conflict-unsafe" as Id<"posLocalSyncConflict">],
@@ -714,6 +716,8 @@ describe("terminal operational state policy", () => {
     const state = buildTerminalOperationalState(
       baseInput({
         cloudRepair: {
+          hasMoreCandidates: false,
+          obsoleteConflictIds: [],
           preconditionHash: "hash",
           safeConflictIds: ["safe-conflict" as Id<"posLocalSyncConflict">],
           skippedConflictIds: ["unsafe-conflict" as Id<"posLocalSyncConflict">],
@@ -754,6 +758,8 @@ describe("terminal operational state policy", () => {
     const state = buildTerminalOperationalState(
       baseInput({
         cloudRepair: {
+          hasMoreCandidates: false,
+          obsoleteConflictIds: [],
           preconditionHash: "hash",
           safeConflictIds: ["conflict-1" as Id<"posLocalSyncConflict">],
           skippedConflictIds: [],
@@ -979,6 +985,8 @@ describe("terminal operational state policy", () => {
     const state = buildTerminalOperationalState(
       baseInput({
         cloudRepair: {
+          hasMoreCandidates: false,
+          obsoleteConflictIds: [],
           preconditionHash: "hash",
           safeConflictIds: [],
           skippedConflictIds: [
@@ -1231,6 +1239,8 @@ function baseInput(
       status: "unknown",
     },
     cloudRepair: {
+      hasMoreCandidates: false,
+      obsoleteConflictIds: [],
       preconditionHash: "empty",
       safeConflictIds: [],
       skippedConflictIds: [],

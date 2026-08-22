@@ -5,6 +5,7 @@ import {
   createTerminalRecoveryCommandReadRepository,
   createTerminalRecoveryCommandRepository,
   getTerminalRecoverySourceEvent,
+  listTerminalRecoveryConflictRowsForEvent,
   listTerminalRecoveryConflictsForRepair,
   patchTerminalRecoveryConflict,
 } from "./terminalRecoveryRepository";
@@ -226,7 +227,10 @@ describe("terminalRecoveryRepository", () => {
       terminalId: "terminal-1" as Id<"posTerminal">,
     });
 
-    expect(result).toEqual([conflict]);
+    expect(result).toEqual({
+      candidates: [{ blockerStatus: "not_register_conflict", conflict }],
+      isIncomplete: false,
+    });
     expect(ctx.db.query).toHaveBeenCalledWith("posLocalSyncConflict");
     expect(ctx.queryLog).toContain("by_store_terminal_status_type");
     expect(ctx.eqLog).toEqual(
@@ -239,7 +243,7 @@ describe("terminalRecoveryRepository", () => {
     );
   });
 
-  it("omits repair conflicts when their blocking register session is settled", async () => {
+  it("keeps settled-blocker register conflicts as repair candidates and tags them", async () => {
     const staleConflict = {
       _id: "conflict-stale" as Id<"posLocalSyncConflict">,
       conflictType: "permission",
@@ -285,7 +289,13 @@ describe("terminalRecoveryRepository", () => {
       terminalId: "terminal-1" as Id<"posTerminal">,
     });
 
-    expect(result).toEqual([activeConflict]);
+    expect(result).toEqual({
+      candidates: [
+        { blockerStatus: "current", conflict: activeConflict },
+        { blockerStatus: "settled", conflict: staleConflict },
+      ],
+      isIncomplete: false,
+    });
   });
 
   it("keeps repairable inventory conflicts when stale register conflicts exceed the source cap", async () => {
@@ -331,7 +341,92 @@ describe("terminalRecoveryRepository", () => {
       terminalId: "terminal-1" as Id<"posTerminal">,
     });
 
-    expect(result).toEqual([inventoryConflict]);
+    expect(result.candidates).toHaveLength(101);
+    expect(result.candidates).toContainEqual({
+      blockerStatus: "not_register_conflict",
+      conflict: inventoryConflict,
+    });
+    expect(
+      result.candidates.filter(
+        (candidate) => candidate.blockerStatus === "settled",
+      ),
+    ).toHaveLength(100);
+    expect(result.isIncomplete).toBe(true);
+  });
+
+  it("settles every duplicate row for one source event through the event-scoped index", async () => {
+    const rows = Array.from({ length: 3 }, (_, index) => ({
+      _id: `conflict-dup-${index}` as Id<"posLocalSyncConflict">,
+      conflictType: "permission",
+      details: {},
+      localEventId: "event-open-1",
+      localRegisterSessionId: "local-register-1",
+      sequence: index + 1,
+      status: index === 2 ? "resolved" : "needs_review",
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    }));
+    const ctx = buildCtx({
+      posLocalSyncConflict: [
+        ...rows,
+        {
+          _id: "conflict-other-event",
+          conflictType: "permission",
+          details: {},
+          localEventId: "event-open-2",
+          localRegisterSessionId: "local-register-2",
+          sequence: 9,
+          status: "needs_review",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+      ],
+    });
+
+    const result = await listTerminalRecoveryConflictRowsForEvent(
+      ctx as never,
+      {
+        limit: 10,
+        localEventId: "event-open-1",
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+      },
+    );
+
+    expect(result.rows.map((row) => row._id)).toEqual([
+      "conflict-dup-0",
+      "conflict-dup-1",
+    ]);
+    expect(result.isIncomplete).toBe(false);
+    expect(ctx.queryLog).toContain("by_store_terminal_localEvent_status");
+  });
+
+  it("reports an incomplete event-scoped settle read past the row limit", async () => {
+    const rows = Array.from({ length: 6 }, (_, index) => ({
+      _id: `conflict-dup-${index}` as Id<"posLocalSyncConflict">,
+      conflictType: "permission",
+      details: {},
+      localEventId: "event-open-1",
+      localRegisterSessionId: "local-register-1",
+      sequence: index + 1,
+      status: "needs_review",
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    }));
+    const ctx = buildCtx({ posLocalSyncConflict: rows });
+
+    const result = await listTerminalRecoveryConflictRowsForEvent(
+      ctx as never,
+      {
+        limit: 4,
+        localEventId: "event-open-1",
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+      },
+    );
+
+    expect(result.rows).toHaveLength(4);
+    expect(result.isIncomplete).toBe(true);
   });
 
   it("loads the source local event for a terminal repair conflict", async () => {

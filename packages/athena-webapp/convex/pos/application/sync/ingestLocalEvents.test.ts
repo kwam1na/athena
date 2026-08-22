@@ -1229,6 +1229,114 @@ describe("createLocalSyncIngestionService", () => {
     ]);
   });
 
+  it("creates the missing inventory review target when an already-projected expense retries", async () => {
+    const repository = createFakeSyncRepository({
+      skus: [
+        {
+          _id: "sku-1",
+          storeId: "store-1",
+          productId: "product-1",
+          sku: "KIT-1",
+          price: 25,
+          quantityAvailable: 0,
+          inventoryCount: 0,
+          images: [],
+        },
+      ],
+    });
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 200,
+    });
+    const expense = buildExpenseRecordedEvent({ sequence: 1 });
+    repository.events.push({
+      _id: "sync-event-existing-expense",
+      acceptedAt: 100,
+      eventType: "expense_recorded",
+      localEventId: expense.localEventId,
+      localExpenseSessionId: "local-expense-session-1",
+      localRegisterSessionId: "local-expense-session-1",
+      occurredAt: expense.occurredAt,
+      payload: expense.payload,
+      projectedAt: 100,
+      sequence: expense.sequence,
+      staffProfileId: expense.staffProfileId as never,
+      status: "projected",
+      storeId: "store-1" as never,
+      submittedAt: 100,
+      syncScope: "expense",
+      terminalId: "terminal-1" as never,
+    });
+    repository.mappings.push({
+      _id: "mapping-expense-transaction-existing",
+      cloudId: "expense-transaction-existing" as never,
+      cloudTable: "expenseTransaction",
+      createdAt: 100,
+      localEventId: expense.localEventId,
+      localExpenseSessionId: "local-expense-session-1",
+      localId: "local-expense-event-1",
+      localIdKind: "expenseTransaction",
+      localRegisterSessionId: "",
+      storeId: "store-1" as never,
+      syncScope: "expense",
+      terminalId: "terminal-1" as never,
+    });
+    repository.conflicts.push({
+      _id: "conflict-expense-inventory",
+      conflictType: "inventory",
+      createdAt: 100,
+      details: {
+        blocksProjection: false,
+        inventoryCount: 0,
+        localExpenseEventId: "local-expense-event-1",
+        productSkuId: "sku-1",
+        quantityAvailable: 0,
+        requestedQuantity: 1,
+      },
+      localEventId: expense.localEventId,
+      localRegisterSessionId: "local-expense-session-1",
+      sequence: expense.sequence,
+      status: "needs_review",
+      storeId: "store-1" as never,
+      summary: "Inventory needs manager review for a synced expense.",
+      terminalId: "terminal-1" as never,
+    });
+
+    const retry = await service.ingestBatch(buildBatch({ events: [expense] }));
+
+    expect(retry.kind).toBe("ok");
+    if (retry.kind !== "ok") throw new Error("Expected ok result");
+    expect(retry.data.accepted).toEqual([
+      expect.objectContaining({
+        localEventId: "event-expense-recorded-1",
+        status: "projected",
+      }),
+    ]);
+    expect(repository.createdExpenseTransactions).toEqual([]);
+    expect(repository.conflicts).toHaveLength(1);
+    expect(repository.createdServiceWorkItems).toEqual([
+      expect.objectContaining({
+        productSkuId: "sku-1",
+        status: "open",
+        type: "synced_sale_inventory_review",
+        metadata: expect.objectContaining({
+          localExpenseEventId: "local-expense-event-1",
+          sourceId: "expense-transaction-existing",
+          sourceKind: "expense",
+        }),
+      }),
+    ]);
+    expect(retry.data.mappings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          localId: "local-expense-event-1:inventory-review",
+          localIdKind: "inventoryReviewWorkItem",
+        }),
+      ]),
+    );
+  });
+
   it("projects held expense retries that move from global to scoped sequence", async () => {
     const repository = createFakeSyncRepository();
     const service = createLocalSyncIngestionService({
@@ -5672,8 +5780,12 @@ function createFakeSyncRepository(
       });
       return id as never;
     },
-    async findBlockingRegisterSession() {
-      return null;
+    async findScopedRegisterSessionLifecycle() {
+      return {
+        blockingRegisterSession: null,
+        hasAmbiguousCloseEvidence: false,
+        latestAuthoritativeCloseAt: null,
+      };
     },
     async listOpenRegisterReviewConflictFacts(args) {
       return [

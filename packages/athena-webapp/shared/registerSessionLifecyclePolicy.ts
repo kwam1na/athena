@@ -230,6 +230,169 @@ export function canSupersedeReviewedRegisterSessionForLocalOpen(input: {
   );
 }
 
+export const OBSOLETE_REGISTER_OPEN_SYNC_REVIEW_SUMMARY =
+  "Register open predates the authoritative drawer close boundary.";
+
+export const UNSAFE_REGISTER_OPEN_SYNC_REVIEW_SUMMARY =
+  "Register open chronology could not be verified against the authoritative drawer close boundary.";
+
+/**
+ * Lifecycle close evidence for one scoped register session. Only occurrence and
+ * close timestamps are compared; document insertion order is never used.
+ */
+export type RegisterSessionLifecycleCloseEvidence = {
+  closedAt?: number | null;
+  closeoutOwnedAt?: number | null;
+  closeoutRecords?: readonly unknown[] | null;
+  status?: RegisterSessionStatus | string | null;
+};
+
+export type RegisterSessionAuthoritativeCloseBoundary = {
+  /** True when a close happened but no close occurrence timestamp is derivable. */
+  hasAmbiguousCloseEvidence: boolean;
+  latestAuthoritativeCloseAt: number | null;
+};
+
+/**
+ * Derives the latest authoritative close/review boundary for a scoped drawer
+ * from a bounded window of register sessions.
+ */
+export function getRegisterSessionAuthoritativeCloseBoundary(
+  sessions: readonly (RegisterSessionLifecycleCloseEvidence | null | undefined)[],
+): RegisterSessionAuthoritativeCloseBoundary {
+  let latestAuthoritativeCloseAt: number | null = null;
+  let hasAmbiguousCloseEvidence = false;
+
+  for (const session of sessions) {
+    if (!session) continue;
+    const closeAt = getRegisterSessionCloseOccurrenceAt(session);
+    if (closeAt === null) {
+      if (session.status === "closed") {
+        hasAmbiguousCloseEvidence = true;
+      }
+      continue;
+    }
+
+    latestAuthoritativeCloseAt =
+      latestAuthoritativeCloseAt === null
+        ? closeAt
+        : Math.max(latestAuthoritativeCloseAt, closeAt);
+  }
+
+  return { hasAmbiguousCloseEvidence, latestAuthoritativeCloseAt };
+}
+
+export type RegisterOpenLifecycleBoundaryEvidence = {
+  hasAmbiguousCloseEvidence?: boolean;
+  latestAuthoritativeCloseAt?: number | null;
+  storeId?: string | null;
+  terminalId?: string | null;
+};
+
+export type RegisterOpenLifecycleCandidateEvidence = {
+  hasExistingProjection?: boolean;
+  localRegisterSessionId: string;
+  occurredAt?: number | null;
+  storeId: string;
+  terminalId: string;
+};
+
+export type RegisterOpenLifecycleDisposition =
+  | {
+      disposition: "fresh";
+      reason: "after_authoritative_boundary" | "no_authoritative_boundary";
+    }
+  | { disposition: "duplicate"; reason: "existing_projection" }
+  | {
+      candidateOccurredAt: number;
+      disposition: "obsolete";
+      latestAuthoritativeCloseAt: number;
+      reason: "at_or_before_authoritative_boundary";
+    }
+  | {
+      disposition: "unsafe";
+      reason: "ambiguous_close_evidence" | "missing_occurrence_evidence";
+    };
+
+/**
+ * Single decision point for whether a register open may still create or reuse a
+ * cloud drawer. Pure and reusable: projection and terminal cloud repair both
+ * classify candidates through this function.
+ */
+export function classifyRegisterOpenAgainstLifecycleBoundary(input: {
+  boundary?: RegisterOpenLifecycleBoundaryEvidence | null;
+  candidate: RegisterOpenLifecycleCandidateEvidence;
+}): RegisterOpenLifecycleDisposition {
+  const { boundary, candidate } = input;
+
+  if (candidate.hasExistingProjection) {
+    return { disposition: "duplicate", reason: "existing_projection" };
+  }
+
+  const isScopedBoundary =
+    Boolean(boundary) &&
+    (boundary?.storeId === undefined ||
+      boundary.storeId === null ||
+      boundary.storeId === candidate.storeId) &&
+    (boundary?.terminalId === undefined ||
+      boundary.terminalId === null ||
+      boundary.terminalId === candidate.terminalId);
+  const latestAuthoritativeCloseAt =
+    isScopedBoundary && typeof boundary?.latestAuthoritativeCloseAt === "number"
+      ? boundary.latestAuthoritativeCloseAt
+      : null;
+  const hasAmbiguousCloseEvidence =
+    isScopedBoundary && boundary?.hasAmbiguousCloseEvidence === true;
+
+  if (latestAuthoritativeCloseAt === null && !hasAmbiguousCloseEvidence) {
+    return { disposition: "fresh", reason: "no_authoritative_boundary" };
+  }
+
+  if (typeof candidate.occurredAt !== "number") {
+    return { disposition: "unsafe", reason: "missing_occurrence_evidence" };
+  }
+
+  if (latestAuthoritativeCloseAt === null) {
+    return { disposition: "unsafe", reason: "ambiguous_close_evidence" };
+  }
+
+  if (candidate.occurredAt <= latestAuthoritativeCloseAt) {
+    return {
+      candidateOccurredAt: candidate.occurredAt,
+      disposition: "obsolete",
+      latestAuthoritativeCloseAt,
+      reason: "at_or_before_authoritative_boundary",
+    };
+  }
+
+  return { disposition: "fresh", reason: "after_authoritative_boundary" };
+}
+
+function getRegisterSessionCloseOccurrenceAt(
+  session: RegisterSessionLifecycleCloseEvidence,
+) {
+  const latestCloseoutRecordAt = (session.closeoutRecords ?? []).reduce<
+    number | null
+  >((latest, record) => {
+    const occurredAt =
+      typeof record === "object" &&
+      record !== null &&
+      "occurredAt" in record &&
+      typeof (record as { occurredAt?: unknown }).occurredAt === "number"
+        ? (record as { occurredAt: number }).occurredAt
+        : null;
+    if (occurredAt === null) return latest;
+    return latest === null ? occurredAt : Math.max(latest, occurredAt);
+  }, null);
+  if (latestCloseoutRecordAt !== null) return latestCloseoutRecordAt;
+
+  if (typeof session.closeoutOwnedAt === "number") {
+    return session.closeoutOwnedAt;
+  }
+
+  return typeof session.closedAt === "number" ? session.closedAt : null;
+}
+
 export function canOpenReplacementDrawerForLocalBlock(input: {
   activeRegisterSession?: RegisterSessionLifecycleScopedSession | null;
   drawerAuthorityReason?: RegisterSessionLifecycleDrawerAuthorityReason | null;

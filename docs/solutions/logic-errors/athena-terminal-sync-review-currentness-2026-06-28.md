@@ -18,6 +18,9 @@ tags:
   - register-session
   - cash-controls
   - open-work
+  - register-lifecycle
+  - cloud-repair
+delivery_diff_fingerprint: 320dc92f349b9fdfb147f0dbe3c0304557a3c33c76d8f65a5ed3264dc8f17c53
 ---
 
 # Athena Terminal Sync Review Currentness
@@ -58,6 +61,42 @@ conflict volume alone:
   previews so repair actions do not reintroduce conflicts that terminal health
   already classified as settled.
 
+### One authoritative close boundary for drawers (V26-1247, V26-1250)
+
+Drawer freshness is a lifecycle question with exactly one answer per scoped
+drawer (store plus terminal), and both projection and repair must ask it the
+same way:
+
+- `shared/registerSessionLifecyclePolicy.ts` derives the latest authoritative
+  close boundary from lifecycle occurrence evidence (closeout records, then
+  `closeoutOwnedAt`, then `closedAt`), never from document insertion order, and
+  classifies a candidate register open as `fresh`, `duplicate`, `obsolete`, or
+  `unsafe`. Ambiguous close evidence (a closed session with no occurrence time)
+  fails closed as `unsafe`.
+- `localSyncRepository.findScopedRegisterSessionLifecycle` exposes that boundary
+  even when no session is currently blocking, so the blocking-session and
+  no-blocker paths in `projectLocalEvents.projectRegisterOpened` share one
+  decision. An obsolete or unsafe open creates a permission conflict carrying
+  the disposition and reason; it never creates a register session.
+- Terminal cloud repair reuses the same classifier. Settled-blocker register
+  conflicts are repair candidates again; an obsolete or duplicate source event
+  settles every duplicate conflict row for that event and marks the event
+  rejected or projected without calling projection. Only a genuinely fresh
+  replacement still takes the existing safe projection path.
+- A drawer in `closing` is not a blocker for repair: every path into `closing`
+  leaves close-occurrence evidence (a submitted closeout stamps
+  `closeoutOwnedAt`; a reopen after rejection appends a closeout record), so
+  the boundary already represents it.
+- Caps do not move. Candidate reads stay at 100 per conflict type and a single
+  source event settles at most 2,000 open rows per invocation. The per-event
+  read is status-scoped (`by_store_terminal_localEvent_status`): only open rows
+  count toward the cap, because conflict rows are never deleted and an event's
+  settled history must not block its convergence; a window that is still
+  truncated fails closed so an event is skipped whole rather than half-settled.
+  A capped read reports `hasMoreCandidates` and stays incomplete until repair
+  converges, which is the same posture this note already required for
+  terminal health.
+
 ## Prevention
 
 - Any terminal health count must answer "what work is still actionable now?"
@@ -71,3 +110,21 @@ conflict volume alone:
 - Treat capped evidence as diagnostic risk. A capped summary may be incomplete,
   but it must not report healthy or clear unless the current work target has
   actually been resolved.
+- Never add a second freshness rule. Any new lifecycle question about a
+  register open goes through `classifyRegisterOpenAgainstLifecycleBoundary`
+  with a boundary from `findScopedRegisterSessionLifecycle`.
+- Repair must never replay an obsolete open to clear its conflicts; resolving
+  the rows and the source event without projection is the durable path.
+- Known residual risks to keep in view: an event whose raw row window exceeds
+  the per-event cap is skipped permanently (no audited terminal has one); the
+  query-side preview omits skipped rows whose blocker already settled while the
+  repair mutation reports them; the query-side lifecycle read uses a wider
+  session window than the mutation-side read; and terminal-local open times are
+  compared with server-stamped cloud closes, which predates this work.
+
+## Related
+
+- `docs/solutions/architecture-patterns/athena-open-work-resolution-ownership-2026-07-02.md`
+- `packages/athena-webapp/shared/registerSessionLifecyclePolicy.ts`
+- `packages/athena-webapp/convex/pos/application/terminalRecovery/cloudRepairPolicy.ts`
+- `packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.ts`

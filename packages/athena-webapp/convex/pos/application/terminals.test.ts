@@ -1836,7 +1836,10 @@ describe("terminal health summaries", () => {
       },
     });
     vi.mocked(hasActiveRegisterSessionForTerminal).mockResolvedValue(false);
-    vi.mocked(listTerminalRecoveryConflictsForRepair).mockResolvedValue([]);
+    vi.mocked(listTerminalRecoveryConflictsForRepair).mockResolvedValue({
+      candidates: [],
+      isIncomplete: false,
+    });
     vi.mocked(getTerminalRecoverySourceEvent).mockResolvedValue(null);
     const readRepository = {
       getCommand: vi.fn().mockResolvedValue(null),
@@ -3197,9 +3200,10 @@ describe("terminal health summaries", () => {
       unresolvedConflictCount: 1,
       unresolvedConflicts: [],
     });
-    vi.mocked(listTerminalRecoveryConflictsForRepair).mockResolvedValue([
-      conflict,
-    ]);
+    vi.mocked(listTerminalRecoveryConflictsForRepair).mockResolvedValue({
+      candidates: [{ blockerStatus: "unresolved", conflict }],
+      isIncomplete: false,
+    });
     vi.mocked(getTerminalRecoverySourceEvent).mockResolvedValue(
       buildSyncEvent({ eventType: "register_opened", status: "conflicted" }),
     );

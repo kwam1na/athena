@@ -497,7 +497,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(screen.queryByText(/closure wig/i)).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        "Enter reviewed counts for each SKU. Submitted stock updates close 3 open sale inventory work items.",
+        "Enter reviewed counts for each SKU. Submitted stock updates close 3 open inventory review work items.",
       ),
     ).toBeInTheDocument();
     expect(onSearchStateChange).toHaveBeenCalledWith(
@@ -563,7 +563,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "More open sale review SKUs exist outside this view. Finish the listed SKUs, then return for the rest.",
+        "More open inventory review SKUs exist outside this view. Finish the listed SKUs, then return for the rest.",
       ),
     ).toBeInTheDocument();
   });
@@ -580,7 +580,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
 
     expect(
       screen.getByText(
-        "All synced sale inventory review work items are resolved. No stock counts are needed.",
+        "All synced inventory review work items are resolved. No stock counts are needed.",
       ),
     ).toBeInTheDocument();
     expect(

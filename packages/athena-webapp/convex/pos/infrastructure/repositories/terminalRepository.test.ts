@@ -720,6 +720,57 @@ describe("terminalRepository sync evidence", () => {
     });
   });
 
+  it("groups synced expense inventory conflicts with their open work target", async () => {
+    const ctx = buildCtx({
+      operationalWorkItem: [
+        buildOperationalWorkItem({
+          _id: "work-item-expense" as Id<"operationalWorkItem">,
+          metadata: {
+            localEventId: "event-expense-recorded-1",
+            localExpenseEventId: "local-expense-event-1",
+            localExpenseSessionId: "local-expense-session-1",
+            sourceKind: "expense",
+            sourceType: "expenseTransaction",
+          },
+          status: "open",
+          type: "synced_sale_inventory_review",
+        }),
+      ],
+      posLocalSyncConflict: [
+        buildSyncConflict({
+          _id: "conflict-expense-inventory" as Id<"posLocalSyncConflict">,
+          conflictType: "inventory",
+          localEventId: "event-expense-recorded-1",
+          sequence: 9,
+          summary: "Inventory needs manager review for a synced expense.",
+        }),
+      ],
+    });
+
+    const result = await getTerminalSyncEvidence(ctx as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    expect(result.unresolvedConflicts?.[0]).toMatchObject({
+      _id: "conflict-expense-inventory",
+      reviewTarget: {
+        type: "open_work",
+        workItemId: "work-item-expense",
+        workItemType: "synced_sale_inventory_review",
+      },
+    });
+    expect(result.reviewSummary?.groups?.[0]).toMatchObject({
+      actionability: "open_work_review",
+      conflictType: "inventory",
+      owner: "operations_open_work",
+      reviewTarget: {
+        type: "open_work",
+        workItemId: "work-item-expense",
+      },
+    });
+  });
+
   it("groups mapped register-session conflicts under cash controls", async () => {
     const ctx = buildCtx({
       posLocalSyncConflict: [

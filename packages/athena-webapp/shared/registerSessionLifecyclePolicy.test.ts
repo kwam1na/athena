@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   canOpenReplacementDrawerForLocalBlock,
+  classifyRegisterOpenAgainstLifecycleBoundary,
+  getRegisterSessionAuthoritativeCloseBoundary,
   canReuseCloudRegisterSessionForLocalOpen,
   canSupersedeReviewedRegisterSessionForLocalOpen,
   getRegisterSessionVoidApplicationStatus,
@@ -471,5 +473,188 @@ describe("registerSessionLifecyclePolicy", () => {
         type: "cart.item_added",
       }),
     ).toBe(false);
+  });
+
+  it("derives the latest authoritative close boundary from lifecycle evidence", () => {
+    expect(
+      getRegisterSessionAuthoritativeCloseBoundary([
+        { status: "closed", closedAt: 40, closeoutRecords: [] },
+        { status: "closed", closeoutRecords: [{ occurredAt: 90 }], closedAt: 50 },
+      ]),
+    ).toEqual({ hasAmbiguousCloseEvidence: false, latestAuthoritativeCloseAt: 90 });
+  });
+
+  it("prefers closeout ownership over insertion order for the close boundary", () => {
+    expect(
+      getRegisterSessionAuthoritativeCloseBoundary([
+        { status: "closing", closeoutOwnedAt: 30, closeoutRecords: [] },
+      ]),
+    ).toEqual({ hasAmbiguousCloseEvidence: false, latestAuthoritativeCloseAt: 30 });
+  });
+
+  it("marks a closed register session without close evidence ambiguous", () => {
+    expect(
+      getRegisterSessionAuthoritativeCloseBoundary([
+        { status: "closed", closeoutRecords: [] },
+      ]),
+    ).toEqual({ hasAmbiguousCloseEvidence: true, latestAuthoritativeCloseAt: null });
+  });
+
+  it("reports no authoritative close boundary for a drawer that never closed", () => {
+    expect(
+      getRegisterSessionAuthoritativeCloseBoundary([
+        { status: "active", closeoutRecords: [] },
+        null,
+        undefined,
+      ]),
+    ).toEqual({ hasAmbiguousCloseEvidence: false, latestAuthoritativeCloseAt: null });
+  });
+
+  it("classifies a register open before the authoritative close boundary as obsolete", () => {
+    expect(
+      classifyRegisterOpenAgainstLifecycleBoundary({
+        boundary: {
+          latestAuthoritativeCloseAt: 90,
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+        candidate: {
+          localRegisterSessionId: "local-register-2",
+          occurredAt: 10,
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+      }),
+    ).toEqual({
+      candidateOccurredAt: 10,
+      disposition: "obsolete",
+      latestAuthoritativeCloseAt: 90,
+      reason: "at_or_before_authoritative_boundary",
+    });
+  });
+
+  it("classifies a register open after the authoritative close boundary as fresh", () => {
+    expect(
+      classifyRegisterOpenAgainstLifecycleBoundary({
+        boundary: {
+          latestAuthoritativeCloseAt: 90,
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+        candidate: {
+          localRegisterSessionId: "local-register-2",
+          occurredAt: 91,
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+      }),
+    ).toEqual({
+      disposition: "fresh",
+      reason: "after_authoritative_boundary",
+    });
+  });
+
+  it("classifies an already projected register open as duplicate", () => {
+    expect(
+      classifyRegisterOpenAgainstLifecycleBoundary({
+        boundary: {
+          latestAuthoritativeCloseAt: 90,
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+        candidate: {
+          hasExistingProjection: true,
+          localRegisterSessionId: "local-register-2",
+          occurredAt: 10,
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+      }),
+    ).toEqual({ disposition: "duplicate", reason: "existing_projection" });
+  });
+
+  it("ignores lifecycle boundaries scoped to another terminal or store", () => {
+    expect(
+      classifyRegisterOpenAgainstLifecycleBoundary({
+        boundary: {
+          latestAuthoritativeCloseAt: 90,
+          storeId: "store-1",
+          terminalId: "terminal-2",
+        },
+        candidate: {
+          localRegisterSessionId: "local-register-2",
+          occurredAt: 10,
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+      }),
+    ).toEqual({ disposition: "fresh", reason: "no_authoritative_boundary" });
+    expect(
+      classifyRegisterOpenAgainstLifecycleBoundary({
+        boundary: {
+          latestAuthoritativeCloseAt: 90,
+          storeId: "store-2",
+          terminalId: "terminal-1",
+        },
+        candidate: {
+          localRegisterSessionId: "local-register-2",
+          occurredAt: 10,
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+      }),
+    ).toEqual({ disposition: "fresh", reason: "no_authoritative_boundary" });
+  });
+
+  it("fails closed when lifecycle chronology is missing or ambiguous", () => {
+    expect(
+      classifyRegisterOpenAgainstLifecycleBoundary({
+        boundary: {
+          latestAuthoritativeCloseAt: 90,
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+        candidate: {
+          localRegisterSessionId: "local-register-2",
+          occurredAt: null,
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+      }),
+    ).toEqual({ disposition: "unsafe", reason: "missing_occurrence_evidence" });
+    expect(
+      classifyRegisterOpenAgainstLifecycleBoundary({
+        boundary: {
+          hasAmbiguousCloseEvidence: true,
+          latestAuthoritativeCloseAt: null,
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+        candidate: {
+          localRegisterSessionId: "local-register-2",
+          occurredAt: 10,
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+      }),
+    ).toEqual({ disposition: "unsafe", reason: "ambiguous_close_evidence" });
+  });
+
+  it("treats a drawer that never closed as a fresh register open", () => {
+    expect(
+      classifyRegisterOpenAgainstLifecycleBoundary({
+        boundary: {
+          latestAuthoritativeCloseAt: null,
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+        candidate: {
+          localRegisterSessionId: "local-register-1",
+          occurredAt: 10,
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+      }),
+    ).toEqual({ disposition: "fresh", reason: "no_authoritative_boundary" });
   });
 });

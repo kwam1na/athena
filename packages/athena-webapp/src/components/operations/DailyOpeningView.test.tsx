@@ -820,7 +820,7 @@ describe("DailyOpeningViewContent", () => {
     ).not.toBeInTheDocument();
     expect(within(firstRow as HTMLElement).getByText("High")).toBeInTheDocument();
     expect(
-      within(firstRow as HTMLElement).getByText("Synced sale inventory"),
+      within(firstRow as HTMLElement).getByText("Synced inventory"),
     ).toBeInTheDocument();
     expect(
       within(firstRow as HTMLElement).getByText(/open since/i),

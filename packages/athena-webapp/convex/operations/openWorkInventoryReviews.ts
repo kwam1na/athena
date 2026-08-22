@@ -27,9 +27,11 @@ import {
   MAX_ATOMIC_SYNCED_SALE_REVIEW_GROUP_SIZE,
   projectLogicalOperationalWork,
 } from "./logicalOperationalWork";
+import { resolveLocalSyncReviewWithCtx } from "../pos/application/sync/resolveLocalSyncReview";
 
 const SYNCED_SALE_INVENTORY_REVIEW_TYPE = "synced_sale_inventory_review";
-const INVENTORY_REVIEW_LOCAL_ID_KIND = "inventoryReviewWorkItem";
+const INVENTORY_REVIEW_LOCAL_ID_KIND: Doc<"posLocalSyncMapping">["localIdKind"] =
+  "inventoryReviewWorkItem";
 const TERMINAL_STATUSES = new Set(["completed", "cancelled"]);
 const STOCK_UPDATE_SOURCE_TYPE = "stock_adjustment_batch";
 const STOCK_UPDATE_MOVEMENT_TYPES = new Set(["adjustment", "cycle_count"]);
@@ -37,6 +39,14 @@ const AUTO_RESOLVE_STOCK_REVIEW_SCAN_LIMIT = 500;
 const AUTO_RESOLVE_STOCK_REVIEW_SKU_PROBE_LIMIT = 100;
 const AUTO_RESOLVE_STOCK_REVIEW_REASON =
   "Resolved by applied stock adjustment.";
+const INVENTORY_REVIEW_CONFLICTS_SETTLED_EVENT_TYPE =
+  "synced_sale_inventory_review_conflicts_settled";
+const EXPENSE_SESSION_MISMATCH_MESSAGE =
+  "Expense session does not match the inventory review terminal.";
+const EXPENSE_SOURCE_MISMATCH_MESSAGE =
+  "Expense does not match the inventory review context.";
+const EXPENSE_METADATA_MISMATCH_MESSAGE =
+  "Work item metadata does not match the recorded expense context.";
 
 const syncedSaleInventoryReviewOutcomeValidator = v.union(
   v.literal("completed"),
@@ -53,6 +63,10 @@ type SyncedSaleInventoryReviewOutcome =
 
 type ResolveSyncedSaleInventoryReviewArgs = {
   actorStaffProfileId?: Id<"staffProfile">;
+  expenseSessionId?: Id<"expenseSession">;
+  expenseTransactionId?: Id<"expenseTransaction">;
+  localExpenseEventId?: string;
+  localExpenseSessionId?: string;
   localRegisterSessionId?: string;
   localTransactionId?: string;
   outcome: SyncedSaleInventoryReviewOutcome;
@@ -79,6 +93,10 @@ type ResolveSyncedSaleInventoryReviewArgs = {
 };
 
 type InventoryReviewSourceValidationArgs = {
+  expenseSessionId?: Id<"expenseSession">;
+  expenseTransactionId?: Id<"expenseTransaction">;
+  localExpenseEventId?: string;
+  localExpenseSessionId?: string;
   localRegisterSessionId?: string;
   localTransactionId?: string;
   receiptNumber?: string;
@@ -93,6 +111,23 @@ export function inventoryReviewSourceValidationArgsFromWorkItem(
   workItem: Doc<"operationalWorkItem">,
 ): Omit<InventoryReviewSourceValidationArgs, "storeId" | "workItem"> {
   const metadata = workItem.metadata ?? {};
+  if (inventoryReviewSourceKind(metadata) === "expense") {
+    return {
+      expenseSessionId:
+        idMetadataValue<"expenseSession">(metadata, "expenseSessionId") ??
+        undefined,
+      expenseTransactionId:
+        idMetadataValue<"expenseTransaction">(metadata, "sourceId") ??
+        undefined,
+      localExpenseEventId:
+        stringMetadataValue(metadata, "localExpenseEventId") ?? undefined,
+      localExpenseSessionId:
+        stringMetadataValue(metadata, "localExpenseSessionId") ?? undefined,
+      terminalId:
+        idMetadataValue<"posTerminal">(metadata, "terminalId") ?? undefined,
+    };
+  }
+
   return {
     localRegisterSessionId:
       stringMetadataValue(metadata, "localRegisterSessionId") ?? undefined,
@@ -114,6 +149,10 @@ export async function validateInventoryReviewSourceContextWithCtx(
   args: InventoryReviewSourceValidationArgs,
 ) {
   const metadata = args.workItem.metadata ?? {};
+  if (inventoryReviewSourceKind(metadata) === "expense") {
+    return validateExpenseInventoryReviewSourceContextWithCtx(ctx, args);
+  }
+
   const [terminal, registerSession, sale] = await Promise.all([
     args.terminalId ? ctx.db.get("posTerminal", args.terminalId) : null,
     args.registerSessionId
@@ -186,12 +225,90 @@ export async function validateInventoryReviewSourceContextWithCtx(
     return validationError("Sale receipt does not match the inventory review.");
   }
 
-  return ok({ registerSession, sale, terminal });
+  return ok({ expenseSession: null, registerSession, sale, terminal });
+}
+
+/**
+ * Expense members of the shared inventory-review rail validate against their
+ * own local expense identity. Sale-shaped context is rejected outright so a
+ * sale proof can never satisfy an expense member (and vice versa).
+ */
+async function validateExpenseInventoryReviewSourceContextWithCtx(
+  ctx: MutationCtx,
+  args: InventoryReviewSourceValidationArgs,
+) {
+  const metadata = args.workItem.metadata ?? {};
+  const [terminal, expenseSession, expenseTransaction] = await Promise.all([
+    args.terminalId ? ctx.db.get("posTerminal", args.terminalId) : null,
+    args.expenseSessionId
+      ? ctx.db.get("expenseSession", args.expenseSessionId)
+      : null,
+    args.expenseTransactionId
+      ? ctx.db.get("expenseTransaction", args.expenseTransactionId)
+      : null,
+  ]);
+
+  if (args.terminalId && (!terminal || terminal.storeId !== args.storeId)) {
+    return validationError("Terminal does not match the inventory review store.");
+  }
+  if (args.expenseSessionId) {
+    if (
+      !expenseSession ||
+      expenseSession.storeId !== args.storeId ||
+      (args.terminalId && expenseSession.terminalId !== args.terminalId)
+    ) {
+      return validationError(EXPENSE_SESSION_MISMATCH_MESSAGE);
+    }
+  }
+  if (args.expenseTransactionId) {
+    if (
+      !expenseTransaction ||
+      expenseTransaction.storeId !== args.storeId ||
+      (args.expenseSessionId &&
+        expenseTransaction.sessionId !== args.expenseSessionId)
+    ) {
+      return validationError(EXPENSE_SOURCE_MISMATCH_MESSAGE);
+    }
+  }
+  if (
+    args.localRegisterSessionId !== undefined ||
+    args.localTransactionId !== undefined ||
+    args.receiptNumber !== undefined ||
+    args.registerSessionId !== undefined ||
+    args.sourceId !== undefined ||
+    !optionalMetadataMatches(
+      metadata,
+      "expenseSessionId",
+      args.expenseSessionId,
+    ) ||
+    !optionalMetadataMatches(
+      metadata,
+      "localExpenseEventId",
+      args.localExpenseEventId,
+    ) ||
+    !optionalMetadataMatches(
+      metadata,
+      "localExpenseSessionId",
+      args.localExpenseSessionId,
+    ) ||
+    !optionalMetadataMatches(metadata, "sourceId", args.expenseTransactionId) ||
+    !optionalMetadataMatches(metadata, "terminalId", args.terminalId)
+  ) {
+    return validationError(EXPENSE_METADATA_MISMATCH_MESSAGE);
+  }
+
+  return ok({
+    expenseSession,
+    registerSession: null,
+    sale: null,
+    terminal,
+  });
 }
 
 type ResolveSyncedSaleInventoryReviewData = {
-  action: "resolved";
+  action: "resolved" | "already_terminal";
   outcome: SyncedSaleInventoryReviewOutcome;
+  settledConflictCount: number;
   status: "completed" | "cancelled";
   workItemId: Id<"operationalWorkItem">;
 };
@@ -216,8 +333,29 @@ type AutoResolveSyncedSaleInventoryReviewsArgs = {
   storeId: Id<"store">;
 };
 
-function inventoryReviewLocalId(localTransactionId: string) {
-  return `${localTransactionId}:inventory-review`;
+function inventoryReviewLocalId(localSourceEventId: string) {
+  return `${localSourceEventId}:inventory-review`;
+}
+
+/**
+ * `synced_sale_inventory_review` is the shared storage discriminator for synced
+ * sale and synced expense stock shortfalls. Members declare which source they
+ * came from; rows written before expense support default to "sale".
+ */
+function inventoryReviewSourceKind(
+  metadata: Record<string, unknown> | undefined,
+) {
+  return stringMetadataValue(metadata, "sourceKind") === "expense"
+    ? ("expense" as const)
+    : ("sale" as const);
+}
+
+function inventoryReviewSourceNoun(
+  metadata: Record<string, unknown> | undefined,
+) {
+  return inventoryReviewSourceKind(metadata) === "expense"
+    ? "expense"
+    : "sale";
 }
 
 function stringMetadataValue(
@@ -342,7 +480,203 @@ function terminalStatusForOutcome(
   return outcome === "completed" ? "completed" : "cancelled";
 }
 
+/**
+ * Durable local source identity for an inventory review work item. Derived from
+ * server-written work item metadata only, never from caller-supplied args, and
+ * kept source-kind agnostic so non-sale members of the same rail resolve through
+ * their own mapping key rather than a hard-coded sale assumption.
+ */
+function inventoryReviewSourceMappingIdentity(
+  metadata: Record<string, unknown>,
+) {
+  const sourceKind = inventoryReviewSourceKind(metadata);
+  const localSourceEventId =
+    sourceKind === "expense"
+      ? stringMetadataValue(metadata, "localExpenseEventId")
+      : stringMetadataValue(metadata, "localTransactionId");
+  const localId =
+    stringMetadataValue(metadata, "localId") ??
+    (localSourceEventId ? inventoryReviewLocalId(localSourceEventId) : null);
+
+  return {
+    localEventId: stringMetadataValue(metadata, "localEventId"),
+    localId,
+    // The mapping kind is the rail discriminator and stays fixed; the local id
+    // below is the per-source seam.
+    localIdKind: INVENTORY_REVIEW_LOCAL_ID_KIND,
+    // Expense members are scoped by their local expense session, not a register
+    // session, so their mapping row carries no register-session key.
+    localRegisterSessionId:
+      sourceKind === "expense"
+        ? null
+        : stringMetadataValue(metadata, "localRegisterSessionId"),
+    sourceKind,
+    terminalId: idMetadataValue<"posTerminal">(metadata, "terminalId"),
+  };
+}
+
+type InventoryReviewSourceSettlement = {
+  disposition: "settled" | "no_open_conflicts" | "unmapped";
+  localEventIds: string[];
+  settledConflictCount: number;
+  terminalId: Id<"posTerminal"> | null;
+};
+
+const UNMAPPED_INVENTORY_REVIEW_SOURCE_SETTLEMENT: InventoryReviewSourceSettlement =
+  {
+    disposition: "unmapped",
+    localEventIds: [],
+    settledConflictCount: 0,
+    terminalId: null,
+  };
+
+/**
+ * Settles the POS sync conflicts that produced this inventory review, in the
+ * same mutation that makes the work terminal. The canonical
+ * `inventoryReviewWorkItem` mapping is the resolution key: it proves the store,
+ * terminal, local register session, and local id all belong to this work item
+ * before any conflict row is touched. Conflict transition itself runs through
+ * the bounded `resolveLocalSyncReview` primitive, which is idempotent, so a
+ * retry converges instead of double-resolving.
+ */
+async function settleInventoryReviewSourceConflictsWithCtx(
+  ctx: MutationCtx,
+  args: {
+    resolvedAt: number;
+    resolvedByStaffProfileId?: Id<"staffProfile">;
+    resolvedByUserId?: Id<"athenaUser">;
+    storeId: Id<"store">;
+    workItem: Doc<"operationalWorkItem">;
+  },
+): Promise<InventoryReviewSourceSettlement> {
+  const identity = inventoryReviewSourceMappingIdentity(
+    args.workItem.metadata ?? {},
+  );
+  if (!identity.terminalId || !identity.localId) {
+    return UNMAPPED_INVENTORY_REVIEW_SOURCE_SETTLEMENT;
+  }
+  if (identity.sourceKind === "sale" && !identity.localRegisterSessionId) {
+    return UNMAPPED_INVENTORY_REVIEW_SOURCE_SETTLEMENT;
+  }
+
+  // Sale members prove their register session as part of the mapping key.
+  // Expense members are keyed per terminal by their own local expense source
+  // identity (the same read projection uses to find them), so the register
+  // session is not part of their proof.
+  const mapping =
+    identity.sourceKind === "expense"
+      ? await ctx.db
+          .query("posLocalSyncMapping")
+          .withIndex("by_store_terminal_localKindId", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .eq("terminalId", identity.terminalId!)
+              .eq("localIdKind", identity.localIdKind)
+              .eq("localId", identity.localId!),
+          )
+          .unique()
+      : await ctx.db
+          .query("posLocalSyncMapping")
+          .withIndex("by_store_terminal_local", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .eq("terminalId", identity.terminalId!)
+              .eq("localRegisterSessionId", identity.localRegisterSessionId!)
+              .eq("localIdKind", identity.localIdKind)
+              .eq("localId", identity.localId!),
+          )
+          .unique();
+  if (
+    !mapping ||
+    mapping.cloudTable !== "operationalWorkItem" ||
+    mapping.cloudId !== String(args.workItem._id)
+  ) {
+    return UNMAPPED_INVENTORY_REVIEW_SOURCE_SETTLEMENT;
+  }
+
+  // The mapping row and the work item metadata both name the originating local
+  // event. They normally agree; a repaired mapping can name a second one, and
+  // the primitive deduplicates so the common case costs one conflict read.
+  const localEventIds = [
+    ...new Set(
+      [mapping.localEventId, identity.localEventId].filter(
+        (localEventId): localEventId is string =>
+          Boolean(localEventId && localEventId.trim()),
+      ),
+    ),
+  ];
+  if (localEventIds.length === 0) {
+    return UNMAPPED_INVENTORY_REVIEW_SOURCE_SETTLEMENT;
+  }
+
+  const settlement = await resolveLocalSyncReviewWithCtx(ctx, {
+    localEventIds,
+    now: args.resolvedAt,
+    storeId: args.storeId,
+    terminalId: identity.terminalId,
+    ...(args.resolvedByStaffProfileId
+      ? { resolvedByStaffProfileId: args.resolvedByStaffProfileId }
+      : {}),
+    ...(args.resolvedByUserId
+      ? { resolvedByUserId: args.resolvedByUserId }
+      : {}),
+  });
+
+  return {
+    disposition:
+      settlement.resolvedConflictCount > 0 ? "settled" : "no_open_conflicts",
+    localEventIds,
+    settledConflictCount: settlement.resolvedConflictCount,
+    terminalId: identity.terminalId,
+  };
+}
+
+function recordedInventoryReviewOutcome(
+  workItem: Doc<"operationalWorkItem">,
+): SyncedSaleInventoryReviewOutcome {
+  const resolution = workItem.metadata?.resolution;
+  const outcome =
+    resolution && typeof resolution === "object" && !Array.isArray(resolution)
+      ? (resolution as Record<string, unknown>).outcome
+      : null;
+  if (
+    outcome === "completed" ||
+    outcome === "dismissed" ||
+    outcome === "cancelled" ||
+    outcome === "superseded"
+  ) {
+    return outcome;
+  }
+  return workItem.status === "completed" ? "completed" : "cancelled";
+}
+
 function sourceMetadataFromWorkItem(metadata: Record<string, unknown>) {
+  if (inventoryReviewSourceKind(metadata) === "expense") {
+    const localExpenseEventId = stringMetadataValue(
+      metadata,
+      "localExpenseEventId",
+    );
+
+    return {
+      expenseSessionId: idMetadataValue<"expenseSession">(
+        metadata,
+        "expenseSessionId",
+      ),
+      localExpenseEventId,
+      localExpenseSessionId: stringMetadataValue(
+        metadata,
+        "localExpenseSessionId",
+      ),
+      localId: localExpenseEventId
+        ? inventoryReviewLocalId(localExpenseEventId)
+        : null,
+      localIdKind: INVENTORY_REVIEW_LOCAL_ID_KIND,
+      sourceId: idMetadataValue<"expenseTransaction">(metadata, "sourceId"),
+      sourceKind: "expense" as const,
+      terminalId: idMetadataValue<"posTerminal">(metadata, "terminalId"),
+    };
+  }
+
   const localTransactionId = stringMetadataValue(metadata, "localTransactionId");
 
   return {
@@ -361,6 +695,7 @@ function sourceMetadataFromWorkItem(metadata: Record<string, unknown>) {
       "registerSessionId",
     ),
     sourceId: idMetadataValue<"posTransaction">(metadata, "sourceId"),
+    sourceKind: "sale" as const,
     terminalId: idMetadataValue<"posTerminal">(metadata, "terminalId"),
   };
 }
@@ -447,10 +782,10 @@ export async function autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWit
   }
 
   if (movementsBySkuId.size === 0) {
-    return { resolvedCount: 0 };
+    return { resolvedCount: 0, settledConflictCount: 0 };
   }
   if (movementsBySkuId.size > AUTO_RESOLVE_STOCK_REVIEW_SKU_PROBE_LIMIT) {
-    return { resolvedCount: 0 };
+    return { resolvedCount: 0, settledConflictCount: 0 };
   }
 
   const workItemGroups = [];
@@ -475,6 +810,7 @@ export async function autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWit
   }
   const resolvedAt = Date.now();
   let resolvedCount = 0;
+  let settledConflictCount = 0;
 
   for (const workItem of workItemGroups.flat()) {
     const metadata = workItem.metadata ?? {};
@@ -492,6 +828,19 @@ export async function autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWit
     if (stockUpdate.createdAt < workItem.createdAt) {
       continue;
     }
+
+    // Same mutation as the work transition below: the applied stock adjustment
+    // settles the review and the sync conflicts that produced it together.
+    const sourceSettlement = await settleInventoryReviewSourceConflictsWithCtx(
+      ctx,
+      {
+        resolvedAt,
+        storeId: args.storeId,
+        workItem,
+        ...(args.actorUserId ? { resolvedByUserId: args.actorUserId } : {}),
+      },
+    );
+    settledConflictCount += sourceSettlement.settledConflictCount;
 
     const domainTrace = {
       boundary:
@@ -514,6 +863,7 @@ export async function autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWit
       reason: AUTO_RESOLVE_STOCK_REVIEW_REASON,
       resolvedAt,
       source: sourceMetadataFromWorkItem(metadata),
+      sourceSettlement,
       stockState: null,
       stockUpdate: {
         createdAt: stockUpdate.createdAt,
@@ -542,7 +892,7 @@ export async function autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWit
     await recordOperationalEventWithCtx(ctx, {
       actorUserId: args.actorUserId,
       eventType: "synced_sale_inventory_review_completed",
-      message: "Synced sale inventory review completed by stock adjustment.",
+      message: `Synced ${inventoryReviewSourceNoun(metadata)} inventory review completed by stock adjustment.`,
       organizationId: workItem.organizationId ?? args.organizationId,
       reason: AUTO_RESOLVE_STOCK_REVIEW_REASON,
       storeId: args.storeId,
@@ -559,6 +909,7 @@ export async function autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWit
         priorState: resolution.priorState,
         reason: resolution.reason,
         source: resolution.source,
+        sourceSettlement,
         stockState: null,
         stockUpdate: resolution.stockUpdate,
         terminalAudit: null,
@@ -568,7 +919,7 @@ export async function autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWit
     resolvedCount += 1;
   }
 
-  return { resolvedCount };
+  return { resolvedCount, settledConflictCount };
 }
 
 export async function resolveSyncedSaleInventoryReviewWithCtx(
@@ -617,10 +968,12 @@ export async function resolveSyncedSaleInventoryReviewWithCtx(
   ) {
     return validationError("Work item is not a synced sale inventory review.");
   }
-  if (TERMINAL_STATUSES.has(workItem.status)) {
-    return conflictError("Inventory review work is already terminal.");
-  }
-  if (workItem.status !== "open" && workItem.status !== "in_progress") {
+  const isTerminalWorkItem = TERMINAL_STATUSES.has(workItem.status);
+  if (
+    !isTerminalWorkItem &&
+    workItem.status !== "open" &&
+    workItem.status !== "in_progress"
+  ) {
     return conflictError("Inventory review work is not currently resolvable.");
   }
 
@@ -646,6 +999,92 @@ export async function resolveSyncedSaleInventoryReviewWithCtx(
 
   const actorStaffProfileId = actorStaffProfile?._id;
   const metadata = workItem.metadata ?? {};
+
+  if (isTerminalWorkItem) {
+    // Idempotent retry: the recorded work outcome is already durable, so the
+    // only remaining convergence gap is a mapped source conflict that never
+    // settled. Validate the same source context a first-time resolution would,
+    // then settle only what is still open.
+    const terminalSourceValidation =
+      await validateInventoryReviewSourceContextWithCtx(ctx, {
+        ...args,
+        workItem,
+      });
+    if (terminalSourceValidation.kind !== "ok") return terminalSourceValidation;
+
+    const recordedOutcome = recordedInventoryReviewOutcome(workItem);
+    const recordedStatus: "completed" | "cancelled" =
+      workItem.status === "completed" ? "completed" : "cancelled";
+    if (args.validateOnly) {
+      return ok({
+        action: "already_terminal",
+        outcome: recordedOutcome,
+        settledConflictCount: 0,
+        status: recordedStatus,
+        workItemId: args.workItemId,
+      });
+    }
+
+    const settledAt = Date.now();
+    const sourceSettlement = await settleInventoryReviewSourceConflictsWithCtx(
+      ctx,
+      {
+        resolvedAt: settledAt,
+        storeId: args.storeId,
+        workItem,
+        ...(actorStaffProfileId
+          ? { resolvedByStaffProfileId: actorStaffProfileId }
+          : {}),
+        resolvedByUserId: athenaUser._id,
+      },
+    );
+
+    if (sourceSettlement.settledConflictCount > 0) {
+      // Settlement-only evidence. The original resolution event still owns the
+      // work outcome, so this records who converged the lingering source rows
+      // rather than restating the terminal transition.
+      await recordOperationalEventWithCtx(ctx, {
+        actorStaffProfileId,
+        actorUserId: athenaUser._id,
+        eventType: INVENTORY_REVIEW_CONFLICTS_SETTLED_EVENT_TYPE,
+        message:
+          "Lingering synced sale sync conflicts settled for terminal inventory review.",
+        organizationId: store.organizationId,
+        reason: args.reason.trim(),
+        storeId: args.storeId,
+        subjectId: args.workItemId,
+        subjectLabel: workItem.title,
+        subjectType: SYNCED_SALE_INVENTORY_REVIEW_TYPE,
+        workItemId: args.workItemId,
+        metadata: {
+          authority: {
+            kind: "organization_member_role",
+            role: "full_admin",
+          },
+          domainTrace: {
+            boundary:
+              "operations.openWorkInventoryReviews.settleTerminalInventoryReviewSourceConflicts",
+            proofKind: "terminal_work_item_state",
+          },
+          nextState: { status: recordedStatus },
+          outcome: recordedOutcome,
+          priorState: { status: recordedStatus },
+          reason: args.reason.trim(),
+          source: sourceMetadataFromWorkItem(metadata),
+          sourceSettlement,
+        },
+      });
+    }
+
+    return ok({
+      action: "already_terminal",
+      outcome: recordedOutcome,
+      settledConflictCount: sourceSettlement.settledConflictCount,
+      status: recordedStatus,
+      workItemId: args.workItemId,
+    });
+  }
+
   const primaryProductSkuId =
     workItem.productSkuId ??
     idMetadataValue<"productSku">(metadata, "primaryProductSkuId");
@@ -690,8 +1129,14 @@ export async function resolveSyncedSaleInventoryReviewWithCtx(
 
   const resolvedAt = Date.now();
   const status = terminalStatusForOutcome(args.outcome);
-  const canonicalLocalId = args.localTransactionId
-    ? inventoryReviewLocalId(args.localTransactionId)
+  const sourceKind = inventoryReviewSourceKind(metadata);
+  const localSourceEventId =
+    sourceKind === "expense"
+      ? (args.localExpenseEventId ??
+        stringMetadataValue(metadata, "localExpenseEventId"))
+      : args.localTransactionId;
+  const canonicalLocalId = localSourceEventId
+    ? inventoryReviewLocalId(localSourceEventId)
     : null;
   const terminalIdFromMetadata = idMetadataValue<"posTerminal">(
     metadata,
@@ -718,29 +1163,45 @@ export async function resolveSyncedSaleInventoryReviewWithCtx(
     },
     reason: args.reason.trim(),
     resolvedAt,
-    source: {
-      localId: canonicalLocalId,
-      localIdKind: INVENTORY_REVIEW_LOCAL_ID_KIND,
-      localRegisterSessionId:
-        args.localRegisterSessionId ??
-        stringMetadataValue(metadata, "localRegisterSessionId"),
-      localTransactionId:
-        args.localTransactionId ??
-        stringMetadataValue(metadata, "localTransactionId"),
-      receiptNumber:
-        args.receiptNumber ?? stringMetadataValue(metadata, "receiptNumber"),
-      registerSessionId:
-        args.registerSessionId ?? idMetadataValue<"registerSession">(
-          metadata,
-          "registerSessionId",
-        ),
-      sourceId:
-        args.sourceId ?? idMetadataValue<"posTransaction">(
-          metadata,
-          "sourceId",
-        ),
-      terminalId: args.terminalId ?? terminalIdFromMetadata,
-    },
+    source:
+      sourceKind === "expense"
+        ? {
+            expenseSessionId:
+              args.expenseSessionId ??
+              idMetadataValue<"expenseSession">(metadata, "expenseSessionId"),
+            localExpenseEventId: localSourceEventId ?? null,
+            localExpenseSessionId:
+              args.localExpenseSessionId ??
+              stringMetadataValue(metadata, "localExpenseSessionId"),
+            localId: canonicalLocalId,
+            localIdKind: INVENTORY_REVIEW_LOCAL_ID_KIND,
+            sourceId:
+              args.expenseTransactionId ??
+              idMetadataValue<"expenseTransaction">(metadata, "sourceId"),
+            sourceKind: "expense" as const,
+            terminalId: args.terminalId ?? terminalIdFromMetadata,
+          }
+        : {
+            localId: canonicalLocalId,
+            localIdKind: INVENTORY_REVIEW_LOCAL_ID_KIND,
+            localRegisterSessionId:
+              args.localRegisterSessionId ??
+              stringMetadataValue(metadata, "localRegisterSessionId"),
+            localTransactionId:
+              args.localTransactionId ??
+              stringMetadataValue(metadata, "localTransactionId"),
+            receiptNumber:
+              args.receiptNumber ??
+              stringMetadataValue(metadata, "receiptNumber"),
+            registerSessionId:
+              args.registerSessionId ??
+              idMetadataValue<"registerSession">(metadata, "registerSessionId"),
+            sourceId:
+              args.sourceId ??
+              idMetadataValue<"posTransaction">(metadata, "sourceId"),
+            sourceKind: "sale" as const,
+            terminalId: args.terminalId ?? terminalIdFromMetadata,
+          },
     stockState,
     stockUpdate: stockUpdate
       ? {
@@ -772,16 +1233,34 @@ export async function resolveSyncedSaleInventoryReviewWithCtx(
     return ok({
       action: "resolved",
       outcome: args.outcome,
+      settledConflictCount: 0,
       status,
       workItemId: args.workItemId,
     });
   }
 
+  // Work transition and source settlement share this mutation, so a settlement
+  // failure rolls the transition back rather than leaving a terminal review
+  // above open conflicts.
+  const sourceSettlement = await settleInventoryReviewSourceConflictsWithCtx(
+    ctx,
+    {
+      resolvedAt,
+      storeId: args.storeId,
+      workItem,
+      ...(actorStaffProfileId
+        ? { resolvedByStaffProfileId: actorStaffProfileId }
+        : {}),
+      resolvedByUserId: athenaUser._id,
+    },
+  );
+  const settledResolution = { ...resolution, sourceSettlement };
+
   await ctx.db.patch("operationalWorkItem", args.workItemId, {
     ...(status === "completed" ? { completedAt: resolvedAt } : {}),
     metadata: {
       ...metadata,
-      resolution,
+      resolution: settledResolution,
     },
     status,
   });
@@ -790,10 +1269,9 @@ export async function resolveSyncedSaleInventoryReviewWithCtx(
     actorStaffProfileId,
     actorUserId: athenaUser._id,
     eventType: `synced_sale_inventory_review_${status}`,
-    message:
-      status === "completed"
-        ? "Synced sale inventory review completed."
-        : "Synced sale inventory review cancelled.",
+    message: `Synced ${inventoryReviewSourceNoun(metadata)} inventory review ${
+      status === "completed" ? "completed" : "cancelled"
+    }.`,
     organizationId: store.organizationId,
     reason: args.reason.trim(),
     storeId: args.storeId,
@@ -810,6 +1288,7 @@ export async function resolveSyncedSaleInventoryReviewWithCtx(
       priorState: resolution.priorState,
       reason: resolution.reason,
       source: resolution.source,
+      sourceSettlement,
       stockState: resolution.stockState,
       stockUpdate: resolution.stockUpdate,
       terminalAudit: "terminalAudit" in resolution ? resolution.terminalAudit : null,
@@ -824,6 +1303,7 @@ export async function resolveSyncedSaleInventoryReviewWithCtx(
   return ok({
     action: "resolved",
     outcome: args.outcome,
+    settledConflictCount: sourceSettlement.settledConflictCount,
     status,
     workItemId: args.workItemId,
   });
@@ -953,24 +1433,13 @@ export async function resolveSyncedSaleInventoryReviewGroupWithCtx(
   ]);
 
   const memberArgs = group.items.map((item) => {
-    const metadata = item.metadata ?? {};
+    // Every member is validated against its own source, so a mixed sale and
+    // expense SKU group never lets one member's proof stand in for another.
     return {
-      localRegisterSessionId:
-        stringMetadataValue(metadata, "localRegisterSessionId") ?? undefined,
-      localTransactionId:
-        stringMetadataValue(metadata, "localTransactionId") ?? undefined,
+      ...inventoryReviewSourceValidationArgsFromWorkItem(item),
       outcome: args.outcome,
       reason: args.reason,
-      receiptNumber:
-        stringMetadataValue(metadata, "receiptNumber") ?? undefined,
-      registerSessionId:
-        idMetadataValue<"registerSession">(metadata, "registerSessionId") ??
-        undefined,
-      sourceId:
-        idMetadataValue<"posTransaction">(metadata, "sourceId") ?? undefined,
       storeId: args.storeId,
-      terminalId:
-        idMetadataValue<"posTerminal">(metadata, "terminalId") ?? undefined,
       validatedContext: {
         actorStaffProfileId: actorStaffProfile?._id,
         actorUserId: athenaUser._id,
@@ -1012,6 +1481,10 @@ export async function resolveSyncedSaleInventoryReviewGroupWithCtx(
 export const resolveSyncedSaleInventoryReview = internalMutation({
   args: {
     actorStaffProfileId: v.optional(v.id("staffProfile")),
+    expenseSessionId: v.optional(v.id("expenseSession")),
+    expenseTransactionId: v.optional(v.id("expenseTransaction")),
+    localExpenseEventId: v.optional(v.string()),
+    localExpenseSessionId: v.optional(v.string()),
     localRegisterSessionId: v.optional(v.string()),
     localTransactionId: v.optional(v.string()),
     outcome: syncedSaleInventoryReviewOutcomeValidator,

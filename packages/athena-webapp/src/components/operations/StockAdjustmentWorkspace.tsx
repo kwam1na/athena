@@ -3375,12 +3375,12 @@ export function StockAdjustmentWorkspaceContent({
                   filters.work === "synced_sale_inventory_review" ? (
                     openSyncedSaleInventoryReview?.completeness ===
                     "incomplete" ? (
-                      "More open sale review SKUs exist outside this view. Finish the listed SKUs, then return for the rest."
+                      "More open inventory review SKUs exist outside this view. Finish the listed SKUs, then return for the rest."
                     ) : (openSyncedSaleInventoryReview?.workItemCount ?? 0) ===
                       0 ? (
-                      "All synced sale inventory review work items are resolved. No stock counts are needed."
+                      "All synced inventory review work items are resolved. No stock counts are needed."
                     ) : (
-                      `Enter reviewed counts for each SKU. Submitted stock updates close ${formatInventoryNumber(openSyncedSaleInventoryReview?.workItemCount ?? 0)} open sale inventory ${pluralize(openSyncedSaleInventoryReview?.workItemCount ?? 0, "work item")}.`
+                      `Enter reviewed counts for each SKU. Submitted stock updates close ${formatInventoryNumber(openSyncedSaleInventoryReview?.workItemCount ?? 0)} open inventory review ${pluralize(openSyncedSaleInventoryReview?.workItemCount ?? 0, "work item")}.`
                     )
                   ) : stockAdjustmentAutoLoadStatus ? (
                     <span
