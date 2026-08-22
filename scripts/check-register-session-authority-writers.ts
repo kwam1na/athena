@@ -13,11 +13,6 @@ const ALLOWED_WRITERS = new Map([
   ],
 ]);
 const ALLOWED_IMPLICIT_WRITES = new Set([
-  "convex/migrations/migrateAmountsToPesewas.ts:patch:order._id",
-  "convex/migrations/migrateAmountsToPesewas.ts:patch:session._id",
-  "convex/migrations/migrateAmountsToPesewas.ts:patch:store._id",
-  "convex/migrations/migrateAmountsToPesewas.ts:patch:sku._id",
-  "convex/migrations/migrateAmountsToPesewas.ts:patch:item._id",
   "convex/inventory/organizationMembers.ts:patch:member._id",
   "convex/inventory/organizations.ts:patch:args.id",
   "convex/inventory/organizations.ts:delete:args.id",
