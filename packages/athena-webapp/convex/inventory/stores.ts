@@ -53,6 +53,7 @@ import type {
   OperationQueryCtx,
 } from "../operationAdmission/types";
 import type { MutationCtx } from "../_generated/server";
+import { deleteAgentHarnessContentForStoreWithCtx } from "../agentHarness/retention";
 
 const entity = "store";
 const CONFIG_MIGRATION_PAGE_SIZE = 50;
@@ -108,7 +109,15 @@ export async function removeStoreWithCtx(
   if (!store) return true;
 
   const cleanup = await deleteWeeklyReportingForStoreWithCtx(ctx, storeId);
-  if (cleanup.hasMore) {
+  // Agent-harness content (prompts, replay payloads, scratch, claim support)
+  // is removed in the same bounded passes; audit rows only gain lifecycle
+  // markers and the runtime adapter is asked to clean its side.
+  const agentCleanup = await deleteAgentHarnessContentForStoreWithCtx(
+    ctx,
+    storeId,
+    Date.now(),
+  );
+  if (cleanup.hasMore || agentCleanup.hasMore) {
     await ctx.scheduler.runAfter(
       0,
       internal.inventory.stores.continueStoreRemoval,

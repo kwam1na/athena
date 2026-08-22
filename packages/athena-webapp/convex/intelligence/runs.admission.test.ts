@@ -31,7 +31,7 @@ vi.mock("../sharedDemo/actor", async (importOriginal) => ({
   getSharedDemoActorWithCtx: sharedDemoMocks.getSharedDemoActorWithCtx,
 }));
 
-import { dismissArtifact, latestArtifact } from "./runs";
+import { dismissArtifact, latestArtifact, latestArtifactBySubject, latestRunDebug } from "./runs";
 
 const modules = Object.fromEntries(
   Object.entries(import.meta.glob("../**/*.ts")).map(([path, loader]) => [
@@ -236,6 +236,160 @@ describe("intelligence admission", () => {
         }),
       ),
     ).rejects.toThrow("Store access denied.");
+  });
+});
+
+/**
+ * An Ask Athena answer committed by admin A. The harness turn views are the
+ * only readers of these rows: every one of them reauthorizes the viewer
+ * against the turn's own grant, suppression, and egress class. The legacy
+ * panel surfaces below carry none of that, so they must not see it.
+ */
+async function seedAgentAnswer(ctx: MutationCtx, fixture: Fixture) {
+  const now = Date.now();
+  const runId = await ctx.db.insert("intelligenceRun", {
+    actorRef: `athenaUser:${fixture.adminA}`,
+    attemptCount: 1,
+    capability: "agent:daily_operations",
+    createdAt: now + 10,
+    debugSubjectId: String(fixture.storeA),
+    debugSubjectTable: "store",
+    harnessKind: "agent",
+    idempotencyKey: "agent:turn-1",
+    principalKind: "athenaUser",
+    providerKey: "athena_contract_fake",
+    sourceRefs: [],
+    status: "completed",
+    storeId: fixture.storeA,
+    trigger: "operator",
+    updatedAt: now + 10,
+    visibilityMode: "store_admin",
+  });
+  const artifactId = await ctx.db.insert("intelligenceArtifact", {
+    capability: "agent:daily_operations",
+    createdAt: now + 11,
+    evidenceRefs: [],
+    kind: "agent_answer",
+    payload: { kind: "agent_answer.v1", outcome: "answer", narrative: "AGENT-ANSWER-NARRATIVE", egressClass: "sensitive", citations: [] },
+    runId,
+    snapshotHash: "hash-agent",
+    sourceRefs: [],
+    status: "ready",
+    storeId: fixture.storeA,
+    subjectId: String(fixture.storeA),
+    subjectTable: "store",
+    title: "Open shifts",
+    updatedAt: now + 11,
+    visibilityMode: "store_admin",
+  });
+  await ctx.db.patch("intelligenceRun", runId, { artifactId });
+  return { runId, artifactId };
+}
+
+describe("agent answers stay out of the legacy intelligence surfaces", () => {
+  beforeEach(() => {
+    sharedDemoMocks.getSharedDemoActorWithCtx.mockReset();
+    sharedDemoMocks.getSharedDemoActorWithCtx.mockResolvedValue(null);
+    accessMocks.requireStoreFullAdminAccess.mockReset();
+    accessMocks.requireStoreFullAdminAccess.mockImplementation(
+      async (_ctx: unknown, _storeId: unknown) => ({
+        athenaUser: { _id: adminAId },
+      }),
+    );
+  });
+
+  it("latestArtifact and latestArtifactBySubject answer null for an agent answer, for the initiating admin and a colleague alike", async () => {
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedFixture);
+    await t.run((ctx) => seedAgentAnswer(ctx, fixture));
+
+    for (const admin of [fixture.adminA, fixture.adminB]) {
+      for (const includeDismissed of [undefined, true]) {
+        expect(
+          await t.run((ctx) =>
+            getHandler(latestArtifact)(asAdmitted(ctx, admin), {
+              capability: "agent:daily_operations",
+              includeDismissed,
+              kind: "agent_answer",
+              storeId: fixture.storeA,
+            }),
+          ),
+        ).toBeNull();
+        expect(
+          await t.run((ctx) =>
+            getHandler(latestArtifactBySubject)(asAdmitted(ctx, admin), {
+              includeDismissed,
+              kind: "agent_answer",
+              storeId: fixture.storeA,
+              subjectId: String(fixture.storeA),
+              subjectTable: "store",
+            }),
+          ),
+        ).toBeNull();
+      }
+    }
+    // The legacy panel artifact is untouched by the exclusion.
+    const legacy = (await t.run((ctx) =>
+      getHandler(latestArtifact)(asAdmitted(ctx, fixture.adminA), {
+        capability: "storeInsights",
+        kind: "store_insights",
+        storeId: fixture.storeA,
+      }),
+    )) as { _id: Id<"intelligenceArtifact"> } | null;
+    expect(legacy?._id).toBe(fixture.artifactA);
+  });
+
+  it("latestRunDebug never surfaces an agent run, by capability or by subject", async () => {
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedFixture);
+    await t.run((ctx) => seedAgentAnswer(ctx, fixture));
+
+    for (const admin of [fixture.adminA, fixture.adminB]) {
+      expect(
+        await t.run((ctx) =>
+          getHandler(latestRunDebug)(asAdmitted(ctx, admin), {
+            capability: "agent:daily_operations",
+            storeId: fixture.storeA,
+          }),
+        ),
+      ).toBeNull();
+      expect(
+        await t.run((ctx) =>
+          getHandler(latestRunDebug)(asAdmitted(ctx, admin), {
+            capability: "agent:daily_operations",
+            sourceRefId: String(fixture.storeA),
+            sourceRefTable: "store",
+            storeId: fixture.storeA,
+          }),
+        ),
+      ).toBeNull();
+    }
+    // A legacy run still debugs.
+    expect(
+      await t.run((ctx) =>
+        getHandler(latestRunDebug)(asAdmitted(ctx, fixture.adminA), {
+          capability: "storeInsights",
+          storeId: fixture.storeA,
+        }),
+      ),
+    ).not.toBeNull();
+  });
+
+  it("dismissArtifact refuses to withdraw an agent answer and leaves it ready", async () => {
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(seedFixture);
+    const seeded = await t.run((ctx) => seedAgentAnswer(ctx, fixture));
+
+    for (const admin of [fixture.adminA, fixture.adminB]) {
+      await expect(
+        t.run((ctx) =>
+          getHandler(dismissArtifact)(asAdmitted(ctx, admin), { artifactId: seeded.artifactId }),
+        ),
+      ).rejects.toThrow(/conversation/);
+    }
+    const artifact = await t.run((ctx) => ctx.db.get("intelligenceArtifact", seeded.artifactId));
+    expect(artifact?.status).toBe("ready");
+    expect(artifact?.dismissedAt).toBeUndefined();
   });
 });
 

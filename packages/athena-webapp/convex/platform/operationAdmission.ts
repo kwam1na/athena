@@ -1,4 +1,18 @@
 import { internal } from "../_generated/api";
+import { AGENT_GENERATED_REGISTRY } from "../agentHarness/_generated/registry";
+import { createDelegatedAdmission } from "../agentHarness/delegatedAdmission";
+import { resolveDurableEnablementWithCtx } from "../agentHarness/deploymentState";
+import { createAgentReadPortRegistry } from "../agentHarness/readPorts";
+import type { AgentEvidenceExtractor } from "../agentHarness/conformance";
+import {
+  REGISTER_SESSIONS_EXTRACTOR,
+  REGISTER_SESSIONS_MANIFEST,
+} from "../cashControls/agentCapabilities/registers";
+import { STORE_DAY_EXTRACTOR, STORE_DAY_MANIFEST } from "../operations/agentCapabilities/storeDay";
+import { DAY_SALES_EXTRACTOR, DAY_SALES_MANIFEST } from "../reports/agentCapabilities/sales";
+import { POSITIONS_EXTRACTOR, POSITIONS_MANIFEST } from "../stockOps/agentCapabilities/inventory";
+import { FLEET_STORE_HEALTH_MANIFEST } from "../agentHarness/profiles/syntheticSecondSurface";
+import { STORE_HEALTH_UPTIME_EXTRACTOR } from "../agentHarness/profiles/syntheticSecondSurfaceConformance";
 import { captureSharedDemoAdmittedActionWithCtx } from "../contextTracking/sharedDemoActionCapture";
 import { getStorefrontClaimFromRequest } from "../http/utils";
 import { isAthenaUnauthenticatedError } from "../lib/athenaUnauthenticated";
@@ -22,6 +36,7 @@ import {
   createWhatsAppSignatureVerifier,
 } from "../operationAdmission/ingressVerification";
 import { walkthroughAllowedOrigins } from "../marketing/walkthroughConfig";
+import { createNormalUserDelegatedAuthorityPort } from "../operationAdmission/delegatedAuthority";
 import { createAdmissionRail } from "../operationAdmission/rail";
 import {
   createNormalUserReadOperationAdapter,
@@ -34,6 +49,7 @@ import type {
   OperationResourceGuards,
   OperationScopeConstraints,
 } from "../operationAdmission/types";
+import { createSharedDemoDelegatedAuthorityPort } from "../sharedDemo/delegatedAuthority";
 import { createSharedDemoOperationAdapter } from "../sharedDemo/operationAdapter";
 import { createSharedDemoReadOperationAdapter } from "../sharedDemo/readOperationAdapter";
 import {
@@ -139,6 +155,108 @@ export const admitReadOperationWithCtx =
   operationAdmissionRail.admitReadOperationWithCtx;
 
 export type { OperationScopeConstraints };
+
+/*
+ * Delegated agent admission (V26-1262) — the second composition here.
+ *
+ * An agent run never becomes an actor of the rail above. It holds a derived
+ * grant: the operator who opened the turn was admitted by the public rail, and
+ * every capability read the run triggers re-reads that operator's CURRENT
+ * authority through the port registered for their kind (normal user →
+ * membership and store scope; shared demo → principal, session, and the demo
+ * read-intent grant), intersects it with the grant pinned at run start and the
+ * live kill switch, and dispatches only to a read port the generated registry
+ * names AND this file binds to an `internal.*` query. Unbound ports are
+ * unreachable; a binding whose function name is not the registered path fails
+ * here, at composition time.
+ *
+ * A capability package registers its ports by appending `{ portKey, handler: internal.<module>.<export> }`
+ * entries below after `bun run agent-sdk:generate`; the port module itself is
+ * written with `defineAgentReadPortQuery` exported from this file.
+ */
+export const agentReadPorts = createAgentReadPortRegistry({
+  registry: AGENT_GENERATED_REGISTRY,
+  bindings: [
+    // Synthetic second surface: the non-isomorphic profile that proves the
+    // harness is not shaped around Daily Operations.
+    { portKey: "fleet.stores", handler: internal.agentHarness.profiles.syntheticSecondSurfacePorts.listStores },
+    { portKey: "fleet.storeHealth", handler: internal.agentHarness.profiles.syntheticSecondSurfacePorts.getStoreHealth },
+    { portKey: "directory.teams", handler: internal.agentHarness.profiles.syntheticSecondSurfacePorts.listTeams },
+    // Daily Operations profile. Each port module is written with
+    // `defineAgentReadPortQuery` below and colocated with its domain read code.
+    { portKey: "operations.storeDay", handler: internal.operations.agentCapabilities.storeDayPorts.getStoreDay },
+    { portKey: "operations.attention", handler: internal.operations.agentCapabilities.workPorts.listAttention },
+    { portKey: "operations.approvals", handler: internal.operations.agentCapabilities.workPorts.listApprovals },
+    { portKey: "operations.activity", handler: internal.operations.agentCapabilities.activityPorts.listActivity },
+    { portKey: "reports.daySales", handler: internal.reports.agentCapabilities.salesPorts.getDaySales },
+    { portKey: "reports.weekPerformance", handler: internal.reports.agentCapabilities.salesPorts.getWeekPerformance },
+    { portKey: "reports.storePulse", handler: internal.reports.agentCapabilities.salesPorts.getStorePulse },
+    {
+      portKey: "cash.registerSessions",
+      handler: internal.cashControls.agentCapabilities.registersPorts.readRegisterSessions,
+    },
+    {
+      portKey: "automation.dailyOperations",
+      handler: internal.automation.agentCapabilities.evidencePorts.listAutomationEvidence,
+    },
+    { portKey: "inventory.positions", handler: internal.stockOps.agentCapabilities.inventoryPorts.readPositions },
+    {
+      portKey: "inventory.replenishment",
+      handler: internal.stockOps.agentCapabilities.inventoryPorts.listReplenishment,
+    },
+  ],
+});
+
+/**
+ * Manifest-declared evidence extractors, resolved by capability id.
+ *
+ * The kernel may never import a product domain, and a domain port module must
+ * import THIS file for `defineAgentReadPortQuery`. So the index is built here,
+ * from the DECLARATION half of each package (manifests plus extractors, no
+ * database access), which imports nothing from this module and therefore
+ * creates no cycle. `convex/agentHarness/executorSeams.ts` resolves through it
+ * when it mints claim support at completion; an unregistered capability simply
+ * yields provenance-only evidence, which is the honest fail-closed default.
+ */
+const AGENT_EVIDENCE_EXTRACTORS: { readonly [capabilityId: string]: AgentEvidenceExtractor } = {
+  [STORE_DAY_MANIFEST.capabilityId]: STORE_DAY_EXTRACTOR,
+  [DAY_SALES_MANIFEST.capabilityId]: DAY_SALES_EXTRACTOR,
+  [REGISTER_SESSIONS_MANIFEST.capabilityId]: REGISTER_SESSIONS_EXTRACTOR,
+  [POSITIONS_MANIFEST.capabilityId]: POSITIONS_EXTRACTOR,
+  [FLEET_STORE_HEALTH_MANIFEST.capabilityId]: STORE_HEALTH_UPTIME_EXTRACTOR,
+};
+
+export function resolveAgentEvidenceExtractor(capabilityId: string): AgentEvidenceExtractor | undefined {
+  return AGENT_EVIDENCE_EXTRACTORS[capabilityId];
+}
+
+export const agentDelegatedAdmission = createDelegatedAdmission({
+  registry: AGENT_GENERATED_REGISTRY,
+  readPorts: agentReadPorts,
+  authorityPorts: {
+    normal_user: createNormalUserDelegatedAuthorityPort(),
+    shared_demo: createSharedDemoDelegatedAuthorityPort(),
+  },
+  // The live shrink-only overlay: the published baseline narrowed by the
+  // durable profile/capability switches, every profile DEFAULT OFF. Read on
+  // every delegated check, so a flipped switch denies immediately.
+  resolveEnablement: (ctx) => resolveDurableEnablementWithCtx(ctx, AGENT_GENERATED_REGISTRY.enablement),
+});
+
+/** Run start: pin the grant. `prepareAgentRunGrantWithCtx` feeds `recordTurnIntentWithCtx`. */
+export const prepareAgentRunGrantWithCtx = agentDelegatedAdmission.prepareRunGrantWithCtx;
+export const materializeAgentRunGrantWithCtx = agentDelegatedAdmission.materializeRunGrantWithCtx;
+/** Any time during dispatch, epoch fencing, or completion: re-derive the effective grant for a purpose. */
+export const reauthorizeAgentGrantWithCtx = agentDelegatedAdmission.reauthorizeGrantWithCtx;
+export const describeAgentGrantForModel = agentDelegatedAdmission.describeGrantForModel;
+/** Capability bridge: before dispatch, then before the result becomes program-visible. */
+export const admitAgentCapabilityCallWithCtx = agentDelegatedAdmission.admitCapabilityCallWithCtx;
+export const releaseAgentCapabilityResultWithCtx = agentDelegatedAdmission.releaseCapabilityResultWithCtx;
+/** Citations and completion: in the same transaction as the mint/commit. */
+export const reauthorizeAgentCitationsWithCtx = agentDelegatedAdmission.reauthorizeCitationsWithCtx;
+export const reauthorizeAgentCompletionWithCtx = agentDelegatedAdmission.reauthorizeCompletionWithCtx;
+/** Port authors: the only way to define a dispatchable read port. */
+export const defineAgentReadPortQuery = agentDelegatedAdmission.defineAgentReadPortQuery;
 
 /*
  * `resolveWriteAdmission` is deliberately NOT re-exported.

@@ -1,7 +1,10 @@
+import agent from "@convex-dev/agent/convex.config";
 import { defineApp } from "convex/server";
 import { v } from "convex/values";
 
-export default defineApp({
+import { CONVEX_AGENT_COMPONENT_NAME } from "./agentHarness/agentRuntime/convexAgentRegistration";
+
+const app = defineApp({
   env: {
     MAILERSEND_API_KEY: v.optional(v.string()),
     R2_PUBLIC_URL: v.optional(v.string()),
@@ -31,3 +34,11 @@ export default defineApp({
     ATHENA_WAIVER_ORIGIN: v.optional(v.string()),
   },
 });
+
+// Convex Agent must be mounted directly here: mounting it through a local module makes the
+// Convex backend reject the push (`start_push 500`, same class as convex-backend#467). This is
+// the one runtime-native import allowed outside `agentHarness/agentRuntime/` (a deliberate
+// deviation from that boundary); everything else about the runtime stays behind that directory.
+app.use(agent, { name: CONVEX_AGENT_COMPONENT_NAME });
+
+export default app;

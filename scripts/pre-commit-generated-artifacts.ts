@@ -6,6 +6,10 @@ import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
 import { writeGeneratedHarnessDocs } from "./harness-generate";
 import { TRACKED_GRAPHIFY_ARTIFACTS } from "./graphify-check";
 import { runGraphifyRebuild } from "./graphify-rebuild";
+import {
+  AGENT_SDK_GENERATED_ARTIFACTS,
+  writeAgentSdkArtifacts as writeAthenaAgentSdkArtifacts,
+} from "./agent-sdk-generate";
 
 const TRACKED_GENERATED_HARNESS_DOCS = [
   ...new Set(
@@ -21,11 +25,16 @@ const TRACKED_CONVEX_GENERATED_ARTIFACTS = [
   path.join("packages", "athena-webapp", "convex", "_generated", "server.js"),
 ].sort((left, right) => left.localeCompare(right));
 
+const TRACKED_AGENT_SDK_ARTIFACTS = [...AGENT_SDK_GENERATED_ARTIFACTS].sort(
+  (left, right) => left.localeCompare(right)
+);
+
 const HELP_TEXT = `Usage: bun scripts/pre-commit-generated-artifacts.ts [--help]
 
 Refresh and verify tracked generated artifacts that must be committed with source changes:
   - harness docs from the harness registry
   - Convex generated API files under packages/athena-webapp/convex/_generated/
+  - agent capability SDK artifacts under packages/athena-webapp/convex/agentHarness/_generated/
   - graphify artifacts under graphify-out/
   - tracked working-tree changes via git add --update
 
@@ -67,6 +76,7 @@ type PreCommitGeneratedArtifactsOptions = {
   verifyConvexGeneratedApi?: (rootDir: string) => Promise<void>;
   runGraphifyRebuild?: (rootDir: string) => Promise<void>;
   runHarnessGenerate?: (rootDir: string) => Promise<void>;
+  writeAgentSdkArtifacts?: (rootDir: string) => Promise<void>;
   spawn?: (
     command: string[],
     options: {
@@ -540,9 +550,17 @@ async function collectConvexSourceModulesFromDir(rootDir: string, currentDir: st
       continue;
     }
 
+    // Mirror the Convex CLI's entry-point rules (`entryPoints` in
+    // convex/dist/esm/bundler/index.js): a basename with more than one dot
+    // (`*.test.ts`, `*.d.ts`, `foo.harness.ts`), a dotfile, or a `#` temp file
+    // is never bundled as a function module, so `_generated/api.d.ts` will
+    // never reference it and the coverage check must not demand it.
+    const dotCount = (entry.name.match(/\./g) ?? []).length;
     if (
       !entry.isFile() ||
-      entry.name.endsWith(".test.ts") ||
+      dotCount > 1 ||
+      entry.name.startsWith(".") ||
+      entry.name.startsWith("#") ||
       (!entry.name.endsWith(".ts") && !entry.name.endsWith(".js"))
     ) {
       continue;
@@ -603,6 +621,11 @@ export async function runPreCommitGeneratedArtifacts(
       }));
   const verifyConvexGeneratedApi =
     options.verifyConvexGeneratedApi ?? verifyAthenaConvexGeneratedApi;
+  const generateAgentSdkArtifacts =
+    options.writeAgentSdkArtifacts ??
+    (async (artifactRootDir: string) => {
+      await writeAthenaAgentSdkArtifacts(artifactRootDir);
+    });
 
   logger.log("[pre-commit] Refreshing generated harness docs...");
   await generateHarnessDocs(rootDir);
@@ -627,6 +650,15 @@ export async function runPreCommitGeneratedArtifacts(
     "Convex generated API"
   );
 
+  logger.log("[pre-commit] Regenerating agent capability SDK artifacts...");
+  await generateAgentSdkArtifacts(rootDir);
+  await stageTrackedGeneratedArtifacts(
+    rootDir,
+    spawn,
+    TRACKED_AGENT_SDK_ARTIFACTS,
+    "agent capability SDK"
+  );
+
   logger.log("[pre-commit] Refreshing tracked graphify artifacts...");
   await rebuild(rootDir);
   await stageTrackedGeneratedArtifacts(
@@ -641,6 +673,7 @@ export async function runPreCommitGeneratedArtifacts(
 }
 
 export {
+  TRACKED_AGENT_SDK_ARTIFACTS,
   TRACKED_CONVEX_GENERATED_ARTIFACTS,
   TRACKED_GENERATED_HARNESS_DOCS,
   TRACKED_GRAPHIFY_ARTIFACTS,

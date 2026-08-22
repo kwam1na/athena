@@ -10,6 +10,8 @@ import {
 } from "./harness-audit";
 import { HarnessBlockedError } from "./harness-blockers";
 import { writeGeneratedHarnessDocs } from "./harness-generate";
+import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
+import { HARNESS_GATE_REGISTRY } from "./harness-gate-registry";
 
 const tempRoots: string[] = [];
 
@@ -1332,6 +1334,29 @@ async function createFixtureRepo() {
     "fixture\n",
     rootDir,
   );
+  // Agent harness surfaces (kernel, domain capability packages, delegated
+  // authority ports, shared contracts, and the reusable host) so the
+  // agent-harness validation scenario's mapped paths resolve.
+  for (const agentPath of [
+    "packages/athena-webapp/convex/agentHarness/registry.ts",
+    "packages/athena-webapp/convex/automation/agentCapabilities/evidence.ts",
+    "packages/athena-webapp/convex/cashControls/agentCapabilities/registers.ts",
+    "packages/athena-webapp/convex/operations/agentCapabilities/storeDay.ts",
+    "packages/athena-webapp/convex/reports/agentCapabilities/sales.ts",
+    "packages/athena-webapp/convex/stockOps/agentCapabilities/inventory.ts",
+    "packages/athena-webapp/convex/lib/agentCapabilityManifests.ts",
+    "packages/athena-webapp/convex/lib/agentCapabilitySupport.ts",
+    "packages/athena-webapp/convex/operationAdmission/delegatedAuthority.ts",
+    "packages/athena-webapp/convex/sharedDemo/delegatedAuthority.ts",
+    "packages/athena-webapp/convex/platform/operationAdmission.ts",
+    "packages/athena-webapp/convex/intelligence/providers/convexAgent.ts",
+    "packages/athena-webapp/convex.json",
+    "packages/athena-webapp/shared/agentHarness/values.ts",
+    "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
+    "packages/athena-webapp/src/components/operations/dailyOperationsAgentPresentation.ts",
+  ]) {
+    await write(agentPath, "export {};\n", rootDir);
+  }
   await write("packages/athena-webapp/convex/auth.ts", "export {};\n", rootDir);
   await write(
     "packages/athena-webapp/convex/auth/SharedDemoTicket.ts",
@@ -2221,5 +2246,56 @@ describe("runHarnessAudit", () => {
     ).resolves.toContain('"kind": "raw"');
 
     await expect(runHarnessAudit(rootDir)).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * The agent harness is gated on three things that a normal change is not:
+ * generated registry drift, operation-admission coverage, and the focused
+ * conformance/security/data-governance suites. This asserts them against the
+ * LIVE registry, not the fixture, because that registry is what decides which
+ * validations a touched file actually triggers.
+ */
+describe("agent harness merge gate", () => {
+  const scenario = HARNESS_APP_REGISTRY.flatMap((app) => app.validationScenarios).find(
+    (candidate) => candidate.id === "athena.agent-harness",
+  );
+
+  it("registers a review-sensitive agent-harness scenario", () => {
+    expect(scenario).toBeDefined();
+    expect(scenario!.reviewSensitive).toBe(true);
+    expect(
+      HARNESS_GATE_REGISTRY.obligations["review.green"].activation.kind === "review_projection" &&
+        HARNESS_GATE_REGISTRY.obligations["review.green"].activation.sensitiveScenarioIds,
+    ).toContain("athena.agent-harness");
+  });
+
+  it("covers the kernel, the capability packages, the admission ports, and the host", () => {
+    const paths = scenario!.touchedPaths;
+    for (const required of [
+      "convex/agentHarness",
+      "convex/platform/operationAdmission.ts",
+      "convex/operationAdmission/delegatedAuthority.ts",
+      "shared/agentHarness",
+      "src/components/agent",
+    ]) {
+      expect(paths, required).toContain(required);
+    }
+    for (const domain of ["automation", "cashControls", "operations", "reports", "stockOps"]) {
+      expect(paths).toContain(`convex/${domain}/agentCapabilities`);
+    }
+  });
+
+  it("gates on generated registry drift, admission coverage, and the focused suites", () => {
+    const commands = scenario!.commands;
+    expect(commands).toContainEqual({ kind: "raw", command: "bun run agent-sdk:check" });
+    expect(commands).toContainEqual({ kind: "script", script: "audit:convex" });
+    const focused = commands.find(
+      (command) => command.kind === "raw" && command.command.includes("convex/agentHarness"),
+    );
+    expect(focused, "the focused agent-harness suite must run").toBeDefined();
+    // `convex/operationAdmission` carries the zero-findings coverage assertion,
+    // so a new unadmitted export fails this scenario as well as the checker.
+    expect(focused!.kind === "raw" && focused!.command).toContain("convex/operationAdmission");
   });
 });

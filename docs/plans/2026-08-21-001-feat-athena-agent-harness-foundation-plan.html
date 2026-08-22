@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Athena Agent Harness Foundation — Plan Review</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b1020; --panel:#121a2f; --panel2:#18233d; --ink:#edf2ff; --muted:#9eacc9; --line:#2d3a5d; --accent:#7dd3fc; --green:#6ee7b7; --amber:#fbbf24; --rose:#fb7185; }
+    * { box-sizing:border-box; }
+    body { margin:0; font:15px/1.6 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:radial-gradient(circle at 85% 5%,#16284b 0,transparent 32rem),var(--bg); color:var(--ink); }
+    main { width:min(1180px,calc(100% - 32px)); margin:0 auto; padding:48px 0 80px; }
+    h1,h2,h3 { line-height:1.15; letter-spacing:-.025em; }
+    h1 { max-width:850px; font-size:clamp(38px,6vw,72px); margin:12px 0 20px; }
+    h2 { margin:0 0 18px; font-size:27px; }
+    h3 { margin:0 0 10px; font-size:18px; }
+    p { margin:0 0 14px; }
+    a { color:var(--accent); }
+    .eyebrow { color:var(--accent); text-transform:uppercase; letter-spacing:.16em; font-weight:800; font-size:12px; }
+    .lede { color:#c9d5ef; font-size:19px; max-width:900px; }
+    .meta,.chips { display:flex; flex-wrap:wrap; gap:9px; margin:24px 0 0; }
+    .chip { border:1px solid var(--line); border-radius:999px; padding:5px 10px; color:var(--muted); background:#0f172a99; }
+    section { margin-top:48px; }
+    .grid { display:grid; grid-template-columns:repeat(12,1fr); gap:16px; }
+    .card { grid-column:span 4; background:linear-gradient(150deg,var(--panel2),var(--panel)); border:1px solid var(--line); border-radius:16px; padding:20px; }
+    .wide { grid-column:span 6; }
+    .full { grid-column:1/-1; }
+    .num { display:inline-grid; place-items:center; width:30px; height:30px; border-radius:9px; background:#203354; color:var(--accent); font-weight:800; margin-bottom:12px; }
+    ul { margin:8px 0 0; padding-left:20px; }
+    li { margin:5px 0; color:#c8d4ed; }
+    .rail { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; align-items:stretch; }
+    .stage { position:relative; border:1px solid var(--line); border-radius:14px; padding:16px; background:var(--panel); }
+    .stage:not(:last-child)::after { content:"→"; position:absolute; right:-12px; top:50%; color:var(--accent); z-index:2; font-weight:900; }
+    .stage b { display:block; color:var(--green); }
+    .stage small { color:var(--muted); }
+    table { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); }
+    th,td { padding:11px 13px; text-align:left; vertical-align:top; border-bottom:1px solid var(--line); }
+    th { color:var(--accent); background:#17223b; }
+    td { color:#c8d4ed; }
+    code { color:#bae6fd; background:#0b1327; padding:2px 5px; border-radius:5px; }
+    .callout { border-left:4px solid var(--amber); padding:16px 18px; background:#261e0c; border-radius:0 12px 12px 0; }
+    .boundary { border-left-color:var(--rose); background:#2a111b; }
+    .ok { color:var(--green); }
+    footer { color:var(--muted); border-top:1px solid var(--line); margin-top:56px; padding-top:20px; }
+    @media (max-width:850px) { .card,.wide { grid-column:1/-1; } .rail { grid-template-columns:1fr; } .stage:not(:last-child)::after { content:"↓"; right:50%; top:auto; bottom:-17px; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Implementation plan · 21 August 2026</div>
+    <h1>Athena agent harness foundation</h1>
+    <p class="lede">A governed, read-only agent layer that lets models compose Athena’s operational intelligence without bypassing Athena’s identity, admission, evidence, or domain-authority rails.</p>
+    <div class="meta"><span class="chip">Status: active · streamlined</span><span class="chip">Convex Agent via Athena adapter</span><span class="chip">Constrained TypeScript</span><span class="chip">Daily Operations first adapter</span><span class="chip">10 implementation units</span></div>
+  </header>
+
+  <section>
+    <h2>The architectural split</h2>
+    <div class="grid">
+      <article class="card wide"><h3>Convex Agent owns through one adapter</h3><ul><li>Runtime thread and message mechanics</li><li>Model turns, internal streaming, and tool-loop progression</li><li>Its compatible model/provider invocation</li><li>Final conversational narrative, buffered until authorized release</li></ul></article>
+      <article class="card wide"><h3>Athena owns</h3><ul><li>The runtime contract, opaque references, and normalized events</li><li>Operator identity, delegated grants, tenant/store scope</li><li>Capability semantics, budgets, evidence, and citations</li><li>Intelligence runs, artifacts, approvals, and operational truth</li></ul></article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Request path</h2>
+    <div class="rail">
+      <div class="stage"><b>1 · Intent</b><small>Authorize operator; create or resume an Athena run and opaque runtime thread.</small></div>
+      <div class="stage"><b>2 · Discover</b><small>Reveal compact metadata only for granted packages.</small></div>
+      <div class="stage"><b>3 · Program</b><small>Model submits import-free TypeScript to one execution tool.</small></div>
+      <div class="stage"><b>4 · Read</b><small>Every bridge call revalidates authority and invokes a domain read port.</small></div>
+      <div class="stage"><b>5 · Release</b><small>Commit a cited answer, reauthorize each view, and record actual receipt separately.</small></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Foundational contracts</h2>
+    <div class="grid">
+      <article class="card"><div class="num">A</div><h3>Capability package</h3><p>Domain-owned semantic resources with typed filters, projections, bounds, sensitivity, freshness, completeness, evidence, cost, and lifecycle.</p></article>
+      <article class="card"><div class="num">B</div><h3>Agent profile adapter</h3><p>Selects packages, versions, scope, prompt/context policy, budgets, presentation, and evaluations. It does not alter the kernel.</p></article>
+      <article class="card"><div class="num">C</div><h3>Generated registry</h3><p>Build-time validated declarations and runtime schemas under an immutable digest with progressive, grant-filtered discovery.</p></article>
+      <article class="card"><div class="num">D</div><h3>Delegated grant</h3><p>Fail-closed intersection of profile, operator permission, tenant/store scope, lifecycle, emergency clamps, and run policy.</p></article>
+      <article class="card"><div class="num">E</div><h3>Program executor</h3><p>Replaceable sandbox, Athena-owned validation, async mediated bridge, run-wide limits, one explicit output, and no host facilities.</p></article>
+      <article class="card"><div class="num">F</div><h3>Evidence protocol</h3><p>Run → attempt → capability call lineage, normalized arguments, usage, result hashes, opaque citations, and derived completeness.</p></article>
+      <article class="card"><div class="num">G</div><h3>Agent runtime adapter</h3><p>Opaque runtime references, normalized lifecycle events, and bidirectional Athena-owned tool dispatch. Convex Agent is the sole v1 implementation; a contract fake proves separation.</p></article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Delivery map</h2>
+    <table>
+      <thead><tr><th>Unit</th><th>Outcome</th><th>Depends on</th></tr></thead>
+      <tbody>
+        <tr><td>U1</td><td>Durable run, attempt, call, budget, citation, and scratch lifecycle</td><td>—</td></tr>
+        <tr><td>U2</td><td>Capability SDK, runtime adapter, manifest, result, bridge, and profile contracts</td><td>U1</td></tr>
+        <tr><td>U3</td><td>Manifest compiler, immutable registry, progressive discovery, drift gate</td><td>U2</td></tr>
+        <tr><td>U4</td><td>Delegated admission and registered domain-owned internal read ports</td><td>U1, U3</td></tr>
+        <tr><td>U5</td><td>Convex Agent adapter, registration shim, tool-dispatch conformance, Node 22, and sandbox gate</td><td>U2</td></tr>
+        <tr><td>U6</td><td>Executor, scheduling, budgets, evidence, result envelopes, citations</td><td>U1, U3–U5</td></tr>
+        <tr><td>U7</td><td>Runtime-neutral host over the Convex Agent adapter, projected history, fixed tool loop, completion outbox</td><td>U6</td></tr>
+        <tr><td>U8</td><td>Full Daily Operations semantic packages and one reusable profile adapter</td><td>U3, U4, U6</td></tr>
+        <tr><td>U9</td><td>Reusable operational-evidence host with Daily Operations mounted through profile metadata</td><td>U7, U8</td></tr>
+        <tr><td>U10</td><td>Focused security/conformance smoke checks, enable switch, and docs</td><td>U1–U9</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Daily Operations is the first adapter—not the kernel</h2>
+    <div class="grid">
+      <article class="card wide"><h3>Selected semantic packages</h3><ul><li>Store-day lifecycle and readiness</li><li>Sales, pulse, week metrics, payments, top items</li><li>Operational work, approvals, and queue</li><li>Registers and cash</li><li>Activity and timeline</li><li>Automation evidence</li><li>Inventory and stock</li></ul></article>
+      <article class="card wide"><h3>Extension proof</h3><p>A synthetic second profile must use the same manifest registration, compiler, grant, discovery, executor, evidence, completion, and UI host contracts.</p><p class="ok"><strong>Pass condition:</strong> no Daily Operations imports or branches exist in the kernel, and a second surface requires only conforming manifests plus profile selection.</p></article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Hard boundaries</h2>
+    <div class="callout boundary"><strong>Read-only means structurally unreachable:</strong> no mutations, scheduling, network, credentials, filesystem, imports, dynamic evaluation, timers, randomness, ambient clock, raw database access, Convex context, public API re-entry, or function registry. Convex Agent/component imports are also confined to one adapter directory. Future writes use a separate proposal → fresh precondition → Athena approval → admitted domain-command rail.</div>
+  </section>
+
+  <section>
+    <h2>Runtime decision gate</h2>
+    <div class="grid">
+      <article class="card wide"><h3>Single runtime, separate sandbox choice</h3><p>Convex Agent is the only v1 orchestration runtime and must pass Athena’s adapter contract. <code>@ai-sdk/code-mode</code> remains the leading program-sandbox candidate in a Node 22 Convex action, wrapped behind the generated <code>athena.*</code> facade.</p></article>
+      <article class="card wide"><h3>Exit criteria</h3><p>Deployability, Agent-to-runner bridge, multi-package calls, cancellation, concurrency, hard resource limits, invalid-program rejection, escape testing, and zero host access. If it fails, choose direct QuickJS or external microVM; never <code>node:vm</code>.</p></article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Release posture</h2>
+    <div class="rail">
+      <div class="stage"><b>Build</b><small>Land the reusable contracts, Convex Agent adapter, executor, profile, and host.</small></div>
+      <div class="stage"><b>Smoke</b><small>Run direct-harness checks while the operator profile remains disabled.</small></div>
+      <div class="stage"><b>Enable</b><small>Turn on <code>daily_operations.v1</code> broadly through one reversible profile switch.</small></div>
+      <div class="stage"><b>Learn</b><small>Monitor the first real turns, then use latency, cost, errors, and behavior to iterate.</small></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Review outcome</h2>
+    <div class="callout"><strong>Aligned:</strong> fresh coherence, scope, and adversarial review found no material blocker in the streamlined one-switch release, compatibility epoch, tool idempotency, or usage settlement design.</div>
+  </section>
+
+  <footer>
+    Full implementation detail, test scenarios, risks, alternatives, and source references live in <a href="2026-08-21-001-feat-athena-agent-harness-foundation-plan.md">the Markdown plan</a>. Origin: <a href="../brainstorms/2026-08-21-athena-agent-harness-foundation-requirements.md">confirmed requirements</a>.
+  </footer>
+</main>
+</body>
+</html>

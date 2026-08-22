@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { GRAPHIFY_WIKI_ARTIFACTS } from "./graphify-wiki";
 import {
+  TRACKED_AGENT_SDK_ARTIFACTS,
   TRACKED_CONVEX_GENERATED_ARTIFACTS,
   TRACKED_GENERATED_HARNESS_DOCS,
   TRACKED_GRAPHIFY_ARTIFACTS,
@@ -67,6 +68,9 @@ describe("runPreCommitGeneratedArtifacts", () => {
       verifyConvexGeneratedApi: async () => {
         steps.push("convex:verify");
       },
+      writeAgentSdkArtifacts: async () => {
+        steps.push("agent-sdk:generate");
+      },
       runGraphifyRebuild: async () => {
         steps.push("graphify:rebuild");
       },
@@ -89,6 +93,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
       "convex:refresh",
       "convex:verify",
       `git add -- ${TRACKED_CONVEX_GENERATED_ARTIFACTS.join(" ")}`,
+      "agent-sdk:generate",
+      `git add -- ${TRACKED_AGENT_SDK_ARTIFACTS.join(" ")}`,
       "graphify:rebuild",
       `git add -- ${TRACKED_GRAPHIFY_ARTIFACTS.join(" ")}`,
       "git add --update -- .",
@@ -102,6 +108,7 @@ describe("runPreCommitGeneratedArtifacts", () => {
       runHarnessGenerate: async () => {},
       hasConvexSourceChanges: async () => false,
       verifyConvexGeneratedApi: async () => {},
+      writeAgentSdkArtifacts: async () => {},
       runGraphifyRebuild: async () => {},
       spawn(command) {
         commands.push(command);
@@ -118,6 +125,7 @@ describe("runPreCommitGeneratedArtifacts", () => {
     expect(commands).toEqual([
       ["git", "add", "--", ...TRACKED_GENERATED_HARNESS_DOCS],
       ["git", "add", "--", ...TRACKED_CONVEX_GENERATED_ARTIFACTS],
+      ["git", "add", "--", ...TRACKED_AGENT_SDK_ARTIFACTS],
       ["git", "add", "--", ...TRACKED_GRAPHIFY_ARTIFACTS],
       ["git", "add", "--update", "--", "."],
     ]);
@@ -130,6 +138,7 @@ describe("runPreCommitGeneratedArtifacts", () => {
       runHarnessGenerate: async () => {},
       hasConvexSourceChanges: async () => false,
       verifyConvexGeneratedApi: async () => {},
+      writeAgentSdkArtifacts: async () => {},
       runGraphifyRebuild: async () => {},
       spawn(command) {
         commands.push(command);
@@ -153,6 +162,7 @@ describe("runPreCommitGeneratedArtifacts", () => {
       runHarnessGenerate: async () => {},
       hasConvexSourceChanges: async () => false,
       verifyConvexGeneratedApi: async () => {},
+      writeAgentSdkArtifacts: async () => {},
       runGraphifyRebuild: async () => {},
       spawn(command) {
         commands.push(command);
@@ -177,7 +187,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
         runHarnessGenerate: async () => {},
         hasConvexSourceChanges: async () => false,
         verifyConvexGeneratedApi: async () => {},
-        runGraphifyRebuild: async () => {},
+      writeAgentSdkArtifacts: async () => {},
+      runGraphifyRebuild: async () => {},
         spawn() {
           return {
             exited: Promise.resolve(1),
@@ -199,7 +210,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
         verifyConvexGeneratedApi: async () => {
           throw new Error("convex generated api drift");
         },
-        runGraphifyRebuild: async () => {},
+      writeAgentSdkArtifacts: async () => {},
+      runGraphifyRebuild: async () => {},
         spawn() {
           return {
             exited: Promise.resolve(0),
@@ -222,7 +234,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
           throw new Error("convex refresh failed");
         },
         verifyConvexGeneratedApi: async () => {},
-        runGraphifyRebuild: async () => {},
+      writeAgentSdkArtifacts: async () => {},
+      runGraphifyRebuild: async () => {},
         spawn() {
           return {
             exited: Promise.resolve(0),
@@ -248,7 +261,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
 
       await runPreCommitGeneratedArtifacts(repoDir, {
         runHarnessGenerate: async () => {},
-        runGraphifyRebuild: async () => {},
+      writeAgentSdkArtifacts: async () => {},
+      runGraphifyRebuild: async () => {},
         spawn(command, options) {
           commands.push({
             command,
@@ -311,7 +325,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
 
       await runPreCommitGeneratedArtifacts(repoDir, {
         runHarnessGenerate: async () => {},
-        runGraphifyRebuild: async () => {},
+      writeAgentSdkArtifacts: async () => {},
+      runGraphifyRebuild: async () => {},
         spawn(command, options) {
           commands.push({ command, env: options.env });
 
@@ -371,7 +386,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
       await expect(
         runPreCommitGeneratedArtifacts(repoDir, {
           runHarnessGenerate: async () => {},
-          runGraphifyRebuild: async () => {},
+      writeAgentSdkArtifacts: async () => {},
+      runGraphifyRebuild: async () => {},
           resolveHostname: async () => {
             throw Object.assign(new Error("query timed out"), { code: "EAI_AGAIN" });
           },
@@ -421,7 +437,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
       await expect(
         runPreCommitGeneratedArtifacts(repoDir, {
           runHarnessGenerate: async () => {},
-          runGraphifyRebuild: async () => {},
+      writeAgentSdkArtifacts: async () => {},
+      runGraphifyRebuild: async () => {},
           resolveHostname: async () => new Promise(() => {}),
           resolverTimeoutMs: 1,
           retryDelay: async () => {},
@@ -471,7 +488,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
       await expect(
         runPreCommitGeneratedArtifacts(repoDir, {
           runHarnessGenerate: async () => {},
-          runGraphifyRebuild: async () => {},
+      writeAgentSdkArtifacts: async () => {},
+      runGraphifyRebuild: async () => {},
           convexAttemptTimeoutMs: 1,
           convexTerminationGraceMs: 1,
           resolveHostname: async () => {
@@ -537,7 +555,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
       await expect(
         runPreCommitGeneratedArtifacts(repoDir, {
           runHarnessGenerate: async () => {},
-          runGraphifyRebuild: async () => {},
+      writeAgentSdkArtifacts: async () => {},
+      runGraphifyRebuild: async () => {},
           convexAttemptTimeoutMs: 1,
           convexTerminationGraceMs: 1,
           resolveHostname: async () => {
@@ -595,7 +614,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
       await expect(
         runPreCommitGeneratedArtifacts(repoDir, {
           runHarnessGenerate: async () => {},
-          runGraphifyRebuild: async () => {},
+      writeAgentSdkArtifacts: async () => {},
+      runGraphifyRebuild: async () => {},
           convexAttemptTimeoutMs: 1,
           convexTerminationGraceMs: 1,
           resolveHostname: async () => [{ address: "203.0.113.1" }],
@@ -649,7 +669,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
 
       await runPreCommitGeneratedArtifacts(repoDir, {
         runHarnessGenerate: async () => {},
-        runGraphifyRebuild: async () => {},
+      writeAgentSdkArtifacts: async () => {},
+      runGraphifyRebuild: async () => {},
         resolveHostname: async () => {
           throw Object.assign(new Error("temporary resolver failure"), {
             code: "EAI_AGAIN",
@@ -707,7 +728,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
       await expect(
         runPreCommitGeneratedArtifacts(repoDir, {
           runHarnessGenerate: async () => {},
-          runGraphifyRebuild: async () => {},
+      writeAgentSdkArtifacts: async () => {},
+      runGraphifyRebuild: async () => {},
           resolveHostname: async () => {
             resolverCalls += 1;
           },
@@ -760,7 +782,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
       await expect(
         runPreCommitGeneratedArtifacts(repoDir, {
           runHarnessGenerate: async () => {},
-          runGraphifyRebuild: async () => {},
+      writeAgentSdkArtifacts: async () => {},
+      runGraphifyRebuild: async () => {},
           resolveHostname: async () => {
             throw Object.assign(new Error("temporary resolver failure"), {
               code: "EAI_AGAIN",
@@ -815,7 +838,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
 
       await runPreCommitGeneratedArtifacts(repoDir, {
         runHarnessGenerate: async () => {},
-        runGraphifyRebuild: async () => {},
+      writeAgentSdkArtifacts: async () => {},
+      runGraphifyRebuild: async () => {},
         spawn(command, options) {
           commands.push(command.join(" "));
 
@@ -851,7 +875,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
       await expect(
         runPreCommitGeneratedArtifacts(repoDir, {
           runHarnessGenerate: async () => {},
-          runGraphifyRebuild: async () => {},
+      writeAgentSdkArtifacts: async () => {},
+      runGraphifyRebuild: async () => {},
           spawn(command) {
             if (command[0] === "git" && command[1] === "status") {
               return {
@@ -875,6 +900,45 @@ describe("runPreCommitGeneratedArtifacts", () => {
     });
   });
 
+  it("does not demand modules the Convex CLI never bundles (multi-dot, dotfile, # temp)", async () => {
+    await withTempRepo(async (repoDir) => {
+      await writeConvexApiFixture(repoDir);
+      const catalogDir = path.join(
+        repoDir,
+        "packages",
+        "athena-webapp",
+        "convex",
+        "catalog"
+      );
+      // The CLI skips basenames with more than one dot, dotfiles, and `#`
+      // files as function entry points, so `_generated/api.d.ts` never lists
+      // them; the coverage check must mirror that rule.
+      await writeFile(path.join(catalogDir, "items.harness.ts"), "export {};\n");
+      await writeFile(path.join(catalogDir, "items.d.ts"), "export {};\n");
+      await writeFile(path.join(catalogDir, ".scratch.ts"), "export {};\n");
+      await writeFile(path.join(catalogDir, "#items.ts"), "export {};\n");
+
+      await expect(
+        runPreCommitGeneratedArtifacts(repoDir, {
+          runHarnessGenerate: async () => {},
+          hasConvexSourceChanges: async () => false,
+          writeAgentSdkArtifacts: async () => {},
+          runGraphifyRebuild: async () => {},
+          spawn() {
+            return {
+              exited: Promise.resolve(0),
+              stdout: new Response("").body,
+              stderr: new Response("").body,
+            };
+          },
+          logger: {
+            log() {},
+          },
+        })
+      ).resolves.toBeUndefined();
+    });
+  });
+
   it("fails clearly when default Convex source inspection fails", async () => {
     await withTempRepo(async (repoDir) => {
       await writeConvexApiFixture(repoDir);
@@ -882,7 +946,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
       await expect(
         runPreCommitGeneratedArtifacts(repoDir, {
           runHarnessGenerate: async () => {},
-          runGraphifyRebuild: async () => {},
+      writeAgentSdkArtifacts: async () => {},
+      runGraphifyRebuild: async () => {},
           spawn(command) {
             if (command[0] === "git" && command[1] === "status") {
               return {
@@ -914,7 +979,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
         runHarnessGenerate: async () => {},
         hasConvexSourceChanges: async () => false,
         verifyConvexGeneratedApi: async () => {},
-        runGraphifyRebuild: async () => {},
+      writeAgentSdkArtifacts: async () => {},
+      runGraphifyRebuild: async () => {},
         spawn() {
           spawnCount += 1;
           if (spawnCount === 1) {
@@ -943,7 +1009,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
         runHarnessGenerate: async () => {},
         hasConvexSourceChanges: async () => false,
         verifyConvexGeneratedApi: async () => {},
-        runGraphifyRebuild: async () => {},
+      writeAgentSdkArtifacts: async () => {},
+      runGraphifyRebuild: async () => {},
         spawn() {
           spawnCount += 1;
           if (spawnCount < 3) {
@@ -972,10 +1039,11 @@ describe("runPreCommitGeneratedArtifacts", () => {
         runHarnessGenerate: async () => {},
         hasConvexSourceChanges: async () => false,
         verifyConvexGeneratedApi: async () => {},
+        writeAgentSdkArtifacts: async () => {},
         runGraphifyRebuild: async () => {},
         spawn() {
           spawnCount += 1;
-          if (spawnCount < 4) {
+          if (spawnCount < 5) {
             return {
               exited: Promise.resolve(0),
               stderr: new Response("").body,
@@ -1001,10 +1069,11 @@ describe("runPreCommitGeneratedArtifacts", () => {
         runHarnessGenerate: async () => {},
         hasConvexSourceChanges: async () => false,
         verifyConvexGeneratedApi: async () => {},
+        writeAgentSdkArtifacts: async () => {},
         runGraphifyRebuild: async () => {},
         spawn() {
           spawnCount += 1;
-          if (spawnCount < 4) {
+          if (spawnCount < 5) {
             return {
               exited: Promise.resolve(0),
               stderr: new Response("").body,
@@ -1031,6 +1100,27 @@ describe("runPreCommitGeneratedArtifacts", () => {
       path.join("packages", "athena-webapp", "convex", "_generated", "dataModel.d.ts"),
       path.join("packages", "athena-webapp", "convex", "_generated", "server.d.ts"),
       path.join("packages", "athena-webapp", "convex", "_generated", "server.js"),
+    ]);
+  });
+
+  it("keeps the tracked agent capability SDK artifact list aligned with repo outputs", () => {
+    expect(TRACKED_AGENT_SDK_ARTIFACTS).toEqual([
+      path.join(
+        "packages",
+        "athena-webapp",
+        "convex",
+        "agentHarness",
+        "_generated",
+        "registry.ts"
+      ),
+      path.join(
+        "packages",
+        "athena-webapp",
+        "convex",
+        "agentHarness",
+        "_generated",
+        "schemas.ts"
+      ),
     ]);
   });
 

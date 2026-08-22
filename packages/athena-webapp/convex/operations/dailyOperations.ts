@@ -48,7 +48,7 @@ import {
 } from "./dailyOperations/frozenMetricAuthority";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const MAX_OPERATIONS_QUERY_LIMIT = 200;
+export const MAX_OPERATIONS_QUERY_LIMIT = 200;
 const MAX_OPERATIONS_LOOKAHEAD_LIMIT = MAX_OPERATIONS_QUERY_LIMIT + 1;
 const MAX_ACTIVE_REPAIR_QUERY_LIMIT = 200;
 const COMPACT_OPERATIONS_TIMELINE_LIMIT = 5;
@@ -109,7 +109,7 @@ type LifecycleStatus =
   | "reopened"
   | "closed";
 
-type DailyOperationsAttentionItem = {
+export type DailyOperationsAttentionItem = {
   id: string;
   label: string;
   message: string;
@@ -151,7 +151,7 @@ type DailyOperationsLane = {
   to: string;
 };
 
-type DailyOperationsTimelineEvent = {
+export type DailyOperationsTimelineEvent = {
   approvedProductLink?: LinkTarget;
   createdAt: number;
   id: string;
@@ -436,7 +436,7 @@ async function buildLiveWeekMetricForDate(
   };
 }
 
-async function buildWeekMetricsForDates(
+export async function buildWeekMetricsForDates(
   ctx: Pick<QueryCtx, "db">,
   args: {
     metrics: Array<{
@@ -741,7 +741,7 @@ async function listOpenQueueSnapshot(
   };
 }
 
-async function listPendingApprovalRequestsSnapshot(
+export async function listPendingApprovalRequestsSnapshot(
   ctx: Pick<QueryCtx, "db">,
   args: {
     endAt: number;
@@ -779,7 +779,7 @@ async function listPendingApprovalRequestsSnapshot(
   };
 }
 
-async function listTimelineEvents(
+export async function listTimelineEvents(
   ctx: Pick<QueryCtx, "db">,
   args: {
     endAt: number;
@@ -1848,7 +1848,7 @@ function compareDailyOperationsTimelineEvents(
   );
 }
 
-async function getDailyCloseRecordForDate(
+export async function getDailyCloseRecordForDate(
   ctx: Pick<QueryCtx, "db">,
   args: {
     operatingDate: string;
@@ -1865,7 +1865,7 @@ async function getDailyCloseRecordForDate(
   return selectEffectiveDailyClose(dailyClose);
 }
 
-async function getDailyOpeningRecordForDate(
+export async function getDailyOpeningRecordForDate(
   ctx: Pick<QueryCtx, "db">,
   args: {
     operatingDate: string;

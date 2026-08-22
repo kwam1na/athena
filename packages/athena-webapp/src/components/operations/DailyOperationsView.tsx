@@ -41,6 +41,11 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
+import { AthenaAgentSurface } from "@/components/agent/AthenaAgentPanel";
+import {
+  DAILY_OPERATIONS_AGENT_PRESENTATION,
+  DAILY_OPERATIONS_AGENT_RETURN_LABEL,
+} from "./dailyOperationsAgentPresentation";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -370,6 +375,12 @@ export type DailyOperationsSnapshot = {
 };
 
 export type DailyOperationsViewContentProps = {
+  /**
+   * Present only for an authorized operator on the live surface: it mounts the
+   * reusable agent host with this store's readable name. Fixture and shared-demo
+   * renders leave it out, so no entry appears there.
+   */
+  agentEntry?: { storeName: string };
   cachedPriorWeekBoundaryMetric?:
     DailyOperationsSnapshot["weekMetrics"][number] | null;
   cachedWeekAnalyticsFetchedAt?: number;
@@ -3484,6 +3495,7 @@ function WeekMetricsStrip({
 }
 
 export function DailyOperationsViewContent({
+  agentEntry,
   cachedPriorWeekBoundaryMetric,
   cachedWeekAnalyticsFetchedAt,
   cachedWeekMetrics,
@@ -3815,6 +3827,19 @@ export function DailyOperationsViewContent({
                     <div className="hidden lg:block" />
                   )}
                   <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-center">
+                    {agentEntry ? (
+                      <AthenaAgentSurface
+                        context={{
+                          storeRef: String(snapshot.storeId),
+                          storeName: agentEntry.storeName,
+                          operatingDate: snapshot.operatingDate,
+                        }}
+                        presentation={DAILY_OPERATIONS_AGENT_PRESENTATION}
+                        returnLabel={DAILY_OPERATIONS_AGENT_RETURN_LABEL}
+                        routeParams={{ orgUrlSlug, storeUrlSlug }}
+                        storeId={snapshot.storeId}
+                      />
+                    ) : null}
                     <OperatingDatePicker
                       operatingDate={snapshot.operatingDate}
                       onChange={onOperatingDateChange}
@@ -4380,6 +4405,9 @@ function DailyOperationsConnectedView({
     isLoadingAccess,
   } = useProtectedAdminPageState({ surface: "store_day" });
   const canAccessSurface = canAccessProtectedSurface ?? hasFullAdminAccess;
+  // The shared demo reaches this view for the live current day. Ask Athena is
+  // not offered there: a demo visitor is refused at admission anyway.
+  const sharedDemoContext = useSharedDemoContext();
   const params = useParams({ strict: false }) as
     | {
         orgUrlSlug?: string;
@@ -4875,6 +4903,14 @@ function DailyOperationsConnectedView({
 
   return (
     <DailyOperationsViewContent
+      agentEntry={
+        activeStore &&
+        canQueryProtectedData &&
+        canAccessSurface &&
+        !sharedDemoContext
+          ? { storeName: activeStore.name ?? params?.storeUrlSlug ?? "This store" }
+          : undefined
+      }
       currency={activeStore?.currency ?? "GHS"}
       cachedPriorWeekBoundaryMetric={
         clientWeekAnalytics?.priorWeekBoundaryMetric ??

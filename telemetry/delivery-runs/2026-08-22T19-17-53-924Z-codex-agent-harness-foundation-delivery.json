@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-22T19:17:53.924Z",
+  "branch": "codex/agent-harness-foundation-delivery",
+  "headSha": "51fd59a7f86e2d7705a20ec5e4a9ef7b4cc97b2f",
+  "deliverableDiffFingerprint": "de2898dc54c678c7fe4b3fafae510c5741bec933e410e0d76c1ecd7d3a725267",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 12,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 987394.1177090001
+  },
+  "reviewLoop": {
+    "providerId": "execute",
+    "runId": "20260822-122954-harness-batch-pass6",
+    "finalPassId": "20260822-122954-harness-batch-pass6",
+    "recordedAt": "2026-08-22T18:48:51.529Z",
+    "iterationCount": 6,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 2,
+      "P2": 8,
+      "P3": 34
+    },
+    "deferredExpansionCount": 2,
+    "deferredIssueIds": [
+      "V26-1302",
+      "V26-1303"
+    ]
+  }
+}
