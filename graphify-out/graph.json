@@ -75299,7 +75299,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_terminalrecovery_resolveterminalcloudrepair_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.test.ts",
-      "source_location": "L840",
+      "source_location": "L973",
       "target": "resolveterminalcloudrepair_test_buildclosedregistersession",
       "weight": 1
     },
@@ -75311,7 +75311,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_terminalrecovery_resolveterminalcloudrepair_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.test.ts",
-      "source_location": "L868",
+      "source_location": "L1001",
       "target": "resolveterminalcloudrepair_test_buildconflict",
       "weight": 1
     },
@@ -75323,7 +75323,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_terminalrecovery_resolveterminalcloudrepair_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.test.ts",
-      "source_location": "L702",
+      "source_location": "L835",
       "target": "resolveterminalcloudrepair_test_buildctx",
       "weight": 1
     },
@@ -75335,7 +75335,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_terminalrecovery_resolveterminalcloudrepair_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.test.ts",
-      "source_location": "L888",
+      "source_location": "L1021",
       "target": "resolveterminalcloudrepair_test_buildevent",
       "weight": 1
     },
@@ -75347,7 +75347,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_terminalrecovery_resolveterminalcloudrepair_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.test.ts",
-      "source_location": "L761",
+      "source_location": "L894",
       "target": "resolveterminalcloudrepair_test_buildquery",
       "weight": 1
     },
@@ -75359,7 +75359,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_terminalrecovery_resolveterminalcloudrepair_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.test.ts",
-      "source_location": "L828",
+      "source_location": "L961",
       "target": "resolveterminalcloudrepair_test_buildstaffprofile",
       "weight": 1
     },
@@ -75371,7 +75371,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_terminalrecovery_resolveterminalcloudrepair_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.test.ts",
-      "source_location": "L859",
+      "source_location": "L992",
       "target": "resolveterminalcloudrepair_test_buildstore",
       "weight": 1
     },
@@ -75383,7 +75383,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_terminalrecovery_resolveterminalcloudrepair_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.test.ts",
-      "source_location": "L815",
+      "source_location": "L948",
       "target": "resolveterminalcloudrepair_test_buildterminal",
       "weight": 1
     },
@@ -76871,7 +76871,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_infrastructure_repositories_terminalrecoveryrepository_ts",
       "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
-      "source_location": "L253",
+      "source_location": "L256",
       "target": "terminalrecoveryrepository_deduperecoveryconflictsbyid",
       "weight": 1
     },
@@ -76883,7 +76883,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_infrastructure_repositories_terminalrecoveryrepository_ts",
       "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
-      "source_location": "L282",
+      "source_location": "L285",
       "target": "terminalrecoveryrepository_getterminalrecoverysourceevent",
       "weight": 1
     },
@@ -76919,7 +76919,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_infrastructure_repositories_terminalrecoveryrepository_ts",
       "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
-      "source_location": "L217",
+      "source_location": "L220",
       "target": "terminalrecoveryrepository_listterminalrecoveryconflictsources",
       "weight": 1
     },
@@ -76931,7 +76931,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_infrastructure_repositories_terminalrecoveryrepository_ts",
       "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
-      "source_location": "L301",
+      "source_location": "L304",
       "target": "terminalrecoveryrepository_patchterminalrecoveryconflict",
       "weight": 1
     },
@@ -76943,7 +76943,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_infrastructure_repositories_terminalrecoveryrepository_ts",
       "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
-      "source_location": "L266",
+      "source_location": "L269",
       "target": "terminalrecoveryrepository_resolveterminalrecoveryconflictblockerstatus",
       "weight": 1
     },
@@ -158423,7 +158423,7 @@
       "relation": "calls",
       "source": "resolveterminalcloudrepair_test_buildctx",
       "source_file": "packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.test.ts",
-      "source_location": "L710",
+      "source_location": "L843",
       "target": "resolveterminalcloudrepair_test_buildstaffprofile",
       "weight": 1
     },
@@ -158435,7 +158435,7 @@
       "relation": "calls",
       "source": "resolveterminalcloudrepair_test_buildctx",
       "source_file": "packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.test.ts",
-      "source_location": "L720",
+      "source_location": "L853",
       "target": "resolveterminalcloudrepair_test_buildstore",
       "weight": 1
     },
@@ -158447,7 +158447,7 @@
       "relation": "calls",
       "source": "resolveterminalcloudrepair_test_buildctx",
       "source_file": "packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.test.ts",
-      "source_location": "L708",
+      "source_location": "L841",
       "target": "resolveterminalcloudrepair_test_buildterminal",
       "weight": 1
     },
@@ -185699,7 +185699,7 @@
       "relation": "calls",
       "source": "terminalrecoveryrepository_listterminalrecoveryconflictsources",
       "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
-      "source_location": "L241",
+      "source_location": "L244",
       "target": "terminalrecoveryrepository_deduperecoveryconflictsbyid",
       "weight": 1
     },
@@ -242770,7 +242770,7 @@
       "label": "dedupeRecoveryConflictsById()",
       "norm_label": "deduperecoveryconflictsbyid()",
       "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
-      "source_location": "L253"
+      "source_location": "L256"
     },
     {
       "community": 238,
@@ -242779,7 +242779,7 @@
       "label": "getTerminalRecoverySourceEvent()",
       "norm_label": "getterminalrecoverysourceevent()",
       "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
-      "source_location": "L282"
+      "source_location": "L285"
     },
     {
       "community": 238,
@@ -242806,7 +242806,7 @@
       "label": "listTerminalRecoveryConflictSources()",
       "norm_label": "listterminalrecoveryconflictsources()",
       "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
-      "source_location": "L217"
+      "source_location": "L220"
     },
     {
       "community": 238,
@@ -242815,7 +242815,7 @@
       "label": "patchTerminalRecoveryConflict()",
       "norm_label": "patchterminalrecoveryconflict()",
       "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
-      "source_location": "L301"
+      "source_location": "L304"
     },
     {
       "community": 238,
@@ -242824,7 +242824,7 @@
       "label": "resolveTerminalRecoveryConflictBlockerStatus()",
       "norm_label": "resolveterminalrecoveryconflictblockerstatus()",
       "source_file": "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
-      "source_location": "L266"
+      "source_location": "L269"
     },
     {
       "community": 2380,
@@ -257170,7 +257170,7 @@
       "label": "buildClosedRegisterSession()",
       "norm_label": "buildclosedregistersession()",
       "source_file": "packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.test.ts",
-      "source_location": "L840"
+      "source_location": "L973"
     },
     {
       "community": 308,
@@ -257179,7 +257179,7 @@
       "label": "buildConflict()",
       "norm_label": "buildconflict()",
       "source_file": "packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.test.ts",
-      "source_location": "L868"
+      "source_location": "L1001"
     },
     {
       "community": 308,
@@ -257188,7 +257188,7 @@
       "label": "buildCtx()",
       "norm_label": "buildctx()",
       "source_file": "packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.test.ts",
-      "source_location": "L702"
+      "source_location": "L835"
     },
     {
       "community": 308,
@@ -257197,7 +257197,7 @@
       "label": "buildEvent()",
       "norm_label": "buildevent()",
       "source_file": "packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.test.ts",
-      "source_location": "L888"
+      "source_location": "L1021"
     },
     {
       "community": 308,
@@ -257206,7 +257206,7 @@
       "label": "buildQuery()",
       "norm_label": "buildquery()",
       "source_file": "packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.test.ts",
-      "source_location": "L761"
+      "source_location": "L894"
     },
     {
       "community": 308,
@@ -257215,7 +257215,7 @@
       "label": "buildStaffProfile()",
       "norm_label": "buildstaffprofile()",
       "source_file": "packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.test.ts",
-      "source_location": "L828"
+      "source_location": "L961"
     },
     {
       "community": 308,
@@ -257224,7 +257224,7 @@
       "label": "buildStore()",
       "norm_label": "buildstore()",
       "source_file": "packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.test.ts",
-      "source_location": "L859"
+      "source_location": "L992"
     },
     {
       "community": 308,
@@ -257233,7 +257233,7 @@
       "label": "buildTerminal()",
       "norm_label": "buildterminal()",
       "source_file": "packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.test.ts",
-      "source_location": "L815"
+      "source_location": "L948"
     },
     {
       "community": 309,

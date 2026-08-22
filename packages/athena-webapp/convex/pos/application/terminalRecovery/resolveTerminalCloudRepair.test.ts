@@ -414,6 +414,68 @@ describe("resolveTerminalCloudRepair", () => {
     );
   });
 
+  it("settles an obsolete register open behind a submitted closeout that is still closing", async () => {
+    // A drawer in `closing` has already submitted its closeout, so the shared
+    // lifecycle boundary (closeoutOwnedAt) decides freshness instead of the
+    // blocking-session flag; an open that predates that boundary is obsolete.
+    const closeoutOwnedAt = now - 10 * 60 * 1000;
+    // The row carries no blocker reference: a row that names the closing
+    // drawer directly still reads as `current` and fails closed.
+    const conflict = buildConflict({
+      details: { reason: "duplicate_register_opened" },
+    });
+    const ctx = buildCtx({
+      posLocalSyncConflict: [conflict],
+      posLocalSyncEvent: [buildEvent({ occurredAt: now - 30 * 60 * 1000 })],
+      registerSession: [
+        buildClosedRegisterSession({
+          _id: "registerSession-closing" as Id<"registerSession">,
+          closedAt: undefined,
+          closeoutOwnedAt,
+          closeoutRecords: [],
+          status: "closing",
+        }),
+      ],
+    });
+
+    const result = await resolveTerminalCloudRepair(ctx as never, {
+      expectedPreconditionHash: buildTerminalCloudRepairPreconditionHash({
+        safeConflictIds: [conflict._id],
+        storeId,
+        terminalId,
+      }),
+      now,
+      resolvedByUserId: "user-1" as Id<"athenaUser">,
+      storeId,
+      terminalId,
+    });
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        hasMoreCandidates: false,
+        repairedSourceEventIds: ["event-1"],
+        resolvedByDisposition: {
+          duplicate_resolved: 0,
+          fresh_projected: 0,
+          obsolete_resolved: 1,
+        },
+        resolvedConflictIds: [conflict._id],
+        skippedConflictIds: [],
+      },
+    });
+    expect(ctx.tables.registerSession).toHaveLength(1);
+    expect(ctx.tables.registerSession[0]?.status).toBe("closing");
+    expect(ctx.tables.posLocalSyncMapping).toEqual([]);
+    expect(ctx.tables.posLocalSyncEvent).toContainEqual(
+      expect.objectContaining({
+        _id: "event-1-id",
+        rejectionCode: "obsolete_register_open",
+        status: "rejected",
+      }),
+    );
+  });
+
   it("settles every duplicate row for one obsolete source event together with audit evidence", async () => {
     const rows = Array.from({ length: 3 }, (_, index) =>
       buildConflict({
@@ -480,6 +542,77 @@ describe("resolveTerminalCloudRepair", () => {
       data: { repairedSourceEventIds: [], resolvedConflictIds: [] },
     });
     expect(ctx.tables.registerSession).toHaveLength(1);
+  });
+
+  it("fails closed when an obsolete event's row window is truncated by already-resolved rows", async () => {
+    // Two rows of this event were resolved earlier, so the bounded window of
+    // 2,001 rows holds 1,999 open rows even though more remain beyond it.
+    // Truncation must be judged on the raw window: the event is skipped whole
+    // rather than half-settled and stamped rejected.
+    const resolvedRows = Array.from({ length: 2 }, (_, index) =>
+      buildConflict({
+        _id: `conflict-resolved-${index}` as Id<"posLocalSyncConflict">,
+        details: {
+          blockingRegisterSessionId: "registerSession-closed",
+          reason: "duplicate_register_opened",
+        },
+        sequence: index + 1,
+        status: "resolved",
+      }),
+    );
+    const openRows = Array.from({ length: 2_000 }, (_, index) =>
+      buildConflict({
+        _id: `conflict-open-${String(index).padStart(4, "0")}` as Id<"posLocalSyncConflict">,
+        details: {
+          blockingRegisterSessionId: "registerSession-closed",
+          reason: "duplicate_register_opened",
+        },
+        sequence: index + 3,
+      }),
+    );
+    const ctx = buildCtx({
+      posLocalSyncConflict: [...resolvedRows, ...openRows],
+      posLocalSyncEvent: [buildEvent({ occurredAt: now - 30 * 60 * 1000 })],
+      registerSession: [buildClosedRegisterSession()],
+    });
+    const candidateIds = openRows
+      .slice(0, 100)
+      .map((row) => row._id)
+      .sort();
+
+    const result = await resolveTerminalCloudRepair(ctx as never, {
+      expectedPreconditionHash: buildTerminalCloudRepairPreconditionHash({
+        safeConflictIds: candidateIds,
+        storeId,
+        terminalId,
+      }),
+      now,
+      resolvedByUserId: "user-1" as Id<"athenaUser">,
+      storeId,
+      terminalId,
+    });
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        hasMoreCandidates: true,
+        repairedSourceEventIds: [],
+        resolvedByDisposition: {
+          duplicate_resolved: 0,
+          fresh_projected: 0,
+          obsolete_resolved: 0,
+        },
+        resolvedConflictIds: [],
+      },
+    });
+    expect(
+      ctx.tables.posLocalSyncConflict.filter((row) => row.status === "resolved"),
+    ).toHaveLength(2);
+    expect(ctx.tables.posLocalSyncEvent[0]).toMatchObject({
+      _id: "event-1-id",
+      status: "conflicted",
+    });
+    expect(ctx.db.patch).not.toHaveBeenCalled();
   });
 
   it("fails closed for an active blocker and for ambiguous close chronology", async () => {

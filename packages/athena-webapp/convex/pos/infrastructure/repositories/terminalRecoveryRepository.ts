@@ -209,7 +209,10 @@ export async function listTerminalRecoveryConflictRowsForEvent(
   const openRows = rows.filter((row) => row.status === "needs_review");
 
   return {
-    isIncomplete: openRows.length > args.limit,
+    // Truncation is judged on the raw index window, not the open subset: a
+    // window cut short by already-resolved rows must still fail closed so the
+    // caller never settles part of one source event's rows.
+    isIncomplete: rows.length > args.limit,
     rows: openRows.slice(0, args.limit),
   };
 }
