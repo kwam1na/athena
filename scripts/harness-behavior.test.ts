@@ -5,6 +5,7 @@ import { createServer } from "node:http";
 import { connect as netConnect } from "node:net";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
+// CLI boundary coverage is centralized in harness-blocker-inventory.test.ts.
 
 import {
   HarnessBehaviorPhaseError,
@@ -13,6 +14,7 @@ import {
   runHarnessBehaviorScenario,
   runPlaywrightFlow,
 } from "./harness-behavior";
+import { harnessBehaviorFailedBlocker } from "./harness-behavior";
 
 const tempRoots: string[] = [];
 
@@ -918,5 +920,21 @@ describe("scenario port reclaim", () => {
     });
 
     expect(stillListening).toBe(false);
+  });
+});
+
+describe("harnessBehaviorFailedBlocker", () => {
+  it("keeps the failing phase detail while giving the block a stable code", () => {
+    const blocker = harnessBehaviorFailedBlocker(
+      "Harness behavior failed in seed phase: fixture missing.",
+    );
+
+    expect(blocker.code).toBe("harness_behavior_failed");
+    expect(blocker.source).toEqual({ kind: "command", id: "harness:behavior" });
+    expect(blocker.details).toContain("seed phase");
+    expect(blocker.remediations.map((item) => item.id)).toEqual([
+      "repair-harness-behavior-scenario",
+      "rerun-harness-behavior",
+    ]);
   });
 });

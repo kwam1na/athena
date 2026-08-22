@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+// CLI boundary coverage is centralized in harness-blocker-inventory.test.ts.
 import {
   MECHANICAL_PACKAGE_SCRIPTS,
   isMechanicalRawCommand,

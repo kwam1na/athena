@@ -3,12 +3,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+// CLI boundary coverage is centralized in harness-blocker-inventory.test.ts.
 import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
 import {
   formatHarnessJanitorReport,
   parseHarnessJanitorCliArgs,
   runHarnessJanitor,
 } from "./harness-janitor";
+import { runHarnessCliBoundary } from "./harness-blockers";
 
 const tempRoots: string[] = [];
 
@@ -294,5 +296,25 @@ describe("parseHarnessJanitorCliArgs", () => {
     expect(() =>
       parseHarnessJanitorCliArgs(["--repair", "--report-only"])
     ).toThrow("Cannot combine --report-only with --repair.");
+  });
+});
+
+describe("harness:janitor command boundary", () => {
+  it("reports a non-zero janitor run through the shared blocker contract", async () => {
+    const errors: string[] = [];
+    const code = await runHarnessCliBoundary({
+      source: { kind: "command", id: "harness:janitor" },
+      reproduce: ["bun", "run", "harness:janitor"],
+      run: () => 1,
+      logger: { error: (line: string) => errors.push(line) },
+    });
+
+    // The janitor's own report is prose with no code, source, or remediation,
+    // so suppressing the shared fallback would leave a non-zero exit with no
+    // contract-conformant output at all.
+    expect(code).toBe(1);
+    expect(errors.join("\n")).toContain("harness_command_failed");
+    expect(errors.join("\n")).toContain("command:harness:janitor");
+    expect(errors.join("\n")).toContain("rerun-command-harness-janitor");
   });
 });

@@ -2,8 +2,10 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+// CLI boundary coverage is centralized in harness-blocker-inventory.test.ts.
 
-import { validateHarnessDocs } from "./harness-check";
+import { HarnessBlockedError } from "./harness-blockers";
+import { runHarnessCheck, validateHarnessDocs } from "./harness-check";
 import { writeGeneratedHarnessDocs } from "./harness-generate";
 
 const REQUIRED_INDEX_LINKS = [
@@ -914,5 +916,30 @@ describe("validateHarnessDocs", () => {
     expect(
       errors.filter((error) => error.includes("runtime behavior scenario"))
     ).toEqual([]);
+  });
+});
+
+describe("runHarnessCheck", () => {
+  it("reports stale generated docs as a typed blocker, not an internal error", async () => {
+    const rootDir = await createFixtureRepo();
+    // Drop the navigation README the docs check requires, so the check has a
+    // real finding to report.
+    await write("README.md", "# athena\n", rootDir);
+
+    // Stale generated docs are an expected policy failure, so the block must
+    // not arrive as `harness_internal_error` with generic
+    // reproduce-and-inspect guidance.
+    const error = await runHarnessCheck(rootDir).catch(
+      (thrown: unknown) => thrown,
+    );
+
+    expect(error).toBeInstanceOf(HarnessBlockedError);
+    const [blocker] = (error as HarnessBlockedError).blockers;
+    expect(blocker?.code).toBe("harness_docs_stale");
+    expect(blocker?.source).toEqual({ kind: "command", id: "harness:check" });
+    expect(blocker?.remediations.map((remediation) => remediation.id)).toEqual([
+      "regenerate-harness-docs",
+      "update-harness-app-registry",
+    ]);
   });
 });

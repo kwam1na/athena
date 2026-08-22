@@ -10,6 +10,11 @@ import {
   type HarnessAppRegistryEntry,
 } from "./harness-app-registry";
 import { HARNESS_BEHAVIOR_SCENARIOS } from "./harness-behavior-scenarios";
+import {
+  createHarnessBlocker,
+  HarnessBlockedError,
+  runHarnessCliBoundary,
+} from "./harness-blockers";
 import { generateHarnessDocs } from "./harness-generate";
 
 const MARKDOWN_LINK_PATTERN = /\[[^\]]+\]\(([^)]+)\)/g;
@@ -842,13 +847,38 @@ export async function runHarnessCheck(rootDir: string) {
     return;
   }
 
-  for (const error of errors) {
-    console.error(`- ${error}`);
-  }
-
-  throw new Error(`Harness docs check failed with ${errors.length} issue(s).`);
+  // A stale generated doc is an expected policy failure, not a crash. Throwing
+  // a bare Error here routed it through the internal-error boundary, which
+  // replaced the registry-source guidance this check exists to give with
+  // "an unexpected internal error".
+  throw new HarnessBlockedError([
+    createHarnessBlocker({
+      code: "harness_docs_stale",
+      source: { kind: "command", id: "harness:check" },
+      summary: `Harness docs check failed with ${errors.length} issue(s).`,
+      details: errors.map((error) => `- ${error}`).join("\n"),
+      remediations: [
+        {
+          id: "regenerate-harness-docs",
+          kind: "command",
+          command: ["bun", "run", "harness:generate"],
+          summary: "Regenerate the harness docs from their registry sources.",
+        },
+        {
+          id: "update-harness-app-registry",
+          kind: "code_change",
+          summary:
+            "If regeneration reproduces the issue, the drift is registry-owned: update the scenario or path in scripts/harness-app-registry.ts before regenerating again.",
+        },
+      ],
+    }),
+  ], `Harness docs check failed with ${errors.length} issue(s).`);
 }
 
 if (import.meta.main) {
-  await runHarnessCheck(process.cwd());
+  process.exitCode = await runHarnessCliBoundary({
+    source: { kind: "command", id: "harness:check" },
+    reproduce: ["bun", "run", "harness:check"],
+    run: () => runHarnessCheck(process.cwd()),
+  });
 }

@@ -3,6 +3,11 @@ import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { HARNESS_APP_REGISTRY, type ValidationCommand } from "./harness-app-registry";
+import {
+  HarnessBlockedError,
+  createHarnessBlocker,
+  runHarnessCliBoundary,
+} from "./harness-blockers";
 import { runHarnessCheck } from "./harness-check";
 import {
   collectHarnessRepoValidationCapabilities,
@@ -1185,7 +1190,35 @@ export function parseHarnessReviewArgs(
   };
 }
 
-if (import.meta.main) {
+export function harnessReviewBlockedBlocker(detail: string) {
+  return createHarnessBlocker({
+    code: "harness_review_blocked",
+    source: { kind: "command", id: "harness:review" },
+    summary: "The harness review blocked this candidate.",
+    details: detail,
+    remediations: [
+      {
+        id: "repair-harness-review-finding",
+        kind: "code_change",
+        summary:
+          "Resolve the reported finding at its source, then rerun the review.",
+      },
+      {
+        id: "rerun-harness-review",
+        kind: "command",
+        command: ["bun", "run", "harness:review"],
+        summary: "Rerun the harness review.",
+      },
+    ],
+  });
+}
+
+/**
+ * Every throw inside runHarnessReview is a policy block, not a crash. Reaching
+ * the boundary bare, they rendered as `harness_internal_error` with a stack -
+ * the form the operator contract reserves for genuinely unexpected exceptions.
+ */
+async function runHarnessReviewCli() {
   try {
     const parsed = parseHarnessReviewArgs(Bun.argv.slice(2));
     await runHarnessReview(process.cwd(), {
@@ -1195,8 +1228,16 @@ if (import.meta.main) {
       providerEvidencePath: parsed.providerEvidencePath,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`\n[harness:review] BLOCKED: ${message}`);
-    process.exit(1);
+    if (error instanceof HarnessBlockedError) throw error;
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new HarnessBlockedError([harnessReviewBlockedBlocker(detail)], detail);
   }
+}
+
+if (import.meta.main) {
+  process.exitCode = await runHarnessCliBoundary({
+    source: { kind: "command", id: "harness:review" },
+    reproduce: ["bun", "run", "harness:review", ...Bun.argv.slice(2)],
+    run: runHarnessReviewCli,
+  });
 }

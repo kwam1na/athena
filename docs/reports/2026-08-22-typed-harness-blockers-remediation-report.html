@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Typed Harness Blockers And First-Class Remediation</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="78eb41793d125b28db3314495991d2df0508a7713f53540c87f4fc28d7776199">
+  <header data-report-section="header">
+    <h1>Typed Harness Blockers And First-Class Remediation</h1>
+    <p>How Athena&#x27;s fail-closed harness stopped explaining itself in prose</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch codex/v26-1222-1224-harness-remediation</li>
+      <li>V26-1222 / V26-1223 / V26-1224</li>
+      <li>1424 harness tests green</li>
+      <li>Six review rounds; six follow-ups filed</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Linear</dt><dd>V26-1222, V26-1223, V26-1224</dd>
+      <dt>Batch</dt><dd>harness-first-class-remediation</dd>
+      <dt>Base</dt><dd>origin/main 48427de8</dd>
+      <dt>Candidate</dt><dd>squashed to one commit</dd>
+      <dt>Status</dt><dd>Delivery candidate (not merged)</dd>
+      <dt>Production deploy</dt><dd>Not applicable - repo tooling only</dd>
+      <dt>Root alignment</dt><dd>Pending</dd>
+      <dt>Follow-ups</dt><dd>V26-1274, V26-1275, V26-1276, V26-1277, V26-1278, V26-1279</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive Summary</h2>
+      <p>Athena&#x27;s delivery harness is fail-closed on purpose. When it blocks, the operator cannot weaken the sensor, cannot auto-repair a semantic failure, and in most cases cannot waive. That makes the failure message the only remediation channel the harness has - and until this change, that channel was free-form prose that every command invented for itself.</p>
+      <p>This batch makes the blocker a first-class typed object. A fail-closed condition is now constructed at the boundary that detects it, carrying a stable machine code, a discriminated source, sanitized detail, and a non-empty tuple of typed remediations. Executable repairs are argument arrays, not shell strings. Terminal output and structured events are two renderers over that same object, so the two views cannot prescribe different repairs.</p>
+      <p>Every package-script-reachable harness CLI was migrated onto a shared boundary runner, and an inventory sensor now fails the build when a reachable harness command drifts off the contract. The durable guidance in docs/harness.md, the architecture doc, the registry solution note, and the execute skill was rewritten to match.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>The Problem</h2>
+      <p>The harness protects four kinds of trust - navigation, validation, review, and runtime - and its governing rule is that it may refresh files but never silently push repaired evidence past review. Every escape hatch is deliberately expensive. So when the gate says no, the operator&#x27;s entire path forward is whatever the message happens to say.</p>
+      <p>That message had no contract. Three separate weaknesses compounded:</p>
+      <ul>
+        <li>Two parallel remediation projections. The gate decision carried both a findings array, where each finding had a free-form remediation string, and a separately computed remediation object with machine and human string lists. Nothing kept them consistent, so the terminal could tell an operator one thing while the structured record said another.</li>
+        <li>Bespoke printing per command. Each CLI wrapped itself in its own try/catch, printing its own prefix - [harness:review] BLOCKED:, [pre-push] BLOCKED:, [pr:athena] Preparation blocked: - and some paths dropped remediation entirely while logging only code and message.</li>
+        <li>Shell strings inside prose. Provider-failure and candidate-drift paths built inline literals with commands embedded in the sentence, so automation could only recover the repair by parsing human text.</li>
+      </ul>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>The Mental Model</h2>
+      <p>Think of a blocker the way you think of a typed exception rather than a printed string.</p>
+      <p>The old model was print-at-the-point-of-failure: whichever code noticed the problem also decided how it looked, so presentation was scattered across every command and could not be inspected by anything downstream.</p>
+      <p>The new model splits detection from presentation, mirroring the ownership boundary the harness already applied to policy. The rule the architecture doc now states is that the source that detects a block constructs the blocker; the orchestrator may aggregate blockers and deduplicate remediation ids, but it does not rewrite their ownership, cause, or prescribed repair.</p>
+      <ul>
+        <li>The owning boundary answers what is wrong and how to fix it, because only it knows.</li>
+        <li>The orchestrator answers which blockers happened together, and nothing more.</li>
+        <li>The renderer answers how this looks right now - bounded text for a human, a versioned envelope for a machine.</li>
+        <li>Remediation is guidance, not authorization. Nothing in this contract executes a repair on the operator&#x27;s behalf.</li>
+      </ul>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before And After</h2>
+      <p>The same failure - a stale generated validation-map path owned by the app registry - travelled a very different route before and after.</p>
+      <ul>
+        <li>Before: harness:review noticed the drift, formatted a sentence naming the registry file, and printed it with its own prefix. The gate decision separately recorded a findings entry plus two string remediation lists. An operator read the sentence; automation read the strings; nothing guaranteed they agreed.</li>
+        <li>After: the registry boundary calls createHarnessBlocker with a stable code, source of kind gate/obligation/provider/preparation/candidate/command, and typed remediations. formatHarnessBlockers renders bounded terminal guidance; serializeHarnessBlockers emits the versioned envelope. Both read the same object.</li>
+        <li>Before: gate-decision events were schema v1 with decision.findings and decision.remediation.machine/human. After: schema v2 carries blockers exclusively in a blockerEnvelope, and the delivery-run reader explicitly rejects an event that still carries the legacy fields.</li>
+        <li>Before: waiver eligibility inspected resolution.findings. After: it inspects resolution.blockers, matching the same code values against the same WAIVABLE_FINDING_CODES allowlist, so waiver semantics are unchanged.</li>
+      </ul>
+  </section>
+  <section data-report-section="mechanics">
+    <h2>How The Contract Works</h2>
+      <p>A HarnessBlocker is a code, a source, a summary, optional details, and a non-empty remediation tuple. The non-emptiness is structural, not a runtime assert: NonEmptyTuple&lt;T&gt; is readonly [T, ...T[]], so an empty remediation list fails to type-check at the call site. The same trick types command arguments, so a command remediation cannot carry an empty argv.</p>
+      <p>The source is a discriminated union whose ids are borrowed from the authoritative registries rather than restated - a gate source takes HarnessGateId, an obligation source HarnessObligationId, a provider source HarnessProviderId, all imported from harness-gate-registry.ts. Because nothing in the repo typechecks scripts/, the union alone would be a convention rather than a gate, so the constructor also rejects at runtime any source no registry owns.</p>
+      <p>Remediations come in four kinds. command and retry carry argument arrays and are meant to be run as rendered. manual_action and code_change describe work a human must do deliberately, which is exactly where guidance that is not directly executable belongs. Stable kebab-case remediation ids let one command report several blockers while printing a shared repair only once, in first-seen order.</p>
+      <pre><code>createHarnessBlocker({
+  code: &quot;review_evidence_missing&quot;,
+  source: { kind: &quot;obligation&quot;, id: &quot;review.green&quot; },
+  summary: &quot;The qualifying candidate has no fresh approved final-green review evidence.&quot;,
+  remediations: [
+    {
+      id: &quot;complete-final-green-review&quot;,
+      kind: &quot;manual_action&quot;,
+      summary: &quot;Run the approved review workflow for this candidate, or deliberately accept the offered human waiver.&quot;,
+    },
+  ],
+});</code></pre>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure Boundaries</h2>
+      <p>The contract is deliberate about the difference between an expected block and a genuine crash.</p>
+      <ul>
+        <li>Expected non-zero result: runHarnessCliBoundary turns a non-zero return into a harness_command_failed blocker with a rerun command remediation, preserving the original exit code.</li>
+        <li>Known block: a thrown HarnessBlockedError carries its blockers, which are rendered once at the boundary and exit 1.</li>
+        <li>Unexpected exception: createHarnessInternalErrorBlocker maps any other throw to the stable code harness_internal_error, strips control characters, redacts common secret shapes, and always supplies a reproduction command plus an inspect-the-retained-log action. The execute skill now states plainly that this blocker is diagnostic, not self-repair authority.</li>
+        <li>Output is bounded, not unbounded: details are capped per blocker and the joined terminal output is capped overall, while the structured envelope and the retained pre-push log keep the complete sanitized detail.</li>
+        <li>Admission renders decision blockers itself and suppresses the boundary&#x27;s synthetic blocker, so a blocked gate does not print two competing explanations.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key Files</h2>
+
+  </section>
+  <section data-report-section="changes">
+    <h2>What Changed, And What Did Not</h2>
+      <p>Changed: the contract, the delivery spine, every reachable secondary harness CLI, the gate-decision event schema, and the durable guidance.</p>
+      <ul>
+        <li>Added the typed contract and the shared renderers, plus the CLI boundary runner that every migrated command now uses.</li>
+        <li>Migrated the spine - candidate preparation, gate admission and obligations, provider failures, candidate drift, and the pre-push handoff - and then the secondary commands: audit, behavior, check, contract-preflight, generate, inferential-review, janitor, mechanical-check, review, review-evidence, runtime-trends, scorecard, self-review, test, and the documentation waiver command.</li>
+        <li>Moved gate-decision events to schema v2 with an exclusive blockerEnvelope, renamed the ledger&#x27;s findingCodes to blockerCodes, and made the delivery-run reader reject legacy decision shapes outright.</li>
+        <li>Added the inventory sensor that discovers harness CLIs reachable through package scripts and fails on unregistered commands or a boundary that prints, exits, or throws outside the shared runner.</li>
+        <li>Unchanged on purpose: exit codes, waiver policy and its allowlist semantics, event correlation checks, hook byte and line caps, validation policy, and every successful-path output. The migration was diagnostics-only - it changes how the harness explains a refusal, never what it refuses.</li>
+      </ul>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation And Review Evidence</h2>
+      <p>Two commits: 85734417 built the contract and migrated the commands; 96c609c0 fixed what review found. Both are on the branch, and the second exists because the first passed its own tests while three of its stated guarantees did not hold.</p>
+      <p>Five read-only subagents ran over the candidate: two gathered evidence (delivered diff, architectural lineage and prior harness learnings) and three reviewed it (correctness, security, contract conformance). The three reviewers returned CHANGES_REQUESTED independently.</p>
+      <p>Fifteen commits. Six review rounds ran with independent reviewers. The last two were scoped to the diff and to absolute blockers only, with everything else filed as follow-up work - which is why the final rounds produced one blocker each and a filed backlog rather than a longer findings list.</p>
+      <ul>
+        <li>P0, contract conformance: scripts/pr-athena-delivery-run.ts - the delivery orchestrator - was never migrated and was structurally invisible to its own enforcement sensor, because discovery keyed on the harness- filename prefix. Fixed: the boundary is migrated, both pr-athena-* CLIs are registered, and discovery no longer depends on the naming convention.</li>
+        <li>P1, found independently by all three reviewers: createHarnessBlocker validated its input and returned it unmodified, so sanitization and secret redaction applied only to the internal-error path. Fixed at the constructor, so every call site inherits it.</li>
+        <li>P2: the renderer appended remediation last and then truncated the whole string, so guidance was the first thing lost under pressure. Fixed by budgeting guidance first; a regression test renders 12 blockers into a 2,000-character bound and asserts all 12 remediation ids survive.</li>
+        <li>P1: typed sources were compile-time only and nothing typechecks scripts/, so the discriminated union was a convention rather than a gate. A runtime registry guard now rejects any source no registry owns.</li>
+        <li>P1: the sensor implemented only one of the three enforcement classes V26-1223 names. blocker-remediation-missing and blocker-source-freeform were added with fixtures.</li>
+        <li>P1: harness:check and harness:audit threw bare Errors, so ordinary policy findings rendered as harness_internal_error with generic guidance. Both now carry a stable code and their real repair.</li>
+        <li>Second round, P2: the new remediation-consistency guard threw from inside the renderer that runs in the CLI boundary&#x27;s catch handler, so a divergence would have discarded every blocker. Rendering is now total; the invariant moved to the static inventory sensor.</li>
+        <li>Second round, P2: the Convex deploy-key redaction stopped at the first non-base64 character and printed the tail of the key it was redacting; the bearer/token rule swallowed ordinary hyphenated prose; C1 controls were never stripped; and remediation command arrays bypassed sanitizing entirely.</li>
+        <li>Sensors run: bun run harness:test (1424 pass, 0 fail, 66 files), bun run pr:athena:preflight (exit 0), bun run compound:check (pass), and bun run pr:athena at the merge-ready boundary.</li>
+        <li>Deployment: not applicable - this change is repository tooling and ships no runtime surface. Production deploy and root alignment are therefore not pending events for this delivery, and merge is pending at the time of writing.</li>
+        <li>Fifth round, blocking: the two candidate-drift paths in pr:athena:validate-provider exited 1 with a silent terminal, and four commands had been allowed to suppress the shared fallback blocker while printing prose that carried no code, source, or remediation. Both fixed; the janitor test is now behavioral rather than a grep of its own source.</li>
+        <li>Sixth round, blocking: the delivery spine itself suppressed the shared fallback blocker, so a block originating in the orchestrator - a thrown step, or a gate decision event written by an older checkout - exited 1 with only a prose summary. Fixed and covered behaviorally.</li>
+        <li>Non-blocking findings from the last two rounds were filed as V26-1274 through V26-1279 rather than folded in: three CLIs still outside the contract, no typecheck over scripts/, waivable-code exhaustiveness unpinned, a duplicate shell-quoting helper, an unused source id, and a sensor rule for the suppression flag.</li>
+      </ul>
+  </section>
+  <section data-report-section="what-review-caught">
+    <h2>What Review Caught</h2>
+      <p>The three failures below share one shape, and it is the durable lesson of this delivery: a guarantee that lives beside the constructor instead of inside it is documentation, not enforcement.</p>
+      <p>All three passed the original test suite. None were caught by types. Each was found by a reviewer reading the contract&#x27;s claims against its code.</p>
+      <p>A second review pass over the fixes found the sharpest instance of the same shape: the consistency guard added in the first round threw from inside the renderer, which the CLI boundary calls from within its own catch handler. The check meant to protect guidance would have destroyed all of it. Enforcement must not run inside the failure path it protects, so rendering became total and the invariant moved to the static sensor.</p>
+      <ul>
+        <li>The sanitizer existed, was tested, and was correct - and ran on one of thirty paths. The constructor called its cleaning function and discarded the return value.</li>
+        <li>The output bound was off-by-one safe and well tested, but truncated from the end, which is where the remediation lived. Correct arithmetic, wrong thing truncated.</li>
+        <li>The enforcement sensor was thorough about the files it could see, and the file it could not see was the delivery spine. A sensor keyed on a naming convention measures the convention, not the boundary.</li>
+        <li>The second round also found the first round&#x27;s own blind spot: the internal-error fix was applied to the two commands the review named, while harness:review, harness:test and harness:behavior kept the same defect. Fixing what was reported is not the same as fixing what was wrong.</li>
+        <li>A later round found the same shape a third time: two blocked exits built a typed blocker, persisted it to the decision event, and never rendered it. Constructing a blocker is not the same as delivering one - the event and the operator&#x27;s screen are two separate obligations.</li>
+      </ul>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Next-Time Guidance</h2>
+      <p>When you add a fail-closed path to the harness, the contract now tells you where the work goes.</p>
+      <ul>
+        <li>Construct the blocker at the boundary that detects the condition, using createHarnessBlocker. Do not add a second free-form error convention, and do not let the orchestrator restate someone else&#x27;s cause.</li>
+        <li>Take source ids from the registries. If a new obligation or provider appears, its id flows into the source union automatically, and a mistyped id is a compile error.</li>
+        <li>Put executable repairs in command or retry as argument arrays. If the fix needs judgment, it is a manual_action or a code_change - not a sentence with a command buried in it.</li>
+        <li>Register a new harness CLI in the inventory the same day you add it. The allowlist is a migration boundary, not permission for a new unstructured blocker.</li>
+        <li>If you add a blocker code to an already-waivable obligation, add it to WAIVABLE_FINDING_CODES too. Waivability is all-or-nothing across a blocked resolution, so an unlisted code silently makes the whole waiver unofferable.</li>
+        <li>When remediation guidance for the documentation policies changes, update scripts/delivery-documentation-check.test.ts - that note names it as the owning test.</li>
+        <li>As an operator: identify the blocker by code and source, run command and retry argv as rendered, perform manual_action and code_change deliberately, and resolve aggregated blockers as a set before rerunning the authoritative command.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>scripts/harness-blockers.ts</code></td><td>The contract itself: HarnessBlocker, the discriminated source union, the four remediation kinds, NonEmptyTuple enforcement, both renderers, the internal-error mapper, and the shared CLI boundary runner.</td></tr>
+        <tr><td><code>scripts/harness-blocker-inventory.ts</code></td><td>The enforcement sensor. Holds the explicit CLI allowlist, discovers harness commands reachable through package scripts, and reports drift when a boundary prints, exits, or throws outside the shared runner.</td></tr>
+        <tr><td><code>scripts/harness-gate-registry.ts</code></td><td>Authoritative source of gate, obligation, and provider ids. The blocker source union imports these types, so registry-owned ids cannot be restated as free-form strings.</td></tr>
+        <tr><td><code>scripts/harness-gate-obligations.ts</code></td><td>Obligation evaluation. Blocked resolutions now carry typed blockers instead of findings, and remediationFor maps each obligation to its typed repair.</td></tr>
+        <tr><td><code>scripts/harness-gate-admission.ts</code></td><td>The admission boundary. Emits gate-decision schema v2 with the blocker envelope, and derives waiver eligibility from blocker codes against the WAIVABLE_FINDING_CODES allowlist.</td></tr>
+        <tr><td><code>scripts/pr-athena-delivery-run.ts</code></td><td>Delivery orchestration and the event reader that rejects legacy decision shapes, enforcing that schema v2 is exclusive rather than additive.</td></tr>
+        <tr><td><code>scripts/pre-push-review.ts</code></td><td>The pre-push handoff. Renders bounded blocker guidance within the existing output caps while the retained log keeps complete detail.</td></tr>
+        <tr><td><code>docs/harness.md</code></td><td>Durable contributor guidance: the Blocker And Remediation Contract section and the rewritten failure-triage steps.</td></tr>
+        <tr><td><code>docs/architecture/harness.md</code></td><td>States failure presentation as a shared boundary and documents the five-step blocker flow.</td></tr>
+        <tr><td><code>.agents/skills/execute/SKILL.md</code></td><td>Agent-facing operator rules: follow typed remediations, resolve deduplicated blocker sets, and treat harness_internal_error as diagnostic rather than repair authority.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does a fail-closed harness need its failure messages to be a typed contract rather than prose?</p>
+        <ol data-quiz-options>
+          <li>Because prose is slower to render in a terminal</li>
+          <li data-quiz-correct>Because the operator cannot weaken the sensor, auto-repair a semantic failure, or usually waive - so the message is the only remediation channel there is</li>
+          <li>Because CI systems cannot display multi-line text</li>
+          <li>Because typed messages are required for internationalization</li>
+        </ol>
+        <p data-quiz-explanation>Every escape hatch is deliberately expensive. When the gate refuses, whatever the message says is the operator&#x27;s entire path forward, which is why it needed a contract.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A blocker is detected inside a provider check. Who constructs it, and who decides how it is displayed?</p>
+        <ol data-quiz-options>
+          <li>The orchestrator constructs and displays it, since it has the most context</li>
+          <li data-quiz-correct>The provider constructs it; the renderer at the output boundary decides display; the orchestrator may aggregate and deduplicate but never rewrites cause or repair</li>
+          <li>The renderer constructs it from the provider&#x27;s exit code</li>
+          <li>Whichever layer catches the error first does both</li>
+        </ol>
+        <p data-quiz-explanation>Detection and presentation are separate boundaries. The owning source knows what is wrong and how to fix it; the orchestrator only knows which blockers co-occurred.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why are remediation commands stored as argument arrays rather than shell strings?</p>
+        <ol data-quiz-options>
+          <li>Argument arrays serialize to smaller JSON</li>
+          <li data-quiz-correct>So automation can inspect or execute the repair without parsing human output, and so nothing is ever assembled into an injectable shell string</li>
+          <li>Because the terminal cannot render quotes correctly</li>
+          <li>Because shell strings are not valid in TypeScript</li>
+        </ol>
+        <p data-quiz-explanation>The array is the machine representation. Quoting happens only at the moment a human is shown the command, and the array is never joined for execution.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>The original createHarnessBlocker called its sanitizing helper on every summary. Why did secrets still reach the terminal?</p>
+        <ol data-quiz-options>
+          <li>The helper&#x27;s regex was wrong</li>
+          <li data-quiz-correct>The helper returned a cleaned string and the constructor discarded it, returning the caller&#x27;s object unmodified</li>
+          <li>Sanitization ran after rendering</li>
+          <li>The helper only ran in development builds</li>
+        </ol>
+        <p data-quiz-explanation>Validation and normalization were conflated. The value was checked and thrown away, so the guarantee held only where redaction happened to be applied by hand - the internal-error path.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What was wrong with bounding the rendered output by truncating the joined string at the end?</p>
+        <ol data-quiz-options>
+          <li>It could split a multi-byte character</li>
+          <li data-quiz-correct>Remediation was appended last, so verbose blockers pushed the guidance off the end - removing exactly what the contract exists to deliver</li>
+          <li>The bound was off by one</li>
+          <li>It made output non-deterministic</li>
+        </ol>
+        <p data-quiz-explanation>The arithmetic was correct; the priority was not. Guidance now claims its budget before the diagnostic body, and a test proves every remediation id survives a tight bound.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why did the enforcement sensor report zero findings while the delivery orchestrator sat entirely outside the contract?</p>
+        <ol data-quiz-options>
+          <li>The orchestrator was on an explicit exemption list</li>
+          <li data-quiz-correct>Discovery keyed on the harness- filename prefix, and scripts/pr-athena-delivery-run.ts does not have it, so the file was structurally unreportable</li>
+          <li>The sensor only ran in CI</li>
+          <li>The orchestrator had no import.meta.main boundary</li>
+        </ol>
+        <p data-quiz-explanation>A sensor keyed on a naming convention measures the convention rather than the boundary. Registration is now the mechanism and discovery is the drift alarm over it.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>harness:check found a stale generated doc and threw a bare Error. What did the operator see, and why does it matter?</p>
+        <ol data-quiz-options>
+          <li>A clear stale-docs message; it does not matter</li>
+          <li data-quiz-correct>harness_internal_error with generic reproduce-and-inspect guidance, replacing the registry-source remediation that this exact failure motivated</li>
+          <li>A silent exit 0</li>
+          <li>A TypeScript compile error</li>
+        </ol>
+        <p data-quiz-explanation>The CLI boundary maps any unrecognized throw to the internal-error blocker, which is reserved for genuinely unexpected exceptions. Expected policy failures must carry their own code and repair.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Two blockers carry a remediation with the same id but differently worded summaries. What now happens?</p>
+        <ol data-quiz-options>
+          <li>Both are printed in order</li>
+          <li data-quiz-correct>It throws, because a shared id is a claim that the repair is the same and the renderer prints it only once</li>
+          <li>The longer summary wins</li>
+          <li>They are merged into one combined summary</li>
+        </ol>
+        <p data-quiz-explanation>Dedupe by id is lossy by design, so id reuse has to mean identical guidance. Divergence used to silently keep whichever phrasing appeared first.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the honest limit of the static enforcement sensor?</p>
+        <ol data-quiz-options>
+          <li>It cannot read TypeScript at all</li>
+          <li data-quiz-correct>A new CLI that is neither harness--prefixed nor registered is invisible to it; that gap is covered only by the runtime source guard in createHarnessBlocker</li>
+          <li>It cannot detect console.error</li>
+          <li>It only works on committed files</li>
+        </ol>
+        <p data-quiz-explanation>The limit is documented rather than implied, which is what V26-1223 asked for: where static discovery cannot cover dynamic blockers, require registration and state the boundary.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the correct reading of a harness_internal_error blocker&#x27;s details?</p>
+        <ol data-quiz-options>
+          <li>A shell command to run as-is</li>
+          <li data-quiz-correct>Diagnostic context - inspect the retained log and use the named reproduction command; it is not self-repair authority</li>
+          <li>Proof the gate should be bypassed</li>
+          <li>A list of files to delete</li>
+        </ol>
+        <p data-quiz-explanation>Remediation throughout this contract is guidance, not authorization. The internal-error path especially: its details are sanitized exception text, not an instruction.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>Delivered-diff analyst (read-only Explore subagent)</dt><dd>Read harness-blockers.ts and harness-blocker-inventory.ts in full plus the spine diffs; produced the typed-contract description, the schema-v2 field-level change list, the before/after of blocker representation, the changed-file map, and ten risks - three of which became fixes in 96c609c0.</dd>
+      <dt>Context and lineage researcher (read-only Explore subagent)</dt><dd>Traced the gate/obligation model back to V26-1199, inventoried the twenty docs/solutions/harness notes and the two waiver paths, and surfaced the standing constraints on adding a blocker - including that an unlisted code in WAIVABLE_FINDING_CODES silently makes a whole waiver unofferable.</dd>
+      <dt>Correctness reviewer (read-only Explore subagent)</dt><dd>Verified the non-empty remediation invariant, dedupe determinism, bounding arithmetic, and that admission, waiver, and exit-code semantics survived the v2 migration. Returned seven findings; the sanitization gap (P1) and remediation truncation (P2) were blocking.</dd>
+      <dt>Security reviewer (read-only Explore subagent)</dt><dd>Confirmed command-array rendering is genuinely shell-safe and that event writes are atomic and git-private. Found the redaction gap and its blast radius through the retained pre-push log, plus the missing secret shapes now covered, and one ad-hoc argv join.</dd>
+      <dt>Contract-conformance reviewer (read-only Explore subagent)</dt><dd>Checked all nineteen acceptance criteria across V26-1222/1223/1224 with a per-criterion verdict and an empirical inventory cross-check. Found the P0 delivery-spine gap, the two unregistered pr-athena CLIs, and the two missing enforcement classes.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

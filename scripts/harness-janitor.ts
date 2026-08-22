@@ -4,6 +4,7 @@ import path from "node:path";
 import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
 import { validateHarnessDocs } from "./harness-check";
 import { runHarnessAudit } from "./harness-audit";
+import { runHarnessCliBoundary } from "./harness-blockers";
 import { writeGeneratedHarnessDocs } from "./harness-generate";
 import { runGraphifyCheck } from "./graphify-check";
 import { runGraphifyRebuild } from "./graphify-rebuild";
@@ -403,19 +404,17 @@ export function formatHarnessJanitorReport(result: HarnessJanitorResult) {
   return lines.join("\n");
 }
 
-if (import.meta.main) {
+async function runHarnessJanitorCli() {
   const args = parseHarnessJanitorCliArgs(Bun.argv.slice(2));
+  const result = await runHarnessJanitor(process.cwd(), args);
+  console.log(formatHarnessJanitorReport(result));
+  return result.exitCode;
+}
 
-  runHarnessJanitor(process.cwd(), args)
-    .then((result) => {
-      console.log(formatHarnessJanitorReport(result));
-      if (result.exitCode !== 0) {
-        process.exit(1);
-      }
-    })
-    .catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(message);
-      process.exit(1);
-    });
+if (import.meta.main) {
+  process.exitCode = await runHarnessCliBoundary({
+    source: { kind: "command", id: "harness:janitor" },
+    reproduce: ["bun", "run", "harness:janitor"],
+    run: runHarnessJanitorCli,
+  });
 }

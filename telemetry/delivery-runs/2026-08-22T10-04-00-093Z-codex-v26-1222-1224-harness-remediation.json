@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-22T10:04:00.093Z",
+  "branch": "codex/v26-1222-1224-harness-remediation",
+  "headSha": "d184c2d5fbd475ba72940adebd00a0c1ff71c36d",
+  "deliverableDiffFingerprint": "78eb41793d125b28db3314495991d2df0508a7713f53540c87f4fc28d7776199",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 0,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 551313.2534990001
+  },
+  "reviewLoop": {
+    "providerId": "ce-code-review",
+    "runId": "v26-1222-1224-harness-remediation",
+    "finalPassId": "final-pass-6",
+    "recordedAt": "2026-08-22T09:54:44.554Z",
+    "iterationCount": 6,
+    "findingCounts": {
+      "P0": 1,
+      "P1": 6,
+      "P2": 20,
+      "P3": 25
+    },
+    "deferredExpansionCount": 8,
+    "deferredIssueIds": [
+      "V26-1274",
+      "V26-1275",
+      "V26-1276",
+      "V26-1277",
+      "V26-1278",
+      "V26-1279",
+      "V26-1284",
+      "V26-1285"
+    ]
+  }
+}

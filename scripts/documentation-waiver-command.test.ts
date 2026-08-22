@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+// CLI boundary coverage is centralized in harness-blocker-inventory.test.ts.
 
 import {
   buildDocumentationWaiverRequest,

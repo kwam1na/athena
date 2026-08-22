@@ -2,11 +2,13 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+// CLI boundary coverage is centralized in harness-blocker-inventory.test.ts.
 
 import {
   auditHarnessGateObligationContract,
   runHarnessAudit,
 } from "./harness-audit";
+import { HarnessBlockedError } from "./harness-blockers";
 import { writeGeneratedHarnessDocs } from "./harness-generate";
 
 const tempRoots: string[] = [];
@@ -2127,6 +2129,21 @@ describe("runHarnessAudit", () => {
     await expect(runHarnessAudit(rootDir)).rejects.toThrow(
       /athena-webapp[\s\S]*Stale validation surface: packages\/athena-webapp\/docs\/agent\/validation-map\.json references missing path "packages\/athena-webapp\/src\/missing-runtime\//,
     );
+
+    // Audit findings are an expected policy failure: they carry their own code
+    // and repair rather than arriving as `harness_internal_error`.
+    const error = await runHarnessAudit(rootDir).catch(
+      (thrown: unknown) => thrown,
+    );
+    expect(error).toBeInstanceOf(HarnessBlockedError);
+    const [blocker] = (error as HarnessBlockedError).blockers;
+    expect(blocker?.code).toBe("harness_audit_failed");
+    expect(blocker?.source).toEqual({ kind: "command", id: "harness:audit" });
+    expect(blocker?.details).toContain("Stale validation surface");
+    expect(blocker?.remediations.map((remediation) => remediation.id)).toEqual([
+      "regenerate-harness-docs",
+      "resolve-harness-audit-findings",
+    ]);
   });
 
   it("reports app, validation map, and next action for stale mapped paths", async () => {

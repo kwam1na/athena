@@ -11,6 +11,7 @@ import {
   resolveSummaryBaseline,
   runPrAthenaDeliveryRun,
   writePrAthenaProviderEvidence,
+  runPrAthenaDeliveryRunCli,
 } from "./pr-athena-delivery-run";
 import {
   createDeliveryRunLedger,
@@ -51,7 +52,7 @@ function ledgerEvent(
     admitted,
     preventedCostClass: "merge_grade_validation",
     resolutionKinds: admitted ? ["satisfied_evidence"] : ["blocked"],
-    findingCodes: admitted ? [] : ["review_evidence_missing"],
+    blockerCodes: admitted ? [] : ["review_evidence_missing"],
     timestamp:
       sequence === "evaluated"
         ? "2026-08-11T00:00:00.000Z"
@@ -91,7 +92,7 @@ function persistedEvent(
   admitted: boolean,
 ) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     kind: "gate_decision",
     invocationId: expected.invocationId,
     invocationMode: "outer",
@@ -119,9 +120,26 @@ function persistedEvent(
           obligationId: "review.green",
         },
       ],
-      findings: admitted ? [] : [{ code: "review_evidence_missing" }],
       diagnostics: [],
-      remediation: { machine: [], human: [] },
+    },
+    blockerEnvelope: {
+      schemaVersion: 1,
+      blockers: admitted
+        ? []
+        : [
+            {
+              code: "review_evidence_missing",
+              source: { kind: "obligation", id: "review.green" },
+              summary: "Review evidence is missing.",
+              remediations: [
+                {
+                  id: "complete-review",
+                  kind: "manual_action",
+                  summary: "Complete review.",
+                },
+              ],
+            },
+          ],
     },
   };
 }
@@ -154,7 +172,7 @@ async function createDecisionEventFixture() {
     runGit(rootDir, [
       "rev-parse",
       "--git-path",
-      "codex/harness-obligations/v1/events",
+      "codex/harness-obligations/v2/events",
     ]),
   );
   await mkdir(eventsDir, { recursive: true });
@@ -370,6 +388,42 @@ describe("pr-athena delivery run wrapper", () => {
       ).resolves.toContain('"invocationId":"invocation-a"');
     } finally {
       await rm(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects legacy gate-decision schemas and string projections", async () => {
+    const v1 = await createDecisionEventFixture();
+    const projected = await createDecisionEventFixture();
+    try {
+      await writeDecisionEvent(v1.eventsDir, {
+        ...persistedEvent(v1.expected, "evaluated", false),
+        schemaVersion: 1,
+      });
+      await expect(
+        consumeHarnessGateDecisionEvents(v1.rootDir, v1.expected, 1),
+      ).rejects.toThrow(/correlation validation/i);
+
+      const legacy = persistedEvent(projected.expected, "evaluated", false);
+      await writeDecisionEvent(projected.eventsDir, {
+        ...legacy,
+        decision: {
+          ...legacy.decision,
+          findings: [{ code: "review_evidence_missing" }],
+          remediation: { machine: [], human: [] },
+        },
+      });
+      await expect(
+        consumeHarnessGateDecisionEvents(
+          projected.rootDir,
+          projected.expected,
+          1,
+        ),
+      ).rejects.toThrow(/correlation validation/i);
+    } finally {
+      await Promise.all([
+        rm(v1.rootDir, { recursive: true, force: true }),
+        rm(projected.rootDir, { recursive: true, force: true }),
+      ]);
     }
   });
 
@@ -794,5 +848,40 @@ describe("pr-athena delivery run wrapper", () => {
     } finally {
       await rm(rootDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("runPrAthenaDeliveryRunCli", () => {
+  it("renders a typed blocker when the block originates in the orchestrator", async () => {
+    const errors: string[] = [];
+
+    const exitCode = await runPrAthenaDeliveryRunCli(
+      [],
+      {
+        writeLedger: false,
+        // A gate decision event written by an older checkout: the v1 -> v2
+        // break makes this an expected upgrade condition, and runStep swallows
+        // it into blockedReason rather than rethrowing.
+        resolveGateDecisionExpectation: async () => {
+          throw new Error(
+            "Harness gate decision event failed correlation validation.",
+          );
+        },
+        runCommand: async () => ({ exitCode: 0 }),
+      } as never,
+      { error: (line: string) => errors.push(line) },
+    );
+
+    const rendered = errors.join("\n");
+
+    // Before this, the only operator-facing output was the prose run summary:
+    // no code, no source, no remediation, on the spine itself.
+    expect(exitCode).not.toBe(0);
+    expect(rendered).toContain("delivery_run_blocked");
+    expect(rendered).toContain("command:pr:athena:delivery-run");
+    expect(rendered).toContain("rerun-delivery-run");
+    expect(rendered).toContain(
+      "Harness gate decision event failed correlation validation.",
+    );
   });
 });

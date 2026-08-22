@@ -2,6 +2,11 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 
 import { withoutGitRepositoryContext } from "./git-environment";
+import {
+  HarnessBlockedError,
+  createHarnessBlocker,
+  runHarnessCliBoundary,
+} from "./harness-blockers";
 
 const ROOT_TEST_DIRECTORY = "scripts";
 const TEST_FILE_SUFFIX = ".test.ts";
@@ -73,8 +78,42 @@ export async function runHarnessTest(
 
   const exitCode = await proc.exited;
   if (exitCode !== 0) {
-    throw new Error(`[harness:test] bun test failed (exit ${exitCode}).`);
+    // A failing test is the ordinary outcome this command exists to report.
+    // Thrown bare, it reached the CLI boundary as an unexpected exception and
+    // rendered as `harness_internal_error` with a stack.
+    throw new HarnessBlockedError(
+      [harnessTestsFailedBlocker(exitCode)],
+      `[harness:test] bun test failed (exit ${exitCode}).`,
+    );
   }
+}
+
+/**
+ * A failing test is the ordinary outcome this command exists to report.
+ * Thrown bare, it reached the CLI boundary as an unexpected exception and
+ * rendered as `harness_internal_error` with a stack.
+ */
+export function harnessTestsFailedBlocker(exitCode: number) {
+  return createHarnessBlocker({
+    code: "harness_tests_failed",
+    source: { kind: "command", id: "harness:test" },
+    summary: `Harness tests failed (exit ${exitCode}).`,
+    details:
+      "The failing test output is printed above; this command streams the runner's own output.",
+    remediations: [
+      {
+        id: "fix-failing-harness-tests",
+        kind: "code_change",
+        summary: "Fix the failing tests or the behavior they cover, then rerun.",
+      },
+      {
+        id: "rerun-harness-tests",
+        kind: "command",
+        command: ["bun", "run", "harness:test"],
+        summary: "Rerun the harness test suite.",
+      },
+    ],
+  });
 }
 
 export function parseHarnessTestCliArgs(args: string[]): HarnessTestCliArgs {
@@ -97,11 +136,12 @@ export function parseHarnessTestCliArgs(args: string[]): HarnessTestCliArgs {
 }
 
 if (import.meta.main) {
-  const args = parseHarnessTestCliArgs(Bun.argv.slice(2));
-
-  runHarnessTest(process.cwd(), args).catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(message);
-    process.exit(1);
+  process.exitCode = await runHarnessCliBoundary({
+    source: { kind: "command", id: "harness:test" },
+    reproduce: ["bun", "run", "harness:test", ...Bun.argv.slice(2)],
+    run: () => {
+      const args = parseHarnessTestCliArgs(Bun.argv.slice(2));
+      return runHarnessTest(process.cwd(), args);
+    },
   });
 }
