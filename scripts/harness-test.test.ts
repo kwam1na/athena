@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+// CLI boundary coverage is centralized in harness-blocker-inventory.test.ts.
 
 import {
   collectHarnessTestTargets,
@@ -10,6 +11,7 @@ import {
 } from "./harness-test";
 import { withoutGitRepositoryContext } from "./git-environment";
 import { collectRootScriptTestFiles } from "./root-scripts-coverage";
+import { harnessTestsFailedBlocker } from "./harness-test";
 
 const tempRoots: string[] = [];
 
@@ -118,7 +120,7 @@ describe("runHarnessTest", () => {
 
         test("nested Git commands stay inside the fixture", async () => {
           expect(Object.keys(process.env).filter((key) => key.startsWith("GIT_"))).toEqual([]);
-          const fixtureRoot = path.join(import.meta.dir, "nested-repo");
+          const fixtureRoot = path.join(import.meta.dirname, "nested-repo");
           await mkdir(fixtureRoot, { recursive: true });
           const git = (...args: string[]) => {
             const result = Bun.spawnSync(["git", ...args], {
@@ -259,5 +261,18 @@ describe("parseHarnessTestCliArgs", () => {
       dryRun: true,
       passthroughArgs: ["--reporter", "dot", "--timeout", "5000"],
     });
+  });
+});
+
+describe("harnessTestsFailedBlocker", () => {
+  it("reports a failing suite as an expected block, not an internal error", () => {
+    const blocker = harnessTestsFailedBlocker(1);
+
+    expect(blocker.code).toBe("harness_tests_failed");
+    expect(blocker.source).toEqual({ kind: "command", id: "harness:test" });
+    expect(blocker.remediations.map((item) => item.id)).toEqual([
+      "fix-failing-harness-tests",
+      "rerun-harness-tests",
+    ]);
   });
 });

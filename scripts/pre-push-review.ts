@@ -1,4 +1,9 @@
 import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
+import {
+  createHarnessBlocker,
+  HarnessBlockedError,
+  runHarnessCliBoundary,
+} from "./harness-blockers";
 import { validateHarnessDocs } from "./harness-check";
 import { TRACKED_GRAPHIFY_ARTIFACTS, runGraphifyCheck } from "./graphify-check";
 import { writeGeneratedHarnessDocs } from "./harness-generate";
@@ -497,10 +502,46 @@ export async function runPrePushReview(
   logger.log("\n[pre-push] All checks passed.");
 }
 
+async function runPrePushReviewCli() {
+  try {
+    await runPrePushReview(ROOT_DIR);
+  } catch (error) {
+    if (error instanceof HarnessBlockedError) throw error;
+    throw new HarnessBlockedError([
+      createHarnessBlocker({
+        code: "prepush_step_failed",
+        source: { kind: "command", id: "pre-push:review" },
+        summary: "A pre-push validation step blocked the push.",
+        details: error instanceof Error ? error.message : String(error),
+        remediations: [
+          {
+            id: "rerun-prepush-review",
+            kind: "command",
+            command: ["bun", "run", "pre-push:review"],
+            summary: "Address the reported step and rerun pre-push review.",
+          },
+          // The hook prints a bounded tail, so the path to the complete log is
+          // the one piece of information that makes the rest recoverable.
+          ...(process.env.ATHENA_PRE_PUSH_LOG
+            ? ([
+                {
+                  id: "inspect-prepush-retained-log",
+                  kind: "manual_action" as const,
+                  summary: `Read the complete retained pre-push log at ${process.env.ATHENA_PRE_PUSH_LOG}.`,
+                },
+              ] as const)
+            : []),
+        ],
+      }),
+    ]);
+  }
+}
+
 if (import.meta.main) {
-  runPrePushReview(ROOT_DIR).catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`\n[pre-push] BLOCKED: ${message}`);
-    process.exit(1);
+  process.exitCode = await runHarnessCliBoundary({
+    source: { kind: "command", id: "pre-push:review" },
+    reproduce: ["bun", "run", "pre-push:review"],
+    run: runPrePushReviewCli,
+    retainedLogPath: process.env.ATHENA_PRE_PUSH_LOG,
   });
 }

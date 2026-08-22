@@ -3,11 +3,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+// CLI boundary coverage is centralized in harness-blocker-inventory.test.ts.
 import {
   collectHarnessReviewContext,
   recordHarnessReviewEvidence,
 } from "./harness-review-evidence";
 import { HARNESS_REVIEW_IDENTITY_VERSION } from "./harness-review-identity";
+import { harnessReviewEvidenceRejectedBlocker } from "./harness-review-evidence";
 
 const roots: string[] = [];
 
@@ -960,4 +962,23 @@ describe("harness review evidence", () => {
       ).rejects.toThrow(message);
     },
   );
+});
+
+describe("harnessReviewEvidenceRejectedBlocker", () => {
+  it("names the invoked review command as its typed source", () => {
+    const blocker = harnessReviewEvidenceRejectedBlocker(
+      "harness:review-evidence",
+      "review manifest is not finalized green",
+    );
+
+    expect(blocker.code).toBe("harness_review_evidence_rejected");
+    expect(blocker.source).toEqual({
+      kind: "command",
+      id: "harness:review-evidence",
+    });
+    expect(blocker.remediations.map((item) => item.id)).toEqual([
+      "repair-review-manifest",
+      "recapture-review-context",
+    ]);
+  });
 });

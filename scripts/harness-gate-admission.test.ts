@@ -5,6 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+// CLI boundary coverage is centralized in harness-blocker-inventory.test.ts.
 
 import {
   defaultScenarios,
@@ -97,9 +98,9 @@ const execFileAsync = promisify(execFile);
 
 afterEach(async () => {
   await Promise.all(
-    temporaryDirectories.splice(0).map((directory) =>
-      rm(directory, { recursive: true, force: true }),
-    ),
+    temporaryDirectories
+      .splice(0)
+      .map((directory) => rm(directory, { recursive: true, force: true })),
   );
 });
 
@@ -236,7 +237,7 @@ describe("harness gate admission", () => {
       promptForWaiver,
     });
     const result = await runHarnessGateAdmission("/repo", options as never);
-    expect(result.decision.findings.map((finding) => finding.code)).toEqual([
+    expect(result.decision.blockers.map((blocker) => blocker.code)).toEqual([
       "review_evidence_missing",
       "compound-solution",
       "landed-change-report",
@@ -275,10 +276,9 @@ describe("harness gate admission", () => {
     const result = await runHarnessGateAdmission("/repo", options as never);
 
     expect(result.status).toBe("passed");
-    expect(promptForWaiver).toHaveBeenCalledWith(
-      expect.anything(),
-      ["documentation.current"],
-    );
+    expect(promptForWaiver).toHaveBeenCalledWith(expect.anything(), [
+      "documentation.current",
+    ]);
     expect(publishWaiver).not.toHaveBeenCalled();
   });
 
@@ -337,7 +337,7 @@ describe("harness gate admission", () => {
     });
     const result = await runHarnessGateAdmission("/repo", options as never);
     expect(result.status).not.toBe("passed");
-    expect(result.decision.findings.map((finding) => finding.code)).toContain(
+    expect(result.decision.blockers.map((blocker) => blocker.code)).toContain(
       "telemetry_record_missing",
     );
     // The waiver path is interactive-human only — agents are exactly the
@@ -390,9 +390,18 @@ describe("harness gate admission", () => {
     // A waiver means "I accept this missing artifact", never "I accept this
     // corrupt one" — so the malformed code must not reach the waiver path.
     expect(promptForWaiver).not.toHaveBeenCalled();
-    expect(result.decision.findings.map((finding) => finding.code)).toContain(
+    expect(result.decision.blockers.map((blocker) => blocker.code)).toContain(
       "telemetry_record_malformed",
     );
+    // A malformed record needs "regenerate, do not hand-edit", which is
+    // different guidance from the missing-record case and so a different id.
+    const malformed = result.decision.blockers.find(
+      (blocker) => blocker.code === "telemetry_record_malformed",
+    );
+    expect(malformed?.remediations.map((item) => item.id)).toEqual([
+      "regenerate-delivery-telemetry",
+    ]);
+    expect(malformed?.remediations[0]?.summary).toMatch(/instead of editing/i);
   });
 
   it("waives every blocked obligation under one prompt, and names them all in it", async () => {
@@ -475,16 +484,22 @@ describe("harness gate admission", () => {
       const result = await runHarnessGateAdmission("/repo", options as never);
 
       expect(result.status).toBe("blocked");
-      expect(result.decision.findings).toEqual(
+      expect(result.decision.blockers).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ code: "waiver_declined" }),
         ]),
       );
+      const declined = result.decision.blockers.find(
+        (blocker) => blocker.code === "waiver_declined",
+      );
+      expect(declined?.remediations.map((item) => item.id)).toEqual([
+        "complete-final-green-review-after-decline",
+      ]);
       expect(options._spies.spawnHeavy).not.toHaveBeenCalled();
       expect(publishWaiver).not.toHaveBeenCalled();
       expect(
-        options._spies.writeDecisionEvent.mock.calls.map(([, event]) =>
-          event.sequence,
+        options._spies.writeDecisionEvent.mock.calls.map(
+          ([, event]) => event.sequence,
         ),
       ).toEqual(["evaluated"]);
     },
@@ -511,7 +526,7 @@ describe("harness gate admission", () => {
     const result = await runHarnessGateAdmission("/repo", options as never);
 
     expect(result.status).toBe("blocked");
-    expect(result.decision.findings).toEqual(
+    expect(result.decision.blockers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ code: "candidate_changed_during_prompt" }),
       ]),
@@ -519,8 +534,8 @@ describe("harness gate admission", () => {
     expect(options._spies.spawnHeavy).not.toHaveBeenCalled();
     expect(publishWaiver).not.toHaveBeenCalled();
     expect(
-      options._spies.writeDecisionEvent.mock.calls.map(([, event]) =>
-        event.sequence,
+      options._spies.writeDecisionEvent.mock.calls.map(
+        ([, event]) => event.sequence,
       ),
     ).toEqual(["evaluated"]);
   });
@@ -544,13 +559,14 @@ describe("harness gate admission", () => {
     expect(spawnHeavy).toHaveBeenCalledTimes(1);
     expect(publishWaiver).not.toHaveBeenCalled();
     expect(
-      options._spies.writeDecisionEvent.mock.calls.map(([, event]) =>
-        event.sequence,
+      options._spies.writeDecisionEvent.mock.calls.map(
+        ([, event]) => event.sequence,
       ),
     ).toEqual(["evaluated", "provider_failed"]);
   });
 
   it("emits terminal candidate-changed telemetry and does not publish a waiver after provider drift", async () => {
+    const errors: string[] = [];
     let captureCount = 0;
     const publishWaiver = vi.fn(async () => undefined);
     const options = humanWaiverOptions({
@@ -566,11 +582,17 @@ describe("harness gate admission", () => {
         };
       },
       publishWaiver,
+      logger: { log: () => {}, error: (line: string) => errors.push(line) },
     });
 
     const result = await runHarnessGateAdmission("/repo", options as never);
 
     expect(result.status).toBe("provider_changed_candidate");
+    // The blocker was built and persisted to the event; before this it was
+    // then discarded for the operator, so the command exited non-zero with a
+    // completely silent terminal.
+    expect(errors.join("\n")).toContain("candidate:candidate-drift");
+    expect(errors.join("\n")).toContain("prepare-current-candidate");
     expect(options._spies.spawnHeavy).toHaveBeenCalledTimes(
       HEAVY_PROVIDER_COMMANDS.length,
     );
@@ -599,6 +621,7 @@ describe("harness gate admission", () => {
   });
 
   it("rechecks the exact candidate immediately before spawning", async () => {
+    const driftErrors: string[] = [];
     let captureCount = 0;
     const options = greenOptions({
       captureCandidate: async () => {
@@ -611,9 +634,14 @@ describe("harness gate admission", () => {
               : { ...candidate, treeSha: "tree-raced" },
         };
       },
+      logger: { log: () => {}, error: (line: string) => driftErrors.push(line) },
     });
     const result = await runHarnessGateAdmission("/repo", options as never);
     expect(result.status).toBe("candidate_changed");
+    // The sibling provider-drift path is covered above; this one is the
+    // before-spawn block, which also exited 1 with a silent terminal.
+    expect(driftErrors.join("\n")).toContain("candidate:candidate-drift");
+    expect(driftErrors.join("\n")).toContain("prepare-current-candidate");
     expect(options._spies.spawnHeavy).not.toHaveBeenCalled();
   });
 
@@ -624,8 +652,8 @@ describe("harness gate admission", () => {
     { field: "reviewSensitive", value: undefined },
     { field: "reviewSensitive", value: "yes" },
   ])("fails closed for malformed scenario $field", ({ field, value }) => {
-    const scenario = HARNESS_APP_REGISTRY[0].validationScenarios[0] as unknown as
-      Record<string, unknown>;
+    const scenario = HARNESS_APP_REGISTRY[0]
+      .validationScenarios[0] as unknown as Record<string, unknown>;
     const original = scenario[field];
     scenario[field] = value;
     try {
@@ -664,7 +692,7 @@ describe("harness gate admission", () => {
     const gitDir = path.join(rootDir, ".git");
     expect(path.relative(gitDir, destination)).toBe(
       path.join(
-        "codex/harness-obligations/v1/events",
+        "codex/harness-obligations/v2/events",
         "invocation-a--evaluated.json",
       ),
     );
@@ -675,5 +703,33 @@ describe("harness gate admission", () => {
     await expect(
       writeHarnessGateDecisionEvent(rootDir, event),
     ).rejects.toMatchObject({ code: "EEXIST" });
+  });
+});
+
+describe("prepare-current-candidate remediation", () => {
+  it("means one repair everywhere it appears", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const nodePath = await import("node:path");
+    const summaries = new Set<string>();
+
+    for (const file of [
+      "harness-gate-admission.ts",
+      "pr-athena-prepare.ts",
+    ]) {
+      const source = await readFile(
+        nodePath.join(import.meta.dirname, file),
+        "utf8",
+      );
+      for (const match of source.matchAll(
+        /id: "prepare-current-candidate",[\s\S]{0,200}?summary: "([^"]+)"/g,
+      )) {
+        if (match[1]) summaries.add(match[1]);
+      }
+    }
+
+    // One id is a claim that two blockers need the same repair. Divergent
+    // wording under it makes the id meaningless to an operator scanning the
+    // list: two entries, same handle, different instructions.
+    expect(summaries.size).toBe(1);
   });
 });

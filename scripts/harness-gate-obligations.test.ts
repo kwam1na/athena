@@ -85,6 +85,55 @@ function resolution(
 }
 
 describe("evaluateGateObligations", () => {
+  it("gives a malformed telemetry record its own regenerate remediation", () => {
+    const decision = evaluateGateObligations(
+      input({
+        liveProviderResults: [
+          {
+            providerId: "delivery-documentation-check",
+            runId: "docs-malformed",
+            status: "green",
+            findings: [],
+          },
+          {
+            providerId: "delivery-run-telemetry-check",
+            runId: "telemetry-malformed",
+            status: "failed",
+            findings: [
+              {
+                code: "telemetry_record_malformed",
+                message: "Changed telemetry record is not a valid record.",
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    const malformed = decision.blockers.find(
+      (blocker) => blocker.code === "telemetry_record_malformed",
+    );
+    // Distinct from `record-delivery-telemetry`: only the missing-record case
+    // is waivable, and hand-editing a corrupt record is how the second bad
+    // commit happens. A shared id would let the renderer print either.
+    expect(malformed?.remediations.map((item) => item.id)).toEqual([
+      "regenerate-delivery-telemetry",
+    ]);
+  });
+
+  it("uses the shared typed blocker contract without legacy projections", () => {
+    const decision = evaluateGateObligations(input({ records: [] }));
+
+    expect(decision.admitted).toBe(false);
+    expect(decision.blockers).not.toHaveLength(0);
+    expect(decision).not.toHaveProperty("findings");
+    expect(decision).not.toHaveProperty("remediation");
+    expect(decision.blockers[0]).toMatchObject({
+      source: { kind: "obligation" },
+      remediations: [expect.objectContaining({ id: expect.any(String) })],
+    });
+  });
+
   it("honors an attested documentation waiver in repository CI", () => {
     const waiver: AttestedWaiverRecord = {
       schemaVersion: 1,
@@ -111,7 +160,6 @@ describe("evaluateGateObligations", () => {
               {
                 code: "compound-solution",
                 message: "Solution note is missing",
-                remediation: "Write the solution note",
               },
             ],
           },
@@ -214,12 +262,10 @@ describe("evaluateGateObligations", () => {
               {
                 code: "solution_note_stale",
                 message: "Solution note is stale",
-                remediation: "Update the solution note",
               },
               {
                 code: "landed_report_stale",
                 message: "Landed-change report is stale",
-                remediation: "Regenerate the landed-change report",
               },
             ],
           },
@@ -234,7 +280,7 @@ describe("evaluateGateObligations", () => {
     );
 
     expect(decision.admitted).toBe(false);
-    expect(decision.findings.map((finding) => finding.code)).toEqual([
+    expect(decision.blockers.map((blocker) => blocker.code)).toEqual([
       "review_evidence_missing",
       "solution_note_stale",
       "landed_report_stale",
@@ -274,10 +320,9 @@ describe("evaluateGateObligations", () => {
     );
     expect(resolution(incomplete, "review.green")).toMatchObject({
       kind: "blocked",
-      findings: [
+      blockers: [
         expect.objectContaining({
           code: "review_evidence_missing",
-          providerId: "execute",
         }),
       ],
     });
@@ -410,7 +455,7 @@ describe("evaluateGateObligations", () => {
     expect(decision.admitted).toBe(false);
     expect(resolution(decision, "review.green")).toMatchObject({
       kind: "blocked",
-      findings: [expect.objectContaining({ code: "stale_evidence" })],
+      blockers: [expect.objectContaining({ code: "stale_evidence" })],
     });
   });
 
@@ -430,7 +475,7 @@ describe("evaluateGateObligations", () => {
     expect(decision.admitted).toBe(false);
     expect(resolution(decision, "review.green")).toMatchObject({
       kind: "blocked",
-      findings: [expect.objectContaining({ code: "stale_evidence" })],
+      blockers: [expect.objectContaining({ code: "stale_evidence" })],
     });
   });
 
@@ -507,7 +552,6 @@ describe("evaluateGateObligations", () => {
           {
             code: "telemetry_record_missing",
             message: "No telemetry record for this delivery",
-            remediation: "Run bun run delivery:telemetry-record",
           },
         ],
       },
@@ -619,7 +663,10 @@ describe("evaluateGateObligations", () => {
         ),
         "review.green",
       ),
-    ).toMatchObject({ kind: "waived", waiverRecordId: "durable-review-waiver" });
+    ).toMatchObject({
+      kind: "waived",
+      waiverRecordId: "durable-review-waiver",
+    });
   });
 
   it("does not let a waiver hide an applicable malformed record", () => {
@@ -650,7 +697,7 @@ describe("evaluateGateObligations", () => {
 
     expect(resolution(decision, "review.green")).toMatchObject({
       kind: "blocked",
-      findings: [expect.objectContaining({ code: "corrupt_record" })],
+      blockers: [expect.objectContaining({ code: "corrupt_record" })],
     });
   });
 
@@ -666,7 +713,7 @@ describe("evaluateGateObligations", () => {
 
     expect(resolution(decision, "review.green")).toMatchObject({
       kind: "blocked",
-      findings: [expect.objectContaining({ code: "ambiguous_records" })],
+      blockers: [expect.objectContaining({ code: "ambiguous_records" })],
     });
   });
 

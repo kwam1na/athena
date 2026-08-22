@@ -4,6 +4,7 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { collectConvexReturnValidatorContractFindings as collectSharedConvexReturnValidatorContractFindings } from "./convex-return-validator-contract-check";
+import { runHarnessCliBoundary } from "./harness-blockers";
 
 const DEFAULT_BASE_REF = "origin/main";
 const DEFAULT_MACHINE_OUTPUT_PATH =
@@ -2727,35 +2728,37 @@ export function parseHarnessInferentialReviewArgs(
   };
 }
 
-if (import.meta.main) {
-  try {
-    const parsed = parseHarnessInferentialReviewArgs(Bun.argv.slice(2));
-    if (parsed.help) {
-      console.log(
-        "Usage: bun run harness:inferential-review [--base <ref>] [--persist-history]",
-      );
-      process.exit(0);
-    }
-
-    const result = await runHarnessInferentialReview(process.cwd(), {
-      baseRef: parsed.baseRef,
-      persistHistory: parsed.persistHistory,
-    });
-    console.log(result.humanReport);
-    console.log(`Machine output: ${result.machineOutputPath}`);
-
-    if (result.exitCode !== 0) {
-      console.error(
-        formatInferentialFailureDiagnostic(
-          result.machine,
-          result.machineOutputPath,
-        ),
-      );
-      process.exit(result.exitCode);
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`\n[harness:inferential-review] BLOCKED: ${message}`);
-    process.exit(1);
+async function runHarnessInferentialReviewCli() {
+  const parsed = parseHarnessInferentialReviewArgs(Bun.argv.slice(2));
+  if (parsed.help) {
+    console.log(
+      "Usage: bun run harness:inferential-review [--base <ref>] [--persist-history]",
+    );
+    return 0;
   }
+
+  const result = await runHarnessInferentialReview(process.cwd(), {
+    baseRef: parsed.baseRef,
+    persistHistory: parsed.persistHistory,
+  });
+  console.log(result.humanReport);
+  console.log(`Machine output: ${result.machineOutputPath}`);
+
+  if (result.exitCode !== 0) {
+    console.error(
+      formatInferentialFailureDiagnostic(
+        result.machine,
+        result.machineOutputPath,
+      ),
+    );
+  }
+  return result.exitCode;
+}
+
+if (import.meta.main) {
+  process.exitCode = await runHarnessCliBoundary({
+    source: { kind: "command", id: "harness:inferential-review" },
+    reproduce: ["bun", "run", "harness:inferential-review"],
+    run: runHarnessInferentialReviewCli,
+  });
 }

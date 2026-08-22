@@ -204,6 +204,72 @@ scenarios, coverage summary logic, and related script contracts.
 When the harness changes, this command is the first proof that the sensors still
 work.
 
+### Blocker And Remediation Contract
+
+Fail-closed harness commands share the typed contract in
+`scripts/harness-blockers.ts`. A `HarnessBlocker` has a stable machine code, a
+typed source, a concise summary, optional sanitized details, and a non-empty
+remediation tuple. Sources identify the policy or execution boundary that owns
+the failure: a gate, obligation, provider, preparation receipt, candidate
+capture or drift check, or package-script-reachable command.
+
+Remediations are typed as `command`, `manual_action`, `code_change`, or
+`retry`. Pick the kind by what the operator has to do, not by how the text
+reads:
+
+| Kind | Use it when | Carries a command |
+| --- | --- | --- |
+| `command` | A deterministic repair exists and should be run now. | Required |
+| `retry` | Nothing is wrong with the repo; rerun once an external or transient condition clears. | Optional |
+| `code_change` | A source edit is required before the check can pass. | No |
+| `manual_action` | A human must decide or act outside the repo (review, waiver, inspecting a log). | No |
+
+The internal-error boundary is separate from all four: it is reserved for
+genuinely unexpected exceptions, and its guidance is diagnostic rather than a
+repair to run. Do not reach for it to report an expected policy failure.
+
+Remediation of every kind is guidance, not authorization. A blocker describes
+what the owning boundary believes would unblock the command; it does not grant
+permission to perform that repair automatically. Whether a `command`
+remediation may run without a human deciding is governed by the repo's
+existing bounded self-repair policy - one repair, one rerun, and only for
+deterministic drift - not by the blocker having named it. The renderer never
+executes anything it prints.
+
+Commands are stored as argument arrays, not interpolated shell strings. This
+keeps the machine representation safe to inspect and reuse; terminal output
+quotes those arguments only when it renders them for a human. Stable
+remediation ids let a command report all blockers together while printing a
+repeated repair only once.
+
+Both output forms must derive from the same blocker objects:
+
+- `formatHarnessBlockers` produces bounded, deterministic terminal guidance.
+- `serializeHarnessBlockers` produces the versioned structured-event payload.
+- `createHarnessInternalErrorBlocker` converts unexpected exceptions into the
+  same contract while removing control characters and redacting common secret
+  shapes.
+
+Gate-decision events use schema v2 and carry blockers only in the required
+`blockerEnvelope`. This is a deliberate break, not a compatible extension: the
+event path moved from `codex/harness-obligations/v1/events` to `.../v2/events`,
+and the reader rejects a v1 event rather than degrading. Events written by an
+older checkout are not readable after the upgrade; rerun the gate to produce a
+current one. The removed `decision.findings` and
+`decision.remediation.machine/human` fields are not accepted by the
+delivery-run reader; waiver eligibility and ledger blocker codes come from the
+typed envelope.
+
+Do not throw or print a new operator-facing blocker as free-form prose. Create
+the blocker at the owning source, preserve it through orchestration, and choose
+the terminal or structured renderer only at the output boundary.
+
+`scripts/harness-blocker-inventory.ts` is the enforcement sensor for this
+contract. It inventories root harness CLIs reachable through package scripts
+and blocks commands that lack structured remediation coverage or introduce a
+new unstructured blocker path. New commands must register and use the shared
+contract immediately.
+
 ### Review Sensors
 
 `bun run harness:self-review --base origin/main` and
@@ -558,11 +624,17 @@ Most harness failures are trying to answer one of these questions:
 The fastest response is usually:
 
 1. Read the exact failing command and message.
-2. Decide whether it is a code failure, stale generated artifact, or missing
-   validation mapping.
-3. Run the narrow repair or validation command named by the failure.
+2. Read the blocker source and stable code to identify the owning boundary.
+3. Follow the typed remediation in order. Run a `command` or `retry` argument
+   list as shown; perform a `manual_action` or `code_change` deliberately rather
+   than treating it as executable text.
 4. Review the diff.
 5. Commit the source change and its refreshed evidence together.
+
+When several blockers are reported, resolve their deduplicated remediations and
+rerun the authoritative command. If the output reports
+`harness_internal_error`, inspect the retained log before retrying; its details
+are diagnostic context, not a substitute for the named reproduction command.
 
 Avoid weakening the sensor to get past a failure. If the failure is noisy, fix
 the sensor's precision with a test so the repo learns from the false positive.
