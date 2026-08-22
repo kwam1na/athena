@@ -22,8 +22,11 @@ export type StoreScheduleDateException = {
 };
 
 export type StoreScheduleDraft = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Convex id fields kept untyped by the verbatim move out of convex/; see V26-1316.
   _id?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Convex id fields kept untyped by the verbatim move out of convex/; see V26-1316.
   organizationId: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Convex id fields kept untyped by the verbatim move out of convex/; see V26-1316.
   storeId: any;
   timezone: string;
   weeklyWindows: StoreScheduleWindow[];
@@ -36,9 +39,12 @@ export type StoreScheduleDraft = {
   source: ScheduleSource;
   createdAt: number;
   updatedAt: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Convex id fields kept untyped by the verbatim move out of convex/; see V26-1316.
   createdByUserId?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Convex id fields kept untyped by the verbatim move out of convex/; see V26-1316.
   updatedByUserId?: any;
   supersededAt?: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Convex id fields kept untyped by the verbatim move out of convex/; see V26-1316.
   supersededByScheduleId?: any;
 };
 

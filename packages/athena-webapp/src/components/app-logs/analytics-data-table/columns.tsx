@@ -1,17 +1,15 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "~/src/components/base/table/data-table-column-header";
 import { Link } from "@tanstack/react-router";
-import { capitalizeWords } from "~/shared/textCase";
 import { getRelativeTime } from "~/src/lib/utils";
-import { Analytic, BagItem } from "~/types";
-import { Computer, Monitor, Phone, Smartphone, User } from "lucide-react";
+import { Analytic } from "~/types";
+import { Monitor, Smartphone, User } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "../../ui/tooltip";
-import { useLogItems } from "./log-items-provider";
 
 export const columns: ColumnDef<Analytic>[] = [
   {

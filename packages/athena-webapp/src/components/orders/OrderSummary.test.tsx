@@ -5,14 +5,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // The component reads stored pesewas and formats major units, so it is the
 // closest thing to a contract test for the currency helpers it imports.
 const useOnlineOrderMock = vi.fn();
-const useGetActiveStoreMock = vi.fn();
+const getActiveStoreMock = vi.fn();
 
 vi.mock("~/src/contexts/OnlineOrderContext", () => ({
   useOnlineOrder: () => useOnlineOrderMock(),
 }));
 
 vi.mock("~/src/hooks/useGetActiveStore", () => ({
-  default: () => useGetActiveStoreMock(),
+  default: () => getActiveStoreMock(),
 }));
 
 import { OrderSummary } from "./OrderSummary";
@@ -21,7 +21,7 @@ type TestOrder = Record<string, unknown>;
 
 function renderSummary(order: TestOrder | null) {
   useOnlineOrderMock.mockReturnValue({ order });
-  useGetActiveStoreMock.mockReturnValue({
+  getActiveStoreMock.mockReturnValue({
     activeStore: { currency: "GHS" },
   });
 
@@ -37,7 +37,7 @@ function amountFor(label: string) {
 describe("OrderSummary", () => {
   beforeEach(() => {
     useOnlineOrderMock.mockReset();
-    useGetActiveStoreMock.mockReset();
+    getActiveStoreMock.mockReset();
   });
 
   it("renders nothing without an order", () => {
