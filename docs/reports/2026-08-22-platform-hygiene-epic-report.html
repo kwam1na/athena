@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Platform Hygiene Epic (V26-1312)</title>
+  </head>
+  <body>
+    <article
+      data-athena-landed-change-report="v2"
+      data-athena-report-diff-fingerprint="564a3027e19d5f7a7c3a1c8e6cdedfd72c2fa66d505ac378e21dbbe77b02ef52"
+      data-athena-report-base="origin/main"
+      data-athena-report-head="9260ef1b16663eba21e23f214db5f009ae9405f8"
+    >
+      <header data-report-section="header">
+        <h1>Platform Hygiene: six tickets, one integration</h1>
+        <ul data-report-pills>
+          <li>Delivery candidate</li>
+          <li>Branch codex/v26-1312-platform-hygiene</li>
+          <li>Epic V26-1312 — six tickets</li>
+          <li>9,926 webapp tests green</li>
+          <li>204 storefront tests green</li>
+          <li>2 defects found in review and fixed</li>
+        </ul>
+        <dl data-report-meta>
+          <dt>Epic</dt><dd>V26-1312 — Platform Hygiene</dd>
+          <dt>Tickets</dt><dd>V26-1171, V26-963, V26-964, V26-965, V26-967, V26-1172</dd>
+          <dt>Status</dt><dd>Delivery candidate — not yet merged, not yet deployed</dd>
+          <dt>Base</dt><dd>origin/main</dd>
+          <dt>Candidate head</dt><dd>9260ef1b</dd>
+          <dt>Follow-ups filed</dt><dd>V26-1315, V26-1316</dd>
+        </dl>
+      </header>
+
+      <section data-report-section="summary">
+        <h2>Executive summary</h2>
+        <p>
+          Six tickets land together: one production bug fix, four structural
+          boundary refactors, and the documentation that makes the bug fix's
+          rule durable. They ship as one PR because they share generated
+          artifacts — the Convex generated API, the graphify knowledge graph,
+          and the harness doc indexes — which would otherwise conflict across
+          five separate pull requests. Ticket-level scope stayed separate: each
+          was implemented in its own isolated worktree, and the shared
+          artifacts were regenerated exactly once at integration.
+        </p>
+        <p>
+          The headline change is <strong>V26-1171</strong>: archiving a product
+          can no longer strand open sale-inventory review work. Alongside it,
+          three refactors move code across boundaries without changing
+          behavior, and <strong>V26-967</strong> deletes a frontend fallback
+          that had been quietly reporting offline terminals as healthy.
+        </p>
+        <p>
+          An independent review pass found <strong>two real defects in this
+          branch's own work</strong> — one of them a false "migration
+          complete" signal that gates a money-validator constraint flip. Both
+          are fixed here, each with a regression test that was proven to fail
+          against the unfixed code before being committed. The review is part
+          of the story of this delivery, not a footnote to it.
+        </p>
+      </section>
+
+      <section data-report-section="problem">
+        <h2>What was wrong, in plain language</h2>
+        <p>
+          <strong>Products could be archived out from under their own
+          unfinished work.</strong> When a POS sale needed an inventory review,
+          that review lived in the Stock adjustments workspace. But Stock
+          adjustments hides archived SKUs. So archiving a product made its open
+          review work unreachable while the weekly inventory-attention count
+          still counted it. Operators saw a count of 59 items needing attention
+          and a workspace that could only render 58. The missing one was
+          invisible and unresolvable.
+        </p>
+        <p>
+          <strong>Browser code was importing Convex server internals.</strong>
+          Eight allow-listed exceptions had accumulated in a boundary test, each
+          individually justified in a comment. An allowlist that long stops
+          being an exception list and becomes the architecture.
+        </p>
+        <p>
+          <strong>The storefront compiled through the admin app's root.</strong>
+          Shared DTOs were imported from <code>@athena/webapp</code>, so the
+          storefront's type graph ran through another application's internals
+          and its generated Convex model paths.
+        </p>
+        <p>
+          <strong>Terminal Health had two brains.</strong> The server computed
+          an authoritative operational state, and the frontend kept a parallel
+          derivation as a fallback. The two had drifted.
+        </p>
+        <p>
+          <strong>Amount migrations could not be run safely.</strong> They read
+          entire tables into memory, had no idempotency marker, and resolved
+          genuinely ambiguous values by heuristic guess.
+        </p>
+      </section>
+
+      <section data-report-section="mental-model">
+        <h2>The idea that ties it together</h2>
+        <p>
+          Five of these six tickets are the same shape:
+          <strong>something was being decided in two places at once, and the
+          two places disagreed.</strong>
+        </p>
+        <ul>
+          <li>
+            <strong>Product archive:</strong> the source workflow decided a
+            product was done; the destination workspace decided its work was
+            unreachable. Nobody reconciled them.
+          </li>
+          <li>
+            <strong>Terminal Health:</strong> the server decided operational
+            state; the frontend re-decided it from raw ledgers.
+          </li>
+          <li>
+            <strong>Convex boundary:</strong> "what is browser-safe" was
+            decided by an allowlist in a test, not by where code lived.
+          </li>
+          <li>
+            <strong>Storefront contracts:</strong> the shape of a shared DTO was
+            decided inside the admin application root.
+          </li>
+          <li>
+            <strong>Amount migrations:</strong> "has this row been converted?"
+            was decided by guessing at the value's magnitude, not recorded.
+          </li>
+        </ul>
+        <p>
+          In every case the fix is the same move: <em>give the decision one
+          owner, and make the other side read it rather than recompute it.</em>
+          A precondition on the source transition. A server aggregate the UI
+          renders. A module location instead of an allowlist. A contract
+          package. A marker column written in the same transaction as the data
+          it describes.
+        </p>
+        <p>
+          The durable rule V26-1172 records is the general form: <strong>a
+          source transition must not make unresolved operational work
+          unreachable.</strong> Either the work becomes terminal, or the
+          transition is blocked. Silently orphaning it is the one option that is
+          never acceptable.
+        </p>
+      </section>
+
+      <section data-report-section="before-after">
+        <h2>Before and after, per boundary</h2>
+        <h3>Product archive (V26-1171)</h3>
+        <p>
+          Before: two public paths reached
+          <code>availability: "archived"</code> — the dedicated
+          <code>archive</code> mutation and the generic <code>update</code> —
+          and neither consulted the product's SKU-scoped inventory review work.
+        </p>
+        <p>
+          After: both call one guard,
+          <code>guardProductArchiveTransition</code>, before any write. The scan
+          is bounded and store-scoped, and it <em>fails closed</em>: if it
+          cannot prove it saw all the work, it blocks rather than allowing an
+          orphan.
+        </p>
+        <h3>Amount migrations (V26-963)</h3>
+        <p>
+          Before: full-table <code>.collect()</code> behind a lint suppression;
+          no marker, so a second run multiplied by 100 again; a
+          <code>price &lt; 10_000</code> heuristic that silently guessed in both
+          directions and buried the guess in the same counter as genuine skips.
+        </p>
+        <p>
+          After: cursor-paged batches that schedule their own successors,
+          dry-run by default, and a <code>pesewasMigratedAt</code> marker
+          written in the same <code>ctx.db.patch</code> as the money fields.
+          Ambiguous values are now a first-class outcome — reported with a
+          reason, never written, never marked, so they resurface until a human
+          decides.
+        </p>
+        <h3>Convex/browser boundary (V26-965)</h3>
+        <p>
+          Before: an allowlist of eight patterns. After: exactly one entry, for
+          generated Convex modules. Each of the other seven was resolved by
+          moving the implementation into <code>shared/</code> and leaving a
+          thin re-export shim at the old Convex path — so no server import site
+          changed at all.
+        </p>
+        <h3>Storefront contracts (V26-964)</h3>
+        <p>
+          Before: the storefront imported <code>@athena/webapp</code>. After: a
+          new <code>@athena/contracts</code> package, with exactly one
+          type-only seam to the generated Convex model. The admin app's
+          <code>types.ts</code> shrank from 358 lines to a 16-line facade, so
+          roughly 200 existing call sites were untouched.
+        </p>
+        <h3>Terminal Health (V26-967)</h3>
+        <p>
+          Before: <code>buildLegacyOperationalExplanation</code>, about 145
+          lines re-deriving lanes from runtime status and recovery ledgers when
+          the server aggregate was absent. After: deleted. The presentation
+          layer now only normalizes and labels what the server returned, tagging
+          each result with its <code>source</code>.
+        </p>
+      </section>
+
+      <section data-report-section="key-files">
+        <h2>Key files</h2>
+        <table>
+          <thead>
+            <tr><th>File</th><th>Why it matters</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>convex/inventory/helpers/productArchivePrecondition.ts</code></td>
+              <td>The single entry point for the archive guard: bounded, store-scoped, fail-closed.</td>
+            </tr>
+            <tr>
+              <td><code>convex/inventory/products.ts</code></td>
+              <td>Both public transitions into <code>archived</code> call the guard before any write.</td>
+            </tr>
+            <tr>
+              <td><code>shared/productArchivePolicy.ts</code></td>
+              <td>Reason codes and operator copy shared by server and browser, so no raw backend wording reaches an operator.</td>
+            </tr>
+            <tr>
+              <td><code>convex/migrations/backfillAmountsToPesewas.ts</code></td>
+              <td>The safe-migration pattern: table specs, <code>classifyRow</code>, marker-first idempotency, ambiguity reporting.</td>
+            </tr>
+            <tr>
+              <td><code>convex/migrations/migratePosAmountsToPesewas.ts</code></td>
+              <td>Owns the <code>complete</code> flag that gates the money-validator constraint flip — and where review defect #1 lived.</td>
+            </tr>
+            <tr>
+              <td><code>src/routeTree.browser-boundary.test.ts</code></td>
+              <td>The allowlist collapsed to one entry; the test itself is the enforcement.</td>
+            </tr>
+            <tr>
+              <td><code>packages/athena-contracts/convexModel.ts</code></td>
+              <td>The one sanctioned type-only seam to generated Convex output.</td>
+            </tr>
+            <tr>
+              <td><code>packages/athena-webapp/types.ts</code></td>
+              <td>The facade that made the contracts extraction a non-event for ~200 call sites.</td>
+            </tr>
+            <tr>
+              <td><code>src/components/pos/terminals/terminalHealthPresentation.ts</code></td>
+              <td>Legacy derivation deleted; <code>source</code> tagging and the inventory scoping filter remain.</td>
+            </tr>
+            <tr>
+              <td><code>docs/solutions/architecture-patterns/athena-source-transition-operational-work-reachability-2026-08-22.md</code></td>
+              <td>The reusable rule, so the next person does not rediscover it from a production mismatch.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section data-report-section="changes">
+        <h2>What changed — and what deliberately did not</h2>
+        <h3>Visible changes</h3>
+        <ul>
+          <li>
+            Archiving a product with open sale-inventory review work is
+            rejected with <em>"Archiving on hold"</em> and a count of reviews to
+            resolve. No backend identifiers are exposed.
+          </li>
+          <li>
+            Terminal Health badges, headline, sale impact and next step now come
+            from the server lane on both list and detail. A response with no
+            aggregate says so plainly instead of guessing a green state.
+          </li>
+          <li>
+            Operators gain dry-run-by-default backfill mutations and a read-only
+            verifier; the old migration module is deleted.
+          </li>
+        </ul>
+        <h3>Deliberately unchanged</h3>
+        <ul>
+          <li>
+            <strong>V26-964 and V26-965 change no runtime behavior.</strong> The
+            evidence is in the tree: re-export shims at every old import path,
+            the <code>types.ts</code> facade, byte-identical file renames, and
+            characterization tests written <em>before</em> each move.
+          </li>
+          <li>
+            <strong><code>onlineOrder.amount</code> and
+            <code>paymentDue</code> are still not converted.</strong> The legacy
+            module had those conversions commented out, so they were never
+            converted in any environment. Converting them here would be a new,
+            unreviewed data change wearing a refactor's clothes.
+          </li>
+          <li>
+            <strong><code>catalogImport.ts</code> can still insert a product
+            directly as archived.</strong> That is creation, not a transition of
+            a product that could already own work, so the guard does not apply.
+            It is documented so a future reader does not read it as a gap.
+          </li>
+          <li>
+            <strong><code>classifyTerminalHealth</code> is retained.</strong> It
+            answers a different question and still drives the roster count
+            tiles. Only the badge path moved to the server — and confusing those
+            two is exactly what review defect #2 was.
+          </li>
+          <li>
+            <strong>Existing production work items were not repaired.</strong>
+            Cleanup of the observed mismatch is explicitly out of scope; this
+            ticket prevents the next one.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="failure-boundaries">
+        <h2>The two defects review caught</h2>
+        <p>
+          Both were introduced by this branch's own work and found by
+          independent reviewers reading the code, not by a failing test.
+        </p>
+        <h3>A migration that could claim it was finished when it was not</h3>
+        <p>
+          The POS migration recorded <code>complete: true</code> on a run
+          record, and that flag gates flipping the money validators to
+          integer-only. The guard read:
+        </p>
+        <pre><code>const complete = !dryRun &amp;&amp; page.isDone &amp;&amp; totals.pending === 0;</code></pre>
+        <p>
+          But <code>pending</code> is only incremented inside the
+          <code>if (dryRun)</code> branch. In an applying chain it is
+          structurally zero, so the third condition is dead and the guard
+          reduces to <code>page.isDone</code>. An operator resuming from a
+          supplied cursor would skip every page before it, reach the end, and
+          mark the table drained while unconverted rows remained behind the
+          start point — green-lighting a constraint flip that would then reject
+          those rows on read.
+        </p>
+        <p>
+          Completion now also requires that the chain started at the table
+          beginning, threaded through the scheduled successors. Separately, a
+          dry run no longer writes the run record at all: it previously called
+          the upsert unconditionally, so a sanity dry run before cutover could
+          clear an existing <code>complete: true</code>.
+        </p>
+        <h3>A terminal that appeared in no metric tile</h3>
+        <p>
+          When badges moved to the server lane, the roster's "Needs review"
+          <em>count</em> also lost its classification disjunct. But local-runtime
+          review work classifies as "Needs review" while the server routes it to
+          the <code>needs_terminal_action</code> lane. Such a terminal fell out
+          of the review tile, and because the other tiles are label-driven and
+          none match, it appeared in <em>no</em> tile at all — visible only in
+          the total. The disjunct is restored; tiles stay classification-driven,
+          badges are server-driven, and the asymmetry is now documented in
+          place.
+        </p>
+      </section>
+
+      <section data-report-section="validation">
+        <h2>Validation and review evidence</h2>
+        <p><strong>Status: delivery candidate.</strong> Not merged, not deployed, Linear not yet <code>Done</code>, root checkout not yet fast-forwarded.</p>
+        <table>
+          <thead>
+            <tr><th>Check</th><th>Result</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Webapp Vitest suite</td><td>826 files, 9,926 tests passed</td></tr>
+            <tr><td>Storefront Vitest suite</td><td>37 files, 204 tests passed</td></tr>
+            <tr><td><code>bunx tsc --noEmit</code> (webapp, storefront, contracts)</td><td>clean</td></tr>
+            <tr><td><code>bun run architecture:check</code></td><td>passed for both packages</td></tr>
+            <tr><td><code>bun run lint:convex:changed</code></td><td>pagination and return-validator checks passed</td></tr>
+            <tr><td><code>bun run lint:frontend:changed</code></td><td>0 errors</td></tr>
+            <tr><td><code>bun run audit:convex</code></td><td>admission coverage passed</td></tr>
+            <tr><td>Browser boundary test</td><td>passed, and falsified with a deliberate forbidden import</td></tr>
+            <tr><td>Review checkpoint</td><td>4 independent reviewers, one per subsystem</td></tr>
+          </tbody>
+        </table>
+        <p>
+          <strong>Review outcome:</strong> the archive slice and the two
+          boundary refactors returned no correctness defects. The migration
+          slice returned one P1 and one P2; the terminal health slice returned
+          one P2. All three are fixed in this branch. Each fix carries a
+          regression test that was <em>falsified against the unfixed code
+          first</em> — the migration tests failed with
+          <code>expected true to be false</code>, and the roster test read
+          <code>0</code> where it now reads <code>1</code>.
+        </p>
+        <p>
+          <strong>Deferred, with tickets filed rather than silence:</strong>
+          V26-1315 (an <code>amount</code>-type discount renders at 100× in the
+          order summary — a pre-existing bug, characterized as-is rather than
+          fixed inside a behavior-preserving refactor) and V26-1316 (Convex id
+          fields left untyped in the moved schedule module, because typing them
+          cascades into six unrelated test fixtures).
+        </p>
+        <p>
+          <strong>Known operational edge:</strong> the archive scan limits are
+          500 SKUs and 500 open review rows. Beyond either, the archive fails
+          closed and the operator is told to try again shortly — which will not
+          resolve on its own at that scale. Fail-closed is the right default;
+          the copy is optimistic about transience.
+        </p>
+      </section>
+
+      <section data-report-section="guidance">
+        <h2>Guidance for next time</h2>
+        <ul>
+          <li>
+            <strong>In Convex, "reject the transition" and "audit the
+            rejection" are mutually exclusive if you throw.</strong> A throwing
+            mutation rolls back its own audit row. When the rejection must leave
+            a record, return a result instead of raising.
+          </li>
+          <li>
+            <strong>A migration marker must be written in the same patch as the
+            data it describes,</strong> and classification must check the marker
+            <em>before</em> inspecting any value. Once converted, a row's own
+            magnitude is actively misleading evidence.
+          </li>
+          <li>
+            <strong>Never let a dry run touch a completion gate.</strong> Not
+            the flag, not the record it lives in.
+          </li>
+          <li>
+            <strong>A completion flag must prove coverage, not just
+            termination.</strong> "I reached the last page" and "I saw every
+            page" are different claims.
+          </li>
+          <li>
+            <strong>A parallel fallback that mirrors a server policy will
+            rot.</strong> This one missed the <code>Offline</code> case and
+            reported offline terminals as healthy. When the server contract
+            makes a field required, delete the fallback in the same slice — the
+            safety net was the hazard.
+          </li>
+          <li>
+            <strong>"Pure module" is not the same as "browser-safe."</strong>
+            The audit unit is the transitive closure, not the file.
+          </li>
+          <li>
+            <strong>Write characterization tests before the move, not
+            after.</strong> On this delivery they caught the author twice —
+            expectations were wrong and the code was right. Written afterwards,
+            those would have been "fixed" to match and the signal lost.
+          </li>
+          <li>
+            <strong>Adding a rule to a shared ESLint config is not safe until
+            you falsify it.</strong> Flat config merges
+            <code>no-restricted-imports</code> last-wins, not by union, so a
+            broad new rule silently disabled a narrower existing one — and the
+            boundary check stayed green because no file violated the rule that
+            had just been switched off.
+          </li>
+          <li>
+            <strong>Do not run review agents inside the active delivery
+            worktree.</strong> One reviewer's cleanup of its own scratch work
+            reverted staged edits and produced an empty commit. Reviewers should
+            read from an isolated copy.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="quiz" data-quiz-pass-threshold="8">
+        <h2>Comprehension quiz</h2>
+        <p>Ten questions on the mechanics and the judgement calls.</p>
+        <ol data-quiz>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Why can a rejected product archive not simply throw an error?</p>
+            <ol data-quiz-options>
+              <li>Throwing is slower than returning in the Convex runtime.</li>
+              <li data-quiz-correct>A throwing mutation rolls back its own writes, so the audit row recording the rejection would vanish with it.</li>
+              <li>The frontend cannot catch errors raised by Convex mutations.</li>
+              <li>Thrown errors bypass the store-scoping check.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The rejection has to be auditable. Since a throw rolls back
+              everything the mutation wrote, including the operational event,
+              the decision is returned as a result instead.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What made the old migration's completion flag unsafe?</p>
+            <ol data-quiz-options>
+              <li>It was written before the rows were converted.</li>
+              <li>It was stored in memory and lost on restart.</li>
+              <li data-quiz-correct>Its "nothing pending" condition was dead code in apply mode, so it reduced to "I reached the last page" — which a cursor-resumed chain can do without seeing earlier pages.</li>
+              <li>It was only set for the first table in the registry.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The pending counter is only incremented in dry-run mode. In an
+              applying chain it is structurally zero, leaving termination
+              masquerading as coverage.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Why must migration classification check the marker before inspecting the value?</p>
+            <ol data-quiz-options>
+              <li>Reading the marker is cheaper than reading the value.</li>
+              <li data-quiz-correct>After conversion, the row's own magnitude no longer indicates whether it was converted — it is misleading evidence.</li>
+              <li>The value may be null on legacy rows.</li>
+              <li>The marker is only present on rows created after the cutoff.</li>
+            </ol>
+            <p data-quiz-explanation>
+              A converted row looks like a large unconverted one. Only the
+              marker distinguishes them, so it must be consulted first.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What does the migration now do with a genuinely ambiguous value?</p>
+            <ol data-quiz-options>
+              <li>Converts it and records a warning.</li>
+              <li>Skips it silently, as before.</li>
+              <li data-quiz-correct>Reports it with a reason, writes nothing, and does not mark it — so it resurfaces on every verification until a human decides.</li>
+              <li>Deletes the row and logs the deletion.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The old code buried a guess in the same counter as genuine skips.
+              Ambiguity is now a distinct, persistent outcome.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>How did the boundary refactor avoid changing any server import site?</p>
+            <ol data-quiz-options>
+              <li>It updated every server import in the same commit.</li>
+              <li data-quiz-correct>Implementations moved into <code>shared/</code> while the old Convex paths were kept as thin re-export shims.</li>
+              <li>It added a bundler alias mapping old paths to new ones.</li>
+              <li>Server code never imported those modules to begin with.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Move the implementation, leave a re-export. Server import
+              statements are untouched, so the change carries no server-side
+              churn.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What real bug did deleting the Terminal Health frontend fallback remove?</p>
+            <ol data-quiz-options>
+              <li>Drawer-open terminals rendered twice on the roster.</li>
+              <li data-quiz-correct>The fallback never handled the <code>Offline</code> classification, so an offline terminal fell through and rendered as "Healthy / No action needed".</li>
+              <li>Recovery actions were shown to users without permission.</li>
+              <li>Stale terminals showed a negative age.</li>
+            </ol>
+            <p data-quiz-explanation>
+              It branched on "No check-in" and "Stale" but not "Offline", so an
+              offline terminal reached the healthy branch.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Why did a terminal end up counted in no metric tile at all?</p>
+            <ol data-quiz-options>
+              <li>Its store id was missing from the roster query.</li>
+              <li>The tile only counts terminals seen in the last hour.</li>
+              <li data-quiz-correct>The review tile dropped its classification disjunct, and local-runtime review work classifies as "Needs review" while the server routes it to a non-review lane — and the remaining tiles are label-driven, matching none of them.</li>
+              <li>Its lane was unknown, which no tile renders.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Badges moved to the server lane, but the counts were meant to stay
+              classification-driven. Applying the badge's source to the count
+              opened a gap between the two.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Why was the 100× discount display bug characterized rather than fixed here?</p>
+            <ol data-quiz-options>
+              <li>It could not be reproduced reliably.</li>
+              <li data-quiz-correct>It is pre-existing, and fixing it inside a refactor whose contract was "change no behavior" would have hidden a behavior change in a move.</li>
+              <li>The owning team had not approved the fix.</li>
+              <li>The correct value was unknown.</li>
+            </ol>
+            <p data-quiz-explanation>
+              A behavior-preserving refactor must preserve even the wrong
+              behavior. The bug was pinned as-is and filed as V26-1315.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Why did adding a new ESLint boundary rule silently weaken an existing one?</p>
+            <ol data-quiz-options>
+              <li>The new rule ran in a separate config file.</li>
+              <li>The old rule had been deprecated upstream.</li>
+              <li data-quiz-correct>Flat config merges <code>no-restricted-imports</code> last-wins rather than by union, so the broader block replaced the narrower one for overlapping files.</li>
+              <li>The rule severity was set to warn instead of error.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The boundary check stayed green because no file violated the rule
+              that had just been disabled. Only the config's own unit test
+              caught it.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What is the reusable lifecycle rule this epic records?</p>
+            <ol data-quiz-options>
+              <li>Archived records should be hidden from every workspace.</li>
+              <li>Operational work should be auto-completed when its subject is archived.</li>
+              <li data-quiz-correct>A source transition must not make unresolved operational work unreachable — the work becomes terminal, or the transition is blocked.</li>
+              <li>Attention counts should exclude any archived subject.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Silently orphaning the work is the one unacceptable option, which
+              is precisely what produced the 59-vs-58 mismatch.
+            </p>
+          </li>
+        </ol>
+      </section>
+
+      <section data-report-section="subagent-evidence">
+        <h2>Subagent evidence</h2>
+        <p>
+          This delivery was carried out by a set of subagents, each scoped to one
+          ticket and one isolated worktree, followed by an independent review
+          pass. What each contributed:
+        </p>
+        <dl>
+          <dt>Implementation subagents (six, one per ticket)</dt>
+          <dd>
+            Each held to the execution posture its ticket specified —
+            <code>test-first</code> for the archive bug,
+            <code>characterization-first</code> for the four refactors,
+            <code>sensor-only</code> for the documentation. Each reported its
+            red-first or characterization evidence, real sensor output, and
+            merge-conflict risks for its siblings.
+          </dd>
+          <dt>Review subagents (four, one per subsystem)</dt>
+          <dd>
+            Independent of the implementers, each given the delivery contract so
+            scope was judged against the actual tickets. They cleared the
+            archive slice and both boundary refactors, and produced the two
+            defects fixed here. One verified the moved modules byte-for-byte
+            against their originals; another traced every write path to
+            <code>availability</code> rather than trusting the two named in the
+            ticket.
+          </dd>
+          <dt>Delivered-diff subagent</dt>
+          <dd>
+            Produced the changed-file map, the before/after per boundary, the
+            risk list, and the test inventory used throughout this report, and
+            independently confirmed both defect descriptions against the code.
+          </dd>
+        </dl>
+        <p>
+          One process failure is worth recording: the review subagents were run
+          inside the active delivery worktree, and one of them reverted files it
+          had touched during its own test runs, wiping staged edits and
+          producing an empty commit. No work was lost, but read-only reviewers
+          belong in an isolated checkout.
+        </p>
+      </section>
+    </article>
+  </body>
+</html>
