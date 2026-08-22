@@ -70,7 +70,7 @@ export const registerSessionSchema = v.object({
   closeoutNotificationScheduledAt: v.optional(v.number()),
   managerApprovalRequestId: v.optional(v.id("approvalRequest")),
   notes: v.optional(v.string()),
-  // U10: deterministic idempotency marker for the cedis→pesewas migration of the
+  // Deterministic idempotency marker for the cedis→pesewas migration of the
   // cash-drawer money fields (openingFloat/expectedCash/countedCash/variance +
   // closeoutRecords[]).
   pesewasMigratedAt: v.optional(v.number()),
