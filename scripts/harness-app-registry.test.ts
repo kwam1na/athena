@@ -49,6 +49,16 @@ const reviewSensitiveActivationCases = [
     expectedScenarioIds: ["athena.pos-mixed-checkout"],
   },
   {
+    name: "activates the agent harness kernel",
+    entry: {
+      path: "packages/athena-webapp/convex/agentHarness/turns.ts",
+      additions: 1,
+      deletions: 0,
+    },
+    scenarioId: "athena.agent-harness",
+    expectedScenarioIds: ["athena.agent-harness"],
+  },
+  {
     name: "activates staff and store configuration",
     entry: {
       path: "packages/athena-webapp/src/components/store-configuration/StoreDetails.tsx",

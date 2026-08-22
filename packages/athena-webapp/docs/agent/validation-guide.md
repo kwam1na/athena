@@ -58,6 +58,22 @@ Run:
 
 Use this for the reporting contract, fact ingestion, the day fold, the sweeper and its read models, custom ranges, reseed, or source-truth verification. Pair it with the owning source-domain scenario when a POS, storefront, service, payment, inventory, or Daily Close command emits new facts. Source state and inventory effects remain atomic with the command; the fold is replayable asynchronous work and must never decide operational success. The fold is the correctness authority — the open-day incremental path is only a preview of it.
 
+## Agent harness, capability packages, and profile edits
+
+Touched surfaces: `convex/agentHarness`, `convex/automation/agentCapabilities`, `convex/cashControls/agentCapabilities`, `convex/operations/agentCapabilities`, `convex/reports/agentCapabilities`, `convex/stockOps/agentCapabilities`, `convex/lib/agentCapabilityManifests.ts`, `convex/lib/agentCapabilitySupport.ts`, `convex/operationAdmission/delegatedAuthority.ts`, `convex/sharedDemo/delegatedAuthority.ts`, `convex/platform/operationAdmission.ts`, `convex/intelligence/providers/convexAgent.ts`, `convex.json`, `shared/agentHarness`, `src/components/agent`, `src/components/operations/dailyOperationsAgentPresentation.ts`
+
+Run:
+
+- `bun run --filter '@athena/webapp' test -- convex/agentHarness shared/agentHarness convex/operationAdmission convex/platform src/components/agent`
+- `bun run agent-sdk:check`
+- `bun run --filter '@athena/webapp' audit:convex`
+- `bun run --filter '@athena/webapp' lint:convex:changed`
+- `bun run --filter '@athena/webapp' lint:frontend:changed`
+- `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
+- `bun run --filter '@athena/webapp' build`
+
+Use this for the agent harness kernel, a domain capability package, a profile, the delegated admission ports, or the reusable agent host. Three things gate a merge here and none of them may be skipped: generated registry drift (`agent-sdk:check` refuses a stale artifact and names the regeneration command), operation-admission coverage (the checker must report zero findings and the caller table must be current), and the focused conformance, security, and data-governance suites — `releaseConformance`, `security`, `dataGovernance`, and the `evals` smoke matrix — which are what stand between a capability and an operator. Changing a read port's behaviour also requires bumping its `implementationVersion`, which moves the compatibility digest and therefore requires the pre-deploy fence (`bun scripts/agent-harness-fence.ts --reason "<id>"`) before the change deploys. Release itself is one switch: publish, smoke through the direct harness while the switch is off, one broad enable, watch the first turns, and disable to roll back — no cohorts, canaries, staged profile versions, or drain gates.
+
 ## Daily store operations lifecycle edits
 
 Touched surfaces: `convex/operations/dailyClose.ts`, `convex/operations/dailyOpening.ts`, `convex/operations/dailyOperations.ts`, `convex/schemas/operations/dailyClose.ts`, `convex/schemas/operations/dailyOpening.ts`, `src/components/operations/DailyCloseHistoryView.tsx`, `src/components/operations/DailyCloseView.tsx`, `src/components/operations/DailyOpeningView.tsx`, `src/components/operations/DailyOperationsView.tsx`, `src/components/app-sidebar.tsx`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/index.tsx`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history.tsx`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close.tsx`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening.tsx`

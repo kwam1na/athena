@@ -40,6 +40,37 @@ crons.cron(
   {},
 );
 
+// Agent harness retention: the short-lived (30-day) and standard (365-day)
+// retention classes for prompts, scratch, replay payloads, claim support, and
+// citations, plus due runtime-adapter cleanups. Bounded and self-continuing
+// like the marketing cleanups below; a crashed pass leaves rows for the next.
+crons.interval(
+  "agent-harness-retention-sweep",
+  { hours: 6 },
+  internal.agentHarness.retention.sweepExpiredAgentContent,
+  {},
+);
+
+// Agent harness repair safety net: stale executing attempts, turns that never
+// reached running, and runs fenced by a compatibility-epoch advance. Each
+// pass is bounded; repair never reopens a terminal run or duplicates work.
+crons.interval(
+  "agent-harness-repair-sweep",
+  { minutes: process.env.STAGE == "prod" ? 5 : 60 },
+  internal.agentHarness.retention.repairSweep,
+  {},
+);
+
+// Agent harness completion outbox: committed answers whose runtime
+// projection did not land (host crash, adapter hiccup) are projected again with
+// backoff; projection is idempotent and never reopens a run.
+crons.interval(
+  "agent-harness-outbox-repair",
+  { minutes: process.env.STAGE == "prod" ? 5 : 60 },
+  internal.agentHarness.runtimeHost.repairCompletionOutbox,
+  {},
+);
+
 crons.interval("walkthrough-retention-cleanup", { hours: 24 }, internal.marketing.walkthroughRequestRetention.cleanupBatch, {});
 crons.interval("landing-funnel-retention-cleanup", { hours: 24 }, internal.marketing.landingFunnelRetention.cleanupBatch, {});
 crons.interval("walkthrough-notification-recovery", { minutes: 10 }, internal.marketing.walkthroughRequestNotifications.scheduleEligibleBatch, {});

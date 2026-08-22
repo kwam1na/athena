@@ -23,6 +23,7 @@ const mockedHooks = vi.hoisted(() => ({
   useSearch: vi.fn(),
   useProtectedAdminPageState: vi.fn(),
   useQuery: vi.fn(),
+  useMutation: vi.fn(),
   useSharedDemoContext: vi.fn(),
 }));
 
@@ -79,6 +80,7 @@ vi.mock("@tanstack/react-router", () => ({
 
 vi.mock("convex/react", () => ({
   useQuery: mockedHooks.useQuery,
+  useMutation: mockedHooks.useMutation,
 }));
 
 vi.mock("~/src/hooks/use-navigate-back", () => ({
@@ -201,6 +203,18 @@ vi.mock("~/convex/_generated/api", () => ({
     },
     operations: {
       dailyOperations: mockedApi,
+    },
+    agentHarness: {
+      turns: {
+        startTurn: "startTurn",
+        cancelTurn: "cancelTurn",
+        resumeTurn: "resumeTurn",
+        acknowledgeTurnAnswer: "acknowledgeTurnAnswer",
+        inspectCitationEvidence: "inspectCitationEvidence",
+        getTurnView: "getTurnView",
+        getTurnAnswer: "getTurnAnswer",
+        getThreadHistory: "getThreadHistory",
+      },
     },
   },
 }));
@@ -4969,5 +4983,118 @@ describe("DailyOperationsView", () => {
     expect(
       screen.queryByText("Daily Operations unavailable"),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("DailyOperationsView — Ask Athena", () => {
+  const agentQueryNames = new Set([
+    "getThreadHistory",
+    "getTurnView",
+    "getTurnAnswer",
+  ]);
+
+  beforeEach(() => {
+    window.scrollTo = vi.fn();
+    (
+      mockedApi as { getDailyOperationsSnapshot?: unknown }
+    ).getDailyOperationsSnapshot = "getDailyOperationsSnapshot";
+    mockedHooks.useProtectedAdminPageState.mockReturnValue({
+      activeStore: { _id: "store-1", currency: "GHS", name: "Osu" },
+      canQueryProtectedData: true,
+      hasFinancialDetailsAccess: true,
+      hasFullAdminAccess: true,
+      isAuthenticated: true,
+      isLoadingAccess: false,
+    });
+    mockedHooks.useSharedDemoContext.mockReturnValue(null);
+    mockedHooks.useSearch.mockReturnValue({});
+    mockedHooks.useQuery.mockImplementation((query: unknown, args: unknown) => {
+      if (args === "skip") return undefined;
+      if (typeof query === "string" && agentQueryNames.has(query)) {
+        return query === "getThreadHistory"
+          ? { kind: "history", threadKey: "t", reauthorizedAt: 1, entries: [] }
+          : undefined;
+      }
+      return operatingSnapshot;
+    });
+    mockedHooks.useMutation.mockImplementation((name: unknown) =>
+      vi.fn(async (args: unknown) => {
+        agentMutationCalls.push({ name: String(name), args });
+        return name === "startTurn"
+          ? {
+              outcome: "started",
+              bindingId: "binding-1",
+              runId: "run-1",
+              threadKey: "thread",
+            }
+          : { outcome: "unavailable", reason: "not_found" };
+      }),
+    );
+    agentMutationCalls.length = 0;
+  });
+
+  const agentMutationCalls: { name: string; args: unknown }[] = [];
+
+  it("puts a restrained entry in the header and keeps it closed", () => {
+    render(<DailyOperationsView />);
+
+    expect(screen.getByTestId("athena-agent-entry")).toHaveTextContent(
+      "Ask Athena",
+    );
+    expect(screen.queryByTestId("athena-agent-panel")).not.toBeInTheDocument();
+  });
+
+  it("shows the store and the operating day before any question is asked", async () => {
+    const user = userEvent.setup();
+    render(<DailyOperationsView />);
+
+    await user.click(screen.getByTestId("athena-agent-entry"));
+
+    const context = screen.getByTestId("athena-agent-context");
+    expect(context).toHaveTextContent("Osu");
+    expect(context).toHaveTextContent(operatingSnapshot.operatingDate);
+    await waitFor(() =>
+      expect(screen.getByTestId("athena-agent-prompt")).toHaveFocus(),
+    );
+  });
+
+  it("asks through the profile with the store day snapshotted into the turn", async () => {
+    const user = userEvent.setup();
+    render(<DailyOperationsView />);
+
+    await user.click(screen.getByTestId("athena-agent-entry"));
+    await user.type(
+      screen.getByTestId("athena-agent-prompt"),
+      "What is blocking the close?",
+    );
+    await act(async () => {
+      await user.click(screen.getByTestId("athena-agent-submit"));
+    });
+
+    const start = agentMutationCalls.find((call) => call.name === "startTurn");
+    expect(start?.args).toMatchObject({
+      storeId: "store-1",
+      profileId: "daily_operations",
+      prompt: "What is blocking the close?",
+      context: {
+        storeRef: "store-1",
+        storeName: "Osu",
+        operatingDate: operatingSnapshot.operatingDate,
+      },
+    });
+    expect((start?.args as { threadKey: string }).threadKey).toMatch(
+      /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/,
+    );
+  });
+
+  it("stays out of the shared demo", () => {
+    mockedHooks.useSharedDemoContext.mockReturnValue({
+      kind: "shared_demo",
+      storeId: "store-1",
+    });
+
+    render(<DailyOperationsView />);
+
+    expect(screen.queryByTestId("athena-agent-entry")).not.toBeInTheDocument();
   });
 });

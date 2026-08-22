@@ -130,6 +130,60 @@
       "behaviorScenarios": []
     },
     {
+      "id": "athena.agent-harness",
+      "reviewSensitive": true,
+      "name": "agent-harness-capability-packages-and-profile-edits",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/agentHarness",
+        "packages/athena-webapp/convex/automation/agentCapabilities",
+        "packages/athena-webapp/convex/cashControls/agentCapabilities",
+        "packages/athena-webapp/convex/operations/agentCapabilities",
+        "packages/athena-webapp/convex/reports/agentCapabilities",
+        "packages/athena-webapp/convex/stockOps/agentCapabilities",
+        "packages/athena-webapp/convex/lib/agentCapabilityManifests.ts",
+        "packages/athena-webapp/convex/lib/agentCapabilitySupport.ts",
+        "packages/athena-webapp/convex/operationAdmission/delegatedAuthority.ts",
+        "packages/athena-webapp/convex/sharedDemo/delegatedAuthority.ts",
+        "packages/athena-webapp/convex/platform/operationAdmission.ts",
+        "packages/athena-webapp/convex/intelligence/providers/convexAgent.ts",
+        "packages/athena-webapp/convex.json",
+        "packages/athena-webapp/shared/agentHarness",
+        "packages/athena-webapp/src/components/agent",
+        "packages/athena-webapp/src/components/operations/dailyOperationsAgentPresentation.ts"
+      ],
+      "commands": [
+        {
+          "kind": "raw",
+          "command": "bun run --filter '@athena/webapp' test -- convex/agentHarness shared/agentHarness convex/operationAdmission convex/platform src/components/agent"
+        },
+        {
+          "kind": "raw",
+          "command": "bun run agent-sdk:check"
+        },
+        {
+          "kind": "script",
+          "script": "audit:convex"
+        },
+        {
+          "kind": "script",
+          "script": "lint:convex:changed"
+        },
+        {
+          "kind": "script",
+          "script": "lint:frontend:changed"
+        },
+        {
+          "kind": "raw",
+          "command": "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
+        },
+        {
+          "kind": "script",
+          "script": "build"
+        }
+      ],
+      "behaviorScenarios": []
+    },
+    {
       "id": "athena.daily-store-operations",
       "reviewSensitive": false,
       "name": "daily-store-operations-lifecycle-edits",

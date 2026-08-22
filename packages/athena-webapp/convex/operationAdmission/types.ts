@@ -315,3 +315,84 @@ export type OperationIngress = {
   rawBody: string;
   request: Request;
 };
+
+// ---------------------------------------------------------------------------
+// Agent delegation (V26-1262)
+//
+// An agent run acts under a DERIVED grant, never under a substitute identity.
+// The types below are deliberately NOT members of `OperationActor`: the public
+// ingress rail, its adapter chain, and every actor-coverage assertion are
+// untouched. A delegated run records the initiating operator and re-reads that
+// operator's CURRENT authority through a registered authority port on every
+// capability call; the effective grant is the intersection of what was pinned
+// at run start and what the operator still holds.
+// ---------------------------------------------------------------------------
+
+/** The operator kinds that may initiate an agent run. Public and storefront actors never can. */
+export type DelegatedOperatorKind = "normal_user" | "shared_demo";
+
+export type DelegatedOperator = {
+  kind: DelegatedOperatorKind;
+  athenaUserId: Id<"athenaUser">;
+  /** Shared-demo principals are keyed by their auth user; required for that kind. */
+  authUserId?: Id<"users">;
+};
+
+export type DelegatedAuthorityRequest = {
+  operator: DelegatedOperator;
+  organizationId: Id<"organization">;
+  storeId: Id<"store">;
+  now: number;
+};
+
+export type DelegatedMembershipRole = "full_admin" | "pos_only";
+
+/**
+ * What the operator holds RIGHT NOW, as the authority port observed it. The
+ * kernel derives the SDK authority tier and the grant intersection from this;
+ * the port itself knows nothing about manifests or projections.
+ */
+export type DelegatedAuthoritySnapshot = {
+  operator: DelegatedOperator;
+  organizationId: Id<"organization">;
+  storeId: Id<"store">;
+  membershipRole: DelegatedMembershipRole;
+  operationalRoles: readonly string[];
+  heldReadIntents: readonly AthenaReadIntent[];
+};
+
+export type DelegatedAuthorityDenialReason =
+  | "operator_unknown"
+  | "membership_revoked"
+  | "store_missing"
+  | "store_out_of_scope"
+  | "principal_missing"
+  | "session_expired"
+  | "demo_disabled";
+
+export type DelegatedAuthorityOutcome =
+  | { kind: "authorized"; authority: DelegatedAuthoritySnapshot }
+  | { kind: "denied"; reason: DelegatedAuthorityDenialReason; message: string };
+
+/**
+ * Authority port for one operator kind. Registered at the composition root,
+ * selected by the operator kind pinned on the grant — there is no chain and no
+ * fall-through: a denial from the selected port is terminal, and a throw
+ * propagates.
+ */
+export type DelegatedAuthorityPort = {
+  kind: DelegatedOperatorKind;
+  resolve: (
+    ctx: OperationAdmissionCtx,
+    request: DelegatedAuthorityRequest,
+  ) => Promise<DelegatedAuthorityOutcome>;
+};
+
+/** Provenance recorded on harness evidence rows: the grant, never an actor substitution. */
+export type AgentDelegationProvenance = {
+  kind: "agent_delegation";
+  operatorKind: DelegatedOperatorKind;
+  actorRef: string;
+  grantDigest: string;
+  authorizationEpoch: number;
+};

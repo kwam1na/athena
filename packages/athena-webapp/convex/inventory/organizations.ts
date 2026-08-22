@@ -23,6 +23,7 @@ import type {
 } from "../operationAdmission/types";
 import type { Id } from "../_generated/dataModel";
 import { deleteWeeklyReportingForStoreWithCtx } from "./stores";
+import { deleteAgentHarnessContentForOrganizationWithCtx } from "../agentHarness/retention";
 
 const entity = "organization";
 const ORGANIZATION_STORE_DELETE_BATCH_SIZE = 10;
@@ -34,6 +35,23 @@ async function removeOrganizationBatchWithCtx(
 ): Promise<boolean> {
   const organization = await ctx.db.get("organization", organizationId);
   if (!organization) return true;
+
+  // Agent-harness content is keyed by organization as well as store, so one
+  // bounded org-scoped pass covers every store (including those beyond this
+  // page). A full batch re-runs this same page before paging on.
+  const agentCleanup = await deleteAgentHarnessContentForOrganizationWithCtx(
+    ctx,
+    organizationId,
+    Date.now(),
+  );
+  if (agentCleanup.hasMore) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.inventory.organizations.continueOrganizationRemoval,
+      { organizationId, cursor },
+    );
+    return false;
+  }
 
   const stores = await ctx.db
     .query("store")

@@ -159,6 +159,23 @@ import {
   intelligenceRunSchema,
 } from "./schemas/intelligence";
 import {
+  agentBudgetLedgerSchema,
+  agentBudgetReservationSchema,
+  agentCapabilityCallSchema,
+  agentCitationBindingSchema,
+  agentClaimSupportSchema,
+  agentCompatibilityEpochSchema,
+  agentEnablementSwitchSchema,
+  agentSpendWindowSchema,
+  agentEvidenceAccessAuditSchema,
+  agentProgramAttemptSchema,
+  agentPromptPayloadSchema,
+  agentReplayPayloadSchema,
+  agentRunGrantSchema,
+  agentScratchDescriptorSchema,
+  agentTurnBindingSchema,
+} from "./schemas/agentHarness";
+import {
   remoteAssistClientSchema,
   remoteAssistSessionEventSchema,
   remoteAssistSessionSchema,
@@ -567,7 +584,9 @@ const schema = defineSchema({
     .index("by_storeId_idempotencyKey", ["storeId", "idempotencyKey"])
     .index("by_actorRef_status", ["actorRef", "status"])
     .index("by_contextSnapshotId", ["contextSnapshotId"])
-    .index("by_artifactId", ["artifactId"]),
+    .index("by_artifactId", ["artifactId"])
+    // Compatibility-epoch repair: active statuses pinned to an older epoch.
+    .index("by_status_compatibilityEpoch", ["status", "compatibilityEpoch"]),
   intelligenceContextSnapshot: defineTable(intelligenceContextSnapshotSchema)
     .index("by_runId", ["runId"])
     .index("by_storeId_capability_hash", [
@@ -609,6 +628,106 @@ const schema = defineSchema({
       "capability",
       "startedAt",
     ]),
+  // --- Agent harness children of the intelligence aggregate ---
+  agentRunGrant: defineTable(agentRunGrantSchema)
+    .index("by_runId", ["runId"])
+    .index("by_storeId_lifecycle", ["storeId", "lifecycle"])
+    .index("by_organizationId_lifecycle", ["organizationId", "lifecycle"])
+    .index("by_compatibilityEpoch_createdAt", ["compatibilityEpoch", "createdAt"]),
+  agentTurnBinding: defineTable(agentTurnBindingSchema)
+    .index("by_runId", ["runId"])
+    .index("by_storeId_turnIdempotencyKey", ["storeId", "turnIdempotencyKey"])
+    .index("by_runtimeThreadRef_createdAt", ["runtimeThreadRef", "createdAt"])
+    .index("by_storeId_threadKey_createdAt", ["storeId", "threadKey", "createdAt"])
+    .index("by_step_outboxNextAttemptAt", ["step", "outboxNextAttemptAt"])
+    .index("by_step_abandonedAt_stepUpdatedAt", [
+      "step",
+      "abandonedAt",
+      "stepUpdatedAt",
+    ])
+    .index("by_runtimeCleanupStatus_runtimeCleanupNextAttemptAt", [
+      "runtimeCleanupStatus",
+      "runtimeCleanupNextAttemptAt",
+    ])
+    .index("by_storeId_runtimeCleanupStatus", ["storeId", "runtimeCleanupStatus"])
+    .index("by_organizationId_runtimeCleanupStatus", [
+      "organizationId",
+      "runtimeCleanupStatus",
+    ]),
+  agentPromptPayload: defineTable(agentPromptPayloadSchema)
+    .index("by_runId", ["runId"])
+    .index("by_retentionClass_expiresAt", ["retentionClass", "expiresAt"])
+    .index("by_storeId", ["storeId"])
+    .index("by_organizationId", ["organizationId"]),
+  agentProgramAttempt: defineTable(agentProgramAttemptSchema)
+    .index("by_runId_sequence", ["runId", "sequence"])
+    .index("by_runId_attemptIdempotencyKey", ["runId", "attemptIdempotencyKey"])
+    .index("by_runId_status", ["runId", "status"])
+    .index("by_status_leaseExpiresAt", ["status", "leaseExpiresAt"])
+    .index("by_storeId_createdAt", ["storeId", "createdAt"]),
+  agentCapabilityCall: defineTable(agentCapabilityCallSchema)
+    .index("by_runId_sequence", ["runId", "sequence"])
+    .index("by_runId_callIdempotencyKey", ["runId", "callIdempotencyKey"])
+    .index("by_runId_status", ["runId", "status"])
+    .index("by_attemptId_status", ["attemptId", "status"])
+    .index("by_storeId_capabilityId_createdAt", [
+      "storeId",
+      "capabilityId",
+      "createdAt",
+    ])
+    .index("by_organizationId_createdAt", ["organizationId", "createdAt"])
+    .index("by_resultHash", ["resultHash"]),
+  agentBudgetLedger: defineTable(agentBudgetLedgerSchema).index("by_runId", [
+    "runId",
+  ]),
+  agentBudgetReservation: defineTable(agentBudgetReservationSchema)
+    .index("by_runId_idempotencyKey", ["runId", "idempotencyKey"])
+    .index("by_runId_status", ["runId", "status"])
+    .index("by_attemptId_status", ["attemptId", "status"]),
+  agentCitationBinding: defineTable(agentCitationBindingSchema)
+    .index("by_runId_citationKey", ["runId", "citationKey"])
+    .index("by_artifactId", ["artifactId"])
+    .index("by_callId", ["callId"])
+    .index("by_evidenceLifecycle_expiresAt", ["evidenceLifecycle", "expiresAt"])
+    .index("by_storeId_evidenceLifecycle", ["storeId", "evidenceLifecycle"])
+    .index("by_organizationId_evidenceLifecycle", [
+      "organizationId",
+      "evidenceLifecycle",
+    ]),
+  agentReplayPayload: defineTable(agentReplayPayloadSchema)
+    .index("by_runId", ["runId"])
+    .index("by_callId", ["callId"])
+    .index("by_attemptId_subjectKind", ["attemptId", "subjectKind"])
+    .index("by_retentionClass_expiresAt", ["retentionClass", "expiresAt"])
+    .index("by_storeId", ["storeId"])
+    .index("by_organizationId", ["organizationId"]),
+  agentClaimSupport: defineTable(agentClaimSupportSchema)
+    .index("by_runId", ["runId"])
+    .index("by_citationBindingId", ["citationBindingId"])
+    .index("by_retentionClass_expiresAt", ["retentionClass", "expiresAt"])
+    .index("by_storeId", ["storeId"])
+    .index("by_organizationId", ["organizationId"]),
+  agentScratchDescriptor: defineTable(agentScratchDescriptorSchema)
+    .index("by_runId_scratchKey", ["runId", "scratchKey"])
+    .index("by_retentionClass_expiresAt", ["retentionClass", "expiresAt"])
+    .index("by_storeId", ["storeId"])
+    .index("by_organizationId", ["organizationId"]),
+  agentEvidenceAccessAudit: defineTable(agentEvidenceAccessAuditSchema)
+    .index("by_runId_accessedAt", ["runId", "accessedAt"])
+    .index("by_storeId_accessedAt", ["storeId", "accessedAt"])
+    .index("by_citationBindingId", ["citationBindingId"]),
+  agentCompatibilityEpoch: defineTable(agentCompatibilityEpochSchema).index(
+    "by_scopeKey",
+    ["scopeKey"],
+  ),
+  agentEnablementSwitch: defineTable(agentEnablementSwitchSchema).index(
+    "by_subjectKind_subjectKey",
+    ["subjectKind", "subjectKey"],
+  ),
+  agentSpendWindow: defineTable(agentSpendWindowSchema).index(
+    "by_scopeKey_windowKey",
+    ["scopeKey", "windowKey"],
+  ),
   bag: defineTable(bagSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeFrontUserId", ["storeFrontUserId"]),

@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Athena Agent Harness Foundation</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="6b9c64cc49ad0ebd53e183191ae119b9745bb783c57799206675d5b43beb7890">
+  <header data-report-section="header">
+    <h1>Athena Agent Harness Foundation</h1>
+    <p>A read-only agent runtime that answers an operator&#x27;s question from evidence it can cite, behind Athena&#x27;s own authority boundary</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch codex/agent-harness-foundation-delivery</li>
+      <li>11 Linear tickets, one integration PR</li>
+      <li>Six review passes, 13 lenses, unanimous on passes 4–6</li>
+      <li>Dev deployment: epoch 3, smoke 6/6, one real operator turn with two citations</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>PR</dt><dd>Not yet opened (coordinated integration PR for the athena-agent-harness-foundation batch)</dd>
+      <dt>Candidate head</dt><dd>257c4978 — merge with origin/main 7e7c047c as 858b7e48, then review-fix commits 4264d929 (pass 1), 195d4cc9 (pass 2), 66e0ea60 (pass 3), 84102690 (pass 4 residuals), and the merge-gate preflight fix 257c4978; passes 5 and 6 produced no fix</dd>
+      <dt>Linear</dt><dd>V26-1259, V26-975, V26-1261, V26-1263, V26-1262, V26-1264, V26-1265, V26-1267, V26-1268, V26-1272, V26-1273</dd>
+      <dt>Plan</dt><dd>docs/plans/2026-08-21-001-feat-athena-agent-harness-foundation-plan.md</dd>
+      <dt>Production deploy</dt><dd>Pending — not deployed; dev deployment jovial-wildebeest-179 carries this head at compatibility epoch 3 (digest fnv1a64:85dc961243788804) with daily_operations enabled</dd>
+      <dt>Root alignment</dt><dd>Pending — local branch ahead of origin/main, nothing pushed</dd>
+      <dt>Linear status</dt><dd>All eleven tickets In Progress until the integration PR merges; follow-ups filed as V26-1291 to V26-1297 and V26-1302 to V26-1304</dd>
+      <dt>Review evidence</dt><dd>review.green obligation record 2ec257c1… written by harness:review-evidence for run 20260822-122954-harness-batch-pass6 (13 reviewers, unanimous) against deliverable identity 263e72ee…; the merge gate consumes that record</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+      <p>This batch adds a second backend authority boundary to Athena: an agent harness under convex/agentHarness that lets an operator ask a question in plain language and get back an answer grounded in data the operator is actually allowed to see. The model never touches the public API. It is handed a derived, shrink-only grant, five fixed tools, and a sandboxed facade of get/list reads that domain packages publish into a kernel that is forbidden from importing them.</p>
+      <p>Daily Operations is the first surface. Its eleven capabilities (store day, attention, approvals, activity, day sales, week performance, store pulse, register sessions, automation evidence, inventory positions, replenishment) are declared next to the domain code, compiled into a generated registry by a conformance-gated generator, and reached only through internal read ports. A second, synthetic, organization-scoped profile proves the kernel needs no change per surface.</p>
+      <p>Release is one switch and one fence: profiles are default-off, daily_operations.v1 is published but disabled until an operator flips the durable switch, and a behavior-changing deploy advances a compatibility epoch in one atomic transaction that disables profiles and terminalizes idle runs. No cohorts, canaries, staged versions, or drain windows exist, on purpose.</p>
+      <p>The candidate is proven four ways: 56 test files in the package (including four release-gate suites that run against the published composition rather than fixtures) plus the root harness suites; the full webapp suite, which ran clean at integration (818 files / 9,748 tests) and which the merge gate re-runs on this head before merge, recording the result in artifacts/harness-delivery-runs; a deployed direct-harness smoke while the switch was off, repeated at every fence; and real end-to-end operator turns on the dev deployment with gpt-5-nano — the first produced two reconstructible citations with claim-support slices in 62.6 seconds, and the turn on this head answered a question about open registers and morning automation with two citations and a plain statement of what could not be read. Six independent review passes, thirteen lenses each, ran between the first candidate and this head; pass 3 caught two P1 defects the suites and the first two passes had not, and the merge gate&#x27;s contract preflight caught an unmapped package-root file (convex.json) that six approving passes had not.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Why this mattered</h2>
+      <p>Athena already had an intelligence layer for one-shot structured generation, but nothing that could answer an open question across several domains while honoring the operator&#x27;s exact authority. Letting a model call the public API under the operator&#x27;s session would have made every read a potential tenancy leak, and letting it write SQL-like queries would have made every answer unverifiable.</p>
+      <p>The plan therefore required an agent that is a reader, not an actor: it may only read what the delegating operator may read at the moment of each read, it must cite the data it used so an answer can be reconstructed later, and it must be impossible to widen its authority through configuration drift, prompt injection, or a stale deployment.</p>
+      <p>The two failures found by the release gate show why the posture is structural rather than advisory: store removal initially left the capability-call ledger behind (rows carrying request arguments and store-authored labels), and a capability refusal never reached the model, so the model read every denial as an access restriction and burned its attempt cap repeating the same malformed call.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>The mental model: a courier with a sealed letter of authority</h2>
+      <p>Think of a turn as sending a courier into the warehouse with a sealed letter. The letter (the run grant) names the operator who sent the courier, the exact shelves they may look at, and the date it was written (the compatibility epoch). The courier cannot rewrite the letter, and every door (a capability call) re-reads it against the live staff register before opening. If the operator was removed from the register mid-trip, the next door stays shut.</p>
+      <p>The courier does not carry tools for every shelf. It carries five: discover what shelves exist, describe one shelf, run a bounded read program, keep scratch notes, and hand in the finished answer. The read program runs inside a sealed room (QuickJS) with no clock, no randomness, no network, and no way to reach anything but the facade the letter permits.</p>
+      <p>Everything the courier brings back is stamped with where it came from and how sensitive it is. The answer inherits the highest sensitivity of anything it read, and a later reader who cannot see that class cannot see the answer either. Citations are receipts that tie each claim to a result hash, so an investigator can later ask whether the evidence still exists, has expired, or was deleted by the store&#x27;s own lifecycle.</p>
+      <ul>
+        <li>Kernel: convex/agentHarness — lifecycle, grants, delegated admission, executor, evidence, citations, turns, retention, deployment state. It imports no product domain.</li>
+        <li>Domain packages: capability declarations and read ports living next to the domain code (operations, reports, cashControls, automation, stockOps).</li>
+        <li>Profiles: which packages a surface gets, its budgets, egress ceiling, prompt policy, and presentation adapter (daily_operations.v1; a synthetic second surface).</li>
+        <li>Runtime adapter: AgentRuntimeAdapter in shared/agentHarness, implemented by Convex Agent under agentRuntime/ — the only place the AI SDK exists.</li>
+        <li>Host: src/components/agent — one reusable panel, one presentation contract, a closed-vocabulary inert renderer.</li>
+      </ul>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+      <p>Before: one authority boundary (the operation-admission ingress rail). Domain reads were UI-shaped queries. Intelligence runs did one-shot generation through TanStack AI. The docs said Convex Agent was not installed.</p>
+      <ul>
+        <li>Ingress: before, public functions and Hono routes only. After, the same rail plus exactly five operator-turn operations (start, resume, cancel, acknowledge, inspect citation evidence) plus three admitted read queries (turn view, answer, thread history) — the only agent surface on it.</li>
+        <li>Authority: before, per-request session checks. After, a derived grant pinned at turn start, re-derived on every capability call, before every result release, before citation minting, and before completion; shrink-only intersections everywhere.</li>
+        <li>Reads: before, UI queries. After, domain-owned internal read ports behind a declared manifest (verbs get/list only, declared filters, projections, freshness, completeness, citation, evidence, cost), reached through a generated registry the model never sees.</li>
+        <li>Execution: before, none. After, model-authored bounded TypeScript validated by a Babel AST pass and run in QuickJS under frozen ceilings (60 s elapsed, 3 attempts, 24 calls, 5,000 rows, 2 MiB bridge bytes, 240 KiB per call output, 64 MiB heap).</li>
+        <li>Evidence: before, artifacts and source references on an intelligence run. After, per-attempt and per-call evidence, replay payloads, claim-support slices, citation bindings keyed to result hashes, and an access audit that records reads without storing what was read.</li>
+        <li>Release: before, not applicable. After, a durable per-profile switch (default off), a capability kill switch, and an atomic compatibility fence with a repair sweep for idle runs.</li>
+        <li>Browser: before, nothing. After, a reusable panel mounted on Daily Operations for authorized operators only, rendering through a closed-vocabulary inert text renderer that cannot emit links, images, or raw HTML.</li>
+      </ul>
+  </section>
+  <section data-report-section="mechanics">
+    <h2>Layer-by-layer mechanics of one turn</h2>
+      <p>1. The operator submits a prompt through the Ask Athena entry. turns.startTurn admits the request on the ingress rail, checks the per-operator active-run and spend ceilings, records the intent, and schedules runtimeHost.driveTurn.</p>
+      <p>2. The host mints the grant (operator identity, projected capabilities and projections, authority digest, epoch, admission-policy version) and walks the turn binding through intent_recorded, runtime_thread_bound, runtime_input_saved, scheduled, and running. Each step is durable, so a crash between two systems is repairable rather than lost.</p>
+      <p>3. The Convex Agent adapter runs the model turn with the five fixed tools. Every tool call carries a fingerprint over adapter version, turn, tool id, canonicalized args hash, and call id; an exact replay returns the recorded outcome and any mismatch fails without invoking a handler.</p>
+      <p>4. athena.executeProgram validates the model&#x27;s program (no imports, eval, timers, clock, or randomness; facade shape checked against the grant; exactly one explicit output) and runs it in QuickJS. Each facade call goes through delegated admission, a budget reservation, the domain&#x27;s internal read port, and a release check. Denied calls consume a call attempt but no rows, bytes, or provider budget.</p>
+      <p>5. athena.completeRun prepares privately, then one Athena transaction reauthorizes the cited calls, commits evidence, the artifact, the run, and operator_release_committed. An idempotent outbox later projects the committed narrative back into runtime history with backoff (1 m, 10 m, 1 h, 6 h).</p>
+      <p>6. The panel reads the turn view reactively, shows server-authored milestones in a polite live region, moves focus to the answer heading on completion, and records the operator&#x27;s view receipt through an admitted acknowledgement mutation — never through the read itself.</p>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+      <ul>
+        <li>Authority revoked mid-run: the next capability call denies; a result whose authority disappeared before release is settled as evidence only with no payload; after provider egress has happened the exposure is recorded truthfully and the release and citations are suppressed.</li>
+        <li>Kill switch: a switch row can only narrow the published baseline, never widen it; it is read live on every dispatch, release, citation, and completion. Unpublished reads profile_unpublished, switched off reads profile_disabled, capability off reads capability_disabled.</li>
+        <li>Epoch fence: one atomic transaction disables profiles and advances the epoch; dispatch, release, and completion compare pinned versus current epoch and deny compatibility_epoch_fenced; repairFencedRuns terminalizes idle old-epoch runs.</li>
+        <li>Provider failure: no automatic failover to a less-trusted provider; a profile with no authorized provider for the turn&#x27;s maximum egress class is rejected before any runtime or provider work.</li>
+        <li>Cancellation: the abort signal reaches the QuickJS interrupt handler; late host results are dropped; usage is settled conservatively (charged, not forgiven).</li>
+        <li>Sandbox: eval, Reflect, Math.random, Date, and Proxy are absent; prototype constructors throw; the facade is deep-frozen; only JSON crosses; an output past the ceiling is rejected, not truncated; guest error text never becomes evidence.</li>
+        <li>Read-port contract violation: undeclared fields, raw document ids, exceeded page bounds, or undeclared completeness sources fail the call closed with port_contract_violation.</li>
+        <li>Absence, not zero: an unheld projection is absent at both type and runtime; a figure that does not exist is unknown(not_recorded); a get the caller may not see returns an empty object with sources unavailable.</li>
+        <li>Retention: prompts, scratch, provisional programs, and candidate outputs live 30 days; only cited attempts&#x27; exact source, result, and claim slices are promoted to 365 days; store and organization removal delete agent content (including the capability-call ledger) and mark grants and citations deleted_by_lifecycle.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+      <p>The table lists the files a reader should open first, in roughly the order data flows through a turn.</p>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed and what intentionally did not</h2>
+      <p>Changed: 204 source, test, script, and documentation files (about 58k insertions), plus the regenerated Convex API, the generated capability registry and schemas, the harness doc indexes, Graphify output, and the lockfile. Fifteen new Convex tables and one new index on intelligenceRun. Eight exact-pinned runtime, sandbox, and parser dependencies (zod stays at its existing caret range). Three new bounded crons (retention every 6 hours; fence repair and outbox repair every 5 minutes in production, hourly elsewhere).</p>
+      <p>Two deviations from the plan, both evidence-backed and recorded: the root convex.config.ts imports the Convex Agent component definition directly because mounting it through a local module made the deployment reject the push with an opaque start_push 500 (bisected across fourteen pushes); and program validation uses @babel/parser instead of the typescript checker because the latter would have pushed the isolate bundle past Convex&#x27;s 32 MiB cap, trading away semantic type-checking of model programs in favor of runtime argument validation at the bridge.</p>
+      <p>Also delivered at integration, per the user&#x27;s instruction: every plan-unit label (U1 through U10, wave N) was swept out of harness comments, docstrings, scripts, and docs and replaced by the module, contract, or invariant it referred to — 185 hits to zero, with the focused suite byte-identical before and after.</p>
+      <p>Changed by the review loop, on top of the first candidate: spend settled exactly once at every terminal end a turn can reach (finalize, outbox projection landed or exhausted, suppressed release, resume-on-read of an abandoned binding) with a guard for bindings the pre-marker path already paid out; the answer&#x27;s egress class floored at the class of the history replayed to the provider; agent answers excluded from the legacy intelligence queries and dismiss mutation so only the harness&#x27;s reauthorized views ever release one; thread admission scoped to the operator&#x27;s own active runs and thread history read newest-first per viewer, so colleagues share a store context without blocking or starving each other; bounded, newest-first purchase-order scans for replenishment; typed host seam references; and seven uncalled internal functions removed.</p>
+      <ul>
+        <li>Did not change: the ingress rail&#x27;s shape, the intelligence run as the durable business parent, TanStack AI, or Daily Operations business logic (only export widening).</li>
+        <li>Did not add: mutations of any kind (command verbs are rejected at generation as reserved_command_verb, distinct from the versioned-extension code), RAG, durable agents, workflow or workpool components, LangChain or LangGraph, a second orchestration runtime, or any rollout machinery.</li>
+        <li>Did not stream: v1 buffers the model narrative server-side and shows only server-authored milestones while a turn runs. Provisional streaming is a separately planned follow-up with its own reviewed plan.</li>
+      </ul>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and review evidence</h2>
+      <p>Every unit was verified independently by the orchestrator before its commit: focused suites, typecheck, agent-sdk:check, harness:check, and git diff --check were re-run rather than taken from the implementing agent&#x27;s handoff. The full webapp suite ran once at U10: 818 files, 9,748 tests, zero failures.</p>
+      <p>Release gate on the dev deployment (jovial-wildebeest-179), run three times as the candidate moved: the compatibility fence advanced the durable epoch in one transaction each time (0 to 1 for the first candidate, 2 for the first review-fix head, 3 for this head at digest fnv1a64:85dc961243788804, canceling zero active runs), the direct-harness smoke ran six scenarios with the profile switched off (operators denied profile_disabled throughout), the switch was flipped on, and a real operator turn completed end to end through the Daily Operations panel: on head 84102690 (this head adds only a validation-map entry) the question about open registers and morning automation returned an answer citing cash.registerSessions and automation.dailyOperations, labeled as limited evidence with a plain list of what could not be read (fence output, smoke and switch-status JSON, and the turn transcript are kept beside the delivery session as fence-pass5.log, smoke-pass5.json, status-pass5.json, and operator-turn-pass5.md; the run itself is inspectable on dev with describeRunDiagnostics). The first candidate also proved a real cancelled turn. The profile was left enabled on dev.</p>
+      <p>Mechanical preparation for the merge gate (pr:athena:prepare) passed on every reviewed head. The independent review checkpoint ran thirteen reviewers (correctness, security, adversarial, testing, maintainability, project standards, agent-native, learnings, performance, API contract, data migrations, reliability, TypeScript) against each prepared identity, five times. Pass 1 found and the candidate fixed: a provider-spend reservation that leaked whenever a turn ended before its provider invocation; a binding stranded at running with no repair path when the host died; an uncapped completion outbox; the committed answer&#x27;s egress class being derived from the attempts the model chose to cite; a fail-open thread-history filter; organization removal leaving the capability-call ledger behind; an unbounded replenishment scan; an optional OpaqueRef brand; untested model-resolution modules; and dead exports and stale comments. Pass 2 closed the remaining single-item callouts (spend settled once at every terminal end, a legacy-settle guard that needs no migration, the answer class floored at the replayed history&#x27;s class, bounded purchase-order scans, operator copy for a stalled host). Pass 3 found two P1s that passes 1 and 2 had missed: the legacy intelligence queries and dismiss mutation exposed any operator&#x27;s agent answer to any full admin of the store once agent_answer joined the shared artifact-kind validator, and the thread-history projection kept the oldest turns instead of the newest; both were fixed with per-operator admission and newest-first, per-viewer history. Passes 4, 5, and 6 approved unanimously, with the remaining P3 residuals either fixed in the tidy commit or filed as V26-1302, V26-1303, and V26-1304. The merge gate&#x27;s contract preflight then reported one thing no reviewer had: packages/athena-webapp/convex.json, which pins Node 22 for the Convex Agent adapter&#x27;s actions, was not covered by any validation mapping. Mapping it into the review-sensitive agent-harness scenario (registry, regenerated validation docs, audit fixture) was a four-line commit that nonetheless reopened the review identity, so a sixth complete pass ran before the evidence was recorded. That Node setting is deployment-wide: the handful of pre-existing Node actions (passkeys, remote assist, inventory import) move to Node 22 with it; the adversarial lens checked their dependencies and found no break. The review evidence the gate consumes is recorded against the final deliverable identity.</p>
+      <p>Browser verification: the dev webapp was started from the delivery worktree and signed in as the dev operator to exercise the Ask Athena entry on the live Daily Operations surface on the first candidate and again on this head.</p>
+      <ul>
+        <li>Production deploy: pending — nothing deployed to production by this candidate.</li>
+        <li>Root alignment: pending — the branch is ahead of origin/main and unpushed; the merge commit with origin/main resolved only regenerated Graphify output.</li>
+        <li>Linear: all eleven tickets carry a delivery comment with their commit; they stay In Progress until the integration PR merges.</li>
+        <li>Known gaps the tree admits, each with a ticket: convex-test runs sequentially, so concurrency is reviewed rather than raced; agentEvidenceAccessAudit and agentSpendWindow have no expiry sweep yet (V26-1292); registry and compatibility digests are FNV-1a identity labels, not MACs; the direct-harness operator-turn driver is non-production release tooling that should not outlive the release (V26-1291); turn spend is settled by convention at ten terminal sites rather than by construction (V26-1302); a read port&#x27;s version token does not see a behaviour change in a module it dispatches into (V26-1303).</li>
+      </ul>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Next time: extending or debugging the harness</h2>
+      <ul>
+        <li>To add a capability: declare it next to the domain code, write its read port as an internal query, register it in manifestRegistrations.ts, run bun run agent-sdk:generate, and let the conformance gate tell you what the port leaks. Read docs/agent/capability-authoring.md first; the kernel must not learn about your domain.</li>
+        <li>To add a surface: define a profile (packages, budgets, egress ceiling, prompt policy, presentation adapter), re-declare the presentation adapter in src/ behind the drift test, and mount AthenaAgentSurface. The synthetic second surface is the template.</li>
+        <li>To change a port&#x27;s behavior: bump implementationVersion on both the binding and the port, then fence on deploy. The generator refuses a moved source under an unchanged version.</li>
+        <li>To investigate a turn: bunx convex run agentHarness/evals/directHarness:describeRunDiagnostics with the run id shows status, budget charged, each attempt&#x27;s validator diagnostic, each capability call&#x27;s refusal, and the authored program; describeDeploymentState shows the epoch and switch state.</li>
+        <li>To roll back: bun scripts/agent-harness-switch.ts --profile daily_operations --disable --reason &lt;incident&gt;. Invoke the fence and switch scripts directly; bun run &lt;script&gt; -- --reason &quot;a b&quot; re-splits the quoted value.</li>
+        <li>Before trusting a green suite: run bunx convex dev --once before tsc, run tsc for any type-level claim, run lint:frontend:changed for shared/, and run the browser for anything about network, touch targets, or scroll ownership. The sensor ladder note in docs/solutions/harness records what each sensor cannot see.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>packages/athena-webapp/docs/agent/capability-authoring.md</code></td><td>The extension contract: naming, completeness and freshness rules, sensitivity as absence, read ports, evidence extractors, the conformance gate, lifecycle vs the durable switch, the fence, profiles, release posture, incident investigation.</td></tr>
+        <tr><td><code>packages/athena-webapp/docs/agent/agent-harness-runtime.md</code></td><td>Exact pins for Convex Agent and the AI SDK, the sandbox decision with measurements, the ceiling table, the direct-mount deployment finding, and the upgrade/rollback path.</td></tr>
+        <tr><td><code>packages/athena-webapp/shared/agentHarness/agentRuntime.ts</code></td><td>The AgentRuntimeAdapter contract: opaque refs, normalized events, the fingerprinted tool ledger, the usage reconciler. This seam is what makes Convex Agent replaceable.</td></tr>
+        <tr><td><code>packages/athena-webapp/shared/agentHarness/manifest.ts</code></td><td>Capability declaration types and validation: verbs, filters, projections, freshness, completeness, citation, evidence, cost.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/agentHarness/grants.ts</code></td><td>The immutable run grant and reauthorizeGrantWithCtx — the fence, digest pin, integrity, enablement, and current-authority checks every flush of authority goes through.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/agentHarness/delegatedAdmission.ts</code></td><td>Per-call authority re-derivation, shrink-only intersection with the pinned grant, the live enablement overlay, and the closed denial vocabulary.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts</code></td><td>Babel AST validation of model programs: bans imports, eval, timers, clock, randomness; checks the facade shape against the grant; requires exactly one explicit output.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/agentHarness/programRuntime/quickJsRuntime.ts</code></td><td>The QuickJS wasm sandbox behind the runtime contract: frozen facade, interrupt-driven cancellation, typed containment failures, JSON-only boundary.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/agentHarness/executor.ts</code></td><td>Attempt lifecycle, sandbox invocation, per-call admission, budget reserve/settle, evidence writes; refusal reasons now reach the model.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/agentHarness/completionOutbox.ts</code></td><td>Private prepare, one committing transaction, then an idempotent outbox projecting the committed narrative back through the adapter with backoff.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/agentHarness/turns.ts</code></td><td>The eight operator entry points (start, resume, cancel, acknowledge, views, history, citation inspection) and the turn-binding host mutations.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/agentHarness/deploymentState.ts</code></td><td>fenceForDeploy, setProfileEnablement, setCapabilityEnablement, cancelActiveRunsForProfile, describeDeploymentState — the whole release surface.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/agentHarness/retention.ts</code></td><td>Retention classes, the bounded sweeper, and the store/organization deletion cascades — including the capability-call ledger the gate found missing.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/agentHarness/importBoundary.test.ts</code></td><td>Fails the build if the kernel imports a product domain, if runtime-native imports leave agentRuntime/, or if the root convex.config.ts mounts anything indirectly.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/agentHarness/security.test.ts</code></td><td>35 adversarial cases against the published composition: tenancy, forged refs, revoked authority, disabled capabilities, sandbox escapes, prompt injection through product data, fingerprint replay.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/agentHarness/profiles/dailyOperations.ts</code></td><td>The first profile: package selection, budgets, egress ceiling, prompt policy, presentation adapter; published enabled, switched off by default.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/convex.config.ts</code></td><td>Mounts the Convex Agent component by importing its definition directly — the one configuration shape the deployment accepts.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx</code></td><td>The reusable host: entry, focus order, milestone live region, answer and quality badge, citation disclosure, stop, new thread, reload-rejoin.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/agent/AthenaAgentSafeText.tsx</code></td><td>Closed-vocabulary renderer emitting text nodes only; inertness is a property of the code, not a markdown configuration.</td></tr>
+        <tr><td><code>scripts/agent-sdk-generate.ts</code></td><td>The registry compiler: refuses to write on any conformance finding or a moved port under an unchanged implementationVersion.</td></tr>
+        <tr><td><code>scripts/agent-harness-fence.ts</code></td><td>One atomic transaction: disable the named profiles and advance the compatibility epoch; supports --dry-run.</td></tr>
+        <tr><td><code>docs/solutions/harness/the-sensor-ladder-what-a-green-suite-cannot-see-2026-08-22.md</code></td><td>What each sensor cannot see, recorded from ten units of evidence; read before trusting a green suite.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="9">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 9 of 12.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How does the model reach Athena data during a turn?</p>
+        <ol data-quiz-options>
+          <li>It calls the public Convex API under the operator&#x27;s session.</li>
+          <li data-quiz-correct>It writes a bounded read program against a grant-projected facade that runs in a QuickJS sandbox and reaches domain-owned internal read ports through delegated admission.</li>
+          <li>It queries the database directly with table names from the schema.</li>
+          <li>It asks the TanStack AI adapter to fetch records on its behalf.</li>
+        </ol>
+        <p data-quiz-explanation>The agent is never an actor on the ingress rail. Its only path to data is the facade compiled from its grant, executed in the sandbox, with every call re-admitted against the operator&#x27;s live authority.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why can a kill switch never widen what the model may read?</p>
+        <ol data-quiz-options>
+          <li>Switch rows are validated by a separate admin approval flow.</li>
+          <li data-quiz-correct>Enablement rows can only narrow the published baseline; the intersection with the pinned grant is shrink-only and re-read live on every dispatch, release, citation, and completion.</li>
+          <li>The switch is only consulted once, at turn start.</li>
+          <li>Switch rows are signed by the deployment key, so a widened row is rejected on read.</li>
+        </ol>
+        <p data-quiz-explanation>The overlay is shrink-only by construction and is consulted at every authority-bearing step, so a flip denies immediately even for a run pinned to an older digest.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens to a figure the operator is not allowed to see in a result?</p>
+        <ol data-quiz-options>
+          <li>It is returned as zero.</li>
+          <li>It is returned as null with a warning.</li>
+          <li data-quiz-correct>The key is absent at both the type level and at runtime; a figure that does not exist is unknown(not_recorded), never 0.</li>
+          <li>The whole result is rejected.</li>
+        </ol>
+        <p data-quiz-explanation>Absence, not zero, is the doctrine: an unheld projection cannot be confused with a real measurement, and a get the caller may not see returns an empty object with sources unavailable.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does the one-command fence do on deploy?</p>
+        <ol data-quiz-options>
+          <li>It drains active runs over a grace window and then disables profiles.</li>
+          <li data-quiz-correct>It disables the named profiles and advances the durable compatibility epoch in one atomic transaction; a repair sweep then terminalizes idle runs pinned to the old epoch.</li>
+          <li>It rolls traffic to a canary cohort first.</li>
+          <li>It regenerates the registry and restarts the Convex deployment.</li>
+        </ol>
+        <p data-quiz-explanation>There is no drain, cohort, or canary machinery. The fence is atomic, dispatch and completion compare pinned versus current epoch, and repairFencedRuns cleans up idle work.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does the root convex.config.ts import the Convex Agent component definition directly?</p>
+        <ol data-quiz-options>
+          <li>Because the component has no other export.</li>
+          <li data-quiz-correct>Because mounting it through a local module made the deployment reject the push with an opaque start_push 500, found by bisecting fourteen pushes.</li>
+          <li>Because the import-boundary test requires every component to be imported from node_modules.</li>
+          <li>Because the plan specified it from the start.</li>
+        </ol>
+        <p data-quiz-explanation>The plan originally allowed a local shim. Deployment reality amended it, and the finding is recorded in agent-harness-runtime.md and a solution note.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What did the first real provider turn on the dev deployment expose?</p>
+        <ol data-quiz-options>
+          <li>That the sandbox leaked the clock.</li>
+          <li data-quiz-correct>That capability refusals never reached the model, so it read every denial as an access restriction and repeated the same malformed call until its attempt cap.</li>
+          <li>That citations were minted from data the program never read.</li>
+          <li>That the fence did not advance the epoch.</li>
+        </ol>
+        <p data-quiz-explanation>Surfacing the refusal reason and clarifying the executeProgram contract turned three wasted attempts into a self-correcting sequence on the very next run.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which sensor is the only one that can prove a type-level claim such as expectTypeOf or internal.* reachability?</p>
+        <ol data-quiz-options>
+          <li>The Vitest suite.</li>
+          <li>bun test over scripts/.</li>
+          <li data-quiz-correct>tsc (the project typecheck).</li>
+          <li>lint:convex:changed.</li>
+        </ol>
+        <p data-quiz-explanation>Bun and Vitest strip types. The sensor ladder note records that tsc caught six real errors the green suite tolerated, and that bunx convex dev --once must run before tsc for module-graph claims.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What evidence states can a citation resolve to later?</p>
+        <ol data-quiz-options>
+          <li>found or missing</li>
+          <li data-quiz-correct>reconstructible, provenance_only, evidence_expired, or evidence_deleted_by_lifecycle</li>
+          <li>valid, stale, or revoked</li>
+          <li>cached or uncached</li>
+        </ol>
+        <p data-quiz-explanation>Missing is not a state. Each answer says something specific: the evidence can be rebuilt, only its provenance survives, it aged out of retention, or the store&#x27;s own lifecycle deleted it.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A reviewer wants to add a feature flag that lets a profile skip the conformance gate for a capability during development. What should happen?</p>
+        <ol data-quiz-options>
+          <li>Add it; development velocity matters.</li>
+          <li data-quiz-correct>Do not add it: the generator refusing to write on a conformance finding is the release gate, and the plan deliberately excludes rollout and bypass machinery.</li>
+          <li>Add it behind a second switch row.</li>
+          <li>Add it only for the synthetic profile.</li>
+        </ol>
+        <p data-quiz-explanation>Generation is a gate, not a formatting step. A bypass would let an unconformant port reach the published registry, which is exactly what the design exists to prevent.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the production and Linear status of this candidate as of this report?</p>
+        <ol data-quiz-options>
+          <li>Deployed to production and all tickets Done.</li>
+          <li data-quiz-correct>Not deployed to production; dev carries the candidate with daily_operations enabled; all eleven tickets stay In Progress until the integration PR merges.</li>
+          <li>Deployed to production behind a canary cohort.</li>
+          <li>Merged to main but not yet deployed.</li>
+        </ol>
+        <p data-quiz-explanation>The report is a delivery-candidate artifact. Merge, production deploy, and Linear closure are pending events that this report does not predict.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Adding agent_answer to the shared artifact-kind validator exposed agent answers to which surface, and how was it closed?</p>
+        <ol data-quiz-options>
+          <li>The public discovery tool — fixed by removing the kind from the validator.</li>
+          <li data-quiz-correct>The legacy intelligence queries and dismiss mutation, which any full admin of the store could call — fixed by excluding agent answers and agent runs in those handlers while keeping the validator the schema shares.</li>
+          <li>The Convex Agent component&#x27;s message store — fixed by deleting runtime threads on commit.</li>
+          <li>The operator&#x27;s own turn view — fixed by a new authority epoch.</li>
+        </ol>
+        <p data-quiz-explanation>Widening a validator that several readers share gives every one of them the new member. The harness reauthorizes every read of an answer; the legacy full-admin queries never did, so the candidate filters agent answers in their handlers and pins it with tests for two admins of the same store.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does the thread-history projection read the index newest-first and filter by the viewer&#x27;s actorRef before counting toward the bound?</p>
+        <ol data-quiz-options>
+          <li>Because Convex indexes can only be read in descending order.</li>
+          <li data-quiz-correct>So a thread that outgrows the limit keeps the most recent turns, and a colleague&#x27;s turns on the shared store thread key cannot push the viewer&#x27;s own history out of the window.</li>
+          <li>To make the model replay the oldest context first.</li>
+          <li>Because the thread key is per operator, so ordering does not matter.</li>
+        </ol>
+        <p data-quiz-explanation>An ascending take freezes on the oldest rows once the bound is exceeded, and a store-scoped key is shared by every operator in the store; the run, not the key, names the operator, so admission and history both filter on run.actorRef.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>session context (ce-session-historian)</dt><dd>Reconstructed the delivery loop from the eleven unit handoffs, the batch brief, the plan and brainstorm, git history, and the Linear delivery comments: the start_push 500 bisect and direct-mount fix, the sandbox spike that rejected @ai-sdk/code-mode, the Babel validator downsize, the first real provider turn exposing silent refusals, the user&#x27;s plan-label sweep instruction, and the one-integration-PR posture.</dd>
+      <dt>delivered diff (ce-repo-research-analyst)</dt><dd>Produced the layered changed-file map with per-file purpose, the architectural before/after, the failure-boundary table, the intentionally-unchanged list, the test and sensor inventory, the generated-artifact freshness table, and the risks the code and docs admit.</dd>
+      <dt>report reviewer (ce-testing-reviewer persona)</dt><dd>Reviewed the rendered report against the tree at 257c4978 for unsupported claims and quiz soundness; verdict report_needs_fixes with seven corrections (commit attribution, eight not nine pinned dependencies, rail operations versus admitted queries, the full-suite claim, the review-evidence wording, where the epoch-3 turn evidence lives, and this entry), all applied before the report was committed; all twelve quiz questions judged to have exactly one defensible answer.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

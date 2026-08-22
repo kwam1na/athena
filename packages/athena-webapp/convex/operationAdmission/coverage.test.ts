@@ -3,6 +3,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { OPERATION_ADMISSION_DEFINITIONS } from "./definitions";
 import { OPERATION_READ_ADMISSION_DEFINITIONS } from "./readDefinitions";
+import { AGENT_GENERATED_REGISTRY } from "../agentHarness/_generated/registry";
+import { agentReadPorts } from "../platform/operationAdmission";
 
 /**
  * End-state admission coverage.
@@ -197,5 +199,68 @@ describe("operation admission registry is frozen", () => {
 
     expect(writes).toHaveLength(writeCount);
     expect(reads).toHaveLength(readCount);
+  });
+});
+
+/**
+ * Delegated agent read ports are NOT ingress.
+ *
+ * A capability call is a derived-grant read inside an internal query, not a
+ * public operation: it never becomes an actor of this rail. The checker above
+ * proves nothing unadmitted is exported; this block proves the complement —
+ * that the only agent-harness surface on the rail is the operator turn, that
+ * every published read port dispatches to a registered internal query, and
+ * that none of them is reachable as a public function.
+ */
+describe("delegated agent read ports stay off the public ingress rail", () => {
+  it("exposes exactly the operator turn functions and nothing else", () => {
+    const agentWrites = OPERATION_ADMISSION_DEFINITIONS.filter((definition) =>
+      definition.operationId.startsWith("agentHarness/"),
+    ).map((definition) => definition.operationId);
+    const agentReads = OPERATION_READ_ADMISSION_DEFINITIONS.filter((definition) =>
+      definition.operationId.startsWith("agentHarness/"),
+    ).map((definition) => definition.operationId);
+
+    expect([...agentWrites].sort()).toEqual([
+      "agentHarness/turns.acknowledgeTurnAnswer",
+      "agentHarness/turns.cancelTurn",
+      "agentHarness/turns.inspectCitationEvidence",
+      "agentHarness/turns.resumeTurn",
+      "agentHarness/turns.startTurn",
+    ]);
+    expect([...agentReads].sort()).toEqual([
+      "agentHarness/turns.getThreadHistory.read",
+      "agentHarness/turns.getTurnAnswer.read",
+      "agentHarness/turns.getTurnView.read",
+    ]);
+  });
+
+  it("keeps every published read port an internal query, bound and reachable", () => {
+    const ports = Object.values(AGENT_GENERATED_REGISTRY.readPorts);
+    expect(ports.length).toBeGreaterThan(0);
+    for (const port of ports) {
+      expect(port.handler.kind, port.portKey).toBe("internal_query");
+      // `module:export`, never an `api.*` path.
+      expect(port.handler.functionPath, port.portKey).toMatch(/^[a-zA-Z0-9/_.]+:[a-zA-Z0-9_]+$/);
+      expect(port.handler.functionPath.startsWith("api."), port.portKey).toBe(false);
+    }
+    // Every registered port is bound at the composition root; an unbound port
+    // would be unreachable and would answer `unavailable` forever.
+    expect(agentReadPorts.listUnboundPorts()).toEqual([]);
+  });
+
+  it("never names a read-port module in a public operation", () => {
+    const portModules = new Set(
+      Object.values(AGENT_GENERATED_REGISTRY.readPorts).map(
+        (port) => port.handler.functionPath.split(":")[0],
+      ),
+    );
+    const publicFunctions = [
+      ...OPERATION_ADMISSION_DEFINITIONS.map((definition) => definition.functionName),
+      ...OPERATION_READ_ADMISSION_DEFINITIONS.map((definition) => definition.functionName),
+    ];
+    for (const functionName of publicFunctions) {
+      expect(portModules.has(String(functionName).split(":")[0]), String(functionName)).toBe(false);
+    }
   });
 });

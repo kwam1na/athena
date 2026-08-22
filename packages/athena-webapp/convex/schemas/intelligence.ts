@@ -33,6 +33,7 @@ export const intelligenceArtifactKindValidator = v.union(
   v.literal("store_insights"),
   v.literal("user_insights"),
   v.literal("structured_text"),
+  v.literal("agent_answer"),
 );
 
 export const intelligenceProviderStatusValidator = v.union(
@@ -93,6 +94,14 @@ export const intelligenceRunSchema = v.object({
   createdAt: v.number(),
   updatedAt: v.number(),
   completedAt: v.optional(v.number()),
+  // Agent-harness additions (all optional so existing rows stay valid). The
+  // business run stays here; child execution state lives in `agent*` tables.
+  harnessKind: v.optional(v.literal("agent")),
+  compatibilityEpoch: v.optional(v.number()),
+  runtimeThreadRef: v.optional(v.string()),
+  turnBindingId: v.optional(v.id("agentTurnBinding")),
+  runGrantId: v.optional(v.id("agentRunGrant")),
+  terminalIdempotencyKey: v.optional(v.string()),
 });
 
 export const intelligenceContextSnapshotSchema = v.object({
@@ -132,7 +141,11 @@ export const intelligenceArtifactSchema = v.object({
   storeId: v.optional(v.id("store")),
   organizationId: v.optional(v.id("organization")),
   runId: v.id("intelligenceRun"),
-  contextSnapshotId: v.id("intelligenceContextSnapshot"),
+  // Optional since agent answers pin their context on `agentRunGrant` instead
+  // of an `intelligenceContextSnapshot`; existing artifacts always carry it.
+  contextSnapshotId: v.optional(v.id("intelligenceContextSnapshot")),
+  runGrantId: v.optional(v.id("agentRunGrant")),
+  turnBindingId: v.optional(v.id("agentTurnBinding")),
   capability: v.string(),
   kind: intelligenceArtifactKindValidator,
   subjectTable: v.optional(v.string()),

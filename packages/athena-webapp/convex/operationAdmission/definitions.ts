@@ -22,6 +22,7 @@ import { REPORTS_DEFINITIONS } from "./domains/reports_definitions";
 import { PLATFORM_DEFINITIONS } from "./domains/platform_definitions";
 import { HTTP_CUSTOMER_DEFINITIONS } from "./domains/httpCustomer_definitions";
 import { HTTP_CORE_DEFINITIONS } from "./domains/httpCore_definitions";
+import { AGENT_HARNESS_DEFINITIONS } from "./domains/agentHarness_definitions";
 
 export { defineOperation };
 
@@ -827,6 +828,7 @@ export const OPERATION_ADMISSION_DEFINITIONS: readonly OperationDefinition[] = O
   ...PLATFORM_DEFINITIONS,
   ...HTTP_CUSTOMER_DEFINITIONS,
   ...HTTP_CORE_DEFINITIONS,
+  ...AGENT_HARNESS_DEFINITIONS,
 ] as const);
 
 export function validateOperationDefinition(
