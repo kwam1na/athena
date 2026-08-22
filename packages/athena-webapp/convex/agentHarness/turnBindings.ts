@@ -11,6 +11,12 @@
  * rungs but never duplicate a prompt, run, job, or artifact, and never reopen
  * a terminal run. Only `completeAgentRunWithCtx` may claim
  * `athena_committed`; projection is an outbox rung after that commit.
+ *
+ * The sweeper closes two kinds of stranded turn: one that never reached
+ * `running` (no host ever picked it up) and one parked at `running` or
+ * `completion_prepared` past the abandon window (its host died mid-turn).
+ * Either way the run fails as retryable, the binding is abandoned, and the
+ * turn's provider-spend reservation is released.
  */
 import { v } from "convex/values";
 
@@ -48,11 +54,22 @@ import {
   markAgentRunRunningWithCtx,
   type CreateAgentRunInput,
 } from "./lifecycle";
+import { settleTurnSpendOnceWithCtx } from "./runAdmission";
 
 /** A rung older than this on an active turn is offered for retry on read. */
 export const AGENT_TURN_STEP_STALE_AFTER_MS = 5 * 60 * 1000;
-/** A pre-running rung older than this is closed by the bounded sweeper. */
+/**
+ * A rung older than this is closed by the bounded sweeper. It exceeds every
+ * turn's elapsed ceiling (`max(runLimits.elapsedMs, the program ceiling)` plus
+ * the turn headroom), so a binding this stale cannot still have a live host.
+ */
 export const AGENT_TURN_BINDING_ABANDON_AFTER_MS = 3 * AGENT_TURN_STEP_STALE_AFTER_MS;
+/**
+ * Marker prefix on `outboxLastError` for a runtime projection the outbox has
+ * given up on. The committed answer stays released; only the mirror into
+ * runtime history is abandoned.
+ */
+export const AGENT_OUTBOX_EXHAUSTED_PREFIX = "outbox_exhausted: ";
 const DEFAULT_SWEEP_LIMIT = 50;
 const MAX_SWEEP_LIMIT = 200;
 
@@ -61,6 +78,8 @@ type ReadCtx = QueryCtx | MutationCtx;
 const PRE_RUNNING_STEPS = AGENT_TURN_BINDING_STEPS.filter(
   (step) => bindingStepIndex(step) < bindingStepIndex("running"),
 );
+/** Steps only a live host owns; past the abandon window that host is gone. */
+const HOST_OWNED_STEPS: readonly AgentTurnBindingStep[] = ["running", "completion_prepared"];
 
 // ---------------------------------------------------------------------------
 // Intent
@@ -353,15 +372,21 @@ export async function resumeTurnBindingWithCtx(
   }
   if (isTerminalRunStatus(runStatus)) {
     if (runStatus === "completed" && binding.step === "athena_committed") {
-      return { action: "await_projection", step: binding.step, runStatus, artifactId: run?.artifactId };
+      // The outbox gave up on this projection: the answer is released, so
+      // there is nothing left for the caller to wait on.
+      const exhausted = binding.outboxNextAttemptAt === undefined && (binding.outboxLastError?.startsWith(AGENT_OUTBOX_EXHAUSTED_PREFIX) ?? false);
+      if (!exhausted) return { action: "await_projection", step: binding.step, runStatus, artifactId: run?.artifactId };
+      return { action: "terminal", step: binding.step, runStatus, artifactId: run?.artifactId };
     }
     if (!isBindingStepAtOrBeyond(binding.step, "athena_committed")) {
-      // Orphan: the run ended without the binding being closed. Close it now.
+      // Orphan: the run ended without the binding being closed. Close it now
+      // and release the turn's reservation with it.
       await ctx.db.patch("agentTurnBinding", binding._id, {
         abandonedAt: input.now,
         abandonReason: `run_${runStatus}`,
         updatedAt: input.now,
       });
+      await settleTurnSpendOnceWithCtx(ctx, { bindingId: binding._id, actualCostUnits: 0, now: input.now });
       return { action: "abandoned", step: binding.step, runStatus, artifactId: run?.artifactId };
     }
     return { action: "terminal", step: binding.step, runStatus, artifactId: run?.artifactId };
@@ -415,10 +440,29 @@ export async function listTurnBindingsForThread(
 // ---------------------------------------------------------------------------
 
 /**
- * Close turns that never reached `running` (queued-without-work, missing
- * runtime thread/input, scheduling that never landed). The run fails as
- * retryable and the binding is abandoned; the operator's next prompt is a new
- * turn. Nothing is duplicated or reopened.
+ * How a stranded rung is closed. `turn_binding_stalled` names a turn no host
+ * ever picked up; `turn_host_stalled` names one whose host died mid-turn.
+ */
+const SWEEP_TARGETS: readonly { step: AgentTurnBindingStep; code: string; message: string }[] = [
+  ...PRE_RUNNING_STEPS.map((step) => ({
+    step,
+    code: "turn_binding_stalled",
+    message: "The request did not start in time. Ask again to retry.",
+  })),
+  ...HOST_OWNED_STEPS.map((step) => ({
+    step,
+    code: "turn_host_stalled",
+    message: "The request stopped unexpectedly. Ask again to retry.",
+  })),
+];
+
+/**
+ * Close turns nothing can finish any more: those that never reached `running`
+ * (queued-without-work, missing runtime thread/input, scheduling that never
+ * landed) and those parked at `running` or `completion_prepared` past the
+ * abandon window, whose host cannot still be alive. The run fails as retryable,
+ * the binding is abandoned, and the turn's spend reservation is released; the
+ * operator's next prompt is a new turn. Nothing is duplicated or reopened.
  */
 export async function sweepStaleTurnBindingsWithCtx(
   ctx: MutationCtx,
@@ -429,7 +473,7 @@ export async function sweepStaleTurnBindingsWithCtx(
   let processed = 0;
   let failed = 0;
   let hasMore = false;
-  for (const step of PRE_RUNNING_STEPS) {
+  for (const target of SWEEP_TARGETS) {
     const remaining = limit - processed;
     if (remaining <= 0) {
       hasMore = true;
@@ -438,7 +482,7 @@ export async function sweepStaleTurnBindingsWithCtx(
     const bindings = await ctx.db
       .query("agentTurnBinding")
       .withIndex("by_step_abandonedAt_stepUpdatedAt", (q) =>
-        q.eq("step", step).eq("abandonedAt", undefined).lte("stepUpdatedAt", cutoff),
+        q.eq("step", target.step).eq("abandonedAt", undefined).lte("stepUpdatedAt", cutoff),
       )
       .take(remaining);
     for (const binding of bindings) {
@@ -450,16 +494,13 @@ export async function sweepStaleTurnBindingsWithCtx(
           abandonReason: run ? `run_${run.status}` : "run_missing",
           updatedAt: input.now,
         });
+        await settleTurnSpendOnceWithCtx(ctx, { bindingId: binding._id, actualCostUnits: 0, now: input.now });
         continue;
       }
       const result = await failAgentRunWithCtx(ctx, {
         runId: run._id,
-        idempotencyKey: `turn-binding-stalled:${binding._id}`,
-        error: {
-          code: "turn_binding_stalled",
-          message: "The request did not start in time. Ask again to retry.",
-          retryable: true,
-        },
+        idempotencyKey: `${target.code}:${binding._id}`,
+        error: { code: target.code, message: target.message, retryable: true },
         now: input.now,
       });
       if (result.outcome === "advanced") failed += 1;
@@ -467,10 +508,11 @@ export async function sweepStaleTurnBindingsWithCtx(
       if (refreshed && refreshed.abandonedAt === undefined) {
         await ctx.db.patch("agentTurnBinding", binding._id, {
           abandonedAt: input.now,
-          abandonReason: "turn_binding_stalled",
+          abandonReason: target.code,
           updatedAt: input.now,
         });
       }
+      await settleTurnSpendOnceWithCtx(ctx, { bindingId: binding._id, actualCostUnits: 0, now: input.now });
     }
     if (bindings.length === remaining) hasMore = true;
   }

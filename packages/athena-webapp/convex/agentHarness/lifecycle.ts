@@ -402,9 +402,7 @@ export async function transitionAgentRunWithCtx(
   }
   const evaluation = evaluateTransition(AGENT_RUN_TRANSITIONS, run.status, input.to);
   if (evaluation.kind === "already_in_state") {
-    return isTerminalRunStatus(run.status)
-      ? { outcome: "already_in_state", status: run.status }
-      : { outcome: "already_in_state", status: run.status };
+    return { outcome: "already_in_state", status: run.status };
   }
   if (evaluation.kind === "rejected") {
     if (evaluation.reason === "terminal_state") return terminalResult(run);

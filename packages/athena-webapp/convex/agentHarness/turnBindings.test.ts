@@ -17,6 +17,7 @@ import {
 } from "./lifecycle";
 import { TEST_NOW, buildRunInput, seedTenant } from "./testSupport";
 import {
+  AGENT_TURN_BINDING_ABANDON_AFTER_MS,
   AGENT_TURN_STEP_STALE_AFTER_MS,
   acknowledgeOperatorViewWithCtx,
   advanceTurnBindingWithCtx,
@@ -263,6 +264,35 @@ describe("turn bindings: thread cardinality and terminal runs (scenario 7)", () 
       expect(await recordTurnIntentWithCtx(ctx, intentInput(seeded.tenant))).toMatchObject({ outcome: "resumed", runStatus: "failed", abandoned: true });
       const bindings = await listTurnBindingsForThread(ctx, "thread:alpha");
       expect(bindings).toHaveLength(1);
+    });
+  });
+});
+
+describe("bounded sweeper: a host that died mid-turn", () => {
+  it("fails and abandons a binding parked at running past the abandon window, and leaves a younger one alone", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const tenant = await seedTenant(ctx, "host-stalled");
+      const created = bound(await recordTurnIntentWithCtx(ctx, intentInput(tenant)));
+      await driveToRunning(ctx, created.bindingId);
+      return { tenant, created };
+    });
+
+    await t.run(async (ctx) => {
+      // A live host can still own a binding this young; the sweep must not touch it.
+      expect(await sweepStaleTurnBindingsWithCtx(ctx, { now: TEST_NOW + AGENT_TURN_BINDING_ABANDON_AFTER_MS - 1, limit: 10 })).toEqual({ failed: 0, hasMore: false });
+      expect(await ctx.db.get("intelligenceRun", seeded.created.runId)).toMatchObject({ status: "running" });
+      expect((await ctx.db.get("agentTurnBinding", seeded.created.bindingId))?.abandonedAt).toBeUndefined();
+
+      // Past the window the host is gone: the run fails retryable, the binding
+      // is abandoned, and the turn's spend reservation is released.
+      const sweptAt = TEST_NOW + AGENT_TURN_BINDING_ABANDON_AFTER_MS + 1;
+      expect(await sweepStaleTurnBindingsWithCtx(ctx, { now: sweptAt, limit: 10 })).toEqual({ failed: 1, hasMore: false });
+      expect(await ctx.db.get("intelligenceRun", seeded.created.runId)).toMatchObject({ status: "failed", error: { code: "turn_host_stalled", retryable: true } });
+      expect(await ctx.db.get("agentTurnBinding", seeded.created.bindingId)).toMatchObject({ step: "running", abandonedAt: sweptAt, abandonReason: "turn_host_stalled", spendSettledAt: sweptAt });
+      // The thread is free again and nothing is reopened.
+      expect(await resumeTurnBindingWithCtx(ctx, { bindingId: seeded.created.bindingId, now: sweptAt + 1 })).toMatchObject({ action: "abandoned", runStatus: "failed" });
+      expect(await sweepStaleTurnBindingsWithCtx(ctx, { now: sweptAt + 2, limit: 10 })).toEqual({ failed: 0, hasMore: false });
     });
   });
 });

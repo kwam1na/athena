@@ -85,6 +85,9 @@ export type AgentTurnHostDeps = {
 
 export const AGENT_HOST_CANCEL_POLL_MS = 2_000;
 
+/** What one projection attempt did; `projection_exhausted` is the outbox giving up on the runtime mirror. */
+export type AgentProjectionResult = AgentProjectionLoad["kind"] | "projected" | "projection_exhausted";
+
 export type AgentTurnHostReport = {
   readonly bindingId: Id<"agentTurnBinding">;
   readonly outcome: "completed" | "failed" | "canceled" | "terminal" | "not_found" | "refused";
@@ -92,7 +95,7 @@ export type AgentTurnHostReport = {
   readonly events: readonly AgentRuntimeEvent["kind"][];
   readonly dispatch: readonly string[];
   readonly usage?: AgentTurnUsageSettlement;
-  readonly projection?: AgentProjectionLoad["kind"] | "projected";
+  readonly projection?: AgentProjectionResult;
   readonly finalize?: AgentFinalizeTurnOutcome;
   readonly timings: { readonly totalMs: number; readonly firstProgressMs: number | null; readonly completionMs: number | null };
 };
@@ -114,7 +117,12 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
     return (await ctx.runMutation(refs.advanceTurnBinding, { bindingId, step, idempotencyKey: `${step}:host`, now: now(), ...extra })) as { outcome: string; denial?: { code: string } };
   }
 
-  async function projectCommitted(bindingId: Id<"agentTurnBinding">): Promise<AgentProjectionLoad["kind"] | "projected"> {
+  async function recordProjectionFailure(bindingId: Id<"agentTurnBinding">, error: string): Promise<AgentProjectionResult> {
+    const failure = (await ctx.runMutation(refs.recordProjectionFailure, { bindingId, error, now: now() })) as { outcome: string };
+    return failure.outcome === "exhausted" ? "projection_exhausted" : "not_committed";
+  }
+
+  async function projectCommitted(bindingId: Id<"agentTurnBinding">): Promise<AgentProjectionResult> {
     const loaded = (await ctx.runQuery(refs.loadProjection, { bindingId, now: now() })) as AgentProjectionLoad;
     if (loaded.kind === "suppressed") {
       await ctx.runMutation(refs.suppressRelease, { bindingId, reason: loaded.reason, now: now() });
@@ -128,15 +136,11 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
         artifact: loaded.artifact,
         idempotencyKey: loaded.idempotencyKey,
       });
-      if (projected.kind === "rejected") {
-        await ctx.runMutation(refs.recordProjectionFailure, { bindingId, error: projected.reason, now: now() });
-        return "not_committed";
-      }
+      if (projected.kind === "rejected") return recordProjectionFailure(bindingId, projected.reason);
       const recorded = (await ctx.runMutation(refs.recordProjection, { bindingId, projectionRef: projected.projectionRef, now: now() })) as AgentRecordProjectionOutcome;
       return recorded.outcome === "rejected" ? "not_committed" : "projected";
     } catch (error) {
-      await ctx.runMutation(refs.recordProjectionFailure, { bindingId, error: error instanceof Error ? error.name : "projection_failed", now: now() });
-      return "not_committed";
+      return recordProjectionFailure(bindingId, error instanceof Error ? error.name : "projection_failed");
     }
   }
 
@@ -156,21 +160,37 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
       ...extra,
     });
 
+    // Every exit before the runtime turn starts still finalizes: the turn's
+    // provider-spend reservation is released by finalize, not by the provider
+    // invocation row, and an unfinalized turn would hold it for the whole day.
+    const finalizeUnstarted = async (outcome: "canceled" | "failed", code: string) =>
+      (await ctx.runMutation(refs.finalizeTurn, {
+        bindingId,
+        outcome,
+        error: { code, message: "The turn could not start.", retryable: true },
+        now: now(),
+      })) as AgentFinalizeTurnOutcome;
+    const refused = async (code: string | undefined) => {
+      const resolved = code ?? "turn_binding_stalled";
+      return report("refused", { code: resolved, finalize: await finalizeUnstarted("failed", resolved) });
+    };
+
     const prepared = (await ctx.runMutation(refs.prepareTurn, { bindingId, now: now() })) as AgentTurnPreparation;
     if (prepared.kind === "not_found") return report("not_found");
-    if (prepared.kind === "terminal") return report("terminal", { code: prepared.runStatus });
-    if (prepared.kind === "refused") return report("refused", { code: prepared.code });
+    // The run is already terminal; finalize is a no-op for it and settles the reservation.
+    if (prepared.kind === "terminal") return report("terminal", { code: prepared.runStatus, finalize: await finalizeUnstarted("canceled", prepared.runStatus) });
+    if (prepared.kind === "refused") return refused(prepared.code);
     const { plan } = prepared;
 
     // Thread and input: resume-safe rungs recording opaque refs only.
     const thread = await adapter.ensureThread({ threadKey: plan.adapter.threadKey, contextBindingRef: plan.adapter.contextBindingRef as never, correlation: plan.adapter.correlation });
     const bound = await advance(bindingId, "runtime_thread_bound", { runtimeThreadRef: thread.threadRef });
-    if (bound.outcome === "rejected") return report("refused", { code: bound.denial?.code });
+    if (bound.outcome === "rejected") return refused(bound.denial?.code);
     const inputSaved = await adapter.saveInput({ threadRef: thread.threadRef, turnKey: plan.adapter.turnKey, prompt: plan.prompt, history: plan.history });
     const saved = await advance(bindingId, "runtime_input_saved", { runtimeInputRef: inputSaved.inputRef });
-    if (saved.outcome === "rejected") return report("refused", { code: saved.denial?.code });
+    if (saved.outcome === "rejected") return refused(saved.denial?.code);
     const running = (await ctx.runMutation(refs.markTurnRunning, { bindingId, now: now() })) as { outcome: string; code?: string };
-    if (running.outcome === "rejected") return report("refused", { code: running.code });
+    if (running.outcome === "rejected") return refused(running.code);
 
     // Kernel-side protocol pieces: fixed tools behind the dispatch ledger, usage reconciler.
     const milestoneQueue: Promise<unknown>[] = [];

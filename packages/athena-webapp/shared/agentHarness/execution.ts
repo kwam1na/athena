@@ -82,22 +82,6 @@ export type AgentEvidenceLifecycle = (typeof AGENT_EVIDENCE_LIFECYCLES)[number];
 export const AGENT_RETENTION_CLASSES = ["short_lived", "standard"] as const;
 export type AgentRetentionClass = (typeof AGENT_RETENTION_CLASSES)[number];
 
-export const AGENT_RUNTIME_CLEANUP_STATUSES = [
-  "not_requested",
-  "pending",
-  "succeeded",
-  "failed",
-] as const;
-export type AgentRuntimeCleanupStatus =
-  (typeof AGENT_RUNTIME_CLEANUP_STATUSES)[number];
-
-export const AGENT_REPLAY_SUBJECT_KINDS = [
-  "program_source",
-  "program_result",
-  "call_output",
-] as const;
-export type AgentReplaySubjectKind = (typeof AGENT_REPLAY_SUBJECT_KINDS)[number];
-
 export const SHORT_LIVED_RETENTION_MS = 30 * DAY_MS;
 export const STANDARD_RETENTION_MS = 365 * DAY_MS;
 
@@ -575,11 +559,4 @@ export function denial(
     retryable: options.retryable ?? false,
     ...(options.detail ? { detail: options.detail } : {}),
   };
-}
-
-export function isLeaseExpired(
-  leaseExpiresAt: number | undefined,
-  now: number,
-): boolean {
-  return leaseExpiresAt !== undefined && leaseExpiresAt <= now;
 }

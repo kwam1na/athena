@@ -117,7 +117,6 @@ Opaque refs: `runtime_thread:th_<40 hex>`, and `runtime_input|runtime_turn|runti
 | `maxResultBytes` | 256 KiB |
 | `maxHeapBytes` | 64 MiB |
 | `maxStackBytes` | 256 KiB (engine limit; see section 3) |
-| `maxProviderTokens` | 200,000 |
 | `maxProviderCostUnits` | 2,000 |
 
 These are initial safety limits, not release benchmarks; tune from observed use.

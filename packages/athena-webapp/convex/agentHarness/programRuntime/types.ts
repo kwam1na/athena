@@ -40,8 +40,6 @@ export type AgentProgramRuntimeCeilings = {
   readonly maxHeapBytes: number;
   /** Sandbox stack ceiling. */
   readonly maxStackBytes: number;
-  /** Provider tokens per run (the runtime host settles usage against this). */
-  readonly maxProviderTokens: number;
   /** Provider cost units per run (Athena's `calculateUsageCost` units). */
   readonly maxProviderCostUnits: number;
 };
@@ -59,7 +57,6 @@ export const AGENT_PROGRAM_RUNTIME_CEILINGS: AgentProgramRuntimeCeilings = Objec
   maxResultBytes: 256 * 1024,
   maxHeapBytes: 64 * 1024 * 1024,
   maxStackBytes: 256 * 1024,
-  maxProviderTokens: 200_000,
   maxProviderCostUnits: 2_000,
 });
 

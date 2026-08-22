@@ -41,9 +41,13 @@ declare const opaqueRefBrand: unique symbol;
  * Branded string carrying only an opaque token. The brand is phantom: at
  * runtime an opaque ref is the string `<kind>:<token>`, which keeps it
  * serializable through JSON, Convex validators, and the sandbox bridge.
+ *
+ * The brand is required, so a bare `string` never satisfies `OpaqueRef<Kind>`:
+ * every ref must come from `opaqueRef()` or from a narrowing through
+ * `isOpaqueRef()`.
  */
 export type OpaqueRef<Kind extends AgentOpaqueRefKind = AgentOpaqueRefKind> = string & {
-  readonly [opaqueRefBrand]?: Kind;
+  readonly [opaqueRefBrand]: Kind;
 };
 
 /**

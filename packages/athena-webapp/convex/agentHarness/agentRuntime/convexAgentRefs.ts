@@ -123,7 +123,7 @@ export function createComponentLookups(ctx: ConvexAgentRuntimeCtx, component: Ag
     return threadToken ? resolveThreadByToken(threadToken) : undefined;
   };
 
-  return { threadsByRef, findThread, listMessages, findMessageByToken, resolveThreadByToken, resolveThread, resolveThreadOfScopedRef };
+  return { threadsByRef, findThread, listMessages, findMessageByToken, resolveThread, resolveThreadOfScopedRef };
 }
 
 export type ComponentLookups = ReturnType<typeof createComponentLookups>;

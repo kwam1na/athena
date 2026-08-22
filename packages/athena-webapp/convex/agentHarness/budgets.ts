@@ -134,13 +134,3 @@ export function deriveExecutionCeilings(
 export function attemptCallIdempotencyKey(attemptId: string, requestDigest: string): string {
   return `attempt:${attemptId}:${requestDigest}`;
 }
-
-/** Settled usage the executor reports for a released envelope. */
-export function actualUsageForRelease(input: {
-  readonly rows: number;
-  readonly bytes: number;
-  readonly costUnits: number;
-  readonly elapsedMs: number;
-}): Partial<BudgetVector> {
-  return { calls: 1, rows: input.rows, bytes: input.bytes, costUnits: input.costUnits, elapsedMs: input.elapsedMs };
-}

@@ -63,7 +63,7 @@ import {
 import { cancelAgentRunWithCtx, failAgentRunWithCtx, checkRunEpochFenceWithCtx } from "./lifecycle";
 import { AGENT_PROGRAM_RUNTIME_CEILINGS } from "./programRuntime/types";
 import { requestRuntimeCleanupWithCtx } from "./retention";
-import { admitTurnStartWithCtx, settleTurnSpendWithCtx, spendWindowKey, validateOperatorPrompt } from "./runAdmission";
+import { admitTurnStartWithCtx, settleTurnSpendOnceWithCtx, turnProviderCostReservation, validateOperatorPrompt } from "./runAdmission";
 import { acknowledgeOperatorViewWithCtx, advanceTurnBindingWithCtx, recordTurnIntentWithCtx, resolveTurnWithCtx, resumeTurnBindingWithCtx } from "./turnBindings";
 import type { AgentDescribeGrantOutcome } from "./tools";
 
@@ -98,10 +98,7 @@ export function operatorCorrelationRef(actorRef: string): string {
   return `operator:${sha256Hex(actorRef).slice(0, 24)}`;
 }
 
-/** Provider cost units reserved per turn before any provider work. */
-export function turnProviderCostReservation(): number {
-  return AGENT_PROGRAM_RUNTIME_CEILINGS.maxProviderCostUnits;
-}
+export { turnProviderCostReservation };
 
 export function operatorFromActor(actor: OperationActor): DelegatedOperator | null {
   switch (actor.kind) {
@@ -431,7 +428,7 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
   ): Promise<AgentFinalizeTurnOutcome> {
     const loaded = await loadTurn(ctx, input.bindingId);
     if (!loaded) return { outcome: "already_terminal", runStatus: null };
-    const { binding, run, grant } = loaded;
+    const { binding, run } = loaded;
     let outcome: AgentFinalizeTurnOutcome["outcome"] = "already_terminal";
     if (!isTerminalRunStatus(run.status)) {
       if (input.outcome === "completed") {
@@ -453,11 +450,11 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
     }
     const refreshed = await ctx.db.get("intelligenceRun", run._id);
 
-    // Usage settles exactly once: the provider invocation row records it and the spend window settles with it.
+    // Usage settles exactly once: the provider invocation row records it.
+    const usage = input.usage ?? { tokens: { input: 0, output: 0, cachedInput: 0, reasoning: 0 }, streams: 0, conservative: true, settledBy: [], lateEventCount: 0, costUnits: 0 };
     const invocations = await ctx.db.query("intelligenceProviderInvocation").withIndex("by_runId", (q) => q.eq("runId", run._id)).take(1);
     const invocation = invocations[0];
     if (invocation && invocation.status === "started") {
-      const usage = input.usage ?? { tokens: { input: 0, output: 0, cachedInput: 0, reasoning: 0 }, streams: 0, conservative: true, settledBy: [], lateEventCount: 0, costUnits: 0 };
       const finalOutcome = refreshed?.status === "completed" ? "completed" : refreshed?.status === "canceled" ? "canceled" : "failed";
       await ctx.db.patch("intelligenceProviderInvocation", invocation._id, {
         status: finalOutcome === "completed" ? "succeeded" : "failed",
@@ -465,15 +462,10 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
         error: input.error ? { code: input.error.code, message: redactProviderSecrets(input.error.message).slice(0, 500), retryable: input.error.retryable } : undefined,
         completedAt: input.now,
       });
-      await settleTurnSpendWithCtx(ctx, {
-        actorRef: grant.initiatingActorRef,
-        storeId: grant.storeId,
-        windowKey: spendWindowKey(run.createdAt),
-        reservedCostUnits: turnProviderCostReservation(),
-        actualCostUnits: usage.costUnits,
-        now: input.now,
-      });
     }
+    // The reservation closes with the TURN, not with the provider row: a turn
+    // refused or canceled before any provider work still holds one.
+    await settleTurnSpendOnceWithCtx(ctx, { bindingId: binding._id, actualCostUnits: invocation ? usage.costUnits : 0, now: input.now });
     if (input.purgeRuntime) {
       const current = await ctx.db.get("agentTurnBinding", binding._id);
       if (current && current.runtimeCleanupStatus !== "succeeded") {

@@ -85,13 +85,6 @@ export function partial<T>(value: T, options: { missing: readonly string[] }): A
   return { state: "partial", value, missing: options.missing };
 }
 
-/** Known, stale, and partial values are usable (with their caveats). */
-export function isUsableValue<T>(
-  state: AgentValueState<T>,
-): state is Extract<AgentValueState<T>, { value: T }> {
-  return state.state === "known" || state.state === "stale" || state.state === "partial";
-}
-
 // ---------------------------------------------------------------------------
 // Freshness, completeness, pagination, warnings, source refs
 // ---------------------------------------------------------------------------
@@ -126,12 +119,6 @@ export type AgentCompleteness = {
 export function deriveCompleteness(sources: readonly AgentSourceCompleteness[]): AgentCompleteness {
   const complete = sources.length > 0 && sources.every((source) => source.status === "complete");
   return { status: complete ? "complete" : "partial", sources };
-}
-
-export function mergeCompleteness(
-  ...parts: readonly AgentCompleteness[]
-): AgentCompleteness {
-  return deriveCompleteness(parts.flatMap((part) => part.sources));
 }
 
 export type AgentPagination = {

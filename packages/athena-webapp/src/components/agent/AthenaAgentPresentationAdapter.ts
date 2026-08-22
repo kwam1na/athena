@@ -19,7 +19,7 @@ import {
   type AgentPresentationAdapterInput,
   type AgentSourceDestination,
 } from "~/shared/agentHarness/profile";
-import type { AgentSourceRef } from "~/shared/agentHarness/results";
+import { isOpaqueRef } from "~/shared/agentHarness/values";
 
 export type AthenaAgentPresentation = AgentPresentationAdapter;
 export type AthenaAgentContext = AgentContextValues;
@@ -206,6 +206,10 @@ export type AthenaAgentSourceInput = {
  * Resolve a server-minted citation to the in-app route that owns the record.
  * Anything the profile does not own, and any route whose parameters are not all
  * known, resolves to nothing rather than to a guessed destination.
+ *
+ * The host only ever holds the serialized form of a source ref, so the ref is
+ * validated back into `OpaqueRef<"source">` here; a citation that did not come
+ * from the server's minting path resolves to nothing.
  */
 export function resolveAthenaSourceLink(
   presentation: AthenaAgentPresentation,
@@ -213,13 +217,14 @@ export function resolveAthenaSourceLink(
   params: Record<string, string | undefined>,
 ): AthenaAgentSourceLink | null {
   if (!source.kind) return null;
+  if (!isOpaqueRef(source.ref, "source")) return null;
   const destination: AgentSourceDestination | null =
     presentation.resolveSourceDestination({
       ref: source.ref,
       kind: source.kind,
       label: source.label,
       capturedAt: 0,
-    } as unknown as AgentSourceRef);
+    });
   if (!destination || destination.kind !== "internal_route") return null;
 
   const required = Array.from(
@@ -247,10 +252,9 @@ export type AthenaAgentDenial = {
   readonly code: string;
   readonly headline: string;
   readonly detail?: string;
-  readonly retryable: boolean;
 };
 
-const DENIAL_COPY: Record<string, { headline: string; detail?: string; retryable?: boolean }> = {
+const DENIAL_COPY: Record<string, { headline: string; detail?: string }> = {
   prompt_empty: { headline: "Type a question to ask." },
   prompt_too_large: {
     headline: "That question is too long.",
@@ -297,17 +301,14 @@ const DENIAL_COPY: Record<string, { headline: string; detail?: string; retryable
   active_run_limit: {
     headline: "Athena is still working on an earlier question.",
     detail: "Wait for it to finish, or cancel it.",
-    retryable: true,
   },
   thread_busy: {
     headline: "Athena is still answering in this conversation.",
     detail: "Wait for it to finish, or cancel it.",
-    retryable: true,
   },
   spend_ceiling: {
     headline: "Athena has reached today's limit for this store.",
     detail: "Try again later.",
-    retryable: true,
   },
 };
 
@@ -322,14 +323,12 @@ export function describeAthenaDenial(code: string): AthenaAgentDenial {
     return {
       code,
       headline: "Athena can't take that question right now.",
-      retryable: false,
     };
   }
   return {
     code,
     headline: copy.headline,
     ...(copy.detail ? { detail: copy.detail } : {}),
-    retryable: copy.retryable === true,
   };
 }
 
@@ -430,30 +429,25 @@ export type AthenaAgentFailure = {
   readonly code: string;
   readonly headline: string;
   readonly detail?: string;
-  readonly retryable: boolean;
 };
 
-const FAILURE_COPY: Record<string, { headline: string; detail?: string; retryable?: boolean }> = {
+const FAILURE_COPY: Record<string, { headline: string; detail?: string }> = {
   canceled: { headline: "Stopped." },
   completion_missing: {
     headline: "Athena didn't reach an answer.",
     detail: "Ask again.",
-    retryable: true,
   },
   provider_failure: {
     headline: "The answer service didn't respond.",
     detail: "Ask again in a moment.",
-    retryable: true,
   },
   runtime_adapter_error: {
     headline: "The answer service didn't respond.",
     detail: "Ask again in a moment.",
-    retryable: true,
   },
   model_unresolvable: {
     headline: "The answer service didn't respond.",
     detail: "Ask again in a moment.",
-    retryable: true,
   },
   turn_elapsed_ceiling: {
     headline: "That took too long.",
@@ -462,12 +456,10 @@ const FAILURE_COPY: Record<string, { headline: string; detail?: string; retryabl
   compatibility_epoch_fenced: {
     headline: "Athena was updated while this was running.",
     detail: "Ask again.",
-    retryable: true,
   },
   turn_binding_stalled: {
     headline: "This request didn't start in time.",
     detail: "Ask again.",
-    retryable: true,
   },
   prompt_unavailable: {
     headline: "The question is no longer stored.",
@@ -494,14 +486,12 @@ export function describeAthenaFailure(code: string): AthenaAgentFailure {
     return {
       code,
       headline: "Athena couldn't finish this question.",
-      retryable: false,
     };
   }
   return {
     code,
     headline: copy.headline,
     ...(copy.detail ? { detail: copy.detail } : {}),
-    retryable: copy.retryable === true,
   };
 }
 

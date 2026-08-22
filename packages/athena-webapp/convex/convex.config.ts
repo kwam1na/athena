@@ -37,8 +37,8 @@ const app = defineApp({
 
 // Convex Agent must be mounted directly here: mounting it through a local module makes the
 // Convex backend reject the push (`start_push 500`, same class as convex-backend#467). This is
-// the one runtime-native import allowed outside `agentHarness/agentRuntime/` (plan decision 8,
-// U5 deviation); everything else about the runtime stays behind that directory.
+// the one runtime-native import allowed outside `agentHarness/agentRuntime/` (a deliberate
+// deviation from that boundary); everything else about the runtime stays behind that directory.
 app.use(agent, { name: CONVEX_AGENT_COMPONENT_NAME });
 
 export default app;

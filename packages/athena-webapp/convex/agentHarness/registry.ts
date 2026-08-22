@@ -694,11 +694,10 @@ export function projectGrant(
 }
 
 /**
- * Reduce a grant projection to the compact, serializable grant the
- * model-visible discovery surface consumes. It names capability ids and
- * granted projections only: no manifests, no bindings, no port handlers, no
- * read intents. `convex/agentHarness/discovery.ts` never reaches the
- * privileged registry, so this is the only way a grant crosses that boundary.
+ * Test convenience: reduce a grant projection straight to the compact,
+ * serializable grant the model-visible discovery surface consumes, without a
+ * database. Production mints the same shape from a run's effective grant in
+ * `grants.ts`; keep the two in step whenever `AgentRuntimeGrant` changes.
  */
 export function toRuntimeGrant(projection: AgentGrantProjection): AgentRuntimeGrant {
   return deepFreezeContract({

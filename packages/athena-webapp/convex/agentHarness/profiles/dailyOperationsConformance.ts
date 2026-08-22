@@ -16,7 +16,6 @@ import { budgetVector, type BudgetVector } from "../../../shared/agentHarness/ex
 import type { AgentReadEnvelope, AgentSourceCompleteness } from "../../../shared/agentHarness/results";
 import { known, unknown } from "../../../shared/agentHarness/results";
 import { opaqueRef, type AgentReadVerb } from "../../../shared/agentHarness/values";
-import type { JsonValue } from "../../../shared/agentHarness/manifest";
 import type { AgentConformanceProbe, AgentEvidenceExtractor } from "../conformance";
 import {
   AGENT_PAGE_COST,
@@ -1027,6 +1026,3 @@ export const DAILY_OPERATIONS_CONFORMANCE: {
   [POSITIONS_MANIFEST.capabilityId]: { probes: positionProbes, extractor: POSITIONS_EXTRACTOR },
   [REPLENISHMENT_MANIFEST.capabilityId]: { probes: replenishmentProbes },
 };
-
-/** Unused import guard: the probes are JSON data, not code paths. */
-export type DailyOperationsProbeJson = JsonValue;

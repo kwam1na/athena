@@ -22,6 +22,7 @@ import { TEST_EXECUTOR_SEAMS, TEST_SCHEMAS, TEST_SEAM_REFS } from "./executor.te
 import { projectThreadHistoryWithCtx } from "./historyProjection";
 import { cancelAgentRunWithCtx, getBudgetLedgerForRun, listProgramAttemptsForRun } from "./lifecycle";
 import { createQuickJsProgramRuntime } from "./programRuntime/quickJsRuntime";
+import { reserveTurnSpendWithCtx, spendWindowKey, turnProviderCostReservation } from "./runAdmission";
 import type { AgentProgramRuntime } from "./programRuntime/types";
 import { registerAgentRuntimeCleanupHook, resetAgentRuntimeCleanupHooksForTests, type AgentRuntimeCleanupDescriptor } from "./retention";
 import { createTurnHost, type AgentTurnHostRefs } from "./runtimeHost";
@@ -410,5 +411,77 @@ describe("turn host — kernel boundaries", () => {
     const after = await rows(t, seeded);
     expect(after.artifacts[0].payload).toMatchObject({ narrative: "Shifts only.", egressClass: "operational" });
     expect(after.invocations[0].requestSummary).toMatchObject({ policyClass: "operational" });
+  });
+});
+
+describe("turn host — a turn that ends before the model runs", () => {
+  /** Both spend windows the turn's reservation was taken against. */
+  async function reservations(t: Harness, seeded: Awaited<ReturnType<typeof seedRecordedTurn>>) {
+    return t.run(async (ctx) => {
+      const windowKey = spendWindowKey(TEST_NOW_BASE);
+      const rows = await Promise.all(
+        [`operator:athenaUser:${seeded.operator.userId}`, `store:${seeded.operator.storeId}`].map((scopeKey) =>
+          ctx.db.query("agentSpendWindow").withIndex("by_scopeKey_windowKey", (q) => q.eq("scopeKey", scopeKey).eq("windowKey", windowKey)).unique(),
+        ),
+      );
+      return rows.map((row) => ({ reserved: row?.reservedCostUnits, settled: row?.settledCostUnits }));
+    });
+  }
+
+  /** What `startTurn` leaves behind: a recorded turn with its provider ceiling reserved. */
+  async function seedAdmittedTurn(t: Harness, slug: string) {
+    const seeded = await t.run((ctx) => seedRecordedTurn(ctx, slug));
+    const reserved = await t.run((ctx) =>
+      reserveTurnSpendWithCtx(ctx, { actorRef: `athenaUser:${seeded.operator.userId}`, storeId: seeded.operator.storeId, costUnits: turnProviderCostReservation(), now: TEST_NOW_BASE }),
+    );
+    if (!reserved.ok) throw new Error(reserved.code);
+    return seeded;
+  }
+
+  it("releases the spend reservation when the run was already terminal, and a second finalize does not settle twice", async () => {
+    const t = backend();
+    const seeded = await seedAdmittedTurn(t, "spend-terminal");
+    expect(await reservations(t, seeded)).toEqual([
+      { reserved: turnProviderCostReservation(), settled: 0 },
+      { reserved: turnProviderCostReservation(), settled: 0 },
+    ]);
+
+    // The operator pressed Stop before the scheduled host ran.
+    await t.run((ctx) => cancelAgentRunWithCtx(ctx, { runId: seeded.runId, idempotencyKey: "operator", reason: "operator_canceled", now: clock() }));
+    const host = await hostFor(t, createAgentRuntimeContractFake({ clock: createDeterministicClock(TEST_NOW_BASE + 1_000) }));
+    expect(await host.driveTurn({ bindingId: seeded.bindingId })).toMatchObject({ outcome: "terminal", finalize: { outcome: "already_terminal", runStatus: "canceled" } });
+    expect(await reservations(t, seeded)).toEqual([
+      { reserved: 0, settled: 0 },
+      { reserved: 0, settled: 0 },
+    ]);
+    expect((await rows(t, seeded)).binding?.spendSettledAt).toBeDefined();
+
+    // Driving the same binding again must not release a second reservation —
+    // the released amount is fixed, so a double settle would rob another turn.
+    const other = await seedAdmittedTurn(t, "spend-neighbour");
+    expect(await host.driveTurn({ bindingId: seeded.bindingId })).toMatchObject({ outcome: "terminal" });
+    expect(await reservations(t, other)).toEqual([
+      { reserved: turnProviderCostReservation(), settled: 0 },
+      { reserved: turnProviderCostReservation(), settled: 0 },
+    ]);
+  });
+
+  it("releases the spend reservation when prepare refuses the turn", async () => {
+    const t = backend();
+    const seeded = await seedAdmittedTurn(t, "spend-refused");
+    // The question is no longer retained: prepare refuses before any provider work.
+    await t.run(async (ctx) => {
+      const grant = await ctx.db.query("agentRunGrant").withIndex("by_runId", (q) => q.eq("runId", seeded.runId)).unique();
+      await ctx.db.patch("agentPromptPayload", grant!.promptPayloadId!, { expiresAt: TEST_NOW_BASE });
+    });
+    const host = await hostFor(t, createAgentRuntimeContractFake({ clock: createDeterministicClock(TEST_NOW_BASE + 1_000) }));
+    expect(await host.driveTurn({ bindingId: seeded.bindingId })).toMatchObject({ outcome: "refused", code: "prompt_unavailable" });
+    expect(await reservations(t, seeded)).toEqual([
+      { reserved: 0, settled: 0 },
+      { reserved: 0, settled: 0 },
+    ]);
+    const after = await rows(t, seeded);
+    expect(after.run).toMatchObject({ status: "failed", error: { code: "prompt_unavailable" } });
+    expect(after.binding?.spendSettledAt).toBeDefined();
   });
 });

@@ -202,9 +202,6 @@ describe("Athena agent operator copy", () => {
       expect(denial.headline).not.toMatch(/[Ee]rror|[Ff]ailed|invalid|null/);
     }
 
-    expect(describeAthenaDenial("thread_busy").retryable).toBe(true);
-    expect(describeAthenaDenial("active_run_limit").retryable).toBe(true);
-    expect(describeAthenaDenial("prompt_empty").retryable).toBe(false);
   });
 
   it("never repeats raw backend wording for an unrecognized denial", () => {
@@ -246,7 +243,6 @@ describe("Athena agent operator copy", () => {
     expect(describeAthenaFailure("some_internal_code").headline).toBe(
       "Athena couldn't finish this question.",
     );
-    expect(describeAthenaFailure("provider_failure").retryable).toBe(true);
   });
 
   it("describes only server-authored milestones", () => {

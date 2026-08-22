@@ -212,6 +212,41 @@ describe("thread history projection (scenario 17)", () => {
     ).toEqual({ kind: "unauthorized", reason: "membership_revoked" });
   });
 
+  it("omits a turn whose grant names no delegated operator instead of showing it to every member of the store", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const owner = await seedDelegatedOperator(ctx, "no-delegation", { role: "full_admin" });
+      const turn = await seedTurn(ctx, owner, { key: "t1", question: "Which shifts are open?", createdAt: TEST_NOW_BASE });
+      // A colleague in the same organization and store: authority passes, so only
+      // the per-turn owner check stands between them and this thread.
+      const colleagueId = await ctx.db.insert("athenaUser", { email: "no-delegation-colleague@test" });
+      await ctx.db.insert("organizationMember", { organizationId: owner.organizationId, userId: colleagueId, role: "full_admin", operationalRoles: [] });
+      const run = await ctx.db.get("intelligenceRun", turn.runId);
+      await ctx.db.patch("agentRunGrant", run!.runGrantId!, { delegation: undefined });
+      return { owner, colleagueId };
+    });
+    const input = (viewer: { kind: "normal_user"; athenaUserId: Id<"athenaUser"> }) => ({
+      storeId: seeded.owner.storeId,
+      organizationId: seeded.owner.organizationId,
+      profileId: TEST_PROFILE_ID,
+      threadKey: THREAD,
+      viewer,
+      now: TEST_NOW_BASE + 50,
+    });
+
+    const colleague = await t.run((ctx) =>
+      projectThreadHistoryWithCtx(ctx, TEST_GRANT_CONFIG, input({ kind: "normal_user", athenaUserId: seeded.colleagueId })),
+    );
+    expect(colleague.kind).toBe("projected");
+    if (colleague.kind !== "projected") return;
+    expect(colleague.entries).toEqual([]);
+    expect(JSON.stringify(colleague)).not.toContain("Which shifts are open?");
+
+    // An ownerless grant matches no viewer at all, including the operator who opened the turn.
+    const owner = await t.run((ctx) => projectThreadHistoryWithCtx(ctx, TEST_GRANT_CONFIG, input(viewerOf(seeded.owner))));
+    expect(owner.kind === "projected" && owner.entries).toEqual([]);
+  });
+
   it("reports expired prompts, lifecycle-deleted grants, and suppressed releases truthfully and keeps them out of model history", async () => {
     const t = convexTest(schema, modules);
     const seeded = await t.run(async (ctx) => {

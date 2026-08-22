@@ -29,12 +29,18 @@ import type { AgentReadPortHandler, AgentReadPortHandlerOutput } from "../../age
 import type { AgentSourceCompleteness } from "../../../shared/agentHarness/results";
 import { known, unknown } from "../../../shared/agentHarness/results";
 import { listInventorySnapshotForProductSkusWithCtx } from "../adjustments";
-import { listReplenishmentRecommendationsWithCtx } from "../replenishment";
+import { listBoundedReplenishmentRecommendationsWithCtx } from "../replenishment";
 import { POSITIONS_PORT_KEY, REPLENISHMENT_PORT_KEY } from "./inventory";
 
 const SKU_REF_KIND = "product_sku";
 const RECOMMENDATION_REF_KIND = "replenishment_recommendation";
 const LOW_STOCK_THRESHOLD = 5;
+/**
+ * The recommendation derivation is a global sort over the store's catalogue, so
+ * the read is bounded at the source to keep one call within the page cost the
+ * manifest declares. Hitting the ceiling is disclosed, never silently dropped.
+ */
+const REPLENISHMENT_SKU_CEILING = 200;
 
 type PositionRow = Awaited<ReturnType<typeof listInventorySnapshotForProductSkusWithCtx>>[number];
 
@@ -185,7 +191,11 @@ export const listReplenishmentHandler: AgentReadPortHandler = async (ctx, input)
   }
   const store = await ctx.db.get("store", storeId);
   const currency = store?.currency ?? "GHS";
-  const recommendations = await listReplenishmentRecommendationsWithCtx(ctx, { storeId });
+  const derived = await listBoundedReplenishmentRecommendationsWithCtx(ctx, {
+    maxSkus: REPLENISHMENT_SKU_CEILING,
+    storeId,
+  });
+  const recommendations = derived.recommendations;
   const requested = input.args.continuityStatus;
   const matching = recommendations.filter(
     (recommendation) => requested === undefined || recommendation.status === requested,
@@ -228,8 +238,8 @@ export const listReplenishmentHandler: AgentReadPortHandler = async (ctx, input)
     sources: [
       {
         sourceKey: "recommendations",
-        status: page.hasMore ? "partial" : "complete",
-        reason: page.hasMore ? "more_pages_available" : undefined,
+        status: derived.skuCeilingReached ? "truncated" : page.hasMore ? "partial" : "complete",
+        reason: derived.skuCeilingReached ? "sku_ceiling_reached" : page.hasMore ? "more_pages_available" : undefined,
         capturedAt: input.now,
       },
       { sourceKey: "inputs", status: "complete", capturedAt: input.now },

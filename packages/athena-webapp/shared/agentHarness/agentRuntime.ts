@@ -290,10 +290,8 @@ type MutableEntry = {
 
 export type AgentToolDispatchLedger = {
   readonly beginTurn: (turnRef: RuntimeTurnRef) => void;
-  readonly isTurnTerminal: (turnRef: RuntimeTurnRef) => boolean;
   /** Cancels every in-flight call of the turn and refuses further dispatch. */
   readonly terminalizeTurn: (turnRef: RuntimeTurnRef, reason: string) => readonly string[];
-  readonly cancelCall: (callId: string, reason: string) => boolean;
   readonly dispatch: AgentToolDispatcher;
   readonly inFlight: (turnRef: RuntimeTurnRef) => readonly AgentToolLedgerEntry[];
   readonly entries: () => readonly AgentToolLedgerEntry[];
@@ -479,7 +477,6 @@ export function createAgentToolDispatchLedger(
     beginTurn: (turnRef) => {
       if (!turns.has(turnRef)) turns.set(turnRef, { terminal: false });
     },
-    isTurnTerminal: (turnRef) => turns.get(turnRef)?.terminal === true,
     terminalizeTurn: (turnRef, reason) => {
       const turn = turns.get(turnRef) ?? { terminal: false };
       turns.set(turnRef, { ...turn, terminal: true });
@@ -491,14 +488,6 @@ export function createAgentToolDispatchLedger(
         canceled.push(entry.callId);
       }
       return canceled;
-    },
-    cancelCall: (callId, reason) => {
-      const owner = callOwners.get(callId);
-      const entry = owner ? byKey.get(owner.idempotencyKey) : undefined;
-      if (!entry || entry.status !== "in_flight") return false;
-      entry.abort?.abort();
-      settle(entry, { kind: "canceled", reason });
-      return true;
     },
     dispatch,
     inFlight: (turnRef) =>

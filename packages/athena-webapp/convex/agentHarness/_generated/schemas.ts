@@ -2544,7 +2544,7 @@ export const AGENT_GENERATED_CAPABILITY_SCHEMAS: AgentCapabilitySchemaIndex = {
             },
             "region": {
               "kind": "string",
-              "meaning": "Region label to narrow by.",
+              "meaning": "Narrow to stores whose governing IANA timezone identifier matches (e.g. \"Africa/Accra\").",
               "required": false
             }
           },
@@ -2571,7 +2571,7 @@ export const AGENT_GENERATED_CAPABILITY_SCHEMAS: AgentCapabilitySchemaIndex = {
           },
           "region": {
             "kind": "string",
-            "meaning": "Region label."
+            "meaning": "The store's governing IANA timezone identifier."
           },
           "storeRef": {
             "kind": "opaqueRef",
@@ -2752,4 +2752,4 @@ export const AGENT_GENERATED_CAPABILITY_SCHEMAS: AgentCapabilitySchemaIndex = {
 
 
 /** Identity of the model-visible schema set; changes whenever a declaration changes. */
-export const AGENT_GENERATED_SCHEMAS_DIGEST = "fnv1a64:558670372db5e208";
+export const AGENT_GENERATED_SCHEMAS_DIGEST = "fnv1a64:49a4a969924e44b4";

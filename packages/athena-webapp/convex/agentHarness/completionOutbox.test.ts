@@ -17,9 +17,10 @@ import schema from "../schema";
 import { looksLikeRawDocumentId } from "../../shared/agentHarness/values";
 import { TEST_ADMISSION, TEST_CLOCK, TEST_NOW_BASE } from "./delegatedAdmission.testPorts";
 import { TEST_EXECUTOR_SEAMS, beginExecutingAttempt, bridgeCall, seedDelegatedRun } from "./executor.testSeams";
-import { AGENT_OUTBOX_BACKOFF_MS, createCompletionOutbox } from "./completionOutbox";
+import { AGENT_OUTBOX_BACKOFF_MS, AGENT_OUTBOX_MAX_ATTEMPTS, createCompletionOutbox } from "./completionOutbox";
 import { buildAnswerArtifactPayload } from "./historyProjection";
 import { cancelAgentRunWithCtx, failAgentRunWithCtx, listCapabilityCallsForRun } from "./lifecycle";
+import { resumeTurnBindingWithCtx } from "./turnBindings";
 import { registerAgentRuntimeCleanupHook, resetAgentRuntimeCleanupHooksForTests, type AgentRuntimeCleanupDescriptor } from "./retention";
 
 const modules = Object.fromEntries(
@@ -128,6 +129,29 @@ describe("prepare → one-transaction commit → idempotent projection (scenario
     expect(await t.run((ctx) => outbox.listOutboxDueWithCtx(ctx, { now: TEST_NOW_BASE + 41 + AGENT_OUTBOX_BACKOFF_MS[0], limit: 10 }))).toEqual([bindingId]);
     expect(await t.run((ctx) => ctx.db.get("agentTurnBinding", bindingId))).toMatchObject({ step: "athena_committed", outboxAttempts: 1, outboxLastError: "thread_mismatch" });
     expect(await t.run((ctx) => ctx.db.get("intelligenceRun", seeded.run.runId))).toMatchObject({ status: "completed" });
+  });
+
+  it("stops retrying a projection that cannot succeed and resumes the committed turn as terminal", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await seedReleasedRun(t, "outbox-cap");
+    const bindingId = seeded.run.bindingId!;
+    await t.run((ctx) => outbox.prepareCompletionWithCtx(ctx, { bindingId, runId: seeded.run.runId, preparedCompletionRef: "completion:c", now: TEST_NOW_BASE + 30 }));
+    await t.run((ctx) => TEST_EXECUTOR_SEAMS.completeRunWithCtx(ctx, { runId: seeded.run.runId, idempotencyKey: "completion:c", ...completionRequest(seeded.finished, seeded.citation), now: TEST_NOW_BASE + 40 }));
+
+    // A host that died before terminalizing its runtime turn leaves that turn
+    // pending forever, so every later attempt is rejected the same way.
+    for (let attempt = 1; attempt <= AGENT_OUTBOX_MAX_ATTEMPTS; attempt += 1) {
+      expect(await t.run((ctx) => outbox.recordProjectionFailureWithCtx(ctx, { bindingId, error: "turn_not_terminal", now: TEST_NOW_BASE + 40 + attempt }))).toMatchObject({ outcome: "scheduled", attempts: attempt });
+    }
+    expect(await t.run((ctx) => outbox.recordProjectionFailureWithCtx(ctx, { bindingId, error: "turn_not_terminal", now: TEST_NOW_BASE + 100 }))).toEqual({ outcome: "exhausted", attempts: AGENT_OUTBOX_MAX_ATTEMPTS + 1 });
+    expect(await t.run((ctx) => ctx.db.get("agentTurnBinding", bindingId))).toMatchObject({ step: "athena_committed", outboxLastError: "outbox_exhausted: turn_not_terminal" });
+    expect((await t.run((ctx) => ctx.db.get("agentTurnBinding", bindingId)))?.outboxNextAttemptAt).toBeUndefined();
+    // Never due again, however far the clock runs.
+    expect(await t.run((ctx) => outbox.listOutboxDueWithCtx(ctx, { now: TEST_NOW_BASE + 30 * 24 * 60 * 60_000, limit: 10 }))).toEqual([]);
+    // The committed answer stays released; only the runtime mirror is given up.
+    expect(await t.run((ctx) => resumeTurnBindingWithCtx(ctx, { bindingId, now: TEST_NOW_BASE + 200 }))).toMatchObject({ action: "terminal", step: "athena_committed", runStatus: "completed" });
+    expect(await t.run((ctx) => ctx.db.get("intelligenceRun", seeded.run.runId))).toMatchObject({ status: "completed" });
+    expect(await t.run((ctx) => ctx.db.query("intelligenceArtifact").withIndex("by_runId", (q) => q.eq("runId", seeded.run.runId)).take(3))).toHaveLength(1);
   });
 });
 

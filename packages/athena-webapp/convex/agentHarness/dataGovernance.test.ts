@@ -278,6 +278,13 @@ describe("scope removal", () => {
   it("removes the organization's agent content", async () => {
     const t = convexTest(schema, modules);
     const { fixture, started } = await seedCompletedRun(t, "org-removal");
+    const seededCalls = await t.run(async (ctx) =>
+      ctx.db
+        .query("agentCapabilityCall")
+        .withIndex("by_runId_sequence", (q) => q.eq("runId", started.runId))
+        .take(50),
+    );
+    expect(seededCalls.length).toBeGreaterThan(0);
     let removed = 0;
     for (let pass = 0; pass < 20; pass += 1) {
       const removal = await t.run((ctx) =>
@@ -306,6 +313,15 @@ describe("scope removal", () => {
         .take(5),
     );
     expect(prompts).toEqual([]);
+    // Capability-call rows are content: organization removal deletes them
+    // directly, exactly as store removal does.
+    const calls = await t.run(async (ctx) =>
+      ctx.db
+        .query("agentCapabilityCall")
+        .withIndex("by_runId_sequence", (q) => q.eq("runId", started.runId))
+        .take(50),
+    );
+    expect(calls).toEqual([]);
   });
 });
 

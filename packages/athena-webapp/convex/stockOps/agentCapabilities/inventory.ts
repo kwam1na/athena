@@ -137,7 +137,7 @@ export const POSITIONS_MANIFEST = defineCapabilityManifest({
   binding: {
     readIntents: ["inventory.stock.view"],
     portKey: POSITIONS_PORT_KEY,
-    implementationVersion: "1",
+    implementationVersion: "2",
   },
 });
 
@@ -296,7 +296,7 @@ export const REPLENISHMENT_MANIFEST = defineCapabilityManifest({
   binding: {
     readIntents: ["procurement.view", "inventory.stock.view"],
     portKey: REPLENISHMENT_PORT_KEY,
-    implementationVersion: "1",
+    implementationVersion: "2",
   },
 });
 
@@ -312,7 +312,7 @@ export const INVENTORY_READ_PORTS: AgentReadPortIndex = {
       verbs: ["list", "get"],
       scopeKind: "store",
       readIntents: POSITIONS_MANIFEST.binding.readIntents,
-      implementationVersion: "1",
+      implementationVersion: "2",
       declaredCost: AGENT_PAGE_COST,
       handler: { kind: "internal_query", functionPath: "stockOps/agentCapabilities/inventoryPorts:readPositions" },
       projections: ["costOverlay"],
@@ -325,7 +325,7 @@ export const INVENTORY_READ_PORTS: AgentReadPortIndex = {
       verbs: ["list"],
       scopeKind: "store",
       readIntents: REPLENISHMENT_MANIFEST.binding.readIntents,
-      implementationVersion: "1",
+      implementationVersion: "2",
       declaredCost: AGENT_PAGE_COST,
       handler: { kind: "internal_query", functionPath: "stockOps/agentCapabilities/inventoryPorts:listReplenishment" },
       projections: ["supplierCommercial"],

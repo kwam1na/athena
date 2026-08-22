@@ -34,9 +34,9 @@ import { AGENT_GENERATED_CAPABILITY_SCHEMAS } from "./_generated/schemas";
 // ---------------------------------------------------------------------------
 
 /**
- * The compact, serializable grant a run carries. `registry.toRuntimeGrant`
- * mints it from the privileged projection; it names capability ids and granted
- * projections only.
+ * The compact, serializable grant a run carries. In production it is minted by
+ * `grants.ts` from the run's effective grant, and it names capability ids and
+ * granted projections only: no manifests, no bindings, no port handlers.
  */
 export type AgentRuntimeGrant = {
   readonly profileId: string;

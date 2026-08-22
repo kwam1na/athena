@@ -101,7 +101,3 @@ export const SHA256_DIGEST_PREFIX = "sha256:" as const;
 export function computeSha256Digest(value: unknown): string {
   return `${SHA256_DIGEST_PREFIX}${sha256Hex(JSON.stringify(canonicalize(value)) ?? "")}`;
 }
-
-export function isSha256Digest(value: unknown): value is `sha256:${string}` {
-  return typeof value === "string" && /^sha256:[0-9a-f]{64}$/.test(value);
-}

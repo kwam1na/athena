@@ -232,7 +232,7 @@ export const agentTurnBindingSchema = v.object({
   operatorReleaseCommittedAt: v.optional(v.number()),
   operatorViewedAt: v.optional(v.number()),
   operatorViewedByActorRef: v.optional(v.string()),
-  // Turn orchestration additions (V26-1265); all optional so U1 rows stay valid.
+  // Turn orchestration additions (V26-1265); all optional so bindings recorded before them stay valid.
   /** Athena-owned thread identity (profile + store + operator + client key); many turns share one. */
   threadKey: v.optional(v.string()),
   /** Opaque runtime turn reference recorded once the adapter started the turn. */
@@ -246,6 +246,14 @@ export const agentTurnBindingSchema = v.object({
   outboxAttempts: v.optional(v.number()),
   outboxNextAttemptAt: v.optional(v.number()),
   outboxLastError: v.optional(v.string()),
+  /**
+   * Set once the turn's provider-spend reservation was released back to the
+   * spend windows. The reservation is a fixed amount per turn, so this marker —
+   * not the provider-invocation row — is what makes settlement happen exactly
+   * once for every terminal outcome, including turns that never reached a
+   * provider.
+   */
+  spendSettledAt: v.optional(v.number()),
   abandonedAt: v.optional(v.number()),
   abandonReason: v.optional(v.string()),
   runtimeCleanupStatus: agentRuntimeCleanupStatusValidator,
@@ -307,7 +315,7 @@ export const agentProgramAttemptSchema = v.object({
   terminalAt: v.optional(v.number()),
   createdAt: v.number(),
   updatedAt: v.number(),
-  // Executor additions (V26-1264); all optional so U1 rows stay valid.
+  // Executor additions; all optional so rows written before the executor existed stay valid.
   /** Hash of the exact validated/stripped source the sandbox executed. */
   validatedSourceHash: v.optional(v.string()),
   /** Maximum egress class of every capability input the attempt read. */

@@ -366,6 +366,29 @@ describe("layout", () => {
     );
   });
 
+  it("seeds the layout from the profile's mount mode when none is given", async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderSurface();
+    await user.click(screen.getByTestId("athena-agent-entry"));
+    // storePresentation declares mountMode "docked_panel".
+    expect(screen.getByTestId("athena-agent-panel")).toHaveAttribute(
+      "data-layout",
+      "docked",
+    );
+    unmount();
+
+    // organizationPresentation declares mountMode "full_screen_sheet".
+    renderSurface({
+      context: { organizationRef: "org-1", organizationName: "Wigclub" },
+      presentation: organizationPresentation,
+    });
+    await user.click(screen.getByTestId("athena-agent-entry"));
+    expect(await screen.findByTestId("athena-agent-panel")).toHaveAttribute(
+      "data-layout",
+      "fullscreen",
+    );
+  });
+
   it("keeps the prompt draft when the layout changes", async () => {
     const user = userEvent.setup();
     const { rerender } = renderSurface({ layout: "docked" });

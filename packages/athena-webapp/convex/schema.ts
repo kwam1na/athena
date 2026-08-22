@@ -628,7 +628,7 @@ const schema = defineSchema({
       "capability",
       "startedAt",
     ]),
-  // --- Agent harness children of the intelligence aggregate (U1) ---
+  // --- Agent harness children of the intelligence aggregate ---
   agentRunGrant: defineTable(agentRunGrantSchema)
     .index("by_runId", ["runId"])
     .index("by_storeId_lifecycle", ["storeId", "lifecycle"])
@@ -675,6 +675,7 @@ const schema = defineSchema({
       "capabilityId",
       "createdAt",
     ])
+    .index("by_organizationId_createdAt", ["organizationId", "createdAt"])
     .index("by_resultHash", ["resultHash"]),
   agentBudgetLedger: defineTable(agentBudgetLedgerSchema).index("by_runId", [
     "runId",

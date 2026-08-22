@@ -251,7 +251,6 @@ export function createDelegatedAdmission(config: DelegatedAdmissionConfig) {
     // 1. Request shape (pure). Unknown capability reads as unauthorized so
     //    discovery cannot be probed through error codes.
     let requestRefusal: { stage: string; reason: string; result: AgentCapabilityRefusal } | undefined;
-    let pageIndex = 0;
     let cursorOk = true;
     if (!manifest) {
       requestRefusal = {
@@ -290,8 +289,6 @@ export function createDelegatedAdmission(config: DelegatedAdmissionConfig) {
         } else if (resolved.pageIndex >= maxPages) {
           cursorOk = false;
           requestRefusal = { stage: "request", reason: "page_budget_exhausted", result: deniedResult("invalid_arguments", "This run's page budget for the capability is spent.") };
-        } else {
-          pageIndex = resolved.pageIndex;
         }
       }
     }
@@ -388,7 +385,6 @@ export function createDelegatedAdmission(config: DelegatedAdmissionConfig) {
       authorizationEpoch: verdict.authorizationEpoch,
       admittedAt: input.now,
     };
-    void pageIndex;
     // The call is about to be dispatched: record that truthfully so a crash
     // between admission and release is recoverable as a stale executing call.
     const executing = await markCapabilityCallExecutingWithCtx(ctx, { callId: admitted.callId, now: input.now });

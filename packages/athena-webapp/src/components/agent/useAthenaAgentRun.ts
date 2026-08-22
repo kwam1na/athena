@@ -111,7 +111,7 @@ export type AthenaAgentSource = {
 };
 
 export type AthenaAgentBlockedSubmission = {
-  readonly reason: "turn_active" | "context_change" | "unavailable" | "empty";
+  readonly reason: "turn_active" | "context_change" | "unavailable";
   readonly headline: string;
 };
 

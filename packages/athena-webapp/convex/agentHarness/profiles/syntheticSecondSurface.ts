@@ -34,7 +34,11 @@ export const FLEET_STORES_MANIFEST = defineCapabilityManifest({
     list: {
       purpose: "Page through the organization's stores.",
       filters: {
-        region: { kind: "string", required: false, meaning: "Region label to narrow by." },
+        region: {
+          kind: "string",
+          required: false,
+          meaning: "Narrow to stores whose governing IANA timezone identifier matches (e.g. \"Africa/Accra\").",
+        },
         health: {
           kind: "enum",
           required: false,
@@ -49,7 +53,7 @@ export const FLEET_STORES_MANIFEST = defineCapabilityManifest({
     fields: {
       storeRef: { kind: "opaqueRef", refKind: "resource", meaning: "Opaque store ref." },
       name: { kind: "string", meaning: "Store display name." },
-      region: { kind: "string", meaning: "Region label." },
+      region: { kind: "string", meaning: "The store's governing IANA timezone identifier." },
       health: { kind: "enum", values: ["healthy", "degraded", "offline"], meaning: "Current health band." },
     },
   },

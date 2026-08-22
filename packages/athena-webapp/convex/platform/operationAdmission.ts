@@ -170,18 +170,19 @@ export type { OperationScopeConstraints };
  * unreachable; a binding whose function name is not the registered path fails
  * here, at composition time.
  *
- * U8 registers a package's ports by appending `{ portKey, handler: internal.<module>.<export> }`
+ * A capability package registers its ports by appending `{ portKey, handler: internal.<module>.<export> }`
  * entries below after `bun run agent-sdk:generate`; the port module itself is
  * written with `defineAgentReadPortQuery` exported from this file.
  */
 export const agentReadPorts = createAgentReadPortRegistry({
   registry: AGENT_GENERATED_REGISTRY,
   bindings: [
-    // Synthetic second surface (U2/U3). Placeholder handlers until U10.
+    // Synthetic second surface: the non-isomorphic profile that proves the
+    // harness is not shaped around Daily Operations.
     { portKey: "fleet.stores", handler: internal.agentHarness.profiles.syntheticSecondSurfacePorts.listStores },
     { portKey: "fleet.storeHealth", handler: internal.agentHarness.profiles.syntheticSecondSurfacePorts.getStoreHealth },
     { portKey: "directory.teams", handler: internal.agentHarness.profiles.syntheticSecondSurfacePorts.listTeams },
-    // Daily Operations (U8). Each port module is written with
+    // Daily Operations profile. Each port module is written with
     // `defineAgentReadPortQuery` below and colocated with its domain read code.
     { portKey: "operations.storeDay", handler: internal.operations.agentCapabilities.storeDayPorts.getStoreDay },
     { portKey: "operations.attention", handler: internal.operations.agentCapabilities.workPorts.listAttention },
@@ -236,25 +237,25 @@ export const agentDelegatedAdmission = createDelegatedAdmission({
     normal_user: createNormalUserDelegatedAuthorityPort(),
     shared_demo: createSharedDemoDelegatedAuthorityPort(),
   },
-  // The live shrink-only overlay (U7): the published baseline narrowed by the
+  // The live shrink-only overlay: the published baseline narrowed by the
   // durable profile/capability switches, every profile DEFAULT OFF. Read on
   // every delegated check, so a flipped switch denies immediately.
   resolveEnablement: (ctx) => resolveDurableEnablementWithCtx(ctx, AGENT_GENERATED_REGISTRY.enablement),
 });
 
-/** Run start (U7): pin the grant. `prepareAgentRunGrantWithCtx` feeds `recordTurnIntentWithCtx`. */
+/** Run start: pin the grant. `prepareAgentRunGrantWithCtx` feeds `recordTurnIntentWithCtx`. */
 export const prepareAgentRunGrantWithCtx = agentDelegatedAdmission.prepareRunGrantWithCtx;
 export const materializeAgentRunGrantWithCtx = agentDelegatedAdmission.materializeRunGrantWithCtx;
-/** Any time (U6/U7/U9): re-derive the effective grant for a purpose. */
+/** Any time during dispatch, epoch fencing, or completion: re-derive the effective grant for a purpose. */
 export const reauthorizeAgentGrantWithCtx = agentDelegatedAdmission.reauthorizeGrantWithCtx;
 export const describeAgentGrantForModel = agentDelegatedAdmission.describeGrantForModel;
-/** Bridge (U6): before dispatch, then before the result becomes program-visible. */
+/** Capability bridge: before dispatch, then before the result becomes program-visible. */
 export const admitAgentCapabilityCallWithCtx = agentDelegatedAdmission.admitCapabilityCallWithCtx;
 export const releaseAgentCapabilityResultWithCtx = agentDelegatedAdmission.releaseCapabilityResultWithCtx;
-/** Citations (U6) and completion (U6/U7): in the same transaction as the mint/commit. */
+/** Citations and completion: in the same transaction as the mint/commit. */
 export const reauthorizeAgentCitationsWithCtx = agentDelegatedAdmission.reauthorizeCitationsWithCtx;
 export const reauthorizeAgentCompletionWithCtx = agentDelegatedAdmission.reauthorizeCompletionWithCtx;
-/** Port authors (U8/U10): the only way to define a dispatchable read port. */
+/** Port authors: the only way to define a dispatchable read port. */
 export const defineAgentReadPortQuery = agentDelegatedAdmission.defineAgentReadPortQuery;
 
 /*

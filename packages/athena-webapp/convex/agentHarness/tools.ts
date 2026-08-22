@@ -429,7 +429,11 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
       const prepared = (await host.ctx.runMutation(host.refs.prepareCompletion, { bindingId: host.bindingId, runId: host.runId, preparedCompletionRef: preparedRef, now: host.now() })) as AgentPrepareCompletionOutcome;
       if (prepared.outcome === "rejected") return denied(prepared.code, prepared.message);
       const cited = new Set(args.citedAttemptRefs);
-      const egressClass = attempts.filter((attempt) => cited.size === 0 || cited.has(attempt.attemptRef)).reduce<AgentEgressClass>((max, attempt) => maxEgressClass(max, attempt.egressClass), "operational");
+      // The narrative may quote anything the provider was shown, so the answer's
+      // class is the maximum over EVERY attempt whose result was released to the
+      // provider — never the model-chosen cited subset, which would let a
+      // narrative carrying sensitive figures ship labelled `operational`.
+      const egressClass = attempts.reduce<AgentEgressClass>((max, attempt) => maxEgressClass(max, attempt.egressClass), "operational");
       const namespaceOf = new Map<string, string>();
       for (const attempt of attempts) for (const citation of attempt.citations) namespaceOf.set(citation.citation, citation.namespace);
       const limitedEvidence = args.limitedEvidence === true || args.outcome === "no_usable_sources" || attempts.some((attempt) => cited.has(attempt.attemptRef) && attempt.completeness === "partial");

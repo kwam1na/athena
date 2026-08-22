@@ -111,7 +111,6 @@ describe("program runtime ceilings (typed config the executor consumes)", () => 
       maxResultBytes: 256 * 1024,
       maxHeapBytes: 64 * 1024 * 1024,
     });
-    expect(AGENT_PROGRAM_RUNTIME_CEILINGS.maxProviderTokens).toBeGreaterThan(0);
     expect(AGENT_PROGRAM_RUNTIME_CEILINGS.maxProviderCostUnits).toBeGreaterThan(0);
     expect(Object.isFrozen(AGENT_PROGRAM_RUNTIME_CEILINGS)).toBe(true);
   });

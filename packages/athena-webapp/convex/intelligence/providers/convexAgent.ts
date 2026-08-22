@@ -2,11 +2,11 @@
  * Convex Agent model path as an Athena intelligence provider (V26-1265).
  *
  * The agent harness does not generate structured text through the TanStack
- * adapter; its model turns run behind the Athena runtime adapter (U5). This
+ * adapter; its model turns run behind the Athena runtime adapter. This
  * module is the provider-registry face of that path: a descriptor with its
  * own capability id, the provider key every harness run records on
  * `intelligenceRun.providerKey` / `intelligenceProviderInvocation`, and the
- * normalizer that turns the kernel's settled usage (U2 reconciler output)
+ * normalizer that turns the kernel's settled usage (the usage reconciler's output)
  * into the same `AthenaProviderUsage` / evidence summary shape the TanStack
  * path records. TanStack AI stays a separate provider; neither imports the
  * other, and no runtime-native usage object reaches this module.
@@ -38,7 +38,7 @@ export function createConvexAgentProviderDescriptor(options: ConvexAgentProvider
   };
 }
 
-/** Token totals the kernel settled (U2 reconciler); never a provider-native object. */
+/** Token totals the kernel settled through the usage reconciler; never a provider-native object. */
 export type ConvexAgentSettledUsage = {
   readonly tokens: { readonly input: number; readonly output: number; readonly cachedInput: number; readonly reasoning: number };
   readonly streams: number;

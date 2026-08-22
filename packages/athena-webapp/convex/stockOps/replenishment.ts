@@ -144,12 +144,27 @@ function buildGuidance(args: {
   }
 }
 
-async function listStoreProductSkus(ctx: QueryCtx, storeId: Id<"store">) {
+/**
+ * `maxSkus` bounds the catalogue scan for callers that must price their read
+ * ahead of time; the caller learns from the returned length whether the ceiling
+ * was reached, so nothing re-scans to find out.
+ */
+async function listStoreProductSkus(
+  ctx: QueryCtx,
+  storeId: Id<"store">,
+  maxSkus?: number,
+) {
+  const query = ctx.db
+    .query("productSku")
+    .withIndex("by_storeId", (q) => q.eq("storeId", storeId));
+
+  if (maxSkus !== undefined) {
+    return query.take(maxSkus);
+  }
+
   const productSkus = [];
 
-  for await (const productSku of ctx.db
-    .query("productSku")
-    .withIndex("by_storeId", (q) => q.eq("storeId", storeId))) {
+  for await (const productSku of query) {
     productSkus.push(productSku);
   }
 
@@ -475,19 +490,40 @@ function deriveContinuityStatus(args: {
 export async function listReplenishmentRecommendationsWithCtx(
   ctx: QueryCtx,
   args: {
+    maxSkus?: number;
+    storeId: Id<"store">;
+  },
+) {
+  const bounded = await listBoundedReplenishmentRecommendationsWithCtx(
+    ctx,
+    args,
+  );
+
+  return bounded.recommendations;
+}
+
+/**
+ * The derivation itself. `maxSkus` caps the catalogue scan and
+ * `skuCeilingReached` reports whether the cap bit, so a bounded caller can
+ * state its completeness honestly without a second pass over the catalogue.
+ */
+export async function listBoundedReplenishmentRecommendationsWithCtx(
+  ctx: QueryCtx,
+  args: {
+    maxSkus?: number;
     storeId: Id<"store">;
   },
 ) {
   const [activeVendors, productSkus, skuContinuityContextById] =
     await Promise.all([
       listActiveStoreVendors(ctx, args.storeId),
-      listStoreProductSkus(ctx, args.storeId),
+      listStoreProductSkus(ctx, args.storeId, args.maxSkus),
       buildSkuContinuityContextById(ctx, args.storeId),
     ]);
   const hasActiveVendor = activeVendors.length > 0;
   const now = Date.now();
 
-  return productSkus
+  const recommendations = productSkus
     .flatMap((productSku) => {
       const lowInventory = productSku.inventoryCount <= LOW_STOCK_THRESHOLD;
       const lowAvailability =
@@ -616,6 +652,12 @@ export async function listReplenishmentRecommendationsWithCtx(
 
       return (left.sku ?? "").localeCompare(right.sku ?? "");
     });
+
+  return {
+    recommendations,
+    skuCeilingReached:
+      args.maxSkus !== undefined && productSkus.length >= args.maxSkus,
+  };
 }
 
 export const listReplenishmentRecommendations = query({

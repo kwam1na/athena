@@ -12,6 +12,7 @@ import {
   AGENT_READ_VERBS,
   AGENT_RESERVED_COMMAND_VERBS,
   AgentVersionedExtensionError,
+  isOpaqueRef,
   isRawIdentifierFieldName,
   looksLikeRawDocumentId,
   maxEgressClass,
@@ -323,6 +324,22 @@ describe("canonical values", () => {
     expect(() => opaqueRef("source", "k17c5k2q0p3gxz7b3w4h5v6n7m8d9e0f")).toThrow(
       /raw document id/i,
     );
+  });
+
+  it("rejects a bare string where a minted opaque ref is required", () => {
+    // The phantom brand is required, so only the minting path (or a narrowing
+    // through isOpaqueRef) produces a value the checker accepts.
+    expectTypeOf<string>().not.toMatchTypeOf<OpaqueRef<"source">>();
+    expectTypeOf<OpaqueRef<"source">>().toMatchTypeOf<string>();
+    expectTypeOf(opaqueRef("source", "store_day:2026-08-21")).toEqualTypeOf<OpaqueRef<"source">>();
+    expectTypeOf<OpaqueRef<"resource">>().not.toMatchTypeOf<OpaqueRef<"source">>();
+
+    const serialized: string = opaqueRef("source", "store_day:2026-08-21");
+    expect(isOpaqueRef(serialized, "source")).toBe(true);
+    if (isOpaqueRef(serialized, "source")) {
+      expectTypeOf(serialized).toMatchTypeOf<OpaqueRef<"source">>();
+    }
+    expect(isOpaqueRef("store_day:2026-08-21", "source")).toBe(false);
   });
 
   it("recognises raw document ids and id-shaped field names", () => {

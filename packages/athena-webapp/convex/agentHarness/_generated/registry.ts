@@ -1007,7 +1007,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     },
     "cap_dailyops_inventory_positions": {
       "binding": {
-        "implementationVersion": "1",
+        "implementationVersion": "2",
         "portKey": "inventory.positions",
         "readIntents": [
           "inventory.stock.view"
@@ -1486,7 +1486,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     },
     "cap_dailyops_replenishment": {
       "binding": {
-        "implementationVersion": "1",
+        "implementationVersion": "2",
         "portKey": "inventory.replenishment",
         "readIntents": [
           "procurement.view",
@@ -2662,7 +2662,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
             },
             "region": {
               "kind": "string",
-              "meaning": "Region label to narrow by.",
+              "meaning": "Narrow to stores whose governing IANA timezone identifier matches (e.g. \"Africa/Accra\").",
               "required": false
             }
           },
@@ -2689,7 +2689,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
           },
           "region": {
             "kind": "string",
-            "meaning": "Region label."
+            "meaning": "The store's governing IANA timezone identifier."
           },
           "storeRef": {
             "kind": "opaqueRef",
@@ -2703,7 +2703,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       }
     }
   },
-  "compatibilityDigest": "fnv1a64:fcd14c0bebbf402d",
+  "compatibilityDigest": "fnv1a64:d94678d3b0ecab65",
   "contractVersion": 1,
   "enablement": {
     "capabilities": {
@@ -2781,12 +2781,12 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       "sourceDigest": "sha256:34307738e9d37077b15e0c3f2e49b5473d3e9a117b7e496e780ae2eb83098919"
     },
     "inventory.positions": {
-      "implementationVersion": "1",
-      "sourceDigest": "sha256:8c0d7cdf5b1e051b4149b0bbc51643c105839152789ef54de869a3973717f824"
+      "implementationVersion": "2",
+      "sourceDigest": "sha256:0c31a96b3cccc1abc03acc491b798de28e07d15f434fd98ff1ea546d88d50da8"
     },
     "inventory.replenishment": {
-      "implementationVersion": "1",
-      "sourceDigest": "sha256:8c0d7cdf5b1e051b4149b0bbc51643c105839152789ef54de869a3973717f824"
+      "implementationVersion": "2",
+      "sourceDigest": "sha256:0c31a96b3cccc1abc03acc491b798de28e07d15f434fd98ff1ea546d88d50da8"
     },
     "operations.activity": {
       "implementationVersion": "1",
@@ -3276,7 +3276,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "functionPath": "stockOps/agentCapabilities/inventoryPorts:readPositions",
         "kind": "internal_query"
       },
-      "implementationVersion": "1",
+      "implementationVersion": "2",
       "portKey": "inventory.positions",
       "projections": [
         "costOverlay"
@@ -3308,7 +3308,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "functionPath": "stockOps/agentCapabilities/inventoryPorts:listReplenishment",
         "kind": "internal_query"
       },
-      "implementationVersion": "1",
+      "implementationVersion": "2",
       "portKey": "inventory.replenishment",
       "projections": [
         "supplierCommercial"
@@ -3545,7 +3545,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       ]
     }
   },
-  "registryDigest": "fnv1a64:c59c97a4d4c1da46",
+  "registryDigest": "fnv1a64:07f5e55b40dfcf3c",
   "sdkView": {
     "contractVersion": 1,
     "packages": {
@@ -3696,7 +3696,7 @@ export const AGENT_GENERATED_SOURCE_KEYS: readonly string[] = [
 ];
 
 /** What a run pins; the deployment epoch fence compares it with the durable epoch digest. */
-export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:fcd14c0bebbf402d";
+export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:d94678d3b0ecab65";
 
 /** Schema identity only; unchanged when a capability is enabled or disabled. */
-export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:c59c97a4d4c1da46";
+export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:07f5e55b40dfcf3c";

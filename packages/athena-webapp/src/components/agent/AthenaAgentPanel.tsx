@@ -175,6 +175,8 @@ export function AthenaAgentPanel({
     [run.sources],
   );
 
+  const answerQuality = run.answer ? describeQuality(run.answer) : null;
+
   useEffect(() => {
     if (!activeCitation) return;
     const source = run.sources[activeCitation];
@@ -417,12 +419,10 @@ export function AthenaAgentPanel({
                 <Badge
                   data-testid="athena-agent-quality"
                   variant={
-                    describeQuality(run.answer).tone === "warning"
-                      ? "outline"
-                      : "secondary"
+                    answerQuality?.tone === "warning" ? "outline" : "secondary"
                   }
                 >
-                  {describeQuality(run.answer).label}
+                  {answerQuality?.label}
                 </Badge>
               </div>
               {run.answer.title ? (
@@ -799,8 +799,15 @@ export function AthenaAgentSurface({
   const scrollTopRef = useRef(0);
   const entryRef = useRef<HTMLButtonElement>(null);
   const isMobile = useIsMobile();
+  // With no explicit layout the surface follows the profile's declared mount
+  // mode, except on mobile where a docked panel has nowhere to dock.
+  // `inline_section` renders as a docked panel: the host has no inline mount.
   const resolvedLayout: AthenaAgentLayout =
-    layout === "auto" ? (isMobile ? "fullscreen" : "docked") : layout;
+    layout !== "auto"
+      ? layout
+      : isMobile || presentation.mountMode === "full_screen_sheet"
+        ? "fullscreen"
+        : "docked";
 
   const handleKey = `${TURN_HANDLE_PREFIX}${composeAthenaThreadKey(presentation, context)}`;
   const [restored, setRestored] = useState(() => ({

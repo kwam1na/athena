@@ -568,15 +568,14 @@ export async function deleteAgentHarnessContentWithCtx(
   // Their lineage survives on the citation binding (result hash, source ref,
   // artifact), which is marked `deleted_by_lifecycle` just below, so an
   // investigation still gets an honest answer after the store is gone.
-  // Organization removal reaches these rows by cascading into each store.
-  if ("storeId" in scope) {
-    const calls = await ctx.db
-      .query("agentCapabilityCall")
-      .withIndex("by_storeId_capabilityId_createdAt", (q) => q.eq("storeId", scope.storeId))
-      .take(batch);
-    for (const call of calls) await ctx.db.delete("agentCapabilityCall", call._id);
-    countDeleted(calls.length);
-  }
+  // Organization removal deletes them directly: nothing cascades this function
+  // into the organization's stores.
+  const calls =
+    "storeId" in scope
+      ? await ctx.db.query("agentCapabilityCall").withIndex("by_storeId_capabilityId_createdAt", (q) => q.eq("storeId", scope.storeId)).take(batch)
+      : await ctx.db.query("agentCapabilityCall").withIndex("by_organizationId_createdAt", (q) => q.eq("organizationId", scope.organizationId)).take(batch);
+  for (const call of calls) await ctx.db.delete("agentCapabilityCall", call._id);
+  countDeleted(calls.length);
 
   const citations =
     "storeId" in scope

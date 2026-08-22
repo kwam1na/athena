@@ -205,8 +205,10 @@ export async function projectThreadHistoryWithCtx(
     if (!run || run.harnessKind !== "agent") continue;
     const grant = run.runGrantId ? await ctx.db.get("agentRunGrant", run.runGrantId) : null;
     if (!grant || grant.profileKey !== input.profileId) continue;
-    // Threads belong to the operator who opened them; a thread key is never shared across operators.
-    if (grant.delegation && grant.delegation.athenaUserId !== input.viewer.athenaUserId) continue;
+    // Threads belong to the operator who opened them; a thread key is never
+    // shared across operators. A grant with no delegation names no owner, so it
+    // matches no viewer and is omitted rather than shown to everyone.
+    if (!grant.delegation || grant.delegation.athenaUserId !== input.viewer.athenaUserId) continue;
 
     const base = { bindingId: binding._id, runId: run._id, createdAt: binding.createdAt, runStatus: run.status };
     if (grant.lifecycle !== "retained") {

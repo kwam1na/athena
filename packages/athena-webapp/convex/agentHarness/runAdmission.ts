@@ -18,6 +18,7 @@
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { AGENT_RUN_ACTIVE_STATUSES, isTerminalRunStatus } from "../../shared/agentHarness/execution";
+import { AGENT_PROGRAM_RUNTIME_CEILINGS } from "./programRuntime/types";
 
 type ReadCtx = QueryCtx | MutationCtx;
 
@@ -263,7 +264,17 @@ export async function reserveTurnSpendWithCtx(
   return { ok: true, windowKey, reservedCostUnits: input.costUnits };
 }
 
-/** Settle a reservation to the actual cost. Idempotent per (window, reservation): a second settle is a no-op. */
+/** Provider cost units reserved per turn before any provider work. */
+export function turnProviderCostReservation(): number {
+  return AGENT_PROGRAM_RUNTIME_CEILINGS.maxProviderCostUnits;
+}
+
+/**
+ * Release a fixed reservation and book the actual cost. The amount is not
+ * carried per reservation, so a second call for the same turn would decrement
+ * a DIFFERENT turn's reservation: callers must settle a turn exactly once
+ * (`settleTurnSpendOnceWithCtx` is that guard).
+ */
 export async function settleTurnSpendWithCtx(
   ctx: MutationCtx,
   input: { actorRef: string; storeId: Id<"store">; windowKey: string; reservedCostUnits: number; actualCostUnits: number; now: number },
@@ -277,6 +288,37 @@ export async function settleTurnSpendWithCtx(
       updatedAt: input.now,
     });
   }
+}
+
+/**
+ * Settle one turn's reservation exactly once, whatever ended it.
+ *
+ * Every admitted turn reserves `turnProviderCostReservation()` before any
+ * provider work, so every terminal outcome — completed, failed, canceled,
+ * refused before the model ran, swept after its host died — must release it or
+ * the operator's daily ceiling erodes. `spendSettledAt` is the once-only guard
+ * and is patched in the same mutation as the settle.
+ */
+export async function settleTurnSpendOnceWithCtx(
+  ctx: MutationCtx,
+  input: { bindingId: Id<"agentTurnBinding">; actualCostUnits: number; now: number },
+): Promise<{ settled: boolean }> {
+  const binding = await ctx.db.get("agentTurnBinding", input.bindingId);
+  if (!binding || binding.spendSettledAt !== undefined) return { settled: false };
+  const run = await ctx.db.get("intelligenceRun", binding.runId);
+  const grant = run?.runGrantId ? await ctx.db.get("agentRunGrant", run.runGrantId) : null;
+  if (!run || !grant) return { settled: false };
+  await settleTurnSpendWithCtx(ctx, {
+    actorRef: grant.initiatingActorRef,
+    storeId: grant.storeId,
+    // The reservation was taken against the window of the day the run started.
+    windowKey: spendWindowKey(run.createdAt),
+    reservedCostUnits: turnProviderCostReservation(),
+    actualCostUnits: input.actualCostUnits,
+    now: input.now,
+  });
+  await ctx.db.patch("agentTurnBinding", binding._id, { spendSettledAt: input.now, updatedAt: input.now });
+  return { settled: true };
 }
 
 // ---------------------------------------------------------------------------

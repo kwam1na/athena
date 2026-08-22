@@ -20,7 +20,7 @@
  */
 import { v } from "convex/values";
 
-import type { Doc, Id } from "../_generated/dataModel";
+import type { Id } from "../_generated/dataModel";
 import { internalMutation, internalQuery, type MutationCtx, type QueryCtx } from "../_generated/server";
 import type { AgentProjectedArtifact } from "../../shared/agentHarness/agentRuntime";
 import { sha256Hex } from "../../shared/agentHarness/digest";
@@ -29,13 +29,20 @@ import { egressClassRank } from "../../shared/agentHarness/values";
 import type { DelegatedAdmission } from "./delegatedAdmission";
 import { parseAnswerPayload, resolveViewerAuthorityWithCtx } from "./historyProjection";
 import { requestRuntimeCleanupWithCtx } from "./retention";
-import { advanceTurnBindingWithCtx } from "./turnBindings";
+import { AGENT_OUTBOX_EXHAUSTED_PREFIX, advanceTurnBindingWithCtx } from "./turnBindings";
 import { agentDelegatedAdmission } from "../platform/operationAdmission";
 
 type ReadCtx = QueryCtx | MutationCtx;
 
 /** Projection retry backoff: 1 m, 10 m, 1 h, 6 h (then 6 h). */
 export const AGENT_OUTBOX_BACKOFF_MS = [60_000, 10 * 60_000, 60 * 60_000, 6 * 60 * 60_000] as const;
+/**
+ * Projection attempts before the outbox gives up. A projection that has failed
+ * through the whole backoff twice over cannot succeed on its own — a host that
+ * died before terminalizing its runtime turn leaves that turn pending forever —
+ * so retrying it further would keep the cron busy for the life of the row.
+ */
+export const AGENT_OUTBOX_MAX_ATTEMPTS = AGENT_OUTBOX_BACKOFF_MS.length + 2;
 const DEFAULT_OUTBOX_LIMIT = 50;
 const MAX_OUTBOX_LIMIT = 200;
 
@@ -155,10 +162,22 @@ export function createCompletionOutbox(config: CompletionOutboxConfig) {
   async function recordProjectionFailureWithCtx(
     ctx: MutationCtx,
     input: { bindingId: Id<"agentTurnBinding">; error: string; now: number },
-  ): Promise<{ outcome: "scheduled" | "not_found"; attempts?: number; nextAttemptAt?: number }> {
+  ): Promise<{ outcome: "scheduled" | "exhausted" | "not_found"; attempts?: number; nextAttemptAt?: number }> {
     const binding = await ctx.db.get("agentTurnBinding", input.bindingId);
     if (!binding) return { outcome: "not_found" };
     const attempts = (binding.outboxAttempts ?? 0) + 1;
+    if (attempts > AGENT_OUTBOX_MAX_ATTEMPTS) {
+      // No due time: the binding leaves the outbox for good. The committed
+      // answer stays released; only the runtime mirror is given up, and the
+      // reason stays on the row for the operator-facing resume path.
+      await ctx.db.patch("agentTurnBinding", binding._id, {
+        outboxAttempts: attempts,
+        outboxNextAttemptAt: undefined,
+        outboxLastError: `${AGENT_OUTBOX_EXHAUSTED_PREFIX}${input.error}`.slice(0, 200),
+        updatedAt: input.now,
+      });
+      return { outcome: "exhausted", attempts };
+    }
     const backoff = AGENT_OUTBOX_BACKOFF_MS[Math.min(attempts - 1, AGENT_OUTBOX_BACKOFF_MS.length - 1)];
     const nextAttemptAt = input.now + backoff;
     await ctx.db.patch("agentTurnBinding", binding._id, { outboxAttempts: attempts, outboxNextAttemptAt: nextAttemptAt, outboxLastError: input.error.slice(0, 200), updatedAt: input.now });
@@ -244,11 +263,6 @@ export function createCompletionOutbox(config: CompletionOutboxConfig) {
 }
 
 export type CompletionOutbox = ReturnType<typeof createCompletionOutbox>;
-
-/** Bindings whose release is suppressed never reach the outbox; the exposure audit is the attempt row. */
-export function isReleaseSuppressed(binding: Pick<Doc<"agentTurnBinding">, "releaseSuppressedAt">): boolean {
-  return binding.releaseSuppressedAt !== undefined;
-}
 
 // ---------------------------------------------------------------------------
 // Production binding (composition root admission)

@@ -514,7 +514,6 @@ export const AGENT_HOST_STATES = [
   "partial",
   "no_usable_sources",
   "terminal_denied",
-  "source_unauthorized",
   "expired_content",
 ] as const;
 export type AgentHostState = (typeof AGENT_HOST_STATES)[number];

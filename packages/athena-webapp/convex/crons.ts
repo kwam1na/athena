@@ -40,7 +40,7 @@ crons.cron(
   {},
 );
 
-// Agent harness (U1): the short-lived (30-day) and standard (365-day)
+// Agent harness retention: the short-lived (30-day) and standard (365-day)
 // retention classes for prompts, scratch, replay payloads, claim support, and
 // citations, plus due runtime-adapter cleanups. Bounded and self-continuing
 // like the marketing cleanups below; a crashed pass leaves rows for the next.
@@ -61,7 +61,7 @@ crons.interval(
   {},
 );
 
-// Agent harness completion outbox (U7): committed answers whose runtime
+// Agent harness completion outbox: committed answers whose runtime
 // projection did not land (host crash, adapter hiccup) are projected again with
 // backoff; projection is idempotent and never reopens a run.
 crons.interval(

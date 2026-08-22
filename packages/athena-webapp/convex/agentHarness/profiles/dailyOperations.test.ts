@@ -29,6 +29,7 @@ import {
   type AgentFieldRecord,
 } from "../../../shared/agentHarness/manifest";
 import { assertProfileSelection } from "../../../shared/agentHarness/profile";
+import { opaqueRef } from "../../../shared/agentHarness/values";
 import { assertManifestConformance, assertProfileConformance } from "../registry";
 import { runCapabilityConformance } from "../conformance";
 import {
@@ -356,7 +357,7 @@ describe("daily_operations.v1 profile", () => {
     );
     for (const kind of citationKinds) {
       const destination = DAILY_OPERATIONS_PRESENTATION.resolveSourceDestination({
-        ref: `source:${kind}.probe`,
+        ref: opaqueRef("source", `${kind}.probe`),
         kind,
         capturedAt: 0,
       });
@@ -366,7 +367,11 @@ describe("daily_operations.v1 profile", () => {
     }
     // An unknown source kind resolves to nothing rather than guessing.
     expect(
-      DAILY_OPERATIONS_PRESENTATION.resolveSourceDestination({ ref: "source:mystery", kind: "mystery", capturedAt: 0 }),
+      DAILY_OPERATIONS_PRESENTATION.resolveSourceDestination({
+        ref: opaqueRef("source", "mystery"),
+        kind: "mystery",
+        capturedAt: 0,
+      }),
     ).toBeNull();
   });
 
