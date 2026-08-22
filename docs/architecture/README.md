@@ -1,3 +1,6 @@
+> Looking for how the workspace packages depend on each other? See
+> [package-contracts.md](./package-contracts.md).
+
 # Architecture diagram rendering
 
 Athena owns the semantic source for its architecture diagrams. Visual profiles

@@ -1,0 +1,16 @@
+{
+  "name": "@athena/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "module": "index.ts",
+  "types": "index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./convexModel": "./convexModel.ts",
+    "./storeConfig": "./storeConfig.ts",
+    "./models": "./models.ts",
+    "./intelligence": "./intelligence.ts",
+    "./homepageRanking": "./homepageRanking.ts"
+  }
+}

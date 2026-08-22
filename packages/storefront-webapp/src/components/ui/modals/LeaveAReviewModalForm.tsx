@@ -8,7 +8,7 @@ import { validateEmail } from "@/lib/validations/email";
 import { WelcomeBackModalConfig } from "./config/welcomeBackModalConfig";
 import { Badge } from "../badge";
 import { PromoCode } from "./types";
-import { OnlineOrder } from "@athena/webapp";
+import { OnlineOrder } from "@athena/contracts";
 import { ProductSkuCard } from "@/components/ProductCard";
 import { Link } from "@tanstack/react-router";
 

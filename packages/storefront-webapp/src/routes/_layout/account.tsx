@@ -9,7 +9,7 @@ import { LOGGED_IN_USER_ID_KEY } from "@/lib/constants";
 import { ALL_COUNTRIES } from "@/lib/countries";
 import { GHANA_REGIONS } from "@/lib/ghanaRegions";
 import { getStoreDetails } from "@/lib/utils";
-import { StoreFrontUser } from "@athena/webapp";
+import { StoreFrontUser } from "@athena/contracts";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";

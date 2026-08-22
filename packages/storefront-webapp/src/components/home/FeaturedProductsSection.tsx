@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import { ProductCard } from "../ProductCard";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { Product, ProductSku } from "@athena/webapp";
+import { Product, ProductSku } from "@athena/contracts";
 import { getProductName } from "@/lib/productUtils";
 import ImageWithFallback from "../ui/image-with-fallback";
 import { formatStoredAmount } from "@/lib/currency";

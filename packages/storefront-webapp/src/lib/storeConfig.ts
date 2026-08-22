@@ -1,4 +1,4 @@
-import { Store } from "@athena/webapp";
+import { Store } from "@athena/contracts";
 
 type StoreConfigInput =
   | Store

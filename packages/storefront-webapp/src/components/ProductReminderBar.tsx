@@ -1,4 +1,4 @@
-import { Offer, ProductSku, PromoCode } from "@athena/webapp";
+import { Offer, ProductSku, PromoCode } from "@athena/contracts";
 import { Button } from "./ui/button";
 import { getProductName } from "@/lib/productUtils";
 import { X } from "lucide-react";

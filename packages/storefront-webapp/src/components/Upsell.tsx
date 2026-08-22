@@ -1,4 +1,4 @@
-import { ProductSku } from "@athena/webapp";
+import { ProductSku } from "@athena/contracts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";

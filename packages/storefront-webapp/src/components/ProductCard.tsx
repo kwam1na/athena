@@ -1,5 +1,5 @@
 import { capitalizeWords } from "@/lib/utils";
-import { Product, ProductSku } from "@athena/webapp";
+import { Product, ProductSku } from "@athena/contracts";
 import {
   useProductDiscount,
   useProductDiscounts,

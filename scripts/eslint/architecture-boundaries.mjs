@@ -30,6 +30,21 @@ const STOREFRONT_LOWER_LAYER_FILES = [
   "src/lib/utils.ts",
 ];
 
+const STOREFRONT_PACKAGE_BOUNDARY_FILES = ["src/**/*.{ts,tsx}"];
+
+// The storefront reads shared DTOs from the neutral `@athena/contracts`
+// package, never from the Athena admin application root or its generated Convex
+// output. See packages/athena-contracts/README.md.
+const ATHENA_APP_ROOT_SPECIFIERS = [
+  "@athena/webapp",
+  "@athena/webapp/**",
+];
+
+const ATHENA_PACKAGE_RELATIVE_SPECIFIERS = [
+  "**/athena-webapp",
+  "**/athena-webapp/**",
+];
+
 const TEST_FILE_IGNORES = ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}"];
 
 const ATHENA_ROUTE_ENTRYPOINTS = expandImportEntrypoint("routes/_authed");
@@ -75,8 +90,37 @@ export function createAthenaArchitectureBoundaryConfig(options = {}) {
   ];
 }
 
+const STOREFRONT_PACKAGE_BOUNDARY_PATTERN = {
+  group: [...ATHENA_APP_ROOT_SPECIFIERS, ...ATHENA_PACKAGE_RELATIVE_SPECIFIERS],
+  message:
+    "Storefront code must not import the Athena webapp package or reach into it by relative path. Shared DTOs and browser-safe contracts live in @athena/contracts (packages/athena-contracts); add a contract there instead.",
+};
+
+const STOREFRONT_ROUTE_ENTRYPOINT_PATTERN = {
+  group: STOREFRONT_ROUTE_ENTRYPOINTS,
+  message:
+    "Storefront checkout/auth lower-layer files must not import checkout or auth route entrypoints under src/routes/shop/checkout, src/routes/login.tsx, src/routes/signup.tsx, or src/routes/auth.verify.tsx. Keep the dependency direction route -> lower layer, not lower layer -> route.",
+};
+
 export function createStorefrontArchitectureBoundaryConfig(options = {}) {
+  // ESLint merges `no-restricted-imports` by last-config-wins rather than by
+  // union, so any config that also matches a lower-layer file has to carry the
+  // lower-layer patterns too. The package boundary comes first and applies to
+  // every storefront source file; the narrower lower-layer config restates it.
   return [
+    {
+      name: "storefront-package-boundaries",
+      files: prefixGlobs(
+        STOREFRONT_PACKAGE_BOUNDARY_FILES,
+        options.packagePrefix,
+      ),
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          { patterns: [STOREFRONT_PACKAGE_BOUNDARY_PATTERN] },
+        ],
+      },
+    },
     {
       name: "storefront-architecture-boundaries",
       files: prefixGlobs(STOREFRONT_LOWER_LAYER_FILES, options.packagePrefix),
@@ -86,11 +130,8 @@ export function createStorefrontArchitectureBoundaryConfig(options = {}) {
           "error",
           {
             patterns: [
-              {
-                group: STOREFRONT_ROUTE_ENTRYPOINTS,
-                message:
-                  "Storefront checkout/auth lower-layer files must not import checkout or auth route entrypoints under src/routes/shop/checkout, src/routes/login.tsx, src/routes/signup.tsx, or src/routes/auth.verify.tsx. Keep the dependency direction route -> lower layer, not lower layer -> route.",
-              },
+              STOREFRONT_PACKAGE_BOUNDARY_PATTERN,
+              STOREFRONT_ROUTE_ENTRYPOINT_PATTERN,
             ],
           },
         ],
@@ -104,7 +145,7 @@ export function getAthenaArchitectureBoundaryTargets() {
 }
 
 export function getStorefrontArchitectureBoundaryTargets() {
-  return [...STOREFRONT_LOWER_LAYER_FILES];
+  return [...STOREFRONT_LOWER_LAYER_FILES, ...STOREFRONT_PACKAGE_BOUNDARY_FILES];
 }
 
 function expandImportEntrypoint(pathFragment) {

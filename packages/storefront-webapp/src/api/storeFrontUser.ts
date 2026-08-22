@@ -1,6 +1,6 @@
 import config from "@/config";
 import { getOrCreateGuestMarker } from "@/lib/guestMarker";
-import { Guest, StoreFrontUser } from "@athena/webapp";
+import { Guest, StoreFrontUser } from "@athena/contracts";
 
 const getBaseUrl = () => `${config.apiGateway.URL}`;
 

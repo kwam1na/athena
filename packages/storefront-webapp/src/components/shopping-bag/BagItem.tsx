@@ -1,4 +1,4 @@
-import { ProductSku } from "@athena/webapp";
+import { ProductSku } from "@athena/contracts";
 import { motion } from "framer-motion";
 import ImageWithFallback from "../ui/image-with-fallback";
 import { formatStoredAmount } from "@/lib/currency";

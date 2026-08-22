@@ -1,4 +1,4 @@
-import { Product, ProductSku } from "@athena/webapp";
+import { Product, ProductSku } from "@athena/contracts";
 import { Button } from "../ui/button";
 import { capitalizeWords } from "@/lib/utils";
 

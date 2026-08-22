@@ -1,5 +1,5 @@
 import config from "@/config";
-import { PromoCode, PromoCodeItem } from "@athena/webapp";
+import { PromoCode, PromoCodeItem } from "@athena/contracts";
 
 const getBaseUrl = () => `${config.apiGateway.URL}/stores/promoCodes`;
 

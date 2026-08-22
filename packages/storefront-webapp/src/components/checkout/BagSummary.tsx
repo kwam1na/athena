@@ -21,7 +21,7 @@ import { formatStoredAmount } from "@/lib/currency";
 import { Badge } from "../ui/badge";
 import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
 import { getStoreConfigV2, getStoreFallbackImageUrl } from "@/lib/storeConfig";
-import { ProductSku } from "@athena/webapp";
+import { ProductSku } from "@athena/contracts";
 
 export type BagSummaryItem = {
   colorName?: string | null;

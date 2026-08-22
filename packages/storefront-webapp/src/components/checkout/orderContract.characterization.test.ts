@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { OnlineOrder, ProductSku, Store, StoreFrontUser } from "@athena/webapp";
+import type { OnlineOrder, ProductSku, Store, StoreFrontUser } from "@athena/contracts";
 
 import { formatDeliveryAddress, getOrderAmount, getPotentialPoints } from "./utils";
 import type { Address } from "./types";

@@ -5,7 +5,7 @@ import {
   type ContextPayload,
   type ContextPrimitiveValue,
   type ContextTrackingEnvelope,
-} from "@athena/webapp/shared/intelligence";
+} from "@athena/contracts/intelligence";
 
 import { postTrackingEvent } from "@/api/trackingEvents";
 import type {

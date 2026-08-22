@@ -28,7 +28,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import placeholder from "@/assets/placeholder.png";
 import { ShoppingBagAction, useShoppingBag } from "@/hooks/useShoppingBag";
-import { BagItem, ProductSku } from "@athena/webapp";
+import { BagItem, ProductSku } from "@athena/contracts";
 import { capitalizeWords, getProductName } from "@/lib/utils";
 import { motion, AnimatePresence, easeInOut } from "framer-motion";
 import { HeartIconFilled } from "@/assets/icons/HeartIconFilled";

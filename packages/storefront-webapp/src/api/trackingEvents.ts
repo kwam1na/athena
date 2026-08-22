@@ -1,7 +1,7 @@
 import type {
   ContextTrackingEnvelope,
   TrackContextEventResult,
-} from "@athena/webapp/shared/intelligence";
+} from "@athena/contracts/intelligence";
 
 import config from "@/config";
 

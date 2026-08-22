@@ -1,5 +1,5 @@
 import config from "@/config";
-import { Organization } from "@athena/webapp";
+import { Organization } from "@athena/contracts";
 
 const baseUrl = `${config.apiGateway.URL}/organizations`;
 

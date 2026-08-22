@@ -1,4 +1,4 @@
-import { BagItem, ProductSku, SavedBagItem } from "@athena/webapp";
+import { BagItem, ProductSku, SavedBagItem } from "@athena/contracts";
 import { capitalizeWords } from "./utils";
 
 type ProductNameInput =

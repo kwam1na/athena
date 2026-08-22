@@ -1,5 +1,5 @@
 import config from "@/config";
-import { Bag } from "@athena/webapp";
+import { Bag } from "@athena/contracts";
 
 type GetBagItemsParams = {
   savedBagId: string;

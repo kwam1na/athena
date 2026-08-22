@@ -1,6 +1,6 @@
 import config from "@/config";
 import { OrganizationStoreEntityApiParams } from "./types";
-import { Color } from "@athena/webapp";
+import { Color } from "@athena/contracts";
 
 const getBaseUrl = () => `${config.apiGateway.URL}/colors`;
 

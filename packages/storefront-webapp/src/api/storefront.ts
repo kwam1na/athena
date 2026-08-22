@@ -1,6 +1,6 @@
 import config from "@/config";
 import { getOrCreateGuestMarker } from "@/lib/guestMarker";
-import { Store } from "@athena/webapp";
+import { Store } from "@athena/contracts";
 
 export async function getStore(asNewUser: boolean): Promise<Store> {
   const marker = getOrCreateGuestMarker();

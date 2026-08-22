@@ -1,6 +1,6 @@
 import config from "@/config";
 import { FilterParams, OrganizationStoreEntityApiParams } from "./types";
-import { FeaturedItem, Product } from "@athena/webapp";
+import { FeaturedItem, Product } from "@athena/contracts";
 
 const buildQueryString = (params?: FilterParams) => {
   if (!params) return null;

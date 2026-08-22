@@ -1,7 +1,7 @@
 import config from "@/config";
 import { BagResponseBody } from "@/lib/schemas/bag";
 import { BagItemResponseBody } from "@/lib/schemas/bagItem";
-import { Bag } from "@athena/webapp";
+import { Bag } from "@athena/contracts";
 
 type GetBagItemsParams = {
   bagId: string;

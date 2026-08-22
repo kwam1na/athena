@@ -1,4 +1,4 @@
-import { ProductSku } from "@athena/webapp";
+import { ProductSku } from "@athena/contracts";
 import { getProductName } from "@/lib/productUtils";
 import { SellingFastSignal, SoldOutBadge } from "./InventoryLevelBadge";
 import { useProductQueries } from "@/lib/queries/product";

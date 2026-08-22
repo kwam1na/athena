@@ -1,4 +1,4 @@
-import { ProductSku } from "@athena/webapp";
+import { ProductSku } from "@athena/contracts";
 import { Check, CheckCheck, Dumbbell, Factory, Gem, Ruler } from "lucide-react";
 
 export const AboutProduct = ({

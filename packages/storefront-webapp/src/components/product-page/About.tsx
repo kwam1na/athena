@@ -1,4 +1,4 @@
-import { ProductSku } from "@athena/webapp";
+import { ProductSku } from "@athena/contracts";
 import { CheckIcon } from "@radix-ui/react-icons";
 
 export const About = ({

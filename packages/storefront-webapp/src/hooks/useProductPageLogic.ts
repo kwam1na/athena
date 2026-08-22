@@ -1,7 +1,7 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useParams, useSearch } from "@tanstack/react-router";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
-import { BagItem, ProductSku, SavedBagItem } from "@athena/webapp";
+import { BagItem, ProductSku, SavedBagItem } from "@athena/contracts";
 import { useEffect, useRef, useState } from "react";
 import { useGetProductQuery } from "@/hooks/useGetProduct";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
