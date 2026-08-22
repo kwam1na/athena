@@ -20,7 +20,7 @@ tags:
   - stock-adjustments
   - convex
   - command-result
-delivery_diff_fingerprint: c21ea011e9950f312ae0503c3b054c5bc3b2084f1da31420bec2122d26f18fa0
+delivery_diff_fingerprint: 5daec8f94ad4380fb64d4840a95333314d1630084e67e77d31167f010da16459
 ---
 
 # Athena Source Transition Operational Work Reachability
