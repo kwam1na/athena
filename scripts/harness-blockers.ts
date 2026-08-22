@@ -57,7 +57,6 @@ export const HARNESS_PREPARATION_SOURCE_IDS = [
   "wiring_mismatch",
   "candidate_unprepared",
   "candidate_ambiguous",
-  "mechanical_failed",
 ] as const;
 
 export type HarnessPreparationSourceId =

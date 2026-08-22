@@ -23183,7 +23183,7 @@
       "relation": "calls",
       "source": "harness_blockers_sanitizeddetail",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L379",
+      "source_location": "L378",
       "target": "harness_blockers_createharnessblocker",
       "weight": 1
     },
@@ -23195,7 +23195,7 @@
       "relation": "calls",
       "source": "harness_blockers_sanitizedline",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L365",
+      "source_location": "L364",
       "target": "harness_blockers_createharnessblocker",
       "weight": 1
     },
@@ -23207,7 +23207,7 @@
       "relation": "calls",
       "source": "harness_blockers_validatedsource",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L374",
+      "source_location": "L373",
       "target": "harness_blockers_createharnessblocker",
       "weight": 1
     },
@@ -23219,7 +23219,7 @@
       "relation": "calls",
       "source": "harness_blockers_createharnessblocker",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L505",
+      "source_location": "L504",
       "target": "harness_blockers_createharnessinternalerrorblocker",
       "weight": 1
     },
@@ -23231,7 +23231,7 @@
       "relation": "calls",
       "source": "harness_blockers_formatunexpectederror",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L503",
+      "source_location": "L502",
       "target": "harness_blockers_createharnessinternalerrorblocker",
       "weight": 1
     },
@@ -23243,7 +23243,7 @@
       "relation": "calls",
       "source": "harness_blockers_remediationidfor",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L512",
+      "source_location": "L511",
       "target": "harness_blockers_createharnessinternalerrorblocker",
       "weight": 1
     },
@@ -23255,7 +23255,7 @@
       "relation": "calls",
       "source": "harness_blockers_bounded",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L464",
+      "source_location": "L463",
       "target": "harness_blockers_formatharnessblockers",
       "weight": 1
     },
@@ -23267,7 +23267,7 @@
       "relation": "calls",
       "source": "harness_blockers_uniqueharnessremediations",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L454",
+      "source_location": "L453",
       "target": "harness_blockers_formatharnessblockers",
       "weight": 1
     },
@@ -23279,7 +23279,7 @@
       "relation": "method",
       "source": "harness_blockers_harnessblockederror",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L109",
+      "source_location": "L108",
       "target": "harness_blockers_harnessblockederror_constructor",
       "weight": 1
     },
@@ -23291,7 +23291,7 @@
       "relation": "calls",
       "source": "harness_blockers_formatharnesscommand",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L409",
+      "source_location": "L408",
       "target": "harness_blockers_remediationinstruction",
       "weight": 1
     },
@@ -23303,7 +23303,7 @@
       "relation": "calls",
       "source": "harness_blockers_createharnessblocker",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L540",
+      "source_location": "L539",
       "target": "harness_blockers_runharnesscliboundary",
       "weight": 1
     },
@@ -23315,7 +23315,7 @@
       "relation": "calls",
       "source": "harness_blockers_createharnessinternalerrorblocker",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L562",
+      "source_location": "L561",
       "target": "harness_blockers_runharnesscliboundary",
       "weight": 1
     },
@@ -23327,7 +23327,7 @@
       "relation": "calls",
       "source": "harness_blockers_formatharnessblockers",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L554",
+      "source_location": "L553",
       "target": "harness_blockers_runharnesscliboundary",
       "weight": 1
     },
@@ -23339,7 +23339,7 @@
       "relation": "calls",
       "source": "harness_blockers_remediationidfor",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L546",
+      "source_location": "L545",
       "target": "harness_blockers_runharnesscliboundary",
       "weight": 1
     },
@@ -23351,7 +23351,7 @@
       "relation": "calls",
       "source": "harness_blockers_bounded",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L252",
+      "source_location": "L251",
       "target": "harness_blockers_sanitizeddetail",
       "weight": 1
     },
@@ -23363,7 +23363,7 @@
       "relation": "calls",
       "source": "harness_blockers_redactsecrets",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L249",
+      "source_location": "L248",
       "target": "harness_blockers_sanitizeddetail",
       "weight": 1
     },
@@ -23375,7 +23375,7 @@
       "relation": "calls",
       "source": "harness_blockers_withoutcontrolcharacters",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L249",
+      "source_location": "L248",
       "target": "harness_blockers_sanitizeddetail",
       "weight": 1
     },
@@ -23387,7 +23387,7 @@
       "relation": "calls",
       "source": "harness_blockers_redactsecrets",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L232",
+      "source_location": "L231",
       "target": "harness_blockers_sanitizedline",
       "weight": 1
     },
@@ -23399,7 +23399,7 @@
       "relation": "calls",
       "source": "harness_blockers_withoutcontrolcharacters",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L232",
+      "source_location": "L231",
       "target": "harness_blockers_sanitizedline",
       "weight": 1
     },
@@ -23411,7 +23411,7 @@
       "relation": "calls",
       "source": "harness_blockers_sanitizedcommand",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L308",
+      "source_location": "L307",
       "target": "harness_blockers_sanitizedremediation",
       "weight": 1
     },
@@ -23423,7 +23423,7 @@
       "relation": "calls",
       "source": "harness_blockers_sanitizeddetail",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L300",
+      "source_location": "L299",
       "target": "harness_blockers_sanitizedremediation",
       "weight": 1
     },
@@ -23435,7 +23435,7 @@
       "relation": "calls",
       "source": "harness_blockers_sanitizedline",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L283",
+      "source_location": "L282",
       "target": "harness_blockers_sanitizedremediation",
       "weight": 1
     },
@@ -166691,7 +166691,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_test_ts",
       "source_file": "scripts/harness-blockers.test.ts",
-      "source_location": "L250",
+      "source_location": "L252",
       "target": "harness_blockers_test_detail",
       "weight": 1
     },
@@ -166703,7 +166703,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_test_ts",
       "source_file": "scripts/harness-blockers.test.ts",
-      "source_location": "L18",
+      "source_location": "L20",
       "target": "harness_blockers_test_part",
       "weight": 1
     },
@@ -166715,7 +166715,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_ts",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L211",
+      "source_location": "L210",
       "target": "harness_blockers_bounded",
       "weight": 1
     },
@@ -166727,7 +166727,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_ts",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L364",
+      "source_location": "L363",
       "target": "harness_blockers_createharnessblocker",
       "weight": 1
     },
@@ -166739,7 +166739,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_ts",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L494",
+      "source_location": "L493",
       "target": "harness_blockers_createharnessinternalerrorblocker",
       "weight": 1
     },
@@ -166751,7 +166751,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_ts",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L447",
+      "source_location": "L446",
       "target": "harness_blockers_formatharnessblockers",
       "weight": 1
     },
@@ -166763,7 +166763,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_ts",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L400",
+      "source_location": "L399",
       "target": "harness_blockers_formatharnesscommand",
       "weight": 1
     },
@@ -166775,7 +166775,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_ts",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L487",
+      "source_location": "L486",
       "target": "harness_blockers_formatunexpectederror",
       "weight": 1
     },
@@ -166787,7 +166787,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_ts",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L108",
+      "source_location": "L107",
       "target": "harness_blockers_harnessblockederror",
       "weight": 1
     },
@@ -166799,7 +166799,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_ts",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L395",
+      "source_location": "L394",
       "target": "harness_blockers_quotecommandargument",
       "weight": 1
     },
@@ -166811,7 +166811,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_ts",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L143",
+      "source_location": "L142",
       "target": "harness_blockers_redactsecrets",
       "weight": 1
     },
@@ -166823,7 +166823,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_ts",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L415",
+      "source_location": "L414",
       "target": "harness_blockers_remediationbody",
       "weight": 1
     },
@@ -166835,7 +166835,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_ts",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L261",
+      "source_location": "L260",
       "target": "harness_blockers_remediationidfor",
       "weight": 1
     },
@@ -166847,7 +166847,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_ts",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L405",
+      "source_location": "L404",
       "target": "harness_blockers_remediationinstruction",
       "weight": 1
     },
@@ -166859,7 +166859,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_ts",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L528",
+      "source_location": "L527",
       "target": "harness_blockers_runharnesscliboundary",
       "weight": 1
     },
@@ -166871,7 +166871,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_ts",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L269",
+      "source_location": "L268",
       "target": "harness_blockers_sanitizedcommand",
       "weight": 1
     },
@@ -166883,7 +166883,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_ts",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L244",
+      "source_location": "L243",
       "target": "harness_blockers_sanitizeddetail",
       "weight": 1
     },
@@ -166895,7 +166895,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_ts",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L229",
+      "source_location": "L228",
       "target": "harness_blockers_sanitizedline",
       "weight": 1
     },
@@ -166907,7 +166907,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_ts",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L282",
+      "source_location": "L281",
       "target": "harness_blockers_sanitizedremediation",
       "weight": 1
     },
@@ -166919,7 +166919,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_ts",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L386",
+      "source_location": "L385",
       "target": "harness_blockers_serializeharnessblockers",
       "weight": 1
     },
@@ -166931,7 +166931,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_ts",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L435",
+      "source_location": "L434",
       "target": "harness_blockers_uniqueharnessremediations",
       "weight": 1
     },
@@ -166943,7 +166943,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_ts",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L320",
+      "source_location": "L319",
       "target": "harness_blockers_validatedsource",
       "weight": 1
     },
@@ -166955,7 +166955,7 @@
       "relation": "contains",
       "source": "scripts_harness_blockers_ts",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L125",
+      "source_location": "L124",
       "target": "harness_blockers_withoutcontrolcharacters",
       "weight": 1
     },
@@ -207142,7 +207142,7 @@
       "label": "detail()",
       "norm_label": "detail()",
       "source_file": "scripts/harness-blockers.test.ts",
-      "source_location": "L250"
+      "source_location": "L252"
     },
     {
       "community": 1202,
@@ -207151,7 +207151,7 @@
       "label": "part()",
       "norm_label": "part()",
       "source_file": "scripts/harness-blockers.test.ts",
-      "source_location": "L18"
+      "source_location": "L20"
     },
     {
       "community": 1202,
@@ -301084,7 +301084,7 @@
       "label": "bounded()",
       "norm_label": "bounded()",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L211"
+      "source_location": "L210"
     },
     {
       "community": 80,
@@ -301093,7 +301093,7 @@
       "label": "createHarnessBlocker()",
       "norm_label": "createharnessblocker()",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L364"
+      "source_location": "L363"
     },
     {
       "community": 80,
@@ -301102,7 +301102,7 @@
       "label": "createHarnessInternalErrorBlocker()",
       "norm_label": "createharnessinternalerrorblocker()",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L494"
+      "source_location": "L493"
     },
     {
       "community": 80,
@@ -301111,7 +301111,7 @@
       "label": "formatHarnessBlockers()",
       "norm_label": "formatharnessblockers()",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L447"
+      "source_location": "L446"
     },
     {
       "community": 80,
@@ -301120,7 +301120,7 @@
       "label": "formatHarnessCommand()",
       "norm_label": "formatharnesscommand()",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L400"
+      "source_location": "L399"
     },
     {
       "community": 80,
@@ -301129,7 +301129,7 @@
       "label": "formatUnexpectedError()",
       "norm_label": "formatunexpectederror()",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L487"
+      "source_location": "L486"
     },
     {
       "community": 80,
@@ -301138,7 +301138,7 @@
       "label": "HarnessBlockedError",
       "norm_label": "harnessblockederror",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L108"
+      "source_location": "L107"
     },
     {
       "community": 80,
@@ -301147,7 +301147,7 @@
       "label": ".constructor()",
       "norm_label": ".constructor()",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L109"
+      "source_location": "L108"
     },
     {
       "community": 80,
@@ -301156,7 +301156,7 @@
       "label": "quoteCommandArgument()",
       "norm_label": "quotecommandargument()",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L395"
+      "source_location": "L394"
     },
     {
       "community": 80,
@@ -301165,7 +301165,7 @@
       "label": "redactSecrets()",
       "norm_label": "redactsecrets()",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L143"
+      "source_location": "L142"
     },
     {
       "community": 80,
@@ -301174,7 +301174,7 @@
       "label": "remediationBody()",
       "norm_label": "remediationbody()",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L415"
+      "source_location": "L414"
     },
     {
       "community": 80,
@@ -301183,7 +301183,7 @@
       "label": "remediationIdFor()",
       "norm_label": "remediationidfor()",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L261"
+      "source_location": "L260"
     },
     {
       "community": 80,
@@ -301192,7 +301192,7 @@
       "label": "remediationInstruction()",
       "norm_label": "remediationinstruction()",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L405"
+      "source_location": "L404"
     },
     {
       "community": 80,
@@ -301201,7 +301201,7 @@
       "label": "runHarnessCliBoundary()",
       "norm_label": "runharnesscliboundary()",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L528"
+      "source_location": "L527"
     },
     {
       "community": 80,
@@ -301210,7 +301210,7 @@
       "label": "sanitizedCommand()",
       "norm_label": "sanitizedcommand()",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L269"
+      "source_location": "L268"
     },
     {
       "community": 80,
@@ -301219,7 +301219,7 @@
       "label": "sanitizedDetail()",
       "norm_label": "sanitizeddetail()",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L244"
+      "source_location": "L243"
     },
     {
       "community": 80,
@@ -301228,7 +301228,7 @@
       "label": "sanitizedLine()",
       "norm_label": "sanitizedline()",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L229"
+      "source_location": "L228"
     },
     {
       "community": 80,
@@ -301237,7 +301237,7 @@
       "label": "sanitizedRemediation()",
       "norm_label": "sanitizedremediation()",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L282"
+      "source_location": "L281"
     },
     {
       "community": 80,
@@ -301246,7 +301246,7 @@
       "label": "serializeHarnessBlockers()",
       "norm_label": "serializeharnessblockers()",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L386"
+      "source_location": "L385"
     },
     {
       "community": 80,
@@ -301255,7 +301255,7 @@
       "label": "uniqueHarnessRemediations()",
       "norm_label": "uniqueharnessremediations()",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L435"
+      "source_location": "L434"
     },
     {
       "community": 80,
@@ -301264,7 +301264,7 @@
       "label": "validatedSource()",
       "norm_label": "validatedsource()",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L320"
+      "source_location": "L319"
     },
     {
       "community": 80,
@@ -301273,7 +301273,7 @@
       "label": "withoutControlCharacters()",
       "norm_label": "withoutcontrolcharacters()",
       "source_file": "scripts/harness-blockers.ts",
-      "source_location": "L125"
+      "source_location": "L124"
     },
     {
       "community": 80,

@@ -1,9 +1,11 @@
+import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 import {
   createHarnessBlocker,
   createHarnessInternalErrorBlocker,
   formatHarnessBlockers,
+  HARNESS_PREPARATION_SOURCE_IDS,
   HarnessBlockedError,
   runHarnessCliBoundary,
   serializeHarnessBlockers,
@@ -593,6 +595,25 @@ describe("harness blockers", () => {
     expect(
       formatHarnessBlockers([blocker], { maxOutputLength: 240 }).length,
     ).toBeLessThanOrEqual(240);
+  });
+
+  it("has a producer for every preparation blocker source", async () => {
+    // The union is meant to describe the boundaries that actually exist, so
+    // every id must be named at a site that produces a preparation blocker.
+    // The only producers are the receipt evaluation in pr-athena-prepare.ts
+    // and the candidate capture it delegates to.
+    const producerText = (
+      await Promise.all(
+        ["pr-athena-prepare.ts", "harness-candidate.ts"].map((file) =>
+          readFile(new URL(`./${file}`, import.meta.url), "utf8"),
+        ),
+      )
+    ).join("\n");
+    const orphaned = HARNESS_PREPARATION_SOURCE_IDS.filter(
+      (id) => !producerText.includes(`"${id}"`),
+    );
+
+    expect(orphaned).toEqual([]);
   });
 
   it("rejects unstable blocker and remediation identifiers", () => {
