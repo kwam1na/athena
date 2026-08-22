@@ -3,6 +3,11 @@ import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
+import {
+  createHarnessBlocker,
+  HarnessBlockedError,
+  runHarnessCliBoundary,
+} from "./harness-blockers";
 import { validateHarnessDocs } from "./harness-check";
 import {
   collectHarnessRepoValidationSelection,
@@ -977,29 +982,55 @@ export async function runHarnessSelfReview(
   };
 }
 
-if (import.meta.main) {
-  try {
-    const parsedArgs = parseCliArguments(process.argv.slice(2));
+async function runHarnessSelfReviewCli(argv: string[]) {
+  const parsedArgs = parseCliArguments(argv);
 
-    if (parsedArgs.help) {
-      console.log("Usage: bun run harness:self-review --base <ref>");
-      process.exit(0);
-    }
-
-    const result = await runHarnessSelfReview(process.cwd(), {
-      baseRef: parsedArgs.baseRef,
-    });
-
-    console.log(result.markdown);
-
-    if (result.blockers.length > 0) {
-      throw new Error(
-        `harness:self-review blocked with ${result.blockers.length} blocker(s).`
-      );
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`\n[harness:self-review] BLOCKED: ${message}`);
-    process.exit(1);
+  if (parsedArgs.help) {
+    console.log("Usage: bun run harness:self-review --base <ref>");
+    return;
   }
+
+  const result = await runHarnessSelfReview(process.cwd(), {
+    baseRef: parsedArgs.baseRef,
+  });
+
+  console.log(result.markdown);
+
+  if (result.blockers.length > 0) {
+    throw new HarnessBlockedError([
+      createHarnessBlocker({
+        code: "harness_self_review_blocked",
+        source: { kind: "command", id: "harness:self-review" },
+        summary: `Harness self-review found ${result.blockers.length} blocker(s).`,
+        details: result.blockers.join("\n"),
+        remediations: [
+          {
+            id: "address-self-review-blockers",
+            kind: "code_change",
+            summary: "Address each reported self-review blocker.",
+          },
+          {
+            id: "rerun-harness-self-review",
+            kind: "command",
+            command: [
+              "bun",
+              "run",
+              "harness:self-review",
+              "--base",
+              parsedArgs.baseRef,
+            ],
+            summary: "Rerun self-review against the same base.",
+          },
+        ],
+      }),
+    ]);
+  }
+}
+
+if (import.meta.main) {
+  process.exitCode = await runHarnessCliBoundary({
+    source: { kind: "command", id: "harness:self-review" },
+    reproduce: ["bun", "run", "harness:self-review", ...process.argv.slice(2)],
+    run: () => runHarnessSelfReviewCli(process.argv.slice(2)),
+  });
 }

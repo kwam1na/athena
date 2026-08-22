@@ -15,7 +15,7 @@ import {
 } from "./architecture-diagram-config";
 
 const SCALE = 2;
-const repoRoot = resolve(import.meta.dir, "..");
+const repoRoot = resolve(import.meta.dirname, "..");
 const defaultOutputDirectory = resolve(repoRoot, "docs/architecture/assets");
 const options = parseExportOptions(Bun.argv.slice(2));
 const outputDirectory = options.bundleDirectory

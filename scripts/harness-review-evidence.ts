@@ -3,6 +3,11 @@ import { readFile, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import {
+  HarnessBlockedError,
+  createHarnessBlocker,
+  runHarnessCliBoundary,
+} from "./harness-blockers";
 import { captureStableHarnessCandidate } from "./harness-candidate";
 import {
   HARNESS_GATE_REGISTRY,
@@ -714,9 +719,60 @@ async function main() {
   );
 }
 
+export function harnessReviewEvidenceRejectedBlocker(
+  reviewCommand: "harness:review-context" | "harness:review-evidence",
+  detail: string,
+) {
+  return createHarnessBlocker({
+    code: "harness_review_evidence_rejected",
+    source: { kind: "command", id: reviewCommand },
+    summary: "The review evidence recorder rejected this manifest.",
+    details: detail,
+    remediations: [
+      {
+        id: "repair-review-manifest",
+        kind: "code_change",
+        summary:
+          "Correct the finalized review manifest to satisfy the reported requirement, then record it again.",
+      },
+      {
+        id: "recapture-review-context",
+        kind: "command",
+        command: ["bun", "run", "harness:review-context"],
+        summary:
+          "Recapture the candidate context if the manifest no longer names the prepared candidate.",
+      },
+    ],
+  });
+}
+
+/**
+ * A rejected manifest is the recorder refusing evidence on purpose, so it
+ * carries a stable code and a repair rather than an internal-error stack.
+ */
+async function runHarnessReviewEvidenceCli(
+  reviewCommand: "harness:review-context" | "harness:review-evidence",
+) {
+  try {
+    return await main();
+  } catch (error) {
+    if (error instanceof HarnessBlockedError) throw error;
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new HarnessBlockedError(
+      [harnessReviewEvidenceRejectedBlocker(reviewCommand, detail)],
+      detail,
+    );
+  }
+}
+
 if (import.meta.main) {
-  main().catch((error) => {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
+  const reviewCommand =
+    process.argv[2] === "context"
+      ? ("harness:review-context" as const)
+      : ("harness:review-evidence" as const);
+  process.exitCode = await runHarnessCliBoundary({
+    source: { kind: "command", id: reviewCommand },
+    reproduce: ["bun", "run", reviewCommand, ...process.argv.slice(3)],
+    run: () => runHarnessReviewEvidenceCli(reviewCommand),
   });
 }

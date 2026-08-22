@@ -177,6 +177,11 @@ Order matters, and the harness now enforces the expensive half of it:
 - If the repo defines a PR-equivalent command, run that before trusting local parity with remote CI.
 - If the repo has generated-artifact repair hooks, run them before the final commit and inspect the diff. For Athena, `bun run pre-commit:generated-artifacts` refreshes harness docs, Convex generated API files, graphify artifacts, and tracked generated changes so new Convex modules do not leave `_generated/api.d.ts` drift for a follow-up PR.
 - When harness or repo validation fails, first classify it as deterministic repairable drift or a semantic blocker.
+- For Athena harness failures, treat `scripts/harness-blockers.ts` as the operator contract: identify the blocker by its stable code and typed source, then follow its typed remediations. Run `command` and `retry` argument arrays as rendered; perform `manual_action` and `code_change` guidance deliberately. Do not infer a shell command from explanatory prose.
+- When you add or change a harness command, register it in `scripts/harness-blocker-inventory.ts` and run `bun run harness:test`. That sensor is the enforcement half of the contract; its allowlist is a migration boundary, not permission for a new unstructured blocker.
+- Treat every remediation as guidance, not authorization. A `command` remediation says what would unblock the gate; the repo's bounded self-repair policy still decides whether you may run it without a human.
+- Resolve aggregated blockers as a set. Shared remediation ids are intentionally rendered once even when several owning sources require the same repair; rerun the authoritative failed command after completing the deduplicated guidance.
+- A `harness_internal_error` blocker is diagnostic rather than self-repair authority. Inspect the retained log, use the named reproduction command, and investigate the cause before retrying. Do not weaken the gate or convert sanitized exception details into a command.
 - If the repo already defines a canonical repair command for deterministic drift, run that repair once, rerun the blocked validation once, and continue only if the rerun passes.
 - Do not invent self-corrections for semantic failures; investigate those normally.
 - If bounded self-repair refreshed tracked artifacts, review and commit those repaired files before pushing again.

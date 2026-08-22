@@ -11,6 +11,12 @@ import {
   HARNESS_REVIEW_IDENTITY_VERSION,
   type HarnessReviewIdentityVersion,
 } from "./harness-review-identity";
+import {
+  createHarnessBlocker,
+  type HarnessBlocker,
+  type HarnessBlockerSource,
+  type HarnessRemediation,
+} from "./harness-blockers";
 
 export type CandidateBinding = {
   /** The exact prepared tree. Recorded for audit, not used for freshness. */
@@ -46,17 +52,19 @@ export type HarnessExecutionContext =
 export type ObligationFinding = {
   code: string;
   message: string;
-  remediation: string;
   obligationId?: string;
   providerId?: string;
   recordId?: string;
+  blocker: HarnessBlocker;
 };
+
+export type LiveProviderFinding = Pick<ObligationFinding, "code" | "message">;
 
 export type LiveProviderResult = {
   providerId: string;
   runId: string;
   status: "green" | "failed";
-  findings: ObligationFinding[];
+  findings: LiveProviderFinding[];
 };
 
 export type EvidenceRecord = {
@@ -154,7 +162,7 @@ export type NotApplicableResolution = ResolutionBase & {
 
 export type BlockedResolution = ResolutionBase & {
   kind: "blocked";
-  findings: ObligationFinding[];
+  blockers: HarnessBlocker[];
 };
 
 export type ObligationResolution =
@@ -171,12 +179,8 @@ export type GateObligationDecision = {
   preventedCostClass: PreventedCostClass;
   admitted: boolean;
   resolutions: ObligationResolution[];
-  findings: ObligationFinding[];
   diagnostics: ObligationFinding[];
-  remediation: {
-    machine: string[];
-    human: string[];
-  };
+  blockers: HarnessBlocker[];
 };
 
 export type EvaluateGateObligationsInput = {
@@ -216,15 +220,79 @@ function finding(
   obligation: HarnessObligationDefinition,
   code: string,
   message: string,
-  details: Partial<ObligationFinding> = {},
+  details: Partial<ObligationFinding> & { source?: HarnessBlockerSource } = {},
 ): ObligationFinding {
+  const {
+    source = { kind: "obligation", id: obligation.id },
+    ...findingDetails
+  } = details;
+  const remediation = remediationFor(obligation, code);
   return {
     code,
     message,
-    remediation: obligation.remediation.machine,
     obligationId: obligation.id,
-    ...details,
+    ...findingDetails,
+    blocker: createHarnessBlocker({
+      code,
+      source,
+      summary: message,
+      remediations: remediation,
+    }),
   };
+}
+
+function remediationFor(
+  obligation: HarnessObligationDefinition,
+  code?: string,
+): readonly [HarnessRemediation, ...HarnessRemediation[]] {
+  switch (obligation.id) {
+    case "review.green":
+      return [
+        {
+          id: "complete-final-green-review",
+          kind: "manual_action",
+          summary: obligation.remediation.human,
+        },
+      ];
+    case "documentation.current":
+      return [
+        {
+          id: "repair-delivery-documentation",
+          kind: "code_change",
+          summary: obligation.remediation.machine,
+        },
+      ];
+    case "telemetry.recorded":
+      // A malformed record and a missing one need different instructions: only
+      // the missing case is waivable, and hand-editing a corrupt record is how
+      // the second bad commit happens. A distinct id keeps the renderer from
+      // collapsing the two.
+      if (code === "telemetry_record_malformed") {
+        return [
+          {
+            id: "regenerate-delivery-telemetry",
+            kind: "command",
+            command: ["bun", "run", "delivery:telemetry-record"],
+            summary:
+              "Regenerate the telemetry record with the recorder instead of editing it by hand.",
+          },
+        ];
+      }
+      return [
+        {
+          id: "record-delivery-telemetry",
+          kind: "command",
+          command: ["bun", "run", "delivery:telemetry-record"],
+          summary: obligation.remediation.machine,
+        },
+      ];
+    default: {
+      // Adding a fourth obligation should fail to compile here rather than
+      // return undefined into a non-empty remediation tuple at runtime.
+      const unhandled: never = obligation.id;
+      throw new Error(`No remediation defined for obligation ${unhandled}.`);
+    }
+  }
 }
 
 function isActive(
@@ -361,11 +429,13 @@ function evaluateLiveObligation(
         );
       } else {
         findings.push(
-          ...result.findings.map((providerFinding) => ({
-            ...providerFinding,
-            obligationId: obligation.id,
-            providerId,
-          })),
+          ...result.findings.map((providerFinding) =>
+            finding(obligation, providerFinding.code, providerFinding.message, {
+              obligationId: obligation.id,
+              providerId,
+              source: { kind: "provider", id: providerId },
+            }),
+          ),
         );
       }
     } else {
@@ -385,7 +455,7 @@ function evaluateLiveObligation(
         kind: "blocked",
         gateId: gate.id,
         obligationId: obligation.id,
-        findings,
+        blockers: findings.map((entry) => entry.blocker),
       },
       diagnostics: [],
     };
@@ -596,7 +666,7 @@ function evaluateHistoricalObligation(
         kind: "blocked",
         gateId: gate.id,
         obligationId: obligation.id,
-        findings: evidenceResult.blockingFindings,
+        blockers: evidenceResult.blockingFindings.map((entry) => entry.blocker),
       },
       diagnostics: evidenceResult.diagnostics,
     };
@@ -608,7 +678,9 @@ function evaluateHistoricalObligation(
         kind: "blocked",
         gateId: gate.id,
         obligationId: obligation.id,
-        findings: evidenceResult.malformedFindings,
+        blockers: evidenceResult.malformedFindings.map(
+          (entry) => entry.blocker,
+        ),
       },
       diagnostics: evidenceResult.blockingFindings.filter(
         (entry) => !evidenceResult.malformedFindings.includes(entry),
@@ -659,7 +731,7 @@ function evaluateHistoricalObligation(
       kind: "blocked",
       gateId: gate.id,
       obligationId: obligation.id,
-      findings,
+      blockers: findings.map((entry) => entry.blocker),
     },
     diagnostics: [],
   };
@@ -681,18 +753,14 @@ function enforceAllowedResolution(
     kind: "blocked",
     gateId: gate.id,
     obligationId: obligation.id,
-    findings: [
+    blockers: [
       finding(
         obligation,
         "resolution_not_allowed",
         `Resolution ${resolution.kind} is not allowed by obligation ${obligation.id}.`,
-      ),
+      ).blocker,
     ],
   };
-}
-
-function unique(values: string[]) {
-  return [...new Set(values)];
 }
 
 export function evaluateGateObligations(
@@ -734,7 +802,12 @@ export function evaluateGateObligations(
 
     const evaluation =
       obligation.freshness.kind === "live"
-        ? evaluateLiveObligation(gate, obligation, input.liveProviderResults, input)
+        ? evaluateLiveObligation(
+            gate,
+            obligation,
+            input.liveProviderResults,
+            input,
+          )
         : evaluateHistoricalObligation(gate, obligation, input);
     resolutions.push(
       enforceAllowedResolution(gate, obligation, evaluation.resolution),
@@ -742,38 +815,16 @@ export function evaluateGateObligations(
     diagnostics.push(...evaluation.diagnostics);
   }
 
-  const findings = resolutions.flatMap((resolution) =>
-    resolution.kind === "blocked" ? resolution.findings : [],
+  const blockers = resolutions.flatMap((resolution) =>
+    resolution.kind === "blocked" ? resolution.blockers : [],
   );
-  const blockedObligationIds = new Set<string>(
-    resolutions
-      .filter((resolution) => resolution.kind === "blocked")
-      .map((resolution) => resolution.obligationId),
-  );
-
   return {
     gateId: gate.id,
     candidate: input.candidate,
     preventedCostClass: gate.preventedCostClass,
-    admitted: findings.length === 0,
+    admitted: blockers.length === 0,
     resolutions,
-    findings,
     diagnostics,
-    remediation: {
-      machine: unique(
-        gate.obligationIds.flatMap((obligationId) =>
-          blockedObligationIds.has(obligationId)
-            ? [input.registry.obligations[obligationId].remediation.machine]
-            : [],
-        ),
-      ),
-      human: unique(
-        gate.obligationIds.flatMap((obligationId) =>
-          blockedObligationIds.has(obligationId)
-            ? [input.registry.obligations[obligationId].remediation.human]
-            : [],
-        ),
-      ),
-    },
+    blockers,
   };
 }

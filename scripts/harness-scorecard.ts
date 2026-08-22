@@ -6,6 +6,7 @@ import {
   type HarnessAppRegistryEntry,
 } from "./harness-app-registry";
 import { HARNESS_BEHAVIOR_SCENARIOS } from "./harness-behavior-scenarios";
+import { runHarnessCliBoundary } from "./harness-blockers";
 import {
   buildPartialDeliveryRunBaseline,
   readDeliveryRunLedger,
@@ -928,7 +929,12 @@ export async function runHarnessScorecard(
 }
 
 if (import.meta.main) {
-  const rootDir = process.cwd();
-  const result = await runHarnessScorecard(rootDir);
-  console.log(JSON.stringify(result.output, null, 2));
+  process.exitCode = await runHarnessCliBoundary({
+    source: { kind: "command", id: "harness:scorecard" },
+    reproduce: ["bun", "run", "harness:scorecard"],
+    run: async () => {
+      const result = await runHarnessScorecard(process.cwd());
+      console.log(JSON.stringify(result.output, null, 2));
+    },
+  });
 }

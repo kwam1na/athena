@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+// CLI boundary coverage is centralized in harness-blocker-inventory.test.ts.
 
 import {
   buildGitProcessEnv,
@@ -13,6 +14,7 @@ import {
   resolveHarnessReviewShell,
   runHarnessReview,
 } from "./harness-review";
+import { harnessReviewBlockedBlocker } from "./harness-review";
 
 const tempRoots: string[] = [];
 
@@ -1982,5 +1984,23 @@ describe("getChangedFilesForHarnessReview", () => {
     ).rejects.toThrow(
       "Base ref check failed for origin/does-not-exist"
     );
+  });
+});
+
+describe("harnessReviewBlockedBlocker", () => {
+  it("carries the review finding as sanitized detail under a stable code", () => {
+    const blocker = harnessReviewBlockedBlocker(
+      "Documentation waiver link missing for CONVEX_DEPLOY_KEY=super-secret",
+    );
+
+    expect(blocker.code).toBe("harness_review_blocked");
+    expect(blocker.source).toEqual({ kind: "command", id: "harness:review" });
+    expect(blocker.details).toContain("Documentation waiver link missing");
+    // Sanitization is the constructor's job, so every blocker inherits it.
+    expect(blocker.details).not.toContain("super-secret");
+    expect(blocker.remediations.map((item) => item.id)).toEqual([
+      "repair-harness-review-finding",
+      "rerun-harness-review",
+    ]);
   });
 });

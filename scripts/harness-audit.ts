@@ -10,6 +10,11 @@ import {
   HARNESS_GATE_REGISTRY,
   validateHarnessGateRegistry,
 } from "./harness-gate-registry";
+import {
+  createHarnessBlocker,
+  HarnessBlockedError,
+  runHarnessCliBoundary,
+} from "./harness-blockers";
 import { validateHarnessDocs } from "./harness-check";
 
 const AUDIT_TARGETS = HARNESS_APP_REGISTRY.map((app) => ({
@@ -583,7 +588,32 @@ export async function runHarnessAudit(rootDir: string) {
   }
 
   if (groupedErrors.size > 0) {
-    throw new Error(formatGroupedErrors(groupedErrors));
+    // Expected audit findings, so they carry their own code and repair rather
+    // than arriving as an unexpected internal error.
+    throw new HarnessBlockedError([
+      createHarnessBlocker({
+        code: "harness_audit_failed",
+        source: { kind: "command", id: "harness:audit" },
+        summary: `The harness audit found issues in ${groupedErrors.size} area(s).`,
+        details: formatGroupedErrors(groupedErrors),
+        remediations: [
+          {
+            id: "regenerate-harness-docs",
+            kind: "command",
+            command: ["bun", "run", "harness:generate"],
+            summary: "Regenerate the harness docs from their registry sources.",
+          },
+          {
+            id: "resolve-harness-audit-findings",
+            kind: "code_change",
+            summary:
+              "Resolve each audited finding at its source; the audit reports app-registry and documentation drift, not a transient failure.",
+          },
+        ],
+      }),
+      // The message keeps the grouped detail so programmatic callers that only
+      // see the thrown Error still get the full diagnostic.
+    ], formatGroupedErrors(groupedErrors));
   }
 
   console.log(
@@ -592,5 +622,9 @@ export async function runHarnessAudit(rootDir: string) {
 }
 
 if (import.meta.main) {
-  await runHarnessAudit(process.cwd());
+  process.exitCode = await runHarnessCliBoundary({
+    source: { kind: "command", id: "harness:audit" },
+    reproduce: ["bun", "run", "harness:audit"],
+    run: () => runHarnessAudit(process.cwd()),
+  });
 }

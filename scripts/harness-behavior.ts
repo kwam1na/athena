@@ -5,6 +5,11 @@ import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 
 import { HARNESS_BEHAVIOR_SCENARIOS } from "./harness-behavior-scenarios";
+import {
+  HarnessBlockedError,
+  createHarnessBlocker,
+  runHarnessCliBoundary,
+} from "./harness-blockers";
 
 const DEFAULT_READY_TIMEOUT_MS = 30_000;
 const DEFAULT_HTTP_TIMEOUT_MS = 30_000;
@@ -1783,17 +1788,58 @@ export async function runHarnessBehaviorCli(
   });
 }
 
+/**
+ * HarnessBehaviorPhaseError already names its phase in `.message`, so routing
+ * the detail through here keeps the stage that blocked while giving the
+ * failure a stable code instead of `harness_internal_error`.
+ */
+export function harnessBehaviorFailedBlocker(detail: string) {
+  return createHarnessBlocker({
+    code: "harness_behavior_failed",
+    source: { kind: "command", id: "harness:behavior" },
+    summary: "A runtime behavior scenario blocked the harness.",
+    details: detail,
+    remediations: [
+      {
+        id: "repair-harness-behavior-scenario",
+        kind: "code_change",
+        summary:
+          "Fix the scenario or the behavior it covers; a failing phase names the stage that blocked.",
+      },
+      {
+        id: "rerun-harness-behavior",
+        kind: "command",
+        command: ["bun", "run", "harness:behavior"],
+        summary: "Rerun the runtime behavior scenarios.",
+      },
+    ],
+  });
+}
+
+/**
+ * Scenario failures are expected outcomes, not crashes. Reaching the boundary
+ * as bare Errors turned every one of them into `harness_internal_error`, which
+ * the operator contract reserves for genuinely unexpected exceptions.
+ * HarnessBehaviorPhaseError already names its phase in `.message`, so the
+ * detail survives.
+ */
+async function asHarnessBehaviorBlocker(run: () => Promise<void | number>) {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof HarnessBlockedError) throw error;
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new HarnessBlockedError([harnessBehaviorFailedBlocker(detail)], detail);
+  }
+}
+
 if (import.meta.main) {
-  runHarnessBehaviorCli(process.cwd(), Bun.argv.slice(2)).catch(
-    (error: unknown) => {
-      if (error instanceof HarnessBehaviorPhaseError) {
-        console.error(
-          `[harness:behavior] Failed in ${error.phase} phase: ${error.details}`
-        );
-      } else {
-        console.error(`[harness:behavior] ${formatError(error)}`);
-      }
-      process.exit(1);
-    }
-  );
+  process.exitCode = await runHarnessCliBoundary({
+    source: { kind: "command", id: "harness:behavior" },
+    reproduce: ["bun", "run", "harness:behavior", ...Bun.argv.slice(2)],
+    run: () =>
+      asHarnessBehaviorBlocker(() =>
+        runHarnessBehaviorCli(process.cwd(), Bun.argv.slice(2)),
+      ),
+  });
 }

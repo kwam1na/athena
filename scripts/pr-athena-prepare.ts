@@ -16,6 +16,12 @@ import {
 } from "./harness-mechanical-check";
 import { runPreCommitGeneratedArtifacts } from "./pre-commit-generated-artifacts";
 import { assertPrAthenaProofReady } from "./pre-push-validation-proof";
+import {
+  createHarnessBlocker,
+  HarnessBlockedError,
+  runHarnessCliBoundary,
+  type HarnessBlocker,
+} from "./harness-blockers";
 
 export const PR_ATHENA_PREPARATION_SCHEMA_VERSION = 1;
 export const PR_ATHENA_PREPARATION_GIT_PATH =
@@ -30,6 +36,7 @@ const PREPARATION_WIRING_PATHS = [
   "scripts/pre-commit-generated-artifacts.ts",
   "scripts/pre-push-validation-proof.ts",
   "scripts/harness-mechanical-check.ts",
+  "scripts/harness-blockers.ts",
 ] as const;
 
 type PrepareLogger = Pick<Console, "log">;
@@ -85,6 +92,7 @@ export type PrAthenaPreparationEvaluation =
         | "candidate_ambiguous";
       reason: string;
       remediation: typeof PR_ATHENA_PREPARATION_REMEDIATION;
+      blocker: HarnessBlocker;
       receiptPath?: string;
     };
 
@@ -240,11 +248,26 @@ function blocked(
   reason: string,
   receiptPath?: string,
 ): PrAthenaPreparationEvaluation {
+  const blocker = createHarnessBlocker({
+    code: `preparation_${status}`,
+    source: { kind: "preparation", id: status },
+    summary: "The prepared candidate is not current.",
+    details: reason,
+    remediations: [
+      {
+        id: "prepare-current-candidate",
+        kind: "command",
+        command: ["bun", "run", "pr:athena:prepare"],
+        summary: "Prepare the current candidate again and publish a fresh receipt.",
+      },
+    ],
+  });
   return {
     prepared: false,
     status,
     reason,
     remediation: PR_ATHENA_PREPARATION_REMEDIATION,
+    blocker,
     ...(receiptPath ? { receiptPath } : {}),
   };
 }
@@ -329,12 +352,39 @@ export async function evaluatePrAthenaPreparationReceipt(
   };
 }
 
+async function runPrAthenaPreparationCli() {
+  try {
+    await runPrAthenaPreparation(process.cwd());
+  } catch (error) {
+    throw new HarnessBlockedError([
+      createHarnessBlocker({
+        code: "preparation_failed",
+        source: { kind: "command", id: "pr:athena:prepare" },
+        summary: "The candidate could not be prepared.",
+        details: error instanceof Error ? error.message : String(error),
+        remediations: [
+          {
+            id: "repair-preparation-failure",
+            kind: "code_change",
+            summary:
+              "Address the reported preparation prerequisite before retrying.",
+          },
+          {
+            id: "retry-candidate-preparation",
+            kind: "command",
+            command: ["bun", "run", "pr:athena:prepare"],
+            summary: "Retry candidate preparation.",
+          },
+        ],
+      }),
+    ]);
+  }
+}
+
 if (import.meta.main) {
-  runPrAthenaPreparation(process.cwd()).catch((error: unknown) => {
-    console.error(
-      `[pr:athena] Preparation blocked: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    console.error(`Remediation: ${PR_ATHENA_PREPARATION_REMEDIATION}`);
-    process.exit(1);
+  process.exitCode = await runHarnessCliBoundary({
+    source: { kind: "command", id: "pr:athena:prepare" },
+    reproduce: ["bun", "run", "pr:athena:prepare"],
+    run: runPrAthenaPreparationCli,
   });
 }
