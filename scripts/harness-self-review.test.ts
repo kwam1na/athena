@@ -4,7 +4,8 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // CLI boundary coverage is centralized in harness-blocker-inventory.test.ts.
 
-import { runHarnessSelfReview } from "./harness-self-review";
+import { parseCliArguments, runHarnessSelfReview } from "./harness-self-review";
+import { HarnessUsageError } from "./harness-blockers";
 
 const tempRoots: string[] = [];
 
@@ -513,5 +514,15 @@ describe("runHarnessSelfReview", () => {
       "Graphify appears stale relative to current changed files. Run `bun run graphify:rebuild` before handoff."
     );
     expect(result.markdown).toContain("status: stale");
+  });
+});
+
+describe("parseCliArguments", () => {
+  it("rejects a bad invocation as a typed usage error", () => {
+    // A malformed invocation is expected, not a crash: it must not reach the
+    // boundary as harness_internal_error.
+    expect(() => parseCliArguments(["--dry-run"])).toThrow(HarnessUsageError);
+    expect(() => parseCliArguments([])).toThrow(HarnessUsageError);
+    expect(() => parseCliArguments(["--dry-run"])).toThrow(/--base <ref>/);
   });
 });

@@ -15,6 +15,7 @@ import {
   runHarnessReview,
 } from "./harness-review";
 import { harnessReviewBlockedBlocker } from "./harness-review";
+import { HarnessUsageError } from "./harness-blockers";
 
 const tempRoots: string[] = [];
 
@@ -1895,6 +1896,14 @@ describe("parseHarnessReviewArgs", () => {
     ).toThrow(
       "Missing or invalid value for --validation-provided-by. Supported value: athena-pr-tests"
     );
+  });
+
+  it("rejects an unknown argument as a typed usage error", () => {
+    // A malformed invocation is expected, not a crash: it must not reach the
+    // boundary as harness_internal_error.
+    expect(() =>
+      parseHarnessReviewArgs(["--dry-run"])
+    ).toThrow(HarnessUsageError);
   });
 });
 

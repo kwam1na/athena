@@ -887,6 +887,35 @@ export async function runPrAthenaDeliveryRunCli(
       ]),
     );
   }
+
+  // An interrupted run is the other non-zero exit the spine can produce: any
+  // non-SIGINT signal exits 1, and with `renderNonZero: false` it printed only
+  // the prose summary - indistinguishable from a crash at the terminal. An
+  // operator-initiated SIGINT renders too: a stable code naming the signal
+  // costs nothing and keeps every non-zero exit of the delivery spine total.
+  if (ledger.status === "interrupted") {
+    logger.error(
+      formatHarnessBlockers([
+        createHarnessBlocker({
+          code: "delivery_run_interrupted",
+          source: { kind: "command", id: "pr:athena:delivery-run" },
+          summary: "The Athena delivery run was interrupted before completion.",
+          ...(ledger.interruptedReason
+            ? { details: ledger.interruptedReason }
+            : {}),
+          remediations: [
+            {
+              id: "rerun-interrupted-delivery-run",
+              kind: "command",
+              command: ["bun", "run", "pr:athena"],
+              summary:
+                "Rerun the delivery gate once the interrupting condition clears.",
+            },
+          ],
+        }),
+      ]),
+    );
+  }
   return exitCode;
 }
 

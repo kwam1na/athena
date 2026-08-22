@@ -5,7 +5,7 @@ import type {
   HarnessBehaviorPhase,
   HarnessBehaviorScenarioReport,
 } from "./harness-behavior";
-import { runHarnessCliBoundary } from "./harness-blockers";
+import { runHarnessCliBoundary, HarnessUsageError } from "./harness-blockers";
 
 const DEFAULT_OUTPUT_PATH = "artifacts/harness-behavior/trends/latest.json";
 const CANONICAL_PHASES: HarnessBehaviorPhase[] = [
@@ -529,9 +529,11 @@ export function parseHarnessRuntimeTrendsArgs(
       continue;
     }
 
-    throw new Error(
-      `Unknown argument: ${arg}. Usage: bun run harness:runtime-trends [--persist-history]`
-    );
+    throw new HarnessUsageError({
+      source: { kind: "command", id: "harness:runtime-trends" },
+      message: `Unknown argument: ${arg}. Usage: bun run harness:runtime-trends [--persist-history]`,
+      validFlags: ["--persist-history"],
+    });
   }
 
   return {

@@ -10,6 +10,8 @@ import {
 } from "./harness-review-evidence";
 import { HARNESS_REVIEW_IDENTITY_VERSION } from "./harness-review-identity";
 import { harnessReviewEvidenceRejectedBlocker } from "./harness-review-evidence";
+import { parseReviewEvidenceInvocation } from "./harness-review-evidence";
+import { HarnessUsageError } from "./harness-blockers";
 
 const roots: string[] = [];
 
@@ -980,5 +982,19 @@ describe("harnessReviewEvidenceRejectedBlocker", () => {
       "repair-review-manifest",
       "recapture-review-context",
     ]);
+  });
+});
+
+describe("parseReviewEvidenceInvocation", () => {
+  it("rejects a malformed invocation as a typed usage error", () => {
+    // A malformed invocation is expected, not a crash: it must not reach the
+    // boundary as harness_internal_error.
+    expect(() => parseReviewEvidenceInvocation([])).toThrow(HarnessUsageError);
+    expect(() =>
+      parseReviewEvidenceInvocation(["record"]),
+    ).toThrow(HarnessUsageError);
+    expect(() => parseReviewEvidenceInvocation(["context", "extra"])).toThrow(
+      HarnessUsageError,
+    );
   });
 });

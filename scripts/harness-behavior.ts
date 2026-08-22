@@ -8,6 +8,7 @@ import { HARNESS_BEHAVIOR_SCENARIOS } from "./harness-behavior-scenarios";
 import {
   HarnessBlockedError,
   createHarnessBlocker,
+  HarnessUsageError,
   runHarnessCliBoundary,
 } from "./harness-blockers";
 
@@ -1625,6 +1626,15 @@ export function parseHarnessBehaviorArgs(
   let list = false;
   let help = false;
   let recordVideo = false;
+  const usage = {
+    source: { kind: "command", id: "harness:behavior" } as const,
+    validFlags: [
+      "--scenario <name>",
+      "--record-video [true|false]",
+      "--list",
+      "--help",
+    ],
+  };
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -1656,15 +1666,19 @@ export function parseHarnessBehaviorArgs(
         continue;
       }
 
-      throw new Error(
-        `Invalid value for --record-video: "${rawValue}". Expected true, false, 1, or 0.`
-      );
+      throw new HarnessUsageError({
+        ...usage,
+        message: `Invalid value for --record-video: "${rawValue}". Expected true, false, 1, or 0.`,
+      });
     }
 
     if (arg === "--scenario") {
       const nextValue = args[index + 1];
       if (!nextValue || nextValue.startsWith("-")) {
-        throw new Error("Missing scenario name after --scenario.");
+        throw new HarnessUsageError({
+          ...usage,
+          message: "Missing scenario name after --scenario.",
+        });
       }
       scenarioName = nextValue;
       index += 1;
@@ -1674,12 +1688,18 @@ export function parseHarnessBehaviorArgs(
     if (arg.startsWith("--scenario=")) {
       scenarioName = arg.split("=", 2)[1] ?? null;
       if (!scenarioName) {
-        throw new Error("Missing scenario name after --scenario=.");
+        throw new HarnessUsageError({
+          ...usage,
+          message: "Missing scenario name after --scenario=.",
+        });
       }
       continue;
     }
 
-    throw new Error(`Unknown argument: ${arg}`);
+    throw new HarnessUsageError({
+      ...usage,
+      message: `Unknown argument: ${arg}`,
+    });
   }
 
   return {
@@ -1725,7 +1745,16 @@ export async function runHarnessBehaviorCli(
   }
 
   if (!parsedArgs.scenarioName) {
-    throw new Error("Missing required argument: --scenario <name>.");
+    throw new HarnessUsageError({
+      source: { kind: "command", id: "harness:behavior" },
+      message: "Missing required argument: --scenario <name>.",
+      validFlags: [
+        "--scenario <name>",
+        "--record-video [true|false]",
+        "--list",
+        "--help",
+      ],
+    });
   }
 
   const selectedScenario = scenarios.find(

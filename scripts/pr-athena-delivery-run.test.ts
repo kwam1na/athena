@@ -884,4 +884,57 @@ describe("runPrAthenaDeliveryRunCli", () => {
       "Harness gate decision event failed correlation validation.",
     );
   });
+
+  it("renders delivery_run_interrupted when a phase is killed by a non-SIGINT signal", async () => {
+    const errors: string[] = [];
+
+    const exitCode = await runPrAthenaDeliveryRunCli(
+      [],
+      {
+        writeLedger: false,
+        runCommand: async () => {
+          throw Object.assign(new Error("child terminated"), {
+            signal: "SIGTERM",
+          });
+        },
+      } as never,
+      { error: (line: string) => errors.push(line) },
+    );
+
+    const rendered = errors.join("\n");
+
+    // Before this, a signaled run printed only the prose summary and exited
+    // non-zero with no contract-form output at all - indistinguishable from a
+    // crash at the terminal.
+    expect(exitCode).toBe(1);
+    expect(rendered).toContain("delivery_run_interrupted");
+    expect(rendered).toContain("command:pr:athena:delivery-run");
+    expect(rendered).toContain("rerun-interrupted-delivery-run");
+    expect(rendered).toContain("SIGTERM");
+  });
+
+  it("renders delivery_run_interrupted for SIGINT so the terminal can tell interruption from a crash", async () => {
+    const errors: string[] = [];
+
+    const exitCode = await runPrAthenaDeliveryRunCli(
+      [],
+      {
+        writeLedger: false,
+        runCommand: async () => {
+          throw Object.assign(new Error("child interrupted"), {
+            signal: "SIGINT",
+          });
+        },
+      } as never,
+      { error: (line: string) => errors.push(line) },
+    );
+
+    const rendered = errors.join("\n");
+
+    expect(exitCode).toBe(130);
+    expect(rendered).toContain("delivery_run_interrupted");
+    expect(rendered).toContain("command:pr:athena:delivery-run");
+    expect(rendered).toContain("rerun-interrupted-delivery-run");
+    expect(rendered).not.toContain("harness_internal_error");
+  });
 });

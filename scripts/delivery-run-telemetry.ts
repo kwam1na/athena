@@ -19,6 +19,7 @@ import {
 } from "./harness-delivery-run-ledger";
 import {
   runHarnessCliBoundary,
+  HarnessUsageError,
   type CommandArguments,
   type HarnessBlockerSource,
 } from "./harness-blockers";
@@ -585,21 +586,41 @@ export function assertDeliveryRunTelemetryCheck(
   );
 }
 
-export function parseArgs(argv: string[]) {
+export function parseArgs(
+  argv: string[],
+  source: HarnessBlockerSource = {
+    kind: "command",
+    id: "delivery:telemetry-check",
+  },
+) {
   const [command, ...rest] = argv;
+  const usage = {
+    source,
+    validFlags: ["record", "check", "--base <ref>"],
+  };
   if (command !== "record" && command !== "check") {
-    throw new Error(
-      "Usage: bun scripts/delivery-run-telemetry.ts <record|check> [--base <ref>]",
-    );
+    throw new HarnessUsageError({
+      ...usage,
+      message:
+        "Usage: bun scripts/delivery-run-telemetry.ts <record|check> [--base <ref>]",
+    });
   }
   let baseRef = "origin/main";
   for (let index = 0; index < rest.length; index += 1) {
     if (rest[index] === "--base") {
       baseRef = rest[++index] ?? "";
-      if (!baseRef) throw new Error("Missing value for --base.");
+      if (!baseRef) {
+        throw new HarnessUsageError({
+          ...usage,
+          message: "Missing value for --base.",
+        });
+      }
       continue;
     }
-    throw new Error(`Unknown argument: ${rest[index]}.`);
+    throw new HarnessUsageError({
+      ...usage,
+      message: `Unknown argument: ${rest[index]}.`,
+    });
   }
   return { command, baseRef };
 }
@@ -640,7 +661,10 @@ if (import.meta.main) {
   process.exitCode = await runHarnessCliBoundary({
     ...invocation,
     run: async () => {
-      const { command, baseRef } = parseArgs(process.argv.slice(2));
+      const { command, baseRef } = parseArgs(
+        process.argv.slice(2),
+        invocation.source,
+      );
       if (command === "check") {
         assertDeliveryRunTelemetryCheck(process.cwd(), { baseRef });
         console.log("Delivery-run telemetry check passed.");

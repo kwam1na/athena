@@ -10,6 +10,7 @@ import {
   parseHarnessBehaviorReportLines,
   runHarnessRuntimeTrends,
 } from "./harness-runtime-trends";
+import { HarnessUsageError } from "./harness-blockers";
 
 const tempRoots: string[] = [];
 
@@ -321,5 +322,16 @@ describe("parseHarnessRuntimeTrendsArgs", () => {
       persistHistory: true,
       help: false,
     });
+  });
+
+  it("rejects an unknown argument as a typed usage error", () => {
+    // A malformed invocation is expected, not a crash: it must not reach the
+    // boundary as harness_internal_error.
+    expect(() => parseHarnessRuntimeTrendsArgs(["--dry-run"])).toThrow(
+      HarnessUsageError,
+    );
+    expect(() => parseHarnessRuntimeTrendsArgs(["--dry-run"])).toThrow(
+      /--persist-history/,
+    );
   });
 });

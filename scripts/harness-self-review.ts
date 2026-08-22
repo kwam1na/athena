@@ -6,6 +6,7 @@ import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
 import {
   createHarnessBlocker,
   HarnessBlockedError,
+  HarnessUsageError,
   runHarnessCliBoundary,
 } from "./harness-blockers";
 import { validateHarnessDocs } from "./harness-check";
@@ -807,7 +808,9 @@ function buildMarkdownBundle(params: {
   return lines.join("\n");
 }
 
-function parseCliArguments(argv: string[]) {
+// Exported for its sibling test: usage errors are part of this CLI's
+// operator contract, so the parser's rejection shape is covered directly.
+export function parseCliArguments(argv: string[]) {
   let baseRef: string | null = null;
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -820,7 +823,12 @@ function parseCliArguments(argv: string[]) {
     if (currentArg === "--base") {
       const nextValue = argv[index + 1];
       if (!nextValue || nextValue.startsWith("--")) {
-        throw new Error("Missing value for --base. Example: bun run harness:self-review --base origin/main");
+        throw new HarnessUsageError({
+          source: { kind: "command", id: "harness:self-review" },
+          message:
+            "Missing value for --base. Example: bun run harness:self-review --base origin/main",
+          validFlags: ["--base <ref>"],
+        });
       }
       baseRef = nextValue;
       index += 1;
@@ -839,15 +847,20 @@ function parseCliArguments(argv: string[]) {
       };
     }
 
-    throw new Error(
-      `Unknown argument: ${currentArg}. Usage: bun run harness:self-review --base <ref>`
-    );
+    throw new HarnessUsageError({
+      source: { kind: "command", id: "harness:self-review" },
+      message: `Unknown argument: ${currentArg}. Usage: bun run harness:self-review --base <ref>`,
+      validFlags: ["--base <ref>"],
+    });
   }
 
   if (!baseRef) {
-    throw new Error(
-      "Missing required --base <ref>. Usage: bun run harness:self-review --base origin/main"
-    );
+    throw new HarnessUsageError({
+      source: { kind: "command", id: "harness:self-review" },
+      message:
+        "Missing required --base <ref>. Usage: bun run harness:self-review --base origin/main",
+      validFlags: ["--base <ref>"],
+    });
   }
 
   return {

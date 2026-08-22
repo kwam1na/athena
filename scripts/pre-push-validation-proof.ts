@@ -6,7 +6,7 @@ import { captureStableHarnessCandidate } from "./harness-candidate";
 import { assertDeliveryRunTelemetryCheck } from "./delivery-run-telemetry";
 import type { DeliveryRunTelemetryCheckOptions } from "./delivery-run-telemetry";
 import { isPostGateValidationNeutralPath } from "./harness-review-identity";
-import { runHarnessCliBoundary } from "./harness-blockers";
+import { runHarnessCliBoundary, HarnessUsageError } from "./harness-blockers";
 
 export const PRE_PUSH_VALIDATION_PROOF_SCHEMA_VERSION = 2;
 export const PR_ATHENA_PROOF_BASE_REF = "origin/main";
@@ -651,9 +651,12 @@ async function runPrePushValidationProofCli(command: string | undefined) {
   }
 
   if (command !== "record-pr-athena") {
-    throw new Error(
-      "Usage: bun scripts/pre-push-validation-proof.ts <prepare-pr-athena|record-pr-athena>",
-    );
+    throw new HarnessUsageError({
+      source: { kind: "command", id: "pr:athena" },
+      message:
+        "Usage: bun scripts/pre-push-validation-proof.ts <prepare-pr-athena|record-pr-athena>",
+      validFlags: ["prepare-pr-athena", "record-pr-athena"],
+    });
   }
 
   const result = await recordPrePushValidationProof(process.cwd());
