@@ -9,6 +9,8 @@
  */
 
 import type * as agentHarness_lifecycle from "../agentHarness/lifecycle.js";
+import type * as agentHarness_profiles_syntheticSecondSurface from "../agentHarness/profiles/syntheticSecondSurface.js";
+import type * as agentHarness_registry from "../agentHarness/registry.js";
 import type * as agentHarness_retention from "../agentHarness/retention.js";
 import type * as agentHarness_testSupport from "../agentHarness/testSupport.js";
 import type * as agentHarness_turnBindings from "../agentHarness/turnBindings.js";
@@ -675,6 +677,8 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   "agentHarness/lifecycle": typeof agentHarness_lifecycle;
+  "agentHarness/profiles/syntheticSecondSurface": typeof agentHarness_profiles_syntheticSecondSurface;
+  "agentHarness/registry": typeof agentHarness_registry;
   "agentHarness/retention": typeof agentHarness_retention;
   "agentHarness/testSupport": typeof agentHarness_testSupport;
   "agentHarness/turnBindings": typeof agentHarness_turnBindings;
