@@ -5,7 +5,7 @@
   <title>Blocker Contract &amp; Gates: closing the typed-blocker gaps (V26-1307)</title>
 </head>
 <body>
-<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="cf37f29ea47bde778030b3892553950a1ac5041ad48a02b50db7bcfde6e988fc">
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="5916746cb579eb2e515acabaad9bd9dd458ce8b85f46bfdeadb468754cec562e">
   <header data-report-section="header">
     <h1>Blocker Contract &amp; Gates: closing the typed-blocker gaps (V26-1307)</h1>
     <p>Seven tickets that made every harness non-zero exit carry code, source, and remediation</p>
@@ -103,7 +103,7 @@
       <ul>
         <li>Focused bun test runs over the changed surfaces: 99 passing tests across harness-blockers.test.ts, harness-gate-admission.test.ts, harness-gate-obligations.test.ts, harness-blocker-inventory.test.ts (729 expect calls); 123 passing tests across pr-athena-delivery-run.test.ts, harness-review.test.ts, harness-janitor.test.ts, harness-behavior.test.ts, delivery-documentation-check.test.ts, documentation-waiver-command.test.ts. Zero failures.</li>
         <li>bun run reports:presentation:check passes over the whole report corpus including this report.</li>
-        <li>Deliverable diff fingerprint verified via bun scripts/landed-change-report-check.ts --base origin/main --print-fingerprint: cf37f29ea47bde778030b3892553950a1ac5041ad48a02b50db7bcfde6e988fc, matching the attribute embedded in this report. docs/reports/, docs/solutions/, and other non-deliverable paths are excluded from the fingerprint by design, so adding this report does not move it.</li>
+        <li>Deliverable diff fingerprint verified via bun scripts/landed-change-report-check.ts --base origin/main --print-fingerprint: 5916746cb579eb2e515acabaad9bd9dd458ce8b85f46bfdeadb468754cec562e, matching the attribute embedded in this report. docs/reports/, docs/solutions/, and other non-deliverable paths are excluded from the fingerprint by design, so adding this report does not move it.</li>
         <li>Full-surface authority (bun run pr:athena) is the merge-ready gate and remains pending at the delivery-candidate stage; this report resolves the landed-change-report finding that blocked the delivery-documentation-check provider.</li>
         <li>Deployment status: not applicable - all changes are repository tooling and agent docs; there is no production deploy for this batch.</li>
         <li>Root alignment status: pending - the branch is a delivery candidate; merge and root alignment happen after the gate passes.</li>

@@ -22,7 +22,7 @@ tags:
   - gate-obligations
   - remediations
   - cli-boundary
-delivery_diff_fingerprint: cf37f29ea47bde778030b3892553950a1ac5041ad48a02b50db7bcfde6e988fc
+delivery_diff_fingerprint: 5916746cb579eb2e515acabaad9bd9dd458ce8b85f46bfdeadb468754cec562e
 ---
 
 # An Escape Hatch Needs Its Own Sensor, and Behavior-Gating Enumerations Must Be Exhaustiveness-Pinned
