@@ -204,6 +204,7 @@ import type * as inventory_featuredItem from "../inventory/featuredItem.js";
 import type * as inventory_helpers_expenseSessionExpiration from "../inventory/helpers/expenseSessionExpiration.js";
 import type * as inventory_helpers_expenseSessionValidation from "../inventory/helpers/expenseSessionValidation.js";
 import type * as inventory_helpers_inventoryHolds from "../inventory/helpers/inventoryHolds.js";
+import type * as inventory_helpers_productArchivePrecondition from "../inventory/helpers/productArchivePrecondition.js";
 import type * as inventory_helpers_resultTypes from "../inventory/helpers/resultTypes.js";
 import type * as inventory_helpers_sessionExpiration from "../inventory/helpers/sessionExpiration.js";
 import type * as inventory_helpers_sessionValidation from "../inventory/helpers/sessionValidation.js";
@@ -936,6 +937,7 @@ declare const fullApi: ApiFromModules<{
   "inventory/helpers/expenseSessionExpiration": typeof inventory_helpers_expenseSessionExpiration;
   "inventory/helpers/expenseSessionValidation": typeof inventory_helpers_expenseSessionValidation;
   "inventory/helpers/inventoryHolds": typeof inventory_helpers_inventoryHolds;
+  "inventory/helpers/productArchivePrecondition": typeof inventory_helpers_productArchivePrecondition;
   "inventory/helpers/resultTypes": typeof inventory_helpers_resultTypes;
   "inventory/helpers/sessionExpiration": typeof inventory_helpers_sessionExpiration;
   "inventory/helpers/sessionValidation": typeof inventory_helpers_sessionValidation;
