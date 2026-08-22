@@ -5,7 +5,7 @@
   <title>POS Sync-Review Convergence</title>
 </head>
 <body>
-<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="be3af648a60da1ad1abd9cdf56464891ac18687319f716373e7d847d42cb8a2f">
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="9d3007caedcdb6f6fb1f9506560ef73e0c86fcb8dde5a9f9e7d46c032f42ccee">
   <header data-report-section="header">
     <h1>POS Sync-Review Convergence</h1>
     <p>One close boundary for drawers, one mutation for Open Work and its conflicts, one rail for expense shortfalls</p>
@@ -17,7 +17,7 @@
     </ul>
     <dl data-report-meta>
       <dt>Branch</dt><dd>codex/v26-1247-1250-pos-sync-review-convergence</dd>
-      <dt>Candidate head</dt><dd>734dba03 (source tree; report, solution-note and telemetry commits follow on the same branch)</dd>
+      <dt>Candidate head</dt><dd>e7893f89 (source tree; report, solution-note and telemetry commits follow on the same branch)</dd>
       <dt>PR</dt><dd>Draft PR opens after the full merge gate; number recorded in Linear and the PR body</dd>
       <dt>Status</dt><dd>Delivery candidate; merge, Linear Done, root alignment and deploy pending</dd>
       <dt>Deploy</dt><dd>Not performed</dd>
@@ -84,7 +84,7 @@
   <section data-report-section="validation">
     <h2>Validation and review</h2>
       <p>Focused suites for every touched file passed on the merged tree (21 files, 854 tests), then the full webapp suite (769 files, 9,271 tests), typecheck, lint, architecture lint, and git diff --check. Three integration tests were added for the merge seam: an expense member settles its conflict on manual completion, on stock-adjustment auto-resolution, and never through a sale-shaped mapping.</p>
-      <p>Independent review checkpoint (execute section 6): twelve reviewers (correctness, testing, maintainability, project-standards, security, performance, reliability, adversarial, kieran-typescript, api-contract, agent-native, learnings) ran twice against prepared trees. Round 1 raised one in-contract P1 that was fixed (a repair row window truncated by already-resolved rows read as complete and could half-settle an event) and one in-contract P2 test gap that was closed (mutation-level obsolete settle behind a closing drawer). Round 2 validated a follow-on P1 from reliability: because conflict rows are never deleted, judging truncation on the unfiltered window let an event&#x27;s settled history exceed the cap and skip it forever; the fix adds a status-scoped event index so only open rows count, with a convergence regression test (2 resolved plus 2,000 open rows settle whole). Five further P1 claims were each rejected by an independent validator as outside the acceptance criteria or pre-existing (preview omission of settled-blocker skipped rows, permanent skip of a single event above the 2,000-row cap, clock-domain mixing, all-type settlement per event, preview/apply hash when a fresh open is not projection-safe) and are recorded as residual risks; three P2/P3 cleanup suggestions are advisory. Round 2 re-reviewed the complete changed tree; round 3 re-reviewed the delta (reliability and correctness). Every reviewer approved with zero blocking findings and zero deferred-expansion issues. Review evidence was recorded with bun run harness:review-evidence.</p>
+      <p>Independent review checkpoint (execute section 6): twelve reviewers (correctness, testing, maintainability, project-standards, security, performance, reliability, adversarial, kieran-typescript, api-contract, agent-native, learnings) ran twice against prepared trees. Round 1 raised one in-contract P1 that was fixed (a repair row window truncated by already-resolved rows read as complete and could half-settle an event) and one in-contract P2 test gap that was closed (mutation-level obsolete settle behind a closing drawer). Round 2 validated a follow-on P1 from reliability: because conflict rows are never deleted, judging truncation on the unfiltered window let an event&#x27;s settled history exceed the cap and skip it forever; the fix adds a status-scoped event index so only open rows count, with a convergence regression test (2 resolved plus 2,000 open rows settle whole). Five further P1 claims were each classified by an independent validator as outside the acceptance criteria or pre-existing (preview omission of settled-blocker skipped rows, permanent skip of a single event above the 2,000-row cap, clock-domain mixing, all-type settlement per event, preview/apply hash when a fresh open is not projection-safe); they are recorded as residual risks here and deferred to follow-up issues rather than expanded into this delivery. Round 2 re-reviewed the complete changed tree; rounds 3 and 4 re-reviewed the deltas (reliability and correctness). A round-3 scope check promoted one adversarial finding to an in-contract defect: a row classified skipped per-row could settle with its obsolete event and be reported in both the resolved and skipped lists; the repair result now keeps those lists disjoint, with a regression test. Every reviewer approved with zero blocking findings. Out-of-contract suggestions with a concrete rationale were not dropped: they are deferred to follow-up issues V26-1280 (repair preview and apply evidence parity, including the per-event row cap question), V26-1281 (clock-skew posture for the lifecycle boundary), V26-1282 (settlement scoped by conflict type and public settlement evidence), and V26-1283 (two hygiene cleanups). Review evidence was recorded with bun run harness:review-evidence.</p>
       <p>Full merge gate: bun run pr:athena had not yet run when this report was first rendered; its verbatim [pr:athena] summary lines are appended to this section after it passes, before the final review-and-merge loop.</p>
       <p>Deploy consideration: this delivery adds a Convex schema index (<code>posLocalSyncConflict.by_store_terminal_localEvent_status</code>); Convex builds it on push, so the Convex deploy must accompany the code. Status at report time: delivery candidate. Merge, Linear Done, local root alignment, and production deploy have not happened and are not claimed here.</p>
   </section>
@@ -251,7 +251,7 @@
     <dl>
       <dt>session context (ce-session-historian equivalent)</dt><dd>Collected the four tickets&#x27; implementer comments, the V26-1252 integration strategy, per-branch heads and postures, and the prior decisions recorded in the two existing solution notes.</dd>
       <dt>delivered diff (read-only codebase researcher)</dt><dd>Mapped changed files to tickets, traced the before and after of classification, repair, settlement, and expense projection, enumerated skip reasons, caps, and the tests proving each acceptance criterion.</dd>
-      <dt>quiz and report reviewer</dt><dd>Reviewed the draft for unsupported claims, unclear sections, and weak quiz questions; its corrections were applied before commit.</dd>
+      <dt>quiz and report reviewer</dt><dd>Reviewed the draft against the code for unsupported claims, weak quiz questions, status language, and sensitive data; it returned no corrections.</dd>
     </dl>
   </section>
 </article>
