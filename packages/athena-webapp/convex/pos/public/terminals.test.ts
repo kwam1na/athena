@@ -243,6 +243,8 @@ function buildTerminalHealthSummaryResult() {
         summary: "An app update is available but not ready to refresh yet.",
       },
       cloudRepair: {
+        hasMoreCandidates: false,
+        obsoleteConflictIds: [],
         preconditionHash: "terminal-cloud-repair:hash",
         safeConflictIds: ["conflict-1"],
         skippedConflictIds: [],
@@ -516,6 +518,8 @@ describe("POS terminal public mutations", () => {
         freshRuntimeRequiredForAbleToTransactNow: true,
       },
       cloudRepair: {
+        hasMoreCandidates: false,
+        obsoleteConflictIds: [],
         preconditionHash: "hash",
         safeConflictIds: [],
         skippedConflictIds: [],
@@ -578,7 +582,14 @@ describe("POS terminal public mutations", () => {
     mocks.resolveTerminalCloudRepairCommand.mockResolvedValue({
       kind: "ok",
       data: {
+        hasMoreCandidates: false,
         preconditionHash: "terminal-cloud-repair:hash",
+        repairedSourceEventIds: ["event-1"],
+        resolvedByDisposition: {
+          duplicate_resolved: 0,
+          fresh_projected: 0,
+          obsolete_resolved: 1,
+        },
         resolvedConflictIds: ["conflict-1"],
         skippedConflictIds: [],
       },
@@ -2244,7 +2255,14 @@ describe("POS terminal public mutations", () => {
     assertConformsToExportedReturns(resolveTerminalCloudRepair as never, {
       kind: "ok",
       data: {
+        hasMoreCandidates: false,
         preconditionHash: "terminal-cloud-repair:hash",
+        repairedSourceEventIds: ["event-1"],
+        resolvedByDisposition: {
+          duplicate_resolved: 0,
+          fresh_projected: 0,
+          obsolete_resolved: 1,
+        },
         resolvedConflictIds: ["conflict-1"],
         skippedConflictIds: [],
       },
@@ -2369,6 +2387,8 @@ describe("POS terminal public mutations", () => {
         freshRuntimeRequiredForAbleToTransactNow: false,
       },
       cloudRepair: {
+        hasMoreCandidates: false,
+        obsoleteConflictIds: [],
         preconditionHash: "hash",
         safeConflictIds: [],
         skippedConflictIds: [],
@@ -2442,6 +2462,8 @@ describe("POS terminal public mutations", () => {
         freshRuntimeRequiredForAbleToTransactNow: true,
       },
       cloudRepair: {
+        hasMoreCandidates: false,
+        obsoleteConflictIds: [],
         preconditionHash: "hash",
         safeConflictIds: [],
         skippedConflictIds: [],
@@ -2506,6 +2528,8 @@ describe("POS terminal public mutations", () => {
         freshRuntimeRequiredForAbleToTransactNow: true,
       },
       cloudRepair: {
+        hasMoreCandidates: false,
+        obsoleteConflictIds: [],
         preconditionHash: "hash",
         safeConflictIds: [],
         skippedConflictIds: [],
@@ -2554,6 +2578,8 @@ describe("POS terminal public mutations", () => {
         freshRuntimeRequiredForAbleToTransactNow: true,
       },
       cloudRepair: {
+        hasMoreCandidates: false,
+        obsoleteConflictIds: [],
         preconditionHash: "hash",
         safeConflictIds: [],
         skippedConflictIds: [],

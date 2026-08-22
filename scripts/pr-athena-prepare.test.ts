@@ -43,6 +43,7 @@ async function fixtureRoot() {
     "pre-commit-generated-artifacts.ts",
     "pre-push-validation-proof.ts",
     "harness-mechanical-check.ts",
+    "harness-blockers.ts",
   ]) {
     await writeFile(path.join(root, "scripts", name), `// ${name}\n`);
   }
@@ -56,6 +57,29 @@ afterEach(async () => {
 });
 
 describe("pr:athena preparation", () => {
+  it("returns a shared typed blocker for an expected receipt failure", async () => {
+    const root = await fixtureRoot();
+    const result = await evaluatePrAthenaPreparationReceipt(root, {
+      resolveReceiptPath: async () => path.join(root, "missing.json"),
+      captureCandidate: async () => ({ ok: true, candidate }),
+    });
+
+    expect(result).toMatchObject({
+      prepared: false,
+      status: "missing",
+      blocker: {
+        code: "preparation_missing",
+        source: { kind: "preparation", id: "missing" },
+        remediations: [
+          expect.objectContaining({
+            kind: "command",
+            command: ["bun", "run", "pr:athena:prepare"],
+          }),
+        ],
+      },
+    });
+  });
+
   it("publishes a receipt only after every prerequisite succeeds", async () => {
     const root = await fixtureRoot();
     const calls: string[] = [];

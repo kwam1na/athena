@@ -3,6 +3,10 @@ import {
   type DeliveryDocumentationFinding,
 } from "./delivery-documentation-check";
 import type { DocumentationWaiverFindingCode } from "./documentation-waiver-attestation";
+import {
+  HarnessBlockedError,
+  runHarnessCliBoundary,
+} from "./harness-blockers";
 import type { HarnessCandidate } from "./harness-candidate";
 import { evaluatePrAthenaPreparationReceipt } from "./pr-athena-prepare";
 
@@ -167,7 +171,7 @@ async function main() {
   const rootDir = process.cwd();
   const prepared = await evaluatePrAthenaPreparationReceipt(rootDir);
   if (prepared.prepared === false) {
-    throw new Error(`${prepared.reason}. Remediation: ${prepared.remediation}`);
+    throw new HarnessBlockedError([prepared.blocker]);
   }
   const documentation = evaluateDeliveryDocumentationCheck(rootDir);
   if (documentation.status === "pass") {
@@ -201,8 +205,14 @@ async function main() {
 }
 
 if (import.meta.main) {
-  main().catch((error) => {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
+  process.exitCode = await runHarnessCliBoundary({
+    source: { kind: "command", id: "harness:waive-documentation" },
+    reproduce: [
+      "bun",
+      "run",
+      "harness:waive-documentation",
+      ...process.argv.slice(2),
+    ],
+    run: main,
   });
 }

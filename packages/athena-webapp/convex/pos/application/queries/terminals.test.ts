@@ -728,7 +728,59 @@ describe("terminal health queries", () => {
     expect(queries).not.toContain("posTerminalRecoveryCommand");
   });
 
-  it("offers cloud repair preview for a replacement open after submitted closeout review", async () => {
+  it("keeps the bounded candidate read incomplete while settled rows exceed the cap", async () => {
+    const settledConflicts = Array.from({ length: 5_010 }, (_, index) =>
+      buildConflict({
+        _id: `conflict-settled-${index}` as Id<"posLocalSyncConflict">,
+        conflictType: "permission",
+        details: {
+          blockingRegisterSessionId: "register-closed",
+          reason: "duplicate_register_opened",
+        },
+        localEventId: "event-open-obsolete",
+        localRegisterSessionId: "register-obsolete",
+        sequence: index + 1,
+      }),
+    );
+    const ctx = buildQueryCtx({
+      posLocalSyncConflict: settledConflicts,
+      posLocalSyncEvent: [
+        buildEvent({
+          _id: "event-open-obsolete-id" as Id<"posLocalSyncEvent">,
+          localEventId: "event-open-obsolete",
+          localRegisterSessionId: "register-obsolete",
+          occurredAt: now - 60 * 60 * 1000,
+          sequence: 1,
+        }),
+      ],
+      posTerminal: [buildTerminal({ registerNumber: "A1" })],
+      posTerminalRuntimeStatus: [buildRuntimeStatus()],
+      registerSession: [
+        buildRegisterSession({
+          _id: "register-closed" as Id<"registerSession">,
+          registerNumber: "A1",
+          status: "closed",
+        }),
+      ],
+      staffProfile: [buildStaffProfile()],
+      staffRoleAssignment: [buildStaffRoleAssignment()],
+    });
+
+    const summary = await getTerminalHealthSummary(ctx, {
+      now,
+      storeId,
+      terminalId,
+    });
+
+    // Caps stay where they are: repair converges over repeated invocations
+    // instead of widening the bounded read.
+    expect(summary?.recoveryPreview?.cloudRepair.hasMoreCandidates).toBe(true);
+    expect(
+      summary?.recoveryPreview?.cloudRepair.safeConflictIds.length,
+    ).toBeLessThanOrEqual(100);
+  });
+
+  it("settles a duplicate open that predates the submitted closeout without projection", async () => {
     const duplicateOpenConflict = buildConflict({
       _id: "duplicate-open-conflict" as Id<"posLocalSyncConflict">,
       localEventId: "event-open-replacement",
@@ -780,6 +832,9 @@ describe("terminal health queries", () => {
     });
 
     expect(summary?.recoveryPreview?.cloudRepair.safeConflictIds).toEqual([
+      duplicateOpenConflict._id,
+    ]);
+    expect(summary?.recoveryPreview?.cloudRepair.obsoleteConflictIds).toEqual([
       duplicateOpenConflict._id,
     ]);
     expect(summary?.recoveryPreview?.cloudRepair.skippedConflictIds).toEqual([
@@ -924,6 +979,8 @@ describe("terminal health queries", () => {
     expect(rosterSummary?.recoveryPreview).toEqual(
       expect.objectContaining({
         cloudRepair: {
+          hasMoreCandidates: false,
+          obsoleteConflictIds: [],
           preconditionHash: "terminal-cloud-repair:none",
           safeConflictIds: [],
           skippedConflictIds: [],

@@ -12,6 +12,9 @@ case "$ATHENA_PRE_PUSH_HEARTBEAT_SECONDS" in
     ;;
 esac
 ATHENA_PRE_PUSH_LOG=$(mktemp "$ATHENA_PRE_PUSH_TMP_DIR/athena-pre-push.XXXXXX") || exit 1
+# Exported so pre-push:review can name the retained log in its blocker output;
+# the tail below is bounded, and the path is the only way to reach the rest.
+export ATHENA_PRE_PUSH_LOG
 ATHENA_PRE_PUSH_HOOK_PID=$$
 
 echo "[pre-push] Full validation output is being captured in $ATHENA_PRE_PUSH_LOG"

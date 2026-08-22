@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
+import { runHarnessCliBoundary } from "./harness-blockers";
 import { getChangedFilesForHarnessReview } from "./harness-review";
 
 /**
@@ -306,18 +307,20 @@ async function main() {
   const result = await runHarnessMechanicalCheck(process.cwd());
   if (result.status === "fail") {
     console.error(formatMechanicalCheckFailure(result));
-    process.exit(1);
+    return 1;
   }
   console.log(
     result.ranCommands.length === 0
       ? "Mechanical checks: no deterministic package checks selected for the changed files."
       : `Mechanical checks passed: ${result.ranCommands.join(", ")}.`,
   );
+  return 0;
 }
 
 if (import.meta.main) {
-  main().catch((error) => {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
+  process.exitCode = await runHarnessCliBoundary({
+    source: { kind: "command", id: "pr:athena:mechanical" },
+    reproduce: ["bun", "run", "pr:athena:mechanical"],
+    run: main,
   });
 }

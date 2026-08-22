@@ -1542,7 +1542,7 @@ describe("OperationsQueueViewContent", () => {
 
     expect(screen.getAllByRole("article")).toHaveLength(1);
     expect(
-      screen.getByText("1 open synced sale inventory work item"),
+      screen.getByText("1 open synced inventory work item"),
     ).toBeInTheDocument();
     expect(
       within(
@@ -1557,7 +1557,7 @@ describe("OperationsQueueViewContent", () => {
       }),
     );
     expect(
-      screen.getByRole("option", { name: "Synced sale inventory · 1" }),
+      screen.getByRole("option", { name: "Synced inventory · 1" }),
     ).toBeInTheDocument();
     await user.keyboard("{Escape}");
 
@@ -1569,6 +1569,119 @@ describe("OperationsQueueViewContent", () => {
     expect(
       screen.queryByRole("button", { name: /Mark .*reviewed/ }),
     ).not.toBeInTheDocument();
+  });
+
+  it("labels expense inventory review work without describing it as a sale", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
+        workItems={[
+          {
+            _id: "work-item-expense" as Id<"operationalWorkItem">,
+            approvalState: "not_required",
+            createdAt: Date.now(),
+            details: {
+              inventoryReviewLineCount: 1,
+              localExpenseEventId: "local-expense-event-1",
+              localExpenseSessionId: "local-expense-session-1",
+              primaryProductSkuId: "product-sku-1" as Id<"productSku">,
+              sourceId: "expense-transaction-1",
+              sourceKind: "expense",
+              terminalId: "terminal-1" as Id<"posTerminal">,
+            },
+            priority: "high",
+            status: "open",
+            title: "Review inventory for ADORE DYE",
+            type: "synced_sale_inventory_review",
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getAllByText("Synced expense inventory").length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText("Synced sale inventory")).not.toBeInTheDocument();
+    const actionHref = new URL(
+      screen.getByRole("link", { name: "Adore Dye" }).getAttribute("href") ??
+        "",
+      "http://localhost",
+    );
+    expect(actionHref.pathname).toBe(
+      "/wigclub/store/wigclub/operations/stock-adjustments",
+    );
+    expect(actionHref.searchParams.get("mode")).toBe("cycle_count");
+    expect(actionHref.searchParams.get("sku")).toBe("product-sku-1");
+  });
+
+  it("describes a mixed sale and expense SKU group without calling an expense a sale", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const sharedDetails = {
+      primaryProductSkuId: "product-sku-1" as Id<"productSku">,
+    };
+    const members = [
+      {
+        _id: "work-item-1" as Id<"operationalWorkItem">,
+        approvalState: "not_required",
+        createdAt: Date.now() - 10 * 60 * 1000,
+        details: {
+          ...sharedDetails,
+          receiptNumber: "100001",
+          sourceKind: "sale",
+        },
+        priority: "high",
+        status: "open",
+        title: "Review inventory for ADORE DYE",
+        type: "synced_sale_inventory_review",
+      },
+      {
+        _id: "work-item-expense" as Id<"operationalWorkItem">,
+        approvalState: "not_required",
+        createdAt: Date.now() - 5 * 60 * 1000,
+        details: {
+          ...sharedDetails,
+          localExpenseEventId: "local-expense-event-1",
+          sourceKind: "expense",
+        },
+        priority: "normal",
+        status: "open",
+        title: "Review inventory for ADORE DYE",
+        type: "synced_sale_inventory_review",
+      },
+    ];
+
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        openWorkSearch={{ workType: "synced_sale_inventory_review" }}
+        workItems={[
+          {
+            ...members[0],
+            logicalGroup: {
+              completeness: "complete",
+              key: "synced_sale_inventory_review:store-1:product-sku-1",
+              memberIds: members.map((member) => member._id),
+              members,
+              resolutionAvailability: "available",
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("2 records")).toBeInTheDocument();
+    expect(screen.queryByText("2 sales")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Show details" }));
+
+    expect(screen.getByText("Affected sales and expenses")).toBeInTheDocument();
+    expect(screen.getByText("#100001")).toBeInTheDocument();
+    expect(screen.getByText("Recorded expense")).toBeInTheDocument();
   });
 
   it("shows an observed lower bound when source membership is incomplete", () => {
@@ -1612,7 +1725,7 @@ describe("OperationsQueueViewContent", () => {
     );
 
     expect(
-      screen.getByText("1+ open synced sale inventory work item"),
+      screen.getByText("1+ open synced inventory work item"),
     ).toBeInTheDocument();
     expect(
       screen.getAllByText(

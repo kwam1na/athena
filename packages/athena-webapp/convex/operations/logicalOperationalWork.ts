@@ -127,6 +127,27 @@ export function stableOperationalWorkItemSourceIdentity(
       break;
     }
     case "synced_sale_inventory_review": {
+      // The storage discriminator is shared by synced sale and synced expense
+      // shortfalls. Expense members carry their own local identity so a sale
+      // and an expense can never collapse into one source.
+      if (
+        operationalWorkMetadataString(metadata, "sourceKind") === "expense"
+      ) {
+        const localExpenseDiscriminator =
+          operationalWorkMetadataString(metadata, "localExpenseEventId") ??
+          operationalWorkMetadataString(metadata, "localEventId");
+        if (localExpenseDiscriminator) {
+          return joinSourceIdentity([
+            item.type,
+            "expense",
+            String(item.storeId),
+            operationalWorkMetadataString(metadata, "terminalId"),
+            operationalWorkMetadataString(metadata, "localExpenseSessionId"),
+            localExpenseDiscriminator,
+          ]);
+        }
+      }
+
       const localTransactionId = operationalWorkMetadataString(
         metadata,
         "localTransactionId",

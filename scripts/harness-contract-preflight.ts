@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { runHarnessAudit } from "./harness-audit";
 import { runHarnessSelfReview } from "./harness-self-review";
+import { runHarnessCliBoundary } from "./harness-blockers";
 
 const DEFAULT_MACHINE_OUTPUT_PATH =
   "artifacts/harness-contract-preflight/latest.json";
@@ -212,9 +213,17 @@ export async function runHarnessContractPreflight(
   };
 }
 
-if (import.meta.main) {
+async function runHarnessContractPreflightCli() {
   const result = await runHarnessContractPreflight(process.cwd());
   const logger = result.exitCode === 0 ? console.log : console.error;
   logger(result.humanReport);
-  process.exit(result.exitCode);
+  return result.exitCode;
+}
+
+if (import.meta.main) {
+  process.exitCode = await runHarnessCliBoundary({
+    source: { kind: "command", id: "pr:athena:preflight" },
+    reproduce: ["bun", "run", "pr:athena:preflight"],
+    run: runHarnessContractPreflightCli,
+  });
 }

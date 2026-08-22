@@ -4,10 +4,7 @@ import type {
   TerminalRecoveryCommandReadRepository,
   TerminalRecoveryCommandRepository,
 } from "../../application/terminalRecovery/terminalCommandService";
-import {
-  isCurrentTerminalRegisterConflict,
-  resolveTerminalRegisterConflict,
-} from "./terminalRegisterConflictResolution";
+import { resolveTerminalRegisterConflict } from "./terminalRegisterConflictResolution";
 
 type TerminalRecoveryCtx = QueryCtx | MutationCtx;
 export type TerminalRecoveryConflictRepositoryCtx = QueryCtx | MutationCtx;
@@ -138,25 +135,86 @@ export function createTerminalRecoveryCommandRepository(
   };
 }
 
+/**
+ * How the register drawer that blocked this conflict currently reads. Settled
+ * blockers stay in the candidate read (V26-1250) so obsolete register opens can
+ * reach durable `resolved` state instead of being filtered out forever.
+ */
+export type TerminalRecoveryRepairBlockerStatus =
+  | "current"
+  | "not_register_conflict"
+  | "settled"
+  | "unresolved";
+
+export type TerminalRecoveryRepairCandidate = {
+  blockerStatus: TerminalRecoveryRepairBlockerStatus;
+  conflict: Doc<"posLocalSyncConflict">;
+};
+
+export type TerminalRecoveryRepairCandidateRead = {
+  candidates: TerminalRecoveryRepairCandidate[];
+  /** True when a per-type cap truncated the read; repeat repair to converge. */
+  isIncomplete: boolean;
+};
+
 export async function listTerminalRecoveryConflictsForRepair(
   ctx: QueryCtx | MutationCtx,
   args: {
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;
   },
-) {
-  const conflicts = await listTerminalRecoveryConflictSources(ctx, args);
+): Promise<TerminalRecoveryRepairCandidateRead> {
+  const { conflicts, isIncomplete } = await listTerminalRecoveryConflictSources(
+    ctx,
+    args,
+  );
 
-  const currentConflicts = await Promise.all(
-    conflicts.map(async (conflict) =>
-      (await isCurrentTerminalRecoveryConflict(ctx, conflict, args))
-        ? conflict
-        : null,
-    ),
+  const candidates = await Promise.all(
+    conflicts.map(async (conflict) => ({
+      blockerStatus: await resolveTerminalRecoveryConflictBlockerStatus(
+        ctx,
+        conflict,
+        args,
+      ),
+      conflict,
+    })),
   );
-  return currentConflicts.filter(
-    (conflict): conflict is Doc<"posLocalSyncConflict"> => conflict !== null,
-  );
+
+  return { candidates, isIncomplete };
+}
+
+/**
+ * Event-scoped settle read. Every duplicate conflict row raised for one source
+ * event is settled together, so this reads by `by_store_terminal_localEvent`
+ * rather than rescanning the terminal-wide conflict list.
+ */
+export async function listTerminalRecoveryConflictRowsForEvent(
+  ctx: QueryCtx | MutationCtx,
+  args: {
+    limit: number;
+    localEventId: string;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+): Promise<{ isIncomplete: boolean; rows: Doc<"posLocalSyncConflict">[] }> {
+  // Status-scoped window: only open rows count toward the per-event cap, so an
+  // event's settled history never truncates the read, while a window that is
+  // still truncated fails closed rather than settling part of one event.
+  const openRows = await ctx.db
+    .query("posLocalSyncConflict")
+    .withIndex("by_store_terminal_localEvent_status", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("terminalId", args.terminalId)
+        .eq("localEventId", args.localEventId)
+        .eq("status", "needs_review"),
+    )
+    .take(args.limit + 1);
+
+  return {
+    isIncomplete: openRows.length > args.limit,
+    rows: openRows.slice(0, args.limit),
+  };
 }
 
 async function listTerminalRecoveryConflictSources(
@@ -182,12 +240,17 @@ async function listTerminalRecoveryConflictSources(
     ),
   );
 
-  return dedupeRecoveryConflictsById(
-    conflictsByType.flatMap((conflicts) =>
-      conflicts.slice(0, TERMINAL_RECOVERY_CONFLICT_SOURCE_LOOKUP_CAP),
+  return {
+    conflicts: dedupeRecoveryConflictsById(
+      conflictsByType.flatMap((conflicts) =>
+        conflicts.slice(0, TERMINAL_RECOVERY_CONFLICT_SOURCE_LOOKUP_CAP),
+      ),
+    ).sort((left, right) => right.sequence - left.sequence),
+    isIncomplete: conflictsByType.some(
+      (conflicts) =>
+        conflicts.length > TERMINAL_RECOVERY_CONFLICT_SOURCE_LOOKUP_CAP,
     ),
-  )
-    .sort((left, right) => right.sequence - left.sequence);
+  };
 }
 
 function dedupeRecoveryConflictsById<
@@ -203,20 +266,20 @@ function dedupeRecoveryConflictsById<
   });
 }
 
-async function isCurrentTerminalRecoveryConflict(
+async function resolveTerminalRecoveryConflictBlockerStatus(
   ctx: QueryCtx | MutationCtx,
   conflict: Doc<"posLocalSyncConflict">,
   args: {
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;
   },
-) {
+): Promise<TerminalRecoveryRepairBlockerStatus> {
   const resolution = await resolveTerminalRegisterConflict(ctx, {
     conflict,
     storeId: args.storeId,
     terminalId: args.terminalId,
   });
-  return isCurrentTerminalRegisterConflict(resolution);
+  return resolution.status;
 }
 
 export async function getTerminalRecoverySourceEvent(

@@ -31,7 +31,14 @@ describe("resolveTerminalCloudRepair", () => {
     expect(result).toEqual({
       kind: "ok",
       data: {
+        hasMoreCandidates: false,
         preconditionHash: expect.any(String),
+        repairedSourceEventIds: ["event-1"],
+        resolvedByDisposition: {
+          duplicate_resolved: 0,
+          fresh_projected: 1,
+          obsolete_resolved: 0,
+        },
         resolvedConflictIds: [conflict._id],
         skippedConflictIds: [],
       },
@@ -355,6 +362,445 @@ describe("resolveTerminalCloudRepair", () => {
     );
   });
 
+
+  it("settles an obsolete register open behind a closed boundary without projection", async () => {
+    const conflict = buildConflict({
+      details: {
+        blockingRegisterSessionId: "registerSession-closed",
+        reason: "duplicate_register_opened",
+      },
+    });
+    const ctx = buildCtx({
+      posLocalSyncConflict: [conflict],
+      posLocalSyncEvent: [buildEvent({ occurredAt: now - 30 * 60 * 1000 })],
+      registerSession: [buildClosedRegisterSession()],
+    });
+
+    const result = await resolveTerminalCloudRepair(ctx as never, {
+      expectedPreconditionHash: buildTerminalCloudRepairPreconditionHash({
+        safeConflictIds: [conflict._id],
+        storeId,
+        terminalId,
+      }),
+      now,
+      resolvedByUserId: "user-1" as Id<"athenaUser">,
+      storeId,
+      terminalId,
+    });
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        hasMoreCandidates: false,
+        repairedSourceEventIds: ["event-1"],
+        resolvedByDisposition: {
+          duplicate_resolved: 0,
+          fresh_projected: 0,
+          obsolete_resolved: 1,
+        },
+        resolvedConflictIds: [conflict._id],
+        skippedConflictIds: [],
+      },
+    });
+    expect(ctx.tables.registerSession).toHaveLength(1);
+    expect(ctx.tables.registerSession[0]?._id).toBe("registerSession-closed");
+    expect(ctx.tables.posLocalSyncMapping).toEqual([]);
+    expect(ctx.tables.posLocalSyncEvent).toContainEqual(
+      expect.objectContaining({
+        _id: "event-1-id",
+        rejectionCode: "obsolete_register_open",
+        status: "rejected",
+      }),
+    );
+  });
+
+  it("settles an obsolete register open behind a submitted closeout that is still closing", async () => {
+    // A drawer in `closing` has already submitted its closeout, so the shared
+    // lifecycle boundary (closeoutOwnedAt) decides freshness instead of the
+    // blocking-session flag; an open that predates that boundary is obsolete.
+    const closeoutOwnedAt = now - 10 * 60 * 1000;
+    // The row carries no blocker reference: a row that names the closing
+    // drawer directly still reads as `current` and fails closed.
+    const conflict = buildConflict({
+      details: { reason: "duplicate_register_opened" },
+    });
+    const ctx = buildCtx({
+      posLocalSyncConflict: [conflict],
+      posLocalSyncEvent: [buildEvent({ occurredAt: now - 30 * 60 * 1000 })],
+      registerSession: [
+        buildClosedRegisterSession({
+          _id: "registerSession-closing" as Id<"registerSession">,
+          closedAt: undefined,
+          closeoutOwnedAt,
+          closeoutRecords: [],
+          status: "closing",
+        }),
+      ],
+    });
+
+    const result = await resolveTerminalCloudRepair(ctx as never, {
+      expectedPreconditionHash: buildTerminalCloudRepairPreconditionHash({
+        safeConflictIds: [conflict._id],
+        storeId,
+        terminalId,
+      }),
+      now,
+      resolvedByUserId: "user-1" as Id<"athenaUser">,
+      storeId,
+      terminalId,
+    });
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        hasMoreCandidates: false,
+        repairedSourceEventIds: ["event-1"],
+        resolvedByDisposition: {
+          duplicate_resolved: 0,
+          fresh_projected: 0,
+          obsolete_resolved: 1,
+        },
+        resolvedConflictIds: [conflict._id],
+        skippedConflictIds: [],
+      },
+    });
+    expect(ctx.tables.registerSession).toHaveLength(1);
+    expect(ctx.tables.registerSession[0]?.status).toBe("closing");
+    expect(ctx.tables.posLocalSyncMapping).toEqual([]);
+    expect(ctx.tables.posLocalSyncEvent).toContainEqual(
+      expect.objectContaining({
+        _id: "event-1-id",
+        rejectionCode: "obsolete_register_open",
+        status: "rejected",
+      }),
+    );
+  });
+
+  it("settles every duplicate row for one obsolete source event together with audit evidence", async () => {
+    const rows = Array.from({ length: 3 }, (_, index) =>
+      buildConflict({
+        _id: `conflict-dup-${index}` as Id<"posLocalSyncConflict">,
+        details: {
+          blockingRegisterSessionId: "registerSession-closed",
+          reason: "duplicate_register_opened",
+        },
+        sequence: index + 1,
+      }),
+    );
+    const ctx = buildCtx({
+      posLocalSyncConflict: rows,
+      posLocalSyncEvent: [buildEvent({ occurredAt: now - 30 * 60 * 1000 })],
+      registerSession: [buildClosedRegisterSession()],
+    });
+
+    const result = await resolveTerminalCloudRepair(ctx as never, {
+      expectedPreconditionHash: buildTerminalCloudRepairPreconditionHash({
+        safeConflictIds: rows.map((row) => row._id).sort(),
+        storeId,
+        terminalId,
+      }),
+      now,
+      resolvedByStaffProfileId: "staff-1" as Id<"staffProfile">,
+      resolvedByUserId: "user-1" as Id<"athenaUser">,
+      storeId,
+      terminalId,
+    });
+
+    expect(result).toMatchObject({ kind: "ok" });
+    expect(
+      ctx.tables.posLocalSyncConflict.every(
+        (row) => row.status === "resolved",
+      ),
+    ).toBe(true);
+    for (const row of ctx.tables.posLocalSyncConflict) {
+      expect(row).toMatchObject({
+        details: expect.objectContaining({
+          cloudRepairDisposition: "obsolete_resolved",
+        }),
+        resolvedAt: now,
+        resolvedByStaffProfileId: "staff-1",
+        resolvedByUserId: "user-1",
+        status: "resolved",
+      });
+      expect(row.details).not.toHaveProperty("payload");
+    }
+
+    const repeat = await resolveTerminalCloudRepair(ctx as never, {
+      expectedPreconditionHash: buildTerminalCloudRepairPreconditionHash({
+        safeConflictIds: [],
+        storeId,
+        terminalId,
+      }),
+      now: now + 1,
+      resolvedByUserId: "user-1" as Id<"athenaUser">,
+      storeId,
+      terminalId,
+    });
+
+    expect(repeat).toMatchObject({
+      kind: "ok",
+      data: { repairedSourceEventIds: [], resolvedConflictIds: [] },
+    });
+    expect(ctx.tables.registerSession).toHaveLength(1);
+  });
+
+  it("settles an event whose open rows fit the cap even when its settled history exceeds it", async () => {
+    // Conflict rows are never deleted, so an event's lifetime row count can
+    // pass the per-event cap after earlier rows were settled. Only open rows
+    // count toward the cap: the remaining open rows settle whole and the
+    // source event converges instead of being skipped forever.
+    const resolvedRows = Array.from({ length: 2 }, (_, index) =>
+      buildConflict({
+        _id: `conflict-resolved-${index}` as Id<"posLocalSyncConflict">,
+        details: {
+          blockingRegisterSessionId: "registerSession-closed",
+          reason: "duplicate_register_opened",
+        },
+        sequence: index + 1,
+        status: "resolved",
+      }),
+    );
+    const openRows = Array.from({ length: 2_000 }, (_, index) =>
+      buildConflict({
+        _id: `conflict-open-${String(index).padStart(4, "0")}` as Id<"posLocalSyncConflict">,
+        details: {
+          blockingRegisterSessionId: "registerSession-closed",
+          reason: "duplicate_register_opened",
+        },
+        sequence: index + 3,
+      }),
+    );
+    const ctx = buildCtx({
+      posLocalSyncConflict: [...resolvedRows, ...openRows],
+      posLocalSyncEvent: [buildEvent({ occurredAt: now - 30 * 60 * 1000 })],
+      registerSession: [buildClosedRegisterSession()],
+    });
+    const candidateIds = openRows
+      .slice(0, 100)
+      .map((row) => row._id)
+      .sort();
+
+    const result = await resolveTerminalCloudRepair(ctx as never, {
+      expectedPreconditionHash: buildTerminalCloudRepairPreconditionHash({
+        safeConflictIds: candidateIds,
+        storeId,
+        terminalId,
+      }),
+      now,
+      resolvedByUserId: "user-1" as Id<"athenaUser">,
+      storeId,
+      terminalId,
+    });
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        repairedSourceEventIds: ["event-1"],
+        resolvedByDisposition: {
+          duplicate_resolved: 0,
+          fresh_projected: 0,
+          obsolete_resolved: 2_000,
+        },
+      },
+    });
+    expect(result.kind === "ok" ? result.data.resolvedConflictIds : []).toHaveLength(
+      2_000,
+    );
+    expect(
+      ctx.tables.posLocalSyncConflict.filter((row) => row.status === "needs_review"),
+    ).toHaveLength(0);
+    expect(ctx.tables.posLocalSyncEvent[0]).toMatchObject({
+      _id: "event-1-id",
+      rejectionCode: "obsolete_register_open",
+      status: "rejected",
+    });
+  });
+
+  it("reports each settled row in exactly one result list when an event mixes per-row classifications", async () => {
+    // Two stale duplicate rows classify obsolete; a third row for the same
+    // event is too recent (`not_stale`) and classifies skipped. The event
+    // settles every open row, so the recent row must not also be reported as
+    // skipped.
+    const staleRows = Array.from({ length: 2 }, (_, index) =>
+      buildConflict({
+        _id: `conflict-stale-${index}` as Id<"posLocalSyncConflict">,
+        details: {
+          blockingRegisterSessionId: "registerSession-closed",
+          reason: "duplicate_register_opened",
+        },
+        sequence: index + 1,
+      }),
+    );
+    const recentRow = buildConflict({
+      _id: "conflict-recent" as Id<"posLocalSyncConflict">,
+      createdAt: now - 60 * 1000,
+      details: {
+        blockingRegisterSessionId: "registerSession-closed",
+        reason: "duplicate_register_opened",
+      },
+      sequence: 3,
+    });
+    const ctx = buildCtx({
+      posLocalSyncConflict: [...staleRows, recentRow],
+      posLocalSyncEvent: [buildEvent({ occurredAt: now - 30 * 60 * 1000 })],
+      registerSession: [buildClosedRegisterSession()],
+    });
+
+    const result = await resolveTerminalCloudRepair(ctx as never, {
+      expectedPreconditionHash: buildTerminalCloudRepairPreconditionHash({
+        safeConflictIds: staleRows.map((row) => row._id).sort(),
+        storeId,
+        terminalId,
+      }),
+      now,
+      resolvedByUserId: "user-1" as Id<"athenaUser">,
+      storeId,
+      terminalId,
+    });
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") return;
+    expect([...result.data.resolvedConflictIds].sort()).toEqual([
+      "conflict-recent",
+      "conflict-stale-0",
+      "conflict-stale-1",
+    ]);
+    expect(result.data.skippedConflictIds).toEqual([]);
+    expect(
+      result.data.resolvedConflictIds.filter((id) =>
+        result.data.skippedConflictIds.includes(id),
+      ),
+    ).toEqual([]);
+  });
+
+  it("fails closed for an active blocker and for ambiguous close chronology", async () => {
+    const activeBlockerConflict = buildConflict({
+      details: {
+        blockingRegisterSessionId: "registerSession-open",
+        reason: "duplicate_register_opened",
+      },
+    });
+    const activeCtx = buildCtx({
+      posLocalSyncConflict: [activeBlockerConflict],
+      posLocalSyncEvent: [buildEvent({ occurredAt: now - 30 * 60 * 1000 })],
+      registerSession: [
+        buildClosedRegisterSession(),
+        {
+          ...buildClosedRegisterSession(),
+          _creationTime: now - 5 * 60 * 1000,
+          _id: "registerSession-open" as Id<"registerSession">,
+          closedAt: undefined,
+          status: "active",
+        } as Doc<"registerSession">,
+      ],
+    });
+
+    const activeResult = await resolveTerminalCloudRepair(activeCtx as never, {
+      expectedPreconditionHash: buildTerminalCloudRepairPreconditionHash({
+        safeConflictIds: [],
+        storeId,
+        terminalId,
+      }),
+      now,
+      resolvedByUserId: "user-1" as Id<"athenaUser">,
+      storeId,
+      terminalId,
+    });
+
+    expect(activeResult).toMatchObject({
+      kind: "ok",
+      data: {
+        resolvedConflictIds: [],
+        skippedConflictIds: [activeBlockerConflict._id],
+      },
+    });
+    expect(activeCtx.db.patch).not.toHaveBeenCalled();
+
+    const ambiguousConflict = buildConflict({
+      details: {
+        blockingRegisterSessionId: "registerSession-closed",
+        reason: "duplicate_register_opened",
+      },
+    });
+    const ambiguousCtx = buildCtx({
+      posLocalSyncConflict: [ambiguousConflict],
+      posLocalSyncEvent: [buildEvent({ occurredAt: now - 30 * 60 * 1000 })],
+      registerSession: [
+        {
+          ...buildClosedRegisterSession(),
+          closedAt: undefined,
+          closeoutOwnedAt: undefined,
+          closeoutRecords: [],
+        } as Doc<"registerSession">,
+      ],
+    });
+
+    const ambiguousResult = await resolveTerminalCloudRepair(
+      ambiguousCtx as never,
+      {
+        expectedPreconditionHash: buildTerminalCloudRepairPreconditionHash({
+          safeConflictIds: [],
+          storeId,
+          terminalId,
+        }),
+        now,
+        resolvedByUserId: "user-1" as Id<"athenaUser">,
+        storeId,
+        terminalId,
+      },
+    );
+
+    expect(ambiguousResult).toMatchObject({
+      kind: "ok",
+      data: {
+        resolvedConflictIds: [],
+        skippedConflictIds: [ambiguousConflict._id],
+      },
+    });
+    expect(ambiguousCtx.db.patch).not.toHaveBeenCalled();
+  });
+
+  it("rejects the whole batch with no partial repair when preview evidence drifts", async () => {
+    const rows = Array.from({ length: 2 }, (_, index) =>
+      buildConflict({
+        _id: `conflict-dup-${index}` as Id<"posLocalSyncConflict">,
+        details: {
+          blockingRegisterSessionId: "registerSession-closed",
+          reason: "duplicate_register_opened",
+        },
+        sequence: index + 1,
+      }),
+    );
+    const ctx = buildCtx({
+      posLocalSyncConflict: rows,
+      posLocalSyncEvent: [buildEvent({ occurredAt: now - 30 * 60 * 1000 })],
+      registerSession: [buildClosedRegisterSession()],
+    });
+
+    const result = await resolveTerminalCloudRepair(ctx as never, {
+      expectedPreconditionHash: buildTerminalCloudRepairPreconditionHash({
+        safeConflictIds: [rows[0]!._id],
+        storeId,
+        terminalId,
+      }),
+      now,
+      resolvedByUserId: "user-1" as Id<"athenaUser">,
+      storeId,
+      terminalId,
+    });
+
+    expect(result).toMatchObject({
+      error: { code: "precondition_failed", metadata: { preconditionDrift: true } },
+      kind: "user_error",
+    });
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(
+      ctx.tables.posLocalSyncConflict.every(
+        (row) => row.status === "needs_review",
+      ),
+    ).toBe(true);
+  });
+
   it("stops without patching when the preview precondition drifted", async () => {
     const ctx = buildCtx({
       posLocalSyncConflict: [buildConflict()],
@@ -406,11 +852,18 @@ describe("resolveTerminalCloudRepair", () => {
     expect(result).toEqual({
       kind: "ok",
       data: {
+        hasMoreCandidates: false,
         preconditionHash: buildTerminalCloudRepairPreconditionHash({
           safeConflictIds: [],
           storeId,
           terminalId,
         }),
+        repairedSourceEventIds: [],
+        resolvedByDisposition: {
+          duplicate_resolved: 0,
+          fresh_projected: 0,
+          obsolete_resolved: 0,
+        },
         resolvedConflictIds: [],
         skippedConflictIds: [conflict._id],
       },
@@ -573,6 +1026,25 @@ function buildStaffProfile(
     status: "active",
     ...overrides,
   } as Doc<"staffProfile">;
+}
+
+function buildClosedRegisterSession(
+  overrides: Partial<Doc<"registerSession">> = {},
+): Doc<"registerSession"> {
+  return {
+    _id: "registerSession-closed" as Id<"registerSession">,
+    _creationTime: now - 40 * 60 * 1000,
+    storeId,
+    terminalId,
+    registerNumber: "A1",
+    status: "closed",
+    closedAt: now - 10 * 60 * 1000,
+    openedByStaffProfileId: "staff-1" as Id<"staffProfile">,
+    openedAt: now - 60 * 60 * 1000,
+    openingFloat: 100,
+    expectedCash: 100,
+    ...overrides,
+  } as Doc<"registerSession">;
 }
 
 function buildStore(overrides: Partial<Doc<"store">> = {}): Doc<"store"> {

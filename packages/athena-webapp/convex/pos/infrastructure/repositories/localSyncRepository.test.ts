@@ -48,6 +48,34 @@ describe("createConvexLocalSyncRepository", () => {
     expect(varianceReviewSource).not.toContain(".take(20)");
   });
 
+  it("exposes the scoped register lifecycle boundary through index-bounded reads", () => {
+    const source = readProjectFile(
+      "convex",
+      "pos",
+      "infrastructure",
+      "repositories",
+      "localSyncRepository.ts",
+    );
+    const lifecycleReadSource = source.slice(
+      source.indexOf("async findScopedRegisterSessionLifecycle(args)"),
+      source.indexOf("async listOpenRegisterReviewConflictFacts(args)"),
+    );
+
+    expect(lifecycleReadSource).toContain('.withIndex("by_terminalId"');
+    expect(lifecycleReadSource).toContain(
+      '.withIndex("by_storeId_registerNumber"',
+    );
+    expect(lifecycleReadSource).toContain(
+      "getRegisterSessionAuthoritativeCloseBoundary(",
+    );
+    expect(lifecycleReadSource).toContain("blockingRegisterSession");
+    expect(lifecycleReadSource).toContain(
+      ".take(SCOPED_REGISTER_LIFECYCLE_WINDOW)",
+    );
+    expect(lifecycleReadSource).not.toContain(".collect()");
+    expect(lifecycleReadSource).not.toContain(".paginate(");
+  });
+
   it("atomically journals locally synchronized completed sales", () => {
     const source = readProjectFile(
       "convex",

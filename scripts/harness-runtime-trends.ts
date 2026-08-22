@@ -5,6 +5,7 @@ import type {
   HarnessBehaviorPhase,
   HarnessBehaviorScenarioReport,
 } from "./harness-behavior";
+import { runHarnessCliBoundary } from "./harness-blockers";
 
 const DEFAULT_OUTPUT_PATH = "artifacts/harness-behavior/trends/latest.json";
 const CANONICAL_PHASES: HarnessBehaviorPhase[] = [
@@ -540,15 +541,21 @@ export function parseHarnessRuntimeTrendsArgs(
 }
 
 if (import.meta.main) {
-  const parsed = parseHarnessRuntimeTrendsArgs(Bun.argv.slice(2));
-  if (parsed.help) {
-    console.log("Usage: bun run harness:runtime-trends [--persist-history]");
-    process.exit(0);
-  }
+  process.exitCode = await runHarnessCliBoundary({
+    source: { kind: "command", id: "harness:runtime-trends" },
+    reproduce: ["bun", "run", "harness:runtime-trends", ...Bun.argv.slice(2)],
+    run: async () => {
+      const parsed = parseHarnessRuntimeTrendsArgs(Bun.argv.slice(2));
+      if (parsed.help) {
+        console.log("Usage: bun run harness:runtime-trends [--persist-history]");
+        return;
+      }
 
-  const input = await new Response(Bun.stdin).text();
-  const result = await runHarnessRuntimeTrends(process.cwd(), input, {
-    persistHistory: parsed.persistHistory,
+      const input = await new Response(Bun.stdin).text();
+      const result = await runHarnessRuntimeTrends(process.cwd(), input, {
+        persistHistory: parsed.persistHistory,
+      });
+      console.log(JSON.stringify(result.output, null, 2));
+    },
   });
-  console.log(JSON.stringify(result.output, null, 2));
 }

@@ -51,7 +51,7 @@ export type DeliveryRunGateDecisionEvent = {
   admitted: boolean;
   preventedCostClass: string;
   resolutionKinds: string[];
-  findingCodes: string[];
+  blockerCodes: string[];
   timestamp: string;
 };
 

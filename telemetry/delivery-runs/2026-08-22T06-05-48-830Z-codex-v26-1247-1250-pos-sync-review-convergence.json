@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-22T06:05:48.830Z",
+  "branch": "codex/v26-1247-1250-pos-sync-review-convergence",
+  "headSha": "d9b8e519c531535ad4b35d3b55023e11068b50f9",
+  "deliverableDiffFingerprint": "320dc92f349b9fdfb147f0dbe3c0304557a3c33c76d8f65a5ed3264dc8f17c53",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 13,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 738586.278333
+  },
+  "reviewLoop": {
+    "providerId": "execute",
+    "runId": "20260822-004735-5bc8ab9b",
+    "finalPassId": "pass-4",
+    "recordedAt": "2026-08-22T05:53:08.210Z",
+    "iterationCount": 4,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 3,
+      "P2": 7,
+      "P3": 6
+    },
+    "deferredExpansionCount": 11,
+    "deferredIssueIds": [
+      "V26-1280",
+      "V26-1280",
+      "V26-1280",
+      "V26-1280",
+      "V26-1280",
+      "V26-1281",
+      "V26-1282",
+      "V26-1282",
+      "V26-1282",
+      "V26-1283",
+      "V26-1283"
+    ]
+  }
+}

@@ -1306,6 +1306,14 @@ const schema = defineSchema({
       "terminalId",
       "localEventId",
     ])
+    // Event-scoped open-row read for terminal cloud repair: truncation must be
+    // judged on open rows only, so settled history never blocks convergence.
+    .index("by_store_terminal_localEvent_status", [
+      "storeId",
+      "terminalId",
+      "localEventId",
+      "status",
+    ])
     .index("by_localEventId", ["localEventId"])
     .index("by_store_terminal_register", [
       "storeId",

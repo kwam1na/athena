@@ -16,9 +16,7 @@ import {
   evaluateDeliveryDocumentationCheck,
   type DeliveryDocumentationFinding,
 } from "./delivery-documentation-check";
-import {
-  discoverCurrentDocumentationWaiver,
-} from "./delivery-documentation-admission";
+import { discoverCurrentDocumentationWaiver } from "./delivery-documentation-admission";
 import type { DiscoveredDocumentationWaiver } from "./documentation-waiver-attestation";
 import {
   evaluateDeliveryRunTelemetryCheck,
@@ -48,9 +46,18 @@ import {
   type HarnessObligationRecordDiagnostic,
 } from "./harness-obligation-records";
 import { evaluatePrAthenaPreparationReceipt } from "./pr-athena-prepare";
+import {
+  createHarnessBlocker,
+  formatHarnessCommand,
+  formatHarnessBlockers,
+  HarnessBlockedError,
+  runHarnessCliBoundary,
+  serializeHarnessBlockers,
+  type HarnessBlocker,
+} from "./harness-blockers";
 
-export const HARNESS_GATE_DECISION_SCHEMA_VERSION = 1;
-const DECISION_EVENTS_GIT_PATH = "codex/harness-obligations/v1/events";
+export const HARNESS_GATE_DECISION_SCHEMA_VERSION = 2 as const;
+const DECISION_EVENTS_GIT_PATH = "codex/harness-obligations/v2/events";
 const execFileAsync = promisify(execFile);
 const SAFE_INVOCATION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const VALID_SCENARIO_ID = /^[a-z0-9.-]+$/;
@@ -61,9 +68,7 @@ type PreparationEvaluation = Awaited<
 type DocumentationEvaluation = ReturnType<
   typeof evaluateDeliveryDocumentationCheck
 >;
-type TelemetryEvaluation = ReturnType<
-  typeof evaluateDeliveryRunTelemetryCheck
->;
+type TelemetryEvaluation = ReturnType<typeof evaluateDeliveryRunTelemetryCheck>;
 type ActivationProjection = Awaited<
   ReturnType<typeof evaluateCandidateReviewActivation>
 >;
@@ -80,9 +85,11 @@ export type HarnessGateDecisionEvent = {
   candidate: CandidateBinding;
   context: HarnessExecutionContext["kind"];
   admitted: boolean;
-  decision: GateObligationDecision;
+  decision: Omit<GateObligationDecision, "blockers">;
   preventedCostClass: string;
   timestamp: string;
+  /** Exclusive v2 blocking-diagnostic envelope consumed by delivery tooling. */
+  blockerEnvelope: ReturnType<typeof serializeHarnessBlockers>;
 };
 
 type AdmissionOptions = {
@@ -211,8 +218,6 @@ function documentationProviderResult(result: DocumentationEvaluation) {
     findings: result.findings.map((finding) => ({
       code: finding.policy,
       message: `${finding.label}: ${finding.message}`,
-      remediation:
-        "Update the required delivery documentation and evaluate again.",
     })),
   };
 }
@@ -228,10 +233,6 @@ function telemetryProviderResult(result: TelemetryEvaluation) {
     findings: result.findings.map((finding) => ({
       code: finding.code,
       message: `Delivery-run telemetry: ${finding.message}`,
-      remediation:
-        finding.code === "telemetry_record_malformed"
-          ? "Regenerate the record with `bun run delivery:telemetry-record` instead of editing it by hand."
-          : "Run `bun run delivery:telemetry-record` after the passing gate run and commit the record.",
     })),
   };
 }
@@ -284,8 +285,8 @@ function waivableBlockedObligationIds(
     return (
       Boolean(obligation?.humanWaiverAllowed) &&
       allowedCodes !== undefined &&
-      resolution.findings.every((finding) =>
-        (allowedCodes as readonly string[]).includes(finding.code),
+      resolution.blockers.every((blocker) =>
+        (allowedCodes as readonly string[]).includes(blocker.code),
       )
     );
   });
@@ -326,14 +327,10 @@ async function defaultPrompt(
   decision: GateObligationDecision,
   obligationIds: readonly string[] = [],
 ) {
-  const named = obligationIds.length > 0
-    ? obligationIds.join(", ")
-    : "review.green";
-  console.log(
-    `This prepared candidate is blocked by: ${named}.`,
-  );
-  for (const remediation of decision.remediation.human)
-    console.log(`- ${remediation}`);
+  const named =
+    obligationIds.length > 0 ? obligationIds.join(", ") : "review.green";
+  console.log(`This prepared candidate is blocked by: ${named}.`);
+  console.log(formatHarnessBlockers(decision.blockers));
   const terminal = createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -430,6 +427,7 @@ function eventFor(
   admitted: boolean,
   now: () => string,
 ): HarnessGateDecisionEvent {
+  const { blockers, ...eventDecision } = decision;
   return {
     schemaVersion: HARNESS_GATE_DECISION_SCHEMA_VERSION,
     kind: "gate_decision",
@@ -442,10 +440,41 @@ function eventFor(
     candidate,
     context: context.kind,
     admitted,
-    decision,
+    decision: eventDecision,
     preventedCostClass: decision.preventedCostClass,
     timestamp: now(),
+    blockerEnvelope: serializeHarnessBlockers(blockers),
   };
+}
+
+function candidateChangedBlocker(
+  code:
+    | "candidate_changed_during_prompt"
+    | "candidate_changed_before_spawn"
+    | "candidate_changed_after_provider",
+  message: string,
+) {
+  const blocker = createHarnessBlocker({
+    code,
+    source: { kind: "candidate", id: "candidate-drift" },
+    summary: message,
+    remediations: [
+      {
+        id: "prepare-current-candidate",
+        kind: "command",
+        command: ["bun", "run", "pr:athena:prepare"],
+        summary: "Prepare the current candidate again and publish a fresh receipt.",
+      },
+    ],
+  });
+  return blocker;
+}
+
+function withBlocker(
+  decision: GateObligationDecision,
+  blocker: HarnessBlocker,
+) {
+  return { ...decision, blockers: [...decision.blockers, blocker] };
 }
 
 export function defaultScenarios(): ReviewSensitiveScenario[] {
@@ -502,9 +531,7 @@ export async function runHarnessGateAdmission(
     options.evaluatePreparation ?? evaluatePrAthenaPreparationReceipt
   )(rootDir);
   if (preparation.prepared === false) {
-    throw new Error(
-      `Harness gate admission blocked: ${preparation.reason}. Remediation: ${preparation.remediation}`,
-    );
+    throw new HarnessBlockedError([preparation.blocker]);
   }
   const context = toEvaluatorContext(
     (
@@ -531,9 +558,21 @@ export async function runHarnessGateAdmission(
     !initialCapture.ok ||
     !sameCandidate(preparation.candidate, initialCapture.candidate)
   ) {
-    throw new Error(
-      "Harness gate admission blocked: candidate changed after preparation",
-    );
+    throw new HarnessBlockedError([
+      createHarnessBlocker({
+        code: "candidate_changed_after_preparation",
+        source: { kind: "candidate", id: "candidate-drift" },
+        summary: "The candidate changed after preparation.",
+        remediations: [
+          {
+            id: "prepare-current-candidate",
+            kind: "command",
+            command: ["bun", "run", "pr:athena:prepare"],
+            summary: "Prepare the current candidate again and publish a fresh receipt.",
+          },
+        ],
+      }),
+    ]);
   }
   const projection = await (
     options.projectActivation ??
@@ -622,19 +661,14 @@ export async function runHarnessGateAdmission(
         !promptCapture.ok ||
         !sameCandidate(preparation.candidate, promptCapture.candidate)
       ) {
+        const changed = candidateChangedBlocker(
+          "candidate_changed_during_prompt",
+          "The candidate changed while the waiver prompt was open.",
+        );
         decision = {
           ...decision,
           admitted: false,
-          findings: [
-            ...decision.findings,
-            {
-              code: "candidate_changed_during_prompt",
-              message:
-                "The candidate changed while the waiver prompt was open.",
-              remediation:
-                "Run pr:athena:prepare and review the resulting candidate.",
-            },
-          ],
+          blockers: [...decision.blockers, changed],
         };
       } else {
         records = withInvocationWaiver(binding, records, waivedObligationIds);
@@ -642,18 +676,24 @@ export async function runHarnessGateAdmission(
         invocationWaiver = decision.admitted;
       }
     } else {
-      decision = {
-        ...decision,
-        findings: [
-          ...decision.findings,
+      const declined = createHarnessBlocker({
+        code: "waiver_declined",
+        source: { kind: "obligation", id: "review.green" },
+        summary: "The interactive human did not accept the offered waiver.",
+        remediations: [
           {
-            code: "waiver_declined",
-            message: "The interactive human did not accept the review waiver.",
-            remediation:
+            // Distinct from the obligation's own `complete-final-green-review`
+            // on purpose: that one still offers the waiver, and the operator
+            // has just declined it. Sharing the id would let the renderer print
+            // whichever phrasing it saw first.
+            id: "complete-final-green-review-after-decline",
+            kind: "manual_action",
+            summary:
               "Complete an approved final-green review for this candidate.",
           },
         ],
-      };
+      });
+      decision = { ...decision, blockers: [...decision.blockers, declined] };
     }
   }
   await writeEvent(
@@ -672,9 +712,7 @@ export async function runHarnessGateAdmission(
     ),
   );
   if (!decision.admitted) {
-    decision.findings.forEach((finding) =>
-      logger.error(`${finding.code}: ${finding.message}`),
-    );
+    logger.error(formatHarnessBlockers(decision.blockers));
     return { admitted: false as const, status: "blocked" as const, decision };
   }
 
@@ -687,17 +725,14 @@ export async function runHarnessGateAdmission(
     !finalCapture.ok ||
     !sameCandidate(preparation.candidate, finalCapture.candidate)
   ) {
+    const changed = candidateChangedBlocker(
+      "candidate_changed_before_spawn",
+      "The candidate changed immediately before heavy validation.",
+    );
     const changedDecision = {
       ...decision,
       admitted: false,
-      findings: [
-        ...decision.findings,
-        {
-          code: "candidate_changed_before_spawn",
-          message: "The candidate changed immediately before heavy validation.",
-          remediation: "Run pr:athena:prepare and evaluate obligations again.",
-        },
-      ],
+      blockers: [...decision.blockers, changed],
     };
     await writeEvent(
       rootDir,
@@ -714,6 +749,10 @@ export async function runHarnessGateAdmission(
         now,
       ),
     );
+    // The blocker was built and persisted to the event, then discarded for the
+    // operator: this path exited 1 with nothing on the terminal, which is the
+    // failure mode the typed contract exists to remove.
+    logger.error(formatHarnessBlockers(changedDecision.blockers));
     return {
       admitted: false as const,
       status: "candidate_changed" as const,
@@ -730,6 +769,22 @@ export async function runHarnessGateAdmission(
       rootDir,
     );
     if (exitCode !== 0) {
+      const providerBlocker = createHarnessBlocker({
+        code: "provider_command_failed",
+        source: { kind: "gate", id: ATHENA_PR_VALIDATION_GATE_ID },
+        summary: `A private validation provider exited with code ${exitCode}.`,
+        details: `Provider command: ${formatHarnessCommand(command)}`,
+        remediations: [
+          {
+            id: "rerun-provider-command",
+            kind: "command",
+            command: command as [string, ...string[]],
+            summary:
+              "Rerun the failed provider command and inspect its complete output.",
+          },
+        ],
+      });
+      const providerDecision = withBlocker(decision, providerBlocker);
       await writeEvent(
         rootDir,
         eventFor(
@@ -740,16 +795,17 @@ export async function runHarnessGateAdmission(
           "provider_failed",
           binding,
           context,
-          decision,
+          providerDecision,
           true,
           now,
         ),
       );
+      logger.error(formatHarnessBlockers([providerBlocker]));
       return {
         admitted: true as const,
         status: "provider_failed" as const,
         exitCode,
-        decision,
+        decision: providerDecision,
       };
     }
   }
@@ -761,17 +817,14 @@ export async function runHarnessGateAdmission(
     !completionCapture.ok ||
     !sameCandidate(preparation.candidate, completionCapture.candidate)
   ) {
+    const changed = candidateChangedBlocker(
+      "candidate_changed_after_provider",
+      "The candidate changed while heavy validation was running.",
+    );
     const changedDecision = {
       ...decision,
       admitted: false,
-      findings: [
-        ...decision.findings,
-        {
-          code: "candidate_changed_after_provider",
-          message: "The candidate changed while heavy validation was running.",
-          remediation: "Run pr:athena:prepare and evaluate obligations again.",
-        },
-      ],
+      blockers: [...decision.blockers, changed],
     };
     await writeEvent(
       rootDir,
@@ -788,6 +841,7 @@ export async function runHarnessGateAdmission(
         now,
       ),
     );
+    logger.error(formatHarnessBlockers(changedDecision.blockers));
     return {
       admitted: true as const,
       status: "provider_changed_candidate" as const,
@@ -803,7 +857,7 @@ export async function runHarnessGateAdmission(
     const durableWaivers = waivedObligationIds.filter(
       (obligationId) =>
         HARNESS_GATE_REGISTRY.obligations[obligationId]?.freshness.kind !==
-          "live",
+        "live",
     );
     for (const obligationId of durableWaivers) {
       await (
@@ -839,12 +893,14 @@ export async function runHarnessGateAdmission(
 
 async function main() {
   const result = await runHarnessGateAdmission(process.cwd());
-  if (result.status !== "passed") process.exit(1);
+  return result.status === "passed" ? 0 : 1;
 }
 
 if (import.meta.main) {
-  main().catch((error) => {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
+  process.exitCode = await runHarnessCliBoundary({
+    source: { kind: "command", id: "pr:athena:validate-provider" },
+    reproduce: ["bun", "run", "pr:athena:validate-provider"],
+    run: main,
+    renderNonZero: false,
   });
 }

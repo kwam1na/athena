@@ -25,6 +25,14 @@ import {
   readLatestPassingDeliveryRunTelemetry,
 } from "./delivery-run-telemetry";
 import { collectDeliverableDiffFingerprint } from "./delivery-diff-fingerprint";
+import {
+  createHarnessBlocker,
+  formatHarnessBlockers,
+  HarnessBlockedError,
+  runHarnessCliBoundary,
+  HARNESS_BLOCKER_SCHEMA_VERSION,
+} from "./harness-blockers";
+import { HARNESS_GATE_DECISION_SCHEMA_VERSION } from "./harness-gate-admission";
 import { ATHENA_PR_VALIDATION_GATE_ID } from "./harness-gate-registry";
 import {
   discoverHarnessObligationRecords,
@@ -34,7 +42,7 @@ import { evaluatePrAthenaPreparationReceipt } from "./pr-athena-prepare";
 
 const DEFAULT_PROVIDER_EVIDENCE_PATH =
   "artifacts/harness-delivery-runs/provider-evidence.json";
-const DECISION_EVENTS_GIT_PATH = "codex/harness-obligations/v1/events";
+const DECISION_EVENTS_GIT_PATH = "codex/harness-obligations/v2/events";
 
 type CommandResult = {
   exitCode: number;
@@ -257,15 +265,15 @@ function parseGateDecisionEvent(
   const candidate = event?.candidate as Record<string, unknown> | undefined;
   const decision = event?.decision as Record<string, unknown> | undefined;
   const resolutions = decision?.resolutions;
-  const findings = decision?.findings;
   const diagnostics = decision?.diagnostics;
-  const remediation = decision?.remediation as
+  const blockerEnvelope = event?.blockerEnvelope as
     Record<string, unknown> | undefined;
+  const blockers = blockerEnvelope?.blockers;
   const decisionCandidate = decision?.candidate as
     Record<string, unknown> | undefined;
   const sequence = event?.sequence;
   if (
-    event?.schemaVersion !== 1 ||
+    event?.schemaVersion !== HARNESS_GATE_DECISION_SCHEMA_VERSION ||
     event.kind !== "gate_decision" ||
     event.invocationId !== expected.invocationId ||
     event.invocationMode !== "outer" ||
@@ -297,10 +305,11 @@ function parseGateDecisionEvent(
     decisionCandidate.diffBaseSha !== expected.candidate.diffBaseSha ||
     decisionCandidate.worktreeId !== expected.candidate.worktreeId ||
     !Array.isArray(resolutions) ||
-    !Array.isArray(findings) ||
     !Array.isArray(diagnostics) ||
-    !Array.isArray(remediation?.machine) ||
-    !Array.isArray(remediation.human)
+    blockerEnvelope?.schemaVersion !== HARNESS_BLOCKER_SCHEMA_VERSION ||
+    !Array.isArray(blockers) ||
+    "findings" in decision ||
+    "remediation" in decision
   ) {
     throw new Error(
       "Harness gate decision event failed correlation validation.",
@@ -334,9 +343,18 @@ function parseGateDecisionEvent(
       }
       return kind;
     }),
-    findingCodes: findings.map((finding) => {
-      const code = (finding as { code?: unknown })?.code;
-      if (!nonEmpty(code)) throw new Error("Malformed gate finding event.");
+    blockerCodes: blockers.map((blocker) => {
+      const value = blocker as Record<string, unknown>;
+      const code = value?.code;
+      const source = value?.source as Record<string, unknown> | undefined;
+      if (
+        !nonEmpty(code) ||
+        !nonEmpty(source?.kind) ||
+        !nonEmpty(source.id) ||
+        !Array.isArray(value.remediations) ||
+        value.remediations.length === 0
+      )
+        throw new Error("Malformed harness blocker event.");
       return code;
     }),
     timestamp: event.timestamp,
@@ -769,33 +787,64 @@ export async function runPrAthenaDeliveryRun(
   return { exitCode, ledger };
 }
 
-if (import.meta.main) {
-  const [command] = Bun.argv.slice(2);
+/**
+ * Exported for its regression test: an orchestrator-origin block reaches here
+ * having printed only the prose summary, so the blocker render below is the
+ * only contract-conformant output that path produces.
+ */
+export async function runPrAthenaDeliveryRunCli(
+  argv: string[] = Bun.argv.slice(2),
+  options: PrAthenaDeliveryRunOptions = {},
+  logger: Pick<Console, "error"> = console,
+) {
+  const [command] = argv;
 
   if (command === PROVIDER_EVIDENCE_COMMAND) {
     await writePrAthenaProviderEvidence(process.cwd());
-    process.exit(0);
+    return 0;
   }
 
   if (command) {
-    console.error(
-      `Usage: bun scripts/pr-athena-delivery-run.ts [${PROVIDER_EVIDENCE_COMMAND}]`,
-    );
-    process.exit(1);
+    throw new HarnessBlockedError([
+      createHarnessBlocker({
+        code: "delivery_run_unknown_command",
+        source: { kind: "command", id: "pr:athena:delivery-run" },
+        summary: `\`${command}\` is not a delivery-run subcommand.`,
+        remediations: [
+          {
+            id: "run-delivery-run-without-subcommand",
+            kind: "command",
+            command: ["bun", "run", "pr:athena"],
+            summary: "Run the full delivery gate with no subcommand.",
+          },
+          {
+            id: "write-delivery-run-provider-evidence",
+            kind: "command",
+            command: [
+              "bun",
+              "scripts/pr-athena-delivery-run.ts",
+              PROVIDER_EVIDENCE_COMMAND,
+            ],
+            summary: "Write provider evidence for the current candidate.",
+          },
+        ],
+      }),
+    ]);
   }
 
-  const { exitCode, ledger } = await runPrAthenaDeliveryRun(process.cwd());
+  const { exitCode, ledger } = await runPrAthenaDeliveryRun(
+    process.cwd(),
+    options,
+  );
   // Observability must never decide the gate: a poisoned tracked record that
   // broke rendering would otherwise turn every later passing run into a crash.
   try {
     const { baseline, baselineSource } = await resolveSummaryBaseline(
       process.cwd(),
     );
-    for (
-      const line of formatDeliveryRunSummary(ledger, baseline, {
-        ...(baselineSource ? { baselineSource } : {}),
-      })
-    ) {
+    for (const line of formatDeliveryRunSummary(ledger, baseline, {
+      ...(baselineSource ? { baselineSource } : {}),
+    })) {
       console.log(line);
     }
   } catch (error) {
@@ -805,5 +854,50 @@ if (import.meta.main) {
       }`,
     );
   }
-  process.exit(exitCode);
+
+  // A blocked run must say so in the contract's own form. A failure that
+  // originated in a child CLI has already printed its blocker, but one that
+  // originated in the orchestrator - a thrown step, a rejected gate decision
+  // event - reaches here having printed only the prose summary above. Naming
+  // the blocked step and its rerun is additional information in both cases,
+  // not a restatement of either.
+  if (ledger.status === "blocked") {
+    logger.error(
+      formatHarnessBlockers([
+        createHarnessBlocker({
+          code: "delivery_run_blocked",
+          source: { kind: "command", id: "pr:athena:delivery-run" },
+          summary: "The Athena delivery run was blocked.",
+          ...(ledger.blockedReason ? { details: ledger.blockedReason } : {}),
+          remediations: [
+            {
+              id: "resolve-delivery-run-block",
+              kind: "code_change",
+              summary:
+                "Resolve the reported block at its source; the failing step names it above.",
+            },
+            {
+              id: "rerun-delivery-run",
+              kind: "command",
+              command: ["bun", "run", "pr:athena"],
+              summary: "Rerun the delivery gate once the block is resolved.",
+            },
+          ],
+        }),
+      ]),
+    );
+  }
+  return exitCode;
+}
+
+if (import.meta.main) {
+  // The orchestrator renders its own step failures as they happen, so a
+  // synthetic `harness_command_failed` blocker on top would restate a refusal
+  // the operator has already been shown.
+  process.exitCode = await runHarnessCliBoundary({
+    source: { kind: "command", id: "pr:athena:delivery-run" },
+    reproduce: ["bun", "run", "pr:athena"],
+    run: runPrAthenaDeliveryRunCli,
+    renderNonZero: false,
+  });
 }

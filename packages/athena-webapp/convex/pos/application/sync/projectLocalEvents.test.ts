@@ -5,6 +5,7 @@ vi.mock("../../infrastructure/posLifecycleJournal", () => ({
 }));
 
 import type { Id } from "../../../_generated/dataModel";
+import { getRegisterSessionAuthoritativeCloseBoundary } from "../../../../shared/registerSessionLifecyclePolicy";
 import {
   createOrReuseRegisterSessionRepairMapping,
   projectLocalSyncEvent,
@@ -5604,6 +5605,189 @@ describe("projectLocalSyncEvent", () => {
     expect(repository.createdRegisterSessions).toEqual([]);
   });
 
+  it("does not project a register open that predates the authoritative close boundary", async () => {
+    const repository = createProjectionRepository({
+      latestRegisterSession: {
+        _id: "register-session-closed",
+        expectedCash: 100,
+        closeoutRecords: [{ occurredAt: 90 }],
+        closedAt: 90,
+        registerNumber: "1",
+        status: "closed",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-opened-historical",
+        localRegisterSessionId: "local-register-historical",
+        sequence: 1,
+        eventType: "register_opened",
+        occurredAt: 10,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          openingFloat: 250,
+          registerNumber: "1",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(repository.createdRegisterSessions).toEqual([]);
+    expect(result.mappings).toEqual([]);
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "permission",
+        details: expect.objectContaining({
+          candidateOccurredAt: 10,
+          latestAuthoritativeCloseAt: 90,
+          lifecycleDisposition: "obsolete",
+          lifecycleReason: "at_or_before_authoritative_boundary",
+          localRegisterSessionId: "local-register-historical",
+        }),
+      }),
+    ]);
+  });
+
+  it("projects a fresh register open after the authoritative close boundary", async () => {
+    const repository = createProjectionRepository({
+      latestRegisterSession: {
+        _id: "register-session-closed",
+        expectedCash: 100,
+        closeoutRecords: [{ occurredAt: 5 }],
+        closedAt: 5,
+        registerNumber: "1",
+        status: "closed",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-opened-fresh",
+        localRegisterSessionId: "local-register-fresh",
+        sequence: 1,
+        eventType: "register_opened",
+        occurredAt: 10,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          openingFloat: 250,
+          registerNumber: "1",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(repository.createdRegisterSessions).toEqual([
+      expect.objectContaining({
+        expectedCash: 250,
+        openingFloat: 250,
+        registerNumber: "1",
+      }),
+    ]);
+  });
+
+  it("does not project a register open when the closed drawer has ambiguous close evidence", async () => {
+    const repository = createProjectionRepository({
+      latestRegisterSession: {
+        _id: "register-session-closed-ambiguous",
+        expectedCash: 100,
+        closeoutRecords: [],
+        registerNumber: "1",
+        status: "closed",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-opened-ambiguous",
+        localRegisterSessionId: "local-register-ambiguous",
+        sequence: 1,
+        eventType: "register_opened",
+        occurredAt: 10,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          openingFloat: 250,
+          registerNumber: "1",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(repository.createdRegisterSessions).toEqual([]);
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "permission",
+        details: expect.objectContaining({
+          lifecycleDisposition: "unsafe",
+          lifecycleReason: "ambiguous_close_evidence",
+        }),
+      }),
+    ]);
+  });
+
+  it("ignores a closed drawer scoped to another terminal when projecting a register open", async () => {
+    const repository = createProjectionRepository({
+      latestRegisterSession: {
+        _id: "register-session-closed-other-terminal",
+        expectedCash: 100,
+        closeoutRecords: [{ occurredAt: 90 }],
+        closedAt: 90,
+        registerNumber: "1",
+        status: "closed",
+        storeId: "store-1",
+        terminalId: "terminal-2",
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-opened-other-terminal",
+        localRegisterSessionId: "local-register-other-terminal",
+        sequence: 1,
+        eventType: "register_opened",
+        occurredAt: 10,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          openingFloat: 250,
+          registerNumber: "1",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(repository.createdRegisterSessions).toEqual([
+      expect.objectContaining({ openingFloat: 250 }),
+    ]);
+  });
+
   it("maps a direct cloud register open after staff authorization", async () => {
     const repository = createProjectionRepository({
       registerSession: {
@@ -7551,6 +7735,255 @@ describe("projectLocalSyncEvent", () => {
     expect(repository.productPatches).toEqual([]);
   });
 
+  it("creates one open inventory review work item for a zero-stock expense", async () => {
+    const repository = createProjectionRepository({
+      sku: {
+        _id: "sku-1",
+        storeId: "store-1",
+        productId: "product-1",
+        sku: "CAP-1",
+        price: 25,
+        quantityAvailable: 0,
+        inventoryCount: 0,
+        images: [],
+      },
+      validCloudIds: new Set(["product-1", "sku-1"]),
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildExpenseRecordedEvent(),
+      syncEventId: "sync-event-expense-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.createdServiceWorkItems).toEqual([
+      expect.objectContaining({
+        productSkuId: "sku-1",
+        status: "open",
+        type: "synced_sale_inventory_review",
+        metadata: expect.objectContaining({
+          localEventId: "event-expense-recorded-1",
+          localExpenseEventId: "local-expense-event-1",
+          localExpenseSessionId: "local-expense-session-1",
+          primaryProductSkuId: "sku-1",
+          sourceKind: "expense",
+          sourceType: "expenseTransaction",
+          terminalId: "terminal-1",
+          skippedMutationItems: [
+            expect.objectContaining({
+              productSkuId: "sku-1",
+              reason: "stock_shortfall",
+              requestedQuantity: 1,
+            }),
+          ],
+          trustedInventoryLines: [
+            expect.objectContaining({ productSkuId: "sku-1", quantity: 1 }),
+          ],
+        }),
+      }),
+    ]);
+    const expenseWorkItemMetadata = (
+      repository.createdServiceWorkItems[0] as {
+        metadata?: Record<string, unknown>;
+      }
+    )?.metadata;
+    expect(expenseWorkItemMetadata).not.toHaveProperty("receiptNumber");
+    expect(expenseWorkItemMetadata).not.toHaveProperty("localTransactionId");
+    expect(result.mappings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          cloudTable: "operationalWorkItem",
+          localExpenseSessionId: "local-expense-session-1",
+          localId: "local-expense-event-1:inventory-review",
+          localIdKind: "inventoryReviewWorkItem",
+          syncScope: "expense",
+        }),
+      ]),
+    );
+    expect(repository.productPatches).toEqual([]);
+  });
+
+  it("reuses the expense transaction, conflict, and inventory review work item on an identical replay", async () => {
+    const repository = createProjectionRepository({
+      sku: {
+        _id: "sku-1",
+        storeId: "store-1",
+        productId: "product-1",
+        sku: "CAP-1",
+        price: 25,
+        quantityAvailable: 0,
+        inventoryCount: 0,
+        images: [],
+      },
+      validCloudIds: new Set(["product-1", "sku-1"]),
+    });
+
+    const first = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildExpenseRecordedEvent(),
+      syncEventId: "sync-event-expense-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+    });
+    const replay = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildExpenseRecordedEvent(),
+      syncEventId: "sync-event-expense-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 200,
+    });
+
+    expect(first.status).toBe("projected");
+    expect(replay.status).toBe("projected");
+    expect(repository.createdExpenseTransactions).toHaveLength(1);
+    expect(repository.createdServiceWorkItems).toHaveLength(1);
+    expect(repository.createdConflicts).toHaveLength(1);
+    expect(replay.mappings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          localId: "local-expense-event-1:inventory-review",
+          localIdKind: "inventoryReviewWorkItem",
+        }),
+      ]),
+    );
+  });
+
+  it("creates the missing inventory review target when an already-projected expense replays", async () => {
+    const repository = createProjectionRepository({
+      sku: {
+        _id: "sku-1",
+        storeId: "store-1",
+        productId: "product-1",
+        sku: "CAP-1",
+        price: 25,
+        quantityAvailable: 0,
+        inventoryCount: 0,
+        images: [],
+      },
+      validCloudIds: new Set(["product-1", "sku-1"]),
+    });
+    repository.mappings.push(
+      {
+        _id: "mapping-existing-expense-session",
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+        syncScope: "expense",
+        localRegisterSessionId: "",
+        localExpenseSessionId: "local-expense-session-1",
+        localEventId: "event-expense-recorded-1",
+        localIdKind: "expenseSession",
+        localId: "local-expense-session-1",
+        cloudTable: "expenseSession",
+        cloudId: "expense-session-1",
+        createdAt: 1,
+      },
+      {
+        _id: "mapping-existing-expense-transaction",
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+        syncScope: "expense",
+        localRegisterSessionId: "",
+        localExpenseSessionId: "local-expense-session-1",
+        localEventId: "event-expense-recorded-1",
+        localIdKind: "expenseTransaction",
+        localId: "local-expense-event-1",
+        cloudTable: "expenseTransaction",
+        cloudId: "expense-transaction-1",
+        createdAt: 1,
+      },
+    );
+    repository.createdConflicts.push({
+      _id: "conflict-expense-inventory",
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      localRegisterSessionId: "",
+      localEventId: "event-expense-recorded-1",
+      sequence: 1,
+      conflictType: "inventory",
+      status: "needs_review",
+      summary: "Inventory needs manager review for a synced expense.",
+      details: {
+        blocksProjection: false,
+        inventoryCount: 0,
+        localExpenseEventId: "local-expense-event-1",
+        productSkuId: "sku-1",
+        quantityAvailable: 0,
+        requestedQuantity: 1,
+      },
+      createdAt: 1,
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildExpenseRecordedEvent(),
+      syncEventId: "sync-event-expense-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 300,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.createdExpenseTransactions).toEqual([]);
+    expect(repository.createdConflicts).toHaveLength(1);
+    expect(repository.createdServiceWorkItems).toEqual([
+      expect.objectContaining({
+        productSkuId: "sku-1",
+        type: "synced_sale_inventory_review",
+        metadata: expect.objectContaining({
+          localExpenseEventId: "local-expense-event-1",
+          sourceId: "expense-transaction-1",
+          sourceKind: "expense",
+        }),
+      }),
+    ]);
+    expect(result.mappings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          localId: "local-expense-event-1:inventory-review",
+          localIdKind: "inventoryReviewWorkItem",
+        }),
+      ]),
+    );
+  });
+
+  it("does not create inventory review work when a projected expense replay has no open shortfall", async () => {
+    const repository = createProjectionRepository({
+      validCloudIds: new Set(["product-1", "sku-1"]),
+    });
+    repository.mappings.push({
+      _id: "mapping-existing-expense-transaction",
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      syncScope: "expense",
+      localRegisterSessionId: "",
+      localExpenseSessionId: "local-expense-session-1",
+      localEventId: "event-expense-recorded-1",
+      localIdKind: "expenseTransaction",
+      localId: "local-expense-event-1",
+      cloudTable: "expenseTransaction",
+      cloudId: "expense-transaction-1",
+      createdAt: 1,
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildExpenseRecordedEvent(),
+      syncEventId: "sync-event-expense-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 300,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.createdServiceWorkItems).toEqual([]);
+  });
+
   it("projects duplicate trusted expense SKU lines with one aggregate stock decrement", async () => {
     const repository = createProjectionRepository({
       sku: {
@@ -8189,6 +8622,18 @@ function createProjectionRepository(
       storeId?: string;
       terminalId?: string;
     };
+    latestRegisterSession: {
+      _id: string;
+      expectedCash: number;
+      closeoutOwnedAt?: number;
+      closeoutOwnershipSource?: string;
+      closeoutRecords: unknown[];
+      closedAt?: number;
+      registerNumber?: string;
+      status: string;
+      storeId?: string;
+      terminalId?: string;
+    };
     registerReviewConflictFacts: LocalSyncRegisterReviewConflictFact[];
     registerSessionsWithCloseoutReview: Set<string>;
     sku: {
@@ -8765,8 +9210,24 @@ function createProjectionRepository(
       createdRegisterSessions.push(input);
       return "register-session-1" as never;
     },
-    async findBlockingRegisterSession() {
-      return (overrides.blockingRegisterSession as never) ?? null;
+    async findScopedRegisterSessionLifecycle(args) {
+      const blockingRegisterSession =
+        (overrides.blockingRegisterSession as never) ?? null;
+      const scopedSessions = [
+        overrides.blockingRegisterSession,
+        overrides.latestRegisterSession,
+      ].filter(
+        (session) =>
+          session !== undefined &&
+          (session.storeId === undefined || session.storeId === args.storeId) &&
+          (session.terminalId === undefined ||
+            session.terminalId === args.terminalId),
+      );
+
+      return {
+        blockingRegisterSession,
+        ...getRegisterSessionAuthoritativeCloseBoundary(scopedSessions),
+      };
     },
     async listOpenRegisterReviewConflictFacts(args) {
       if (overrides.registerReviewConflictFacts) {
