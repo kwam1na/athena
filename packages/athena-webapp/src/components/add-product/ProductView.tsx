@@ -22,6 +22,11 @@ import { Badge } from "../ui/badge";
 import { ProductStatus } from "../product/ProductStatus";
 import { ProtectedRoute } from "../ProtectedRoute";
 import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
+import {
+  ProductArchiveBlockedError,
+  productArchiveBlockFromResult,
+  resolveProductArchiveFailureToast,
+} from "~/src/lib/errors/productArchiveFailure";
 import type { ProductVariant } from "./ProductStock";
 import { buildTrustedInventoryMoneyPayload } from "./ProductStockInput";
 
@@ -180,7 +185,12 @@ function ProductViewContent() {
 
     try {
       setIsDeleteMutationPending(true);
-      await archiveProduct({ id: activeProduct._id, storeId: activeStore._id });
+      const archiveResult = await archiveProduct({
+        id: activeProduct._id,
+        storeId: activeStore._id,
+      });
+      const archiveBlock = productArchiveBlockFromResult(archiveResult);
+      if (archiveBlock) throw new ProductArchiveBlockedError(archiveBlock);
 
       toast(`Product '${activeProduct.name}' archived`, {
         icon: <CheckCircledIcon className="w-4 h-4" />,
@@ -205,9 +215,12 @@ function ProductViewContent() {
           search: { categorySlug: redirect.categorySlug },
         });
       }
-    } catch {
-      presentUnexpectedErrorToast("Something went wrong", {
+    } catch (error) {
+      const { description, title } = resolveProductArchiveFailureToast(error);
+
+      toast.error(title, {
         icon: <Ban className="w-4 h-4" />,
+        description,
       });
     } finally {
       setIsDeleteMutationPending(false);
@@ -289,13 +302,21 @@ function ProductViewContent() {
       void organizationId;
       void storeId;
 
-      await updateProduct({
+      const updateResult = await updateProduct({
         ...updatedProductData,
         slug: toSlug(updatedProductData.name),
         id: _productId,
         categoryId: updatedProductData.categoryId as Id<"category">,
         subcategoryId: updatedProductData.subcategoryId as Id<"subcategory">,
       });
+      const updateArchiveBlock = productArchiveBlockFromResult(updateResult);
+      if (updateArchiveBlock) {
+        const { description, title } = resolveProductArchiveFailureToast(
+          new ProductArchiveBlockedError(updateArchiveBlock),
+        );
+        toast.error(title, { description });
+        return;
+      }
 
       // console.log("variants in flow:", productVariants);
 

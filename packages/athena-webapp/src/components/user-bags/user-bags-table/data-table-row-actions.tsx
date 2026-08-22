@@ -12,6 +12,8 @@ import {
 
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
+
+import { resolveProductArchiveFailureToast } from "~/src/lib/errors/productArchiveFailure";
 import { Ban } from "lucide-react";
 import { useState } from "react";
 import { AlertModal } from "@/components/ui/modals/alert-modal";
@@ -52,9 +54,11 @@ export function DataTableRowActions<TData>({
         }),
       });
     } catch (e) {
-      toast("Something went wrong", {
+      const { description, title } = resolveProductArchiveFailureToast(e);
+
+      toast.error(title, {
         icon: <Ban className="w-4 h-4" />,
-        description: (e as Error).message,
+        description,
       });
     } finally {
       setIsDeleteMutationPending(false);
