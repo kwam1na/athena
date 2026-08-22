@@ -544,6 +544,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/orders/CustomerDetailsView.test.tsx`](../../src/components/orders/CustomerDetailsView.test.tsx)
 - [`src/components/orders/OrderDetailsView.test.tsx`](../../src/components/orders/OrderDetailsView.test.tsx)
 - [`src/components/orders/OrderStatus.test.tsx`](../../src/components/orders/OrderStatus.test.tsx)
+- [`src/components/orders/OrderSummary.test.tsx`](../../src/components/orders/OrderSummary.test.tsx)
 - [`src/components/orders/OrderView.test.tsx`](../../src/components/orders/OrderView.test.tsx)
 - [`src/components/orders/OrdersView.test.tsx`](../../src/components/orders/OrdersView.test.tsx)
 - [`src/components/orders/RefundsView.test.tsx`](../../src/components/orders/RefundsView.test.tsx)
