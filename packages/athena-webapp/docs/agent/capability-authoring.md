@@ -346,7 +346,10 @@ order:
 6. **Roll back immediately if needed** —
    `bun scripts/agent-harness-switch.ts --profile <id> --disable --reason "<incident>"`.
    That denies new work at once, cancels the profile's active runs in bounded
-   passes, and preserves evidence already released.
+   passes, and preserves evidence already released. It stops the operator rail
+   only: the direct-harness smoke registers every published profile `enabled` in
+   its own admission (§10.3), so the compatibility fence (§10.1) is the complete
+   stop when a read port's behaviour, not an operator's reach, is the problem.
 
 What blocks a release and what does not are different questions. Any authority
 or data leak, mutation reach, or sandbox escape blocks enablement outright.
@@ -651,8 +654,10 @@ Start from the run.
   including the capability-call ledger, whose rows carry request arguments and
   store-authored labels — and marks grants and citations
   `deleted_by_lifecycle`; runtime-side content goes through the adapter's
-  cleanup hook, retried with backoff. Organization-scope removal reaches the
-  call ledger by cascading into each store, not through an index of its own.
+  cleanup hook, retried with backoff. Organization-scope removal deletes the
+  call ledger directly through its own `by_organizationId_createdAt` index, the
+  same as every other table in `deleteAgentHarnessContentWithCtx` — it does not
+  cascade into the organization's stores.
   Two tables are honestly outside this today: `agentEvidenceAccessAudit` and
   `agentSpendWindow` are written and asserted payload-free, but nothing expires
   them yet.

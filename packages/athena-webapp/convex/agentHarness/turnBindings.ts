@@ -368,6 +368,10 @@ export async function resumeTurnBindingWithCtx(
   const runStatus = run?.status ?? "failed";
 
   if (binding.abandonedAt !== undefined) {
+    // Only a writer that terminalizes the run abandons a binding, and the host
+    // that owned this turn is gone by the time anyone reads it: whatever the
+    // turn cost is unknowable, so the reservation is released against 0.
+    await settleTurnSpendOnceWithCtx(ctx, { bindingId: binding._id, actualCostUnits: 0, now: input.now });
     return { action: "abandoned", step: binding.step, runStatus, artifactId: run?.artifactId };
   }
   if (isTerminalRunStatus(runStatus)) {
@@ -376,6 +380,7 @@ export async function resumeTurnBindingWithCtx(
       // there is nothing left for the caller to wait on.
       const exhausted = binding.outboxNextAttemptAt === undefined && (binding.outboxLastError?.startsWith(AGENT_OUTBOX_EXHAUSTED_PREFIX) ?? false);
       if (!exhausted) return { action: "await_projection", step: binding.step, runStatus, artifactId: run?.artifactId };
+      await settleTurnSpendOnceWithCtx(ctx, { bindingId: binding._id, actualCostUnits: 0, now: input.now });
       return { action: "terminal", step: binding.step, runStatus, artifactId: run?.artifactId };
     }
     if (!isBindingStepAtOrBeyond(binding.step, "athena_committed")) {
@@ -389,6 +394,9 @@ export async function resumeTurnBindingWithCtx(
       await settleTurnSpendOnceWithCtx(ctx, { bindingId: binding._id, actualCostUnits: 0, now: input.now });
       return { action: "abandoned", step: binding.step, runStatus, artifactId: run?.artifactId };
     }
+    // Committed or projected on a terminal run: the reservation is released
+    // here for a turn whose host died before it could finalize.
+    await settleTurnSpendOnceWithCtx(ctx, { bindingId: binding._id, actualCostUnits: 0, now: input.now });
     return { action: "terminal", step: binding.step, runStatus, artifactId: run?.artifactId };
   }
   if (

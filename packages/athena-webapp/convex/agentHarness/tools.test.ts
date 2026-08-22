@@ -3,13 +3,14 @@
  *
  * The narrative the model writes may quote anything the provider was shown, so
  * the artifact's egress class must be derived from every attempt whose result
- * was released to the provider — never from the cited subset the model chooses.
+ * was released to the provider — and from the projected history the provider
+ * was replayed — never from the cited subset the model chooses.
  */
 import { describe, expect, it } from "vitest";
 
 import type { Id } from "../_generated/dataModel";
 import type { AgentToolHandlerContext } from "../../shared/agentHarness/agentRuntime";
-import type { AgentEgressClass } from "../../shared/agentHarness/values";
+import { opaqueRef, type AgentEgressClass } from "../../shared/agentHarness/values";
 import { createAthenaToolRegistrations, type AgentToolHostContext } from "./tools";
 
 type CompleteRunCall = { artifact: { payload: Record<string, unknown> } };
@@ -19,7 +20,7 @@ const COMPLETE_RUN = { seam: "completeRun" };
 
 function handlerContext(idempotencyKey: string): AgentToolHandlerContext {
   return {
-    turnRef: "runtime_turn:test" as unknown as AgentToolHandlerContext["turnRef"],
+    turnRef: opaqueRef("runtime_turn", "test"),
     callId: idempotencyKey,
     idempotencyKey,
     signal: new AbortController().signal,
@@ -28,9 +29,10 @@ function handlerContext(idempotencyKey: string): AgentToolHandlerContext {
 
 /**
  * One attempt per requested class, each released to the provider, then a
- * completion citing only the refs the caller names.
+ * completion citing only the refs the caller names. `egressFloor` is the class
+ * of the projected history the turn replayed into the provider.
  */
-function toolsUnderTest(attemptClasses: readonly AgentEgressClass[]) {
+function toolsUnderTest(attemptClasses: readonly AgentEgressClass[], egressFloor?: AgentEgressClass) {
   const completions: CompleteRunCall[] = [];
   let sequence = 0;
 
@@ -65,6 +67,7 @@ function toolsUnderTest(attemptClasses: readonly AgentEgressClass[]) {
       } as never;
     },
     now: () => 1_700_000_000_000,
+    ...(egressFloor ? { egressFloor } : {}),
   } satisfies Partial<AgentToolHostContext> as unknown as AgentToolHostContext;
 
   const { registrations } = createAthenaToolRegistrations(host);
@@ -109,5 +112,22 @@ describe("athena.completeRun answer egress class", () => {
     });
 
     expect(tools.completions[0].artifact.payload.egressClass).toBe("operational");
+  });
+
+  it("holds the class at the projected history's class when this turn read only operational sources", async () => {
+    // A prior sensitive answer was replayed into the provider, so the narrative
+    // may restate it even though nothing this turn read exceeded operational.
+    const tools = toolsUnderTest(["operational", "operational"], "sensitive");
+    await tools.executeProgram();
+    await tools.executeProgram();
+
+    await tools.completeRun({
+      outcome: "answer",
+      narrative: "Same as the figures above.",
+      citedAttemptRefs: ["attempt_0"],
+      citations: [{ ref: "citation_0" }],
+    });
+
+    expect(tools.completions[0].artifact.payload.egressClass).toBe("sensitive");
   });
 });

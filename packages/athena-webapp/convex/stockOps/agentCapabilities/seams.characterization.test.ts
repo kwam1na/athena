@@ -17,7 +17,7 @@ import schema from "../../schema";
 import { getInventoryUnitSummaryWithCtx, listInventorySnapshotWithCtx } from "../adjustments";
 import { listReplenishmentRecommendationsWithCtx } from "../replenishment";
 import { seedDailyOperationsStore } from "../../agentHarness/evals/dailyOperations.fixture";
-import { listReplenishmentHandler } from "./inventoryPorts";
+import { REPLENISHMENT_PURCHASE_ORDER_CEILING, REPLENISHMENT_SKU_CEILING, listReplenishmentHandler } from "./inventoryPorts";
 import { REPLENISHMENT_PORT_KEY } from "./inventory";
 
 const modules = import.meta.glob("../../**/*.ts");
@@ -119,6 +119,100 @@ describe("inventory.replenishment read ceiling", () => {
     });
     // The page stays at the manifest's bound even though the catalogue is larger.
     expect((output.data as unknown[]).length).toBe(100);
+  });
+
+  it("reports the recommendations source as truncated and warns when the purchase-order history exceeds the read ceiling", async () => {
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(async (ctx) => {
+      const seeded = await seedDailyOperationsStore(ctx, { slug: "replenishment-po-ceiling" });
+      const vendors = await ctx.db
+        .query("vendor")
+        .withIndex("by_storeId_status", (q) => q.eq("storeId", seeded.storeId).eq("status", "active"))
+        .take(1);
+      // One more historical purchase order than the per-status ceiling covers,
+      // so the continuity scan is bounded even though the catalogue is small.
+      for (let index = 0; index <= REPLENISHMENT_PURCHASE_ORDER_CEILING; index += 1) {
+        await ctx.db.insert("purchaseOrder", {
+          storeId: seeded.storeId,
+          organizationId: seeded.organizationId,
+          vendorId: vendors[0]!._id,
+          poNumber: `PO-${String(index).padStart(4, "0")}`,
+          status: "received",
+          lineItemCount: 0,
+          totalUnits: 0,
+          subtotalAmount: 0,
+          totalAmount: 0,
+          createdAt: 1_700_000_000_000,
+          receivedAt: 1_700_000_000_000,
+        });
+      }
+      return seeded;
+    });
+
+    const output = await t.run((ctx) =>
+      listReplenishmentHandler(ctx, {
+        portKey: REPLENISHMENT_PORT_KEY,
+        capabilityId: "inventory.replenishment",
+        verb: "list",
+        scope: { kind: "store", storeId: fixture.storeId, organizationId: fixture.organizationId },
+        args: {},
+        pageIndex: 0,
+        pageSize: 100,
+        grantedProjections: [],
+        now: Date.now(),
+      }),
+    );
+
+    expect(output.kind).toBe("data");
+    if (output.kind !== "data") throw new Error("unreachable");
+    expect(output.sources.find((source) => source.sourceKey === "recommendations")).toMatchObject({
+      status: "truncated",
+      reason: "purchase_order_ceiling_reached",
+    });
+    expect(output.warnings).toMatchObject([{ code: "replenishment_source_truncated", sourceKey: "recommendations" }]);
+  });
+
+  it("reports the recommendations source as complete when the catalogue fills the ceiling exactly", async () => {
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(async (ctx) => {
+      const seeded = await seedDailyOperationsStore(ctx, { slug: "replenishment-exact" });
+      const lowStockSku = await ctx.db.get("productSku", seeded.lowStockSkuId);
+      // Exactly REPLENISHMENT_SKU_CEILING SKUs in the store: the scan reads the
+      // whole catalogue, so nothing was cut and the answer is complete.
+      for (let index = 0; index < REPLENISHMENT_SKU_CEILING - 2; index += 1) {
+        await ctx.db.insert("productSku", {
+          images: [],
+          inventoryCount: 40,
+          price: 10_000,
+          netPrice: 10_000,
+          productId: lowStockSku!.productId,
+          productName: `Healthy ${String(index).padStart(3, "0")}`,
+          quantityAvailable: 40,
+          sku: `HL-${String(index).padStart(3, "0")}`,
+          storeId: seeded.storeId,
+        });
+      }
+      return seeded;
+    });
+
+    const output = await t.run((ctx) =>
+      listReplenishmentHandler(ctx, {
+        portKey: REPLENISHMENT_PORT_KEY,
+        capabilityId: "inventory.replenishment",
+        verb: "list",
+        scope: { kind: "store", storeId: fixture.storeId, organizationId: fixture.organizationId },
+        args: {},
+        pageIndex: 0,
+        pageSize: 100,
+        grantedProjections: [],
+        now: Date.now(),
+      }),
+    );
+
+    expect(output.kind).toBe("data");
+    if (output.kind !== "data") throw new Error("unreachable");
+    expect(output.sources.find((source) => source.sourceKey === "recommendations")).toMatchObject({ status: "complete" });
+    expect(output.warnings).toEqual([]);
   });
 
   it("reports the recommendations source as complete when the catalogue fits under the ceiling", async () => {

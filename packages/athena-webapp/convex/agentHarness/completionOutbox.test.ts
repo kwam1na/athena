@@ -20,6 +20,7 @@ import { TEST_EXECUTOR_SEAMS, beginExecutingAttempt, bridgeCall, seedDelegatedRu
 import { AGENT_OUTBOX_BACKOFF_MS, AGENT_OUTBOX_MAX_ATTEMPTS, createCompletionOutbox } from "./completionOutbox";
 import { buildAnswerArtifactPayload } from "./historyProjection";
 import { cancelAgentRunWithCtx, failAgentRunWithCtx, listCapabilityCallsForRun } from "./lifecycle";
+import { reserveTurnSpendWithCtx, spendWindowKey, turnProviderCostReservation } from "./runAdmission";
 import { resumeTurnBindingWithCtx } from "./turnBindings";
 import { registerAgentRuntimeCleanupHook, resetAgentRuntimeCleanupHooksForTests, type AgentRuntimeCleanupDescriptor } from "./retention";
 
@@ -59,6 +60,29 @@ async function seedReleasedRun(t: TestConvex<typeof schema>, slug: string) {
     }),
   );
   return { run, attempt, finished, citation: finished.citations[0].citation };
+}
+
+type SeededRun = Awaited<ReturnType<typeof seedReleasedRun>>["run"];
+
+/** What `startTurn` leaves behind: the turn's provider ceiling reserved on both scopes. */
+async function reserveTurnSpend(t: TestConvex<typeof schema>, run: SeededRun) {
+  const reserved = await t.run((ctx) =>
+    reserveTurnSpendWithCtx(ctx, { actorRef: `athenaUser:${run.operator.userId}`, storeId: run.operator.storeId, costUnits: turnProviderCostReservation(), now: TEST_NOW_BASE }),
+  );
+  if (!reserved.ok) throw new Error(reserved.code);
+}
+
+/** The reservation still held on the operator and store windows the turn reserved against. */
+async function reservedCostUnits(t: TestConvex<typeof schema>, run: SeededRun) {
+  return t.run(async (ctx) => {
+    const windowKey = spendWindowKey(TEST_NOW_BASE);
+    const rows = await Promise.all(
+      [`operator:athenaUser:${run.operator.userId}`, `store:${run.operator.storeId}`].map((scopeKey) =>
+        ctx.db.query("agentSpendWindow").withIndex("by_scopeKey_windowKey", (q) => q.eq("scopeKey", scopeKey).eq("windowKey", windowKey)).unique(),
+      ),
+    );
+    return rows.map((row) => row?.reservedCostUnits);
+  });
 }
 
 function completionRequest(finished: Awaited<ReturnType<typeof seedReleasedRun>>["finished"], citation: string) {
@@ -118,6 +142,22 @@ describe("prepare → one-transaction commit → idempotent projection (scenario
     expect(await t.run((ctx) => ctx.db.get("intelligenceRun", seeded.run.runId))).toMatchObject({ status: "completed" });
   });
 
+  it("releases the turn's spend reservation when the projection lands and finalize never ran", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await seedReleasedRun(t, "outbox-spend");
+    const bindingId = seeded.run.bindingId!;
+    await reserveTurnSpend(t, seeded.run);
+    await t.run((ctx) => outbox.prepareCompletionWithCtx(ctx, { bindingId, runId: seeded.run.runId, preparedCompletionRef: "completion:s", now: TEST_NOW_BASE + 30 }));
+    await t.run((ctx) => TEST_EXECUTOR_SEAMS.completeRunWithCtx(ctx, { runId: seeded.run.runId, idempotencyKey: "completion:s", ...completionRequest(seeded.finished, seeded.citation), now: TEST_NOW_BASE + 40 }));
+
+    // The host died between the commit and `finalizeTurn`: the binding is at
+    // `athena_committed`, past every sweep target, and still holds its reservation.
+    expect(await reservedCostUnits(t, seeded.run)).toEqual([turnProviderCostReservation(), turnProviderCostReservation()]);
+    expect(await t.run((ctx) => outbox.recordProjectionWithCtx(ctx, { bindingId, projectionRef: "runtime_projection:spend", now: TEST_NOW_BASE + 42 }))).toEqual({ outcome: "projected", step: "runtime_projected" });
+    expect(await reservedCostUnits(t, seeded.run)).toEqual([0, 0]);
+    expect(await t.run((ctx) => ctx.db.get("agentTurnBinding", bindingId))).toMatchObject({ spendSettledAt: TEST_NOW_BASE + 42 });
+  });
+
   it("backs off a failed projection and retries it later without touching the commit", async () => {
     const t = convexTest(schema, modules);
     const seeded = await seedReleasedRun(t, "outbox-retry");
@@ -135,6 +175,7 @@ describe("prepare → one-transaction commit → idempotent projection (scenario
     const t = convexTest(schema, modules);
     const seeded = await seedReleasedRun(t, "outbox-cap");
     const bindingId = seeded.run.bindingId!;
+    await reserveTurnSpend(t, seeded.run);
     await t.run((ctx) => outbox.prepareCompletionWithCtx(ctx, { bindingId, runId: seeded.run.runId, preparedCompletionRef: "completion:c", now: TEST_NOW_BASE + 30 }));
     await t.run((ctx) => TEST_EXECUTOR_SEAMS.completeRunWithCtx(ctx, { runId: seeded.run.runId, idempotencyKey: "completion:c", ...completionRequest(seeded.finished, seeded.citation), now: TEST_NOW_BASE + 40 }));
 
@@ -144,6 +185,8 @@ describe("prepare → one-transaction commit → idempotent projection (scenario
       expect(await t.run((ctx) => outbox.recordProjectionFailureWithCtx(ctx, { bindingId, error: "turn_not_terminal", now: TEST_NOW_BASE + 40 + attempt }))).toMatchObject({ outcome: "scheduled", attempts: attempt });
     }
     expect(await t.run((ctx) => outbox.recordProjectionFailureWithCtx(ctx, { bindingId, error: "turn_not_terminal", now: TEST_NOW_BASE + 100 }))).toEqual({ outcome: "exhausted", attempts: AGENT_OUTBOX_MAX_ATTEMPTS + 1 });
+    // Giving up is the other end the outbox can reach, so the turn's reservation is released here too.
+    expect(await reservedCostUnits(t, seeded.run)).toEqual([0, 0]);
     expect(await t.run((ctx) => ctx.db.get("agentTurnBinding", bindingId))).toMatchObject({ step: "athena_committed", outboxLastError: "outbox_exhausted: turn_not_terminal" });
     expect((await t.run((ctx) => ctx.db.get("agentTurnBinding", bindingId)))?.outboxNextAttemptAt).toBeUndefined();
     // Never due again, however far the clock runs.

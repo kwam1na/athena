@@ -146,8 +146,9 @@ function buildGuidance(args: {
 
 /**
  * `maxSkus` bounds the catalogue scan for callers that must price their read
- * ahead of time; the caller learns from the returned length whether the ceiling
- * was reached, so nothing re-scans to find out.
+ * ahead of time. One row past the ceiling is read so the caller can tell a
+ * catalogue that fills the ceiling exactly from one that was cut short, and
+ * nothing re-scans to find out.
  */
 async function listStoreProductSkus(
   ctx: QueryCtx,
@@ -159,7 +160,7 @@ async function listStoreProductSkus(
     .withIndex("by_storeId", (q) => q.eq("storeId", storeId));
 
   if (maxSkus !== undefined) {
-    return query.take(maxSkus);
+    return query.take(maxSkus + 1);
   }
 
   const productSkus = [];
@@ -171,20 +172,32 @@ async function listStoreProductSkus(
   return productSkus;
 }
 
+/**
+ * `maxPurchaseOrders` bounds one status slice of the store's lifetime
+ * purchase-order history, one row past the ceiling for the same reason the
+ * catalogue scan does.
+ */
 async function listStorePurchaseOrdersByStatus(
   ctx: QueryCtx,
   args: {
     status: PurchaseOrderContextStatus;
     storeId: Id<"store">;
+    maxPurchaseOrders?: number;
   },
 ) {
-  const purchaseOrders = [];
-
-  for await (const purchaseOrder of ctx.db
+  const query = ctx.db
     .query("purchaseOrder")
     .withIndex("by_storeId_status", (q) =>
       q.eq("storeId", args.storeId).eq("status", args.status),
-    )) {
+    );
+
+  if (args.maxPurchaseOrders !== undefined) {
+    return query.take(args.maxPurchaseOrders + 1);
+  }
+
+  const purchaseOrders = [];
+
+  for await (const purchaseOrder of query) {
     purchaseOrders.push(purchaseOrder);
   }
 
@@ -209,17 +222,25 @@ async function listActiveStoreVendors(ctx: QueryCtx, storeId: Id<"store">) {
   return vendors;
 }
 
+/** `maxLineItems` bounds one order's line items, one row past the ceiling. */
 async function listPurchaseOrderLineItems(
   ctx: QueryCtx,
   purchaseOrderId: Id<"purchaseOrder">,
+  maxLineItems?: number,
 ) {
-  const lineItems = [];
-
-  for await (const lineItem of ctx.db
+  const query = ctx.db
     .query("purchaseOrderLineItem")
     .withIndex("by_purchaseOrderId", (q) =>
       q.eq("purchaseOrderId", purchaseOrderId),
-    )) {
+    );
+
+  if (maxLineItems !== undefined) {
+    return query.take(maxLineItems + 1);
+  }
+
+  const lineItems = [];
+
+  for await (const lineItem of query) {
     lineItems.push(lineItem);
   }
 
@@ -306,19 +327,55 @@ function sortPurchaseOrderContexts<T extends PurchaseOrderLineContext>(
   });
 }
 
+/**
+ * The continuity scan walks the store's purchase-order history in every
+ * context status plus each order's line items, so both ceilings bound it and
+ * `ceilingReached` reports whether either bit — the caller states its
+ * completeness from that flag, never from the row counts.
+ */
 async function buildSkuContinuityContextById(
   ctx: QueryCtx,
   storeId: Id<"store">,
+  ceilings: {
+    maxPurchaseOrdersPerStatus?: number;
+    maxLineItemsPerPurchaseOrder?: number;
+  } = {},
 ) {
   const skuContinuityContextById = new Map<string, SkuContinuityContext>();
+  let ceilingReached = false;
   const purchaseOrdersByStatus = await Promise.all(
     PURCHASE_ORDER_CONTEXT_STATUSES.map((status) =>
-      listStorePurchaseOrdersByStatus(ctx, { status, storeId }),
+      listStorePurchaseOrdersByStatus(ctx, {
+        status,
+        storeId,
+        maxPurchaseOrders: ceilings.maxPurchaseOrdersPerStatus,
+      }),
     ),
   );
+  const maxPurchaseOrders = ceilings.maxPurchaseOrdersPerStatus;
+  const purchaseOrders = purchaseOrdersByStatus.flatMap((statusSlice) => {
+    if (maxPurchaseOrders === undefined || statusSlice.length <= maxPurchaseOrders) {
+      return statusSlice;
+    }
+    ceilingReached = true;
+    return statusSlice.slice(0, maxPurchaseOrders);
+  });
 
-  for (const purchaseOrder of purchaseOrdersByStatus.flat()) {
-    const lineItems = await listPurchaseOrderLineItems(ctx, purchaseOrder._id);
+  const maxLineItems = ceilings.maxLineItemsPerPurchaseOrder;
+
+  for (const purchaseOrder of purchaseOrders) {
+    const readLineItems = await listPurchaseOrderLineItems(
+      ctx,
+      purchaseOrder._id,
+      maxLineItems,
+    );
+    let lineItems = readLineItems;
+
+    if (maxLineItems !== undefined && readLineItems.length > maxLineItems) {
+      ceilingReached = true;
+      lineItems = readLineItems.slice(0, maxLineItems);
+    }
+
     const vendor = await ctx.db.get("vendor", purchaseOrder.vendorId);
 
     for (const lineItem of lineItems) {
@@ -407,7 +464,7 @@ async function buildSkuContinuityContextById(
     sortPurchaseOrderContexts(context.receivedPurchaseOrders);
   });
 
-  return skuContinuityContextById;
+  return { ceilingReached, skuContinuityContextById };
 }
 
 function hasRelatedPurchaseOrderContext(context?: SkuContinuityContext) {
@@ -504,22 +561,34 @@ export async function listReplenishmentRecommendationsWithCtx(
 
 /**
  * The derivation itself. `maxSkus` caps the catalogue scan and
- * `skuCeilingReached` reports whether the cap bit, so a bounded caller can
- * state its completeness honestly without a second pass over the catalogue.
+ * `maxPurchaseOrdersPerStatus`/`maxPurchaseOrderLineItems` cap the continuity
+ * scan over the store's purchase-order history; `skuCeilingReached` and
+ * `purchaseOrderCeilingReached` report whether either cap bit, so a bounded
+ * caller can state its completeness honestly without a second pass.
  */
 export async function listBoundedReplenishmentRecommendationsWithCtx(
   ctx: QueryCtx,
   args: {
     maxSkus?: number;
+    maxPurchaseOrdersPerStatus?: number;
+    maxPurchaseOrderLineItems?: number;
     storeId: Id<"store">;
   },
 ) {
-  const [activeVendors, productSkus, skuContinuityContextById] =
-    await Promise.all([
-      listActiveStoreVendors(ctx, args.storeId),
-      listStoreProductSkus(ctx, args.storeId, args.maxSkus),
-      buildSkuContinuityContextById(ctx, args.storeId),
-    ]);
+  const [activeVendors, readSkus, continuity] = await Promise.all([
+    listActiveStoreVendors(ctx, args.storeId),
+    listStoreProductSkus(ctx, args.storeId, args.maxSkus),
+    buildSkuContinuityContextById(ctx, args.storeId, {
+      maxPurchaseOrdersPerStatus: args.maxPurchaseOrdersPerStatus,
+      maxLineItemsPerPurchaseOrder: args.maxPurchaseOrderLineItems,
+    }),
+  ]);
+  const skuContinuityContextById = continuity.skuContinuityContextById;
+  const skuCeilingReached =
+    args.maxSkus !== undefined && readSkus.length > args.maxSkus;
+  const productSkus = skuCeilingReached
+    ? readSkus.slice(0, args.maxSkus)
+    : readSkus;
   const hasActiveVendor = activeVendors.length > 0;
   const now = Date.now();
 
@@ -655,8 +724,8 @@ export async function listBoundedReplenishmentRecommendationsWithCtx(
 
   return {
     recommendations,
-    skuCeilingReached:
-      args.maxSkus !== undefined && productSkus.length >= args.maxSkus,
+    skuCeilingReached,
+    purchaseOrderCeilingReached: continuity.ceilingReached,
   };
 }
 

@@ -22,7 +22,7 @@ import { TEST_EXECUTOR_SEAMS, TEST_SCHEMAS, TEST_SEAM_REFS } from "./executor.te
 import { projectThreadHistoryWithCtx } from "./historyProjection";
 import { cancelAgentRunWithCtx, getBudgetLedgerForRun, listProgramAttemptsForRun } from "./lifecycle";
 import { createQuickJsProgramRuntime } from "./programRuntime/quickJsRuntime";
-import { reserveTurnSpendWithCtx, spendWindowKey, turnProviderCostReservation } from "./runAdmission";
+import { reserveTurnSpendWithCtx, settleTurnSpendWithCtx, spendWindowKey, turnProviderCostReservation } from "./runAdmission";
 import type { AgentProgramRuntime } from "./programRuntime/types";
 import { registerAgentRuntimeCleanupHook, resetAgentRuntimeCleanupHooksForTests, type AgentRuntimeCleanupDescriptor } from "./retention";
 import { createTurnHost, type AgentTurnHostRefs } from "./runtimeHost";
@@ -429,8 +429,8 @@ describe("turn host — a turn that ends before the model runs", () => {
   }
 
   /** What `startTurn` leaves behind: a recorded turn with its provider ceiling reserved. */
-  async function seedAdmittedTurn(t: Harness, slug: string) {
-    const seeded = await t.run((ctx) => seedRecordedTurn(ctx, slug));
+  async function seedAdmittedTurn(t: Harness, slug: string, options: Parameters<typeof seedRecordedTurn>[2] = {}) {
+    const seeded = await t.run((ctx) => seedRecordedTurn(ctx, slug, options));
     const reserved = await t.run((ctx) =>
       reserveTurnSpendWithCtx(ctx, { actorRef: `athenaUser:${seeded.operator.userId}`, storeId: seeded.operator.storeId, costUnits: turnProviderCostReservation(), now: TEST_NOW_BASE }),
     );
@@ -464,6 +464,53 @@ describe("turn host — a turn that ends before the model runs", () => {
       { reserved: turnProviderCostReservation(), settled: 0 },
       { reserved: turnProviderCostReservation(), settled: 0 },
     ]);
+  });
+
+  it("leaves a neighbouring reservation alone when re-finalizing a turn the pre-marker path already settled", async () => {
+    const t = backend();
+    const legacy = await seedAdmittedTurn(t, "spend-legacy");
+    // The same operator and store, so both turns reserve against the same two windows.
+    const neighbour = await seedAdmittedTurn(t, "spend-legacy-neighbour", { operator: legacy.operator });
+    expect(await reservations(t, neighbour)).toEqual([
+      { reserved: turnProviderCostReservation() * 2, settled: 0 },
+      { reserved: turnProviderCostReservation() * 2, settled: 0 },
+    ]);
+
+    await t.run(async (ctx) => {
+      // The shape a binding finalized before `spendSettledAt` existed is left
+      // in: the provider invocation row is terminal, the old finalize already
+      // released the reservation, and no marker records that it did.
+      await ctx.db.insert("intelligenceProviderInvocation", {
+        runId: legacy.runId,
+        providerKey: "athena_contract_fake",
+        capability: "agent_turn",
+        status: "succeeded",
+        requestSummary: {},
+        rawPayloadStored: false,
+        startedAt: TEST_NOW_BASE,
+        completedAt: TEST_NOW_BASE + 5,
+      });
+      await settleTurnSpendWithCtx(ctx, {
+        actorRef: `athenaUser:${legacy.operator.userId}`,
+        storeId: legacy.operator.storeId,
+        windowKey: spendWindowKey(TEST_NOW_BASE),
+        reservedCostUnits: turnProviderCostReservation(),
+        actualCostUnits: 120,
+        now: TEST_NOW_BASE + 5,
+      });
+      await cancelAgentRunWithCtx(ctx, { runId: legacy.runId, idempotencyKey: "legacy", reason: "operator_canceled", now: TEST_NOW_BASE + 6 });
+    });
+    expect((await rows(t, legacy)).binding?.spendSettledAt).toBeUndefined();
+
+    // Re-driving the terminal legacy turn must not settle a second time: the
+    // released amount is fixed, so it would rob the neighbouring turn.
+    const host = await hostFor(t, createAgentRuntimeContractFake({ clock: createDeterministicClock(TEST_NOW_BASE + 1_000) }));
+    expect(await host.driveTurn({ bindingId: legacy.bindingId })).toMatchObject({ outcome: "terminal" });
+    expect(await reservations(t, neighbour)).toEqual([
+      { reserved: turnProviderCostReservation(), settled: 120 },
+      { reserved: turnProviderCostReservation(), settled: 120 },
+    ]);
+    expect((await rows(t, legacy)).binding?.spendSettledAt).toBeDefined();
   });
 
   it("releases the spend reservation when prepare refuses the turn", async () => {

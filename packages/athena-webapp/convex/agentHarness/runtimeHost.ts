@@ -41,6 +41,7 @@ import type { AgentPrepareCompletionOutcome, AgentProjectionLoad, AgentRecordPro
 // eslint-disable-next-line @convex-dev/import-wrong-runtime -- this module is "use node" too; the rule only inspects the imported file
 import { createProductionConvexAgentRuntimeAdapter } from "./agentRuntime/convexAgentProduction";
 import type { AgentCapabilitySchemaIndex } from "./discovery";
+import { historyEgressClass } from "./historyProjection";
 // eslint-disable-next-line @convex-dev/import-wrong-runtime -- this module is "use node" too; the rule only inspects the imported file
 import { getProductionProgramExecutor, type AgentExecuteProgramResult, type AgentExecutorCtx } from "./executor";
 // eslint-disable-next-line @convex-dev/import-wrong-runtime -- this module is "use node" too; the rule only inspects the imported file
@@ -209,6 +210,9 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
         if (turnRef) await adapter.reportProgress?.(turnRef, milestone);
       },
       now,
+      // The provider was replayed this turn's projected history, so an answer
+      // written from it cannot be classed below what that history carried.
+      egressFloor: historyEgressClass(plan.history),
       schemas: deps.schemas,
     });
     const ledger = createAgentToolDispatchLedger({ adapterVersion: adapter.descriptor.adapterVersion, tools: tools.registrations });

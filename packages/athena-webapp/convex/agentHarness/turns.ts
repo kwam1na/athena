@@ -153,6 +153,8 @@ export function describeTurnErrorForOperator(code: string | undefined): string {
     case "turn_binding_stalled":
     case "prompt_unavailable":
       return "The request didn't start in time. Ask again.";
+    case "turn_host_stalled":
+      return "The request stopped unexpectedly. Ask again.";
     case "canceled":
       return "Stopped.";
     default:
@@ -454,6 +456,9 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
     const usage = input.usage ?? { tokens: { input: 0, output: 0, cachedInput: 0, reasoning: 0 }, streams: 0, conservative: true, settledBy: [], lateEventCount: 0, costUnits: 0 };
     const invocations = await ctx.db.query("intelligenceProviderInvocation").withIndex("by_runId", (q) => q.eq("runId", run._id)).take(1);
     const invocation = invocations[0];
+    // Read before the patch below: the settle uses it to tell a turn this
+    // finalize is closing from one the pre-marker path already settled.
+    const invocationStatusBefore = invocation?.status ?? null;
     if (invocation && invocation.status === "started") {
       const finalOutcome = refreshed?.status === "completed" ? "completed" : refreshed?.status === "canceled" ? "canceled" : "failed";
       await ctx.db.patch("intelligenceProviderInvocation", invocation._id, {
@@ -465,7 +470,7 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
     }
     // The reservation closes with the TURN, not with the provider row: a turn
     // refused or canceled before any provider work still holds one.
-    await settleTurnSpendOnceWithCtx(ctx, { bindingId: binding._id, actualCostUnits: invocation ? usage.costUnits : 0, now: input.now });
+    await settleTurnSpendOnceWithCtx(ctx, { bindingId: binding._id, actualCostUnits: invocation ? usage.costUnits : 0, now: input.now, invocationStatusBefore });
     if (input.purgeRuntime) {
       const current = await ctx.db.get("agentTurnBinding", binding._id);
       if (current && current.runtimeCleanupStatus !== "succeeded") {

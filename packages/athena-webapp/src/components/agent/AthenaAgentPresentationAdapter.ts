@@ -461,6 +461,10 @@ const FAILURE_COPY: Record<string, { headline: string; detail?: string }> = {
     headline: "This request didn't start in time.",
     detail: "Ask again.",
   },
+  turn_host_stalled: {
+    headline: "This request stopped unexpectedly.",
+    detail: "Ask again.",
+  },
   prompt_unavailable: {
     headline: "The question is no longer stored.",
     detail: "Ask it again to get a fresh answer.",

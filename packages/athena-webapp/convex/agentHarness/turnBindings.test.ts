@@ -10,11 +10,13 @@ import { budgetVector } from "../../shared/agentHarness/execution";
 import {
   admitCapabilityCallWithCtx,
   beginProgramAttemptWithCtx,
+  cancelAgentRunWithCtx,
   completeAgentRunWithCtx,
   markCapabilityCallExecutingWithCtx,
   settleCapabilityCallWithCtx,
   transitionProgramAttemptWithCtx,
 } from "./lifecycle";
+import { reserveTurnSpendWithCtx, spendWindowKey, turnProviderCostReservation } from "./runAdmission";
 import { TEST_NOW, buildRunInput, seedTenant } from "./testSupport";
 import {
   AGENT_TURN_BINDING_ABANDON_AFTER_MS,
@@ -293,6 +295,47 @@ describe("bounded sweeper: a host that died mid-turn", () => {
       // The thread is free again and nothing is reopened.
       expect(await resumeTurnBindingWithCtx(ctx, { bindingId: seeded.created.bindingId, now: sweptAt + 1 })).toMatchObject({ action: "abandoned", runStatus: "failed" });
       expect(await sweepStaleTurnBindingsWithCtx(ctx, { now: sweptAt + 2, limit: 10 })).toEqual({ failed: 0, hasMore: false });
+    });
+  });
+});
+
+describe("resume-on-read: a binding abandoned by run terminalization", () => {
+  it("releases the turn's spend reservation on the next read when no host ever came back", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const tenant = await seedTenant(ctx, "abandoned-spend");
+      const created = bound(await recordTurnIntentWithCtx(ctx, intentInput(tenant)));
+      await driveToRunning(ctx, created.bindingId);
+      const reserved = await reserveTurnSpendWithCtx(ctx, { actorRef: "athenaUser:operator-1", storeId: tenant.storeId, costUnits: turnProviderCostReservation(), now: TEST_NOW });
+      if (!reserved.ok) throw new Error(reserved.code);
+      return { tenant, created };
+    });
+
+    /** The reservation still held on the operator and store windows. */
+    const reserved = async (ctx: MutationCtx) => {
+      const windowKey = spendWindowKey(TEST_NOW);
+      const rows = await Promise.all(
+        ["operator:athenaUser:operator-1", `store:${seeded.tenant.storeId}`].map((scopeKey) =>
+          ctx.db.query("agentSpendWindow").withIndex("by_scopeKey_windowKey", (q) => q.eq("scopeKey", scopeKey).eq("windowKey", windowKey)).unique(),
+        ),
+      );
+      return rows.map((row) => row?.reservedCostUnits);
+    };
+
+    await t.run(async (ctx) => {
+      // The kill switch cancels the run: terminalization abandons the binding,
+      // which puts it past every sweep target while the host is already gone.
+      await cancelAgentRunWithCtx(ctx, { runId: seeded.created.runId, idempotencyKey: "switch", reason: "profile_disabled", now: TEST_NOW + 10 });
+      expect((await ctx.db.get("agentTurnBinding", seeded.created.bindingId))?.abandonedAt).toBe(TEST_NOW + 10);
+      expect(await reserved(ctx)).toEqual([turnProviderCostReservation(), turnProviderCostReservation()]);
+      expect(await sweepStaleTurnBindingsWithCtx(ctx, { now: TEST_NOW + AGENT_TURN_BINDING_ABANDON_AFTER_MS + 1, limit: 10 })).toEqual({ failed: 0, hasMore: false });
+
+      expect(await resumeTurnBindingWithCtx(ctx, { bindingId: seeded.created.bindingId, now: TEST_NOW + 20 })).toMatchObject({ action: "abandoned", runStatus: "canceled" });
+      expect(await reserved(ctx)).toEqual([0, 0]);
+      expect(await ctx.db.get("agentTurnBinding", seeded.created.bindingId)).toMatchObject({ spendSettledAt: TEST_NOW + 20 });
+      // A second read settles nothing more: the marker is the once-only guard.
+      expect(await resumeTurnBindingWithCtx(ctx, { bindingId: seeded.created.bindingId, now: TEST_NOW + 30 })).toMatchObject({ action: "abandoned" });
+      expect(await ctx.db.get("agentTurnBinding", seeded.created.bindingId)).toMatchObject({ spendSettledAt: TEST_NOW + 20 });
     });
   });
 });

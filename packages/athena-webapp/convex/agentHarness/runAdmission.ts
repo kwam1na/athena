@@ -298,16 +298,35 @@ export async function settleTurnSpendWithCtx(
  * refused before the model ran, swept after its host died — must release it or
  * the operator's daily ceiling erodes. `spendSettledAt` is the once-only guard
  * and is patched in the same mutation as the settle.
+ *
+ * A binding finalized before `spendSettledAt` existed settled through the
+ * provider invocation row and carries no marker, so an already-terminal
+ * invocation row this mutation did not itself terminalize means the old path
+ * paid out: the marker is stamped and nothing is released. Callers that
+ * terminalize that row themselves pass the status they read before doing so.
  */
 export async function settleTurnSpendOnceWithCtx(
   ctx: MutationCtx,
-  input: { bindingId: Id<"agentTurnBinding">; actualCostUnits: number; now: number },
+  input: {
+    bindingId: Id<"agentTurnBinding">;
+    actualCostUnits: number;
+    now: number;
+    invocationStatusBefore?: "started" | "succeeded" | "failed" | null;
+  },
 ): Promise<{ settled: boolean }> {
   const binding = await ctx.db.get("agentTurnBinding", input.bindingId);
   if (!binding || binding.spendSettledAt !== undefined) return { settled: false };
   const run = await ctx.db.get("intelligenceRun", binding.runId);
   const grant = run?.runGrantId ? await ctx.db.get("agentRunGrant", run.runGrantId) : null;
   if (!run || !grant) return { settled: false };
+  const invocationStatus =
+    input.invocationStatusBefore !== undefined
+      ? input.invocationStatusBefore
+      : ((await ctx.db.query("intelligenceProviderInvocation").withIndex("by_runId", (q) => q.eq("runId", run._id)).take(1))[0]?.status ?? null);
+  if (invocationStatus === "succeeded" || invocationStatus === "failed") {
+    await ctx.db.patch("agentTurnBinding", binding._id, { spendSettledAt: input.now, updatedAt: input.now });
+    return { settled: false };
+  }
   await settleTurnSpendWithCtx(ctx, {
     actorRef: grant.initiatingActorRef,
     storeId: grant.storeId,

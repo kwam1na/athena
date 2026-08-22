@@ -26,7 +26,7 @@ import {
 } from "../../lib/agentCapabilitySupport";
 import { defineAgentReadPortQuery } from "../../platform/operationAdmission";
 import type { AgentReadPortHandler, AgentReadPortHandlerOutput } from "../../agentHarness/readPorts";
-import type { AgentSourceCompleteness } from "../../../shared/agentHarness/results";
+import type { AgentSourceCompleteness, AgentWarning } from "../../../shared/agentHarness/results";
 import { known, unknown } from "../../../shared/agentHarness/results";
 import { listInventorySnapshotForProductSkusWithCtx } from "../adjustments";
 import { listBoundedReplenishmentRecommendationsWithCtx } from "../replenishment";
@@ -40,7 +40,13 @@ const LOW_STOCK_THRESHOLD = 5;
  * the read is bounded at the source to keep one call within the page cost the
  * manifest declares. Hitting the ceiling is disclosed, never silently dropped.
  */
-const REPLENISHMENT_SKU_CEILING = 200;
+export const REPLENISHMENT_SKU_CEILING = 200;
+/**
+ * The same read also walks the store's purchase-order history and each order's
+ * line items, so both scans carry their own ceiling; either one hitting it
+ * truncates the answer.
+ */
+export const REPLENISHMENT_PURCHASE_ORDER_CEILING = 200;
 
 type PositionRow = Awaited<ReturnType<typeof listInventorySnapshotForProductSkusWithCtx>>[number];
 
@@ -193,9 +199,14 @@ export const listReplenishmentHandler: AgentReadPortHandler = async (ctx, input)
   const currency = store?.currency ?? "GHS";
   const derived = await listBoundedReplenishmentRecommendationsWithCtx(ctx, {
     maxSkus: REPLENISHMENT_SKU_CEILING,
+    maxPurchaseOrdersPerStatus: REPLENISHMENT_PURCHASE_ORDER_CEILING,
+    maxPurchaseOrderLineItems: REPLENISHMENT_PURCHASE_ORDER_CEILING,
     storeId,
   });
   const recommendations = derived.recommendations;
+  // Either scan hitting its ceiling truncates the same answer, so the model is
+  // told once, structurally and as a warning.
+  const truncated = derived.skuCeilingReached || derived.purchaseOrderCeilingReached;
   const requested = input.args.continuityStatus;
   const matching = recommendations.filter(
     (recommendation) => requested === undefined || recommendation.status === requested,
@@ -238,13 +249,27 @@ export const listReplenishmentHandler: AgentReadPortHandler = async (ctx, input)
     sources: [
       {
         sourceKey: "recommendations",
-        status: derived.skuCeilingReached ? "truncated" : page.hasMore ? "partial" : "complete",
-        reason: derived.skuCeilingReached ? "sku_ceiling_reached" : page.hasMore ? "more_pages_available" : undefined,
+        status: truncated ? "truncated" : page.hasMore ? "partial" : "complete",
+        reason: derived.skuCeilingReached
+          ? "sku_ceiling_reached"
+          : derived.purchaseOrderCeilingReached
+            ? "purchase_order_ceiling_reached"
+            : page.hasMore
+              ? "more_pages_available"
+              : undefined,
         capturedAt: input.now,
       },
       { sourceKey: "inputs", status: "complete", capturedAt: input.now },
     ],
-    warnings: [],
+    warnings: truncated
+      ? ([
+          {
+            code: "replenishment_source_truncated",
+            message: "More stock and purchase-order history exists than this read's ceiling covers.",
+            sourceKey: "recommendations",
+          },
+        ] satisfies AgentWarning[])
+      : [],
     sourceRefs: page.items.flatMap((recommendation) => [
       {
         ref: mintAgentSourceRef(RECOMMENDATION_REF_KIND, storeId, String(recommendation._id)),

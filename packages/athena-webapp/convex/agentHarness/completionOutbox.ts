@@ -29,6 +29,7 @@ import { egressClassRank } from "../../shared/agentHarness/values";
 import type { DelegatedAdmission } from "./delegatedAdmission";
 import { parseAnswerPayload, resolveViewerAuthorityWithCtx } from "./historyProjection";
 import { requestRuntimeCleanupWithCtx } from "./retention";
+import { settleTurnSpendOnceWithCtx } from "./runAdmission";
 import { AGENT_OUTBOX_EXHAUSTED_PREFIX, advanceTurnBindingWithCtx } from "./turnBindings";
 import { agentDelegatedAdmission } from "../platform/operationAdmission";
 
@@ -156,6 +157,11 @@ export function createCompletionOutbox(config: CompletionOutboxConfig) {
     });
     if (advanced.outcome === "rejected") return { outcome: "rejected", step: advanced.step, code: advanced.denial.code };
     await ctx.db.patch("agentTurnBinding", binding._id, { outboxNextAttemptAt: undefined, outboxLastError: undefined, updatedAt: input.now });
+    // A committed binding reaches this end or the exhausted one, and no sweep
+    // target covers it: a host that died after the commit left the turn's
+    // reservation held, so it is released here. Its real provider cost died
+    // with the host, so nothing is booked as spent.
+    await settleTurnSpendOnceWithCtx(ctx, { bindingId: binding._id, actualCostUnits: 0, now: input.now });
     return { outcome: advanced.outcome === "advanced" ? "projected" : "already_projected", step: "runtime_projected" };
   }
 
@@ -176,6 +182,9 @@ export function createCompletionOutbox(config: CompletionOutboxConfig) {
         outboxLastError: `${AGENT_OUTBOX_EXHAUSTED_PREFIX}${input.error}`.slice(0, 200),
         updatedAt: input.now,
       });
+      // The other end a committed binding can reach: the turn is over for good,
+      // so its reservation is released here on the same terms as a projection.
+      await settleTurnSpendOnceWithCtx(ctx, { bindingId: binding._id, actualCostUnits: 0, now: input.now });
       return { outcome: "exhausted", attempts };
     }
     const backoff = AGENT_OUTBOX_BACKOFF_MS[Math.min(attempts - 1, AGENT_OUTBOX_BACKOFF_MS.length - 1)];

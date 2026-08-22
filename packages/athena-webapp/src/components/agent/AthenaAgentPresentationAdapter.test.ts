@@ -161,6 +161,16 @@ describe("Athena agent source destinations", () => {
     ).toBeNull();
   });
 
+  it("has no destination for a ref that did not come from the server's minting path", () => {
+    expect(
+      resolveAthenaSourceLink(
+        storePresentation,
+        { ref: "not-an-opaque-ref", kind: "close_record" },
+        { orgUrlSlug: "wigclub", storeUrlSlug: "osu" },
+      ),
+    ).toBeNull();
+  });
+
   it("refuses to build a link with an unfilled route parameter", () => {
     expect(
       resolveAthenaSourceLink(
@@ -237,6 +247,12 @@ describe("Athena agent operator copy", () => {
       "That took too long.",
     );
     expect(describeAthenaFailure("canceled").headline).toBe("Stopped.");
+    // A turn the sweeper closed because its host died is retryable: the copy
+    // must say so rather than falling through to the generic headline.
+    expect(describeAthenaFailure("turn_host_stalled")).toMatchObject({
+      headline: "This request stopped unexpectedly.",
+      detail: "Ask again.",
+    });
     expect(describeAthenaFailure("authority_revoked").headline).toBe(
       "This answer is no longer available to you.",
     );
