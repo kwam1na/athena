@@ -398,7 +398,7 @@ describe("terminalRecoveryRepository", () => {
       "conflict-dup-1",
     ]);
     expect(result.isIncomplete).toBe(false);
-    expect(ctx.queryLog).toContain("by_store_terminal_localEvent");
+    expect(ctx.queryLog).toContain("by_store_terminal_localEvent_status");
   });
 
   it("reports an incomplete event-scoped settle read past the row limit", async () => {

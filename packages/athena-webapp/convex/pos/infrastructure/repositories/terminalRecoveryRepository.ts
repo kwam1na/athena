@@ -197,22 +197,22 @@ export async function listTerminalRecoveryConflictRowsForEvent(
     terminalId: Id<"posTerminal">;
   },
 ): Promise<{ isIncomplete: boolean; rows: Doc<"posLocalSyncConflict">[] }> {
-  const rows = await ctx.db
+  // Status-scoped window: only open rows count toward the per-event cap, so an
+  // event's settled history never truncates the read, while a window that is
+  // still truncated fails closed rather than settling part of one event.
+  const openRows = await ctx.db
     .query("posLocalSyncConflict")
-    .withIndex("by_store_terminal_localEvent", (q) =>
+    .withIndex("by_store_terminal_localEvent_status", (q) =>
       q
         .eq("storeId", args.storeId)
         .eq("terminalId", args.terminalId)
-        .eq("localEventId", args.localEventId),
+        .eq("localEventId", args.localEventId)
+        .eq("status", "needs_review"),
     )
     .take(args.limit + 1);
-  const openRows = rows.filter((row) => row.status === "needs_review");
 
   return {
-    // Truncation is judged on the raw index window, not the open subset: a
-    // window cut short by already-resolved rows must still fail closed so the
-    // caller never settles part of one source event's rows.
-    isIncomplete: rows.length > args.limit,
+    isIncomplete: openRows.length > args.limit,
     rows: openRows.slice(0, args.limit),
   };
 }

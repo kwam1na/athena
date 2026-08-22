@@ -18,6 +18,8 @@ tags:
   - work-items
   - resolution
   - convex
+  - sync-conflicts
+delivery_diff_fingerprint: 28bb8d7f1fa5788d23e9e09cc221134e40cba2ebd8d073defaf8b24212896b1c
 ---
 
 # Athena Open Work Resolution Ownership
@@ -44,10 +46,29 @@ The baseline contract is:
   action completes, cancels, or converts the underlying subject. Service
   appointments, service cases, purchase orders, receiving, and unresolved
   catalog decisions stay source-owned.
-- POS synced sale inventory reviews are the exception that Operations owns:
-  resolution must validate the current store, terminal, register session, sale,
-  work item type/status, and canonical local mapping key
-  `inventoryReviewWorkItem:${localTransactionId}:inventory-review`.
+- POS synced inventory reviews are the exception that Operations owns.
+  `synced_sale_inventory_review` is the shared synced inventory-review rail: it
+  carries sale members and, since V26-1249, expense members. Each member
+  declares `sourceKind` and validates against its own source. A sale member
+  validates the current store, terminal, register session, sale, work item
+  type/status, and canonical local mapping key
+  `inventoryReviewWorkItem:${localTransactionId}:inventory-review`; an expense
+  member validates store, terminal, expense session, expense transaction, and
+  the key `inventoryReviewWorkItem:${localExpenseEventId}:inventory-review`
+  written per terminal with no register session. A sale proof can never satisfy
+  an expense member and vice versa, and a mixed-SKU logical group validates
+  every member before any member is written.
+- Open Work and its source conflicts settle together (V26-1248). The mutation
+  that makes a synced inventory review terminal, whether a manual outcome, a
+  qualifying stock adjustment, or a retry of already-terminal work, resolves the
+  `posLocalSyncConflict` rows for the member's local event through the bounded,
+  idempotent `resolveLocalSyncReview` primitive in the same transaction. The
+  canonical mapping is the only settlement key: it must point at this exact work
+  item, otherwise the settlement disposition is `unmapped` and no conflict row is
+  touched. The resolution metadata and the operational event record
+  `sourceSettlement` (disposition, local event ids, settled count) as the audit
+  of convergence; a retry of terminal work returns `already_terminal`, keeps the
+  recorded outcome, and settles only lingering rows.
 - Daily Close owns carry-forward completion and cancellation. It must consume
   manager proof bound to `daily_close_carry_forward` and the
   `dailyCloseId:sourceId` subject before mutating the row.
@@ -68,6 +89,13 @@ receipt numbers, product names, or internal ids as accidental idempotency keys.
   or continue an Open Work row.
 - Add negative tests for wrong terminal, wrong store, wrong source metadata,
   stale work status, and receipt-only or SKU-only matching.
+- When adding a member kind to the synced inventory-review rail, give it its
+  own mapping identity and validation branch and extend
+  `inventoryReviewSourceMappingIdentity`; never add a parallel settlement
+  helper or a new work type.
+- Assert settlement evidence in tests: `settledConflictCount` on the result and
+  `sourceSettlement.disposition` in the resolution metadata and event. An
+  `unmapped` disposition means the mapping is wrong, not the conflict.
 - Treat manager proof as consumed evidence at the command boundary that owns
   the decision.
 - Keep unsupported work types out of the visible queue, or render them without
@@ -97,6 +125,24 @@ localId = ${localTransactionId}:inventory-review
 That mapping is the durable source identity. Receipt numbers, cloud transaction
 ids, and product SKU ids are useful context, not resolution keys.
 
+When a synced expense skips a stock decrement, projection keeps the expense
+transaction, creates one work item on the same rail with `sourceKind: expense`,
+and maps it per terminal:
+
+```text
+storeId
+terminalId
+localRegisterSessionId = "" (expense events carry no register session)
+localIdKind = inventoryReviewWorkItem
+localId = ${localExpenseEventId}:inventory-review
+```
+
+Settlement then reads that mapping through the per-terminal index
+(`by_store_terminal_localKindId`) while sale members keep the
+register-session-keyed proof. Settlement is keyed by the member's local event,
+so every open conflict row raised by that event settles with the work; it is
+not scoped by conflict type, matching the terminal review primitive it reuses.
+
 ## Related
 
 - `docs/solutions/design-patterns/athena-open-work-row-context-metadata-2026-06-29.md`
@@ -104,4 +150,6 @@ ids, and product SKU ids are useful context, not resolution keys.
 - `docs/solutions/architecture/athena-manager-approval-authority-standard-2026-07-01.md`
 - `packages/athena-webapp/convex/operations/operationalWorkItems.ts`
 - `packages/athena-webapp/convex/operations/openWorkInventoryReviews.ts`
+- `packages/athena-webapp/convex/pos/application/sync/resolveLocalSyncReview.ts`
+- `docs/solutions/logic-errors/athena-terminal-sync-review-currentness-2026-06-28.md`
 - `packages/athena-webapp/src/components/operations/OperationsQueueView.tsx`

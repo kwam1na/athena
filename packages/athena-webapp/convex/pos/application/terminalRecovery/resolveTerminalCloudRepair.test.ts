@@ -544,11 +544,11 @@ describe("resolveTerminalCloudRepair", () => {
     expect(ctx.tables.registerSession).toHaveLength(1);
   });
 
-  it("fails closed when an obsolete event's row window is truncated by already-resolved rows", async () => {
-    // Two rows of this event were resolved earlier, so the bounded window of
-    // 2,001 rows holds 1,999 open rows even though more remain beyond it.
-    // Truncation must be judged on the raw window: the event is skipped whole
-    // rather than half-settled and stamped rejected.
+  it("settles an event whose open rows fit the cap even when its settled history exceeds it", async () => {
+    // Conflict rows are never deleted, so an event's lifetime row count can
+    // pass the per-event cap after earlier rows were settled. Only open rows
+    // count toward the cap: the remaining open rows settle whole and the
+    // source event converges instead of being skipped forever.
     const resolvedRows = Array.from({ length: 2 }, (_, index) =>
       buildConflict({
         _id: `conflict-resolved-${index}` as Id<"posLocalSyncConflict">,
@@ -595,24 +595,25 @@ describe("resolveTerminalCloudRepair", () => {
     expect(result).toMatchObject({
       kind: "ok",
       data: {
-        hasMoreCandidates: true,
-        repairedSourceEventIds: [],
+        repairedSourceEventIds: ["event-1"],
         resolvedByDisposition: {
           duplicate_resolved: 0,
           fresh_projected: 0,
-          obsolete_resolved: 0,
+          obsolete_resolved: 2_000,
         },
-        resolvedConflictIds: [],
       },
     });
+    expect(result.kind === "ok" ? result.data.resolvedConflictIds : []).toHaveLength(
+      2_000,
+    );
     expect(
-      ctx.tables.posLocalSyncConflict.filter((row) => row.status === "resolved"),
-    ).toHaveLength(2);
+      ctx.tables.posLocalSyncConflict.filter((row) => row.status === "needs_review"),
+    ).toHaveLength(0);
     expect(ctx.tables.posLocalSyncEvent[0]).toMatchObject({
       _id: "event-1-id",
-      status: "conflicted",
+      rejectionCode: "obsolete_register_open",
+      status: "rejected",
     });
-    expect(ctx.db.patch).not.toHaveBeenCalled();
   });
 
   it("fails closed for an active blocker and for ambiguous close chronology", async () => {
