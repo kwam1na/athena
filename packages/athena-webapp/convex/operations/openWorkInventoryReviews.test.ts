@@ -359,7 +359,7 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
         },
       );
 
-    expect(result).toEqual({ resolvedCount: 1 });
+    expect(result).toEqual({ resolvedCount: 1, settledConflictCount: 0 });
     expect(ctx.db.patch).toHaveBeenCalledWith(
       "operationalWorkItem",
       "work-item-1",
@@ -415,7 +415,7 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
         },
       );
 
-    expect(result).toEqual({ resolvedCount: 1 });
+    expect(result).toEqual({ resolvedCount: 1, settledConflictCount: 0 });
     expect(ctx.db.patch).toHaveBeenCalledWith(
       "operationalWorkItem",
       "work-item-1",
@@ -445,7 +445,7 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
         },
       );
 
-    expect(result).toEqual({ resolvedCount: 1 });
+    expect(result).toEqual({ resolvedCount: 1, settledConflictCount: 0 });
     expect(ctx.db.patch).toHaveBeenCalledWith(
       "operationalWorkItem",
       "work-item-1",
@@ -478,7 +478,7 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
           },
         );
 
-      expect(result).toEqual({ resolvedCount: 0 });
+      expect(result).toEqual({ resolvedCount: 0, settledConflictCount: 0 });
       expect(ctx.db.patch).not.toHaveBeenCalled();
       expect(ctx.db.insert).not.toHaveBeenCalled();
     },
@@ -503,7 +503,7 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
         },
       );
 
-    expect(result).toEqual({ resolvedCount: 0 });
+    expect(result).toEqual({ resolvedCount: 0, settledConflictCount: 0 });
     expect(ctx.db.query).not.toHaveBeenCalled();
     expect(ctx.db.patch).not.toHaveBeenCalled();
     expect(ctx.db.insert).not.toHaveBeenCalled();
@@ -522,6 +522,7 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
       data: {
         action: "resolved",
         outcome: "completed",
+        settledConflictCount: 0,
         status: "completed",
         workItemId: "work-item-1",
       },
@@ -624,6 +625,7 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
       data: {
         action: "resolved",
         outcome: "superseded",
+        settledConflictCount: 0,
         status: "cancelled",
         workItemId: "work-item-1",
       },
@@ -674,7 +676,7 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
     expect(ctx.db.insert).not.toHaveBeenCalled();
   });
 
-  it("rejects already-terminal work item attempts", async () => {
+  it("treats an already-terminal work item as a settle-only no-op", async () => {
     const ctx = buildCtx({
       operationalWorkItem: buildWorkItem({ status: "completed" }),
     });
@@ -684,12 +686,13 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
       defaultArgs(),
     );
 
-    expect(result).toEqual({
-      kind: "user_error",
-      error: {
-        code: "conflict",
-        message: "Inventory review work is already terminal.",
+    expect(result).toMatchObject({
+      data: {
+        action: "already_terminal",
+        settledConflictCount: 0,
+        status: "completed",
       },
+      kind: "ok",
     });
     expect(ctx.db.patch).not.toHaveBeenCalled();
   });
@@ -747,6 +750,7 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
       data: {
         action: "resolved",
         outcome: "completed",
+        settledConflictCount: 0,
         status: "completed",
         workItemId: "work-item-1",
       },
@@ -781,6 +785,7 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
       data: {
         action: "resolved",
         outcome: "completed",
+        settledConflictCount: 0,
         status: "completed",
         workItemId: "work-item-1",
       },
@@ -879,12 +884,343 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
       data: {
         action: "resolved",
         outcome: "completed",
+        settledConflictCount: 0,
         status: "completed",
         workItemId: "work-item-1",
       },
       kind: "ok",
     });
     expect(ctx.db.patch).toHaveBeenCalled();
+  });
+});
+
+describe("synced sale inventory review source conflict settlement", () => {
+  it("settles every matching open source conflict when manual completion succeeds", async () => {
+    const ctx = buildCtx({ posLocalSyncConflict: buildConflict() });
+
+    const result = await resolveSyncedSaleInventoryReviewWithCtx(
+      ctx as never,
+      defaultArgs(),
+    );
+
+    expect(result).toMatchObject({
+      data: { action: "resolved", settledConflictCount: 1, status: "completed" },
+      kind: "ok",
+    });
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "posLocalSyncConflict",
+      "conflict-1",
+      expect.objectContaining({
+        resolvedAt: 1_772_550_000_000,
+        resolvedByStaffProfileId: "staff-manager-1",
+        resolvedByUserId: "user-1",
+        status: "resolved",
+      }),
+    );
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "operationalWorkItem",
+      "work-item-1",
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          resolution: expect.objectContaining({
+            sourceSettlement: {
+              disposition: "settled",
+              localEventIds: ["event-sale-completed-1"],
+              settledConflictCount: 1,
+              terminalId: "terminal-1",
+            },
+          }),
+        }),
+        status: "completed",
+      }),
+    );
+    expect(ctx.db.insert).toHaveBeenCalledWith(
+      "operationalEvent",
+      expect.objectContaining({
+        eventType: "synced_sale_inventory_review_completed",
+        metadata: expect.objectContaining({
+          sourceSettlement: expect.objectContaining({
+            disposition: "settled",
+            settledConflictCount: 1,
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("settles the same source conflicts for cancellation and supersession outcomes", async () => {
+    for (const outcome of ["cancelled", "superseded", "dismissed"] as const) {
+      const ctx = buildCtx({ posLocalSyncConflict: buildConflict() });
+
+      const result = await resolveSyncedSaleInventoryReviewWithCtx(
+        ctx as never,
+        defaultArgs({ outcome }),
+      );
+
+      expect(result).toMatchObject({
+        data: { outcome, settledConflictCount: 1, status: "cancelled" },
+        kind: "ok",
+      });
+      expect(ctx.db.patch).toHaveBeenCalledWith(
+        "posLocalSyncConflict",
+        "conflict-1",
+        expect.objectContaining({ status: "resolved" }),
+      );
+    }
+  });
+
+  it("reports no open conflicts when the mapped source rows are already resolved", async () => {
+    const ctx = buildCtx({
+      posLocalSyncConflict: buildConflict({ status: "resolved" }),
+    });
+
+    const result = await resolveSyncedSaleInventoryReviewWithCtx(
+      ctx as never,
+      defaultArgs(),
+    );
+
+    expect(result).toMatchObject({
+      data: { settledConflictCount: 0 },
+      kind: "ok",
+    });
+    expect(ctx.db.patch).not.toHaveBeenCalledWith(
+      "posLocalSyncConflict",
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(ctx.db.insert).toHaveBeenCalledWith(
+      "operationalEvent",
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          sourceSettlement: expect.objectContaining({
+            disposition: "no_open_conflicts",
+            settledConflictCount: 0,
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("reports an unmapped source disposition when the canonical mapping does not own the work item", async () => {
+    const ctx = buildCtx({
+      posLocalSyncConflict: buildConflict(),
+      posLocalSyncMapping: buildMapping({ cloudId: "work-item-other" }),
+    });
+
+    const result = await resolveSyncedSaleInventoryReviewWithCtx(
+      ctx as never,
+      defaultArgs(),
+    );
+
+    expect(result).toMatchObject({ kind: "ok" });
+    expect(ctx.db.patch).not.toHaveBeenCalledWith(
+      "posLocalSyncConflict",
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(ctx.db.insert).toHaveBeenCalledWith(
+      "operationalEvent",
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          sourceSettlement: expect.objectContaining({
+            disposition: "unmapped",
+            settledConflictCount: 0,
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("settles work and conflicts atomically from a qualifying stock adjustment", async () => {
+    const ctx = buildCtx({ posLocalSyncConflict: buildConflict() });
+
+    const result =
+      await autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWithCtx(
+        ctx as never,
+        {
+          actorUserId: "user-1" as Id<"athenaUser">,
+          inventoryMovements: [buildInventoryMovement()],
+          organizationId: "org-1" as Id<"organization">,
+          stockAdjustmentBatchId: "batch-1" as Id<"stockAdjustmentBatch">,
+          storeId: "store-1" as Id<"store">,
+        },
+      );
+
+    expect(result).toEqual({ resolvedCount: 1, settledConflictCount: 1 });
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "posLocalSyncConflict",
+      "conflict-1",
+      expect.objectContaining({
+        resolvedByUserId: "user-1",
+        status: "resolved",
+      }),
+    );
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "operationalWorkItem",
+      "work-item-1",
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          resolution: expect.objectContaining({
+            sourceSettlement: expect.objectContaining({
+              disposition: "settled",
+              settledConflictCount: 1,
+            }),
+          }),
+        }),
+        status: "completed",
+      }),
+    );
+    expect(ctx.db.insert).toHaveBeenCalledWith(
+      "operationalEvent",
+      expect.objectContaining({
+        eventType: "synced_sale_inventory_review_completed",
+        metadata: expect.objectContaining({
+          sourceSettlement: expect.objectContaining({
+            settledConflictCount: 1,
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("converges a previously completed review by settling lingering conflicts only", async () => {
+    const ctx = buildCtx({
+      operationalWorkItem: buildWorkItem({
+        completedAt: 1_772_549_000_000,
+        metadata: {
+          ...buildWorkItem().metadata,
+          resolution: { outcome: "dismissed" },
+        },
+        status: "completed",
+      }),
+      posLocalSyncConflict: buildConflict(),
+    });
+
+    const result = await resolveSyncedSaleInventoryReviewWithCtx(
+      ctx as never,
+      defaultArgs({ outcome: "completed" }),
+    );
+
+    expect(result).toMatchObject({
+      data: {
+        action: "already_terminal",
+        outcome: "dismissed",
+        settledConflictCount: 1,
+        status: "completed",
+        workItemId: "work-item-1",
+      },
+      kind: "ok",
+    });
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "posLocalSyncConflict",
+      "conflict-1",
+      expect.objectContaining({ status: "resolved" }),
+    );
+    expect(ctx.db.patch).not.toHaveBeenCalledWith(
+      "operationalWorkItem",
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(ctx.db.insert).toHaveBeenCalledWith(
+      "operationalEvent",
+      expect.objectContaining({
+        eventType: "synced_sale_inventory_review_conflicts_settled",
+        metadata: expect.objectContaining({
+          outcome: "dismissed",
+          sourceSettlement: expect.objectContaining({
+            settledConflictCount: 1,
+          }),
+        }),
+        subjectId: "work-item-1",
+      }),
+    );
+  });
+
+  it("writes nothing when an already-terminal review has no lingering conflicts", async () => {
+    const ctx = buildCtx({
+      operationalWorkItem: buildWorkItem({ status: "cancelled" }),
+      posLocalSyncConflict: buildConflict({ status: "resolved" }),
+    });
+
+    const result = await resolveSyncedSaleInventoryReviewWithCtx(
+      ctx as never,
+      defaultArgs(),
+    );
+
+    expect(result).toMatchObject({
+      data: {
+        action: "already_terminal",
+        settledConflictCount: 0,
+        status: "cancelled",
+      },
+      kind: "ok",
+    });
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+  });
+
+  it("rejects forged cross-store source context on an already-terminal retry", async () => {
+    const ctx = buildCtx({
+      operationalWorkItem: buildWorkItem({ status: "completed" }),
+      posLocalSyncConflict: buildConflict(),
+      posTerminal: buildTerminal({ storeId: "store-2" as Id<"store"> }),
+    });
+
+    const result = await resolveSyncedSaleInventoryReviewWithCtx(
+      ctx as never,
+      defaultArgs(),
+    );
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+        message: "Terminal does not match the inventory review store.",
+      },
+    });
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+  });
+
+  it("rejects a mismatched local identity on an already-terminal retry", async () => {
+    const ctx = buildCtx({
+      operationalWorkItem: buildWorkItem({ status: "completed" }),
+      posLocalSyncConflict: buildConflict(),
+    });
+
+    const result = await resolveSyncedSaleInventoryReviewWithCtx(
+      ctx as never,
+      defaultArgs({ localTransactionId: "local-txn-forged" }),
+    );
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+        message: "Work item metadata does not match the sale context.",
+      },
+    });
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+  });
+
+  it("leaves no partial transition when conflict settlement fails", async () => {
+    const ctx = buildCtx({ posLocalSyncConflict: buildConflict() });
+    ctx.db.patch.mockImplementation(async (tableName: string) => {
+      if (tableName === "posLocalSyncConflict") {
+        throw new Error("conflict settlement failed");
+      }
+    });
+
+    await expect(
+      resolveSyncedSaleInventoryReviewWithCtx(ctx as never, defaultArgs()),
+    ).rejects.toThrow("conflict settlement failed");
+
+    expect(ctx.db.patch).not.toHaveBeenCalledWith(
+      "operationalWorkItem",
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(ctx.db.insert).not.toHaveBeenCalled();
   });
 });
 
@@ -942,6 +1278,7 @@ type BuildCtxSeed = Partial<{
   inventoryMovement: Doc<"inventoryMovement"> | null;
   operationalWorkItem: Doc<"operationalWorkItem">;
   oversizedOperationalWorkRepair: Doc<"oversizedOperationalWorkRepair">;
+  posLocalSyncConflict: Doc<"posLocalSyncConflict">;
   posLocalSyncMapping: Doc<"posLocalSyncMapping">;
   productSku: Doc<"productSku"> | null;
   posTerminal: Doc<"posTerminal">;
@@ -962,6 +1299,7 @@ function buildCtx(seed: BuildCtxSeed = {}) {
         : seed.inventoryMovement,
     operationalWorkItem: seed.operationalWorkItem ?? buildWorkItem(),
     oversizedOperationalWorkRepair: seed.oversizedOperationalWorkRepair,
+    posLocalSyncConflict: seed.posLocalSyncConflict,
     posLocalSyncMapping: seed.posLocalSyncMapping ?? buildMapping(),
     productSku:
       seed.productSku === undefined ? buildProductSku() : seed.productSku,
@@ -1228,4 +1566,24 @@ function buildMapping(
     terminalId: "terminal-1" as Id<"posTerminal">,
     ...overrides,
   } as Doc<"posLocalSyncMapping">;
+}
+
+function buildConflict(
+  overrides: Partial<Doc<"posLocalSyncConflict">> = {},
+): Doc<"posLocalSyncConflict"> {
+  return {
+    _creationTime: 1,
+    _id: "conflict-1" as Id<"posLocalSyncConflict">,
+    conflictType: "inventory",
+    createdAt: 1,
+    details: {},
+    localEventId: "event-sale-completed-1",
+    localRegisterSessionId: "local-register-1",
+    sequence: 1,
+    status: "needs_review",
+    storeId: "store-1" as Id<"store">,
+    summary: "Inventory was not decremented for this synced sale.",
+    terminalId: "terminal-1" as Id<"posTerminal">,
+    ...overrides,
+  } as Doc<"posLocalSyncConflict">;
 }
