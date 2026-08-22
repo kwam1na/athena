@@ -65,7 +65,7 @@ export const FLEET_STORES_MANIFEST = defineCapabilityManifest({
   binding: {
     readIntents: ["organization.view", "store.configuration.view"],
     portKey: "fleet.stores",
-    implementationVersion: "1",
+    implementationVersion: "2",
   },
 });
 
@@ -127,7 +127,7 @@ export const FLEET_STORE_HEALTH_MANIFEST = defineCapabilityManifest({
   binding: {
     readIntents: ["organization.view", "platform.health.view"],
     portKey: "fleet.storeHealth",
-    implementationVersion: "1",
+    implementationVersion: "2",
   },
 });
 
@@ -166,7 +166,7 @@ export const DIRECTORY_TEAMS_MANIFEST = defineCapabilityManifest({
   binding: {
     readIntents: ["organization.view", "staff.view"],
     portKey: "directory.teams",
-    implementationVersion: "1",
+    implementationVersion: "2",
   },
 });
 
@@ -186,7 +186,7 @@ export const SYNTHETIC_SECOND_SURFACE_READ_PORTS: AgentReadPortIndex = {
       verbs: ["list"],
       scopeKind: "organization",
       readIntents: FLEET_STORES_MANIFEST.binding.readIntents,
-      implementationVersion: "1",
+      implementationVersion: "2",
       declaredCost: FLEET_STORES_MANIFEST.cost.worstCasePerCall,
       handler: { kind: "internal_query", functionPath: "agentHarness/profiles/syntheticSecondSurfacePorts:listStores" },
       projections: [],
@@ -199,7 +199,7 @@ export const SYNTHETIC_SECOND_SURFACE_READ_PORTS: AgentReadPortIndex = {
       verbs: ["get"],
       scopeKind: "organization",
       readIntents: FLEET_STORE_HEALTH_MANIFEST.binding.readIntents,
-      implementationVersion: "1",
+      implementationVersion: "2",
       declaredCost: FLEET_STORE_HEALTH_MANIFEST.cost.worstCasePerCall,
       handler: { kind: "internal_query", functionPath: "agentHarness/profiles/syntheticSecondSurfacePorts:getStoreHealth" },
       projections: ["incidentDetails"],
@@ -212,7 +212,7 @@ export const SYNTHETIC_SECOND_SURFACE_READ_PORTS: AgentReadPortIndex = {
       verbs: ["list"],
       scopeKind: "organization",
       readIntents: DIRECTORY_TEAMS_MANIFEST.binding.readIntents,
-      implementationVersion: "1",
+      implementationVersion: "2",
       declaredCost: DIRECTORY_TEAMS_MANIFEST.cost.worstCasePerCall,
       handler: { kind: "internal_query", functionPath: "agentHarness/profiles/syntheticSecondSurfacePorts:listTeams" },
       projections: [],

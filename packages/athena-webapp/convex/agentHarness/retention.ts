@@ -563,6 +563,21 @@ export async function deleteAgentHarnessContentWithCtx(
   for (const row of claims) await ctx.db.delete("agentClaimSupport", row._id);
   countDeleted(claims.length);
 
+  // Capability-call rows carry request arguments and human-readable source
+  // labels taken from the store's own records, so they are content, not audit.
+  // Their lineage survives on the citation binding (result hash, source ref,
+  // artifact), which is marked `deleted_by_lifecycle` just below, so an
+  // investigation still gets an honest answer after the store is gone.
+  // Organization removal reaches these rows by cascading into each store.
+  if ("storeId" in scope) {
+    const calls = await ctx.db
+      .query("agentCapabilityCall")
+      .withIndex("by_storeId_capabilityId_createdAt", (q) => q.eq("storeId", scope.storeId))
+      .take(batch);
+    for (const call of calls) await ctx.db.delete("agentCapabilityCall", call._id);
+    countDeleted(calls.length);
+  }
+
   const citations =
     "storeId" in scope
       ? await ctx.db.query("agentCitationBinding").withIndex("by_storeId_evidenceLifecycle", (q) => q.eq("storeId", scope.storeId).eq("evidenceLifecycle", "retained")).take(batch)

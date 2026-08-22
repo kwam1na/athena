@@ -11,6 +11,8 @@ import {
 import { STORE_DAY_EXTRACTOR, STORE_DAY_MANIFEST } from "../operations/agentCapabilities/storeDay";
 import { DAY_SALES_EXTRACTOR, DAY_SALES_MANIFEST } from "../reports/agentCapabilities/sales";
 import { POSITIONS_EXTRACTOR, POSITIONS_MANIFEST } from "../stockOps/agentCapabilities/inventory";
+import { FLEET_STORE_HEALTH_MANIFEST } from "../agentHarness/profiles/syntheticSecondSurface";
+import { STORE_HEALTH_UPTIME_EXTRACTOR } from "../agentHarness/profiles/syntheticSecondSurfaceConformance";
 import { captureSharedDemoAdmittedActionWithCtx } from "../contextTracking/sharedDemoActionCapture";
 import { getStorefrontClaimFromRequest } from "../http/utils";
 import { isAthenaUnauthenticatedError } from "../lib/athenaUnauthenticated";
@@ -220,6 +222,7 @@ const AGENT_EVIDENCE_EXTRACTORS: { readonly [capabilityId: string]: AgentEvidenc
   [DAY_SALES_MANIFEST.capabilityId]: DAY_SALES_EXTRACTOR,
   [REGISTER_SESSIONS_MANIFEST.capabilityId]: REGISTER_SESSIONS_EXTRACTOR,
   [POSITIONS_MANIFEST.capabilityId]: POSITIONS_EXTRACTOR,
+  [FLEET_STORE_HEALTH_MANIFEST.capabilityId]: STORE_HEALTH_UPTIME_EXTRACTOR,
 };
 
 export function resolveAgentEvidenceExtractor(capabilityId: string): AgentEvidenceExtractor | undefined {

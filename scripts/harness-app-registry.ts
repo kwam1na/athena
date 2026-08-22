@@ -397,6 +397,46 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this for the reporting contract, fact ingestion, the day fold, the sweeper and its read models, custom ranges, reseed, or source-truth verification. Pair it with the owning source-domain scenario when a POS, storefront, service, payment, inventory, or Daily Close command emits new facts. Source state and inventory effects remain atomic with the command; the fold is replayable asynchronous work and must never decide operational success. The fold is the correctness authority — the open-day incremental path is only a preview of it.",
       },
       {
+        id: "athena.agent-harness",
+        reviewSensitive: true,
+        title: "Agent harness, capability packages, and profile edits",
+        touchedPaths: [
+          "convex/agentHarness",
+          "convex/automation/agentCapabilities",
+          "convex/cashControls/agentCapabilities",
+          "convex/operations/agentCapabilities",
+          "convex/reports/agentCapabilities",
+          "convex/stockOps/agentCapabilities",
+          "convex/lib/agentCapabilityManifests.ts",
+          "convex/lib/agentCapabilitySupport.ts",
+          "convex/operationAdmission/delegatedAuthority.ts",
+          "convex/sharedDemo/delegatedAuthority.ts",
+          "convex/platform/operationAdmission.ts",
+          "convex/intelligence/providers/convexAgent.ts",
+          "shared/agentHarness",
+          "src/components/agent",
+          "src/components/operations/dailyOperationsAgentPresentation.ts",
+        ],
+        commands: [
+          {
+            kind: "raw",
+            command:
+              "bun run --filter '@athena/webapp' test -- convex/agentHarness shared/agentHarness convex/operationAdmission convex/platform src/components/agent",
+          },
+          { kind: "raw", command: "bun run agent-sdk:check" },
+          { kind: "script", script: "audit:convex" },
+          { kind: "script", script: "lint:convex:changed" },
+          { kind: "script", script: "lint:frontend:changed" },
+          {
+            kind: "raw",
+            command:
+              "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+          },
+          { kind: "script", script: "build" },
+        ],
+        note: "Use this for the agent harness kernel, a domain capability package, a profile, the delegated admission ports, or the reusable agent host. Three things gate a merge here and none of them may be skipped: generated registry drift (`agent-sdk:check` refuses a stale artifact and names the regeneration command), operation-admission coverage (the checker must report zero findings and the caller table must be current), and the focused conformance, security, and data-governance suites — `releaseConformance`, `security`, `dataGovernance`, and the `evals` smoke matrix — which are what stand between a capability and an operator. Changing a read port's behaviour also requires bumping its `implementationVersion`, which moves the compatibility digest and therefore requires the pre-deploy fence (`bun run agent-harness:fence`) before the change deploys.",
+      },
+      {
         id: "athena.daily-store-operations",
         reviewSensitive: false,
         title: "Daily store operations lifecycle edits",

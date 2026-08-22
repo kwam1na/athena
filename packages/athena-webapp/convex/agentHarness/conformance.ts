@@ -240,8 +240,19 @@ export type AgentConformanceInput = {
   readonly extractor?: AgentEvidenceExtractor;
 };
 
+/**
+ * What a probe actually observed. A snapshot with no fields observed nothing:
+ * unauthorized and out-of-scope data is structurally ABSENT, so the honest
+ * answer to "one store this organization does not own" is an empty snapshot
+ * whose sources report `unavailable` — not a null body (a `get` port must
+ * return an object) and not a zeroed one.
+ */
 function envelopeItems(envelope: AgentReadEnvelope<unknown>): readonly unknown[] {
-  return Array.isArray(envelope.data) ? envelope.data : envelope.data === undefined || envelope.data === null ? [] : [envelope.data];
+  const data = envelope.data;
+  if (Array.isArray(data)) return data;
+  if (data === undefined || data === null) return [];
+  if (typeof data === "object" && Object.keys(data as Record<string, unknown>).length === 0) return [];
+  return [data];
 }
 
 /** Canonical form of an observation, ignoring the wall clock. */

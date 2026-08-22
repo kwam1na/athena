@@ -121,20 +121,69 @@ mint and consume manager `approvalProof` when needed, and let the domain command
 remain the source of truth. TanStack/provider-native tool approval is only a
 runtime pause signal until it is mapped through Athena's approval contract.
 
+## The Agent Harness
+
+Ask Athena is built on the agent harness in
+[convex/agentHarness](../../convex/agentHarness), and it does not change the
+ownership boundary above: the Athena intelligence run is still the durable
+business parent, the artifact is still the reviewed output, and the runtime is
+still an adapter below the contract.
+
+What the harness adds is a way for a model to compose *many* domain reads
+safely in one turn. The model never gets a tool per backend read. It gets five
+fixed tools — discover, describe, executeProgram, scratch, completeRun — and
+writes one bounded, read-only TypeScript program against a grant-projected
+`athena.<package>.<resource>.get|list` facade. Every call in that program goes
+through delegated admission, a budget reservation, a domain-owned internal read
+port, and a result release, and the answer is committed only with citations
+bound to the exact results it read.
+
+Three boundaries are worth knowing before touching any of it:
+
+- **Delegation is not identity substitution.** An agent run never becomes an
+  actor of the ingress rail. It holds a derived grant pinned at run start, and
+  every call re-derives the initiating operator's current authority and
+  intersects it — shrink only.
+- **The runtime lives behind one adapter.** Convex Agent is the sole v1
+  orchestration implementation, reached only through
+  `shared/agentHarness/agentRuntime.ts`. Only
+  `convex/agentHarness/agentRuntime/` may import `@convex-dev/agent`, `ai`, or
+  `@ai-sdk/*`, and the root `convex/convex.config.ts` mounts the component. The
+  deterministic contract fake and the real adapter pass the same suite.
+- **It is a read harness.** There is no propose or apply surface, no mutation
+  reach, and reserved command verbs are rejected at generation. Future command
+  work starts from its own plan and uses proposal, fresh precondition, Athena
+  approval, and admitted domain-command rails.
+
+Profiles are default off behind one durable switch
+(`bun run agent-harness:switch`), which is also the rollback. A behavioural
+change to a read port moves the compatibility digest and requires the pre-deploy
+fence (`bun run agent-harness:fence`), which disables the profiles and advances
+the epoch so in-flight runs cannot mix versions.
+
+To add a capability, a package, or a profile, follow
+[capability-authoring.md](./capability-authoring.md). The Convex Agent and
+sandbox version pins, and their upgrade and rollback path, are in
+[agent-harness-runtime.md](./agent-harness-runtime.md).
+
+TanStack AI remains a separate, untouched adapter for existing structured
+provider work; the harness does not replace it.
+
 ## Convex AI Component Boundary
 
-V1 uses Convex durable tables, mutations, internal/scheduled actions, and
-reactive queries. It does not install Convex Agent, RAG, or Durable Agents
-components.
+Athena intelligence uses Convex durable tables, mutations, internal/scheduled
+actions, and reactive queries. The Convex Agent component is now installed and
+mounted, exclusively as the agent harness's runtime; RAG and Durable Agents are
+still not installed.
 
-| Runtime or retrieval option | Use in v1? | Use when |
+| Runtime or retrieval option | Use? | Use when |
 | --- | --- | --- |
 | Scheduled/internal Convex actions | Yes | Recording intent, running one provider call, and persisting artifacts |
 | Reactive Convex queries | Yes | Showing run/artifact progress without client-owned chat state |
 | Workpool/Workflow | No | Controlled parallelism, retries, or long-running multi-step orchestration exceed simple scheduled actions |
-| Convex Agent component | No | Ask Athena needs persistent threads, live-updating messages, usage/rate helpers, or workflow memory |
+| Convex Agent component | Yes, harness only | Reached only through the Athena runtime adapter under `convex/agentHarness/agentRuntime/`; it owns no business record, and its component tables hold only the prompt with hashes, a per-turn status record, and the committed narrative projection |
 | Convex RAG component | No | Document-like semantic retrieval needs namespaces, filters, source refs, and migration controls |
-| Durable Agents component | No | Non-v1; treat as experimental until production maturity is proven |
+| Durable Agents component | No | Treat as experimental until production maturity is proven |
 
 Future component adoption must include all of the following:
 

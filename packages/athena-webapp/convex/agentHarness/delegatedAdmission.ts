@@ -269,9 +269,16 @@ export function createDelegatedAdmission(config: DelegatedAdmissionConfig) {
         requestRefusal = {
           stage: "request",
           reason: "args_invalid",
-          result: deniedResult("invalid_arguments", "The arguments do not match the capability's filters.", {
-            issues: argsValidation.issues.map((issue) => `${issue.code}@${issue.path}`),
-          }),
+          // Name the offending argument in the message, not only in the
+          // detail: the message is what a model actually reads, and an
+          // unactionable denial is what makes it guess.
+          result: deniedResult(
+            "invalid_arguments",
+            `The arguments do not match the capability's filters (${argsValidation.issues
+              .map((issue) => `${issue.code} at ${issue.path}`)
+              .join("; ")}). Pass only the filters this capability declares; the store is taken from the run, never from arguments.`,
+            { issues: argsValidation.issues.map((issue) => `${issue.code}@${issue.path}`) },
+          ),
         };
       } else if (request.cursor !== undefined) {
         const resolved = request.verb === "list" && portKey ? resolveAgentCursor(request.cursor, { runId: input.runId, portKey }) : null;

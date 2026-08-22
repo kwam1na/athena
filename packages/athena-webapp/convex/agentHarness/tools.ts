@@ -111,7 +111,19 @@ export const describeTool: AgentToolDefinition<AgentDescribeArgs, unknown> = {
 export const executeProgramTool: AgentToolDefinition<AgentExecuteProgramArgs, unknown> = {
   toolId: "athena.executeProgram",
   description:
-    "Run one bounded, read-only TypeScript program against the athena.<package>.<resource>.get|list facade and return its single structured result with citation refs. Arguments: { source: string } — import-free, deterministic, must `return` exactly one JSON value.",
+    "Run one bounded, read-only TypeScript program and return its single structured result with citation refs. Arguments: { source: string }.\n" +
+    "The source is a program BODY, not a module: top-level `await` is allowed, and it must end with exactly one top-level `return` of one JSON value.\n" +
+    "Read only through the full path `athena.<package>.<resource>.get({...})` or `.list({...})` — never destructure or alias `athena`, and never reference a package name on its own.\n" +
+    "Every read returns `{ kind, envelope }`; check `kind === \"result\"` before reading `envelope.data`, and report the other kinds honestly instead of guessing.\n" +
+    "Arguments are ONLY the filters `athena.describe` lists for that capability: the store is fixed by the run, so a store name or id is never an argument.\n" +
+    "No imports, no `require`, no timers, no randomness, no clock.\n" +
+    "Example:\n" +
+    "const day = await athena.operations.storeDay.get({ operatingDate: \"2026-08-22\" });\n" +
+    "const registers = await athena.cash.registerSessions.list({ operatingDate: \"2026-08-22\" });\n" +
+    "return {\n" +
+    "  stage: day.kind === \"result\" ? day.envelope.data.lifecycleStage : null,\n" +
+    "  openDrawers: registers.kind === \"result\" ? registers.envelope.data.filter((s) => s.status === \"open\").length : null,\n" +
+    "};",
   validateInput: (raw): Validation<AgentExecuteProgramArgs> => {
     const object = objectOf(raw);
     const source = object?.source;
@@ -362,7 +374,13 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
                 ...(candidate.freshness ? { freshness: candidate.freshness } : {}),
                 ...(candidate.completeness ? { completeness: candidate.completeness } : {}),
               })),
-              calls: result.calls.map((call) => ({ namespace: call.namespace, verb: call.verb, outcome: call.outcome })),
+              calls: result.calls.map((call) => ({
+                namespace: call.namespace,
+                verb: call.verb,
+                outcome: call.outcome,
+                ...(call.reason ? { reason: call.reason } : {}),
+                ...(call.detail ? { detail: call.detail } : {}),
+              })),
             },
           };
         }

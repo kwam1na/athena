@@ -288,6 +288,11 @@ export const PROFILE_ALLOWED_PREFIXES = [
   "convex/platform/operationAdmission",
   // Declaration-side manifest constants shared by domain packages (U8).
   "convex/lib/agentCapabilityManifests",
+  // Environment-neutral runtime-adapter identity. The build-time composition
+  // root pins the published compatibility identity to the selected adapter;
+  // the constants module names it without loading the Node adapter or any
+  // runtime-native package (asserted separately by the shim rules below).
+  "convex/agentHarness/agentRuntime/convexAgentKind",
 ] as const;
 
 export function findProfileImportViolations(
@@ -502,6 +507,10 @@ describe("agent harness import boundaries", () => {
     /** Modules outside the domains themselves that may reach a capability module. */
     const CAPABILITY_CONSUMERS = [
       "convex/agentHarness/evals/dailyOperations.smokeHarness.ts",
+      // The release smoke's direct harness wraps the same domain handlers in
+      // its own admission so the contracts can be exercised before the
+      // operator switch is flipped.
+      "convex/agentHarness/evals/directHarness.ts",
       "convex/agentHarness/profiles/dailyOperations.ts",
       "convex/agentHarness/profiles/dailyOperationsConformance.ts",
       "convex/platform/operationAdmission.ts",

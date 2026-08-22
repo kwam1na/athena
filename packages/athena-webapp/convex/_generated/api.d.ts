@@ -27,6 +27,8 @@ import type * as agentHarness_delegatedAdmission from "../agentHarness/delegated
 import type * as agentHarness_deploymentState from "../agentHarness/deploymentState.js";
 import type * as agentHarness_discovery from "../agentHarness/discovery.js";
 import type * as agentHarness_egressPolicy from "../agentHarness/egressPolicy.js";
+import type * as agentHarness_evals_dailyOperations from "../agentHarness/evals/dailyOperations.js";
+import type * as agentHarness_evals_directHarness from "../agentHarness/evals/directHarness.js";
 import type * as agentHarness_evidence from "../agentHarness/evidence.js";
 import type * as agentHarness_executor from "../agentHarness/executor.js";
 import type * as agentHarness_executorSeams from "../agentHarness/executorSeams.js";
@@ -757,6 +759,8 @@ declare const fullApi: ApiFromModules<{
   "agentHarness/deploymentState": typeof agentHarness_deploymentState;
   "agentHarness/discovery": typeof agentHarness_discovery;
   "agentHarness/egressPolicy": typeof agentHarness_egressPolicy;
+  "agentHarness/evals/dailyOperations": typeof agentHarness_evals_dailyOperations;
+  "agentHarness/evals/directHarness": typeof agentHarness_evals_directHarness;
   "agentHarness/evidence": typeof agentHarness_evidence;
   "agentHarness/executor": typeof agentHarness_executor;
   "agentHarness/executorSeams": typeof agentHarness_executorSeams;

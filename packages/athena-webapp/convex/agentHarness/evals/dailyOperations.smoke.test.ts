@@ -160,9 +160,14 @@ beforeEach(() => {
 });
 
 describe("daily_operations.v1 direct-harness smoke", () => {
-  it("keeps the published profile disabled and never creates an operator turn", async () => {
-    expect(DAILY_OPERATIONS_PROFILE.lifecycle).toBe("unpublished");
-    expect(AGENT_GENERATED_REGISTRY.enablement.profiles["daily_operations"]).toBe("unpublished");
+  it("keeps the published profile switched off and never creates an operator turn", async () => {
+    // The profile is PUBLISHED (an operator may reach it at all) but the
+    // durable enablement switch is default-off and shrink-only, so nothing
+    // operator-facing is reachable until that row exists on the deployment.
+    // The direct harness supplies its own overlay, which is why this smoke
+    // runs either way and still creates no turn binding.
+    expect(DAILY_OPERATIONS_PROFILE.lifecycle).toBe("enabled");
+    expect(AGENT_GENERATED_REGISTRY.enablement.profiles["daily_operations"]).toBe("enabled");
     // Every published capability is `enabled`: they pass the conformance gate,
     // and only the profile switch stands between them and an operator.
     for (const capabilityId of Object.keys(AGENT_GENERATED_REGISTRY.enablement.capabilities)) {

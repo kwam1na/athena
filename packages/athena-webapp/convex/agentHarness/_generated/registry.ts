@@ -2355,7 +2355,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     },
     "cap_synthetic_directory_teams": {
       "binding": {
-        "implementationVersion": "1",
+        "implementationVersion": "2",
         "portKey": "directory.teams",
         "readIntents": [
           "organization.view",
@@ -2460,7 +2460,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     },
     "cap_synthetic_fleet_store_health": {
       "binding": {
-        "implementationVersion": "1",
+        "implementationVersion": "2",
         "portKey": "fleet.storeHealth",
         "readIntents": [
           "organization.view",
@@ -2585,7 +2585,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     },
     "cap_synthetic_fleet_stores": {
       "binding": {
-        "implementationVersion": "1",
+        "implementationVersion": "2",
         "portKey": "fleet.stores",
         "readIntents": [
           "organization.view",
@@ -2703,7 +2703,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       }
     }
   },
-  "compatibilityDigest": "fnv1a64:71a40a4791f2eac9",
+  "compatibilityDigest": "fnv1a64:fcd14c0bebbf402d",
   "contractVersion": 1,
   "enablement": {
     "capabilities": {
@@ -2723,7 +2723,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       "cap_synthetic_fleet_stores": "enabled"
     },
     "profiles": {
-      "daily_operations": "unpublished",
+      "daily_operations": "enabled",
       "organization_overview": "unpublished"
     }
   },
@@ -2769,16 +2769,16 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       "sourceDigest": "sha256:71d58c34adc814d582561a6a70c63771679052eb677e9990ea7d9e35059dffa6"
     },
     "directory.teams": {
-      "implementationVersion": "1",
-      "sourceDigest": "sha256:01ae8ebf10e59c831a4fee4d543aefd0a5e27643e65086080344ed03a4455000"
+      "implementationVersion": "2",
+      "sourceDigest": "sha256:34307738e9d37077b15e0c3f2e49b5473d3e9a117b7e496e780ae2eb83098919"
     },
     "fleet.storeHealth": {
-      "implementationVersion": "1",
-      "sourceDigest": "sha256:01ae8ebf10e59c831a4fee4d543aefd0a5e27643e65086080344ed03a4455000"
+      "implementationVersion": "2",
+      "sourceDigest": "sha256:34307738e9d37077b15e0c3f2e49b5473d3e9a117b7e496e780ae2eb83098919"
     },
     "fleet.stores": {
-      "implementationVersion": "1",
-      "sourceDigest": "sha256:01ae8ebf10e59c831a4fee4d543aefd0a5e27643e65086080344ed03a4455000"
+      "implementationVersion": "2",
+      "sourceDigest": "sha256:34307738e9d37077b15e0c3f2e49b5473d3e9a117b7e496e780ae2eb83098919"
     },
     "inventory.positions": {
       "implementationVersion": "1",
@@ -2887,7 +2887,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
           }
         ]
       },
-      "lifecycle": "unpublished",
+      "lifecycle": "enabled",
       "packages": [
         {
           "packageKey": "operations",
@@ -3101,8 +3101,8 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     "harness": "athena.agent-harness.v1",
     "runtime": "athena.agent-runtime.v1",
     "runtimeAdapter": {
-      "adapterKind": "athena_contract_fake",
-      "adapterVersion": "fake.1"
+      "adapterKind": "convex_agent",
+      "adapterVersion": "convex_agent@0.7.1+ai@7.0.76+athena.1"
     }
   },
   "readPorts": {
@@ -3186,7 +3186,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "functionPath": "agentHarness/profiles/syntheticSecondSurfacePorts:listTeams",
         "kind": "internal_query"
       },
-      "implementationVersion": "1",
+      "implementationVersion": "2",
       "portKey": "directory.teams",
       "projections": [],
       "readIntents": [
@@ -3216,7 +3216,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "functionPath": "agentHarness/profiles/syntheticSecondSurfacePorts:getStoreHealth",
         "kind": "internal_query"
       },
-      "implementationVersion": "1",
+      "implementationVersion": "2",
       "portKey": "fleet.storeHealth",
       "projections": [
         "incidentDetails"
@@ -3247,7 +3247,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "functionPath": "agentHarness/profiles/syntheticSecondSurfacePorts:listStores",
         "kind": "internal_query"
       },
-      "implementationVersion": "1",
+      "implementationVersion": "2",
       "portKey": "fleet.stores",
       "projections": [],
       "readIntents": [
@@ -3545,7 +3545,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       ]
     }
   },
-  "registryDigest": "fnv1a64:20943ae9d94de71b",
+  "registryDigest": "fnv1a64:c59c97a4d4c1da46",
   "sdkView": {
     "contractVersion": 1,
     "packages": {
@@ -3696,7 +3696,7 @@ export const AGENT_GENERATED_SOURCE_KEYS: readonly string[] = [
 ];
 
 /** What a run pins; U7 compares it with the durable epoch digest. */
-export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:71a40a4791f2eac9";
+export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:fcd14c0bebbf402d";
 
 /** Schema identity only; unchanged when a capability is enabled or disabled. */
-export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:20943ae9d94de71b";
+export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:c59c97a4d4c1da46";

@@ -15,13 +15,20 @@
 import type { AgentCapabilityManifest } from "../../shared/agentHarness/manifest";
 import type { AgentProfileDefinition } from "../../shared/agentHarness/profile";
 import type { AgentReadPortIndex } from "../../shared/agentHarness/readPort";
+import {
+  CONVEX_AGENT_ADAPTER_KIND,
+  CONVEX_AGENT_ADAPTER_VERSION,
+} from "./agentRuntime/convexAgentKind";
 import type { AgentConformanceProbe, AgentEvidenceExtractor } from "./conformance";
 import {
   SYNTHETIC_SECOND_SURFACE_MANIFESTS,
   SYNTHETIC_SECOND_SURFACE_PROFILE,
   SYNTHETIC_SECOND_SURFACE_READ_PORTS,
 } from "./profiles/syntheticSecondSurface";
-import { SYNTHETIC_SECOND_SURFACE_CONFORMANCE } from "./profiles/syntheticSecondSurfaceConformance";
+import {
+  SYNTHETIC_SECOND_SURFACE_CONFORMANCE,
+  SYNTHETIC_SECOND_SURFACE_EVIDENCE_EXTRACTORS,
+} from "./profiles/syntheticSecondSurfaceConformance";
 import {
   DAILY_OPERATIONS_MANIFESTS,
   DAILY_OPERATIONS_PROFILE,
@@ -49,13 +56,16 @@ export type AgentManifestRegistration = {
 };
 
 /**
- * Runtime adapter the generated compatibility identity is bound to. U5 owns
- * the real `convex_agent` adapter; changing either token here changes the
- * compatibility digest and therefore requires U7's pre-deploy epoch fence.
+ * Runtime adapter the generated compatibility identity is bound to: the
+ * production Convex Agent adapter, named through its environment-neutral
+ * identity module so the build-time generator never loads the Node adapter or
+ * the AI SDK. Changing either token changes the compatibility digest and
+ * therefore requires the pre-deploy epoch fence
+ * (`bun run agent-harness:fence`).
  */
 export const AGENT_SELECTED_RUNTIME_ADAPTER = {
-  adapterKind: "athena_contract_fake",
-  adapterVersion: "fake.1",
+  adapterKind: CONVEX_AGENT_ADAPTER_KIND,
+  adapterVersion: CONVEX_AGENT_ADAPTER_VERSION,
 } as const;
 
 /** Version token of the delegated-admission policy; U4 bumps it on behavior change. */
@@ -89,7 +99,10 @@ export const DAILY_OPERATIONS_REGISTRATION: AgentManifestRegistration = {
  */
 export const AGENT_EVIDENCE_EXTRACTORS: {
   readonly [capabilityId: string]: AgentEvidenceExtractor;
-} = { ...DAILY_OPERATIONS_EVIDENCE_EXTRACTORS };
+} = {
+  ...DAILY_OPERATIONS_EVIDENCE_EXTRACTORS,
+  ...SYNTHETIC_SECOND_SURFACE_EVIDENCE_EXTRACTORS,
+};
 
 /** Every registration point the generator compiles. Order does not matter. */
 export const AGENT_MANIFEST_REGISTRATIONS: readonly AgentManifestRegistration[] = [

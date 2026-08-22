@@ -178,16 +178,18 @@ describe("agent SDK generation", () => {
       registrations: [
         {
           ...SYNTHETIC,
+          // Any version above whatever the package currently publishes; the
+          // point is that it MOVED, not the number.
           manifests: SYNTHETIC.manifests.map(
             (manifest) =>
               ({
                 ...manifest,
-                binding: { ...manifest.binding, implementationVersion: "2" },
+                binding: { ...manifest.binding, implementationVersion: "99" },
               }) as AgentCapabilityManifest,
           ),
           readPorts: {
             ...SYNTHETIC.readPorts,
-            ports: SYNTHETIC.readPorts.ports.map((port) => ({ ...port, implementationVersion: "2" })),
+            ports: SYNTHETIC.readPorts.ports.map((port) => ({ ...port, implementationVersion: "99" })),
           },
         },
       ],

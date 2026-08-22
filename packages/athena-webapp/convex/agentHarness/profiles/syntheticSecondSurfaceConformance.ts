@@ -154,7 +154,9 @@ const storeHealthProbes: readonly AgentConformanceProbe[] = [
     scopeRef: FOREIGN_SCOPE,
     grantedProjections: [],
     foreignScope: true,
-    envelope: healthEnvelope(null),
+    // An empty snapshot, not a null one: the fields are structurally absent
+    // and both sources report `unavailable`, which is what the port returns.
+    envelope: healthEnvelope({}),
     budget: SNAPSHOT_BUDGET,
   },
 ];
@@ -215,4 +217,16 @@ export const SYNTHETIC_SECOND_SURFACE_CONFORMANCE: {
     extractor: STORE_HEALTH_UPTIME_EXTRACTOR,
   },
   [DIRECTORY_TEAMS_MANIFEST.capabilityId]: { probes: teamsProbes },
+};
+
+/**
+ * Runtime-side extractor index for this package, keyed by capability id. The
+ * admission composition root re-exports the union of every package's index as
+ * `resolveAgentEvidenceExtractor`, which the executor seams resolve through
+ * when they mint claim support at completion.
+ */
+export const SYNTHETIC_SECOND_SURFACE_EVIDENCE_EXTRACTORS: {
+  readonly [capabilityId: string]: AgentEvidenceExtractor;
+} = {
+  [FLEET_STORE_HEALTH_MANIFEST.capabilityId]: STORE_HEALTH_UPTIME_EXTRACTOR,
 };

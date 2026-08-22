@@ -86,7 +86,7 @@ import {
 import type { AgentProgramDiagnostics, AgentProgramRuntimeCeilings, AgentProgramValidationIssue } from "./programRuntime/types";
 import type { AgentReadPortInvocation, AgentReadPortResponse } from "./readPorts";
 import { recordScratchDescriptorWithCtx } from "./retention";
-import { agentDelegatedAdmission } from "../platform/operationAdmission";
+import { agentDelegatedAdmission, resolveAgentEvidenceExtractor } from "../platform/operationAdmission";
 
 type ReadCtx = QueryCtx | MutationCtx;
 type IntelligenceError = NonNullable<Doc<"intelligenceRun">["error"]>;
@@ -845,12 +845,17 @@ export type AgentExecutorSeams = ReturnType<typeof createAgentExecutorSeams>;
 // Production binding: the composition root's delegated admission and the
 // generated schemas. U7's tool handlers call these through
 // `internal.agentHarness.executorSeams.*` (or through `executor.ts`).
-// Evidence extractors are resolved by U8's registration point; until a
-// package registers one, every citation is provenance-only after replay
-// expiry, which is the honest default.
+// Manifest-declared evidence extractors are resolved through the admission
+// composition root (the only module that may reach both the kernel and a
+// product package), so a cited call carries a deterministic minimal claim
+// slice instead of degrading to provenance-only. A capability that declares no
+// extractor still yields provenance-only, which is the honest default.
 // ---------------------------------------------------------------------------
 
-export const agentExecutorSeams = createAgentExecutorSeams({ admission: agentDelegatedAdmission });
+export const agentExecutorSeams = createAgentExecutorSeams({
+  admission: agentDelegatedAdmission,
+  resolveEvidenceExtractor: resolveAgentEvidenceExtractor,
+});
 
 export const prepareAttempt = agentExecutorSeams.functions.prepareAttempt;
 export const beginAttempt = agentExecutorSeams.functions.beginAttempt;

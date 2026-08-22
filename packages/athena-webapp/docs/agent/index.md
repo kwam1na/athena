@@ -8,6 +8,9 @@
 - [Test index](./test-index.md)
 - [Key folder index](./key-folder-index.md)
 - [Validation guide](./validation-guide.md)
+- [Intelligence layer](./intelligence.md)
+- [Capability authoring (agent harness)](./capability-authoring.md)
+- [Agent harness runtime pins](./agent-harness-runtime.md)
 
 Use this harness when the task touches the authenticated dashboard shell in [src/main.tsx](../../src/main.tsx), route files under [src/routes/_authed.tsx](../../src/routes/_authed.tsx), or the Convex-backed HTTP surface in [convex/http.ts](../../convex/http.ts).
 

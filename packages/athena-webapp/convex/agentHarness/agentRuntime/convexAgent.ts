@@ -64,7 +64,11 @@ import {
 } from "../../../shared/agentHarness/agentRuntime";
 import { opaqueRef, type Timestamp } from "../../../shared/agentHarness/values";
 import { cleanupConvexAgentRuntime } from "./convexAgentCleanup";
-import { CONVEX_AGENT_ADAPTER_KIND } from "./convexAgentKind";
+import {
+  CONVEX_AGENT_ADAPTER_KIND,
+  CONVEX_AGENT_ADAPTER_VERSION,
+  CONVEX_AGENT_PINNED_VERSIONS,
+} from "./convexAgentKind";
 import {
   athenaMetadataOf,
   correlationUserId,
@@ -84,20 +88,11 @@ export { cleanupConvexAgentRuntime, createConvexAgentCleanupHook } from "./conve
 // Identity and version pins
 // ---------------------------------------------------------------------------
 
-// The kind constant lives in a V8-safe module so mutation-side code can name
-// the adapter without loading this Node module.
-export { CONVEX_AGENT_ADAPTER_KIND } from "./convexAgentKind";
-
-/** Exact package versions this adapter was proven against; bump only with the upgrade path in the runtime doc. */
-export const CONVEX_AGENT_PINNED_VERSIONS = Object.freeze({
-  "@convex-dev/agent": "0.7.1",
-  ai: "7.0.76",
-  "@ai-sdk/openai": "4.0.45",
-});
-
-/** Part of every tool fingerprint: changing it invalidates replay across deployments (by design). */
-export const CONVEX_AGENT_ADAPTER_VERSION =
-  `convex_agent@${CONVEX_AGENT_PINNED_VERSIONS["@convex-dev/agent"]}+ai@${CONVEX_AGENT_PINNED_VERSIONS.ai}+athena.1` as const;
+// The identity constants live in a V8-safe module so mutation-side code and
+// the build-time generator can name the adapter without loading this module.
+// `CONVEX_AGENT_ADAPTER_VERSION` is part of every tool fingerprint: changing it
+// invalidates replay across deployments (by design).
+export { CONVEX_AGENT_ADAPTER_KIND, CONVEX_AGENT_ADAPTER_VERSION, CONVEX_AGENT_PINNED_VERSIONS };
 
 export const CONVEX_AGENT_NAME = "athena" as const;
 

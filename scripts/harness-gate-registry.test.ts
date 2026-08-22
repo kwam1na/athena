@@ -10,6 +10,7 @@ import {
 } from "./harness-gate-registry";
 
 const knownSensitiveScenarioIds = [
+  "athena.agent-harness",
   "athena.shared-demo-admission",
   "athena.cash-controls",
   "athena.pos-item-adjustment",

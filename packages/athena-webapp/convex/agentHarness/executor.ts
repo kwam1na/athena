@@ -94,6 +94,15 @@ export type AgentExecutorCallRecord = {
   readonly deduplicated: boolean;
   readonly callId?: Id<"agentCapabilityCall">;
   readonly truncation?: { readonly keptItems: number; readonly droppedItems: number };
+  /**
+   * Why a non-`result` call ended that way, in the bridge's own vocabulary.
+   * The model authors the program but never sees the refusal the program
+   * received unless the program happened to return it, so an unexplained
+   * `denied` here reads to a model as "no access" and it guesses. Naming the
+   * reason is what lets the next attempt be a correction rather than a repeat.
+   */
+  readonly reason?: string;
+  readonly detail?: string;
 };
 
 export type AgentExecuteProgramResult =
@@ -262,6 +271,13 @@ export function createProgramExecutor(config: AgentProgramExecutorConfig) {
         }
         const outcome = await pending;
         record.outcome = outcome.kind;
+        if (outcome.kind !== "result") {
+          const refusal = outcome as { code?: string; reason?: string; error?: { code?: string; message?: string }; message?: string };
+          const reason = refusal.code ?? refusal.reason ?? refusal.error?.code;
+          if (typeof reason === "string") record.reason = reason;
+          const detail = refusal.message ?? refusal.error?.message;
+          if (typeof detail === "string") record.detail = detail.slice(0, 400);
+        }
         if (record.deduplicated) {
           const original = calls.find((candidate) => candidate !== record && candidate.namespace === record.namespace && candidate.callId && !candidate.deduplicated);
           if (original) record.callId = original.callId;

@@ -96,6 +96,7 @@ export type HarnessGateRegistry = {
 };
 
 const REVIEW_SENSITIVE_SCENARIO_IDS = [
+  "athena.agent-harness",
   "athena.shared-demo-admission",
   "athena.cash-controls",
   "athena.pos-item-adjustment",

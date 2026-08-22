@@ -176,8 +176,14 @@ export const DAILY_OPERATIONS_PROFILE = defineAgentProfile({
   contractVersion: 1,
   profileId: DAILY_OPERATIONS_PROFILE_ID,
   profileVersion: DAILY_OPERATIONS_PROFILE_VERSION,
-  // U10 flips this through the enablement overlay after the post-deploy smoke.
-  lifecycle: "unpublished",
+  /**
+   * Published: the profile MAY be reached by operators. It is not on yet —
+   * the durable enablement switch is default-off and shrink-only, so an
+   * operator turn is admitted only once `bun run agent-harness:switch
+   * --profile daily_operations --enable` writes the row on the deployment.
+   * Publication is the code-side decision; enablement is the operational one.
+   */
+  lifecycle: "enabled",
   scope: { kind: "store" },
   packages: [
     { packageKey: "operations", packageVersion: "1.0.0" },

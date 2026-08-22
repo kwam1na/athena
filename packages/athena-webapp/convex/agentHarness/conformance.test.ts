@@ -317,7 +317,9 @@ describe("capability conformance harness", () => {
   it("fails a capability whose port drifts from its manifest binding", () => {
     const driftedPort = defineAgentReadPort({
       ...STORES_PORT,
-      implementationVersion: "2",
+      // Any value the manifest binding does not declare; the point is the
+      // mismatch, not the number.
+      implementationVersion: "9",
     });
     expect(
       codes(

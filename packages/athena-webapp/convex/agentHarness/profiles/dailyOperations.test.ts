@@ -299,7 +299,7 @@ describe("daily_operations.v1 profile", () => {
     ]);
   });
 
-  it("stays inside the program-runtime ceilings and ships disabled", () => {
+  it("stays inside the program-runtime ceilings and ships published but switched off", () => {
     const limits = DAILY_OPERATIONS_PROFILE.budgetPolicy.runLimits;
     expect(limits.calls).toBeLessThanOrEqual(AGENT_PROGRAM_RUNTIME_CEILINGS.maxCapabilityCalls);
     expect(limits.rows).toBeLessThanOrEqual(AGENT_PROGRAM_RUNTIME_CEILINGS.maxRows);
@@ -312,8 +312,10 @@ describe("daily_operations.v1 profile", () => {
     expect(DAILY_OPERATIONS_PROFILE.budgetPolicy.maxInFlightCalls).toBeLessThanOrEqual(
       AGENT_PROGRAM_RUNTIME_CEILINGS.maxInFlightCalls,
     );
-    // U10 flips this; nothing an operator does can reach the profile before then.
-    expect(DAILY_OPERATIONS_PROFILE.lifecycle).toBe("unpublished");
+    // Published, so the profile MAY be reached — but the durable enablement
+    // switch is default-off and shrink-only, so no operator turn is admitted
+    // until the switch is flipped on the deployment.
+    expect(DAILY_OPERATIONS_PROFILE.lifecycle).toBe("enabled");
   });
 
   it("carries the presentation contract the reusable host needs", () => {
