@@ -1,5 +1,6 @@
 import type { Id, TableNames } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
+import { getRegisterSessionAuthoritativeCloseBoundary } from "../../../../shared/registerSessionLifecyclePolicy";
 import { isRegisterSessionConflictBlockingStatus } from "../../../../shared/registerSessionStatus";
 import { insertApprovalRequestWithCtx } from "../../../operations/approvalRequestHelpers";
 import { areRegisterSessionCloseoutReviewFactsEquivalent } from "../../../operations/registerSessionCloseoutGate";
@@ -52,6 +53,9 @@ import {
   markRegisterMappingAuthorityMapped,
 } from "../../application/sync/registerMappingAuthorityRevision";
 import { startStoreDayWithCtx } from "../../../operations/dailyOpening";
+
+/** Bounded terminal-scoped window used to derive the authoritative close boundary. */
+const SCOPED_REGISTER_LIFECYCLE_WINDOW = 5;
 
 function omitUndefined<T extends Record<string, unknown>>(value: T) {
   return Object.fromEntries(
@@ -569,21 +573,26 @@ export function createConvexLocalSyncRepository(
         }),
       );
     },
-    async findBlockingRegisterSession(args) {
-      const latestByTerminal = await ctx.db
+    async findScopedRegisterSessionLifecycle(args) {
+      const recentByTerminal = await ctx.db
         .query("registerSession")
         .withIndex("by_terminalId", (q) => q.eq("terminalId", args.terminalId))
         .order("desc")
-        .first();
+        .take(SCOPED_REGISTER_LIFECYCLE_WINDOW);
+      // The authoritative lifecycle boundary stays terminal scoped: another
+      // terminal reusing the same register number must not decide this drawer.
+      const boundary =
+        getRegisterSessionAuthoritativeCloseBoundary(recentByTerminal);
+      const latestByTerminal = recentByTerminal[0] ?? null;
       if (
         latestByTerminal &&
         isRegisterSessionConflictBlockingStatus(latestByTerminal.status)
       ) {
-        return latestByTerminal;
+        return { blockingRegisterSession: latestByTerminal, ...boundary };
       }
 
       if (!args.registerNumber) {
-        return null;
+        return { blockingRegisterSession: null, ...boundary };
       }
 
       const latestByRegisterNumber = await ctx.db
@@ -595,10 +604,15 @@ export function createConvexLocalSyncRepository(
         )
         .order("desc")
         .first();
-      return latestByRegisterNumber &&
-        isRegisterSessionConflictBlockingStatus(latestByRegisterNumber.status)
-        ? latestByRegisterNumber
-        : null;
+
+      return {
+        blockingRegisterSession:
+          latestByRegisterNumber &&
+          isRegisterSessionConflictBlockingStatus(latestByRegisterNumber.status)
+            ? latestByRegisterNumber
+            : null,
+        ...boundary,
+      };
     },
     async listOpenRegisterReviewConflictFacts(args) {
       const registerSessionMappings = await ctx.db

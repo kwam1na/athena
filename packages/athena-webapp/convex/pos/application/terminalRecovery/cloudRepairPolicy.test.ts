@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { getRegisterSessionAuthoritativeCloseBoundary } from "../../../../shared/registerSessionLifecyclePolicy";
 
 import type { Doc, Id } from "../../../_generated/dataModel";
 import {
@@ -302,8 +303,8 @@ function createRepairProjectionRepository(overrides: {
   validCloudIds?: Set<string>;
 } = {}): TerminalCloudRepairProjectionEligibilityRepository {
   return {
-    async findBlockingRegisterSession() {
-      return overrides.blockingRegisterSession
+    async findScopedRegisterSessionLifecycle() {
+      const blockingRegisterSession = overrides.blockingRegisterSession
         ? ({
             closeoutRecords: [],
             expectedCash: 100,
@@ -311,6 +312,13 @@ function createRepairProjectionRepository(overrides: {
             ...overrides.blockingRegisterSession,
           } as never)
         : null;
+
+      return {
+        blockingRegisterSession,
+        ...getRegisterSessionAuthoritativeCloseBoundary([
+          blockingRegisterSession,
+        ]),
+      };
     },
     async getRegisterSession(registerSessionId) {
       return overrides.registerSession &&

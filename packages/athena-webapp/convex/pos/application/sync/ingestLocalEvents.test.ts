@@ -5672,8 +5672,12 @@ function createFakeSyncRepository(
       });
       return id as never;
     },
-    async findBlockingRegisterSession() {
-      return null;
+    async findScopedRegisterSessionLifecycle() {
+      return {
+        blockingRegisterSession: null,
+        hasAmbiguousCloseEvidence: false,
+        latestAuthoritativeCloseAt: null,
+      };
     },
     async listOpenRegisterReviewConflictFacts(args) {
       return [

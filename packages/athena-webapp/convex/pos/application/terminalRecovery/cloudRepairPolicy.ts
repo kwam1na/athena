@@ -155,7 +155,7 @@ export function buildTerminalCloudRepairPreconditionHash(args: {
 
 export type TerminalCloudRepairProjectionEligibilityRepository = Pick<
   SyncProjectionRepository,
-  | "findBlockingRegisterSession"
+  | "findScopedRegisterSessionLifecycle"
   | "getRegisterSession"
   | "getStaffProfile"
   | "getTerminal"
@@ -232,11 +232,12 @@ export async function canProjectRegisterOpenForTerminalCloudRepair(
     });
   }
 
-  const blockingRegisterSession = await repository.findBlockingRegisterSession({
-    storeId: args.storeId,
-    terminalId: args.terminalId,
-    registerNumber: terminalRegisterNumber,
-  });
+  const { blockingRegisterSession } =
+    await repository.findScopedRegisterSessionLifecycle({
+      storeId: args.storeId,
+      terminalId: args.terminalId,
+      registerNumber: terminalRegisterNumber,
+    });
   if (!blockingRegisterSession) return true;
 
   const reviewState = await getRepairOpenRegisterCloseoutReviewState(repository, {
@@ -296,8 +297,10 @@ function getRepairConflictCloseoutReviewBoundaryAt(
 
 function getRepairRegisterSessionCloseoutBoundaryAt(
   registerSession: Awaited<
-    ReturnType<TerminalCloudRepairProjectionEligibilityRepository["findBlockingRegisterSession"]>
-  >,
+    ReturnType<
+      TerminalCloudRepairProjectionEligibilityRepository["findScopedRegisterSessionLifecycle"]
+    >
+  >["blockingRegisterSession"],
 ) {
   const latestCloseoutRecord = registerSession?.closeoutRecords?.reduce<
     number | undefined

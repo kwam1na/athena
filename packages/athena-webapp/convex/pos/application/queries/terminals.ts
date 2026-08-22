@@ -1,5 +1,6 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { QueryCtx } from "../../../_generated/server";
+import { getRegisterSessionAuthoritativeCloseBoundary } from "../../../../shared/registerSessionLifecyclePolicy";
 import {
   isRegisterSessionConflictBlockingStatus,
 } from "../../../../shared/registerSessionStatus";
@@ -811,28 +812,32 @@ function createTerminalCloudRepairQueryRepository(
   };
 
   return {
-    async findBlockingRegisterSession(args) {
+    async findScopedRegisterSessionLifecycle(args) {
       const terminalRows = await ctx.db
         .query("registerSession")
         .withIndex("by_terminalId", (q) => q.eq("terminalId", args.terminalId))
         .order("desc")
         .take(20);
-      const latestByTerminal = terminalRows
+      const terminalScopedSessions = terminalRows
         .filter(
           (session) =>
             session.storeId === args.storeId &&
             session.terminalId === args.terminalId,
         )
-        .sort((left, right) => right._creationTime - left._creationTime)[0];
+        .sort((left, right) => right._creationTime - left._creationTime);
+      const boundary = getRegisterSessionAuthoritativeCloseBoundary(
+        terminalScopedSessions,
+      );
+      const latestByTerminal = terminalScopedSessions[0];
       if (
         latestByTerminal &&
         isRegisterSessionConflictBlockingStatus(latestByTerminal.status)
       ) {
-        return latestByTerminal;
+        return { blockingRegisterSession: latestByTerminal, ...boundary };
       }
 
       if (!args.registerNumber) {
-        return null;
+        return { blockingRegisterSession: null, ...boundary };
       }
 
       const registerRows = await ctx.db
@@ -849,10 +854,14 @@ function createTerminalCloudRepairQueryRepository(
             session.registerNumber === args.registerNumber,
         )
         .sort((left, right) => right._creationTime - left._creationTime)[0];
-      return latestByRegisterNumber &&
-        isRegisterSessionConflictBlockingStatus(latestByRegisterNumber.status)
-        ? latestByRegisterNumber
-        : null;
+      return {
+        blockingRegisterSession:
+          latestByRegisterNumber &&
+          isRegisterSessionConflictBlockingStatus(latestByRegisterNumber.status)
+            ? latestByRegisterNumber
+            : null,
+        ...boundary,
+      };
     },
     getRegisterSession(registerSessionId) {
       return ctx.db.get("registerSession", registerSessionId);

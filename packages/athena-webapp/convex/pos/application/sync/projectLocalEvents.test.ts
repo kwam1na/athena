@@ -5,6 +5,7 @@ vi.mock("../../infrastructure/posLifecycleJournal", () => ({
 }));
 
 import type { Id } from "../../../_generated/dataModel";
+import { getRegisterSessionAuthoritativeCloseBoundary } from "../../../../shared/registerSessionLifecyclePolicy";
 import {
   createOrReuseRegisterSessionRepairMapping,
   projectLocalSyncEvent,
@@ -5604,6 +5605,189 @@ describe("projectLocalSyncEvent", () => {
     expect(repository.createdRegisterSessions).toEqual([]);
   });
 
+  it("does not project a register open that predates the authoritative close boundary", async () => {
+    const repository = createProjectionRepository({
+      latestRegisterSession: {
+        _id: "register-session-closed",
+        expectedCash: 100,
+        closeoutRecords: [{ occurredAt: 90 }],
+        closedAt: 90,
+        registerNumber: "1",
+        status: "closed",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-opened-historical",
+        localRegisterSessionId: "local-register-historical",
+        sequence: 1,
+        eventType: "register_opened",
+        occurredAt: 10,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          openingFloat: 250,
+          registerNumber: "1",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(repository.createdRegisterSessions).toEqual([]);
+    expect(result.mappings).toEqual([]);
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "permission",
+        details: expect.objectContaining({
+          candidateOccurredAt: 10,
+          latestAuthoritativeCloseAt: 90,
+          lifecycleDisposition: "obsolete",
+          lifecycleReason: "at_or_before_authoritative_boundary",
+          localRegisterSessionId: "local-register-historical",
+        }),
+      }),
+    ]);
+  });
+
+  it("projects a fresh register open after the authoritative close boundary", async () => {
+    const repository = createProjectionRepository({
+      latestRegisterSession: {
+        _id: "register-session-closed",
+        expectedCash: 100,
+        closeoutRecords: [{ occurredAt: 5 }],
+        closedAt: 5,
+        registerNumber: "1",
+        status: "closed",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-opened-fresh",
+        localRegisterSessionId: "local-register-fresh",
+        sequence: 1,
+        eventType: "register_opened",
+        occurredAt: 10,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          openingFloat: 250,
+          registerNumber: "1",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(repository.createdRegisterSessions).toEqual([
+      expect.objectContaining({
+        expectedCash: 250,
+        openingFloat: 250,
+        registerNumber: "1",
+      }),
+    ]);
+  });
+
+  it("does not project a register open when the closed drawer has ambiguous close evidence", async () => {
+    const repository = createProjectionRepository({
+      latestRegisterSession: {
+        _id: "register-session-closed-ambiguous",
+        expectedCash: 100,
+        closeoutRecords: [],
+        registerNumber: "1",
+        status: "closed",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-opened-ambiguous",
+        localRegisterSessionId: "local-register-ambiguous",
+        sequence: 1,
+        eventType: "register_opened",
+        occurredAt: 10,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          openingFloat: 250,
+          registerNumber: "1",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(repository.createdRegisterSessions).toEqual([]);
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "permission",
+        details: expect.objectContaining({
+          lifecycleDisposition: "unsafe",
+          lifecycleReason: "ambiguous_close_evidence",
+        }),
+      }),
+    ]);
+  });
+
+  it("ignores a closed drawer scoped to another terminal when projecting a register open", async () => {
+    const repository = createProjectionRepository({
+      latestRegisterSession: {
+        _id: "register-session-closed-other-terminal",
+        expectedCash: 100,
+        closeoutRecords: [{ occurredAt: 90 }],
+        closedAt: 90,
+        registerNumber: "1",
+        status: "closed",
+        storeId: "store-1",
+        terminalId: "terminal-2",
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-opened-other-terminal",
+        localRegisterSessionId: "local-register-other-terminal",
+        sequence: 1,
+        eventType: "register_opened",
+        occurredAt: 10,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          openingFloat: 250,
+          registerNumber: "1",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(repository.createdRegisterSessions).toEqual([
+      expect.objectContaining({ openingFloat: 250 }),
+    ]);
+  });
+
   it("maps a direct cloud register open after staff authorization", async () => {
     const repository = createProjectionRepository({
       registerSession: {
@@ -8189,6 +8373,18 @@ function createProjectionRepository(
       storeId?: string;
       terminalId?: string;
     };
+    latestRegisterSession: {
+      _id: string;
+      expectedCash: number;
+      closeoutOwnedAt?: number;
+      closeoutOwnershipSource?: string;
+      closeoutRecords: unknown[];
+      closedAt?: number;
+      registerNumber?: string;
+      status: string;
+      storeId?: string;
+      terminalId?: string;
+    };
     registerReviewConflictFacts: LocalSyncRegisterReviewConflictFact[];
     registerSessionsWithCloseoutReview: Set<string>;
     sku: {
@@ -8765,8 +8961,24 @@ function createProjectionRepository(
       createdRegisterSessions.push(input);
       return "register-session-1" as never;
     },
-    async findBlockingRegisterSession() {
-      return (overrides.blockingRegisterSession as never) ?? null;
+    async findScopedRegisterSessionLifecycle(args) {
+      const blockingRegisterSession =
+        (overrides.blockingRegisterSession as never) ?? null;
+      const scopedSessions = [
+        overrides.blockingRegisterSession,
+        overrides.latestRegisterSession,
+      ].filter(
+        (session) =>
+          session !== undefined &&
+          (session.storeId === undefined || session.storeId === args.storeId) &&
+          (session.terminalId === undefined ||
+            session.terminalId === args.terminalId),
+      );
+
+      return {
+        blockingRegisterSession,
+        ...getRegisterSessionAuthoritativeCloseBoundary(scopedSessions),
+      };
     },
     async listOpenRegisterReviewConflictFacts(args) {
       if (overrides.registerReviewConflictFacts) {
