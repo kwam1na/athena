@@ -1,10 +1,15 @@
+import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 import {
   createHarnessBlocker,
   createHarnessInternalErrorBlocker,
+  createHarnessUsageErrorBlocker,
   formatHarnessBlockers,
+  HARNESS_PREPARATION_SOURCE_IDS,
+  HARNESS_USAGE_ERROR_CODE,
   HarnessBlockedError,
+  HarnessUsageError,
   runHarnessCliBoundary,
   serializeHarnessBlockers,
   type HarnessBlocker,
@@ -595,6 +600,25 @@ describe("harness blockers", () => {
     ).toBeLessThanOrEqual(240);
   });
 
+  it("has a producer for every preparation blocker source", async () => {
+    // The union is meant to describe the boundaries that actually exist, so
+    // every id must be named at a site that produces a preparation blocker.
+    // The only producers are the receipt evaluation in pr-athena-prepare.ts
+    // and the candidate capture it delegates to.
+    const producerText = (
+      await Promise.all(
+        ["pr-athena-prepare.ts", "harness-candidate.ts"].map((file) =>
+          readFile(new URL(`./${file}`, import.meta.url), "utf8"),
+        ),
+      )
+    ).join("\n");
+    const orphaned = HARNESS_PREPARATION_SOURCE_IDS.filter(
+      (id) => !producerText.includes(`"${id}"`),
+    );
+
+    expect(orphaned).toEqual([]);
+  });
+
   it("rejects unstable blocker and remediation identifiers", () => {
     expect(() =>
       createHarnessBlocker({
@@ -650,5 +674,63 @@ describe("harness blockers", () => {
     expect(output).toEqual([
       expect.stringContaining("[harness_command_failed]"),
     ]);
+  });
+});
+
+describe("harness usage errors", () => {
+  it("carries the stable usage code, its source, and a flags remediation", () => {
+    const blocker = createHarnessUsageErrorBlocker({
+      source: { kind: "command", id: "harness:janitor" },
+      message: "Unknown harness janitor argument: --dry-run.",
+      validFlags: ["--repair", "--report-only"],
+    });
+
+    expect(blocker.code).toBe(HARNESS_USAGE_ERROR_CODE);
+    expect(blocker.source).toEqual({ kind: "command", id: "harness:janitor" });
+    expect(blocker.summary).toContain("--dry-run");
+
+    const rendered = formatHarnessBlockers([blocker]);
+    expect(rendered).toContain("[harness_usage_error]");
+    expect(rendered).toContain("Source: command:harness:janitor");
+    expect(rendered).toContain("--repair, --report-only");
+    expect(rendered).not.toContain("harness_internal_error");
+  });
+
+  it("renders through the CLI boundary without an internal-error stack", async () => {
+    const output: string[] = [];
+    const exitCode = await runHarnessCliBoundary({
+      source: { kind: "command", id: "harness:janitor" },
+      reproduce: ["bun", "run", "harness:janitor"],
+      run: () => {
+        throw new HarnessUsageError({
+          source: { kind: "command", id: "harness:janitor" },
+          message: "Cannot combine --report-only with --repair.",
+          validFlags: ["--repair", "--report-only"],
+        });
+      },
+      logger: { error: (message) => output.push(message) },
+    });
+
+    const rendered = output.join("\n");
+    expect(exitCode).toBe(1);
+    expect(rendered).toContain("[harness_usage_error]");
+    expect(rendered).toContain(
+      "Rerun with supported flags: --repair, --report-only.",
+    );
+    expect(rendered).not.toContain("unexpected internal error");
+  });
+
+  it("keeps the invocation message as the error text and passes catch-all wrappers untouched", () => {
+    const error = new HarnessUsageError({
+      source: { kind: "command", id: "harness:review" },
+      message: "Missing value for --base.",
+      validFlags: ["--base <ref>"],
+    });
+    // Review and behavior wrap every non-contract throw into their own
+    // blocked blocker; a usage error must survive that wrapping unchanged.
+    expect(error).toBeInstanceOf(HarnessBlockedError);
+    expect(error.message).toBe("Missing value for --base.");
+    expect(error.blockers).toHaveLength(1);
+    expect(error.blockers[0].code).toBe(HARNESS_USAGE_ERROR_CODE);
   });
 });

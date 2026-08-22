@@ -5,6 +5,7 @@ import {
 import type { DocumentationWaiverFindingCode } from "./documentation-waiver-attestation";
 import {
   HarnessBlockedError,
+  HarnessUsageError,
   runHarnessCliBoundary,
 } from "./harness-blockers";
 import type { HarnessCandidate } from "./harness-candidate";
@@ -126,10 +127,17 @@ export function parseDocumentationWaiverArgs(argv: string[]) {
   }
   let pr: string | undefined;
   let reason = "";
+  const usage = {
+    source: { kind: "command", id: "harness:waive-documentation" } as const,
+    validFlags: ["--pr <number>", "--reason <text>"],
+  };
   const readValue = (flag: string, index: number) => {
     const value = argv[index + 1];
     if (!value || value.startsWith("--")) {
-      throw new Error(`${flag} requires a value.`);
+      throw new HarnessUsageError({
+        ...usage,
+        message: `${flag} requires a value.`,
+      });
     }
     return value;
   };
@@ -138,9 +146,17 @@ export function parseDocumentationWaiverArgs(argv: string[]) {
     else if (argv[index] === "--reason") {
       reason = readValue("--reason", index++);
     }
-    else throw new Error(`Unknown argument: ${argv[index]}`);
+    else throw new HarnessUsageError({
+      ...usage,
+      message: `Unknown argument: ${argv[index]}`,
+    });
   }
-  if (!reason.trim()) throw new Error("Pass a non-empty --reason.");
+  if (!reason.trim()) {
+    throw new HarnessUsageError({
+      ...usage,
+      message: "Pass a non-empty --reason.",
+    });
+  }
   return { help: false as const, pr, reason };
 }
 

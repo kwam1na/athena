@@ -4,7 +4,7 @@ import path from "node:path";
 import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
 import { validateHarnessDocs } from "./harness-check";
 import { runHarnessAudit } from "./harness-audit";
-import { runHarnessCliBoundary } from "./harness-blockers";
+import { runHarnessCliBoundary, HarnessUsageError } from "./harness-blockers";
 import { writeGeneratedHarnessDocs } from "./harness-generate";
 import { runGraphifyCheck } from "./graphify-check";
 import { runGraphifyRebuild } from "./graphify-rebuild";
@@ -342,11 +342,18 @@ export type HarnessJanitorCliArgs = {
 
 export function parseHarnessJanitorCliArgs(args: string[]): HarnessJanitorCliArgs {
   let requestedMode: HarnessJanitorMode | null = null;
+  const usage = {
+    source: { kind: "command", id: "harness:janitor" } as const,
+    validFlags: ["--repair", "--report-only"],
+  };
 
   for (const arg of args) {
     if (arg === "--repair") {
       if (requestedMode && requestedMode !== "repair") {
-        throw new Error("Cannot combine --repair with --report-only.");
+        throw new HarnessUsageError({
+          ...usage,
+          message: "Cannot combine --report-only with --repair.",
+        });
       }
       requestedMode = "repair";
       continue;
@@ -354,15 +361,19 @@ export function parseHarnessJanitorCliArgs(args: string[]): HarnessJanitorCliArg
 
     if (arg === "--report-only") {
       if (requestedMode && requestedMode !== "report-only") {
-        throw new Error("Cannot combine --report-only with --repair.");
+        throw new HarnessUsageError({
+          ...usage,
+          message: "Cannot combine --report-only with --repair.",
+        });
       }
       requestedMode = "report-only";
       continue;
     }
 
-    throw new Error(
-      `Unknown harness janitor argument: ${arg}. Supported flags: --repair, --report-only.`
-    );
+    throw new HarnessUsageError({
+      ...usage,
+      message: `Unknown harness janitor argument: ${arg}. Supported flags: --repair, --report-only.`,
+    });
   }
 
   return {

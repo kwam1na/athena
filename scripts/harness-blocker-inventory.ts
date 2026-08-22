@@ -62,6 +62,18 @@ export const HARNESS_BLOCKER_CLI_INVENTORY = [
   { file: "scripts/harness-test.ts", commands: ["harness:test"] },
   { file: "scripts/pre-push-review.ts", commands: ["pre-push:review"] },
   {
+    file: "scripts/delivery-documentation-check.ts",
+    commands: ["delivery:documentation-check"],
+  },
+  {
+    file: "scripts/delivery-run-telemetry.ts",
+    commands: ["delivery:telemetry-check", "delivery:telemetry-record"],
+  },
+  {
+    file: "scripts/pre-push-validation-proof.ts",
+    commands: ["pr:athena:record-proof"],
+  },
+  {
     file: "scripts/pr-athena-delivery-run.ts",
     // `pr:athena:validate` also targets this file directly, for the
     // write-provider-evidence subcommand.
@@ -91,6 +103,7 @@ export type HarnessBlockerInventoryFinding = {
     | "boundary-console-output"
     | "boundary-process-exit"
     | "boundary-throw"
+    | "blocker-emission-missing"
     | "blocker-remediation-missing"
     | "blocker-source-freeform"
     | "blocker-remediation-divergent";
@@ -201,14 +214,6 @@ export async function discoverHarnessBlockerInventory(
   // Reachability is deliberately *not* used to widen this set: composite
   // aliases such as `pr:athena:validate` chain out to `graphify:rebuild` and
   // other tools that are not harness blocker boundaries.
-  //
-  // Three reachable CLIs are knowingly still outside the contract:
-  // `delivery-documentation-check.ts` and `delivery-run-telemetry.ts` (the CLI
-  // form of the two live gate providers) and `pre-push-validation-proof.ts` (a
-  // `pr:athena` step). They still print prose and call process.exit, and
-  // migrating them is tracked separately rather than claimed here - the
-  // honest statement is that the contract does not yet cover them, not that
-  // they are mere remediation targets.
   //
   // The residual limit, stated rather than papered over: a new CLI that is
   // neither `harness-`-prefixed nor registered here is invisible to this
@@ -336,6 +341,45 @@ export function inspectHarnessBlockerShapes(
   return findings;
 }
 
+const RENDER_NON_ZERO_FALSE_PATTERN = /renderNonZero:\s*false\b/;
+const BLOCKER_EMISSION_PATTERNS = [
+  /\bcreateHarnessBlocker\s*\(/,
+  /\bHarnessBlockedError\b/,
+  /\bformatHarnessBlockers\s*\(/,
+];
+
+/**
+ * `renderNonZero: false` suppresses the shared `harness_command_failed`
+ * fallback in `runHarnessCliBoundary`. That is legitimate only when the file
+ * renders its own conformant blocker - prose with no code, source, or
+ * remediation shipped twice before this rule existed, and both times only a
+ * human caught it.
+ *
+ * Literal declarations only, like the other shape rules. A suppression computed
+ * at runtime (`renderNonZero: someFlag`) is invisible here, and the rule reads
+ * whole files rather than dataflow: it can prove that a file both suppresses
+ * the fallback and constructs a blocker somewhere, but not that the constructed
+ * blocker actually reaches the suppressed exit path. Following indirection or
+ * control flow would report drift it could not prove; the runtime contract in
+ * `createHarnessBlocker` still owns the shape of whatever is rendered.
+ */
+export function inspectRenderNonZeroSuppression(
+  file: string,
+  source: string,
+): HarnessBlockerInventoryFinding[] {
+  if (!RENDER_NON_ZERO_FALSE_PATTERN.test(source)) return [];
+  for (const pattern of BLOCKER_EMISSION_PATTERNS) {
+    if (pattern.test(source)) return [];
+  }
+  return [
+    {
+      code: "blocker-emission-missing",
+      file,
+      message: `${file} passes renderNonZero: false but never constructs its own blocker; suppressing the shared fallback requires emitting a typed blocker via createHarnessBlocker, HarnessBlockedError, or formatHarnessBlockers.`,
+    },
+  ];
+}
+
 const REMEDIATION_LITERAL_PATTERN =
   /id:\s*"([a-z0-9]+(?:-[a-z0-9]+)*)"\s*,\s*kind:\s*"(command|manual_action|code_change|retry)"\s*,(?:[^}]*?)summary:\s*"((?:[^"\\]|\\.)*)"/g;
 
@@ -419,6 +463,7 @@ export async function auditHarnessBlockerInventory(
 
     findings.push(...inspectHarnessCliBoundary(entry.file, source));
     findings.push(...inspectHarnessBlockerShapes(entry.file, source));
+    findings.push(...inspectRenderNonZeroSuppression(entry.file, source));
     for (const command of entry.commands) {
       // Reachable rather than direct: `pr:athena` is an alias for
       // `pr:athena:delivery-run`, and an alias-only command is still a command

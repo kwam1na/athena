@@ -10,7 +10,7 @@ import {
   parseHarnessJanitorCliArgs,
   runHarnessJanitor,
 } from "./harness-janitor";
-import { runHarnessCliBoundary } from "./harness-blockers";
+import { runHarnessCliBoundary, HarnessUsageError } from "./harness-blockers";
 
 const tempRoots: string[] = [];
 
@@ -289,7 +289,10 @@ describe("parseHarnessJanitorCliArgs", () => {
     });
   });
 
-  it("rejects unknown or conflicting flags", () => {
+  it("rejects unknown or conflicting flags as typed usage errors", () => {
+    expect(() => parseHarnessJanitorCliArgs(["--unknown"])).toThrow(
+      HarnessUsageError
+    );
     expect(() => parseHarnessJanitorCliArgs(["--unknown"])).toThrow(
       "Unknown harness janitor argument: --unknown."
     );
@@ -316,5 +319,26 @@ describe("harness:janitor command boundary", () => {
     expect(errors.join("\n")).toContain("harness_command_failed");
     expect(errors.join("\n")).toContain("command:harness:janitor");
     expect(errors.join("\n")).toContain("rerun-command-harness-janitor");
+  });
+
+  it("reports a bad flag as a typed usage error rather than an internal error", async () => {
+    const errors: string[] = [];
+    const code = await runHarnessCliBoundary({
+      source: { kind: "command", id: "harness:janitor" },
+      reproduce: ["bun", "run", "harness:janitor"],
+      run: () => parseHarnessJanitorCliArgs(["--dry-run"]),
+      logger: { error: (line: string) => errors.push(line) },
+    });
+
+    const rendered = errors.join("\n");
+
+    // A bad flag is an expected outcome, not a crash: the operator gets a
+    // stable code and the supported flags, never an `harness_internal_error`
+    // stack.
+    expect(code).toBe(1);
+    expect(rendered).toContain("harness_usage_error");
+    expect(rendered).toContain("command:harness:janitor");
+    expect(rendered).toContain("--repair, --report-only");
+    expect(rendered).not.toContain("harness_internal_error");
   });
 });

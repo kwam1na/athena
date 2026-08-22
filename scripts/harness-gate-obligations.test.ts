@@ -121,6 +121,73 @@ describe("evaluateGateObligations", () => {
     ]);
   });
 
+  it("gives each documentation policy finding its own repair guidance", () => {
+    const failingDocs = (code: string) => [
+      {
+        providerId: "delivery-documentation-check",
+        runId: "docs-failing",
+        status: "failed" as const,
+        findings: [{ code, message: `${code} finding` }],
+      },
+      {
+        providerId: "delivery-run-telemetry-check",
+        runId: "telemetry-green-1",
+        status: "green" as const,
+        findings: [],
+      },
+    ];
+
+    // Authoring a solution note and regenerating a landed-change report are
+    // different repairs; neither may inherit the obligation's generic
+    // repair-everything guidance.
+    const compound = evaluateGateObligations(
+      input({ liveProviderResults: failingDocs("compound-solution") }),
+    );
+    expect(
+      compound.blockers
+        .find((blocker) => blocker.code === "compound-solution")
+        ?.remediations.map((item) => item.id),
+    ).toEqual(["author-compound-solution-note"]);
+
+    const report = evaluateGateObligations(
+      input({ liveProviderResults: failingDocs("landed-change-report") }),
+    );
+    expect(
+      report.blockers
+        .find((blocker) => blocker.code === "landed-change-report")
+        ?.remediations.map((item) => item.id),
+    ).toEqual(["regenerate-landed-change-report"]);
+  });
+
+  it("keeps the obligation-level documentation remediation as fallback", () => {
+    // A structural failure (no provider finding) has no per-code repair, so it
+    // keeps the obligation's generic guidance.
+    const decision = evaluateGateObligations(
+      input({
+        liveProviderResults: [
+          {
+            providerId: "delivery-documentation-check",
+            runId: "docs-structural",
+            status: "failed",
+            findings: [],
+          },
+          {
+            providerId: "delivery-run-telemetry-check",
+            runId: "telemetry-green-2",
+            status: "green",
+            findings: [],
+          },
+        ],
+      }),
+    );
+
+    expect(
+      decision.blockers
+        .find((blocker) => blocker.code === "live_provider_failed")
+        ?.remediations.map((item) => item.id),
+    ).toEqual(["repair-delivery-documentation"]);
+  });
+
   it("uses the shared typed blocker contract without legacy projections", () => {
     const decision = evaluateGateObligations(input({ records: [] }));
 

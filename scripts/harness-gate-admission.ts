@@ -268,6 +268,93 @@ export const WAIVABLE_FINDING_CODES: {
   "telemetry.recorded": ["telemetry_record_missing"],
 };
 
+// Exhaustive-by-construction witnesses for the typed provider code unions.
+// Adding a member to either union fails to compile until it is named here,
+// which is what routes the new code into the classification decision below
+// instead of letting it default to silence.
+const DOCUMENTATION_PROVIDER_CODES: Record<
+  DeliveryDocumentationFinding["policy"],
+  null
+> = {
+  "compound-solution": null,
+  "landed-change-report": null,
+};
+
+const TELEMETRY_PROVIDER_CODES: Record<DeliveryRunTelemetryFindingCode, null> = {
+  telemetry_record_missing: null,
+  telemetry_record_malformed: null,
+};
+
+/**
+ * Every finding code an obligation can carry into a blocked resolution:
+ * the evaluator's structural codes plus each provider's full code surface.
+ * The waiver offer intersects blockers against WAIVABLE_FINDING_CODES, so an
+ * unclassified code silently voids waivers for the whole run — this export is
+ * the closed enumeration that makes such a gap a test failure instead.
+ */
+export const EMITTABLE_BLOCKED_FINDING_CODES: Readonly<
+  Record<HarnessObligationId, readonly string[]>
+> = {
+  "review.green": [
+    "review_evidence_missing",
+    "stale_evidence",
+    "unknown_provider",
+    "evidence_not_green",
+    "unresolved_actionable_findings",
+    "ambiguous_records",
+    // mapRecordDiagnostic is the only production source of invalid records,
+    // and it always emits this code.
+    "malformed_record",
+    "resolution_not_allowed",
+  ],
+  "documentation.current": [
+    ...Object.keys(DOCUMENTATION_PROVIDER_CODES),
+    "live_provider_missing",
+    "ambiguous_live_provider",
+    "live_provider_failed",
+    "resolution_not_allowed",
+  ],
+  "telemetry.recorded": [
+    ...Object.keys(TELEMETRY_PROVIDER_CODES),
+    "live_provider_missing",
+    "ambiguous_live_provider",
+    "live_provider_failed",
+    "resolution_not_allowed",
+  ],
+};
+
+/**
+ * The deliberate complement of WAIVABLE_FINDING_CODES: codes an obligation can
+ * emit into a blocked resolution that a human waiver must never cover. A waiver
+ * means "I accept this missing artifact", never "I accept this malformed
+ * record" or "I accept a structurally broken evaluation". Together with the
+ * waivable list this partitions EMITTABLE_BLOCKED_FINDING_CODES exactly; the
+ * guard test fails until every new code lands in one of the two.
+ */
+export const INTENTIONALLY_NOT_WAIVABLE_FINDING_CODES: Readonly<
+  Record<HarnessObligationId, readonly string[]>
+> = {
+  "review.green": [
+    "unresolved_actionable_findings",
+    "ambiguous_records",
+    "malformed_record",
+    "resolution_not_allowed",
+  ],
+  "documentation.current": [
+    "live_provider_missing",
+    "ambiguous_live_provider",
+    "live_provider_failed",
+    "resolution_not_allowed",
+  ],
+  "telemetry.recorded": [
+    "telemetry_record_malformed",
+    "live_provider_missing",
+    "ambiguous_live_provider",
+    "live_provider_failed",
+    "resolution_not_allowed",
+  ],
+};
+
 function waivableBlockedObligationIds(
   decision: GateObligationDecision,
   context: HarnessExecutionContext,

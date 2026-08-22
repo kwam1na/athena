@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-22T21:28:06.099Z",
+  "branch": "codex/v26-1307-blocker-contract-gates",
+  "headSha": "13f057ba8fdbedf9935b814da93a537c4659c25e",
+  "deliverableDiffFingerprint": "5916746cb579eb2e515acabaad9bd9dd458ce8b85f46bfdeadb468754cec562e",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 0,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 609941.291292
+  },
+  "reviewLoop": {
+    "providerId": "ce-code-review",
+    "runId": "20260822-171421-rereview",
+    "finalPassId": "20260822-171421-rereview-final",
+    "recordedAt": "2026-08-22T21:15:19.457Z",
+    "iterationCount": 2,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 0,
+      "P3": 2
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}

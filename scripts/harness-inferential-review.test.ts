@@ -11,6 +11,7 @@ import {
   runHarnessInferentialReview,
   stripTypeScriptNonCode,
 } from "./harness-inferential-review";
+import { HarnessUsageError } from "./harness-blockers";
 
 const tempRoots: string[] = [];
 
@@ -3722,5 +3723,22 @@ describe("parseHarnessInferentialReviewArgs", () => {
       persistHistory: true,
       help: false,
     });
+  });
+
+  it("rejects an unknown argument as a typed usage error", () => {
+    // A malformed invocation is expected, not a crash: it must not reach the
+    // boundary as harness_internal_error.
+    expect(() =>
+      parseHarnessInferentialReviewArgs(["--dry-run"]),
+    ).toThrow(HarnessUsageError);
+    let caught: unknown;
+    try {
+      parseHarnessInferentialReviewArgs(["--dry-run"]);
+    } catch (error) {
+      caught = error;
+    }
+    expect(
+      (caught as HarnessUsageError).blockers[0].remediations[0].summary,
+    ).toContain("--base <ref>, --persist-history");
   });
 });

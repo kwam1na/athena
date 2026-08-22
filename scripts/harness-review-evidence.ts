@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   HarnessBlockedError,
   createHarnessBlocker,
+  HarnessUsageError,
   runHarnessCliBoundary,
 } from "./harness-blockers";
 import { captureStableHarnessCandidate } from "./harness-candidate";
@@ -696,20 +697,52 @@ export async function collectHarnessReviewContext(
   return { worktreeId: storage.worktreeId, candidate: captured.candidate };
 }
 
-async function main() {
-  const [command, manifestPath] = process.argv.slice(2);
+export type ReviewEvidenceInvocation =
+  | { command: "context"; manifestPath?: undefined }
+  | { command: "record"; manifestPath: string };
+
+/**
+ * Exported for its sibling test: a malformed invocation is a usage error, not
+ * a crash, so the rejection shape is part of this CLI's operator contract.
+ */
+export function parseReviewEvidenceInvocation(
+  argv: string[],
+): ReviewEvidenceInvocation {
+  const [command, manifestPath] = argv;
   if (command === "context" && !manifestPath) {
+    return { command: "context" };
+  }
+  if (command !== "record" || !manifestPath || argv.length !== 2) {
+    throw new HarnessUsageError({
+      // Same derivation the boundary uses for its source, so the usage blocker
+      // names whichever command the operator actually invoked.
+      source: {
+        kind: "command",
+        id:
+          command === "context"
+            ? "harness:review-context"
+            : "harness:review-evidence",
+      },
+      message:
+        "Usage: bun scripts/harness-review-evidence.ts <context|record finalized-manifest-path>",
+      validFlags: ["context", "record <finalized-manifest-path>"],
+    });
+  }
+  return { command: "record", manifestPath };
+}
+
+async function main() {
+  const invocation = parseReviewEvidenceInvocation(process.argv.slice(2));
+  if (invocation.command === "context") {
     console.log(
       JSON.stringify(await collectHarnessReviewContext(process.cwd())),
     );
     return;
   }
-  if (command !== "record" || !manifestPath || process.argv.length !== 4) {
-    throw new Error(
-      "Usage: bun scripts/harness-review-evidence.ts <context|record finalized-manifest-path>",
-    );
-  }
-  const result = await recordHarnessReviewEvidence(process.cwd(), manifestPath);
+  const result = await recordHarnessReviewEvidence(
+    process.cwd(),
+    invocation.manifestPath,
+  );
   console.log(
     JSON.stringify({
       kind: "review_evidence_recorded",

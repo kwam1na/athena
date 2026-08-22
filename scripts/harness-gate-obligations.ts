@@ -255,6 +255,30 @@ function remediationFor(
         },
       ];
     case "documentation.current":
+      // The two documentation policies repair differently: a solution note is
+      // authored once per durable learning, while a landed-change report is
+      // regenerated whenever the deliverable diff moves. Distinct ids keep the
+      // renderer from collapsing the two into one generic instruction.
+      if (code === "compound-solution") {
+        return [
+          {
+            id: "author-compound-solution-note",
+            kind: "code_change",
+            summary:
+              "Author or refresh the reusable solution note under docs/solutions/ with the repo-local compound workflow, then evaluate again.",
+          },
+        ];
+      }
+      if (code === "landed-change-report") {
+        return [
+          {
+            id: "regenerate-landed-change-report",
+            kind: "code_change",
+            summary:
+              "Generate or refresh the landed-change report under docs/reports/ for this candidate and keep its diff fingerprint current, then evaluate again.",
+          },
+        ];
+      }
       return [
         {
           id: "repair-delivery-documentation",

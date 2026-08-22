@@ -17,6 +17,12 @@ import {
   type DeliveryRunReviewLoopSummary,
   type DeliveryRunStatus,
 } from "./harness-delivery-run-ledger";
+import {
+  runHarnessCliBoundary,
+  HarnessUsageError,
+  type CommandArguments,
+  type HarnessBlockerSource,
+} from "./harness-blockers";
 
 export const DELIVERY_RUN_TELEMETRY_SCHEMA_VERSION = 1 as const;
 export const DELIVERY_RUN_TELEMETRY_DIR = "telemetry/delivery-runs";
@@ -580,34 +586,90 @@ export function assertDeliveryRunTelemetryCheck(
   );
 }
 
-export function parseArgs(argv: string[]) {
+export function parseArgs(
+  argv: string[],
+  source: HarnessBlockerSource = {
+    kind: "command",
+    id: "delivery:telemetry-check",
+  },
+) {
   const [command, ...rest] = argv;
+  const usage = {
+    source,
+    validFlags: ["record", "check", "--base <ref>"],
+  };
   if (command !== "record" && command !== "check") {
-    throw new Error(
-      "Usage: bun scripts/delivery-run-telemetry.ts <record|check> [--base <ref>]",
-    );
+    throw new HarnessUsageError({
+      ...usage,
+      message:
+        "Usage: bun scripts/delivery-run-telemetry.ts <record|check> [--base <ref>]",
+    });
   }
   let baseRef = "origin/main";
   for (let index = 0; index < rest.length; index += 1) {
     if (rest[index] === "--base") {
       baseRef = rest[++index] ?? "";
-      if (!baseRef) throw new Error("Missing value for --base.");
+      if (!baseRef) {
+        throw new HarnessUsageError({
+          ...usage,
+          message: "Missing value for --base.",
+        });
+      }
       continue;
     }
-    throw new Error(`Unknown argument: ${rest[index]}.`);
+    throw new HarnessUsageError({
+      ...usage,
+      message: `Unknown argument: ${rest[index]}.`,
+    });
   }
   return { command, baseRef };
 }
 
+/**
+ * One boundary serves both subcommands, so each blocking exit names the source
+ * that actually owns it: the live telemetry sensor command for `check`, and the
+ * obligation the record step exists to satisfy for `record`.
+ */
+export function telemetryCliContract(argv: string[]): {
+  source: HarnessBlockerSource;
+  reproduce: CommandArguments;
+} {
+  if (argv[0] === "record") {
+    return {
+      source: { kind: "obligation", id: "telemetry.recorded" },
+      reproduce: [
+        "bun",
+        "run",
+        "delivery:telemetry-record",
+        ...argv.slice(1),
+      ] as const,
+    };
+  }
+  return {
+    source: { kind: "command", id: "delivery:telemetry-check" },
+    reproduce: [
+      "bun",
+      "run",
+      "delivery:telemetry-check",
+      ...argv.slice(1),
+    ] as const,
+  };
+}
+
 if (import.meta.main) {
-  // One try/catch around the whole entrypoint, matching the sibling sensors:
-  // a failure prints one line, not a stack trace.
-  try {
-    const { command, baseRef } = parseArgs(process.argv.slice(2));
-    if (command === "check") {
-      assertDeliveryRunTelemetryCheck(process.cwd(), { baseRef });
-      console.log("Delivery-run telemetry check passed.");
-    } else {
+  const invocation = telemetryCliContract(process.argv.slice(2));
+  process.exitCode = await runHarnessCliBoundary({
+    ...invocation,
+    run: async () => {
+      const { command, baseRef } = parseArgs(
+        process.argv.slice(2),
+        invocation.source,
+      );
+      if (command === "check") {
+        assertDeliveryRunTelemetryCheck(process.cwd(), { baseRef });
+        console.log("Delivery-run telemetry check passed.");
+        return;
+      }
       const written = await recordDeliveryRunTelemetry(process.cwd(), {
         baseRef,
       });
@@ -619,9 +681,6 @@ if (import.meta.main) {
           generatedAt: written.record.generatedAt,
         }),
       );
-    }
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  }
+    },
+  });
 }

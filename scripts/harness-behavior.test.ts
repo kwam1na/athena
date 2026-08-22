@@ -15,6 +15,7 @@ import {
   runPlaywrightFlow,
 } from "./harness-behavior";
 import { harnessBehaviorFailedBlocker } from "./harness-behavior";
+import { HarnessUsageError } from "./harness-blockers";
 
 const tempRoots: string[] = [];
 
@@ -611,6 +612,11 @@ describe("parseHarnessBehaviorArgs", () => {
     expect(() => parseHarnessBehaviorArgs(["--scenario"])).toThrow(
       "Missing scenario name after --scenario."
     );
+    // A malformed invocation is a usage error, not a crash: it must carry the
+    // stable code rather than reaching the boundary as harness_internal_error.
+    expect(() => parseHarnessBehaviorArgs(["--scenario"])).toThrow(
+      HarnessUsageError
+    );
   });
 
   it("throws when --record-video has an invalid value", () => {
@@ -621,6 +627,12 @@ describe("parseHarnessBehaviorArgs", () => {
         "--record-video=maybe",
       ])
     ).toThrow("Invalid value for --record-video");
+  });
+
+  it("throws when an unknown argument is passed", () => {
+    expect(() => parseHarnessBehaviorArgs(["--dry-run"])).toThrow(
+      HarnessUsageError
+    );
   });
 });
 

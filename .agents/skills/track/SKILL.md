@@ -86,8 +86,16 @@ Use this resolution order before asking the user for context:
 - Check for near-duplicate active issues before creating new ones.
 - Apply explicit labels first; add project or domain labels only when requested or clearly useful.
 
-8. Return the execution handoff.
-- Include resolved context, created issues, dependency map, and assumptions.
+8. Group batch tickets under an epic.
+- When the plan yields more than one ticket that belongs together as a coordinated batch, create one epic issue first: title it `Epic: <batch name>`, keep the body to a short scope summary (one paragraph) plus the subissue list, and place it in the resolved team/project.
+- Set each batch ticket's `parentId` to the epic so Linear provides rollup progress per batch. Do not use projects or labels for this grouping.
+- A single-ticket plan needs no epic; do not create a wrapper around one ticket.
+- The epic is a grouping surface, not an implementation script: no acceptance criteria, sensors, or posture belong on it. Those live on the tickets.
+- Name the epic after the workstream or domain (for example `Agent Streaming`, `Reporting & Payments`), not the plan filename.
+- If a batch splits into milestones or phases, record them as sections in the epic body rather than intermediate parent issues.
+
+9. Return the execution handoff.
+- Include resolved context, epic (if any), created issues, dependency map, and assumptions.
 - If the tickets form a coordinated generated-artifact batch, say so directly and recommend a single integration PR after parallel ticket execution.
 - If implementation is next, say `Use $execute for implementation.`
 
@@ -95,7 +103,8 @@ Use this resolution order before asking the user for context:
 
 - `Resolved Context`: issue source or cwd-derived context, team, project
 - `Plan Source`: `Superpowers` or `Fallback template`
-- `Created Issues`: key, title, URL, labels
+- `Epic`: key, title, URL when a batch epic was created; omit for single-ticket plans
+- `Created Issues`: key, title, URL, labels, parent link
 - `Execution Plan`: `Can Start Now` and `Blocked`
 - `Integration Strategy`: `One PR per ticket` or `Single integration PR after parallel execution`
 - `Delivery Posture`: execution posture and expected sensors by issue
@@ -107,7 +116,9 @@ Use this resolution order before asking the user for context:
 
 - Optimize for minimum dependency chains and maximum parallel execution.
 - Do not create tickets directly from vague scope; if the work is not concrete enough to become a checklist, plan first.
-- Do not create umbrella tickets when the plan yields separable implementation outcomes.
+- Do not create umbrella tickets when the plan yields separable implementation outcomes. Use an epic parent for grouping instead; the epic never replaces atomic tickets.
+- Every batch ticket must be linked to its epic before the handoff; verify no ticket is left unparented when an epic exists.
+- Deduplicate before creating: if a new ticket duplicates an existing active issue, close the new one as a duplicate of the survivor (set the duplicate relation first, then the state) instead of keeping both.
 - Avoid implementation detail that does not help define the ticket.
 - Treat repo and agent documentation refresh as required follow-up work when a feature changes capabilities, workflows, architecture, or other durable repo behavior; keep the repo honest about its standing behavior.
 - Do not let durable state changes, authorization-sensitive actions, approval workflows, money/inventory/customer-impacting records, or asynchronous work omit an explicit audit/tracing decision.

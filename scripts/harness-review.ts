@@ -6,6 +6,7 @@ import { HARNESS_APP_REGISTRY, type ValidationCommand } from "./harness-app-regi
 import {
   HarnessBlockedError,
   createHarnessBlocker,
+  HarnessUsageError,
   runHarnessCliBoundary,
 } from "./harness-blockers";
 import { runHarnessCheck } from "./harness-check";
@@ -1082,15 +1083,27 @@ export function parseHarnessReviewArgs(
   let validationProvidedBy: "athena-pr-tests" | undefined;
   let providerEvidencePath: string | undefined;
 
+  const usage = {
+    source: { kind: "command", id: "harness:review" } as const,
+    validFlags: [
+      "--base <ref>",
+      "--repo-validation-provided-by pr:athena",
+      "--validation-provided-by athena-pr-tests",
+      "--provider-evidence <path>",
+    ],
+  };
+
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
 
     if (arg === "--base") {
       const value = argv[index + 1]?.trim();
       if (!value) {
-        throw new Error(
-          "Missing value for --base. Usage: bun run harness:review --base origin/main"
-        );
+        throw new HarnessUsageError({
+          ...usage,
+          message:
+            "Missing value for --base. Usage: bun run harness:review --base origin/main",
+        });
       }
       baseRef = value;
       index += 1;
@@ -1100,9 +1113,11 @@ export function parseHarnessReviewArgs(
     if (arg.startsWith("--base=")) {
       const value = arg.slice("--base=".length).trim();
       if (!value) {
-        throw new Error(
-          "Missing value for --base. Usage: bun run harness:review --base origin/main"
-        );
+        throw new HarnessUsageError({
+          ...usage,
+          message:
+            "Missing value for --base. Usage: bun run harness:review --base origin/main",
+        });
       }
       baseRef = value;
       continue;
@@ -1111,9 +1126,11 @@ export function parseHarnessReviewArgs(
     if (arg === "--repo-validation-provided-by") {
       const value = argv[index + 1]?.trim();
       if (value !== "pr:athena") {
-        throw new Error(
-          "Missing or invalid value for --repo-validation-provided-by. Supported value: pr:athena. This flag suppresses only the repo-owned validation set; package validation still runs. For the broader CI mode that also prunes workflow-provided package commands, use --validation-provided-by athena-pr-tests."
-        );
+        throw new HarnessUsageError({
+          ...usage,
+          message:
+            "Missing or invalid value for --repo-validation-provided-by. Supported value: pr:athena. This flag suppresses only the repo-owned validation set; package validation still runs. For the broader CI mode that also prunes workflow-provided package commands, use --validation-provided-by athena-pr-tests.",
+        });
       }
       repoValidationProvidedBy = value;
       index += 1;
@@ -1123,9 +1140,11 @@ export function parseHarnessReviewArgs(
     if (arg.startsWith("--repo-validation-provided-by=")) {
       const value = arg.slice("--repo-validation-provided-by=".length).trim();
       if (value !== "pr:athena") {
-        throw new Error(
-          "Missing or invalid value for --repo-validation-provided-by. Supported value: pr:athena. This flag suppresses only the repo-owned validation set; package validation still runs. For the broader CI mode that also prunes workflow-provided package commands, use --validation-provided-by athena-pr-tests."
-        );
+        throw new HarnessUsageError({
+          ...usage,
+          message:
+            "Missing or invalid value for --repo-validation-provided-by. Supported value: pr:athena. This flag suppresses only the repo-owned validation set; package validation still runs. For the broader CI mode that also prunes workflow-provided package commands, use --validation-provided-by athena-pr-tests.",
+        });
       }
       repoValidationProvidedBy = value;
       continue;
@@ -1134,9 +1153,11 @@ export function parseHarnessReviewArgs(
     if (arg === "--validation-provided-by") {
       const value = argv[index + 1]?.trim();
       if (value !== "athena-pr-tests") {
-        throw new Error(
-          "Missing or invalid value for --validation-provided-by. Supported value: athena-pr-tests. This flag suppresses the repo-owned validation set and prunes package commands the PR workflow runs separately. For the narrower local pr:athena mode, use --repo-validation-provided-by pr:athena."
-        );
+        throw new HarnessUsageError({
+          ...usage,
+          message:
+            "Missing or invalid value for --validation-provided-by. Supported value: athena-pr-tests. This flag suppresses the repo-owned validation set and prunes package commands the PR workflow runs separately. For the narrower local pr:athena mode, use --repo-validation-provided-by pr:athena.",
+        });
       }
       validationProvidedBy = value;
       index += 1;
@@ -1146,9 +1167,11 @@ export function parseHarnessReviewArgs(
     if (arg.startsWith("--validation-provided-by=")) {
       const value = arg.slice("--validation-provided-by=".length).trim();
       if (value !== "athena-pr-tests") {
-        throw new Error(
-          "Missing or invalid value for --validation-provided-by. Supported value: athena-pr-tests. This flag suppresses the repo-owned validation set and prunes package commands the PR workflow runs separately. For the narrower local pr:athena mode, use --repo-validation-provided-by pr:athena."
-        );
+        throw new HarnessUsageError({
+          ...usage,
+          message:
+            "Missing or invalid value for --validation-provided-by. Supported value: athena-pr-tests. This flag suppresses the repo-owned validation set and prunes package commands the PR workflow runs separately. For the narrower local pr:athena mode, use --repo-validation-provided-by pr:athena.",
+        });
       }
       validationProvidedBy = value;
       continue;
@@ -1157,9 +1180,11 @@ export function parseHarnessReviewArgs(
     if (arg === "--provider-evidence") {
       const value = argv[index + 1]?.trim();
       if (!value) {
-        throw new Error(
-          "Missing value for --provider-evidence. Usage: bun run harness:review --provider-evidence <path>"
-        );
+        throw new HarnessUsageError({
+          ...usage,
+          message:
+            "Missing value for --provider-evidence. Usage: bun run harness:review --provider-evidence <path>",
+        });
       }
       providerEvidencePath = value;
       index += 1;
@@ -1169,17 +1194,20 @@ export function parseHarnessReviewArgs(
     if (arg.startsWith("--provider-evidence=")) {
       const value = arg.slice("--provider-evidence=".length).trim();
       if (!value) {
-        throw new Error(
-          "Missing value for --provider-evidence. Usage: bun run harness:review --provider-evidence <path>"
-        );
+        throw new HarnessUsageError({
+          ...usage,
+          message:
+            "Missing value for --provider-evidence. Usage: bun run harness:review --provider-evidence <path>",
+        });
       }
       providerEvidencePath = value;
       continue;
     }
 
-    throw new Error(
-      `Unknown argument: ${arg}. Usage: bun run harness:review [--base <ref>] [--repo-validation-provided-by pr:athena] [--validation-provided-by athena-pr-tests] [--provider-evidence <path>]`
-    );
+    throw new HarnessUsageError({
+      ...usage,
+      message: `Unknown argument: ${arg}. Usage: bun run harness:review [--base <ref>] [--repo-validation-provided-by pr:athena] [--validation-provided-by athena-pr-tests] [--provider-evidence <path>]`,
+    });
   }
 
   return {

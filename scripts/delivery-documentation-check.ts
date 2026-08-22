@@ -5,6 +5,7 @@ import {
   assertLandedChangeReportCheck,
 } from "./landed-change-report-check";
 import { collectDeliverableDiffFingerprint } from "./delivery-diff-fingerprint";
+import { runHarnessCliBoundary, HarnessUsageError } from "./harness-blockers";
 
 export type DocumentationPolicyCheckOptions = {
   assertCompoundSolutionCheck?: (
@@ -97,17 +98,31 @@ export function parseArgs(argv: string[]) {
   let baseRef = "origin/main";
   let threshold: number | undefined;
   let printFingerprint = false;
+  const usage = {
+    source: { kind: "command", id: "delivery:documentation-check" } as const,
+    validFlags: ["--base <ref>", "--threshold <n>", "--print-fingerprint"],
+  };
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--base") {
       baseRef = argv[++index] ?? "";
-      if (!baseRef) throw new Error("Missing value for --base.");
+      if (!baseRef) {
+        throw new HarnessUsageError({
+          ...usage,
+          message: "Missing value for --base.",
+        });
+      }
       continue;
     }
     if (arg === "--threshold") {
       const value = argv[++index];
-      if (!value) throw new Error("Missing value for --threshold.");
+      if (!value) {
+        throw new HarnessUsageError({
+          ...usage,
+          message: "Missing value for --threshold.",
+        });
+      }
       threshold = Number(value);
       continue;
     }
@@ -115,7 +130,10 @@ export function parseArgs(argv: string[]) {
       printFingerprint = true;
       continue;
     }
-    throw new Error(`Unknown argument: ${arg}.`);
+    throw new HarnessUsageError({
+      ...usage,
+      message: `Unknown argument: ${arg}.`,
+    });
   }
 
   return { baseRef, threshold, printFingerprint };
@@ -137,9 +155,20 @@ function changedFiles(rootDir: string, baseRef: string) {
 }
 
 if (import.meta.main) {
-  try {
-    const options = parseArgs(process.argv.slice(2));
-    if (options.printFingerprint) {
+  process.exitCode = await runHarnessCliBoundary({
+    source: { kind: "command", id: "delivery:documentation-check" },
+    reproduce: [
+      "bun",
+      "run",
+      "delivery:documentation-check",
+      ...process.argv.slice(2),
+    ],
+    run: async () => {
+      const options = parseArgs(process.argv.slice(2));
+      if (!options.printFingerprint) {
+        assertDeliveryDocumentationCheck(process.cwd(), options);
+        return;
+      }
       console.log(
         collectDeliverableDiffFingerprint(
           process.cwd(),
@@ -147,11 +176,6 @@ if (import.meta.main) {
           changedFiles(process.cwd(), options.baseRef),
         ),
       );
-    } else {
-      assertDeliveryDocumentationCheck(process.cwd(), options);
-    }
-  } catch (error: unknown) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  }
+    },
+  });
 }

@@ -28,6 +28,7 @@ import { collectDeliverableDiffFingerprint } from "./delivery-diff-fingerprint";
 import {
   createHarnessBlocker,
   formatHarnessBlockers,
+  formatHarnessCommand,
   HarnessBlockedError,
   runHarnessCliBoundary,
   HARNESS_BLOCKER_SCHEMA_VERSION,
@@ -106,14 +107,6 @@ const PR_ATHENA_SCORECARD_PHASE: PrAthenaPhase = {
 
 const PROVIDER_EVIDENCE_COMMAND = "write-provider-evidence";
 const PROOF_GIT_PATH = "codex/pre-push-pr-athena-proof.json";
-
-function commandToString(command: string[]) {
-  return command
-    .map((part) =>
-      /\s/.test(part) ? `'${part.replaceAll("'", "'\\''")}'` : part,
-    )
-    .join(" ");
-}
 
 async function runProcess(
   command: string[],
@@ -704,7 +697,7 @@ export async function runPrAthenaDeliveryRun(
     const endedMs = monotonicMs();
     commandSpans.push({
       phase: step.phase,
-      command: commandToString(step.command),
+      command: formatHarnessCommand(step.command),
       startedAt,
       endedAt: nowIso(),
       durationMs: Math.max(0, endedMs - startedMs),
@@ -881,6 +874,35 @@ export async function runPrAthenaDeliveryRunCli(
               kind: "command",
               command: ["bun", "run", "pr:athena"],
               summary: "Rerun the delivery gate once the block is resolved.",
+            },
+          ],
+        }),
+      ]),
+    );
+  }
+
+  // An interrupted run is the other non-zero exit the spine can produce: any
+  // non-SIGINT signal exits 1, and with `renderNonZero: false` it printed only
+  // the prose summary - indistinguishable from a crash at the terminal. An
+  // operator-initiated SIGINT renders too: a stable code naming the signal
+  // costs nothing and keeps every non-zero exit of the delivery spine total.
+  if (ledger.status === "interrupted") {
+    logger.error(
+      formatHarnessBlockers([
+        createHarnessBlocker({
+          code: "delivery_run_interrupted",
+          source: { kind: "command", id: "pr:athena:delivery-run" },
+          summary: "The Athena delivery run was interrupted before completion.",
+          ...(ledger.interruptedReason
+            ? { details: ledger.interruptedReason }
+            : {}),
+          remediations: [
+            {
+              id: "rerun-interrupted-delivery-run",
+              kind: "command",
+              command: ["bun", "run", "pr:athena"],
+              summary:
+                "Rerun the delivery gate once the interrupting condition clears.",
             },
           ],
         }),

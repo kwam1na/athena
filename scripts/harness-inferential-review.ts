@@ -4,7 +4,7 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { collectConvexReturnValidatorContractFindings as collectSharedConvexReturnValidatorContractFindings } from "./convex-return-validator-contract-check";
-import { runHarnessCliBoundary } from "./harness-blockers";
+import { runHarnessCliBoundary, HarnessUsageError } from "./harness-blockers";
 
 const DEFAULT_BASE_REF = "origin/main";
 const DEFAULT_MACHINE_OUTPUT_PATH =
@@ -2673,6 +2673,11 @@ export function parseHarnessInferentialReviewArgs(
   let baseRef = DEFAULT_BASE_REF;
   let persistHistory = false;
 
+  const usage = {
+    source: { kind: "command", id: "harness:inferential-review" } as const,
+    validFlags: ["--base <ref>", "--persist-history"],
+  };
+
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
 
@@ -2696,9 +2701,11 @@ export function parseHarnessInferentialReviewArgs(
     if (arg === "--base") {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) {
-        throw new Error(
-          "Missing value for --base. Usage: bun run harness:inferential-review --base origin/main",
-        );
+        throw new HarnessUsageError({
+          ...usage,
+          message:
+            "Missing value for --base. Usage: bun run harness:inferential-review --base origin/main",
+        });
       }
       baseRef = value;
       index += 1;
@@ -2708,17 +2715,20 @@ export function parseHarnessInferentialReviewArgs(
     if (arg.startsWith("--base=")) {
       const value = arg.slice("--base=".length).trim();
       if (!value) {
-        throw new Error(
-          "Missing value for --base. Usage: bun run harness:inferential-review --base origin/main",
-        );
+        throw new HarnessUsageError({
+          ...usage,
+          message:
+            "Missing value for --base. Usage: bun run harness:inferential-review --base origin/main",
+        });
       }
       baseRef = value;
       continue;
     }
 
-    throw new Error(
-      `Unknown argument: ${arg}. Usage: bun run harness:inferential-review [--base <ref>]`,
-    );
+    throw new HarnessUsageError({
+      ...usage,
+      message: `Unknown argument: ${arg}. Usage: bun run harness:inferential-review [--base <ref>]`,
+    });
   }
 
   return {

@@ -636,6 +636,13 @@ rerun the authoritative command. If the output reports
 `harness_internal_error`, inspect the retained log before retrying; its details
 are diagnostic context, not a substitute for the named reproduction command.
 
+`harness_internal_error` is reserved for genuinely unexpected exceptions. Two
+other non-zero exits carry their own stable codes: a malformed invocation
+renders `harness_usage_error` with a remediation naming the supported flags,
+and an interrupted `pr:athena` delivery run renders
+`delivery_run_interrupted` naming the signal, so a signaled run never looks
+like a crash at the terminal.
+
 Avoid weakening the sensor to get past a failure. If the failure is noisy, fix
 the sensor's precision with a test so the repo learns from the false positive.
 

@@ -9,6 +9,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   defaultScenarios,
+  EMITTABLE_BLOCKED_FINDING_CODES,
+  INTENTIONALLY_NOT_WAIVABLE_FINDING_CODES,
   runHarnessGateAdmission,
   WAIVABLE_FINDING_CODES,
   writeHarnessGateDecisionEvent,
@@ -122,6 +124,66 @@ describe("harness gate admission", () => {
           ?.length,
       ).toBeGreaterThan(0);
     }
+  });
+
+  it("classifies every emittable blocked finding code as waivable or intentionally not waivable", () => {
+    // waivableBlockedObligationIds is all-or-nothing: one unclassified code in
+    // any blocked resolution silently makes the waiver unofferable for the
+    // entire run. Every code an obligation can emit must therefore be named in
+    // exactly one of the two sets, so adding a code forces a decision instead
+    // of defaulting to silence.
+    const problems: string[] = [];
+    for (const [obligationId, emittable] of Object.entries(
+      EMITTABLE_BLOCKED_FINDING_CODES,
+    )) {
+      const waivable = new Set(WAIVABLE_FINDING_CODES[obligationId as never] ??
+        []);
+      const notWaivable = new Set(
+        INTENTIONALLY_NOT_WAIVABLE_FINDING_CODES[obligationId as never] ?? [],
+      );
+      for (const code of emittable) {
+        if (waivable.has(code) && notWaivable.has(code)) {
+          problems.push(
+            `${obligationId}: ${code} is classified as both waivable and intentionally not waivable`,
+          );
+        } else if (!waivable.has(code) && !notWaivable.has(code)) {
+          problems.push(
+            `${obligationId}: ${code} is emitted into blocked resolutions but is classified nowhere`,
+          );
+        }
+      }
+      for (const code of waivable) {
+        if (!emittable.includes(code)) {
+          problems.push(
+            `${obligationId}: ${code} is waivable but no longer emitted; remove it from the allow-list`,
+          );
+        }
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+
+  it("pins every structural evaluator finding code into the emittable sets", async () => {
+    // The typed provider unions are pinned by exhaustive Record witnesses in
+    // the admission module; this scan covers the plain-string structural codes
+    // inside harness-gate-obligations.ts so a newly added literal cannot enter
+    // a blocked resolution without being classified above.
+    const { readFile } = await import("node:fs/promises");
+    const nodePath = await import("node:path");
+    const source = await readFile(
+      nodePath.join(import.meta.dirname, "harness-gate-obligations.ts"),
+      "utf8",
+    );
+    const scanned = new Set<string>();
+    for (const match of source.matchAll(/finding\(\s*obligation,\s*"([^"]+)"/g)) {
+      if (match[1]) scanned.add(match[1]);
+    }
+    expect(scanned.size).toBeGreaterThan(0);
+    const emittable = new Set(
+      Object.values(EMITTABLE_BLOCKED_FINDING_CODES).flat(),
+    );
+    const unclassified = [...scanned].filter((code) => !emittable.has(code));
+    expect(unclassified).toEqual([]);
   });
 
   it("blocks qualifying agent work without evidence before any heavy spawn", async () => {

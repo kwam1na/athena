@@ -57,7 +57,6 @@ export const HARNESS_PREPARATION_SOURCE_IDS = [
   "wiring_mismatch",
   "candidate_unprepared",
   "candidate_ambiguous",
-  "mechanical_failed",
 ] as const;
 
 export type HarnessPreparationSourceId =
@@ -523,6 +522,52 @@ export function createHarnessInternalErrorBlocker(input: {
       },
     ],
   });
+}
+
+export const HARNESS_USAGE_ERROR_CODE = "harness_usage_error";
+
+/**
+ * A bad flag or malformed invocation is an expected outcome of a CLI that
+ * parses arguments, not a crash. Thrown bare from a parser, it reached the CLI
+ * boundary as `harness_internal_error` with a stack - the form the contract
+ * reserves for genuinely unexpected exceptions - and the operator had to read
+ * source to learn which flags exist.
+ */
+export function createHarnessUsageErrorBlocker(input: {
+  source: HarnessBlockerSource;
+  message: string;
+  validFlags: readonly string[];
+}): HarnessBlocker {
+  return createHarnessBlocker({
+    code: HARNESS_USAGE_ERROR_CODE,
+    source: input.source,
+    summary: input.message,
+    remediations: [
+      {
+        id: remediationIdFor("rerun-with-supported-flags", input.source),
+        kind: "manual_action",
+        summary: `Rerun with supported flags: ${input.validFlags.join(", ")}.`,
+      },
+    ],
+  });
+}
+
+/**
+ * Extends HarnessBlockedError on purpose: several CLIs (harness:review,
+ * harness:behavior, harness:review-evidence) wrap every non-contract throw in
+ * their own blocked blocker, and a usage error must survive that wrapping
+ * unchanged rather than being reclassified as a domain block. The invocation
+ * message stays the Error message so existing diagnostics keep reading true.
+ */
+export class HarnessUsageError extends HarnessBlockedError {
+  constructor(input: {
+    source: HarnessBlockerSource;
+    message: string;
+    validFlags: readonly string[];
+  }) {
+    super([createHarnessUsageErrorBlocker(input)], input.message);
+    this.name = "HarnessUsageError";
+  }
 }
 
 export async function runHarnessCliBoundary(input: {
