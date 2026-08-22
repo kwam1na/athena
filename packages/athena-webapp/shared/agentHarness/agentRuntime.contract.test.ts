@@ -1,5 +1,5 @@
 /**
- * Runtime contract tests (plan U2 scenarios 7, 9, 10).
+ * Runtime contract tests.
  *
  * Runs the reusable adapter suite against the deterministic contract fake and
  * proves the kernel-owned tool-dispatch ledger and usage reconciler directly.

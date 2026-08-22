@@ -158,16 +158,35 @@ Three boundaries are worth knowing before touching any of it:
 Profiles are default off behind one durable switch
 (`bun run agent-harness:switch`), which is also the rollback. A behavioural
 change to a read port moves the compatibility digest and requires the pre-deploy
-fence (`bun run agent-harness:fence`), which disables the profiles and advances
-the epoch so in-flight runs cannot mix versions.
+fence (`bun run agent-harness:fence`), which in one transaction disables the
+profiles and advances the epoch so in-flight runs cannot mix versions. Releasing
+a profile is that one switch: publish, smoke through the direct harness while
+the switch is off, enable broadly, watch the first turns, disable to roll back.
+No cohorts, no canaries, no staged profile versions, no drain gate.
 
-To add a capability, a package, or a profile, follow
+Provider accounting stays Athena's: usage is normalized at the adapter edge
+(delta or cumulative declared, deduplicated and ordered by sequence, retries
+attributed separately, cancellation and missing finals settled conservatively),
+and Athena computes cost from those totals. Every model tool call carries an
+idempotency fingerprint over the adapter version, turn, tool, canonicalized
+arguments, and call identity; an exact replay returns the recorded outcome and
+any mismatch fails without invoking a handler.
+
+To add a capability, a package, a profile, or a new operator surface, follow
 [capability-authoring.md](./capability-authoring.md). The Convex Agent and
 sandbox version pins, and their upgrade and rollback path, are in
 [agent-harness-runtime.md](./agent-harness-runtime.md).
 
 TanStack AI remains a separate, untouched adapter for existing structured
-provider work; the harness does not replace it.
+provider work; the harness does not replace it, is not layered on it, and does
+not fall back to it. Both provider paths normalize into the same Athena
+evidence contracts.
+
+The harness borrows patterns described in the public Deep Agents writing —
+progressive capability discovery, constrained code execution, explicit scratch,
+explicit completion — reimplemented on Athena's contracts. LangChain, LangGraph,
+and Deep Agents are not installed, are not dependencies, and are not an
+alternate runtime.
 
 ## Convex AI Component Boundary
 

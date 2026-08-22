@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 /**
- * Run admission (plan U7 scenarios 7, 9, 15): operator prompt validation with
+ * Run admission: operator prompt validation with
  * no partial persistence, the per-operator active-run limit, one active turn
  * per thread, and the reserve-then-settle provider-spend ceiling.
  */

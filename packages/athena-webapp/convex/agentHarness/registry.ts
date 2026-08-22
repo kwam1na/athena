@@ -18,9 +18,11 @@
  * capability is denied even under a pinned digest. Behavioral change — a port
  * implementation, harness/runtime protocol, adapter, admission policy, profile
  * policy, or schema change — moves the compatibility digest, and
- * `compareCompatibility` is what U7 feeds into the durable epoch fence.
+ * `compareCompatibility` is what the deployment epoch fence feeds into the
+ * durable epoch fence.
  *
- * U3 generates the checked-in registry from these functions; U4 binds the
+ * The build-time generator (`scripts/agent-sdk-generate.ts`) writes the
+ * checked-in registry from these functions; delegated admission binds the
  * ports' internal function references at the admission composition root. The
  * registry never imports a product domain or a profile: profiles are inputs.
  */
@@ -84,8 +86,9 @@ function unknownIntentIssues(intents: readonly string[], path: string): AgentCon
 /**
  * Manifest conformance at the registry boundary: the shared validation plus
  * the closed read-intent vocabulary for the binding and every projection.
- * U3 grows this into the generated conformance harness; U8 runs it per
- * manifest before a capability may be enabled.
+ * The generated conformance harness (`conformance.ts`) grows out of this;
+ * every domain package runs it per manifest before a capability may be
+ * enabled.
  */
 export function assertManifestConformance(manifest: AgentCapabilityManifest): AgentRegistryValidation {
   const validation = validateCapabilityManifest(manifest);
@@ -146,8 +149,8 @@ export function assertProfileConformance(
  * Behavioral identity of one registered read-port implementation. The version
  * token is declared by the domain; the source digest is computed by the
  * build-time generator over the handler module. A changed source with an
- * unchanged token is the deterministic check U3's generator refuses to write
- * past (plan U3 scenario 8).
+ * unchanged token is the deterministic check the registry generator
+ * (`scripts/agent-sdk-generate.ts`) refuses to write past.
  */
 export type AgentPortImplementationRecord = {
   readonly implementationVersion: string;
@@ -189,7 +192,7 @@ export type AgentRegistryBuildInput = {
   readonly readPorts: AgentReadPortIndex;
   readonly profiles: readonly AgentProfileDefinition[];
   readonly runtimeAdapter: { readonly adapterKind: string; readonly adapterVersion: string };
-  /** Version token of the delegated-admission policy (U4). */
+  /** Version token of the delegated-admission policy. */
   readonly admissionPolicyVersion: string;
   /** Per-port implementation identity; the generator supplies real source digests. */
   readonly portImplementations?: AgentPortImplementationIndex;
@@ -475,16 +478,17 @@ export function evaluateEnablement(
 
 export type AgentCompatibilityComparison = {
   readonly changed: boolean;
-  /** U7 advances the durable epoch and terminalizes nonterminal old-digest runs. */
+  /** The pre-deploy fence advances the durable epoch and terminalizes nonterminal old-digest runs. */
   readonly requiresEpochAdvance: boolean;
   readonly previousDigest: string | undefined;
   readonly nextDigest: string;
 };
 
 /**
- * Pure old/new comparison metadata. U3 owns the identity; U1 owns the durable
- * epoch (`advanceCompatibilityEpochWithCtx`) and U7 owns the one-command
- * pre-deploy fence that consumes this.
+ * Pure old/new comparison metadata. This module owns the identity; the
+ * harness lifecycle owns the durable epoch
+ * (`advanceCompatibilityEpochWithCtx`) and the pre-deploy fence command
+ * (`scripts/agent-harness-fence.ts`) consumes this.
  */
 export function compareCompatibility(
   previousDigest: string | undefined,
@@ -507,10 +511,10 @@ export type AgentCompatibilityAdvancePlan =
     };
 
 /**
- * Turn a digest comparison into exactly the input U1's
- * `advanceCompatibilityEpochWithCtx` expects. This is the whole of U3's part
- * in the fence: U7 runs one command that disables the profile and applies this
- * plan, and the existing bounded repair pass terminalizes nonterminal runs
+ * Turn a digest comparison into exactly the input the lifecycle's
+ * `advanceCompatibilityEpochWithCtx` expects. This is the whole of the
+ * registry's part in the fence: the fence command disables the profile and
+ * applies this plan, and the existing bounded repair pass terminalizes nonterminal runs
  * still pinned to the old epoch.
  */
 export function planCompatibilityAdvance(input: {
@@ -569,8 +573,9 @@ export type AgentGrantProjectionOptions = {
    * Live enablement overlay. Defaults to the published baseline; a kill switch
    * may only shrink it. A disabled profile refuses to project at all, and a
    * capability that is not `enabled` is absent from the projection. An
-   * `unpublished` profile still projects, because U10's direct-harness smoke
-   * runs the contracts before the profile is enabled for operators; admission
+   * `unpublished` profile still projects, because the direct-harness smoke
+   * (`evals/directHarness.ts`) runs the contracts before the profile is
+   * enabled for operators; admission
    * for a real turn goes through `evaluateEnablement`.
    */
   readonly enablement?: AgentEnablementOverlay;
@@ -587,7 +592,8 @@ export type AgentGrantDigestInput = {
 };
 
 /**
- * The grant digest formula, shared with U4's integrity check so a pinned
+ * The grant digest formula, shared with the delegated-admission integrity
+ * check so a pinned
  * grant record can be verified against the digest the run was opened with.
  */
 export function computeGrantDigest(input: AgentGrantDigestInput): string {

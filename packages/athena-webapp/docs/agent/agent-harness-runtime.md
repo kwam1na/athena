@@ -1,6 +1,8 @@
 # Agent harness runtime: Convex Agent adapter and program sandbox
 
-This is the runtime record for plan U5 (`docs/plans/2026-08-21-001-feat-athena-agent-harness-foundation-plan.md`): the exact versions the Convex Agent adapter is proven against, how to upgrade and roll them back, the program-sandbox decision with its evidence, the safety ceilings, the deployment findings, and how the executor (U6) and runtime host (U7) construct and drive the pieces.
+This is the runtime record for the agent harness: the exact versions the Convex Agent adapter is proven against, how to upgrade and roll them back, the program-sandbox decision with its evidence, the safety ceilings, the deployment findings, and how the program executor and the turn host construct and drive the pieces.
+
+For what the harness is and where it sits, read [architecture.md](./architecture.md); to add a capability, a package, or a profile, read [capability-authoring.md](./capability-authoring.md).
 
 ## 1. What exists
 
@@ -9,13 +11,13 @@ This is the runtime record for plan U5 (`docs/plans/2026-08-21-001-feat-athena-a
 | Component mount | root `convex/convex.config.ts` + `convex/agentHarness/agentRuntime/convexAgentRegistration.ts` (constants only) | The root config imports `@convex-dev/agent/convex.config` directly and calls `app.use(agent, { name: CONVEX_AGENT_COMPONENT_NAME })` itself — the one runtime-native import allowed outside `agentRuntime/`. Mounting through a local module makes the Convex backend reject the push (section 6). The shim carries only the mount name; `importBoundary.test.ts` enforces both rules. |
 | Runtime adapter | `convex/agentHarness/agentRuntime/convexAgent.ts` (`"use node"`) | Implements `shared/agentHarness/agentRuntime.ts` (`AgentRuntimeAdapter`) over Convex Agent. Only `agentRuntime/` may import `@convex-dev/agent`, `ai`, `@ai-sdk/*` (enforced by `convex/agentHarness/importBoundary.test.ts`). |
 | Opaque refs and lookups | `convex/agentHarness/agentRuntime/convexAgentRefs.ts` (V8-safe) | Token minting/parsing and component lookups; type-only runtime imports so mutations can use it. |
-| Retention cleanup | `convex/agentHarness/agentRuntime/convexAgentCleanup.ts` (V8-safe) | `cleanupConvexAgentRuntime` and `createConvexAgentCleanupHook` for U1's `registerAgentRuntimeCleanupHook`; the adapter's `cleanup` delegates here. |
-| Default model resolver | `convex/agentHarness/agentRuntime/models.ts` (`"use node"`) | OpenAI via `OPENAI_API_KEY`; refuses any other provider with a typed error. U7's model registry replaces it. |
+| Retention cleanup | `convex/agentHarness/agentRuntime/convexAgentCleanup.ts` (V8-safe) | `cleanupConvexAgentRuntime` and `createConvexAgentCleanupHook` for the retention registry's `registerAgentRuntimeCleanupHook`; the adapter's `cleanup` delegates here. |
+| Default model resolver | `convex/agentHarness/agentRuntime/models.ts` (`"use node"`) | OpenAI via `OPENAI_API_KEY`; refuses any other provider with a typed error. The profile-governed model registry (`convex/agentHarness/modelRegistry.ts`) replaces it. |
 | Deployed smoke | `convex/agentHarness/agentRuntime/convexAgentSmoke.ts` (`"use node"`) | Internal action: a Convex Agent turn through the adapter plus an Athena tool through the sandbox bridge. `convexAgentSmoke.test.ts` runs the same action under convex-test. |
 | Program runtime contract | `convex/agentHarness/programRuntime/types.ts` | Ceilings, facade shape, host bridge, typed outcomes. Environment-neutral. |
 | Static validation | `convex/agentHarness/programRuntime/programValidation.ts` (`"use node"`) | `@babel/parser` TypeScript AST: policy, free-identifier allowlist, facade-shape rules, explicit-output rule, erasable-syntax stripping, JS re-parse. |
 | Sandbox | `convex/agentHarness/programRuntime/quickJsRuntime.ts` (`"use node"`) | Direct QuickJS (wasm) behind the contract. The plan named this file `codeMode.ts`; it is `quickJsRuntime.ts` because the chosen adapter is not code-mode (section 3). |
-| 240 KiB output ceiling | `convex/agentHarness/programRuntime/outputCeiling.ts` | Environment-neutral helper U6 runs before persisting any call output. |
+| 240 KiB output ceiling | `convex/agentHarness/programRuntime/outputCeiling.ts` | Environment-neutral helper the executor runs before persisting any call output. |
 
 Convex Node actions run on Node 22 (`packages/athena-webapp/convex.json`, `node.nodeVersion: "22"`). Only `"use node"` files are bundled for Node; every other non-test file under `convex/` is an isolate entry point that the push analyzes, which is why the engine-, parser-, and AI-SDK-bearing modules carry the directive and why the mutation-side helpers are split out.
 
@@ -42,18 +44,18 @@ Pinned exactly in `packages/athena-webapp/package.json`, mirrored in `CONVEX_AGE
 2. Read `node_modules/@convex-dev/agent/CHANGELOG.md` for component schema changes. The component owns its tables; a new schema is applied by `bunx convex dev --once` on dev and by the normal deploy on production. Record any migration the changelog requires here first.
 3. Update `CONVEX_AGENT_PINNED_VERSIONS` and bump the `athena.N` suffix of `CONVEX_AGENT_ADAPTER_VERSION`.
 4. Run, in order: `bun run test -- convex/agentHarness/agentRuntime convex/agentHarness/programRuntime shared/agentHarness convex/agentHarness/importBoundary.test.ts convex/intelligence/providers`, `bunx convex dev --once`, then `bunx convex run agentHarness/agentRuntime/convexAgentSmoke:run '{"model":"mock"}'` and, with provider credentials, `'{"model":"openai"}'`.
-5. Incompatible active runs are invalidated through the existing compatibility-epoch path (U1 `advanceCompatibilityEpochWithCtx` with the registry's `compatibilityDigest`, which includes the adapter version); there is no drain and no dedicated deploy workflow.
+5. Incompatible active runs are invalidated through the existing compatibility-epoch path (`advanceCompatibilityEpochWithCtx` in `convex/agentHarness/lifecycle.ts`, given the registry's `compatibilityDigest`, which includes the adapter version); there is no drain, no cohort, and no dedicated deploy workflow.
 6. Update the table above; the version pin test fails until steps 1–5 are recorded.
 
 ### Rollback path
 
 1. `bun add --exact` the previous versions from the table and restore `CONVEX_AGENT_PINNED_VERSIONS` / the adapter version suffix.
-2. If the newer component schema added tables or indexes, the older component definition simply stops using them; Convex keeps the data. If it changed an existing field in a way the old validators reject, run the agent's documented down-migration before pushing, or clear the affected component tables — Athena persists nothing in the component that U1's tables do not already hold (section 4).
+2. If the newer component schema added tables or indexes, the older component definition simply stops using them; Convex keeps the data. If it changed an existing field in a way the old validators reject, run the agent's documented down-migration before pushing, or clear the affected component tables — Athena persists nothing in the component that its own durable tables do not already hold (section 4).
 3. `bunx convex dev --once`, then the smoke action. Runs started under the newer adapter version are invalidated by the same epoch path.
 
 ## 3. Sandbox decision: direct QuickJS over `@ai-sdk/code-mode`
 
-Both candidates were spiked behind `programRuntime/types.ts` on 2026-08-21 (scripts recorded in the U5 handoff). Decision: **direct QuickJS (`quickjs-emscripten-core` + single-file wasm variant)**. `@ai-sdk/code-mode` and its `run` dependency were removed from `package.json` after the spike; an external microVM remains the later fallback. `node:vm` was never a candidate.
+Both candidates were spiked behind `programRuntime/types.ts` on 2026-08-21. Decision: **direct QuickJS (`quickjs-emscripten-core` + single-file wasm variant)**. `@ai-sdk/code-mode` and its `run` dependency were removed from `package.json` after the spike; an external microVM remains the later fallback. `node:vm` was never a candidate.
 
 | Criterion | `@ai-sdk/code-mode` 1.0.33 (`run` 2.0.0) | Direct QuickJS 0.32.0 (`quickJsRuntime.ts`) |
 | --- | --- | --- |
@@ -73,7 +75,7 @@ Measured on the dev machine (Apple Silicon), 12–20 iterations of a two-call `P
 | Completion p50 / p95 | 10.0 ms / 143 ms | 1.3 ms / 1.9 ms |
 | First host call (first progress) p50 / p95 | n/a | 0.9 ms / 1.4 ms |
 
-Engine-specific findings recorded for U6:
+Engine-specific findings the program executor depends on:
 
 - **Stack ceiling is 256 KiB.** QuickJS checks its own stack against the wasm stack; with `setMaxStackSize` at 512 KiB or above the wasm stack overflows first (`RangeError` in the host, runtime left unusable). At 256 KiB the engine reports `InternalError: stack overflow` cleanly (depth ≈ 1,360 frames). `quickJsRuntime.ts` clamps any larger ceiling.
 - **Heap exhaustion is slow, not instant.** Near `maxHeapBytes` QuickJS retries GC before `out of memory`; an 8 MiB ceiling took ~5 s to trip. The elapsed ceiling bounds it either way.
@@ -84,7 +86,7 @@ Engine-specific findings recorded for U6:
 
 The first implementation used `typescript` 5.9 (`createProgram` with the ES2022 lib + a generated facade declaration; ~60–130 ms per validation). It was rejected on bundle size: Convex caps **code at 32 MiB per deployment** (docs: "Code size: 32 MiB"), this app's isolate bundle is already ~19 MB with source maps, and `typescript` adds ~6.3 MB of Node bundle plus ~5.8 MB of source map (measured with `bunx convex dev --once --debug-bundle-path <dir>`). `typescript` also needs its lib files at runtime, which a bundled Node action does not have (Convex installs `externalPackages` only from `<package>/node_modules`, and this workspace hoists to the repo root). The Babel validator adds ~0.5 MB and has no runtime file dependency.
 
-What the validator guarantees: syntax, import/export bans, host/network/fs/eval/timer/clock/randomness bans by free-identifier allowlist, prototype/mutation-handle member bans, `athena.<package>.<resource>.<verb>(args)` facade shape against the grant, exactly one explicit output, erasable-only TypeScript, and a JavaScript re-parse of the stripped program. What it does **not** do: semantic type checking (assignability). Runtime argument validation at the bridge (`AgentToolDefinition.validateInput`, U6 admission) stays authoritative for argument shapes; if a checker is wanted later, it has to run outside the Convex bundle (follow-up in the handoff).
+What the validator guarantees: syntax, import/export bans, host/network/fs/eval/timer/clock/randomness bans by free-identifier allowlist, prototype/mutation-handle member bans, `athena.<package>.<resource>.<verb>(args)` facade shape against the grant, exactly one explicit output, erasable-only TypeScript, and a JavaScript re-parse of the stripped program. What it does **not** do: semantic type checking (assignability). Runtime argument validation at the bridge (`AgentToolDefinition.validateInput`, then delegated admission) stays authoritative for argument shapes; if a checker is wanted later, it has to run outside the Convex bundle.
 
 ## 4. Persistence allowlist (Convex Agent component)
 
@@ -99,7 +101,7 @@ Opaque refs: `runtime_thread:th_<40 hex>`, and `runtime_input|runtime_turn|runti
 
 ## 5. Safety ceilings
 
-`AGENT_PROGRAM_RUNTIME_CEILINGS` in `programRuntime/types.ts` (frozen; U6 consumes the object and may lower values per profile, never raise the stack ceiling):
+`AGENT_PROGRAM_RUNTIME_CEILINGS` in `programRuntime/types.ts` (frozen; the executor consumes the object and may lower values per profile, never raise the stack ceiling):
 
 | Ceiling | Value |
 | --- | --- |
@@ -107,7 +109,7 @@ Opaque refs: `runtime_thread:th_<40 hex>`, and `runtime_input|runtime_turn|runti
 | `maxAttempts` | 3 |
 | `maxCapabilityCalls` | 24 |
 | `maxInFlightCalls` | 4 |
-| `maxRows` | 5,000 (budgeted by U1's `rows` dimension; the sandbox cannot count rows) |
+| `maxRows` | 5,000 (budgeted by the run budget's `rows` dimension; the sandbox cannot count rows) |
 | `maxRunBridgeBytes` | 2 MiB |
 | `maxCallOutputBytes` | 240 KiB (`fitEncodedCallOutput` enforces it before persistence, cutting at a collection-item boundary with typed truncation; snapshots that cannot fit are rejected) |
 | `maxCallArgsBytes` | 64 KiB |
@@ -140,7 +142,7 @@ These are initial safety limits, not release benchmarks; tune from observed use.
 
 - `_generated/api.d.ts` now carries `components.agent`; no casts remain.
 
-## 7. Construction guide for U6 and U7
+## 7. Construction guide for the executor and the turn host
 
 ```ts
 import type { AgentComponent } from "@convex-dev/agent";           // only inside agentRuntime/ or adapter tests
@@ -155,7 +157,7 @@ import { AGENT_PROGRAM_RUNTIME_CEILINGS } from "../programRuntime/types";
 const adapter = createConvexAgentRuntimeAdapter({
   ctx,                                  // runQuery/runMutation (+ runAction for turns)
   component: components.agent,
-  resolveModel: (selection) => resolveDefaultLanguageModel(selection), // U7: model registry
+  resolveModel: (selection) => resolveDefaultLanguageModel(selection), // in production: the profile-governed model registry
   clock: () => Date.now(),              // injectable for deterministic tests
   // idempotencyKeyFor: defaults to `${turnRef}:${callId}`
 });
@@ -170,14 +172,14 @@ await adapter.cleanup({ threadRef, reason });
 // Server-authored progress from an Athena tool handler (never model-visible):
 await adapter.reportProgress(turnRef, "reading_sources");
 
-// Retention (U1 hook registry, V8 mutation side):
+// Retention (the harness retention hook registry, V8 mutation side):
 registerAgentRuntimeCleanupHook(CONVEX_AGENT_ADAPTER_KIND, createConvexAgentCleanupHook(components.agent));
 
 // Program execution from the athena.executeProgram handler:
 const runtime = await createQuickJsProgramRuntime();       // wasm loads once per process
 const outcome = await runtime.execute({
   source,                                                  // model-authored TypeScript
-  bridge: { facade, invoke },                              // U6: grant-derived facade + admitted capability calls
+  bridge: { facade, invoke },                              // grant-derived facade + admitted capability calls
   ceilings: AGENT_PROGRAM_RUNTIME_CEILINGS,                // or a profile-lowered copy
   signal,                                                  // AbortSignal from the tool handler context
 });
@@ -186,9 +188,9 @@ const outcome = await runtime.execute({
 Rules the adapter relies on:
 
 - `saveInput` must run in the same action invocation as `startTurn`: the projected history is re-authorized and re-projected per attempt and is never persisted in the component. `startTurn` throws `input_not_loaded` otherwise.
-- `resumeTurn` resumes only a turn this process holds; a durable `pending` record from a crashed action answers `unknown` (U7 retries through U1's binding), a finalized record answers `terminal`.
+- `resumeTurn` resumes only a turn this process holds; a durable `pending` record from a crashed action answers `unknown` (the turn host retries through the durable turn binding), a finalized record answers `terminal`.
 - Tool definitions are Athena-owned (`AgentToolDefinition`); native names are `toolId.replaceAll(".", "__")` and must match `^[a-zA-Z0-9_-]+$`.
-- Usage: one cumulative terminal stream per provider invocation (`<turn token>:<n>`), emitted at step end and only when the provider reported any count; U7 settles missing usage conservatively through the reconciler.
+- Usage: one cumulative terminal stream per provider invocation (`<turn token>:<n>`), emitted at step end and only when the provider reported any count; the turn host settles missing usage conservatively through the reconciler. [capability-authoring.md](./capability-authoring.md) describes what that settlement guarantees and who owns cost.
 - Turn elapsed ceiling: the adapter fails the turn with `turn_elapsed_ceiling` when `limits.maxElapsedMs` passes.
 - `cleanup` from a mutation context uses the component's async deletion (self-scheduling); with an action context it deletes synchronously.
 - Programs must call the facade as `athena.<package>.<resource>.<verb>({ ... })` — no aliasing, no passing facade functions around — and may reference only the allowlisted globals (`Promise`, `JSON`, `Math` minus `random`, `Array`, `Object`, `String`, `Number`, `Boolean`, `Map`, `Set`, `Error`, `TypeError`, `RangeError`, and a few scalars/helpers).

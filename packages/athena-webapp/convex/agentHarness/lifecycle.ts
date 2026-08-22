@@ -259,7 +259,7 @@ export type CreateAgentRunInput = {
   promptPayloadHash: string;
   runIdempotencyKey: string;
   now: number;
-  /** Delegated-admission provenance (U4); pinned immutably on the grant. */
+  /** Delegated-admission provenance; pinned immutably on the grant. */
   delegation?: Doc<"agentRunGrant">["delegation"];
 };
 
@@ -1028,7 +1028,7 @@ export async function admitCapabilityCallWithCtx(
     normalizedArgs?: Record<string, unknown>;
     requested: BudgetVector;
     now: number;
-    /** Delegated-admission evidence (U4); recorded on the call row, never result data. */
+    /** Delegated-admission evidence; recorded on the call row, never result data. */
     delegation?: Doc<"agentCapabilityCall">["delegation"];
   },
 ): Promise<AdmitCallResult> {
@@ -1239,9 +1239,9 @@ export async function settleCapabilityCallWithCtx(
     sourceRefs?: SourceRef[];
     error?: IntelligenceError;
     now: number;
-    /** Delegated release evidence (U4); replaces the admission-time record when given. */
+    /** Delegated release evidence; replaces the admission-time record when given. */
     delegation?: Doc<"agentCapabilityCall">["delegation"];
-    /** Caller-declared omission (U4 withholds a revoked result); the fence reason still wins. */
+    /** Caller-declared omission (delegated admission withholds a revoked result); the fence reason still wins. */
     outputOmittedReason?: string;
   },
 ): Promise<SettleCallResult> {

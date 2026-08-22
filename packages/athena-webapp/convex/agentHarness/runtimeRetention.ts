@@ -5,8 +5,9 @@
  * record, and the projected artifact narrative the Convex Agent component
  * holds) obey the same 30-day short-lived ceiling as every other harness
  * payload, and follow the Athena turn binding on store/organization removal.
- * U1's retention registry drives both through one adapter-keyed cleanup hook;
- * this module registers U5's Convex Agent hook for the `convex_agent` kind.
+ * The harness retention registry (`retention.ts`) drives both through one
+ * adapter-keyed cleanup hook; this module registers the Convex Agent adapter's
+ * hook for the `convex_agent` kind.
  *
  * Registration is lazy and idempotent (`ensureConvexAgentRuntimeCleanupRegistered`
  * is called by the retention sweep before every lookup), so it works in
@@ -27,7 +28,8 @@ import {
 export { CONVEX_AGENT_ADAPTER_KIND };
 
 /**
- * Adapt U5's structurally typed hook to U1's registry signature. Only the
+ * Adapt the Convex Agent adapter's structurally typed hook to the retention
+ * registry signature. Only the
  * opaque runtime refs cross; a thrown adapter error becomes a retryable
  * failure so the sweep backs off and retries rather than marking the turn
  * clean.

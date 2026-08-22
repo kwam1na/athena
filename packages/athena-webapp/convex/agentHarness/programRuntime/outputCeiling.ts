@@ -1,5 +1,5 @@
 /**
- * 240 KiB encoded call-output ceiling (plan U5 scenario 9).
+ * 240 KiB encoded call-output ceiling.
  *
  * A capability call whose sanitized output would cross the persisted-record
  * ceiling stops at its declared collection boundary and returns typed

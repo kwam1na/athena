@@ -13,7 +13,7 @@
  *   derived from the inputs the host released — model code cannot declassify
  *   because it never computes these;
  * - claim-support slices come only from the manifest-declared deterministic
- *   extractor (U3 conformance), fail-closed to provenance-only;
+ *   extractor (checked by the conformance gate), fail-closed to provenance-only;
  * - the replay loader reconstructs the exact validated source and the
  *   complete bounded inputs inside the short-lived window, and reports
  *   expired / deleted states distinctly afterwards.
@@ -122,13 +122,13 @@ export function normalizeHostCall(
     args,
     ...(cursor ? { cursor } : {}),
   };
-  // Identical to the `normalizedArgsHash` U4 records on the call row, so the
+  // Identical to the `normalizedArgsHash` delegated admission records on the call row, so the
   // dedupe identity, the stored row, and the replay lookup all agree.
   const requestDigest = normalizedRequestDigest(request);
   return { ok: true, invocation: { request, requestDigest, entry } };
 }
 
-/** U4's `normalizedArgsHash` formula (projections sorted, cursor as given). */
+/** The delegated-admission `normalizedArgsHash` formula (projections sorted, cursor as given). */
 export function normalizedRequestDigest(request: AgentCapabilityRequest): string {
   return hashCanonical({
     capabilityId: request.capabilityId,

@@ -1,8 +1,8 @@
 // @vitest-environment node
 /// <reference types="vite/client" />
 /**
- * The turn host end to end (plan U7 scenarios 1–5, 7, 8, 11, 13, 19), run
- * against BOTH U2's deterministic contract fake and U5's Convex Agent adapter
+ * The turn host end to end, run against BOTH the deterministic contract fake
+ * and the Convex Agent adapter
  * (convex-test with the component registered). Only adapter conformance tests
  * inspect component-native state; everything here is asserted on Athena rows
  * and normalized events.

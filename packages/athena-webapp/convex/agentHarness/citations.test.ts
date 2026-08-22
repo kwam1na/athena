@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 /**
- * Citations (plan U6 scenarios 4, 5; ticket V26-1264): opaque refs bound to
+ * Citations (ticket V26-1264): opaque refs bound to
  * run/attempt/call/result hash are minted only from released data; completeRun
  * accepts them only from the explicit successful-attempt set; forged, stale,
  * cross-run, unreleased, and unauthorized references are rejected with typed

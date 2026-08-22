@@ -22,7 +22,7 @@ import { AGENT_RUN_ACTIVE_STATUSES, isTerminalRunStatus } from "../../shared/age
 type ReadCtx = QueryCtx | MutationCtx;
 
 // ---------------------------------------------------------------------------
-// Prompt validation (plan U7 scenario 15)
+// Prompt validation
 // ---------------------------------------------------------------------------
 
 export const AGENT_PROMPT_MAX_BYTES = 16 * 1024;
@@ -143,7 +143,7 @@ export function validateOperatorPrompt(raw: unknown, policy: AgentPromptPolicy =
 }
 
 // ---------------------------------------------------------------------------
-// Active-run limit and one active turn per thread (plan U7 scenario 9)
+// Active-run limit and one active turn per thread
 // ---------------------------------------------------------------------------
 
 /** Active agent runs one operator may hold across stores; a second submission is blocked, never queued. */

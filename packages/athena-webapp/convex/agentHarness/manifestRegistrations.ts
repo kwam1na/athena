@@ -10,7 +10,7 @@
  * Adding a package is a data change here and nothing else: append one
  * registration with its manifests, read-port index, profiles, conformance
  * fixtures, and evidence extractors, then run `bun run agent-sdk:generate`.
- * U8 registers the Daily Operations packages exactly this way.
+ * The Daily Operations packages register exactly this way.
  */
 import type { AgentCapabilityManifest } from "../../shared/agentHarness/manifest";
 import type { AgentProfileDefinition } from "../../shared/agentHarness/profile";
@@ -68,7 +68,7 @@ export const AGENT_SELECTED_RUNTIME_ADAPTER = {
   adapterVersion: CONVEX_AGENT_ADAPTER_VERSION,
 } as const;
 
-/** Version token of the delegated-admission policy; U4 bumps it on behavior change. */
+/** Version token of the delegated-admission policy; bumped on admission behavior change. */
 export const AGENT_ADMISSION_POLICY_VERSION = "u4.0";
 
 export const SYNTHETIC_SECOND_SURFACE_REGISTRATION: AgentManifestRegistration = {

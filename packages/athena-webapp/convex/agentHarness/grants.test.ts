@@ -3,7 +3,7 @@
 /**
  * Run grants: materialization with delegated provenance, reauthorization
  * against current authority plus the live shrink overlay, and the
- * grant-filtered discovery input (plan U4; ticket V26-1262).
+ * grant-filtered discovery input (ticket V26-1262).
  */
 import { convexTest } from "convex-test";
 import { beforeEach, describe, expect, it } from "vitest";

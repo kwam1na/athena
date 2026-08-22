@@ -3,7 +3,7 @@
  *
  * The sandbox implementation behind this contract is replaceable (direct
  * QuickJS today; `@ai-sdk/code-mode` or an external microVM are explicit
- * fallbacks). Everything U6's executor consumes — the typed ceilings, the host
+ * fallbacks). Everything the program executor consumes — the typed ceilings, the host
  * bridge shape, the facade description, and the typed outcomes — lives here and
  * names nothing sandbox-specific. Athena-owned static validation runs outside
  * the sandbox (`programValidation.ts`); the runtime only moves JSON between a
@@ -12,19 +12,19 @@
 import type { JsonValue } from "../../../shared/agentHarness/manifest";
 
 // ---------------------------------------------------------------------------
-// Safety ceilings (initial values from plan U5; tune from observed use)
+// Safety ceilings (initial values; tune from observed use)
 // ---------------------------------------------------------------------------
 
 export type AgentProgramRuntimeCeilings = {
   /** Wall-clock budget for one program execution (the turn's 60 s ceiling). */
   readonly maxElapsedMs: number;
-  /** Program attempts per run (U6 budgets this; carried here so one object rules). */
+  /** Program attempts per run (`budgets.ts` budgets this; carried here so one object rules). */
   readonly maxAttempts: number;
   /** Capability calls per run. */
   readonly maxCapabilityCalls: number;
   /** Capability calls concurrently in flight. */
   readonly maxInFlightCalls: number;
-  /** Rows returned per run (U6 budgets this through the ledger's `rows` dimension). */
+  /** Rows returned per run (`budgets.ts` budgets this through the ledger's `rows` dimension). */
   readonly maxRows: number;
   /** Cumulative sanitized bridge bytes (args + outputs) per run. */
   readonly maxRunBridgeBytes: number;
@@ -40,7 +40,7 @@ export type AgentProgramRuntimeCeilings = {
   readonly maxHeapBytes: number;
   /** Sandbox stack ceiling. */
   readonly maxStackBytes: number;
-  /** Provider tokens per run (U7 settles usage against this). */
+  /** Provider tokens per run (the runtime host settles usage against this). */
   readonly maxProviderTokens: number;
   /** Provider cost units per run (Athena's `calculateUsageCost` units). */
   readonly maxProviderCostUnits: number;
@@ -89,7 +89,7 @@ export type AgentProgramHostCall = {
 };
 
 /**
- * What U6 hands the runtime: the facade shape to materialize as `athena.*`
+ * What the program executor hands the runtime: the facade shape to materialize as `athena.*`
  * and the mediated invocation path. `invoke` must return a JSON value (the
  * capability outcome envelope); a thrown error is a host failure that
  * terminates the attempt without exposing the error to the guest.
@@ -200,7 +200,7 @@ export type AgentProgramRuntime = {
   readonly execute: (input: AgentProgramExecutionInput) => Promise<AgentProgramOutcome>;
   /**
    * Execute without static validation. Adversarial tests only: it proves the
-   * sandbox holds on its own. U6 must never call it.
+   * sandbox holds on its own. The program executor must never call it.
    */
   readonly executeUnvalidated: (input: AgentProgramExecutionInput) => Promise<AgentProgramOutcome>;
 };

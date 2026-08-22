@@ -1,6 +1,6 @@
 "use node";
 /**
- * Deployed-runtime smoke for plan U5 scenario 1: a Node 22 Convex action runs
+ * Deployed-runtime smoke for the Convex Agent adapter: a Node 22 Convex action runs
  * a Convex Agent turn through `ConvexAgentRuntimeAdapter` and an Athena tool
  * through the QuickJS sandbox bridge. Internal only (never operator-visible);
  * invoked with `bunx convex run agentHarness/agentRuntime/convexAgentSmoke:run`.

@@ -1379,7 +1379,7 @@
       "relation": "calls",
       "source": "agent_harness_fence_buildfenceinvocation",
       "source_file": "scripts/agent-harness-fence.ts",
-      "source_location": "L105",
+      "source_location": "L109",
       "target": "agent_harness_fence_main",
       "weight": 1
     },
@@ -1391,7 +1391,7 @@
       "relation": "calls",
       "source": "agent_harness_fence_evaluatefenceresult",
       "source_file": "scripts/agent-harness-fence.ts",
-      "source_location": "L118",
+      "source_location": "L122",
       "target": "agent_harness_fence_main",
       "weight": 1
     },
@@ -1403,7 +1403,7 @@
       "relation": "calls",
       "source": "agent_harness_fence_parseconvexrunoutput",
       "source_file": "scripts/agent-harness-fence.ts",
-      "source_location": "L118",
+      "source_location": "L122",
       "target": "agent_harness_fence_main",
       "weight": 1
     },
@@ -1415,7 +1415,7 @@
       "relation": "calls",
       "source": "agent_harness_fence_parsefenceargs",
       "source_file": "scripts/agent-harness-fence.ts",
-      "source_location": "L100",
+      "source_location": "L104",
       "target": "agent_harness_fence_main",
       "weight": 1
     },
@@ -1427,7 +1427,7 @@
       "relation": "calls",
       "source": "agent_harness_fence_runconvex",
       "source_file": "scripts/agent-harness-fence.ts",
-      "source_location": "L112",
+      "source_location": "L116",
       "target": "agent_harness_fence_main",
       "weight": 1
     },
@@ -1439,7 +1439,7 @@
       "relation": "calls",
       "source": "agent_harness_switch_buildswitchcommand",
       "source_file": "scripts/agent-harness-switch.ts",
-      "source_location": "L66",
+      "source_location": "L70",
       "target": "agent_harness_switch_main",
       "weight": 1
     },
@@ -1451,7 +1451,7 @@
       "relation": "calls",
       "source": "agent_harness_switch_parseswitchargs",
       "source_file": "scripts/agent-harness-switch.ts",
-      "source_location": "L61",
+      "source_location": "L65",
       "target": "agent_harness_switch_main",
       "weight": 1
     },
@@ -1895,7 +1895,7 @@
       "relation": "calls",
       "source": "agentruntimefake_createdeterministicclock",
       "source_file": "packages/athena-webapp/shared/agentHarness/agentRuntimeFake.ts",
-      "source_location": "L96",
+      "source_location": "L97",
       "target": "agentruntimefake_createagentruntimecontractfake",
       "weight": 1
     },
@@ -20075,7 +20075,7 @@
       "relation": "calls",
       "source": "discovery_test_localimports",
       "source_file": "packages/athena-webapp/convex/agentHarness/discovery.test.ts",
-      "source_location": "L232",
+      "source_location": "L233",
       "target": "discovery_test_reachablefrom",
       "weight": 1
     },
@@ -37487,7 +37487,7 @@
       "relation": "calls",
       "source": "manifest_validatecapabilitymanifest",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L770",
+      "source_location": "L771",
       "target": "manifest_assertcapabilitymanifest",
       "weight": 1
     },
@@ -37499,7 +37499,7 @@
       "relation": "method",
       "source": "manifest_issuecollector",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L332",
+      "source_location": "L333",
       "target": "manifest_issuecollector_add",
       "weight": 1
     },
@@ -37511,7 +37511,7 @@
       "relation": "method",
       "source": "manifest_issuecollector",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L336",
+      "source_location": "L337",
       "target": "manifest_issuecollector_extension",
       "weight": 1
     },
@@ -37523,7 +37523,7 @@
       "relation": "method",
       "source": "manifest_issuecollector",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L340",
+      "source_location": "L341",
       "target": "manifest_issuecollector_incomplete",
       "weight": 1
     },
@@ -37535,7 +37535,7 @@
       "relation": "calls",
       "source": "manifest_issuecollector_add",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L341",
+      "source_location": "L342",
       "target": "manifest_issuecollector_incomplete",
       "weight": 1
     },
@@ -37547,7 +37547,7 @@
       "relation": "calls",
       "source": "manifest_projectfields",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L930",
+      "source_location": "L931",
       "target": "manifest_projectmanifestforgrant",
       "weight": 1
     },
@@ -37559,7 +37559,7 @@
       "relation": "calls",
       "source": "manifest_namespacepath",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L882",
+      "source_location": "L883",
       "target": "manifest_summarizecapability",
       "weight": 1
     },
@@ -37571,7 +37571,7 @@
       "relation": "calls",
       "source": "manifest_supportedverbs",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L884",
+      "source_location": "L885",
       "target": "manifest_summarizecapability",
       "weight": 1
     },
@@ -37583,7 +37583,7 @@
       "relation": "calls",
       "source": "manifest_issuecollector_add",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L575",
+      "source_location": "L576",
       "target": "manifest_validatecapabilitymanifest",
       "weight": 1
     },
@@ -37595,7 +37595,7 @@
       "relation": "calls",
       "source": "manifest_issuecollector_extension",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L580",
+      "source_location": "L581",
       "target": "manifest_validatecapabilitymanifest",
       "weight": 1
     },
@@ -37607,7 +37607,7 @@
       "relation": "calls",
       "source": "manifest_issuecollector_incomplete",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L598",
+      "source_location": "L599",
       "target": "manifest_validatecapabilitymanifest",
       "weight": 1
     },
@@ -37619,7 +37619,7 @@
       "relation": "calls",
       "source": "manifest_validateexamples",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L745",
+      "source_location": "L746",
       "target": "manifest_validatecapabilitymanifest",
       "weight": 1
     },
@@ -37631,7 +37631,7 @@
       "relation": "calls",
       "source": "manifest_validatefieldrecord",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L649",
+      "source_location": "L650",
       "target": "manifest_validatecapabilitymanifest",
       "weight": 1
     },
@@ -37643,7 +37643,7 @@
       "relation": "calls",
       "source": "manifest_validateoperations",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L612",
+      "source_location": "L613",
       "target": "manifest_validatecapabilitymanifest",
       "weight": 1
     },
@@ -37655,7 +37655,7 @@
       "relation": "calls",
       "source": "manifest_issuecollector_incomplete",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L517",
+      "source_location": "L518",
       "target": "manifest_validateexamples",
       "weight": 1
     },
@@ -37667,7 +37667,7 @@
       "relation": "calls",
       "source": "manifest_issuecollector_add",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L352",
+      "source_location": "L353",
       "target": "manifest_validatefieldrecord",
       "weight": 1
     },
@@ -37679,7 +37679,7 @@
       "relation": "calls",
       "source": "manifest_issuecollector_extension",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L369",
+      "source_location": "L370",
       "target": "manifest_validatefieldrecord",
       "weight": 1
     },
@@ -37691,7 +37691,7 @@
       "relation": "calls",
       "source": "manifest_issuecollector_add",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L413",
+      "source_location": "L414",
       "target": "manifest_validatefilters",
       "weight": 1
     },
@@ -37703,7 +37703,7 @@
       "relation": "calls",
       "source": "manifest_issuecollector_extension",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L437",
+      "source_location": "L438",
       "target": "manifest_validatefilters",
       "weight": 1
     },
@@ -37715,7 +37715,7 @@
       "relation": "calls",
       "source": "manifest_issuecollector_add",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L454",
+      "source_location": "L455",
       "target": "manifest_validateoperations",
       "weight": 1
     },
@@ -37727,7 +37727,7 @@
       "relation": "calls",
       "source": "manifest_issuecollector_extension",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L469",
+      "source_location": "L470",
       "target": "manifest_validateoperations",
       "weight": 1
     },
@@ -37739,7 +37739,7 @@
       "relation": "calls",
       "source": "manifest_issuecollector_incomplete",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L478",
+      "source_location": "L479",
       "target": "manifest_validateoperations",
       "weight": 1
     },
@@ -37751,7 +37751,7 @@
       "relation": "calls",
       "source": "manifest_validatefilters",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L480",
+      "source_location": "L481",
       "target": "manifest_validateoperations",
       "weight": 1
     },
@@ -41219,7 +41219,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_agentruntime_convexagentcleanupbinding_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgentCleanupBinding.ts",
-      "source_location": "L17",
+      "source_location": "L18",
       "target": "convexagentcleanupbinding_createproductionconvexagentcleanuphook",
       "weight": 1
     },
@@ -41771,7 +41771,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_conformance_test_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/conformance.test.ts",
-      "source_location": "L472",
+      "source_location": "L473",
       "target": "conformance_test_build",
       "weight": 1
     },
@@ -42371,7 +42371,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_discovery_test_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/discovery.test.ts",
-      "source_location": "L214",
+      "source_location": "L215",
       "target": "discovery_test_localimports",
       "weight": 1
     },
@@ -42383,7 +42383,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_discovery_test_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/discovery.test.ts",
-      "source_location": "L225",
+      "source_location": "L226",
       "target": "discovery_test_reachablefrom",
       "weight": 1
     },
@@ -43451,7 +43451,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_executor_testseams_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/executor.testSeams.ts",
-      "source_location": "L127",
+      "source_location": "L128",
       "target": "executor_testseams_beginexecutingattempt",
       "weight": 1
     },
@@ -43463,7 +43463,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_executor_testseams_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/executor.testSeams.ts",
-      "source_location": "L149",
+      "source_location": "L150",
       "target": "executor_testseams_bridgecall",
       "weight": 1
     },
@@ -43475,7 +43475,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_executor_testseams_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/executor.testSeams.ts",
-      "source_location": "L75",
+      "source_location": "L76",
       "target": "executor_testseams_seeddelegatedrun",
       "weight": 1
     },
@@ -43535,7 +43535,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_executorseams_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/executorSeams.ts",
-      "source_location": "L107",
+      "source_location": "L110",
       "target": "executorseams_buildcapabilityschemaindex",
       "weight": 1
     },
@@ -43547,7 +43547,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_executorseams_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/executorSeams.ts",
-      "source_location": "L297",
+      "source_location": "L300",
       "target": "executorseams_createagentexecutorseams",
       "weight": 1
     },
@@ -45143,7 +45143,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_programruntime_programvalidation_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L287",
+      "source_location": "L288",
       "target": "programvalidation_analyze",
       "weight": 1
     },
@@ -45155,7 +45155,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_programruntime_programvalidation_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L433",
+      "source_location": "L434",
       "target": "programvalidation_applydeletions",
       "weight": 1
     },
@@ -45167,7 +45167,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_programruntime_programvalidation_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L125",
+      "source_location": "L126",
       "target": "programvalidation_children",
       "weight": 1
     },
@@ -45179,7 +45179,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_programruntime_programvalidation_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L219",
+      "source_location": "L220",
       "target": "programvalidation_collectdeclarednames",
       "weight": 1
     },
@@ -45191,7 +45191,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_programruntime_programvalidation_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L194",
+      "source_location": "L195",
       "target": "programvalidation_collectpattern",
       "weight": 1
     },
@@ -45203,7 +45203,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_programruntime_programvalidation_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L249",
+      "source_location": "L250",
       "target": "programvalidation_indexfacade",
       "weight": 1
     },
@@ -45215,7 +45215,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_programruntime_programvalidation_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L170",
+      "source_location": "L171",
       "target": "programvalidation_isbindingposition",
       "weight": 1
     },
@@ -45227,7 +45227,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_programruntime_programvalidation_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L121",
+      "source_location": "L122",
       "target": "programvalidation_isnode",
       "weight": 1
     },
@@ -45239,7 +45239,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_programruntime_programvalidation_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L276",
+      "source_location": "L277",
       "target": "programvalidation_ispropertyname",
       "weight": 1
     },
@@ -45251,7 +45251,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_programruntime_programvalidation_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L262",
+      "source_location": "L263",
       "target": "programvalidation_memberchain",
       "weight": 1
     },
@@ -45263,7 +45263,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_programruntime_programvalidation_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L164",
+      "source_location": "L165",
       "target": "programvalidation_positionof",
       "weight": 1
     },
@@ -45275,7 +45275,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_programruntime_programvalidation_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L450",
+      "source_location": "L451",
       "target": "programvalidation_syntaxissue",
       "weight": 1
     },
@@ -45287,7 +45287,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_programruntime_programvalidation_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L464",
+      "source_location": "L465",
       "target": "programvalidation_validateprogramsource",
       "weight": 1
     },
@@ -45299,7 +45299,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_programruntime_programvalidation_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L116",
+      "source_location": "L117",
       "target": "programvalidation_withstrictdirective",
       "weight": 1
     },
@@ -45311,7 +45311,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_programruntime_programvalidation_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L111",
+      "source_location": "L112",
       "target": "programvalidation_wrap",
       "weight": 1
     },
@@ -45431,7 +45431,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_readports_test_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/readPorts.test.ts",
-      "source_location": "L56",
+      "source_location": "L55",
       "target": "readports_test_attempt",
       "weight": 1
     },
@@ -45443,7 +45443,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_readports_test_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/readPorts.test.ts",
-      "source_location": "L32",
+      "source_location": "L31",
       "target": "readports_test_internalref",
       "weight": 1
     },
@@ -45671,7 +45671,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_registry_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L90",
+      "source_location": "L93",
       "target": "registry_assertmanifestconformance",
       "weight": 1
     },
@@ -45683,7 +45683,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_registry_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L107",
+      "source_location": "L110",
       "target": "registry_assertprofileconformance",
       "weight": 1
     },
@@ -45695,7 +45695,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_registry_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L392",
+      "source_location": "L395",
       "target": "registry_baselineenablement",
       "weight": 1
     },
@@ -45707,7 +45707,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_registry_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L225",
+      "source_location": "L228",
       "target": "registry_buildagentcapabilityregistry",
       "weight": 1
     },
@@ -45719,7 +45719,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_registry_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L489",
+      "source_location": "L493",
       "target": "registry_comparecompatibility",
       "weight": 1
     },
@@ -45731,7 +45731,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_registry_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L593",
+      "source_location": "L599",
       "target": "registry_computegrantdigest",
       "weight": 1
     },
@@ -45743,7 +45743,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_registry_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L460",
+      "source_location": "L463",
       "target": "registry_evaluateenablement",
       "weight": 1
     },
@@ -45755,7 +45755,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_registry_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L412",
+      "source_location": "L415",
       "target": "registry_narrowenablement",
       "weight": 1
     },
@@ -45767,7 +45767,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_registry_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L516",
+      "source_location": "L520",
       "target": "registry_plancompatibilityadvance",
       "weight": 1
     },
@@ -45779,7 +45779,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_registry_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L612",
+      "source_location": "L618",
       "target": "registry_projectgrant",
       "weight": 1
     },
@@ -45791,7 +45791,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_registry_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L177",
+      "source_location": "L180",
       "target": "registry_toprofilerecord",
       "weight": 1
     },
@@ -45803,7 +45803,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_registry_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L697",
+      "source_location": "L703",
       "target": "registry_toruntimegrant",
       "weight": 1
     },
@@ -45815,7 +45815,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_registry_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L74",
+      "source_location": "L76",
       "target": "registry_unknownintentissues",
       "weight": 1
     },
@@ -45827,7 +45827,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_registry_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L386",
+      "source_location": "L389",
       "target": "registry_withoutlifecycle",
       "weight": 1
     },
@@ -46415,7 +46415,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_runtimeretention_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeRetention.ts",
-      "source_location": "L35",
+      "source_location": "L37",
       "target": "runtimeretention_createconvexagentruntimecleanuphook",
       "weight": 1
     },
@@ -46427,7 +46427,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_runtimeretention_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeRetention.ts",
-      "source_location": "L52",
+      "source_location": "L54",
       "target": "runtimeretention_ensureconvexagentruntimecleanupregistered",
       "weight": 1
     },
@@ -46583,7 +46583,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_tools_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L203",
+      "source_location": "L204",
       "target": "tools_assertfixedtoolcatalog",
       "weight": 1
     },
@@ -46595,7 +46595,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_tools_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L212",
+      "source_location": "L213",
       "target": "tools_completionrequestref",
       "weight": 1
     },
@@ -46607,7 +46607,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_tools_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L300",
+      "source_location": "L301",
       "target": "tools_createathenatoolregistrations",
       "weight": 1
     },
@@ -46619,7 +46619,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_tools_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L287",
+      "source_location": "L288",
       "target": "tools_denied",
       "weight": 1
     },
@@ -46631,7 +46631,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_tools_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L291",
+      "source_location": "L292",
       "target": "tools_failure",
       "weight": 1
     },
@@ -46643,7 +46643,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_tools_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L73",
+      "source_location": "L74",
       "target": "tools_isjsonvalue",
       "weight": 1
     },
@@ -46655,7 +46655,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_tools_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L68",
+      "source_location": "L69",
       "target": "tools_objectof",
       "weight": 1
     },
@@ -46835,7 +46835,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_testseams_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.testSeams.ts",
-      "source_location": "L80",
+      "source_location": "L81",
       "target": "turns_testseams_seedrecordedturn",
       "weight": 1
     },
@@ -46847,7 +46847,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L82",
+      "source_location": "L84",
       "target": "turns_athenathreadkeyfor",
       "weight": 1
     },
@@ -46859,7 +46859,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L90",
+      "source_location": "L92",
       "target": "turns_contextbindingreffor",
       "weight": 1
     },
@@ -46871,7 +46871,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L631",
+      "source_location": "L633",
       "target": "turns_createagentturnentrypoints",
       "weight": 1
     },
@@ -46883,7 +46883,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L218",
+      "source_location": "L220",
       "target": "turns_createagentturnseams",
       "weight": 1
     },
@@ -46895,7 +46895,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L213",
+      "source_location": "L215",
       "target": "turns_defaultproviderconfigured",
       "weight": 1
     },
@@ -46907,7 +46907,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L586",
+      "source_location": "L588",
       "target": "turns_deniedresult",
       "weight": 1
     },
@@ -46919,7 +46919,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L133",
+      "source_location": "L135",
       "target": "turns_describeturnerrorforoperator",
       "weight": 1
     },
@@ -46931,7 +46931,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L95",
+      "source_location": "L97",
       "target": "turns_operatorcorrelationref",
       "weight": 1
     },
@@ -46943,7 +46943,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L104",
+      "source_location": "L106",
       "target": "turns_operatorfromactor",
       "weight": 1
     },
@@ -46955,7 +46955,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L593",
+      "source_location": "L595",
       "target": "turns_phaseof",
       "weight": 1
     },
@@ -46967,7 +46967,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L603",
+      "source_location": "L605",
       "target": "turns_promptstateof",
       "weight": 1
     },
@@ -46979,7 +46979,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L615",
+      "source_location": "L617",
       "target": "turns_tohistoryentryview",
       "weight": 1
     },
@@ -46991,7 +46991,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L86",
+      "source_location": "L88",
       "target": "turns_turnkeyfor",
       "weight": 1
     },
@@ -47003,7 +47003,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L100",
+      "source_location": "L102",
       "target": "turns_turnprovidercostreservation",
       "weight": 1
     },
@@ -47015,7 +47015,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L587",
+      "source_location": "L589",
       "target": "turns_unavailable",
       "weight": 1
     },
@@ -47027,7 +47027,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L115",
+      "source_location": "L117",
       "target": "turns_validatecontextvalues",
       "weight": 1
     },
@@ -104291,7 +104291,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_agentruntimefake_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/agentRuntimeFake.ts",
-      "source_location": "L93",
+      "source_location": "L94",
       "target": "agentruntimefake_createagentruntimecontractfake",
       "weight": 1
     },
@@ -104303,7 +104303,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_agentruntimefake_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/agentRuntimeFake.ts",
-      "source_location": "L36",
+      "source_location": "L37",
       "target": "agentruntimefake_createdeterministicclock",
       "weight": 1
     },
@@ -104315,7 +104315,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_agentruntimefake_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/agentRuntimeFake.ts",
-      "source_location": "L54",
+      "source_location": "L55",
       "target": "agentruntimefake_deferred",
       "weight": 1
     },
@@ -104723,7 +104723,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_manifest_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L769",
+      "source_location": "L770",
       "target": "manifest_assertcapabilitymanifest",
       "weight": 1
     },
@@ -104735,7 +104735,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_manifest_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L804",
+      "source_location": "L805",
       "target": "manifest_composecapabilitypackages",
       "weight": 1
     },
@@ -104747,7 +104747,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_manifest_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L313",
+      "source_location": "L314",
       "target": "manifest_definecapabilitymanifest",
       "weight": 1
     },
@@ -104759,7 +104759,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_manifest_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L329",
+      "source_location": "L330",
       "target": "manifest_issuecollector",
       "weight": 1
     },
@@ -104771,7 +104771,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_manifest_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L974",
+      "source_location": "L975",
       "target": "manifest_manifestegressclass",
       "weight": 1
     },
@@ -104783,7 +104783,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_manifest_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L79",
+      "source_location": "L80",
       "target": "manifest_namespacepath",
       "weight": 1
     },
@@ -104795,7 +104795,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_manifest_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L945",
+      "source_location": "L946",
       "target": "manifest_omitungrantedfields",
       "weight": 1
     },
@@ -104807,7 +104807,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_manifest_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L896",
+      "source_location": "L897",
       "target": "manifest_projectfields",
       "weight": 1
     },
@@ -104819,7 +104819,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_manifest_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L919",
+      "source_location": "L920",
       "target": "manifest_projectmanifestforgrant",
       "weight": 1
     },
@@ -104831,7 +104831,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_manifest_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L879",
+      "source_location": "L880",
       "target": "manifest_summarizecapability",
       "weight": 1
     },
@@ -104843,7 +104843,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_manifest_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L317",
+      "source_location": "L318",
       "target": "manifest_supportedverbs",
       "weight": 1
     },
@@ -104855,7 +104855,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_manifest_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L571",
+      "source_location": "L572",
       "target": "manifest_validatecapabilitymanifest",
       "weight": 1
     },
@@ -104867,7 +104867,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_manifest_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L510",
+      "source_location": "L511",
       "target": "manifest_validateexamples",
       "weight": 1
     },
@@ -104879,7 +104879,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_manifest_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L345",
+      "source_location": "L346",
       "target": "manifest_validatefieldrecord",
       "weight": 1
     },
@@ -104891,7 +104891,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_manifest_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L411",
+      "source_location": "L412",
       "target": "manifest_validatefilters",
       "weight": 1
     },
@@ -104903,7 +104903,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_manifest_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L452",
+      "source_location": "L453",
       "target": "manifest_validateoperations",
       "weight": 1
     },
@@ -161939,7 +161939,7 @@
       "relation": "calls",
       "source": "programvalidation_collectdeclarednames",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L291",
+      "source_location": "L292",
       "target": "programvalidation_analyze",
       "weight": 1
     },
@@ -161951,7 +161951,7 @@
       "relation": "calls",
       "source": "programvalidation_isnode",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L130",
+      "source_location": "L131",
       "target": "programvalidation_children",
       "weight": 1
     },
@@ -161963,7 +161963,7 @@
       "relation": "calls",
       "source": "programvalidation_analyze",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L491",
+      "source_location": "L492",
       "target": "programvalidation_validateprogramsource",
       "weight": 1
     },
@@ -161975,7 +161975,7 @@
       "relation": "calls",
       "source": "programvalidation_applydeletions",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L494",
+      "source_location": "L495",
       "target": "programvalidation_validateprogramsource",
       "weight": 1
     },
@@ -161987,7 +161987,7 @@
       "relation": "calls",
       "source": "programvalidation_indexfacade",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L491",
+      "source_location": "L492",
       "target": "programvalidation_validateprogramsource",
       "weight": 1
     },
@@ -161999,7 +161999,7 @@
       "relation": "calls",
       "source": "programvalidation_syntaxissue",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L480",
+      "source_location": "L481",
       "target": "programvalidation_validateprogramsource",
       "weight": 1
     },
@@ -162011,7 +162011,7 @@
       "relation": "calls",
       "source": "programvalidation_withstrictdirective",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L501",
+      "source_location": "L502",
       "target": "programvalidation_validateprogramsource",
       "weight": 1
     },
@@ -162023,7 +162023,7 @@
       "relation": "calls",
       "source": "programvalidation_wrap",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L475",
+      "source_location": "L476",
       "target": "programvalidation_validateprogramsource",
       "weight": 1
     },
@@ -168695,7 +168695,7 @@
       "relation": "calls",
       "source": "registry_unknownintentissues",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L94",
+      "source_location": "L97",
       "target": "registry_assertmanifestconformance",
       "weight": 1
     },
@@ -168707,7 +168707,7 @@
       "relation": "calls",
       "source": "registry_assertmanifestconformance",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L115",
+      "source_location": "L118",
       "target": "registry_assertprofileconformance",
       "weight": 1
     },
@@ -168719,7 +168719,7 @@
       "relation": "calls",
       "source": "registry_buildagentcapabilityregistry",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L288",
+      "source_location": "L291",
       "target": "registry_baselineenablement",
       "weight": 1
     },
@@ -168815,7 +168815,7 @@
       "relation": "calls",
       "source": "registry_comparecompatibility",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L521",
+      "source_location": "L525",
       "target": "registry_plancompatibilityadvance",
       "weight": 1
     },
@@ -168827,7 +168827,7 @@
       "relation": "calls",
       "source": "registry_computegrantdigest",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L664",
+      "source_location": "L670",
       "target": "registry_projectgrant",
       "weight": 1
     },
@@ -172007,7 +172007,7 @@
       "relation": "calls",
       "source": "runtimeretention_createconvexagentruntimecleanuphook",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeRetention.ts",
-      "source_location": "L54",
+      "source_location": "L56",
       "target": "runtimeretention_ensureconvexagentruntimecleanupregistered",
       "weight": 1
     },
@@ -172319,7 +172319,7 @@
       "relation": "contains",
       "source": "scripts_agent_harness_fence_ts",
       "source_file": "scripts/agent-harness-fence.ts",
-      "source_location": "L54",
+      "source_location": "L58",
       "target": "agent_harness_fence_buildfenceinvocation",
       "weight": 1
     },
@@ -172331,7 +172331,7 @@
       "relation": "contains",
       "source": "scripts_agent_harness_fence_ts",
       "source_file": "scripts/agent-harness-fence.ts",
-      "source_location": "L64",
+      "source_location": "L68",
       "target": "agent_harness_fence_evaluatefenceresult",
       "weight": 1
     },
@@ -172343,7 +172343,7 @@
       "relation": "contains",
       "source": "scripts_agent_harness_fence_ts",
       "source_file": "scripts/agent-harness-fence.ts",
-      "source_location": "L99",
+      "source_location": "L103",
       "target": "agent_harness_fence_main",
       "weight": 1
     },
@@ -172355,7 +172355,7 @@
       "relation": "contains",
       "source": "scripts_agent_harness_fence_ts",
       "source_file": "scripts/agent-harness-fence.ts",
-      "source_location": "L88",
+      "source_location": "L92",
       "target": "agent_harness_fence_parseconvexrunoutput",
       "weight": 1
     },
@@ -172367,7 +172367,7 @@
       "relation": "contains",
       "source": "scripts_agent_harness_fence_ts",
       "source_file": "scripts/agent-harness-fence.ts",
-      "source_location": "L36",
+      "source_location": "L40",
       "target": "agent_harness_fence_parsefenceargs",
       "weight": 1
     },
@@ -172379,7 +172379,7 @@
       "relation": "contains",
       "source": "scripts_agent_harness_fence_ts",
       "source_file": "scripts/agent-harness-fence.ts",
-      "source_location": "L74",
+      "source_location": "L78",
       "target": "agent_harness_fence_runconvex",
       "weight": 1
     },
@@ -172391,7 +172391,7 @@
       "relation": "contains",
       "source": "scripts_agent_harness_switch_ts",
       "source_file": "scripts/agent-harness-switch.ts",
-      "source_location": "L49",
+      "source_location": "L53",
       "target": "agent_harness_switch_buildswitchcommand",
       "weight": 1
     },
@@ -172403,7 +172403,7 @@
       "relation": "contains",
       "source": "scripts_agent_harness_switch_ts",
       "source_file": "scripts/agent-harness-switch.ts",
-      "source_location": "L60",
+      "source_location": "L64",
       "target": "agent_harness_switch_main",
       "weight": 1
     },
@@ -172415,7 +172415,7 @@
       "relation": "contains",
       "source": "scripts_agent_harness_switch_ts",
       "source_file": "scripts/agent-harness-switch.ts",
-      "source_location": "L26",
+      "source_location": "L30",
       "target": "agent_harness_switch_parseswitchargs",
       "weight": 1
     },
@@ -209308,7 +209308,7 @@
       "label": "buildCapabilitySchemaIndex()",
       "norm_label": "buildcapabilityschemaindex()",
       "source_file": "packages/athena-webapp/convex/agentHarness/executorSeams.ts",
-      "source_location": "L107"
+      "source_location": "L110"
     },
     {
       "community": 1012,
@@ -209317,7 +209317,7 @@
       "label": "createAgentExecutorSeams()",
       "norm_label": "createagentexecutorseams()",
       "source_file": "packages/athena-webapp/convex/agentHarness/executorSeams.ts",
-      "source_location": "L297"
+      "source_location": "L300"
     },
     {
       "community": 1012,
@@ -209425,7 +209425,7 @@
       "label": "attempt()",
       "norm_label": "attempt()",
       "source_file": "packages/athena-webapp/convex/agentHarness/readPorts.test.ts",
-      "source_location": "L56"
+      "source_location": "L55"
     },
     {
       "community": 1016,
@@ -209434,7 +209434,7 @@
       "label": "internalRef()",
       "norm_label": "internalref()",
       "source_file": "packages/athena-webapp/convex/agentHarness/readPorts.test.ts",
-      "source_location": "L32"
+      "source_location": "L31"
     },
     {
       "community": 1017,
@@ -209452,7 +209452,7 @@
       "label": "createConvexAgentRuntimeCleanupHook()",
       "norm_label": "createconvexagentruntimecleanuphook()",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeRetention.ts",
-      "source_location": "L35"
+      "source_location": "L37"
     },
     {
       "community": 1017,
@@ -209461,7 +209461,7 @@
       "label": "ensureConvexAgentRuntimeCleanupRegistered()",
       "norm_label": "ensureconvexagentruntimecleanupregistered()",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeRetention.ts",
-      "source_location": "L52"
+      "source_location": "L54"
     },
     {
       "community": 1018,
@@ -212683,7 +212683,7 @@
       "label": "assertCapabilityManifest()",
       "norm_label": "assertcapabilitymanifest()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L769"
+      "source_location": "L770"
     },
     {
       "community": 109,
@@ -212692,7 +212692,7 @@
       "label": "composeCapabilityPackages()",
       "norm_label": "composecapabilitypackages()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L804"
+      "source_location": "L805"
     },
     {
       "community": 109,
@@ -212701,7 +212701,7 @@
       "label": "defineCapabilityManifest()",
       "norm_label": "definecapabilitymanifest()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L313"
+      "source_location": "L314"
     },
     {
       "community": 109,
@@ -212710,7 +212710,7 @@
       "label": "IssueCollector",
       "norm_label": "issuecollector",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L329"
+      "source_location": "L330"
     },
     {
       "community": 109,
@@ -212719,7 +212719,7 @@
       "label": ".add()",
       "norm_label": ".add()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L332"
+      "source_location": "L333"
     },
     {
       "community": 109,
@@ -212728,7 +212728,7 @@
       "label": ".extension()",
       "norm_label": ".extension()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L336"
+      "source_location": "L337"
     },
     {
       "community": 109,
@@ -212737,7 +212737,7 @@
       "label": ".incomplete()",
       "norm_label": ".incomplete()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L340"
+      "source_location": "L341"
     },
     {
       "community": 109,
@@ -212746,7 +212746,7 @@
       "label": "manifestEgressClass()",
       "norm_label": "manifestegressclass()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L974"
+      "source_location": "L975"
     },
     {
       "community": 109,
@@ -212755,7 +212755,7 @@
       "label": "namespacePath()",
       "norm_label": "namespacepath()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L79"
+      "source_location": "L80"
     },
     {
       "community": 109,
@@ -212764,7 +212764,7 @@
       "label": "omitUngrantedFields()",
       "norm_label": "omitungrantedfields()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L945"
+      "source_location": "L946"
     },
     {
       "community": 109,
@@ -212773,7 +212773,7 @@
       "label": "projectFields()",
       "norm_label": "projectfields()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L896"
+      "source_location": "L897"
     },
     {
       "community": 109,
@@ -212782,7 +212782,7 @@
       "label": "projectManifestForGrant()",
       "norm_label": "projectmanifestforgrant()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L919"
+      "source_location": "L920"
     },
     {
       "community": 109,
@@ -212791,7 +212791,7 @@
       "label": "summarizeCapability()",
       "norm_label": "summarizecapability()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L879"
+      "source_location": "L880"
     },
     {
       "community": 109,
@@ -212800,7 +212800,7 @@
       "label": "supportedVerbs()",
       "norm_label": "supportedverbs()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L317"
+      "source_location": "L318"
     },
     {
       "community": 109,
@@ -212809,7 +212809,7 @@
       "label": "validateCapabilityManifest()",
       "norm_label": "validatecapabilitymanifest()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L571"
+      "source_location": "L572"
     },
     {
       "community": 109,
@@ -212818,7 +212818,7 @@
       "label": "validateExamples()",
       "norm_label": "validateexamples()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L510"
+      "source_location": "L511"
     },
     {
       "community": 109,
@@ -212827,7 +212827,7 @@
       "label": "validateFieldRecord()",
       "norm_label": "validatefieldrecord()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L345"
+      "source_location": "L346"
     },
     {
       "community": 109,
@@ -212836,7 +212836,7 @@
       "label": "validateFilters()",
       "norm_label": "validatefilters()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L411"
+      "source_location": "L412"
     },
     {
       "community": 109,
@@ -212845,7 +212845,7 @@
       "label": "validateOperations()",
       "norm_label": "validateoperations()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L452"
+      "source_location": "L453"
     },
     {
       "community": 109,
@@ -223303,7 +223303,7 @@
       "label": "athenaThreadKeyFor()",
       "norm_label": "athenathreadkeyfor()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L82"
+      "source_location": "L84"
     },
     {
       "community": 130,
@@ -223312,7 +223312,7 @@
       "label": "contextBindingRefFor()",
       "norm_label": "contextbindingreffor()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L90"
+      "source_location": "L92"
     },
     {
       "community": 130,
@@ -223321,7 +223321,7 @@
       "label": "createAgentTurnEntryPoints()",
       "norm_label": "createagentturnentrypoints()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L631"
+      "source_location": "L633"
     },
     {
       "community": 130,
@@ -223330,7 +223330,7 @@
       "label": "createAgentTurnSeams()",
       "norm_label": "createagentturnseams()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L218"
+      "source_location": "L220"
     },
     {
       "community": 130,
@@ -223339,7 +223339,7 @@
       "label": "defaultProviderConfigured()",
       "norm_label": "defaultproviderconfigured()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L213"
+      "source_location": "L215"
     },
     {
       "community": 130,
@@ -223348,7 +223348,7 @@
       "label": "deniedResult()",
       "norm_label": "deniedresult()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L586"
+      "source_location": "L588"
     },
     {
       "community": 130,
@@ -223357,7 +223357,7 @@
       "label": "describeTurnErrorForOperator()",
       "norm_label": "describeturnerrorforoperator()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L133"
+      "source_location": "L135"
     },
     {
       "community": 130,
@@ -223366,7 +223366,7 @@
       "label": "operatorCorrelationRef()",
       "norm_label": "operatorcorrelationref()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L95"
+      "source_location": "L97"
     },
     {
       "community": 130,
@@ -223375,7 +223375,7 @@
       "label": "operatorFromActor()",
       "norm_label": "operatorfromactor()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L104"
+      "source_location": "L106"
     },
     {
       "community": 130,
@@ -223384,7 +223384,7 @@
       "label": "phaseOf()",
       "norm_label": "phaseof()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L593"
+      "source_location": "L595"
     },
     {
       "community": 130,
@@ -223393,7 +223393,7 @@
       "label": "promptStateOf()",
       "norm_label": "promptstateof()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L603"
+      "source_location": "L605"
     },
     {
       "community": 130,
@@ -223402,7 +223402,7 @@
       "label": "toHistoryEntryView()",
       "norm_label": "tohistoryentryview()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L615"
+      "source_location": "L617"
     },
     {
       "community": 130,
@@ -223411,7 +223411,7 @@
       "label": "turnKeyFor()",
       "norm_label": "turnkeyfor()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L86"
+      "source_location": "L88"
     },
     {
       "community": 130,
@@ -223420,7 +223420,7 @@
       "label": "turnProviderCostReservation()",
       "norm_label": "turnprovidercostreservation()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L100"
+      "source_location": "L102"
     },
     {
       "community": 130,
@@ -223429,7 +223429,7 @@
       "label": "unavailable()",
       "norm_label": "unavailable()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L587"
+      "source_location": "L589"
     },
     {
       "community": 130,
@@ -223438,7 +223438,7 @@
       "label": "validateContextValues()",
       "norm_label": "validatecontextvalues()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L115"
+      "source_location": "L117"
     },
     {
       "community": 1300,
@@ -224311,7 +224311,7 @@
       "label": "createProductionConvexAgentCleanupHook()",
       "norm_label": "createproductionconvexagentcleanuphook()",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgentCleanupBinding.ts",
-      "source_location": "L17"
+      "source_location": "L18"
     },
     {
       "community": 1321,
@@ -224410,7 +224410,7 @@
       "label": "seedRecordedTurn()",
       "norm_label": "seedrecordedturn()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.testSeams.ts",
-      "source_location": "L80"
+      "source_location": "L81"
     },
     {
       "community": 1327,
@@ -229234,7 +229234,7 @@
       "label": "analyze()",
       "norm_label": "analyze()",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L287"
+      "source_location": "L288"
     },
     {
       "community": 146,
@@ -229243,7 +229243,7 @@
       "label": "applyDeletions()",
       "norm_label": "applydeletions()",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L433"
+      "source_location": "L434"
     },
     {
       "community": 146,
@@ -229252,7 +229252,7 @@
       "label": "children()",
       "norm_label": "children()",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L125"
+      "source_location": "L126"
     },
     {
       "community": 146,
@@ -229261,7 +229261,7 @@
       "label": "collectDeclaredNames()",
       "norm_label": "collectdeclarednames()",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L219"
+      "source_location": "L220"
     },
     {
       "community": 146,
@@ -229270,7 +229270,7 @@
       "label": "collectPattern()",
       "norm_label": "collectpattern()",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L194"
+      "source_location": "L195"
     },
     {
       "community": 146,
@@ -229279,7 +229279,7 @@
       "label": "indexFacade()",
       "norm_label": "indexfacade()",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L249"
+      "source_location": "L250"
     },
     {
       "community": 146,
@@ -229288,7 +229288,7 @@
       "label": "isBindingPosition()",
       "norm_label": "isbindingposition()",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L170"
+      "source_location": "L171"
     },
     {
       "community": 146,
@@ -229297,7 +229297,7 @@
       "label": "isNode()",
       "norm_label": "isnode()",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L121"
+      "source_location": "L122"
     },
     {
       "community": 146,
@@ -229306,7 +229306,7 @@
       "label": "isPropertyName()",
       "norm_label": "ispropertyname()",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L276"
+      "source_location": "L277"
     },
     {
       "community": 146,
@@ -229315,7 +229315,7 @@
       "label": "memberChain()",
       "norm_label": "memberchain()",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L262"
+      "source_location": "L263"
     },
     {
       "community": 146,
@@ -229324,7 +229324,7 @@
       "label": "positionOf()",
       "norm_label": "positionof()",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L164"
+      "source_location": "L165"
     },
     {
       "community": 146,
@@ -229333,7 +229333,7 @@
       "label": "syntaxIssue()",
       "norm_label": "syntaxissue()",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L450"
+      "source_location": "L451"
     },
     {
       "community": 146,
@@ -229342,7 +229342,7 @@
       "label": "validateProgramSource()",
       "norm_label": "validateprogramsource()",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L464"
+      "source_location": "L465"
     },
     {
       "community": 146,
@@ -229351,7 +229351,7 @@
       "label": "withStrictDirective()",
       "norm_label": "withstrictdirective()",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L116"
+      "source_location": "L117"
     },
     {
       "community": 146,
@@ -229360,7 +229360,7 @@
       "label": "wrap()",
       "norm_label": "wrap()",
       "source_file": "packages/athena-webapp/convex/agentHarness/programRuntime/programValidation.ts",
-      "source_location": "L111"
+      "source_location": "L112"
     },
     {
       "community": 1460,
@@ -238531,7 +238531,7 @@
       "label": "assertManifestConformance()",
       "norm_label": "assertmanifestconformance()",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L90"
+      "source_location": "L93"
     },
     {
       "community": 171,
@@ -238540,7 +238540,7 @@
       "label": "assertProfileConformance()",
       "norm_label": "assertprofileconformance()",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L107"
+      "source_location": "L110"
     },
     {
       "community": 171,
@@ -238549,7 +238549,7 @@
       "label": "baselineEnablement()",
       "norm_label": "baselineenablement()",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L392"
+      "source_location": "L395"
     },
     {
       "community": 171,
@@ -238558,7 +238558,7 @@
       "label": "buildAgentCapabilityRegistry()",
       "norm_label": "buildagentcapabilityregistry()",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L225"
+      "source_location": "L228"
     },
     {
       "community": 171,
@@ -238567,7 +238567,7 @@
       "label": "compareCompatibility()",
       "norm_label": "comparecompatibility()",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L489"
+      "source_location": "L493"
     },
     {
       "community": 171,
@@ -238576,7 +238576,7 @@
       "label": "computeGrantDigest()",
       "norm_label": "computegrantdigest()",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L593"
+      "source_location": "L599"
     },
     {
       "community": 171,
@@ -238585,7 +238585,7 @@
       "label": "evaluateEnablement()",
       "norm_label": "evaluateenablement()",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L460"
+      "source_location": "L463"
     },
     {
       "community": 171,
@@ -238594,7 +238594,7 @@
       "label": "narrowEnablement()",
       "norm_label": "narrowenablement()",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L412"
+      "source_location": "L415"
     },
     {
       "community": 171,
@@ -238603,7 +238603,7 @@
       "label": "planCompatibilityAdvance()",
       "norm_label": "plancompatibilityadvance()",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L516"
+      "source_location": "L520"
     },
     {
       "community": 171,
@@ -238612,7 +238612,7 @@
       "label": "projectGrant()",
       "norm_label": "projectgrant()",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L612"
+      "source_location": "L618"
     },
     {
       "community": 171,
@@ -238621,7 +238621,7 @@
       "label": "toProfileRecord()",
       "norm_label": "toprofilerecord()",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L177"
+      "source_location": "L180"
     },
     {
       "community": 171,
@@ -238630,7 +238630,7 @@
       "label": "toRuntimeGrant()",
       "norm_label": "toruntimegrant()",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L697"
+      "source_location": "L703"
     },
     {
       "community": 171,
@@ -238639,7 +238639,7 @@
       "label": "unknownIntentIssues()",
       "norm_label": "unknownintentissues()",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L74"
+      "source_location": "L76"
     },
     {
       "community": 171,
@@ -238648,7 +238648,7 @@
       "label": "withoutLifecycle()",
       "norm_label": "withoutlifecycle()",
       "source_file": "packages/athena-webapp/convex/agentHarness/registry.ts",
-      "source_location": "L386"
+      "source_location": "L389"
     },
     {
       "community": 1710,
@@ -283279,7 +283279,7 @@
       "label": "assertFixedToolCatalog()",
       "norm_label": "assertfixedtoolcatalog()",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L203"
+      "source_location": "L204"
     },
     {
       "community": 381,
@@ -283288,7 +283288,7 @@
       "label": "completionRequestRef()",
       "norm_label": "completionrequestref()",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L212"
+      "source_location": "L213"
     },
     {
       "community": 381,
@@ -283297,7 +283297,7 @@
       "label": "createAthenaToolRegistrations()",
       "norm_label": "createathenatoolregistrations()",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L300"
+      "source_location": "L301"
     },
     {
       "community": 381,
@@ -283306,7 +283306,7 @@
       "label": "denied()",
       "norm_label": "denied()",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L287"
+      "source_location": "L288"
     },
     {
       "community": 381,
@@ -283315,7 +283315,7 @@
       "label": "failure()",
       "norm_label": "failure()",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L291"
+      "source_location": "L292"
     },
     {
       "community": 381,
@@ -283324,7 +283324,7 @@
       "label": "isJsonValue()",
       "norm_label": "isjsonvalue()",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L73"
+      "source_location": "L74"
     },
     {
       "community": 381,
@@ -283333,7 +283333,7 @@
       "label": "objectOf()",
       "norm_label": "objectof()",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L68"
+      "source_location": "L69"
     },
     {
       "community": 382,
@@ -289363,7 +289363,7 @@
       "label": "build()",
       "norm_label": "build()",
       "source_file": "packages/athena-webapp/convex/agentHarness/conformance.test.ts",
-      "source_location": "L472"
+      "source_location": "L473"
     },
     {
       "community": 436,
@@ -296455,7 +296455,7 @@
       "label": "buildFenceInvocation()",
       "norm_label": "buildfenceinvocation()",
       "source_file": "scripts/agent-harness-fence.ts",
-      "source_location": "L54"
+      "source_location": "L58"
     },
     {
       "community": 507,
@@ -296464,7 +296464,7 @@
       "label": "evaluateFenceResult()",
       "norm_label": "evaluatefenceresult()",
       "source_file": "scripts/agent-harness-fence.ts",
-      "source_location": "L64"
+      "source_location": "L68"
     },
     {
       "community": 507,
@@ -296473,7 +296473,7 @@
       "label": "main()",
       "norm_label": "main()",
       "source_file": "scripts/agent-harness-fence.ts",
-      "source_location": "L99"
+      "source_location": "L103"
     },
     {
       "community": 507,
@@ -296482,7 +296482,7 @@
       "label": "parseConvexRunOutput()",
       "norm_label": "parseconvexrunoutput()",
       "source_file": "scripts/agent-harness-fence.ts",
-      "source_location": "L88"
+      "source_location": "L92"
     },
     {
       "community": 507,
@@ -296491,7 +296491,7 @@
       "label": "parseFenceArgs()",
       "norm_label": "parsefenceargs()",
       "source_file": "scripts/agent-harness-fence.ts",
-      "source_location": "L36"
+      "source_location": "L40"
     },
     {
       "community": 507,
@@ -296500,7 +296500,7 @@
       "label": "runConvex()",
       "norm_label": "runconvex()",
       "source_file": "scripts/agent-harness-fence.ts",
-      "source_location": "L74"
+      "source_location": "L78"
     },
     {
       "community": 507,
@@ -316930,7 +316930,7 @@
       "label": "localImports()",
       "norm_label": "localimports()",
       "source_file": "packages/athena-webapp/convex/agentHarness/discovery.test.ts",
-      "source_location": "L214"
+      "source_location": "L215"
     },
     {
       "community": 768,
@@ -316939,7 +316939,7 @@
       "label": "reachableFrom()",
       "norm_label": "reachablefrom()",
       "source_file": "packages/athena-webapp/convex/agentHarness/discovery.test.ts",
-      "source_location": "L225"
+      "source_location": "L226"
     },
     {
       "community": 768,
@@ -317245,7 +317245,7 @@
       "label": "beginExecutingAttempt()",
       "norm_label": "beginexecutingattempt()",
       "source_file": "packages/athena-webapp/convex/agentHarness/executor.testSeams.ts",
-      "source_location": "L127"
+      "source_location": "L128"
     },
     {
       "community": 771,
@@ -317254,7 +317254,7 @@
       "label": "bridgeCall()",
       "norm_label": "bridgecall()",
       "source_file": "packages/athena-webapp/convex/agentHarness/executor.testSeams.ts",
-      "source_location": "L149"
+      "source_location": "L150"
     },
     {
       "community": 771,
@@ -317263,7 +317263,7 @@
       "label": "seedDelegatedRun()",
       "norm_label": "seeddelegatedrun()",
       "source_file": "packages/athena-webapp/convex/agentHarness/executor.testSeams.ts",
-      "source_location": "L75"
+      "source_location": "L76"
     },
     {
       "community": 771,
@@ -324130,7 +324130,7 @@
       "label": "createAgentRuntimeContractFake()",
       "norm_label": "createagentruntimecontractfake()",
       "source_file": "packages/athena-webapp/shared/agentHarness/agentRuntimeFake.ts",
-      "source_location": "L93"
+      "source_location": "L94"
     },
     {
       "community": 883,
@@ -324139,7 +324139,7 @@
       "label": "createDeterministicClock()",
       "norm_label": "createdeterministicclock()",
       "source_file": "packages/athena-webapp/shared/agentHarness/agentRuntimeFake.ts",
-      "source_location": "L36"
+      "source_location": "L37"
     },
     {
       "community": 883,
@@ -324148,7 +324148,7 @@
       "label": "deferred()",
       "norm_label": "deferred()",
       "source_file": "packages/athena-webapp/shared/agentHarness/agentRuntimeFake.ts",
-      "source_location": "L54"
+      "source_location": "L55"
     },
     {
       "community": 883,
@@ -330808,7 +330808,7 @@
       "label": "buildSwitchCommand()",
       "norm_label": "buildswitchcommand()",
       "source_file": "scripts/agent-harness-switch.ts",
-      "source_location": "L49"
+      "source_location": "L53"
     },
     {
       "community": 993,
@@ -330817,7 +330817,7 @@
       "label": "main()",
       "norm_label": "main()",
       "source_file": "scripts/agent-harness-switch.ts",
-      "source_location": "L60"
+      "source_location": "L64"
     },
     {
       "community": 993,
@@ -330826,7 +330826,7 @@
       "label": "parseSwitchArgs()",
       "norm_label": "parseswitchargs()",
       "source_file": "scripts/agent-harness-switch.ts",
-      "source_location": "L26"
+      "source_location": "L30"
     },
     {
       "community": 993,

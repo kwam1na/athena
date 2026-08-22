@@ -2,9 +2,9 @@
  * Executor budget policy (kernel; pure, V8-safe).
  *
  * Authority boundary: this module decides nothing on its own — it is the
- * documented reserve/settle policy (plan decision 11) expressed over U1's
- * budget primitives, plus the ceilings the executor hands the sandbox. U1's
- * ledger remains the only counter: every reservation is keyed by the
+ * documented reserve/settle policy (plan decision 11) expressed over the
+ * lifecycle's budget primitives, plus the ceilings the executor hands the
+ * sandbox. The lifecycle ledger remains the only counter: every reservation is keyed by the
  * invocation idempotency key, settled exactly once, and bounded by the run
  * limits (clamped to the 2 MiB evidence ceiling at run creation) and the
  * attempt limits (counting outstanding reservations). Identical reads are
@@ -58,7 +58,7 @@ const KNOWN_ACTUALS: { readonly [outcome in AgentCallSettlementOutcome]: readonl
 };
 
 /**
- * The charge/refund table, derived from U1's `settleBudgetReservation` so it
+ * The charge/refund table, derived from the lifecycle's `settleBudgetReservation` so it
  * cannot drift from the counter: a reservation of one unit per dimension is
  * settled with one unit of every actual the executor knows for that outcome,
  * and the charged dimensions are read back.

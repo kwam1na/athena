@@ -2,7 +2,7 @@
 /**
  * Default model resolution for the Convex Agent adapter.
  *
- * Model selection is an injected input to the adapter; U7's model registry
+ * Model selection is an injected input to the adapter; the kernel's model registry
  * (governed by profile/provider egress policy) replaces this. The default
  * targets the provider the dev deployment already holds credentials for
  * (`OPENAI_API_KEY`) and refuses everything else with a typed error, so no

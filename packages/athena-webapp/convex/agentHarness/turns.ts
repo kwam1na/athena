@@ -1,6 +1,7 @@
 /**
- * Turns (kernel; V8): operator intent → U1 turn-binding ladder → runtime host,
- * plus the operator-facing public entry points the reusable host (U9) calls.
+ * Turns (kernel; V8): operator intent → the lifecycle turn-binding ladder →
+ * runtime host, plus the operator-facing public entry points the reusable
+ * operator agent host (React) calls.
  *
  * Authority boundary:
  * - Every public function is admitted by the operation rail and then
@@ -10,7 +11,8 @@
  *   here trusts runtime metadata; runtime refs are opaque strings.
  * - `startTurn` validates the prompt (no partial persistence), admits the run
  *   (profile switch, grant, provider egress, active-run limit, one active turn
- *   per thread, spend ceiling), records intent through U1 in one transaction,
+ *   per thread, spend ceiling), records intent through the harness lifecycle
+ *   in one transaction,
  *   and schedules the internal host action. One turn owns one run; many turns
  *   share one Athena thread key; a terminal run never reopens.
  * - The seams the host uses (`prepareTurn`, `markTurnRunning`, …) compare the
@@ -562,7 +564,7 @@ export const peekTurnState = agentTurnSeams.functions.peekTurnState;
 export const finalizeTurn = agentTurnSeams.functions.finalizeTurn;
 
 // ---------------------------------------------------------------------------
-// Entry points (operation-admitted; U9 consumes these)
+// Entry points (operation-admitted; the reusable operator agent host consumes these)
 //
 // The handlers are built by `createAgentTurnEntryPoints(seams)` so the test
 // package can prove them end to end; the public functions below bind the
@@ -864,7 +866,7 @@ export function createAgentTurnEntryPoints(config: AgentTurnEntryPointConfig) {
     return { kind: "history" as const, threadKey: args.threadKey, reauthorizedAt: projection.reauthorizedAt, entries: projection.entries.map(toHistoryEntryView) };
   }
 
-  /** Source/evidence lookup for the operator (U6 viewer lookup; audited, reauthorized, no raw ids). */
+  /** Source/evidence lookup for the operator (executor viewer lookup; audited, reauthorized, no raw ids). */
   async function inspectCitationEvidence(ctx: AdmittedMutationCtx, args: TurnArgs & { citationRef: string }) {
     const at = now();
     const access = await reauthorizeTurnAccess(ctx, ctx.operationAdmission.actor, args.storeId, args.bindingId, at);
@@ -888,7 +890,7 @@ export const agentTurnEntryPoints = createAgentTurnEntryPoints({
   },
 });
 
-// ----- validators (the contract U9 compiles against) ---------------------------
+// ----- validators (the contract the operator agent host compiles against) -----
 
 const startTurnResult = v.union(
   v.object({ outcome: v.literal("started"), bindingId: v.id("agentTurnBinding"), runId: v.id("intelligenceRun"), threadKey: v.string() }),

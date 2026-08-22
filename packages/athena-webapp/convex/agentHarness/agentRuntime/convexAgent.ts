@@ -1,7 +1,7 @@
 "use node";
 /**
  * `ConvexAgentRuntimeAdapter`: the only place Convex Agent (`@convex-dev/agent`)
- * and AI SDK types are allowed to exist (plan decision 8, U5).
+ * and AI SDK types are allowed to exist (plan decision 8).
  *
  * What crosses the boundary, and only this:
  * - opaque runtime refs minted from SHA-256 digests (`runtime_thread:th_…`,
@@ -18,7 +18,7 @@
  *   / cleanup events; native usage objects are normalized in
  *   `normalizeNativeUsage` and never escape.
  *
- * What the component persists (plan U5 scenario 8): the operator prompt text
+ * What the component persists: the operator prompt text
  * with hashes and opaque bindings, one per-turn assistant record that carries
  * only status and opaque refs (empty content until a committed artifact is
  * projected into it), and nothing else — no tool calls, tool results, or
@@ -199,7 +199,7 @@ export type ConvexAgentIdempotencyKeyPolicy = (input: {
 export type ConvexAgentRuntimeAdapterOptions = {
   readonly ctx: ConvexAgentRuntimeCtx;
   readonly component: AgentComponent;
-  /** Model selection is an injected input; U7's model registry supplies this. */
+  /** Model selection is an injected input; the model registry supplies this. */
   readonly resolveModel: ConvexAgentModelResolver;
   readonly clock?: () => Timestamp;
   readonly adapterVersion?: string;
@@ -209,7 +209,7 @@ export type ConvexAgentRuntimeAdapterOptions = {
   readonly maxRetries?: number;
 };
 
-/** The contract plus the Athena-side authoring seams U7's runtime host and adapter tests need. */
+/** The contract plus the Athena-side authoring seams the runtime host and adapter tests need. */
 export type ConvexAgentRuntimeAdapter = AgentRuntimeAdapter & {
   /** Server-authored progress (e.g. from `athena.executeProgram`); never model-visible. */
   readonly reportProgress: (turnRef: RuntimeTurnRef, milestone: AgentProgressMilestone) => Promise<void>;
@@ -301,7 +301,7 @@ export function createConvexAgentRuntimeAdapter(options: ConvexAgentRuntimeAdapt
             : { status: "failed", error: completion.outcome === "failed" ? (completion.error?.code ?? "failed") : `canceled:${completion.reason ?? ""}` },
       });
     } catch {
-      // The durable record is best effort; the kernel's run state is authoritative (U1).
+      // The durable record is best effort; the kernel's run state is authoritative.
     }
     await emit(turn, { kind: "turn_completed", ...completion });
     turn.settled.resolve();

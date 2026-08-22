@@ -1,10 +1,11 @@
 /**
- * Test-only turn seams bound to U4's test package and U6's test executor seams.
+ * Test-only turn seams bound to the delegated-admission test package and the
+ * test executor seams.
  *
  * Two-dot basename on purpose: never bundled, never linted as ingress.
  * convex-test loads it under the aliased module key `./agentHarness/testTurns.ts`,
  * so `agentHarness/testTurns:<export>` references resolve to the functions
- * this module exports. The host tests bind U7's runtime host to these refs so
+ * this module exports. The host tests bind the runtime host to these refs so
  * the same orchestration runs against the fake and the Convex adapter.
  */
 import { anyApi, type FunctionReference } from "convex/server";

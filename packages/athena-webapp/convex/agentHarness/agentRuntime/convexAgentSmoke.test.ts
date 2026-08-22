@@ -5,7 +5,7 @@
  * through the adapter, an Athena tool through the QuickJS sandbox bridge,
  * projection, and cleanup. The same action is what `bunx convex run
  * agentHarness/agentRuntime/convexAgentSmoke:run` executes on the Node 22
- * deployment (plan U5 scenario 1).
+ * deployment.
  */
 import { anyApi, type FunctionReference } from "convex/server";
 import { describe, expect, it } from "vitest";

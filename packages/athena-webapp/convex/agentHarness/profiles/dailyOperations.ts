@@ -8,8 +8,9 @@
  * domain packages this file imports; nothing here reaches a database.
  *
  * The profile ships `unpublished`. Its capabilities are `enabled` (they pass
- * the conformance gate), but no operator turn can reach them until U10 flips
- * the profile through the same enablement overlay that backs the kill switch.
+ * the conformance gate), but no operator turn can reach them until the
+ * profile switch is flipped on through the same enablement overlay that backs
+ * the kill switch.
  */
 import { budgetVector } from "../../../shared/agentHarness/execution";
 import { defineAgentProfile, definePresentationAdapter } from "../../../shared/agentHarness/profile";

@@ -155,7 +155,7 @@ export type AgentRunDiscoverySurface = {
 };
 
 /**
- * The per-run surface U7's fixed `athena.discover` / `athena.describe` tool
+ * The per-run surface the fixed `athena.discover` / `athena.describe` tool
  * handlers call. Disclosure state lives in the run, not in the model: a
  * describe before an authorized discover is refused.
  */

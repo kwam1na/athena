@@ -1,7 +1,7 @@
 // @vitest-environment node
 /**
  * Actual Convex Agent component persistence and provider requests across
- * success, retry, cancellation, and failure (plan U5 scenario 8), inspected
+ * success, retry, cancellation, and failure, inspected
  * through the registered component under convex-test.
  *
  * Allowlist: the operator prompt text, summaries (committed artifact

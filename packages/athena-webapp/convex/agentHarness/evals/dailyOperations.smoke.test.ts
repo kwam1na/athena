@@ -1,7 +1,7 @@
 // @vitest-environment node
 /// <reference types="vite/client" />
 /**
- * Direct-harness smoke for `daily_operations.v1` (V26-1267, plan U8 scenario 10).
+ * Direct-harness smoke for `daily_operations.v1` (V26-1267).
  *
  * Model-authored TypeScript, the real QuickJS sandbox, the real executor, the
  * real read ports, and a seeded store — with NO operator turn and NO enabling

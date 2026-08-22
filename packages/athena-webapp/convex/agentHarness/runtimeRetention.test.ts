@@ -1,8 +1,8 @@
 // @vitest-environment node
 /// <reference types="vite/client" />
 /**
- * Runtime retention (plan U7 scenario 12): Convex Agent runtime messages obey
- * Athena's 30-day short-lived ceiling through U1's retention sweep, store
+ * Runtime retention: Convex Agent runtime messages obey Athena's 30-day
+ * short-lived ceiling through the harness retention sweep (`retention.ts`), store
  * removal follows the Athena turn binding, and cleanup is idempotent across
  * partial adapter state. The real component is registered under convex-test;
  * component state is inspected only to prove deletion.
@@ -90,7 +90,7 @@ describe("runtime retention binding (scenario 12)", () => {
     expect(hasAgentRuntimeCleanupHook(CONVEX_AGENT_ADAPTER_KIND)).toBe(true);
   });
 
-  it("runtime messages obey the 30-day ceiling: U1's expiry sweep asks the adapter and the component thread is gone", async () => {
+  it("runtime messages obey the 30-day ceiling: the retention expiry sweep asks the adapter and the component thread is gone", async () => {
     const t = backend();
     const seeded = await seedRuntimeTurn(t, "expiry");
     expect(await componentThreads(t, seeded.thread.threadRef)).toBe(1);

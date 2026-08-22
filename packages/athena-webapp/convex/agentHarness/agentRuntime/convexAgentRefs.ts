@@ -1,8 +1,8 @@
 /**
  * Opaque runtime references and component lookups for the Convex Agent
  * adapter. Environment-neutral (no runtime-native imports beyond the
- * component's generated API type), so the V8 mutation side — U1's retention
- * cleanup hook — can resolve refs and delete runtime payloads without loading
+ * component's generated API type), so the V8 mutation side — the harness
+ * retention cleanup hook — can resolve refs and delete runtime payloads without loading
  * the Node-only adapter.
  *
  * Tokens: `th_<40 hex>` for threads (SHA-256 of the Athena thread key);

@@ -1,7 +1,7 @@
 "use node";
 /**
- * Athena-owned static program validation (plan U5: "layer Athena-owned static
- * TypeScript/AST validation and explicit-output rules around the sandbox").
+ * Athena-owned static program validation: Athena-owned static TypeScript/AST
+ * validation and explicit-output rules layered around the sandbox.
  *
  * Runs outside the sandbox, before any domain read, on the TypeScript AST
  * (`@babel/parser`, exact-pinned; the full `typescript` checker was measured
@@ -26,7 +26,8 @@
  *   rejected; the stripped program is re-parsed as plain JavaScript.
  *
  * Semantic type checking (assignability) is not performed; runtime argument
- * validation at the bridge (U2 `validateInput`, U6 admission) remains
+ * validation at the bridge (the capability SDK's `validateInput`, executor
+ * admission) remains
  * authoritative for argument shapes.
  */
 import { parse, type ParserOptions } from "@babel/parser";

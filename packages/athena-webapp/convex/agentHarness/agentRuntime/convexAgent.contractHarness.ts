@@ -1,7 +1,7 @@
 /**
  * Test harness that drives the real Convex Agent adapter over a convex-test
  * backend with the Agent component registered and a scripted AI SDK mock
- * model, so U2's reusable contract suite runs unchanged against it.
+ * model, so the shared runtime-adapter contract suite runs unchanged against it.
  *
  * Adapter-specific test support (may name native types); not a test file.
  */
@@ -102,9 +102,9 @@ export type ConvexAgentContractHarness = AgentRuntimeContractHarness & {
 
 export type ConvexAgentContractHarnessOptions = {
   readonly clock?: () => number;
-  /** Provider id the scripted model answers for (default `fixture`); U7 host tests select the profile's fake provider. */
+  /** Provider id the scripted model answers for (default `fixture`); runtime host tests select the profile's fake provider. */
   readonly providerId?: string;
-  /** Share a backend with the caller (U7 host parity tests) instead of creating a fresh one. */
+  /** Share a backend with the caller (runtime host parity tests) instead of creating a fresh one. */
   readonly backend?: TestConvex<typeof schema>;
 };
 

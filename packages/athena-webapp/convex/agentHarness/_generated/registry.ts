@@ -3695,7 +3695,7 @@ export const AGENT_GENERATED_SOURCE_KEYS: readonly string[] = [
   "agentHarness/profiles/syntheticSecondSurface"
 ];
 
-/** What a run pins; U7 compares it with the durable epoch digest. */
+/** What a run pins; the deployment epoch fence compares it with the durable epoch digest. */
 export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:fcd14c0bebbf402d";
 
 /** Schema identity only; unchanged when a capability is enabled or disabled. */

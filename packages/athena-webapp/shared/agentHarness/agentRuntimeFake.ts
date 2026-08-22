@@ -6,7 +6,8 @@
  * pauses, completion, failure) and the fake drives the kernel through the
  * same hooks a real adapter would. No `Date.now`, no `Math.random`, no
  * timers: references come from counters, timestamps from an injected clock,
- * and ordering from the script plus microtask scheduling, so U6/U7 tests can
+ * and ordering from the script plus microtask scheduling, so executor and
+ * runtime host tests can
  * assert exact event streams. It is not a production runtime.
  */
 import {

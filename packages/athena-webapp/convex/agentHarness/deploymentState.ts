@@ -7,13 +7,13 @@
  *   says what MAY be enabled; a durable `agentEnablementSwitch` row says what
  *   IS enabled. The effective state is the narrower of the two, so the switch
  *   can never widen beyond the baseline and an absent row means disabled.
- *   U4's delegated admission reads this overlay on every check, so flipping
+ *   Delegated admission reads this overlay on every check, so flipping
  *   the switch blocks new turns immediately and denies in-flight dispatch,
  *   release, citation, and completion; the bounded cancel sweep then
  *   terminalizes active runs of that profile.
  * - The pre-deploy fence is ONE mutation: disable the named profiles and
- *   advance the durable compatibility epoch (U1) from U3's plan for the digest
- *   the new code carries. Every dispatch/release/completion checkpoint already
+ *   advance the durable compatibility epoch from the registry's compatibility
+ *   advance plan for the digest the new code carries. Every dispatch/release/completion checkpoint already
  *   compares pinned vs current epoch; the existing repair sweep terminalizes
  *   idle old-epoch runs. Nothing here re-enables: deploy, smoke, or rollback
  *   failure leaves the profile disabled until the switch is flipped on
@@ -68,7 +68,7 @@ async function loadSwitch(ctx: ReadCtx, subjectKind: "profile" | "capability", s
 }
 
 /**
- * The live overlay U4's `resolveEnablement` serves: baseline narrowed by the
+ * The live overlay delegated admission's `resolveEnablement` serves: baseline narrowed by the
  * durable switches, with every profile defaulting to disabled.
  */
 export async function resolveDurableEnablementWithCtx(ctx: ReadCtx, baseline: AgentEnablementOverlay): Promise<AgentEnablementOverlay> {

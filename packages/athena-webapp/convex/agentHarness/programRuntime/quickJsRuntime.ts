@@ -1,6 +1,6 @@
 "use node";
 /**
- * Direct QuickJS program runtime (the sandbox chosen by plan U5; see
+ * Direct QuickJS program runtime (the chosen sandbox; see
  * `docs/agent/agent-harness-runtime.md` for the decision against
  * `@ai-sdk/code-mode`). The plan named this file `codeMode.ts`; it is
  * `quickJsRuntime.ts` because the chosen adapter is not code-mode.

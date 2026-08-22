@@ -1,7 +1,7 @@
 // @vitest-environment node
 /// <reference types="vite/client" />
 /**
- * Completion outbox (plan U7 scenarios 13, 18): `completeRun` prepares
+ * Completion outbox: `completeRun` prepares
  * privately, ONE Athena transaction commits evidence/artifact/run and
  * `operator_release_committed`, and an idempotent outbox projects the
  * committed, currently authorized artifact through the adapter afterwards.

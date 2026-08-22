@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * Program sandbox spike and smoke suite (plan U5 scenarios 2–7 and 9).
+ * Program sandbox spike and smoke suite.
  *
  * The chosen runtime is direct QuickJS (`quickjs-emscripten-core` with the
  * single-file wasm variant) behind the Athena `AgentProgramRuntime` contract;
@@ -97,7 +97,7 @@ function expectRejected(outcome: AgentProgramValidationResult | AgentProgramOutc
   expect(outcome.issues.map((issue) => issue.code)).toContain(code);
 }
 
-describe("program runtime ceilings (typed config U6 consumes)", () => {
+describe("program runtime ceilings (typed config the executor consumes)", () => {
   it("publishes the initial safety ceilings from the plan", () => {
     expect(AGENT_PROGRAM_RUNTIME_CEILINGS).toMatchObject({
       maxElapsedMs: 60_000,

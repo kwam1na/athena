@@ -1,7 +1,7 @@
 "use node";
 /**
  * Model registry (kernel; Node runtime — it loads the provider SDK through
- * U5's `agentRuntime/models.ts`).
+ * `agentRuntime/models.ts`).
  *
  * Authority boundary: the registry is the ONLY place a provider/model/region
  * selection becomes a language model. It is governed by `egressPolicy.ts`:

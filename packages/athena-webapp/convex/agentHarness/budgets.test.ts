@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 /**
- * Reservation and settlement policy for the program executor (plan U6
- * scenarios 1, 2, 8; ticket V26-1264 "reservations cannot overdraw").
+ * Reservation and settlement policy for the program executor (ticket
+ * V26-1264 "reservations cannot overdraw").
  *
  * Pure checks cover the charge/refund table and ceiling derivation; the
  * convex-test checks prove the counter math through the real seams: two
@@ -303,7 +303,7 @@ describe("settlement lands on the ledger per outcome (scenario 8)", () => {
     expect(ledger?.charged.rows).toBe(10 + 10 + 1);
   });
 
-  it("records a denied admission as one consumed call attempt through U1 even when a program keeps retrying", async () => {
+  it("records a denied admission as one consumed call attempt through the lifecycle ledger even when a program keeps retrying", async () => {
     const t = convexTest(schema, modules);
     const run = await t.run((ctx) => seedExecutingRun(ctx, "denied"));
     await t.run(async (ctx) => {

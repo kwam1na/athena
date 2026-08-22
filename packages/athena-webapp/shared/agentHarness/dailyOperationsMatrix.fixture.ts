@@ -5,8 +5,8 @@
  * the v1 manifest contract. It exists so the contract test can prove every
  * column of the matrix (verbs, required filters, maxima and pages-per-run,
  * read intents, sensitive projections, freshness/completeness/citation rules)
- * is expressible without kernel changes. U8 authors the real manifests next to
- * the domain read code and may refine field names; this fixture is not
+ * is expressible without kernel changes. The real manifests are authored next
+ * to the domain read code and may refine field names; this fixture is not
  * imported by any kernel module.
  */
 import { budgetVector } from "./execution";

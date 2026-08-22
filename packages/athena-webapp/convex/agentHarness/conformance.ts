@@ -13,7 +13,7 @@
  * deterministic, must not read ambient state, and may only emit fields the
  * caller was already authorized to see. When no extractor is registered, the
  * transform is unsupported, or the slice would exceed authorization, the
- * citation becomes `provenance_only` — the state U1's evidence lifecycle
+ * citation becomes `provenance_only` — the state the evidence lifecycle
  * records once the short-lived replay payload expires.
  */
 import { AGENT_BUDGET_DIMENSIONS, type BudgetVector } from "../../shared/agentHarness/execution";

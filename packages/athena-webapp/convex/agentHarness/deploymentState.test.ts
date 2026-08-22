@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 /**
- * Deployment state (plan U7 scenarios 9, 14): the durable profile switch is
+ * Deployment state: the durable profile switch is
  * DEFAULT OFF and shrink-only; disabling blocks new turns and cancels active
  * runs of that profile; the one-command pre-deploy fence atomically disables
  * the profile and advances the durable epoch so old-epoch work is denied at
@@ -93,7 +93,7 @@ describe("durable profile enablement (default off, shrink only)", () => {
     });
   });
 
-  it("is what U4's delegated admission reads: a real operator is refused until the switch is on, then granted", async () => {
+  it("is what delegated admission reads: a real operator is refused until the switch is on, then granted", async () => {
     const t = convexTest(schema, modules);
     const config = { ...TEST_GRANT_CONFIG, resolveEnablement: (ctx: Parameters<typeof resolveDurableEnablementWithCtx>[0]) => resolveDurableEnablementWithCtx(ctx, BASELINE) };
     await t.run(async (ctx) => {

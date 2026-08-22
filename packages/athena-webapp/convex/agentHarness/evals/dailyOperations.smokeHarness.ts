@@ -6,13 +6,13 @@
  * The plan's post-deploy smoke "invokes the harness contracts directly while
  * the profile remains disabled". The published profile is `unpublished`, and
  * `evaluateEnablement` denies an unpublished profile at every capability call —
- * that is exactly the gate U10 flips. So the smoke composes its own admission
+ * that is exactly the gate the release enable flips. So the smoke composes its own admission
  * over the SAME real manifests, the SAME real handlers, the SAME real authority
  * ports, and the SAME kernel, differing in exactly two declared ways:
  *
  *   1. the profile it registers is the published profile with `lifecycle`
- *      flipped to `enabled`, so the smoke can run before U10 flips it for
- *      operators, and
+ *      flipped to `enabled`, so the smoke can run before the profile switch
+ *      is flipped on for operators, and
  *   2. the read-port index names smoke function paths, because convex-test
  *      resolves function references by module path and the smoke wrappers live
  *      in this module.
@@ -102,7 +102,7 @@ const SMOKE_READ_PORT_INDEX: AgentReadPortIndex = {
   }),
 };
 
-/** The published profile, enabled so the smoke can run before U10 flips it. */
+/** The published profile, enabled so the smoke can run before the profile switch is flipped on. */
 const SMOKE_PROFILE = defineAgentProfile({ ...DAILY_OPERATIONS_PROFILE, lifecycle: "enabled" });
 
 const build = buildAgentCapabilityRegistry({

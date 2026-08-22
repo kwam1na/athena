@@ -6,12 +6,13 @@
  * namespace, supported read verbs with typed filters and collection bounds,
  * result field meaning, sensitive projections and their authority, freshness,
  * completeness, citation and evidence rules, declared worst-case cost,
- * examples, lifecycle state, and the read-intent/port binding U4 resolves.
+ * examples, lifecycle state, and the read-intent/port binding delegated
+ * admission resolves.
  *
  * Types derive from the manifest: `ProjectedShape<Fields, Granted>` is the
  * grant-projected result type in which unauthorized fields are structurally
- * absent. `validateCapabilityManifest` is the single runtime gate U3's
- * compiler and U8's conformance runs reuse; `composeCapabilityPackages` is the
+ * absent. `validateCapabilityManifest` is the single runtime gate the registry
+ * compiler and every package's conformance run reuse; `composeCapabilityPackages` is the
  * collision-free SDK view a run is granted.
  */
 import type { BudgetVector } from "./execution";

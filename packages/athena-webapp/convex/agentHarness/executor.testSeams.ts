@@ -1,5 +1,6 @@
 /**
- * Test-only executor seams bound to U4's test package (`delegatedAdmission.testPorts.ts`).
+ * Test-only executor seams bound to the delegated-admission test package
+ * (`delegatedAdmission.testPorts.ts`).
  *
  * Two-dot basename on purpose: never bundled, never linted as ingress.
  * convex-test loads it under the aliased module key `./agentHarness/testSeams.ts`,
@@ -57,7 +58,7 @@ export const readCitationEvidence = TEST_EXECUTOR_SEAMS.functions.readCitationEv
 const seams = (anyApi as unknown as { agentHarness: { testSeams: Record<string, unknown> } }).agentHarness.testSeams;
 
 // ---------------------------------------------------------------------------
-// Shared seeding and bridge helpers for the U6 test files
+// Shared seeding and bridge helpers for the program executor test files
 // ---------------------------------------------------------------------------
 
 export type SeededDelegatedRun = {
@@ -69,7 +70,7 @@ export type SeededDelegatedRun = {
 
 /**
  * A running delegated run for one operator. With `withBinding`, the run is
- * created through U1's turn binding (so `operator_release_committed` and
+ * created through the lifecycle turn binding (so `operator_release_committed` and
  * `operatorViewedAt` exist); otherwise it is materialized directly.
  */
 export async function seedDelegatedRun(

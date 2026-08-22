@@ -7,7 +7,7 @@
  * loads it under the aliased module key `./agentHarness/testPorts.ts`, which is
  * what the port index below names (`agentHarness/testPorts:<export>`).
  *
- * The package is deliberately shaped for the U4 scenarios: a store-scoped
+ * The package is deliberately shaped for the delegated-admission scenarios: a store-scoped
  * profile whose capabilities bind a member-held read intent (so a POS-only
  * operator is granted the capability) while projections require a higher tier
  * (so the same program returns fewer FIELDS for that operator), plus one

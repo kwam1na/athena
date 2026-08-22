@@ -4,7 +4,7 @@
  * Delegated admission end to end: admit → domain-owned read port → release,
  * under two operators, with revocation, disablement, cancellation, widening
  * attempts, unregistered targets, and the revocation race between dispatch
- * and release (plan U4 scenarios 1–7; ticket V26-1262).
+ * and release (ticket V26-1262).
  */
 import { convexTest } from "convex-test";
 import { readFileSync, readdirSync } from "node:fs";
@@ -113,7 +113,7 @@ function runPort(t: Harness, admission: typeof TEST_ADMISSION, invocation: Agent
   return admission.dispatchReadPort({ runQuery: (reference, args) => t.query(reference, args) as never }, invocation);
 }
 
-/** The whole bridge sequence U6 will run: admit (mutation) → port (query) → release (mutation). */
+/** The whole bridge sequence the program executor runs: admit (mutation) → port (query) → release (mutation). */
 async function invoke(
   t: Harness,
   run: SeededRun,
@@ -518,7 +518,7 @@ describe("scenario 7 — revocation between dispatch and release", () => {
     const release = await t.run((ctx) => TEST_ADMISSION.releaseCapabilityResultWithCtx(ctx, { callId: admit.callId, response, now: TEST_NOW_BASE + 2 }));
     expect(release).toMatchObject({ outcome: "withheld", result: { kind: "unauthorized" } });
     const [call] = await t.run((ctx) => listCapabilityCallsForRun(ctx, runA.runId));
-    // Already dispatched, so U1 clamps it as canceled; the reason is the port's refusal.
+    // Already dispatched, so the lifecycle clamps it as canceled; the reason is the port's refusal.
     expect(call.status).toBe("canceled");
     expect(call.error).toMatchObject({ code: "membership_revoked" });
     expect(call.delegation?.release).toMatchObject({ verdict: "withheld", reason: "membership_revoked" });
@@ -588,7 +588,7 @@ describe("composition root wiring", () => {
     expect(outcome).toMatchObject({ kind: "refused", stage: "enablement", reason: "profile_unpublished" });
   });
 
-  it("exposes the bound U6/U7 surface and the port definer from the composition root", async () => {
+  it("exposes the bound executor and runtime-host surface and the port definer from the composition root", async () => {
     const root = await import("../platform/operationAdmission");
     for (const name of [
       "materializeAgentRunGrantWithCtx",

@@ -68,7 +68,7 @@ export type AgentExecutorCtx = {
 export type AgentProgramExecutorConfig = {
   readonly runtime: AgentProgramRuntime;
   readonly seams: AgentExecutorSeamRefs;
-  /** Closed read-port dispatch (U4): the composition root's or the test package's. */
+  /** Closed read-port dispatch (delegated admission): the composition root's or the test package's. */
   readonly dispatchReadPort: (ctx: AgentReadPortDispatchCtx, invocation: AgentReadPortInvocation) => Promise<AgentReadPortResponse>;
   readonly clock?: () => number;
   /** Test hooks: narrow or stretch ceilings, and interpose between sandbox result and finish. */
@@ -132,7 +132,7 @@ type Refusal = Exclude<AgentCapabilityResult<AgentReadEnvelope<unknown>>, { kind
 
 const EMPTY_DIAGNOSTICS: AgentProgramDiagnostics = { elapsedMs: 0, hostCalls: 0, maxInFlight: 0, bridgeArgsBytes: 0, bridgeOutputBytes: 0, resultBytes: 0, sourceBytes: 0 };
 
-/** A third of U1's 60 s attempt lease (`AGENT_ATTEMPT_LEASE_MS`), so a live sandbox is never recovered as stale. */
+/** A third of the lifecycle's 60 s attempt lease (`AGENT_ATTEMPT_LEASE_MS`), so a live sandbox is never recovered as stale. */
 export const AGENT_EXECUTOR_HEARTBEAT_MS = 20_000;
 
 function toJson(value: unknown): JsonValue {
@@ -393,7 +393,7 @@ const PRODUCTION_SEAMS: AgentExecutorSeamRefs = {
 
 let productionExecutor: Promise<AgentProgramExecutor> | undefined;
 
-/** The production executor: QuickJS + the composition root's seams and read ports. U7's `athena.executeProgram` handler calls this. */
+/** The production executor: QuickJS + the composition root's seams and read ports. The fixed `athena.executeProgram` tool handler calls this. */
 export function getProductionProgramExecutor(): Promise<AgentProgramExecutor> {
   productionExecutor ??= createQuickJsProgramRuntime().then((runtime) =>
     createProgramExecutor({ runtime, seams: PRODUCTION_SEAMS, dispatchReadPort: agentDelegatedAdmission.dispatchReadPort }),

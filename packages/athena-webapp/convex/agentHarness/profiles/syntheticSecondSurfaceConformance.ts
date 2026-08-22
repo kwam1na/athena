@@ -6,10 +6,10 @@
  * return nothing, and — where the manifest declares extractor evidence — the
  * deterministic extractor itself. The generator refuses to publish an
  * `enabled` capability whose probes do not pass `runCapabilityConformance`,
- * so this file is the template a domain package (U8) copies.
+ * so this file is the template a domain package copies.
  *
- * The observations are the shapes the read ports must return; U10 implements
- * the ports and keeps them honest against exactly these fixtures.
+ * The observations are the shapes the read ports must return; the port
+ * implementations are kept honest against exactly these fixtures.
  */
 import { budgetVector } from "../../../shared/agentHarness/execution";
 import { opaqueRef } from "../../../shared/agentHarness/values";

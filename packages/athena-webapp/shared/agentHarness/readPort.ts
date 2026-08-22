@@ -1,7 +1,7 @@
 /**
  * Domain-owned read-port definition and the explicit registration index
- * (browser-safe declaration; U4 binds the handlers at the operation-admission
- * composition root).
+ * (browser-safe declaration; delegated admission binds the handlers at the
+ * operation-admission composition root).
  *
  * A port binds one capability to an internal function reference, the read
  * intents the operation-admission rail already knows, the scope kind, a field

@@ -1,5 +1,5 @@
 /**
- * Profile conformance (plan U2 scenarios 4 and 6).
+ * Profile conformance.
  *
  * The synthetic second surface is deliberately non-isomorphic to Daily
  * Operations: organization-scoped, a different context/thread key, a

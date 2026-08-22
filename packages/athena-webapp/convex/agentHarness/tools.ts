@@ -3,10 +3,11 @@
  *
  * Authority boundary (plan decision 8, R11, R13): the model sees exactly five
  * tools — discover, describe, executeProgram, scratch, completeRun — defined
- * here as U2 `AgentToolDefinition`s with Athena validators that canonicalize
- * arguments, and handlers that reach only U3 discovery (grant-filtered), U6's
- * executor and seams, and the completion outbox. No individual backend read is
- * a tool. The U2 dispatch ledger fingerprints every call (adapter version +
+ * here as capability-SDK `AgentToolDefinition`s with Athena validators that
+ * canonicalize arguments, and handlers that reach only grant-filtered
+ * discovery (`discovery.ts`), the program executor and its seams, and the
+ * completion outbox. No individual backend read is a tool. The runtime-adapter
+ * dispatch ledger fingerprints every call (adapter version +
  * turn + tool + canonical args hash + call id): an exact replay returns the
  * recorded outcome; any mismatch fails without a handler. Model narrative is
  * never streamed; the only progress the browser sees are the server-authored

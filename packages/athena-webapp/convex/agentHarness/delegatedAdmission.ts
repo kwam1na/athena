@@ -8,7 +8,7 @@
  * `reauthorizeCompletionWithCtx`. Each pass re-derives the effective grant
  * (`grants.ts`) and consults the closed read-port map (`readPorts.ts`). A
  * refusal is typed in the bridge vocabulary, recorded exactly once on the
- * call row through U1's lifecycle (denied calls consume a call attempt and
+ * call row through the harness lifecycle (denied calls consume a call attempt and
  * nothing else), and never retried against a weaker actor: there is no chain.
  * A result invalidated by a later shrink is settled as evidence only — hash,
  * timing, completeness, reason — and its payload is never released.
@@ -225,11 +225,11 @@ export function createDelegatedAdmission(config: DelegatedAdmissionConfig) {
 
   /**
    * Admit one capability call. Order: request shape → authority (pure) →
-   * U1 admission (budget reservation under the idempotency key, with the
+   * lifecycle admission (budget reservation under the idempotency key, with the
    * delegated provenance on the row) → settle immediately as denied /
    * unavailable when refused → otherwise hand back the bound handler and the
    * invocation. A non-running or fenced run is refused before any row exists,
-   * which is also what U1 would do.
+   * which is also what the lifecycle would do.
    */
   async function admitCapabilityCallWithCtxBound(
     ctx: MutationCtx,
@@ -308,7 +308,7 @@ export function createDelegatedAdmission(config: DelegatedAdmissionConfig) {
       return { outcome: "refused", stage: verdict.stage, reason: verdict.reason, result: verdict.result };
     }
 
-    // 3. U1 admission: reserves the declared worst case and records provenance.
+    // 3. Lifecycle admission: reserves the declared worst case and records provenance.
     const grantedProjections = verdict.kind === "authorized" ? verdict.grantedProjections : [];
     const delegation = delegationRecord({
       verdict,
@@ -450,7 +450,7 @@ export function createDelegatedAdmission(config: DelegatedAdmissionConfig) {
       result: AgentCapabilityRefusal,
       extra: { resultHash?: string; actual?: Partial<BudgetVector>; outputOmittedReason?: string; authorizationEpoch: number },
     ): Promise<DelegatedCallRelease> => {
-      // `denied` is an admission-time terminal in U1's machine; a call that was
+      // `denied` is an admission-time terminal in the lifecycle machine; a call that was
       // already dispatched and then refused is clamped as `canceled`. The reason
       // survives on the error and on the release record.
       const outcome: AgentCallSettlementOutcome = requestedOutcome === "denied" && call.status === "executing" ? "canceled" : requestedOutcome;
@@ -609,7 +609,7 @@ export function createDelegatedAdmission(config: DelegatedAdmissionConfig) {
     reauthorizeGrantWithCtx: (ctx: ReadCtx, input: ReauthorizeGrantInput) => reauthorizeGrantWithCtx(ctx, config, input),
     describeGrantForModel,
     admitCapabilityCallWithCtx: admitCapabilityCallWithCtxBound,
-    /** Executor side (U6, from an action): run the admitted invocation against the closed map. */
+    /** Executor side (the program executor, from an action): run the admitted invocation against the closed map. */
     dispatchReadPort: (ctx: Parameters<typeof dispatchAgentReadPort>[0], invocation: AgentReadPortInvocation) =>
       dispatchAgentReadPort(ctx, readPorts, invocation),
     releaseCapabilityResultWithCtx: releaseCapabilityResultWithCtxBound,

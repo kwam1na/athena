@@ -364,7 +364,7 @@ export type MaterializedRunGrant = {
 /**
  * Materialize the immutable run grant: one transaction creates the business
  * run, the grant (with delegated provenance), and the budget ledger. Callers
- * that create the run through the turn binding (U7) use
+ * that create the run through the turn binding (`turns.ts`) use
  * `prepareDelegatedRunGrantWithCtx` and pass `runInput` on instead.
  */
 export async function materializeRunGrantWithCtx(
@@ -628,7 +628,7 @@ function runtimeGrantOf(
 }
 
 /**
- * The grant-filtered discovery input (U3's `discovery.ts` consumes this):
+ * The grant-filtered discovery input (`discovery.ts` consumes this):
  * only the EFFECTIVE capability and projection set, never the registry.
  */
 export function describeGrantForModel(verdict: DelegatedAuthorityAuthorized): AgentRuntimeGrant {

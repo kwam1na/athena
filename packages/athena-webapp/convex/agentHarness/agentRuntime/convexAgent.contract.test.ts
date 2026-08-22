@@ -1,7 +1,7 @@
 // @vitest-environment node
 /**
  * Convex Agent adapter against the reusable `AgentRuntimeAdapter` contract
- * suite (plan U5 scenario 10), plus adapter-specific proofs that only this
+ * suite, plus adapter-specific proofs that only this
  * directory may express: native usage objects are normalized at the edge,
  * native tool names round-trip Athena tool ids, native errors map to typed
  * outcomes, and the model is an injected input.

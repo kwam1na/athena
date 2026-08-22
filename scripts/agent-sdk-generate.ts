@@ -250,7 +250,7 @@ function portVersionIssues(
       message:
         `Read port "${portKey}" changed behaviorally (${before.sourceDigest} → ${record.sourceDigest}) while its ` +
         `implementation version stayed "${record.implementationVersion}". Bump the version on both the manifest ` +
-        "binding and the port so the compatibility digest and U7's epoch fence can see the change.",
+        "binding and the port so the compatibility digest and the deployment epoch fence can see the change.",
     });
   }
   return issues;
@@ -309,7 +309,7 @@ function renderRegistryArtifact(registry: AgentCapabilityRegistry, sourceKeys: r
     "",
     `export const AGENT_GENERATED_SOURCE_KEYS: readonly string[] = ${canonicalJson(sourceKeys)};`,
     "",
-    "/** What a run pins; U7 compares it with the durable epoch digest. */",
+    "/** What a run pins; the deployment epoch fence compares it with the durable epoch digest. */",
     `export const AGENT_GENERATED_COMPATIBILITY_DIGEST = ${JSON.stringify(registry.compatibilityDigest)};`,
     "",
     "/** Schema identity only; unchanged when a capability is enabled or disabled. */",

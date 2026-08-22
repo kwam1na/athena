@@ -1,8 +1,8 @@
 /**
  * Reusable `AgentRuntimeAdapter` contract suite.
  *
- * U2 runs it against the deterministic fake; U5 must run the identical suite
- * against the Convex Agent adapter by supplying a harness whose `scriptTurn`
+ * The contract tests run it against the deterministic fake; every real
+ * adapter must run the identical suite by supplying a harness whose `scriptTurn`
  * drives a scripted model. The suite only ever touches the Athena-owned
  * contract: opaque refs, normalized events, the kernel tool-dispatch ledger,
  * and the usage reconciler. It imports nothing runtime-native.

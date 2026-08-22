@@ -1,7 +1,7 @@
 /**
  * Harness contract shared by the reusable `AgentRuntimeAdapter` suite and any
- * adapter under test (the deterministic fake in U2, the Convex Agent adapter in
- * U5). A harness wraps an adapter with a scripted model so the suite can drive
+ * adapter under test (the deterministic fake, the Convex Agent adapter).
+ * A harness wraps an adapter with a scripted model so the suite can drive
  * identical scenarios against every implementation. Type-only module.
  */
 import type { AgentRuntimeAdapter, AgentToolDispatchResult, RuntimeTurnRef } from "./agentRuntime";
@@ -22,7 +22,7 @@ export type AgentRuntimeScriptStep =
       readonly kind: "tool_call";
       readonly callId: string;
       readonly toolId: string;
-      /** Static args, or a thunk resolved when the scripted model makes the call (U7 tests cite refs minted earlier in the turn). */
+      /** Static args, or a thunk resolved when the scripted model makes the call (runtime host tests cite refs minted earlier in the turn). */
       readonly args: AgentRuntimeScriptArgs;
       readonly idempotencyKey?: string;
     }

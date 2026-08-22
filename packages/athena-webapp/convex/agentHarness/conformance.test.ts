@@ -2,14 +2,14 @@
 
 /**
  * Capability conformance harness, enablement overlay, and compatibility
- * identity (plan U3 scenarios 2, 5, 6, 7, 8, 9).
+ * identity.
  *
  * A capability may not be enabled until scope isolation, field omission,
  * pagination, freshness, evidence extraction, determinism, and budget
  * accounting all pass. Lifecycle is deliberately NOT part of the
  * compatibility digest: disabling is a live deny through the shrink-only
  * enablement overlay, while a behavioral read-port, protocol, adapter, or
- * admission change moves the digest and forces U7's epoch fence.
+ * admission change moves the digest and forces the deployment epoch fence.
  */
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
@@ -459,7 +459,8 @@ describe("evidence extraction", () => {
 
 describe("enablement overlay and compatibility identity", () => {
   /**
-   * The published synthetic profile is `unpublished` until U10 enables it, and
+   * The published synthetic profile is `unpublished` until the release gate
+   * enables it, and
    * `evaluateEnablement` denies an unpublished profile before it ever looks at
    * a capability. These cases are about the capability-level kill switch, so
    * they run against an enabled copy of the same profile.
@@ -652,7 +653,7 @@ describe("enablement overlay and compatibility identity", () => {
   });
 });
 
-describe("compatibility fence handoff (plan U3 scenario 7)", () => {
+describe("compatibility fence handoff", () => {
   it("plans no epoch advance while the compatibility digest is unchanged", () => {
     expect(
       planCompatibilityAdvance({ currentEpoch: 4, currentDigest: "compat:a", nextDigest: "compat:a" }),

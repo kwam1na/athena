@@ -10,7 +10,7 @@
  * released data, the hash still matches, and the binding digest recomputed
  * from the run's own ids reproduces the reference. Forged, stale-attempt,
  * cross-run, and unreleased references are rejected with typed reasons;
- * unauthorized ones are refused by U4's reauthorization, which callers run
+ * unauthorized ones are refused by delegated reauthorization, which callers run
  * after resolution. Evidence lookup for a viewer reauthorizes the viewer
  * through the registered authority port and returns lineage without raw ids.
  */
@@ -289,7 +289,7 @@ export type AgentCitationEvidenceForViewer =
  * Evidence lookup for an operator: reauthorize the viewer through the
  * registered authority port for their kind (current membership and scope),
  * require that they still hold the read intents the cited capability binds,
- * then resolve lineage through U1 (which audits the access) and strip every
+ * then resolve lineage through the harness lifecycle (which audits the access) and strip every
  * document id from the view.
  */
 export async function readCitationEvidenceForViewerWithCtx(

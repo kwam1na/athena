@@ -6,7 +6,7 @@
  * 1. Every one of the eleven capability-matrix rows is published exactly as the
  *    matrix specifies: resource identity, verbs, required filters, maxima,
  *    read intents, sensitive projections, freshness, completeness, citation.
- * 2. Every manifest passes U3's conformance gate, and the profile passes
+ * 2. Every manifest passes the registry conformance gate, and the profile passes
  *    selection conformance against its own packages.
  * 3. The profile's budgets stay inside the program-runtime ceilings, and the
  *    presentation adapter carries everything the reusable host needs.

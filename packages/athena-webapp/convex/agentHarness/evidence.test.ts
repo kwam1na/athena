@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 /**
- * Executor evidence (plan U6 scenarios 3, 6, 11, 12, 13; ticket V26-1264):
+ * Executor evidence (ticket V26-1264):
  * invocation normalization, the 240 KiB per-record ceiling with typed
  * boundary truncation, completeness/freshness/egress derivation, the
  * Convex-document-headroom sensor, attempt-completion storage, `completeRun`
@@ -119,7 +119,7 @@ beforeEach(() => {
 });
 
 describe("invocation normalization", () => {
-  it("maps a facade call onto the capability request, lifts the cursor, drops undefined, and keys it exactly like U4's stored hash", () => {
+  it("maps a facade call onto the capability request, lifts the cursor, drops undefined, and keys it exactly like the stored delegated-admission hash", () => {
     const cursor = opaqueRef("cursor", "v1.1.70616765.abc");
     const normalized = normalizeHostCall(FACADE, { package: "ops", resource: "shifts", verb: "list", args: { status: "open", cursor, zzz: undefined as never } });
     expect(normalized.ok).toBe(true);

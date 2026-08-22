@@ -5,7 +5,7 @@
  * The kernel's runtime host may not name the mounted component
  * (`components.agent` is a runtime-native identifier reserved to this
  * directory), so this is the one place the adapter is bound to it. Model
- * selection stays an injected resolver (U7's model registry); the kernel
+ * selection stays an injected resolver (`modelRegistry.ts`); the kernel
  * receives an `AgentRuntimeAdapter` plus the Athena-side authoring seams and
  * nothing runtime-native.
  */

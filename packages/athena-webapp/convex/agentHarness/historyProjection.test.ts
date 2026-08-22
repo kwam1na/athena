@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 /**
- * Athena-authored history projection and prompt assembly (plan U7 scenarios
- * 3, 11, 17): prior terminal artifacts are reauthorized for the CURRENT
+ * Athena-authored history projection and prompt assembly: prior terminal
+ * artifacts are reauthorized for the CURRENT
  * viewer's role, store, profile, and retention before any of them reaches a
  * model or a screen; raw runtime history is never replayed; product fields are
  * labeled untrusted data that cannot alter instructions.

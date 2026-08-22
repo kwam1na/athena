@@ -6,7 +6,7 @@
  * adds kernel behavior: anything a profile needs that these contracts cannot
  * express is a versioned contract evolution, not a profile exception.
  *
- * The presentation adapter is what the reusable host (U9) consumes: profile
+ * The presentation adapter is what the reusable operator agent host consumes: profile
  * id, an opaque authorized context binding with a human-readable label, entry
  * metadata, mount mode, optional evidence-backed starter intents, a
  * source-destination resolver that may only yield internal routes, and the
@@ -50,7 +50,7 @@ import {
 
 export type AgentContextValues = { readonly [key: string]: string };
 
-/** Only server-minted internal routes are interactive in v1 (U9). */
+/** Only server-minted internal routes are interactive in v1. */
 export type AgentSourceDestination = {
   readonly kind: "internal_route";
   readonly route: string;
@@ -199,7 +199,7 @@ export type AgentProfileDefinition = {
   readonly budgetPolicy: AgentProfileBudgetPolicy;
   readonly promptPolicy: AgentProfilePromptPolicy;
   readonly egressPolicy: AgentProfileEgressPolicy;
-  /** Runtime adapter kind selected for the profile (U5 registers `convex_agent`). */
+  /** Runtime adapter kind selected for the profile (the Convex Agent adapter registers `convex_agent`). */
   readonly runtimeAdapterKind: string;
   readonly presentation: AgentPresentationAdapter;
   readonly evaluation: { readonly scenarios: readonly AgentEvaluationScenario[] };
@@ -501,7 +501,7 @@ export function assertProfileSelection(
 }
 
 // ---------------------------------------------------------------------------
-// Host state vocabulary (consumed by the reusable host in U9)
+// Host state vocabulary (consumed by the reusable operator agent host)
 // ---------------------------------------------------------------------------
 
 export const AGENT_HOST_STATES = [

@@ -1,6 +1,6 @@
 /**
  * Retention cleanup of Convex Agent runtime payloads, environment-neutral so
- * U1's mutation-side retention hook (`registerAgentRuntimeCleanupHook`) can
+ * the mutation-side retention hook (`registerAgentRuntimeCleanupHook`) can
  * run it from the V8 runtime without the Node-only adapter. The adapter's
  * `cleanup` delegates here so there is exactly one deletion path.
  *
@@ -77,7 +77,7 @@ export async function cleanupConvexAgentRuntime(
 }
 
 /**
- * Factory for U1's retention registry:
+ * Factory for the harness retention registry:
  * `registerAgentRuntimeCleanupHook(CONVEX_AGENT_ADAPTER_KIND, createConvexAgentCleanupHook(components.agent))`.
  * Typed structurally so this module never imports the kernel's retention module.
  */

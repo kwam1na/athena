@@ -1,5 +1,5 @@
 /**
- * Provider egress policy (plan U7 scenarios 10, 16): the maximum egress class
+ * Provider egress policy: the maximum egress class
  * across prompt, context, history, and every capability reachable through the
  * grant selects a provider/model/region from the profile allowlist; nothing
  * fails over to a less-trusted provider; a turn never switches model; and

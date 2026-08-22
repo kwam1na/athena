@@ -1,7 +1,6 @@
 /**
  * Read-port registry: closed binding map, opaque cursors, and envelope
- * finishing (field omission, contract enforcement, bounds) — plan U4
- * scenarios 3 and 4.
+ * finishing (field omission, contract enforcement, bounds).
  */
 import { anyApi, makeFunctionReference, type FunctionReference } from "convex/server";
 import { describe, expect, it } from "vitest";

@@ -5,8 +5,8 @@
  * - `completeRun` PREPARES privately: the binding records a digest of the
  *   completion request at `completion_prepared` (and an outbox due time), and
  *   nothing is visible to anyone.
- * - ONE Athena transaction (U6 `completeRun` seam → U4 reauthorization → U1
- *   `completeAgentRunWithCtx`) commits evidence, artifact, run state, and
+ * - ONE Athena transaction (the executor's `completeRun` seam → delegated
+ *   reauthorization → the lifecycle's `completeAgentRunWithCtx`) commits evidence, artifact, run state, and
  *   `operator_release_committed`. Revocation between prepare and commit wins
  *   there: the refusal leaves the binding at `completion_prepared`.
  * - Afterwards an idempotent outbox projects the committed artifact through
@@ -15,7 +15,7 @@
  *   duplicates a projection or reopens the run.
  * - Revocation after commit but before an authorized fetch suppresses release:
  *   the binding is marked, the adapter is asked to purge its payloads through
- *   U1's cleanup hook, and the exposure audit (attempt provider egress,
+ *   the retention cleanup hook, and the exposure audit (attempt provider egress,
  *   release committed, view never acknowledged) stays intact.
  */
 import { v } from "convex/values";
@@ -245,7 +245,7 @@ export function createCompletionOutbox(config: CompletionOutboxConfig) {
 
 export type CompletionOutbox = ReturnType<typeof createCompletionOutbox>;
 
-/** Bindings whose release is suppressed never reach the outbox; the exposure audit is the attempt row (U6). */
+/** Bindings whose release is suppressed never reach the outbox; the exposure audit is the attempt row. */
 export function isReleaseSuppressed(binding: Pick<Doc<"agentTurnBinding">, "releaseSuppressedAt">): boolean {
   return binding.releaseSuppressedAt !== undefined;
 }

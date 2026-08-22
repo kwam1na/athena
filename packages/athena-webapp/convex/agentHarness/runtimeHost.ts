@@ -3,16 +3,16 @@
  * Runtime host (kernel; Node runtime): drives ONE operator turn through the
  * Athena runtime adapter contract.
  *
- * Authority boundary (plan decisions 8, 10, 12): the host consumes only U2's
- * `AgentRuntimeAdapter`, opaque runtime refs, and normalized events. It never
+ * Authority boundary (plan decisions 8, 10, 12): the host consumes only the
+ * shared `AgentRuntimeAdapter` contract, opaque runtime refs, and normalized events. It never
  * imports the runtime component, native messages, or provider session types;
  * the production adapter is constructed by the adapter directory's factory.
  * Per turn it: prepares through the V8 seams (epoch fence, live profile switch,
  * Athena-authored history projection, provider selection for the maximum
  * egress class), binds the runtime thread and input (ladder rungs with opaque
  * refs, idempotent on resume), marks the run running, starts the turn with the
- * fixed tool catalog behind the U2 dispatch ledger, ingests usage into the U2
- * reconciler, observes external cancellation, and on completion settles usage
+ * fixed tool catalog behind the adapter dispatch ledger, ingests usage into
+ * the adapter usage reconciler, observes external cancellation, and on completion settles usage
  * exactly once and hands the committed artifact to the outbox. A revocation
  * after provider exposure cancels the turn, suppresses release, and asks the
  * adapter to purge while the exposure audit stays on the attempt rows.

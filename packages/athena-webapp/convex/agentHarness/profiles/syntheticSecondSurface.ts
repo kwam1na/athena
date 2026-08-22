@@ -7,7 +7,8 @@
  * mix (`fleet` + `directory`), a single-snapshot `get` next to cursor-bounded
  * `list`s, a full-screen mount with different entry metadata, and different
  * source destinations. It exists to prove that additions expressible in v1
- * need no kernel edit (U2) and to run end to end in U10. It imports only the
+ * need no kernel edit to the capability contracts and still run end to end.
+ * It imports only the
  * shared contracts; no product domain and no other profile.
  */
 import { budgetVector } from "../../../shared/agentHarness/execution";

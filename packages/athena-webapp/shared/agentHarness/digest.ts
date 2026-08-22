@@ -3,7 +3,7 @@
  *
  * Program source, validated source, program results, claim digests, and
  * citation bindings are cryptographic commitments, so they use SHA-256 rather
- * than U1's FNV-1a identity label (`computeContentDigest`). The implementation
+ * than the lifecycle's FNV-1a identity label (`computeContentDigest`). The implementation
  * is a small synchronous FIPS 180-4 routine over UTF-8 bytes: it runs
  * unchanged inside a Convex mutation (V8 isolate), a Node action, Vitest, and
  * the browser, and never needs the asynchronous `crypto.subtle` API, which a

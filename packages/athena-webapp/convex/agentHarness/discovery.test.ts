@@ -1,5 +1,5 @@
 /**
- * Model-visible discovery surface (plan U3 scenarios 3 and 4).
+ * Model-visible discovery surface.
  *
  * Default model context is compact, grant-filtered summaries. Detailed
  * declarations appear only after an authorized discover call, and everything
@@ -199,12 +199,13 @@ describe("grant-filtered discovery", () => {
 
 /**
  * Modules that are allowed to import the privileged generated registry. It is
- * empty today: U4 binds ports and U7 fences epochs from it, and each addition
+ * narrow on purpose: delegated admission binds ports and the pre-deploy fence
+ * fences epochs from it, and each addition
  * must be a conscious edit here plus proof that nothing model-visible reaches
  * the module transitively.
  */
 export const PRIVILEGED_REGISTRY_CONSUMERS: readonly string[] = [
-  // U7: the durable profile switch and the pre-deploy fence read the published
+  // The durable profile switch and the pre-deploy fence read the published
   // enablement baseline and the deployed compatibility digest. Nothing
   // model-visible imports it (the reachability test below stays green).
   "deploymentState.ts",

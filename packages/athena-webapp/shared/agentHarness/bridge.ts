@@ -153,7 +153,7 @@ export type AgentFacade<Manifests extends readonly AgentCapabilityManifest[], Gr
 }>;
 
 // ---------------------------------------------------------------------------
-// Discovery surface and program output (consumed by U3/U6)
+// Discovery surface and program output (consumed by discovery and the executor)
 // ---------------------------------------------------------------------------
 
 export type AgentDescribeOutcome =

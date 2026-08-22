@@ -105,7 +105,7 @@ export const STANDARD_RETENTION_MS = 365 * DAY_MS;
 export const AGENT_CALL_EVIDENCE_BYTE_CEILING = 240 * 1024;
 
 /**
- * Run-wide bridge/evidence ceiling (plan U6): the ledger's `bytes` limit is
+ * Run-wide bridge/evidence ceiling: the ledger's `bytes` limit is
  * clamped to this at run creation so the reservation counter enforces it for
  * every profile, whatever its budget policy says.
  */
@@ -439,9 +439,9 @@ export function exceedsBudget(limits: BudgetVector, used: BudgetVector): AgentBu
 
 /**
  * `reconstructible` needs the promoted claim-support slice, the short-lived
- * replay payload, or an immutable authoritative revision reference (plan U6:
- * "an immutable authoritative revision reference may replace a copied call
- * output"); with none of them, only provenance remains. Lifecycle markers win
+ * replay payload, or an immutable authoritative revision reference (an
+ * immutable authoritative revision reference may replace a copied call
+ * output); with none of them, only provenance remains. Lifecycle markers win
  * over availability so an expired or lifecycle-deleted citation is reported
  * as such even if a stray payload row still exists.
  */

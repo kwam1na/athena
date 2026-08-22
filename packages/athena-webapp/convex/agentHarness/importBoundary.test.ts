@@ -1,5 +1,5 @@
 /**
- * Static import boundaries of the agent harness (plan U2 scenarios 5 and 8).
+ * Static import boundaries of the agent harness.
  *
  * - Kernel modules under `convex/agentHarness/` may not import Daily
  *   Operations or any other product domain; profiles select into the kernel
@@ -7,8 +7,8 @@
  * - Convex Agent / runtime-native imports are permitted ONLY under
  *   `convex/agentHarness/agentRuntime/` (implementation, registration shim,
  *   adapter-specific tests). Root `convex/convex.config.ts` may import only
- *   `convex/*` and that local shim. The directory does not exist until U5;
- *   the checks pass today and enforce the moment it appears.
+ *   `convex/*` and that local shim. The directory need not exist yet; the
+ *   checks pass either way and enforce the moment it appears.
  * - Capability, admission, executor, evidence, completion, and presentation
  *   contracts may not name runtime-native identifiers.
  * - `shared/agentHarness/*` stays browser-safe.
@@ -116,8 +116,8 @@ export const PRODUCT_DOMAIN_PREFIXES = [
 ] as const;
 
 /**
- * Build-time composition roots (U3). They are not kernel modules: they exist
- * so the generator can discover profiles and domain capability packages from
+ * Build-time composition roots. They are not kernel modules: they exist so
+ * the registry generator can discover profiles and domain capability packages from
  * explicit registration points. The Convex runtime reads the generated
  * artifacts instead, so no kernel module may import one.
  */
@@ -186,7 +186,7 @@ export const ROOT_CONVEX_CONFIG = "convex/convex.config.ts";
  * The one runtime-native import allowed outside `agentRuntime/`: the component
  * definition, imported and mounted directly by the root config. Mounting it
  * through a local module makes the Convex backend reject the push
- * (`start_push 500`; U5 deviation, see `docs/agent/agent-harness-runtime.md`).
+ * (`start_push 500`; see `docs/agent/agent-harness-runtime.md`).
  */
 export const AGENT_COMPONENT_CONFIG_SPECIFIER = "@convex-dev/agent/convex.config";
 
@@ -284,9 +284,9 @@ export const PROFILE_ALLOWED_PREFIXES = [
   "convex/agentHarness/manifestRegistrations",
   "convex/agentHarness/profiles/",
   "convex/platform/readIntentCatalog",
-  // Port modules obtain `defineAgentReadPortQuery` from the admission composition root (U4).
+  // Port modules obtain `defineAgentReadPortQuery` from the admission composition root.
   "convex/platform/operationAdmission",
-  // Declaration-side manifest constants shared by domain packages (U8).
+  // Declaration-side manifest constants shared by domain packages.
   "convex/lib/agentCapabilityManifests",
   // Environment-neutral runtime-adapter identity. The build-time composition
   // root pins the published compatibility identity to the selected adapter;
@@ -383,7 +383,7 @@ describe("agent harness import boundaries", () => {
     const root = collectSources(CONVEX_DIR, (relative) => relative === ROOT_CONVEX_CONFIG);
     expect(root).toHaveLength(1);
     expect(findRootConvexConfigViolations(root[0])).toEqual([]);
-    // The component must be mounted here directly (U5 deviation; indirect mounts fail to push).
+    // The component must be mounted here directly (indirect mounts fail to push).
     expect(root[0].source).toMatch(/import agent from "@convex-dev\/agent\/convex\.config";/);
     expect(root[0].source).toMatch(/app\.use\(agent, \{ name: CONVEX_AGENT_COMPONENT_NAME \}\)/);
     expect(
@@ -485,7 +485,7 @@ describe("agent harness import boundaries", () => {
   });
 
   /**
-   * Daily Operations (U8) — the first real product package. Three invariants on
+   * Daily Operations — the first real product package. Three invariants on
    * top of the general rules above: the kernel never imports a capability
    * module or a Daily Operations profile; the profile modules reach product
    * domains only through published capability modules; and the DECLARATION half

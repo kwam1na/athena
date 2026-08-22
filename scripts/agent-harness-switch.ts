@@ -1,9 +1,13 @@
 /**
- * Agent harness profile switch (plan U7 / U10): the one reversible enable.
+ * Agent harness profile switch: the one reversible enable.
  *
- *   bun run agent-harness:switch -- --profile daily_operations --enable --reason "smoke passed"
- *   bun run agent-harness:switch -- --profile daily_operations --disable --reason "incident"
- *   bun run agent-harness:switch -- --status
+ *   bun scripts/agent-harness-switch.ts --profile daily_operations --enable --reason "smoke passed"
+ *   bun scripts/agent-harness-switch.ts --profile daily_operations --disable --reason "incident"
+ *   bun scripts/agent-harness-switch.ts --status
+ *
+ * Invoke it directly, as above. The `bun run agent-harness:switch` alias works
+ * only for single-token flag values: `bun run <script> -- --reason "a b c"`
+ * re-splits the quoted value into three arguments.
  *
  * Enable never widens beyond the published baseline (an unpublished profile
  * stays unpublished). Disable blocks new turns immediately, denies in-flight

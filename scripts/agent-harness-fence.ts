@@ -1,10 +1,14 @@
 /**
- * Agent harness pre-deploy fence (plan U7, decision 4).
+ * Agent harness pre-deploy fence (plan decision 4).
  *
  * ONE command, run BEFORE deploying incompatible harness code, against the
  * deployment about to be replaced:
  *
- *   bun run agent-harness:fence -- --reason "deploy v2" [--profile daily_operations ...] [--dry-run]
+ *   bun scripts/agent-harness-fence.ts --reason "deploy v2" [--profile daily_operations ...] [--dry-run]
+ *
+ * Invoke it directly, as above. The `bun run agent-harness:fence` alias works
+ * only for single-token flag values: `bun run <script> -- --reason "a b c"`
+ * re-splits the quoted value into three arguments.
  *
  * It reads the compatibility digest of the LOCAL generated registry (the code
  * about to deploy) and runs `agentHarness/deploymentState:fenceForDeploy` on
@@ -15,7 +19,7 @@
  *
  * The command exits non-zero when the fence cannot be applied, so a deploy
  * script that chains it aborts. Nothing here re-enables a profile: after the
- * deploy and smoke, `bun run agent-harness:switch -- --profile <id> --enable`.
+ * deploy and smoke, `bun scripts/agent-harness-switch.ts --profile <id> --enable`.
  */
 import { spawn } from "node:child_process";
 import path from "node:path";

@@ -9,18 +9,21 @@
  *                     consuming no read budget) and stores the exact validated
  *                     source with the authored text, short-lived;
  * - `reserveAndAdmitCall` reserves the declared worst case under the
- *                     invocation idempotency key and admits through U4;
+ *                     invocation idempotency key and admits through
+ *                     delegated admission;
  * - `settleCall`      fits the released envelope under the 240 KiB record
- *                     ceiling at its declared boundary, then releases (U4) and
- *                     settles (U1) exactly once; timeouts/cancels settle
+ *                     ceiling at its declared boundary, then releases through
+ *                     delegated admission and settles through the harness
+ *                     lifecycle exactly once; timeouts/cancels settle
  *                     conservatively with no payload;
  * - `finishAttempt`   accepts exactly one structured output, hashes it,
  *                     derives completeness/freshness/egress from the released
  *                     inputs, revalidates authority, and records the
  *                     irreversible `provider_egress_committed` boundary;
  * - `completeRun`     resolves attempt/citation refs, reauthorizes citations
- *                     and completion (U4), mints claim slices through the
- *                     manifest extractor, and commits through U1.
+ *                     and completion through delegated admission, mints claim
+ *                     slices through the manifest extractor, and commits
+ *                     through the harness lifecycle.
  * The factory takes the bound delegated admission so the composition root
  * (production) and the test package bind the same code path.
  */
@@ -99,7 +102,7 @@ export type AgentExecutorSeamConfig = {
   readonly admission: DelegatedAdmission;
   /** Model-projectable schemas; defaults to the generated index. Tests pass the test package's. */
   readonly schemas?: AgentCapabilitySchemaIndex;
-  /** Manifest-declared evidence extractors by capability id (U8 supplies; kernel never imports a domain). */
+  /** Manifest-declared evidence extractors by capability id (domain packages supply these; kernel never imports a domain). */
   readonly resolveEvidenceExtractor?: AgentEvidenceExtractorLookup;
 };
 
@@ -843,7 +846,7 @@ export type AgentExecutorSeams = ReturnType<typeof createAgentExecutorSeams>;
 
 // ---------------------------------------------------------------------------
 // Production binding: the composition root's delegated admission and the
-// generated schemas. U7's tool handlers call these through
+// generated schemas. The runtime host's tool handlers call these through
 // `internal.agentHarness.executorSeams.*` (or through `executor.ts`).
 // Manifest-declared evidence extractors are resolved through the admission
 // composition root (the only module that may reach both the kernel and a

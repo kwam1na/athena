@@ -1,16 +1,16 @@
 // @vitest-environment node
 /// <reference types="vite/client" />
 /**
- * Program executor end to end (plan U6 scenarios 1–13; ticket V26-1264):
+ * Program executor end to end (ticket V26-1264):
  * the real QuickJS sandbox, Athena validation, and the executor seams under
- * convex-test against U4's proven test package. Every durable effect is
+ * convex-test against the delegated-admission test package. Every durable effect is
  * asserted on the rows: budgets shared across retries, deduplicated
  * concurrent reads, truncation and mixed freshness, citations bound to the
  * attempt and hash, normalized failure diagnostics, exactly one output,
  * conservative settlement on timeout/cancel, egress inheritance through
  * arbitrary transforms, revocation races with truthful exposure, replay
- * inside the window, and the provider-visible boundary through U2's fake
- * runtime adapter and tool ledger.
+ * inside the window, and the provider-visible boundary through the
+ * deterministic runtime-adapter fake and tool ledger.
  */
 import { convexTest, type TestConvex } from "convex-test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -501,7 +501,7 @@ return { labels: rows.map((row) => row.label).sort(), variance: day.kind === "re
   });
 });
 
-describe("provider-visible boundary through U2's runtime adapter contract and tool ledger", () => {
+describe("provider-visible boundary through the runtime adapter contract and tool ledger", () => {
   function buildTool(executor: Awaited<ReturnType<typeof makeExecutor>>, t: Harness, runId: Id<"intelligenceRun">) {
     const definition: AgentToolDefinition<{ source: string }, unknown> = {
       toolId: "athena.executeProgram",

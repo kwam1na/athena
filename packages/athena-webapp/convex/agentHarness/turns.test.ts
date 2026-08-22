@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 /**
- * Operator-facing turn entry points (plan U7 scenarios 1, 2, 7, 9, 13, 15,
- * 17): the same handlers the public functions bind, proven against the test
+ * Operator-facing turn entry points: the same handlers the public functions
+ * bind, proven against the test
  * package with an admitted actor, plus the executable return-validator
  * contract proofs for every public function (`assertConformsToExportedReturns`).
  */

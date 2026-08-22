@@ -1,6 +1,6 @@
 /**
- * Capability SDK contract tests (plan U2 scenarios 1, 2, 3, 6 and the ticket's
- * type-level assertions). Everything here runs against the browser-safe
+ * Capability SDK contract tests, including the ticket's type-level
+ * assertions. Everything here runs against the browser-safe
  * contract modules only; no Convex, no product domain.
  */
 import { describe, expect, expectTypeOf, it } from "vitest";
