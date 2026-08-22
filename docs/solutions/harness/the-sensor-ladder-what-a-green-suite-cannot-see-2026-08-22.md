@@ -200,6 +200,14 @@ bun run --filter '@athena/webapp' lint:frontend:changed
 bun run --filter '@athena/webapp' audit:convex
 bun run agent-sdk:check
 git diff --check
+
+# 6. Changed-file -> validation-map coverage, from the repo root. A new
+#    package-root file (convex.json was the one here) sits outside every
+#    directory prefix and needs its own touchedPaths entry in
+#    scripts/harness-app-registry.ts, a regenerated map (bun run
+#    harness:generate), and a path in the scripts/harness-audit.test.ts
+#    fixture. Six approving review passes did not see it; this rung did.
+bun run pr:athena:preflight
 ```
 
 Additional rungs when they apply:
