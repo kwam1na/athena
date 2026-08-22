@@ -80,6 +80,60 @@ describe("projectLogicalOperationalWork", () => {
     ]);
   });
 
+  it("groups mixed sale and expense shortages for one SKU while keeping distinct source identities", () => {
+    const saleItem = workItem({
+      _id: "work-sale" as Id<"operationalWorkItem">,
+      productSkuId: "sku-1" as Id<"productSku">,
+      metadata: {
+        localRegisterSessionId: "session-a",
+        localTransactionId: "transaction-a",
+        sourceKind: "sale",
+        terminalId: "terminal-a",
+      },
+    });
+    const expenseItem = workItem({
+      _id: "work-expense" as Id<"operationalWorkItem">,
+      createdAt: 2,
+      productSkuId: "sku-1" as Id<"productSku">,
+      metadata: {
+        localEventId: "event-expense-recorded-1",
+        localExpenseEventId: "transaction-a",
+        localExpenseSessionId: "session-a",
+        sourceKind: "expense",
+        terminalId: "terminal-a",
+      },
+    });
+
+    const saleIdentity = stableOperationalWorkItemSourceIdentity(saleItem);
+    const expenseIdentity =
+      stableOperationalWorkItemSourceIdentity(expenseItem);
+
+    expect(saleIdentity).toBe(
+      "synced_sale_inventory_review:store-1:terminal-a:session-a:transaction-a",
+    );
+    expect(expenseIdentity).toBe(
+      "synced_sale_inventory_review:expense:store-1:terminal-a:session-a:transaction-a",
+    );
+
+    const result = projectLogicalOperationalWork({
+      items: [saleItem, expenseItem],
+      sourceCompleteness: "complete",
+    });
+
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0]).toMatchObject({
+      key: "synced_sale_inventory_review:store-1:sku-1",
+      productSkuId: "sku-1",
+      resolutionAvailability: "available",
+    });
+    expect(result.groups[0].sourceIdentities).toEqual(
+      expect.arrayContaining([saleIdentity, expenseIdentity]),
+    );
+    expect(result.groups[0].items.map((item) => item._id)).toEqual(
+      expect.arrayContaining(["work-sale", "work-expense"]),
+    );
+  });
+
   it("aggregates priority, status, and oldest actionable time independently across sources and aliases", () => {
     const result = projectLogicalOperationalWork({
       items: [

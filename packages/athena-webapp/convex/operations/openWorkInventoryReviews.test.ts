@@ -865,6 +865,275 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
     });
   });
 
+  it("resolves expense inventory review work against its own expense source", async () => {
+    const ctx = buildCtx(buildExpenseCtxSeed());
+
+    const result = await resolveSyncedSaleInventoryReviewWithCtx(
+      ctx as never,
+      expenseArgs(),
+    );
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: {
+        action: "resolved",
+        outcome: "completed",
+        settledConflictCount: 0,
+        status: "completed",
+        workItemId: "work-item-expense-1",
+      },
+    });
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "operationalWorkItem",
+      "work-item-expense-1",
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          resolution: expect.objectContaining({
+            source: expect.objectContaining({
+              localExpenseEventId: "local-expense-event-1",
+              localExpenseSessionId: "local-expense-session-1",
+              localId: "local-expense-event-1:inventory-review",
+              localIdKind: "inventoryReviewWorkItem",
+              sourceId: "expense-transaction-1",
+              sourceKind: "expense",
+              terminalId: "terminal-1",
+            }),
+          }),
+        }),
+        status: "completed",
+      }),
+    );
+    const insertedEvent = ctx.db.insert.mock.calls.find(
+      (call) => call[0] === "operationalEvent",
+    );
+    expect(insertedEvent?.[1]).toMatchObject({
+      eventType: "synced_sale_inventory_review_completed",
+      message: "Synced expense inventory review completed.",
+    });
+    expect(JSON.stringify(insertedEvent?.[1])).not.toContain("staffProofToken");
+  });
+
+  it("fails closed on mismatched expense session, transaction, terminal, store, or local event", async () => {
+    const mismatches: Array<{
+      message: string;
+      overrides: Record<string, unknown>;
+      seed?: BuildCtxSeed;
+    }> = [
+      {
+        message: "Expense session does not match the inventory review terminal.",
+        overrides: {},
+        seed: {
+          expenseSession: buildExpenseSession({
+            terminalId: "terminal-other" as Id<"posTerminal">,
+          }),
+        },
+      },
+      {
+        message: "Expense session does not match the inventory review terminal.",
+        overrides: {},
+        seed: {
+          expenseSession: buildExpenseSession({
+            storeId: "store-2" as Id<"store">,
+          }),
+        },
+      },
+      {
+        message: "Expense does not match the inventory review context.",
+        overrides: {},
+        seed: {
+          expenseTransaction: buildExpenseTransaction({
+            sessionId: "expense-session-other" as Id<"expenseSession">,
+          }),
+        },
+      },
+      {
+        message: "Expense does not match the inventory review context.",
+        overrides: {},
+        seed: {
+          expenseTransaction: buildExpenseTransaction({
+            storeId: "store-2" as Id<"store">,
+          }),
+        },
+      },
+      {
+        message: "Terminal does not match the inventory review store.",
+        overrides: { terminalId: "terminal-other" as Id<"posTerminal"> },
+        seed: {
+          posTerminal: buildTerminal({
+            _id: "terminal-other" as Id<"posTerminal">,
+            storeId: "store-2" as Id<"store">,
+          }),
+        },
+      },
+      {
+        message:
+          "Work item metadata does not match the recorded expense context.",
+        overrides: { localExpenseEventId: "local-expense-event-other" },
+      },
+      {
+        message:
+          "Work item metadata does not match the recorded expense context.",
+        overrides: { localExpenseSessionId: "local-expense-session-other" },
+      },
+      {
+        message: "Inventory review work item not found for this store.",
+        overrides: { storeId: "store-other" as Id<"store"> },
+        seed: { store: buildStore({ _id: "store-other" as Id<"store"> }) },
+      },
+    ];
+
+    for (const mismatch of mismatches) {
+      const ctx = buildCtx(buildExpenseCtxSeed(mismatch.seed));
+      const result = await resolveSyncedSaleInventoryReviewWithCtx(
+        ctx as never,
+        expenseArgs(mismatch.overrides as never),
+      );
+
+      expect(result).toEqual({
+        kind: "user_error",
+        error: {
+          code: mismatch.message.includes("not found")
+            ? "not_found"
+            : "validation_failed",
+          message: mismatch.message,
+        },
+      });
+      expect(ctx.db.patch).not.toHaveBeenCalled();
+      expect(ctx.db.insert).not.toHaveBeenCalled();
+    }
+  });
+
+  it("fails closed when sale-shaped source context is supplied for expense work", async () => {
+    const ctx = buildCtx(buildExpenseCtxSeed());
+
+    const result = await resolveSyncedSaleInventoryReviewWithCtx(
+      ctx as never,
+      expenseArgs({
+        receiptNumber: "LR-001",
+      } as never),
+    );
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+        message:
+          "Work item metadata does not match the recorded expense context.",
+      },
+    });
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+  });
+
+  it("resolves a mixed sale and expense SKU group from one qualifying correction", async () => {
+    const ctx = buildCtx({
+      expenseSession: buildExpenseSession(),
+      expenseTransaction: buildExpenseTransaction(),
+      operationalWorkItems: [buildWorkItem(), buildExpenseWorkItem()],
+    });
+
+    const result = await resolveSyncedSaleInventoryReviewGroupWithCtx(
+      ctx as never,
+      {
+        expectedMemberIds: [
+          "work-item-1" as Id<"operationalWorkItem">,
+          "work-item-expense-1" as Id<"operationalWorkItem">,
+        ],
+        groupKey: "synced_sale_inventory_review:store-1:sku-1",
+        outcome: "completed",
+        reason: "Stock count corrected for the affected SKU.",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: { resolvedCount: 2, status: "completed" },
+    });
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "operationalWorkItem",
+      "work-item-1",
+      expect.objectContaining({ status: "completed" }),
+    );
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "operationalWorkItem",
+      "work-item-expense-1",
+      expect.objectContaining({ status: "completed" }),
+    );
+  });
+
+  it("validates every mixed-group member source before the first write", async () => {
+    const ctx = buildCtx({
+      expenseSession: buildExpenseSession({
+        terminalId: "terminal-other" as Id<"posTerminal">,
+      }),
+      expenseTransaction: buildExpenseTransaction(),
+      operationalWorkItems: [buildWorkItem(), buildExpenseWorkItem()],
+    });
+
+    const result = await resolveSyncedSaleInventoryReviewGroupWithCtx(
+      ctx as never,
+      {
+        expectedMemberIds: [
+          "work-item-1" as Id<"operationalWorkItem">,
+          "work-item-expense-1" as Id<"operationalWorkItem">,
+        ],
+        groupKey: "synced_sale_inventory_review:store-1:sku-1",
+        outcome: "completed",
+        reason: "Stock count corrected for the affected SKU.",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+        message: "Expense session does not match the inventory review terminal.",
+      },
+    });
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+  });
+
+  it("auto-resolves expense inventory review work from an applied stock adjustment", async () => {
+    const ctx = buildCtx(buildExpenseCtxSeed());
+
+    const result =
+      await autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWithCtx(
+        ctx as never,
+        {
+          actorUserId: "user-1" as Id<"athenaUser">,
+          inventoryMovements: [buildInventoryMovement({ createdAt: 2 })],
+          stockAdjustmentBatchId: "batch-1" as Id<"stockAdjustmentBatch">,
+          storeId: "store-1" as Id<"store">,
+        },
+      );
+
+    expect(result).toEqual({ resolvedCount: 1, settledConflictCount: 0 });
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "operationalWorkItem",
+      "work-item-expense-1",
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          resolution: expect.objectContaining({
+            source: expect.objectContaining({
+              localExpenseEventId: "local-expense-event-1",
+              localId: "local-expense-event-1:inventory-review",
+              sourceKind: "expense",
+            }),
+          }),
+        }),
+        status: "completed",
+      }),
+    );
+    const insertedEvent = ctx.db.insert.mock.calls.find(
+      (call) => call[0] === "operationalEvent",
+    );
+    expect(insertedEvent?.[1]).toMatchObject({
+      message: "Synced expense inventory review completed by stock adjustment.",
+    });
+  });
+
   it("does not require the canonical local mapping when stock update proof exists", async () => {
     const ctx = buildCtx({
       posLocalSyncMapping: buildMapping({
@@ -891,6 +1160,172 @@ describe("resolveSyncedSaleInventoryReviewWithCtx", () => {
       kind: "ok",
     });
     expect(ctx.db.patch).toHaveBeenCalled();
+  });
+});
+
+describe("expense inventory review source conflict settlement", () => {
+  it("settles the expense source conflict when an expense member completes manually", async () => {
+    const ctx = buildCtx(
+      buildExpenseCtxSeed({
+        posLocalSyncConflict: buildExpenseConflict(),
+        posLocalSyncMapping: buildExpenseMapping(),
+      }),
+    );
+
+    const result = await resolveSyncedSaleInventoryReviewWithCtx(
+      ctx as never,
+      expenseArgs(),
+    );
+
+    expect(result).toMatchObject({
+      data: {
+        action: "resolved",
+        settledConflictCount: 1,
+        status: "completed",
+        workItemId: "work-item-expense-1",
+      },
+      kind: "ok",
+    });
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "posLocalSyncConflict",
+      "conflict-expense-1",
+      expect.objectContaining({
+        resolvedByUserId: "user-1",
+        status: "resolved",
+      }),
+    );
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "operationalWorkItem",
+      "work-item-expense-1",
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          resolution: expect.objectContaining({
+            source: expect.objectContaining({
+              localId: "local-expense-event-1:inventory-review",
+              sourceKind: "expense",
+            }),
+            sourceSettlement: {
+              disposition: "settled",
+              localEventIds: ["event-expense-recorded-1"],
+              settledConflictCount: 1,
+              terminalId: "terminal-1",
+            },
+          }),
+        }),
+        status: "completed",
+      }),
+    );
+    const insertedEvent = ctx.db.insert.mock.calls.find(
+      (call) => call[0] === "operationalEvent",
+    );
+    expect(insertedEvent?.[1]).toMatchObject({
+      eventType: "synced_sale_inventory_review_completed",
+      message: "Synced expense inventory review completed.",
+      metadata: expect.objectContaining({
+        sourceSettlement: expect.objectContaining({
+          disposition: "settled",
+          settledConflictCount: 1,
+        }),
+      }),
+    });
+  });
+
+  it("settles expense work and its sync conflict atomically from a qualifying stock adjustment", async () => {
+    const ctx = buildCtx(
+      buildExpenseCtxSeed({
+        posLocalSyncConflict: buildExpenseConflict(),
+        posLocalSyncMapping: buildExpenseMapping(),
+      }),
+    );
+
+    const result =
+      await autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWithCtx(
+        ctx as never,
+        {
+          actorUserId: "user-1" as Id<"athenaUser">,
+          inventoryMovements: [buildInventoryMovement({ createdAt: 2 })],
+          organizationId: "org-1" as Id<"organization">,
+          stockAdjustmentBatchId: "batch-1" as Id<"stockAdjustmentBatch">,
+          storeId: "store-1" as Id<"store">,
+        },
+      );
+
+    expect(result).toEqual({ resolvedCount: 1, settledConflictCount: 1 });
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "posLocalSyncConflict",
+      "conflict-expense-1",
+      expect.objectContaining({
+        resolvedByUserId: "user-1",
+        status: "resolved",
+      }),
+    );
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "operationalWorkItem",
+      "work-item-expense-1",
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          resolution: expect.objectContaining({
+            source: expect.objectContaining({ sourceKind: "expense" }),
+            sourceSettlement: expect.objectContaining({
+              disposition: "settled",
+              localEventIds: ["event-expense-recorded-1"],
+              settledConflictCount: 1,
+            }),
+          }),
+        }),
+        status: "completed",
+      }),
+    );
+    const insertedEvent = ctx.db.insert.mock.calls.find(
+      (call) => call[0] === "operationalEvent",
+    );
+    expect(insertedEvent?.[1]).toMatchObject({
+      eventType: "synced_sale_inventory_review_completed",
+      message: "Synced expense inventory review completed by stock adjustment.",
+      metadata: expect.objectContaining({
+        sourceSettlement: expect.objectContaining({
+          settledConflictCount: 1,
+        }),
+      }),
+    });
+  });
+
+  it("never settles an expense member through a sale-shaped mapping", async () => {
+    const ctx = buildCtx(
+      buildExpenseCtxSeed({
+        posLocalSyncConflict: buildExpenseConflict(),
+        posLocalSyncMapping: buildMapping({ cloudId: "work-item-expense-1" }),
+      }),
+    );
+
+    const result = await resolveSyncedSaleInventoryReviewWithCtx(
+      ctx as never,
+      expenseArgs(),
+    );
+
+    expect(result).toMatchObject({
+      data: { action: "resolved", settledConflictCount: 0 },
+      kind: "ok",
+    });
+    expect(ctx.db.patch).not.toHaveBeenCalledWith(
+      "posLocalSyncConflict",
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "operationalWorkItem",
+      "work-item-expense-1",
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          resolution: expect.objectContaining({
+            sourceSettlement: expect.objectContaining({
+              disposition: "unmapped",
+              settledConflictCount: 0,
+            }),
+          }),
+        }),
+      }),
+    );
   });
 });
 
@@ -1275,99 +1710,95 @@ function defaultArgs(
 
 type BuildCtxSeed = Partial<{
   athenaUser: Doc<"athenaUser">;
+  expenseSession: Doc<"expenseSession"> | null;
+  expenseTransaction: Doc<"expenseTransaction"> | null;
   inventoryMovement: Doc<"inventoryMovement"> | null;
   operationalWorkItem: Doc<"operationalWorkItem">;
+  operationalWorkItems: Doc<"operationalWorkItem">[];
   oversizedOperationalWorkRepair: Doc<"oversizedOperationalWorkRepair">;
   posLocalSyncConflict: Doc<"posLocalSyncConflict">;
   posLocalSyncMapping: Doc<"posLocalSyncMapping">;
   productSku: Doc<"productSku"> | null;
   posTerminal: Doc<"posTerminal">;
-  posTransaction: Doc<"posTransaction">;
-  registerSession: Doc<"registerSession">;
+  posTransaction: Doc<"posTransaction"> | null;
+  registerSession: Doc<"registerSession"> | null;
   staffProfile: Doc<"staffProfile">;
   store: Doc<"store">;
   sharedDemoPrincipal: Doc<"sharedDemoPrincipal">;
   sharedDemoRestoreState: Doc<"sharedDemoRestoreState">;
 }>;
 
+function seededRows<TRow>(value: TRow | TRow[] | null | undefined): TRow[] {
+  if (value === null || value === undefined) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
 function buildCtx(seed: BuildCtxSeed = {}) {
-  const rows = {
-    athenaUser: seed.athenaUser,
-    inventoryMovement:
+  const rows: Record<string, Array<Record<string, unknown>>> = {
+    athenaUser: seededRows(seed.athenaUser),
+    expenseSession: seededRows(seed.expenseSession),
+    expenseTransaction: seededRows(seed.expenseTransaction),
+    inventoryMovement: seededRows(
       seed.inventoryMovement === undefined
         ? buildInventoryMovement()
         : seed.inventoryMovement,
-    operationalWorkItem: seed.operationalWorkItem ?? buildWorkItem(),
-    oversizedOperationalWorkRepair: seed.oversizedOperationalWorkRepair,
-    posLocalSyncConflict: seed.posLocalSyncConflict,
-    posLocalSyncMapping: seed.posLocalSyncMapping ?? buildMapping(),
-    productSku:
+    ),
+    operationalWorkItem: seededRows(
+      seed.operationalWorkItems ?? seed.operationalWorkItem ?? buildWorkItem(),
+    ),
+    oversizedOperationalWorkRepair: seededRows(
+      seed.oversizedOperationalWorkRepair,
+    ),
+    posLocalSyncConflict: seededRows(seed.posLocalSyncConflict),
+    posLocalSyncMapping: seededRows(seed.posLocalSyncMapping ?? buildMapping()),
+    productSku: seededRows(
       seed.productSku === undefined ? buildProductSku() : seed.productSku,
-    posTerminal: seed.posTerminal ?? buildTerminal(),
-    posTransaction: seed.posTransaction ?? buildTransaction(),
-    registerSession: seed.registerSession ?? buildRegisterSession(),
-    staffProfile: seed.staffProfile ?? buildStaffProfile(),
-    store: seed.store ?? buildStore(),
-    sharedDemoPrincipal: seed.sharedDemoPrincipal,
-    sharedDemoRestoreState: seed.sharedDemoRestoreState,
+    ),
+    posTerminal: seededRows(seed.posTerminal ?? buildTerminal()),
+    posTransaction: seededRows(
+      seed.posTransaction === undefined ? buildTransaction() : seed.posTransaction,
+    ),
+    registerSession: seededRows(
+      seed.registerSession === undefined
+        ? buildRegisterSession()
+        : seed.registerSession,
+    ),
+    staffProfile: seededRows(seed.staffProfile ?? buildStaffProfile()),
+    store: seededRows(seed.store ?? buildStore()),
+    sharedDemoPrincipal: seededRows(seed.sharedDemoPrincipal),
+    sharedDemoRestoreState: seededRows(seed.sharedDemoRestoreState),
   };
   const get = vi.fn(async (tableName: string, id: string) => {
-    const row = rows[tableName as keyof typeof rows];
-    return row && row._id === id ? row : null;
+    return (rows[tableName] ?? []).find((row) => row._id === id) ?? null;
   });
   const query = vi.fn((tableName: string) => ({
-    withIndex: vi.fn((_indexName: string, builder: (q: QueryBuilder) => QueryBuilder) => {
-      const constraints: Record<string, unknown> = {};
-      const q = {
-        eq(field: string, value: unknown) {
-          constraints[field] = value;
-          return q;
-        },
-      };
-      builder(q);
-      const firstMatchingRow = async () => {
-        const row = rows[tableName as keyof typeof rows];
-        if (!row) return null;
-        return Object.entries(constraints).every(
-          ([field, value]) => row[field as keyof typeof row] === value,
-        )
-          ? row
-          : null;
-      };
-      return {
-        order: vi.fn(() => ({
-          first: vi.fn(firstMatchingRow),
-        })),
-        collect: vi.fn(async () => {
-          const row = rows[tableName as keyof typeof rows];
-          if (!row) return [];
-          return Object.entries(constraints).every(
-            ([field, value]) => row[field as keyof typeof row] === value,
-          )
-            ? [row]
-            : [];
-        }),
-        first: vi.fn(firstMatchingRow),
-        take: vi.fn(async () => {
-          const row = rows[tableName as keyof typeof rows];
-          if (!row) return [];
-          return Object.entries(constraints).every(
-            ([field, value]) => row[field as keyof typeof row] === value,
-          )
-            ? [row]
-            : [];
-        }),
-        unique: vi.fn(async () => {
-          const row = rows[tableName as keyof typeof rows];
-          if (!row) return null;
-          return Object.entries(constraints).every(
-            ([field, value]) => row[field as keyof typeof row] === value,
-          )
-            ? row
-            : null;
-        }),
-      };
-    }),
+    withIndex: vi.fn(
+      (_indexName: string, builder: (q: QueryBuilder) => QueryBuilder) => {
+        const constraints: Record<string, unknown> = {};
+        const q = {
+          eq(field: string, value: unknown) {
+            constraints[field] = value;
+            return q;
+          },
+        };
+        builder(q);
+        const matchingRows = () =>
+          (rows[tableName] ?? []).filter((row) =>
+            Object.entries(constraints).every(
+              ([field, value]) => row[field] === value,
+            ),
+          );
+        return {
+          order: vi.fn(() => ({
+            first: vi.fn(async () => matchingRows()[0] ?? null),
+          })),
+          collect: vi.fn(async () => matchingRows()),
+          first: vi.fn(async () => matchingRows()[0] ?? null),
+          take: vi.fn(async () => matchingRows()),
+          unique: vi.fn(async () => matchingRows()[0] ?? null),
+        };
+      },
+    ),
   }));
 
   return {
@@ -1376,7 +1807,10 @@ function buildCtx(seed: BuildCtxSeed = {}) {
     },
     db: {
       get,
-      insert: vi.fn(async (tableName: string) => `${tableName}-1`),
+      insert: vi.fn(
+        async (tableName: string, _document?: Record<string, unknown>) =>
+          `${tableName}-1`,
+      ),
       patch: vi.fn(),
       query,
     },
@@ -1442,6 +1876,91 @@ function buildWorkItem(
     type: "synced_sale_inventory_review",
     ...overrides,
   } as Doc<"operationalWorkItem">;
+}
+
+function buildExpenseWorkItem(
+  overrides: Partial<Doc<"operationalWorkItem">> = {},
+): Doc<"operationalWorkItem"> {
+  return buildWorkItem({
+    _id: "work-item-expense-1" as Id<"operationalWorkItem">,
+    metadata: {
+      expenseSessionId: "expense-session-1",
+      localEventId: "event-expense-recorded-1",
+      localExpenseEventId: "local-expense-event-1",
+      localExpenseSessionId: "local-expense-session-1",
+      primaryProductSkuId: "sku-1",
+      sourceId: "expense-transaction-1",
+      sourceKind: "expense",
+      sourceType: "expenseTransaction",
+      terminalId: "terminal-1",
+    },
+    title: "Review inventory for Repair Kit",
+    ...overrides,
+  });
+}
+
+function buildExpenseSession(
+  overrides: Partial<Doc<"expenseSession">> = {},
+): Doc<"expenseSession"> {
+  return {
+    _creationTime: 1,
+    _id: "expense-session-1" as Id<"expenseSession">,
+    completedAt: 20,
+    createdAt: 20,
+    expiresAt: Number.MAX_SAFE_INTEGER,
+    sessionNumber: "local-expense-session-1",
+    staffProfileId: "staff-manager-1" as Id<"staffProfile">,
+    status: "completed",
+    storeId: "store-1" as Id<"store">,
+    terminalId: "terminal-1" as Id<"posTerminal">,
+    updatedAt: 20,
+    ...overrides,
+  } as Doc<"expenseSession">;
+}
+
+function buildExpenseTransaction(
+  overrides: Partial<Doc<"expenseTransaction">> = {},
+): Doc<"expenseTransaction"> {
+  return {
+    _creationTime: 1,
+    _id: "expense-transaction-1" as Id<"expenseTransaction">,
+    completedAt: 20,
+    sessionId: "expense-session-1" as Id<"expenseSession">,
+    staffProfileId: "staff-manager-1" as Id<"staffProfile">,
+    status: "completed",
+    storeId: "store-1" as Id<"store">,
+    totalValue: 25,
+    transactionNumber: "000123",
+    ...overrides,
+  } as Doc<"expenseTransaction">;
+}
+
+function buildExpenseCtxSeed(seed: BuildCtxSeed = {}): BuildCtxSeed {
+  return {
+    expenseSession: buildExpenseSession(),
+    expenseTransaction: buildExpenseTransaction(),
+    operationalWorkItem: buildExpenseWorkItem(),
+    posTransaction: null,
+    registerSession: null,
+    ...seed,
+  };
+}
+
+function expenseArgs(
+  overrides: Partial<Parameters<typeof resolveSyncedSaleInventoryReviewWithCtx>[1]> = {},
+) {
+  return {
+    expenseSessionId: "expense-session-1" as Id<"expenseSession">,
+    expenseTransactionId: "expense-transaction-1" as Id<"expenseTransaction">,
+    localExpenseEventId: "local-expense-event-1",
+    localExpenseSessionId: "local-expense-session-1",
+    outcome: "completed" as const,
+    reason: "Stock count corrected for the recorded expense.",
+    storeId: "store-1" as Id<"store">,
+    terminalId: "terminal-1" as Id<"posTerminal">,
+    workItemId: "work-item-expense-1" as Id<"operationalWorkItem">,
+    ...overrides,
+  };
 }
 
 function buildInventoryMovement(
@@ -1586,4 +2105,32 @@ function buildConflict(
     terminalId: "terminal-1" as Id<"posTerminal">,
     ...overrides,
   } as Doc<"posLocalSyncConflict">;
+}
+
+function buildExpenseMapping(
+  overrides: Partial<Doc<"posLocalSyncMapping">> = {},
+): Doc<"posLocalSyncMapping"> {
+  // Expense events carry no register session, so projection writes the mapping
+  // with an empty register-session key and scopes it by local expense source.
+  return buildMapping({
+    _id: "mapping-expense-inventory-review" as Id<"posLocalSyncMapping">,
+    cloudId: "work-item-expense-1",
+    localEventId: "event-expense-recorded-1",
+    localId: "local-expense-event-1:inventory-review",
+    localRegisterSessionId: "",
+    sourceEventType: "expense_recorded",
+    ...overrides,
+  });
+}
+
+function buildExpenseConflict(
+  overrides: Partial<Doc<"posLocalSyncConflict">> = {},
+): Doc<"posLocalSyncConflict"> {
+  return buildConflict({
+    _id: "conflict-expense-1" as Id<"posLocalSyncConflict">,
+    localEventId: "event-expense-recorded-1",
+    localRegisterSessionId: "",
+    summary: "Inventory needs manager review for a synced expense.",
+    ...overrides,
+  });
 }

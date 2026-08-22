@@ -232,6 +232,8 @@ const INVENTORY_CONFLICT_SUMMARY =
   "Inventory needs manager review for a synced offline sale.";
 const EXPENSE_INVENTORY_CONFLICT_SUMMARY =
   "Inventory needs manager review for a synced expense.";
+const EXPENSE_INVENTORY_REVIEW_NOTES =
+  "Recorded expense activity was retained. Inventory was not decremented because stock availability still needs correction.";
 const PAYMENT_CONFLICT_SUMMARY =
   "Payment needs manager review for a synced offline sale.";
 const PERMISSION_DRIFT_SUMMARY =
@@ -431,11 +433,18 @@ async function projectExpenseRecorded(
         localId: args.event.payload.localExpenseSessionId,
       },
     );
+    const reviewWorkItemMapping =
+      await createMissingExpenseInventoryReviewForProjectedExpense(
+        repository,
+        args,
+        { transactionMapping: existingTransactionMapping },
+      );
     return {
       status: "projected",
       mappings: [
         ...(existingSessionMapping ? [existingSessionMapping] : []),
         existingTransactionMapping,
+        ...(reviewWorkItemMapping ? [reviewWorkItemMapping] : []),
       ],
       conflicts: [],
     };
@@ -841,11 +850,252 @@ async function projectExpenseRecorded(
     cloudId: transactionId,
   });
 
+  const reviewWorkItemMapping =
+    await createSkippedExpenseInventoryReviewWorkItem(repository, args, {
+      expenseSessionId: String(sessionId),
+      shortfalls: [...trustedExpenseSkuQuantities.values()].flatMap(
+        (aggregate) =>
+          trustedExpenseSkuAvailability.get(aggregate.productSkuId) === true
+            ? []
+            : [
+                {
+                  inventoryCount: aggregate.inventoryCount,
+                  productId: aggregate.productId,
+                  productSkuId: aggregate.productSkuId,
+                  quantityAvailable: aggregate.quantityAvailable,
+                  requestedQuantity: aggregate.requestedQuantity,
+                } satisfies ExpenseInventoryShortfall,
+              ],
+      ),
+      store,
+      transactionId: String(transactionId),
+    });
+
   return {
     status: "projected",
-    mappings: [sessionMapping, transactionMapping],
+    mappings: [
+      sessionMapping,
+      transactionMapping,
+      ...(reviewWorkItemMapping ? [reviewWorkItemMapping] : []),
+    ],
     conflicts: reviewConflicts,
   };
+}
+
+type ExpenseInventoryShortfall = {
+  inventoryCount: number;
+  productId?: Id<"product">;
+  productSkuId: Id<"productSku">;
+  quantityAvailable: number;
+  requestedQuantity: number;
+};
+
+function expenseInventoryReviewLocalId(localExpenseEventId: string) {
+  return [localExpenseEventId, "inventory-review"].join(":");
+}
+
+function trustedExpenseInventoryLines(
+  repository: SyncProjectionRepository,
+  args: ExpenseRecordedArgs,
+) {
+  return args.event.payload.items.flatMap((item) => {
+    if (item.pendingCheckoutItemId || item.inventoryImportProvisionalSkuId) {
+      return [];
+    }
+    const productId = repository.normalizeCloudId("product", item.productId);
+    const productSkuId = repository.normalizeCloudId(
+      "productSku",
+      item.productSkuId,
+    );
+    if (!productId || !productSkuId) return [];
+
+    return [
+      {
+        localTransactionItemId: item.localTransactionItemId,
+        productId,
+        productName: item.productName,
+        productSku: item.productSku,
+        productSkuId,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      },
+    ];
+  });
+}
+
+/**
+ * Expense stock shortfalls reuse the synced inventory-review rail. The work
+ * item keeps the shared `synced_sale_inventory_review` discriminator, but its
+ * source metadata carries the local expense identity so resolution validates
+ * against the expense session/transaction rather than a sale.
+ */
+async function createSkippedExpenseInventoryReviewWorkItem(
+  repository: SyncProjectionRepository,
+  args: ExpenseRecordedArgs,
+  input: {
+    expenseSessionId?: string;
+    shortfalls: ExpenseInventoryShortfall[];
+    store: StoreRecord;
+    transactionId: string;
+  },
+): Promise<LocalSyncMappingRecord | null> {
+  if (input.shortfalls.length === 0 || !input.store?.organizationId) {
+    return null;
+  }
+
+  const trustedLines = trustedExpenseInventoryLines(repository, args);
+  if (trustedLines.length === 0) return null;
+
+  const localInventoryReviewWorkItemId = expenseInventoryReviewLocalId(
+    args.event.payload.localExpenseEventId,
+  );
+  const existingWorkItemMapping = await repository.findMappingForTerminal({
+    localId: localInventoryReviewWorkItemId,
+    localIdKind: "inventoryReviewWorkItem",
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+  });
+  if (existingWorkItemMapping) return existingWorkItemMapping;
+
+  const primaryShortfall = input.shortfalls[0];
+  const primaryProductSkuId = primaryShortfall.productSkuId;
+  const primaryLine = trustedLines.find(
+    (line) => line.productSkuId === primaryProductSkuId,
+  );
+  const primaryProductName = primaryLine?.productName;
+  const title = primaryProductName
+    ? `Review inventory for ${primaryProductName}`
+    : "Review inventory for a recorded expense";
+  const skippedMutationItems: SaleInventorySkippedMutationItem[] =
+    input.shortfalls.map((shortfall) => {
+      const line = trustedLines.find(
+        (candidate) => candidate.productSkuId === shortfall.productSkuId,
+      );
+      return {
+        availableInventoryCount: shortfall.inventoryCount,
+        ...(shortfall.productId ?? line?.productId
+          ? { productId: (shortfall.productId ?? line?.productId)! }
+          : {}),
+        ...(line?.productName ? { productName: line.productName } : {}),
+        ...(line?.productSku ? { productSku: line.productSku } : {}),
+        productSkuId: shortfall.productSkuId,
+        quantityAvailable: shortfall.quantityAvailable,
+        reason: "stock_shortfall",
+        requestedQuantity: shortfall.requestedQuantity,
+      };
+    });
+
+  const workItemId = await repository.createServiceWorkItem({
+    approvalState: "not_required",
+    createdByStaffProfileId:
+      args.options?.reviewActorStaffProfileId ?? args.event.staffProfileId,
+    createdByUserId: args.submittedByUserId,
+    metadata: {
+      ...(input.expenseSessionId
+        ? { expenseSessionId: input.expenseSessionId }
+        : {}),
+      localEventId: args.event.localEventId,
+      localExpenseEventId: args.event.payload.localExpenseEventId,
+      localExpenseSessionId: args.event.payload.localExpenseSessionId,
+      primaryProductSkuId,
+      ...(args.options?.repairRunId
+        ? { repairRunId: args.options.repairRunId }
+        : {}),
+      skippedMutationItems,
+      sourceId: input.transactionId,
+      sourceKind: "expense",
+      sourceType: "expenseTransaction",
+      terminalId: args.terminalId,
+      trustedInventoryLines: trustedLines,
+    },
+    notes: EXPENSE_INVENTORY_REVIEW_NOTES,
+    organizationId: input.store.organizationId,
+    priority: "high",
+    productSkuId: primaryProductSkuId,
+    status: "open",
+    storeId: args.storeId,
+    title,
+    type: "synced_sale_inventory_review",
+  });
+
+  return createMapping(repository, args, {
+    syncScope: "expense",
+    localExpenseSessionId: args.event.payload.localExpenseSessionId,
+    cloudId: workItemId,
+    cloudTable: "operationalWorkItem",
+    localId: localInventoryReviewWorkItemId,
+    localIdKind: "inventoryReviewWorkItem",
+  });
+}
+
+/**
+ * Retry path for an already-projected expense. The open inventory conflicts the
+ * first projection recorded are the durable shortfall evidence, so the missing
+ * Open Work target is rebuilt from them without re-reading the catalog or
+ * duplicating any expense fact.
+ */
+async function createMissingExpenseInventoryReviewForProjectedExpense(
+  repository: SyncProjectionRepository,
+  args: ExpenseRecordedArgs,
+  input: { transactionMapping: LocalSyncMappingRecord },
+): Promise<LocalSyncMappingRecord | null> {
+  const existingWorkItemMapping = await repository.findMappingForTerminal({
+    localId: expenseInventoryReviewLocalId(
+      args.event.payload.localExpenseEventId,
+    ),
+    localIdKind: "inventoryReviewWorkItem",
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+  });
+  if (existingWorkItemMapping) return existingWorkItemMapping;
+
+  const eventConflicts = await repository.listConflictsForEvent({
+    localEventId: args.event.localEventId,
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+  });
+  const shortfalls = eventConflicts.flatMap((conflict) => {
+    if (
+      conflict.conflictType !== "inventory" ||
+      conflict.status !== "needs_review" ||
+      conflict.summary !== EXPENSE_INVENTORY_CONFLICT_SUMMARY
+    ) {
+      return [];
+    }
+    const rawProductSkuId = conflict.details.productSkuId;
+    const productSkuId =
+      typeof rawProductSkuId === "string"
+        ? repository.normalizeCloudId("productSku", rawProductSkuId)
+        : null;
+    if (!productSkuId) return [];
+
+    return [
+      {
+        inventoryCount: numericConflictDetail(conflict.details.inventoryCount),
+        productSkuId,
+        quantityAvailable: numericConflictDetail(
+          conflict.details.quantityAvailable,
+        ),
+        requestedQuantity: numericConflictDetail(
+          conflict.details.requestedQuantity,
+        ),
+      } satisfies ExpenseInventoryShortfall,
+    ];
+  });
+  if (shortfalls.length === 0) return null;
+
+  const store = await repository.getStore(args.storeId);
+  if (!store) return null;
+
+  return createSkippedExpenseInventoryReviewWorkItem(repository, args, {
+    shortfalls,
+    store,
+    transactionId: input.transactionMapping.cloudId,
+  });
+}
+
+function numericConflictDetail(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
 function assertNever(value: never): never {
@@ -2909,6 +3159,7 @@ async function createSkippedInventoryReviewWorkItem(
       registerSessionId: input.session.registerSession._id,
       skippedMutationItems: input.inventoryValidation.skippedMutationItems,
       sourceId: input.sale.transactionId,
+      sourceKind: "sale",
       sourceType,
       terminalId: args.terminalId,
       trustedInventoryLines: trustedLines,

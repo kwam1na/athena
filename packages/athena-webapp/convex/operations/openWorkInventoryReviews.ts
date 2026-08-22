@@ -41,6 +41,12 @@ const AUTO_RESOLVE_STOCK_REVIEW_REASON =
   "Resolved by applied stock adjustment.";
 const INVENTORY_REVIEW_CONFLICTS_SETTLED_EVENT_TYPE =
   "synced_sale_inventory_review_conflicts_settled";
+const EXPENSE_SESSION_MISMATCH_MESSAGE =
+  "Expense session does not match the inventory review terminal.";
+const EXPENSE_SOURCE_MISMATCH_MESSAGE =
+  "Expense does not match the inventory review context.";
+const EXPENSE_METADATA_MISMATCH_MESSAGE =
+  "Work item metadata does not match the recorded expense context.";
 
 const syncedSaleInventoryReviewOutcomeValidator = v.union(
   v.literal("completed"),
@@ -57,6 +63,10 @@ type SyncedSaleInventoryReviewOutcome =
 
 type ResolveSyncedSaleInventoryReviewArgs = {
   actorStaffProfileId?: Id<"staffProfile">;
+  expenseSessionId?: Id<"expenseSession">;
+  expenseTransactionId?: Id<"expenseTransaction">;
+  localExpenseEventId?: string;
+  localExpenseSessionId?: string;
   localRegisterSessionId?: string;
   localTransactionId?: string;
   outcome: SyncedSaleInventoryReviewOutcome;
@@ -83,6 +93,10 @@ type ResolveSyncedSaleInventoryReviewArgs = {
 };
 
 type InventoryReviewSourceValidationArgs = {
+  expenseSessionId?: Id<"expenseSession">;
+  expenseTransactionId?: Id<"expenseTransaction">;
+  localExpenseEventId?: string;
+  localExpenseSessionId?: string;
   localRegisterSessionId?: string;
   localTransactionId?: string;
   receiptNumber?: string;
@@ -97,6 +111,23 @@ export function inventoryReviewSourceValidationArgsFromWorkItem(
   workItem: Doc<"operationalWorkItem">,
 ): Omit<InventoryReviewSourceValidationArgs, "storeId" | "workItem"> {
   const metadata = workItem.metadata ?? {};
+  if (inventoryReviewSourceKind(metadata) === "expense") {
+    return {
+      expenseSessionId:
+        idMetadataValue<"expenseSession">(metadata, "expenseSessionId") ??
+        undefined,
+      expenseTransactionId:
+        idMetadataValue<"expenseTransaction">(metadata, "sourceId") ??
+        undefined,
+      localExpenseEventId:
+        stringMetadataValue(metadata, "localExpenseEventId") ?? undefined,
+      localExpenseSessionId:
+        stringMetadataValue(metadata, "localExpenseSessionId") ?? undefined,
+      terminalId:
+        idMetadataValue<"posTerminal">(metadata, "terminalId") ?? undefined,
+    };
+  }
+
   return {
     localRegisterSessionId:
       stringMetadataValue(metadata, "localRegisterSessionId") ?? undefined,
@@ -118,6 +149,10 @@ export async function validateInventoryReviewSourceContextWithCtx(
   args: InventoryReviewSourceValidationArgs,
 ) {
   const metadata = args.workItem.metadata ?? {};
+  if (inventoryReviewSourceKind(metadata) === "expense") {
+    return validateExpenseInventoryReviewSourceContextWithCtx(ctx, args);
+  }
+
   const [terminal, registerSession, sale] = await Promise.all([
     args.terminalId ? ctx.db.get("posTerminal", args.terminalId) : null,
     args.registerSessionId
@@ -190,7 +225,84 @@ export async function validateInventoryReviewSourceContextWithCtx(
     return validationError("Sale receipt does not match the inventory review.");
   }
 
-  return ok({ registerSession, sale, terminal });
+  return ok({ expenseSession: null, registerSession, sale, terminal });
+}
+
+/**
+ * Expense members of the shared inventory-review rail validate against their
+ * own local expense identity. Sale-shaped context is rejected outright so a
+ * sale proof can never satisfy an expense member (and vice versa).
+ */
+async function validateExpenseInventoryReviewSourceContextWithCtx(
+  ctx: MutationCtx,
+  args: InventoryReviewSourceValidationArgs,
+) {
+  const metadata = args.workItem.metadata ?? {};
+  const [terminal, expenseSession, expenseTransaction] = await Promise.all([
+    args.terminalId ? ctx.db.get("posTerminal", args.terminalId) : null,
+    args.expenseSessionId
+      ? ctx.db.get("expenseSession", args.expenseSessionId)
+      : null,
+    args.expenseTransactionId
+      ? ctx.db.get("expenseTransaction", args.expenseTransactionId)
+      : null,
+  ]);
+
+  if (args.terminalId && (!terminal || terminal.storeId !== args.storeId)) {
+    return validationError("Terminal does not match the inventory review store.");
+  }
+  if (args.expenseSessionId) {
+    if (
+      !expenseSession ||
+      expenseSession.storeId !== args.storeId ||
+      (args.terminalId && expenseSession.terminalId !== args.terminalId)
+    ) {
+      return validationError(EXPENSE_SESSION_MISMATCH_MESSAGE);
+    }
+  }
+  if (args.expenseTransactionId) {
+    if (
+      !expenseTransaction ||
+      expenseTransaction.storeId !== args.storeId ||
+      (args.expenseSessionId &&
+        expenseTransaction.sessionId !== args.expenseSessionId)
+    ) {
+      return validationError(EXPENSE_SOURCE_MISMATCH_MESSAGE);
+    }
+  }
+  if (
+    args.localRegisterSessionId !== undefined ||
+    args.localTransactionId !== undefined ||
+    args.receiptNumber !== undefined ||
+    args.registerSessionId !== undefined ||
+    args.sourceId !== undefined ||
+    !optionalMetadataMatches(
+      metadata,
+      "expenseSessionId",
+      args.expenseSessionId,
+    ) ||
+    !optionalMetadataMatches(
+      metadata,
+      "localExpenseEventId",
+      args.localExpenseEventId,
+    ) ||
+    !optionalMetadataMatches(
+      metadata,
+      "localExpenseSessionId",
+      args.localExpenseSessionId,
+    ) ||
+    !optionalMetadataMatches(metadata, "sourceId", args.expenseTransactionId) ||
+    !optionalMetadataMatches(metadata, "terminalId", args.terminalId)
+  ) {
+    return validationError(EXPENSE_METADATA_MISMATCH_MESSAGE);
+  }
+
+  return ok({
+    expenseSession,
+    registerSession: null,
+    sale: null,
+    terminal,
+  });
 }
 
 type ResolveSyncedSaleInventoryReviewData = {
@@ -221,8 +333,29 @@ type AutoResolveSyncedSaleInventoryReviewsArgs = {
   storeId: Id<"store">;
 };
 
-function inventoryReviewLocalId(localTransactionId: string) {
-  return `${localTransactionId}:inventory-review`;
+function inventoryReviewLocalId(localSourceEventId: string) {
+  return `${localSourceEventId}:inventory-review`;
+}
+
+/**
+ * `synced_sale_inventory_review` is the shared storage discriminator for synced
+ * sale and synced expense stock shortfalls. Members declare which source they
+ * came from; rows written before expense support default to "sale".
+ */
+function inventoryReviewSourceKind(
+  metadata: Record<string, unknown> | undefined,
+) {
+  return stringMetadataValue(metadata, "sourceKind") === "expense"
+    ? ("expense" as const)
+    : ("sale" as const);
+}
+
+function inventoryReviewSourceNoun(
+  metadata: Record<string, unknown> | undefined,
+) {
+  return inventoryReviewSourceKind(metadata) === "expense"
+    ? "expense"
+    : "sale";
 }
 
 function stringMetadataValue(
@@ -356,10 +489,14 @@ function terminalStatusForOutcome(
 function inventoryReviewSourceMappingIdentity(
   metadata: Record<string, unknown>,
 ) {
-  const localTransactionId = stringMetadataValue(metadata, "localTransactionId");
+  const sourceKind = inventoryReviewSourceKind(metadata);
+  const localSourceEventId =
+    sourceKind === "expense"
+      ? stringMetadataValue(metadata, "localExpenseEventId")
+      : stringMetadataValue(metadata, "localTransactionId");
   const localId =
     stringMetadataValue(metadata, "localId") ??
-    (localTransactionId ? inventoryReviewLocalId(localTransactionId) : null);
+    (localSourceEventId ? inventoryReviewLocalId(localSourceEventId) : null);
 
   return {
     localEventId: stringMetadataValue(metadata, "localEventId"),
@@ -367,10 +504,13 @@ function inventoryReviewSourceMappingIdentity(
     // The mapping kind is the rail discriminator and stays fixed; the local id
     // below is the per-source seam.
     localIdKind: INVENTORY_REVIEW_LOCAL_ID_KIND,
-    localRegisterSessionId: stringMetadataValue(
-      metadata,
-      "localRegisterSessionId",
-    ),
+    // Expense members are scoped by their local expense session, not a register
+    // session, so their mapping row carries no register-session key.
+    localRegisterSessionId:
+      sourceKind === "expense"
+        ? null
+        : stringMetadataValue(metadata, "localRegisterSessionId"),
+    sourceKind,
     terminalId: idMetadataValue<"posTerminal">(metadata, "terminalId"),
   };
 }
@@ -412,25 +552,40 @@ async function settleInventoryReviewSourceConflictsWithCtx(
   const identity = inventoryReviewSourceMappingIdentity(
     args.workItem.metadata ?? {},
   );
-  if (
-    !identity.terminalId ||
-    !identity.localRegisterSessionId ||
-    !identity.localId
-  ) {
+  if (!identity.terminalId || !identity.localId) {
+    return UNMAPPED_INVENTORY_REVIEW_SOURCE_SETTLEMENT;
+  }
+  if (identity.sourceKind === "sale" && !identity.localRegisterSessionId) {
     return UNMAPPED_INVENTORY_REVIEW_SOURCE_SETTLEMENT;
   }
 
-  const mapping = await ctx.db
-    .query("posLocalSyncMapping")
-    .withIndex("by_store_terminal_local", (q) =>
-      q
-        .eq("storeId", args.storeId)
-        .eq("terminalId", identity.terminalId!)
-        .eq("localRegisterSessionId", identity.localRegisterSessionId!)
-        .eq("localIdKind", identity.localIdKind)
-        .eq("localId", identity.localId!),
-    )
-    .unique();
+  // Sale members prove their register session as part of the mapping key.
+  // Expense members are keyed per terminal by their own local expense source
+  // identity (the same read projection uses to find them), so the register
+  // session is not part of their proof.
+  const mapping =
+    identity.sourceKind === "expense"
+      ? await ctx.db
+          .query("posLocalSyncMapping")
+          .withIndex("by_store_terminal_localKindId", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .eq("terminalId", identity.terminalId!)
+              .eq("localIdKind", identity.localIdKind)
+              .eq("localId", identity.localId!),
+          )
+          .unique()
+      : await ctx.db
+          .query("posLocalSyncMapping")
+          .withIndex("by_store_terminal_local", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .eq("terminalId", identity.terminalId!)
+              .eq("localRegisterSessionId", identity.localRegisterSessionId!)
+              .eq("localIdKind", identity.localIdKind)
+              .eq("localId", identity.localId!),
+          )
+          .unique();
   if (
     !mapping ||
     mapping.cloudTable !== "operationalWorkItem" ||
@@ -496,6 +651,32 @@ function recordedInventoryReviewOutcome(
 }
 
 function sourceMetadataFromWorkItem(metadata: Record<string, unknown>) {
+  if (inventoryReviewSourceKind(metadata) === "expense") {
+    const localExpenseEventId = stringMetadataValue(
+      metadata,
+      "localExpenseEventId",
+    );
+
+    return {
+      expenseSessionId: idMetadataValue<"expenseSession">(
+        metadata,
+        "expenseSessionId",
+      ),
+      localExpenseEventId,
+      localExpenseSessionId: stringMetadataValue(
+        metadata,
+        "localExpenseSessionId",
+      ),
+      localId: localExpenseEventId
+        ? inventoryReviewLocalId(localExpenseEventId)
+        : null,
+      localIdKind: INVENTORY_REVIEW_LOCAL_ID_KIND,
+      sourceId: idMetadataValue<"expenseTransaction">(metadata, "sourceId"),
+      sourceKind: "expense" as const,
+      terminalId: idMetadataValue<"posTerminal">(metadata, "terminalId"),
+    };
+  }
+
   const localTransactionId = stringMetadataValue(metadata, "localTransactionId");
 
   return {
@@ -514,6 +695,7 @@ function sourceMetadataFromWorkItem(metadata: Record<string, unknown>) {
       "registerSessionId",
     ),
     sourceId: idMetadataValue<"posTransaction">(metadata, "sourceId"),
+    sourceKind: "sale" as const,
     terminalId: idMetadataValue<"posTerminal">(metadata, "terminalId"),
   };
 }
@@ -710,7 +892,7 @@ export async function autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWit
     await recordOperationalEventWithCtx(ctx, {
       actorUserId: args.actorUserId,
       eventType: "synced_sale_inventory_review_completed",
-      message: "Synced sale inventory review completed by stock adjustment.",
+      message: `Synced ${inventoryReviewSourceNoun(metadata)} inventory review completed by stock adjustment.`,
       organizationId: workItem.organizationId ?? args.organizationId,
       reason: AUTO_RESOLVE_STOCK_REVIEW_REASON,
       storeId: args.storeId,
@@ -947,8 +1129,14 @@ export async function resolveSyncedSaleInventoryReviewWithCtx(
 
   const resolvedAt = Date.now();
   const status = terminalStatusForOutcome(args.outcome);
-  const canonicalLocalId = args.localTransactionId
-    ? inventoryReviewLocalId(args.localTransactionId)
+  const sourceKind = inventoryReviewSourceKind(metadata);
+  const localSourceEventId =
+    sourceKind === "expense"
+      ? (args.localExpenseEventId ??
+        stringMetadataValue(metadata, "localExpenseEventId"))
+      : args.localTransactionId;
+  const canonicalLocalId = localSourceEventId
+    ? inventoryReviewLocalId(localSourceEventId)
     : null;
   const terminalIdFromMetadata = idMetadataValue<"posTerminal">(
     metadata,
@@ -975,29 +1163,45 @@ export async function resolveSyncedSaleInventoryReviewWithCtx(
     },
     reason: args.reason.trim(),
     resolvedAt,
-    source: {
-      localId: canonicalLocalId,
-      localIdKind: INVENTORY_REVIEW_LOCAL_ID_KIND,
-      localRegisterSessionId:
-        args.localRegisterSessionId ??
-        stringMetadataValue(metadata, "localRegisterSessionId"),
-      localTransactionId:
-        args.localTransactionId ??
-        stringMetadataValue(metadata, "localTransactionId"),
-      receiptNumber:
-        args.receiptNumber ?? stringMetadataValue(metadata, "receiptNumber"),
-      registerSessionId:
-        args.registerSessionId ?? idMetadataValue<"registerSession">(
-          metadata,
-          "registerSessionId",
-        ),
-      sourceId:
-        args.sourceId ?? idMetadataValue<"posTransaction">(
-          metadata,
-          "sourceId",
-        ),
-      terminalId: args.terminalId ?? terminalIdFromMetadata,
-    },
+    source:
+      sourceKind === "expense"
+        ? {
+            expenseSessionId:
+              args.expenseSessionId ??
+              idMetadataValue<"expenseSession">(metadata, "expenseSessionId"),
+            localExpenseEventId: localSourceEventId ?? null,
+            localExpenseSessionId:
+              args.localExpenseSessionId ??
+              stringMetadataValue(metadata, "localExpenseSessionId"),
+            localId: canonicalLocalId,
+            localIdKind: INVENTORY_REVIEW_LOCAL_ID_KIND,
+            sourceId:
+              args.expenseTransactionId ??
+              idMetadataValue<"expenseTransaction">(metadata, "sourceId"),
+            sourceKind: "expense" as const,
+            terminalId: args.terminalId ?? terminalIdFromMetadata,
+          }
+        : {
+            localId: canonicalLocalId,
+            localIdKind: INVENTORY_REVIEW_LOCAL_ID_KIND,
+            localRegisterSessionId:
+              args.localRegisterSessionId ??
+              stringMetadataValue(metadata, "localRegisterSessionId"),
+            localTransactionId:
+              args.localTransactionId ??
+              stringMetadataValue(metadata, "localTransactionId"),
+            receiptNumber:
+              args.receiptNumber ??
+              stringMetadataValue(metadata, "receiptNumber"),
+            registerSessionId:
+              args.registerSessionId ??
+              idMetadataValue<"registerSession">(metadata, "registerSessionId"),
+            sourceId:
+              args.sourceId ??
+              idMetadataValue<"posTransaction">(metadata, "sourceId"),
+            sourceKind: "sale" as const,
+            terminalId: args.terminalId ?? terminalIdFromMetadata,
+          },
     stockState,
     stockUpdate: stockUpdate
       ? {
@@ -1065,10 +1269,9 @@ export async function resolveSyncedSaleInventoryReviewWithCtx(
     actorStaffProfileId,
     actorUserId: athenaUser._id,
     eventType: `synced_sale_inventory_review_${status}`,
-    message:
-      status === "completed"
-        ? "Synced sale inventory review completed."
-        : "Synced sale inventory review cancelled.",
+    message: `Synced ${inventoryReviewSourceNoun(metadata)} inventory review ${
+      status === "completed" ? "completed" : "cancelled"
+    }.`,
     organizationId: store.organizationId,
     reason: args.reason.trim(),
     storeId: args.storeId,
@@ -1230,24 +1433,13 @@ export async function resolveSyncedSaleInventoryReviewGroupWithCtx(
   ]);
 
   const memberArgs = group.items.map((item) => {
-    const metadata = item.metadata ?? {};
+    // Every member is validated against its own source, so a mixed sale and
+    // expense SKU group never lets one member's proof stand in for another.
     return {
-      localRegisterSessionId:
-        stringMetadataValue(metadata, "localRegisterSessionId") ?? undefined,
-      localTransactionId:
-        stringMetadataValue(metadata, "localTransactionId") ?? undefined,
+      ...inventoryReviewSourceValidationArgsFromWorkItem(item),
       outcome: args.outcome,
       reason: args.reason,
-      receiptNumber:
-        stringMetadataValue(metadata, "receiptNumber") ?? undefined,
-      registerSessionId:
-        idMetadataValue<"registerSession">(metadata, "registerSessionId") ??
-        undefined,
-      sourceId:
-        idMetadataValue<"posTransaction">(metadata, "sourceId") ?? undefined,
       storeId: args.storeId,
-      terminalId:
-        idMetadataValue<"posTerminal">(metadata, "terminalId") ?? undefined,
       validatedContext: {
         actorStaffProfileId: actorStaffProfile?._id,
         actorUserId: athenaUser._id,
@@ -1289,6 +1481,10 @@ export async function resolveSyncedSaleInventoryReviewGroupWithCtx(
 export const resolveSyncedSaleInventoryReview = internalMutation({
   args: {
     actorStaffProfileId: v.optional(v.id("staffProfile")),
+    expenseSessionId: v.optional(v.id("expenseSession")),
+    expenseTransactionId: v.optional(v.id("expenseTransaction")),
+    localExpenseEventId: v.optional(v.string()),
+    localExpenseSessionId: v.optional(v.string()),
     localRegisterSessionId: v.optional(v.string()),
     localTransactionId: v.optional(v.string()),
     outcome: syncedSaleInventoryReviewOutcomeValidator,

@@ -122,6 +122,8 @@ type QueueWorkItem = {
     followUpReason?: string | null;
     inventoryReviewLineCount?: number | null;
     itemCount?: number | null;
+    localExpenseEventId?: string | null;
+    localExpenseSessionId?: string | null;
     localRegisterSessionId?: string | null;
     localTransactionId?: string | null;
     lookupCode?: string | null;
@@ -139,6 +141,7 @@ type QueueWorkItem = {
     registerSessionId?: string | null;
     sku?: string | null;
     sourceId?: string | null;
+    sourceKind?: string | null;
     terminalId?: string | null;
     totalQuantitySold?: number | null;
     vendorName?: string | null;
@@ -359,7 +362,8 @@ function getQueueWorkItemTypeLabel(type: string) {
   }
 
   if (type === "synced_sale_inventory_review") {
-    return "Synced sale inventory";
+    // Type-level label for a rail shared by sale and expense shortfalls.
+    return "Synced inventory";
   }
 
   if (type === "service_case") {
@@ -624,6 +628,61 @@ function getQueueWorkItemNumberDetail(
 
 function getQueueWorkItemInventoryReviewLineCount(item: QueueWorkItem) {
   return getQueueWorkItemNumberDetail(item, "inventoryReviewLineCount");
+}
+
+/**
+ * `synced_sale_inventory_review` is the shared storage discriminator for synced
+ * sale and synced expense shortfalls. Operator copy must never describe an
+ * expense as a sale, so rows and groups read their source kind from the
+ * sanitized row detail.
+ */
+function getQueueWorkItemSourceKind(item: QueueWorkItem) {
+  return getQueueWorkItemStringDetail(item, "sourceKind") === "expense"
+    ? "expense"
+    : "sale";
+}
+
+function getInventoryReviewTypeLabel(items: QueueWorkItem[]) {
+  const hasExpense = items.some(
+    (item) => getQueueWorkItemSourceKind(item) === "expense",
+  );
+  const hasSale = items.some(
+    (item) => getQueueWorkItemSourceKind(item) === "sale",
+  );
+
+  if (hasExpense && !hasSale) return "Synced expense inventory";
+  if (hasExpense && hasSale) return "Synced inventory";
+  return "Synced sale inventory";
+}
+
+function getInventoryReviewMembersLabel(items: QueueWorkItem[]) {
+  const hasExpense = items.some(
+    (item) => getQueueWorkItemSourceKind(item) === "expense",
+  );
+  const hasSale = items.some(
+    (item) => getQueueWorkItemSourceKind(item) === "sale",
+  );
+  const count = items.length.toLocaleString();
+
+  if (hasExpense && hasSale) {
+    return {
+      heading: "Affected sales and expenses",
+      label: "Affected records",
+      value: `${count} ${items.length === 1 ? "record" : "records"}`,
+    };
+  }
+  if (hasExpense) {
+    return {
+      heading: "Affected expenses",
+      label: "Affected expenses",
+      value: `${count} ${items.length === 1 ? "expense" : "expenses"}`,
+    };
+  }
+  return {
+    heading: "Affected sales",
+    label: "Affected sales",
+    value: `${count} ${items.length === 1 ? "sale" : "sales"}`,
+  };
 }
 
 function getQueueWorkItemStockAdjustmentSkuId(item: QueueWorkItem) {
@@ -1335,7 +1394,11 @@ function QueueWorkItemCard({
           Icon={contextPresentation.Icon}
         />
       }
-      contextLabel={getQueueWorkItemTypeLabel(item.type)}
+      contextLabel={
+        item.type === "synced_sale_inventory_review"
+          ? getInventoryReviewTypeLabel([item])
+          : getQueueWorkItemTypeLabel(item.type)
+      }
       contextLabelClassName={contextPresentation.contextLabelClassName}
       description={null}
       itemId={item._id}
@@ -1382,10 +1445,11 @@ function SyncedSaleInventoryReviewGroupCard({
   const oldestCreatedAt =
     representative.logicalGroup?.oldestActionableAt ??
     Math.min(...items.map((item) => item.createdAt));
+  const membersLabel = getInventoryReviewMembersLabel(items);
   const collapsedMetadataEntries: OperationReviewMetadataEntry[] = [
     {
-      label: "Affected sales",
-      value: `${items.length.toLocaleString()} ${items.length === 1 ? "sale" : "sales"}`,
+      label: membersLabel.label,
+      value: membersLabel.value,
     },
     {
       label: "Needs action",
@@ -1438,14 +1502,14 @@ function SyncedSaleInventoryReviewGroupCard({
           Icon={contextPresentation.Icon}
         />
       }
-      contextLabel="Synced sale inventory"
+      contextLabel={getInventoryReviewTypeLabel(items)}
       contextLabelClassName={contextPresentation.contextLabelClassName}
       description={resolutionNotice}
       detailsSlot={
         <div>
           <div className="flex items-baseline justify-between gap-layout-md">
             <h3 className="text-sm font-medium text-foreground">
-              Affected sales
+              {membersLabel.heading}
             </h3>
             <span className="text-xs tabular-nums text-muted-foreground">
               {items.length.toLocaleString()} total
@@ -1460,15 +1524,19 @@ function SyncedSaleInventoryReviewGroupCard({
                   className="flex flex-col gap-1 px-layout-sm py-layout-sm sm:flex-row sm:items-center sm:justify-between"
                   key={item._id}
                 >
-                  <ReceiptReferenceLink
-                    orgUrlSlug={orgUrlSlug}
-                    receiptNumber={getQueueWorkItemStringDetail(
-                      item,
-                      "receiptNumber",
-                    )}
-                    storeUrlSlug={storeUrlSlug}
-                    transactionId={getQueueWorkItemTransactionId(item)}
-                  />
+                  {getQueueWorkItemSourceKind(item) === "expense" ? (
+                    <span>Recorded expense</span>
+                  ) : (
+                    <ReceiptReferenceLink
+                      orgUrlSlug={orgUrlSlug}
+                      receiptNumber={getQueueWorkItemStringDetail(
+                        item,
+                        "receiptNumber",
+                      )}
+                      storeUrlSlug={storeUrlSlug}
+                      transactionId={getQueueWorkItemTransactionId(item)}
+                    />
+                  )}
                   <span className="flex flex-wrap items-center gap-x-layout-md gap-y-1 text-xs text-muted-foreground">
                     {lineCount !== undefined ? (
                       <span>{formatOptionalLineCount(lineCount)} affected</span>

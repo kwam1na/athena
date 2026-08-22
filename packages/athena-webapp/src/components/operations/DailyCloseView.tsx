@@ -1108,7 +1108,8 @@ function formatOperationalWorkTypeLabel(type: string) {
     case "pos_pending_checkout_item_review":
       return "POS pending checkout";
     case "synced_sale_inventory_review":
-      return "Synced sale inventory";
+      // Shared rail for synced sale and synced expense stock shortfalls.
+      return "Synced inventory";
     case "service_case":
       return "Service case";
     case "service_appointment":
