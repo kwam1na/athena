@@ -66,6 +66,12 @@ export type AgentProjectionLoad =
 
 export type AgentRecordProjectionOutcome = { outcome: "projected" | "already_projected" | "rejected"; step: AgentTurnBindingStep | null; code?: string };
 
+export type AgentProjectionFailureOutcome = { outcome: "scheduled" | "exhausted" | "not_found"; attempts?: number; nextAttemptAt?: number };
+export type AgentSuppressReleaseOutcome = {
+  outcome: "suppressed" | "already_suppressed" | "not_found";
+  cleanup?: Awaited<ReturnType<typeof requestRuntimeCleanupWithCtx>>;
+};
+
 /** Opaque artifact reference for runtime metadata: a digest, never the document id. */
 export function artifactRefFor(artifactId: Id<"intelligenceArtifact">): string {
   return `artifact:${sha256Hex(`artifact:${artifactId}`).slice(0, 24)}`;
@@ -168,7 +174,7 @@ export function createCompletionOutbox(config: CompletionOutboxConfig) {
   async function recordProjectionFailureWithCtx(
     ctx: MutationCtx,
     input: { bindingId: Id<"agentTurnBinding">; error: string; now: number },
-  ): Promise<{ outcome: "scheduled" | "exhausted" | "not_found"; attempts?: number; nextAttemptAt?: number }> {
+  ): Promise<AgentProjectionFailureOutcome> {
     const binding = await ctx.db.get("agentTurnBinding", input.bindingId);
     if (!binding) return { outcome: "not_found" };
     const attempts = (binding.outboxAttempts ?? 0) + 1;
@@ -197,7 +203,7 @@ export function createCompletionOutbox(config: CompletionOutboxConfig) {
   async function suppressReleaseWithCtx(
     ctx: MutationCtx,
     input: { bindingId: Id<"agentTurnBinding">; reason: string; now: number },
-  ): Promise<{ outcome: "suppressed" | "already_suppressed" | "not_found"; cleanup?: Awaited<ReturnType<typeof requestRuntimeCleanupWithCtx>> }> {
+  ): Promise<AgentSuppressReleaseOutcome> {
     const binding = await ctx.db.get("agentTurnBinding", input.bindingId);
     if (!binding) return { outcome: "not_found" };
     const already = binding.releaseSuppressedAt !== undefined;
@@ -211,6 +217,10 @@ export function createCompletionOutbox(config: CompletionOutboxConfig) {
         updatedAt: input.now,
       });
     }
+    // Suppression ends the turn for good: a host that died between the commit
+    // and `finalizeTurn` left its reservation held, so it is released here on
+    // the same once-only terms as a projection. Nothing is booked as spent.
+    await settleTurnSpendOnceWithCtx(ctx, { bindingId: binding._id, actualCostUnits: 0, now: input.now });
     const cleanup = await requestRuntimeCleanupWithCtx(ctx, binding._id, input.now);
     return { outcome: already ? "already_suppressed" : "suppressed", cleanup };
   }

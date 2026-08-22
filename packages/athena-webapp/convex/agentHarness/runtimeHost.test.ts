@@ -70,6 +70,9 @@ const ADAPTERS: readonly AdapterUnderTest[] = [
 
 const PROGRAM = `const shifts = await athena.ops.shifts.list({ status: "open" });
 return { open: shifts.kind === "result" ? shifts.envelope.data.length : -1 };`;
+/** Reads only the operational-class audit trail. */
+const AUDIT_PROGRAM = `const entries = await athena.ops.auditTrail.list({});
+return { entries: entries.kind === "result" ? entries.envelope.data.length : -1 };`;
 
 async function hostFor(t: Harness, harness: AgentRuntimeContractHarness, options: { observe?: (entry: AgentToolLedgerEntry) => void } = {}) {
   const ctx = executorCtx(t);
@@ -126,6 +129,29 @@ async function rows(t: Harness, seeded: { runId: Awaited<ReturnType<typeof seedR
   }));
 }
 
+/** Both spend windows the turn's reservation was taken against. */
+async function reservations(t: Harness, seeded: Awaited<ReturnType<typeof seedRecordedTurn>>) {
+  return t.run(async (ctx) => {
+    const windowKey = spendWindowKey(TEST_NOW_BASE);
+    const rows = await Promise.all(
+      [`operator:athenaUser:${seeded.operator.userId}`, `store:${seeded.operator.storeId}`].map((scopeKey) =>
+        ctx.db.query("agentSpendWindow").withIndex("by_scopeKey_windowKey", (q) => q.eq("scopeKey", scopeKey).eq("windowKey", windowKey)).unique(),
+      ),
+    );
+    return rows.map((row) => ({ reserved: row?.reservedCostUnits, settled: row?.settledCostUnits }));
+  });
+}
+
+/** What `startTurn` leaves behind: a recorded turn with its provider ceiling reserved. */
+async function seedAdmittedTurn(t: Harness, slug: string, options: Parameters<typeof seedRecordedTurn>[2] = {}) {
+  const seeded = await t.run((ctx) => seedRecordedTurn(ctx, slug, options));
+  const reserved = await t.run((ctx) =>
+    reserveTurnSpendWithCtx(ctx, { actorRef: `athenaUser:${seeded.operator.userId}`, storeId: seeded.operator.storeId, costUnits: turnProviderCostReservation(), now: TEST_NOW_BASE }),
+  );
+  if (!reserved.ok) throw new Error(reserved.code);
+  return seeded;
+}
+
 beforeEach(() => {
   TEST_CLOCK.now = TEST_NOW_BASE;
   clockNow = TEST_NOW_BASE + 1_000;
@@ -139,7 +165,7 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ create }) => {
   it("drives one operator turn: ladder, fixed tools, program, private completion, one-transaction commit, projection; narrative never persisted (scenarios 1, 3, 4, 19)", async () => {
     const t = backend();
     const harness = create(t);
-    const seeded = await t.run((ctx) => seedRecordedTurn(ctx, "happy"));
+    const seeded = await seedAdmittedTurn(t, "happy");
     const { captured, observe } = captureProgramResult();
     const turnKey = turnKeyFor(seeded.bindingId);
     harness.scriptTurn(turnKey, [
@@ -183,9 +209,12 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ create }) => {
     expect((after.invocations[0].responseSummary as { usage: { input: number } }).usage.input).toBeGreaterThan(0);
     // The model's own narrative is buffered server-side and never written to Athena.
     expect(JSON.stringify(after)).not.toContain("MODEL-NARRATIVE-NEVER-STORED");
-    // Spend settled to actual cost: nothing remains reserved.
-    const windows = await t.run((ctx) => ctx.db.query("agentSpendWindow").withIndex("by_scopeKey_windowKey", (q) => q.eq("scopeKey", `operator:athenaUser:${seeded.operator.userId}`)).take(3));
-    expect(windows).toEqual([]);
+    // Spend settled to the turn's REAL cost on both windows: `finalizeTurn`
+    // books it before the outbox's zero-cost settle can stamp the marker.
+    expect(await reservations(t, seeded)).toEqual([
+      { reserved: 0, settled: report.usage!.costUnits },
+      { reserved: 0, settled: report.usage!.costUnits },
+    ]);
     // Re-driving a finished turn is a no-op: the run never reopens.
     expect(await host.driveTurn({ bindingId: seeded.bindingId })).toMatchObject({ outcome: "terminal", code: "completed" });
     // The projected history for the next turn on this thread carries the committed answer.
@@ -364,6 +393,37 @@ describe("turn host — kernel boundaries", () => {
     expect(promptText).not.toContain("RAW-RUNTIME-NARRATIVE");
   });
 
+  it("a turn whose replayed history carries a sensitive answer cannot class its own answer below it, even when it read only operational data (scenario 3)", async () => {
+    const t = backend();
+    const harness = createConvexAgentContractHarness({ backend: t, providerId: "athena_contract_fake", clock });
+    // First turn: a full admin reads shifts (revenue projected) and commits a sensitive answer.
+    const first = await t.run((ctx) => seedRecordedTurn(ctx, "floor", { threadKey: "thread-floor", key: "turn-floor-1" }));
+    const firstCapture = captureProgramResult();
+    harness.scriptTurn(turnKeyFor(first.bindingId), [
+      { kind: "tool_call", callId: "c1", toolId: "athena.executeProgram", args: { source: PROGRAM } },
+      { kind: "tool_call", callId: "c2", toolId: "athena.completeRun", args: () => ({ narrative: "Revenue is GHS 12,500 on one open shift.", citedAttemptRefs: [firstCapture.captured.attemptRef], citations: [{ ref: firstCapture.captured.citation }] }) },
+      { kind: "complete", narrative: "done" },
+    ]);
+    expect(await (await hostFor(t, harness, { observe: firstCapture.observe })).driveTurn({ bindingId: first.bindingId })).toMatchObject({ outcome: "completed" });
+    expect((await rows(t, first)).artifacts[0].payload).toMatchObject({ egressClass: "sensitive" });
+
+    // Second turn on the same thread: the audit trail is operational-only, and
+    // it is all this turn reads. The provider was still replayed the sensitive
+    // prior answer, so the new answer is classed at that floor.
+    const second = await t.run((ctx) => seedRecordedTurn(ctx, "floor", { threadKey: "thread-floor", key: "turn-floor-2", operator: first.operator, question: "Who closed the day?" }));
+    const secondCapture = captureProgramResult();
+    harness.scriptTurn(turnKeyFor(second.bindingId), [
+      { kind: "tool_call", callId: "c1", toolId: "athena.executeProgram", args: { source: AUDIT_PROGRAM } },
+      { kind: "tool_call", callId: "c2", toolId: "athena.completeRun", args: () => ({ narrative: "The store closed the day.", citedAttemptRefs: [secondCapture.captured.attemptRef], citations: [{ ref: secondCapture.captured.citation }] }) },
+      { kind: "complete", narrative: "done" },
+    ]);
+    expect(await (await hostFor(t, harness, { observe: secondCapture.observe })).driveTurn({ bindingId: second.bindingId })).toMatchObject({ outcome: "completed" });
+    const after = await rows(t, second);
+    expect(after.attempts).toHaveLength(1);
+    expect(after.attempts[0]).toMatchObject({ egressClass: "operational" });
+    expect(after.artifacts[0].payload).toMatchObject({ narrative: "The store closed the day.", egressClass: "sensitive" });
+  });
+
   it("adversarial product text cannot widen the grant, the tools, the schema, or citation policy (scenarios 2, 11)", async () => {
     const t = backend();
     const fake = createAgentRuntimeContractFake({ clock: createDeterministicClock(TEST_NOW_BASE + 1_000) });
@@ -415,29 +475,6 @@ describe("turn host — kernel boundaries", () => {
 });
 
 describe("turn host — a turn that ends before the model runs", () => {
-  /** Both spend windows the turn's reservation was taken against. */
-  async function reservations(t: Harness, seeded: Awaited<ReturnType<typeof seedRecordedTurn>>) {
-    return t.run(async (ctx) => {
-      const windowKey = spendWindowKey(TEST_NOW_BASE);
-      const rows = await Promise.all(
-        [`operator:athenaUser:${seeded.operator.userId}`, `store:${seeded.operator.storeId}`].map((scopeKey) =>
-          ctx.db.query("agentSpendWindow").withIndex("by_scopeKey_windowKey", (q) => q.eq("scopeKey", scopeKey).eq("windowKey", windowKey)).unique(),
-        ),
-      );
-      return rows.map((row) => ({ reserved: row?.reservedCostUnits, settled: row?.settledCostUnits }));
-    });
-  }
-
-  /** What `startTurn` leaves behind: a recorded turn with its provider ceiling reserved. */
-  async function seedAdmittedTurn(t: Harness, slug: string, options: Parameters<typeof seedRecordedTurn>[2] = {}) {
-    const seeded = await t.run((ctx) => seedRecordedTurn(ctx, slug, options));
-    const reserved = await t.run((ctx) =>
-      reserveTurnSpendWithCtx(ctx, { actorRef: `athenaUser:${seeded.operator.userId}`, storeId: seeded.operator.storeId, costUnits: turnProviderCostReservation(), now: TEST_NOW_BASE }),
-    );
-    if (!reserved.ok) throw new Error(reserved.code);
-    return seeded;
-  }
-
   it("releases the spend reservation when the run was already terminal, and a second finalize does not settle twice", async () => {
     const t = backend();
     const seeded = await seedAdmittedTurn(t, "spend-terminal");

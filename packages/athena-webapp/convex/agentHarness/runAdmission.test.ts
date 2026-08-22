@@ -18,6 +18,7 @@ import {
   admitTurnStartWithCtx,
   countActiveAgentRunsForOperatorWithCtx,
   estimatePromptTokens,
+  findActiveTurnOnThreadWithCtx,
   reserveTurnSpendWithCtx,
   settleTurnSpendWithCtx,
   spendWindowKey,
@@ -160,7 +161,7 @@ describe("per-operator active-run limit, one active turn per thread, and spend c
     });
   });
 
-  it("blocks a second submission on a thread with an active turn (never queues) and frees it when the turn ends", async () => {
+  it("blocks the operator's own second submission on a thread with an active turn (never queues), not a colleague's, and frees it when the turn ends", async () => {
     const t = convexTest(schema, modules);
     const seeded = await t.run(async (ctx) => {
       const tenant = await seedTenant(ctx, "busy");
@@ -170,16 +171,44 @@ describe("per-operator active-run limit, one active turn per thread, and spend c
       return { tenant, intent };
     });
     await t.run(async (ctx) => {
+      // A colleague's active turn on the same store thread key is not this operator's turn.
       expect(
         await admitTurnStartWithCtx(ctx, { actorRef: "athenaUser:other", storeId: seeded.tenant.storeId, threadKey: "thread-busy", maxProviderCostUnits: 10, now: TEST_NOW }),
+      ).toMatchObject({ ok: true });
+      expect(
+        await admitTurnStartWithCtx(ctx, { actorRef: "athenaUser:busy", storeId: seeded.tenant.storeId, threadKey: "thread-busy", maxProviderCostUnits: 10, now: TEST_NOW }),
       ).toMatchObject({ ok: false, code: "thread_busy", retryable: true });
       expect(
-        await admitTurnStartWithCtx(ctx, { actorRef: "athenaUser:other", storeId: seeded.tenant.storeId, threadKey: "thread-free", maxProviderCostUnits: 10, now: TEST_NOW }),
+        await admitTurnStartWithCtx(ctx, { actorRef: "athenaUser:busy", storeId: seeded.tenant.storeId, threadKey: "thread-free", maxProviderCostUnits: 10, now: TEST_NOW }),
       ).toMatchObject({ ok: true });
       await cancelAgentRunWithCtx(ctx, { runId: seeded.intent.runId, idempotencyKey: "c", reason: "done", now: TEST_NOW + 1 });
       expect(
-        await admitTurnStartWithCtx(ctx, { actorRef: "athenaUser:other", storeId: seeded.tenant.storeId, threadKey: "thread-busy", maxProviderCostUnits: 10, now: TEST_NOW + 2 }),
+        await admitTurnStartWithCtx(ctx, { actorRef: "athenaUser:busy", storeId: seeded.tenant.storeId, threadKey: "thread-busy", maxProviderCostUnits: 10, now: TEST_NOW + 2 }),
       ).toMatchObject({ ok: true });
+    });
+  });
+
+  it("finds the operator's own active turn even when colleagues' newer turns sit in front of it on the thread key", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const tenant = await seedTenant(ctx, "buried");
+      const { runIdempotencyKey: _key, ...base } = buildRunInput(tenant, { actorRef: "athenaUser:buried" });
+      const own = await recordTurnIntentWithCtx(ctx, { ...base, turnIdempotencyKey: "turn-own", threadKey: "thread-shared", promptPayload: { prompt: "hi" }, now: TEST_NOW });
+      if (own.outcome !== "created") throw new Error(own.outcome);
+      for (let index = 0; index < 6; index += 1) {
+        const { runIdempotencyKey: _k, ...other } = buildRunInput(tenant, { actorRef: `athenaUser:colleague-${index}` });
+        const intent = await recordTurnIntentWithCtx(ctx, { ...other, turnIdempotencyKey: `turn-colleague-${index}`, threadKey: "thread-shared", promptPayload: { prompt: "hi" }, now: TEST_NOW + 1 + index });
+        if (intent.outcome !== "created") throw new Error(intent.outcome);
+      }
+      return { tenant, own };
+    });
+    await t.run(async (ctx) => {
+      expect(await findActiveTurnOnThreadWithCtx(ctx, { actorRef: "athenaUser:buried", storeId: seeded.tenant.storeId, threadKey: "thread-shared" })).toEqual({ bindingId: seeded.own.bindingId, runId: seeded.own.runId });
+      expect(
+        await admitTurnStartWithCtx(ctx, { actorRef: "athenaUser:buried", storeId: seeded.tenant.storeId, threadKey: "thread-shared", maxProviderCostUnits: 10, now: TEST_NOW + 10 }),
+      ).toMatchObject({ ok: false, code: "thread_busy" });
+      // A different thread key in the same store is free for the same operator.
+      expect(await findActiveTurnOnThreadWithCtx(ctx, { actorRef: "athenaUser:buried", storeId: seeded.tenant.storeId, threadKey: "thread-elsewhere" })).toBeNull();
     });
   });
 

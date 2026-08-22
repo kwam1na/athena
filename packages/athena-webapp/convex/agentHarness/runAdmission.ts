@@ -163,22 +163,41 @@ export async function countActiveAgentRunsForOperatorWithCtx(ctx: ReadCtx, actor
   return count;
 }
 
-/** The most recent non-terminal turn on an Athena thread, if any. */
+/**
+ * Active runs read per status when looking for the operator's own turn. The
+ * operator holds at most `AGENT_OPERATOR_ACTIVE_RUN_LIMIT` agent runs; the
+ * headroom covers legacy intelligence runs that share the actor ref.
+ */
+const ACTIVE_TURN_LOOKUP_TAKE = 25;
+
+/**
+ * The operator's own most recent non-terminal turn on an Athena thread, if
+ * any. A thread key names the store context, not the person, so every
+ * operator in the store shares it: one operator's active turn never blocks a
+ * colleague's. The lookup walks the OPERATOR's active runs, which the
+ * active-run limit bounds, rather than the thread's newest bindings, which
+ * colleagues' turns could push the operator's own turn out of.
+ */
 export async function findActiveTurnOnThreadWithCtx(
   ctx: ReadCtx,
-  input: { storeId: Id<"store">; threadKey: string; limit?: number },
+  input: { actorRef: string; storeId: Id<"store">; threadKey: string },
 ): Promise<{ bindingId: Id<"agentTurnBinding">; runId: Id<"intelligenceRun"> } | null> {
-  const bindings = await ctx.db
-    .query("agentTurnBinding")
-    .withIndex("by_storeId_threadKey_createdAt", (q) => q.eq("storeId", input.storeId).eq("threadKey", input.threadKey))
-    .order("desc")
-    .take(input.limit ?? 5);
-  for (const binding of bindings) {
-    if (binding.abandonedAt !== undefined) continue;
-    const run = await ctx.db.get("intelligenceRun", binding.runId);
-    if (run && !isTerminalRunStatus(run.status)) return { bindingId: binding._id, runId: run._id };
+  let newest: { bindingId: Id<"agentTurnBinding">; runId: Id<"intelligenceRun">; createdAt: number } | null = null;
+  for (const status of AGENT_RUN_ACTIVE_STATUSES) {
+    const runs = await ctx.db
+      .query("intelligenceRun")
+      .withIndex("by_actorRef_status", (q) => q.eq("actorRef", input.actorRef).eq("status", status))
+      .order("desc")
+      .take(ACTIVE_TURN_LOOKUP_TAKE);
+    for (const run of runs) {
+      if (run.harnessKind !== "agent" || isTerminalRunStatus(run.status)) continue;
+      const binding = await ctx.db.query("agentTurnBinding").withIndex("by_runId", (q) => q.eq("runId", run._id)).first();
+      if (!binding || binding.abandonedAt !== undefined) continue;
+      if (binding.storeId !== input.storeId || binding.threadKey !== input.threadKey) continue;
+      if (!newest || binding.createdAt > newest.createdAt) newest = { bindingId: binding._id, runId: run._id, createdAt: binding.createdAt };
+    }
   }
-  return null;
+  return newest ? { bindingId: newest.bindingId, runId: newest.runId } : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -367,7 +386,7 @@ export async function admitTurnStartWithCtx(
   if (active >= limit) {
     return { ok: false, code: "active_run_limit", message: "Athena is still working on an earlier question. Wait for it to finish or cancel it.", retryable: true };
   }
-  const busy = await findActiveTurnOnThreadWithCtx(ctx, { storeId: input.storeId, threadKey: input.threadKey });
+  const busy = await findActiveTurnOnThreadWithCtx(ctx, { actorRef: input.actorRef, storeId: input.storeId, threadKey: input.threadKey });
   if (busy) {
     return { ok: false, code: "thread_busy", message: "Athena is still answering the previous question in this conversation. Wait for it or cancel it first.", retryable: true };
   }

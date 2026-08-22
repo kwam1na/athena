@@ -181,10 +181,6 @@ export function maxEgressClass(...classes: readonly AgentEgressClass[]): AgentEg
   return max;
 }
 
-export function isEgressClassAtMost(egressClass: AgentEgressClass, ceiling: AgentEgressClass): boolean {
-  return egressClassRank(egressClass) <= egressClassRank(ceiling);
-}
-
 /** Ordered authority tiers a sensitive projection may require. */
 export const AGENT_AUTHORITY_TIERS = ["member", "manager", "full_admin"] as const;
 export type AgentAuthorityTier = (typeof AGENT_AUTHORITY_TIERS)[number];

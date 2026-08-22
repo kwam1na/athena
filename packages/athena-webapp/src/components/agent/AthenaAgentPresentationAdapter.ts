@@ -306,6 +306,10 @@ const DENIAL_COPY: Record<string, { headline: string; detail?: string }> = {
     headline: "Athena is still answering in this conversation.",
     detail: "Wait for it to finish, or cancel it.",
   },
+  turn_key_conflict: {
+    headline: "Athena couldn't start this question.",
+    detail: "Ask it again.",
+  },
   spend_ceiling: {
     headline: "Athena has reached today's limit for this store.",
     detail: "Try again later.",

@@ -16,7 +16,7 @@ import {
   settleCapabilityCallWithCtx,
   transitionProgramAttemptWithCtx,
 } from "./lifecycle";
-import { reserveTurnSpendWithCtx, spendWindowKey, turnProviderCostReservation } from "./runAdmission";
+import { reserveTurnSpendWithCtx, settleTurnSpendWithCtx, spendWindowKey, turnProviderCostReservation } from "./runAdmission";
 import { TEST_NOW, buildRunInput, seedTenant } from "./testSupport";
 import {
   AGENT_TURN_BINDING_ABANDON_AFTER_MS,
@@ -336,6 +336,69 @@ describe("resume-on-read: a binding abandoned by run terminalization", () => {
       // A second read settles nothing more: the marker is the once-only guard.
       expect(await resumeTurnBindingWithCtx(ctx, { bindingId: seeded.created.bindingId, now: TEST_NOW + 30 })).toMatchObject({ action: "abandoned" });
       expect(await ctx.db.get("agentTurnBinding", seeded.created.bindingId)).toMatchObject({ spendSettledAt: TEST_NOW + 20 });
+    });
+  });
+});
+
+describe("legacy-settled guard on the resume path", () => {
+  it("stamps the marker without releasing again when the provider row already paid out, so a sibling turn's reservation survives", async () => {
+    const t = convexTest(schema, modules);
+    const actorRef = "athenaUser:operator-1";
+    const seeded = await t.run(async (ctx) => {
+      const tenant = await seedTenant(ctx, "legacy-settled");
+      const first = bound(await recordTurnIntentWithCtx(ctx, intentInput(tenant, { turnIdempotencyKey: "turn-legacy-1", runtimeThreadRef: "thread:legacy" })));
+      const second = bound(await recordTurnIntentWithCtx(ctx, intentInput(tenant, { turnIdempotencyKey: "turn-legacy-2", runtimeThreadRef: "thread:legacy" })));
+      for (const _turn of [first, second]) {
+        const reserved = await reserveTurnSpendWithCtx(ctx, { actorRef, storeId: tenant.storeId, costUnits: turnProviderCostReservation(), now: TEST_NOW });
+        if (!reserved.ok) throw new Error(reserved.code);
+      }
+      // The first turn finished before the marker existed: its provider row is
+      // terminal and the pre-marker path already released its reservation
+      // through that row. Only the second turn's reservation is still held.
+      await ctx.db.insert("intelligenceProviderInvocation", {
+        storeId: tenant.storeId,
+        organizationId: tenant.organizationId,
+        runId: first.runId,
+        providerKey: "athena_contract_fake",
+        providerModel: "athena_contract_fake/fake-1",
+        capability: "agent:test",
+        status: "succeeded",
+        requestSummary: {},
+        rawPayloadStored: false,
+        startedAt: TEST_NOW,
+        completedAt: TEST_NOW + 1,
+      });
+      await settleTurnSpendWithCtx(ctx, { actorRef, storeId: tenant.storeId, windowKey: spendWindowKey(TEST_NOW), reservedCostUnits: turnProviderCostReservation(), actualCostUnits: 7, now: TEST_NOW + 1 });
+      await ctx.db.patch("intelligenceRun", first.runId, { status: "completed", updatedAt: TEST_NOW + 1 });
+      await ctx.db.patch("agentTurnBinding", first.bindingId, { step: "runtime_projected", runtimeProjectionRef: "runtime_projection:legacy", stepUpdatedAt: TEST_NOW + 1, updatedAt: TEST_NOW + 1 });
+      return { tenant, first, second };
+    });
+
+    const windows = async (ctx: MutationCtx) => {
+      const windowKey = spendWindowKey(TEST_NOW);
+      const rows = await Promise.all(
+        [`operator:${actorRef}`, `store:${seeded.tenant.storeId}`].map((scopeKey) =>
+          ctx.db.query("agentSpendWindow").withIndex("by_scopeKey_windowKey", (q) => q.eq("scopeKey", scopeKey).eq("windowKey", windowKey)).unique(),
+        ),
+      );
+      return rows.map((row) => ({ reserved: row?.reservedCostUnits, settled: row?.settledCostUnits }));
+    };
+    const oneReservation = [
+      { reserved: turnProviderCostReservation(), settled: 7 },
+      { reserved: turnProviderCostReservation(), settled: 7 },
+    ];
+
+    await t.run(async (ctx) => {
+      expect((await ctx.db.get("agentTurnBinding", seeded.first.bindingId))?.spendSettledAt).toBeUndefined();
+      expect(await windows(ctx)).toEqual(oneReservation);
+      expect(await resumeTurnBindingWithCtx(ctx, { bindingId: seeded.first.bindingId, now: TEST_NOW + 20 })).toMatchObject({ action: "terminal", runStatus: "completed" });
+      // The invocation lookup saw the terminal row: the marker is stamped and
+      // the second turn's reservation was not decremented in its place.
+      expect(await windows(ctx)).toEqual(oneReservation);
+      expect(await ctx.db.get("agentTurnBinding", seeded.first.bindingId)).toMatchObject({ spendSettledAt: TEST_NOW + 20 });
+      expect(await resumeTurnBindingWithCtx(ctx, { bindingId: seeded.first.bindingId, now: TEST_NOW + 30 })).toMatchObject({ action: "terminal" });
+      expect(await windows(ctx)).toEqual(oneReservation);
+      expect(await ctx.db.get("agentTurnBinding", seeded.first.bindingId)).toMatchObject({ spendSettledAt: TEST_NOW + 20 });
     });
   });
 });

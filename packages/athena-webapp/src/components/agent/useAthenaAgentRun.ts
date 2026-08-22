@@ -389,17 +389,14 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
     receipt && receipt.turnId === turnId ? receipt.viewedAt : undefined;
 
   const answer: AthenaAgentAnswer | null = useMemo(() => {
-    const released = answerResult as
-      | (AthenaAgentAnswer & { kind: "answer" })
-      | { kind: "unavailable" }
-      | undefined;
+    const released = answerResult;
     if (!released || released.kind !== "answer") return null;
     if (suppressedReason) return null;
     // `kind` is the query envelope, not part of the answer the host renders.
     const { kind, ...rest } = released;
     void kind;
     return {
-      ...(rest as unknown as AthenaAgentAnswer),
+      ...rest,
       ...(receiptViewedAt !== undefined ? { viewedAt: receiptViewedAt } : {}),
     };
   }, [answerResult, suppressedReason, receiptViewedAt]);

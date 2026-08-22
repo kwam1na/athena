@@ -21,7 +21,7 @@ import { isTerminalRunStatus } from "../../shared/agentHarness/execution";
 import { egressClassRank, isPlainObject, type AgentEgressClass } from "../../shared/agentHarness/values";
 import type { DelegatedOperator } from "../operationAdmission/types";
 import { normalizeEgressClass } from "./egressPolicy";
-import { deriveAuthorityTier, type DelegatedGrantConfig } from "./grants";
+import { deriveAuthorityTier, encodeDelegatedActorRef, type DelegatedGrantConfig } from "./grants";
 import { evaluateEnablement, projectGrant } from "./registry";
 
 type ReadCtx = QueryCtx | MutationCtx;
@@ -160,6 +160,13 @@ export type AgentThreadHistoryProjection =
   | { readonly kind: "unauthorized"; readonly reason: string };
 
 export const AGENT_HISTORY_TURN_LIMIT = 50;
+/**
+ * Bindings read per history projection before the walk gives up. A thread key
+ * names the store context, not the person, so every operator in the store
+ * shares it and the viewer's own turns may sit behind colleagues'. The walk
+ * is newest-first and stops at the bound or here, whichever comes first.
+ */
+export const AGENT_HISTORY_SCAN_LIMIT = 400;
 
 function contextOf(payload: Record<string, unknown> | undefined): { [key: string]: string } | undefined {
   const context = payload?.context;
@@ -192,17 +199,32 @@ export async function projectThreadHistoryWithCtx(
   const authority = await resolveViewerAuthorityWithCtx(ctx, config, input);
   if (authority.kind === "unauthorized") return { kind: "unauthorized", reason: authority.reason };
 
-  const bindings = await ctx.db
+  // Newest first so the bound keeps the most recent turns, then flipped so
+  // entries read oldest to newest. Colleagues' turns on the shared key are
+  // skipped before they count against the bound: the viewer's own history is
+  // never starved by what others asked.
+  const limit = Math.min(AGENT_HISTORY_TURN_LIMIT, Math.max(1, input.limit ?? AGENT_HISTORY_TURN_LIMIT));
+  const viewerActorRef = encodeDelegatedActorRef(input.viewer);
+  const own: Array<{ binding: Doc<"agentTurnBinding">; run: Doc<"intelligenceRun"> }> = [];
+  let scanned = 0;
+  for await (const binding of ctx.db
     .query("agentTurnBinding")
     .withIndex("by_storeId_threadKey_createdAt", (q) => q.eq("storeId", input.storeId).eq("threadKey", input.threadKey))
-    .take(Math.min(AGENT_HISTORY_TURN_LIMIT, Math.max(1, input.limit ?? AGENT_HISTORY_TURN_LIMIT)));
-
-  const entries: AgentThreadHistoryEntry[] = [];
-  for (const binding of bindings) {
+    .order("desc")) {
+    if (scanned >= AGENT_HISTORY_SCAN_LIMIT) break;
+    scanned += 1;
     if (binding._id === input.excludeBindingId) continue;
     if (binding.organizationId !== input.organizationId) continue;
     const run = await ctx.db.get("intelligenceRun", binding.runId);
     if (!run || run.harnessKind !== "agent") continue;
+    if (run.actorRef !== viewerActorRef) continue;
+    own.push({ binding, run });
+    if (own.length >= limit) break;
+  }
+  own.reverse();
+
+  const entries: AgentThreadHistoryEntry[] = [];
+  for (const { binding, run } of own) {
     const grant = run.runGrantId ? await ctx.db.get("agentRunGrant", run.runGrantId) : null;
     if (!grant || grant.profileKey !== input.profileId) continue;
     // Threads belong to the operator who opened them; a thread key is never

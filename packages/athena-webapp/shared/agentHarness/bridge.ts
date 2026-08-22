@@ -12,11 +12,9 @@
  * The fixed Athena tool catalog is named here so the runtime contract, the
  * executor, and the host agree on the only five model-visible tools.
  */
-import type { BudgetVector } from "./execution";
 import type {
   AgentCapabilityDeclaration,
   AgentCapabilityManifest,
-  AgentCapabilitySummary,
   JsonValue,
   OperationArgs,
   ProjectedShape,
@@ -99,14 +97,6 @@ export type AgentCapabilityResult<Envelope extends AgentReadEnvelope<unknown>> =
 
 export type AgentCapabilityOutcome<Data> = AgentCapabilityResult<AgentReadEnvelope<Data>>;
 
-/** The async bridge a program sees: mediated reads plus read-only budget inspection (R14). */
-export type AgentCapabilityBridge = {
-  readonly invoke: <Data = unknown>(
-    request: AgentCapabilityRequest,
-  ) => Promise<AgentCapabilityOutcome<Data>>;
-  readonly remainingBudget: () => Readonly<BudgetVector>;
-};
-
 // ---------------------------------------------------------------------------
 // Generated facade typing
 // ---------------------------------------------------------------------------
@@ -160,11 +150,6 @@ export type AgentDescribeOutcome =
   | { readonly kind: "declaration"; readonly declaration: AgentCapabilityDeclaration }
   | { readonly kind: "unauthorized"; readonly namespace: string }
   | { readonly kind: "unknown_namespace"; readonly namespace: string };
-
-export type AgentDiscoverySurface = {
-  readonly discover: () => Promise<readonly AgentCapabilitySummary[]>;
-  readonly describe: (namespace: string) => Promise<AgentDescribeOutcome>;
-};
 
 /** Exactly one explicit structured output per program (R15). */
 export type AgentProgramResultEnvelope = {

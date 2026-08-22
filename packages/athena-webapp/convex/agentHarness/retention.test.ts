@@ -140,11 +140,12 @@ async function seedCompletedTurn(
 
 async function contentCounts(ctx: QueryCtx, storeId: Id<"store">) {
   const take = 50;
-  const [prompts, replays, scratch, claims, retainedCitations, retainedGrants] = await Promise.all([
+  const [prompts, replays, scratch, claims, calls, retainedCitations, retainedGrants] = await Promise.all([
     ctx.db.query("agentPromptPayload").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(take),
     ctx.db.query("agentReplayPayload").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(take),
     ctx.db.query("agentScratchDescriptor").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(take),
     ctx.db.query("agentClaimSupport").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(take),
+    ctx.db.query("agentCapabilityCall").withIndex("by_storeId_capabilityId_createdAt", (q) => q.eq("storeId", storeId)).take(take),
     ctx.db.query("agentCitationBinding").withIndex("by_storeId_evidenceLifecycle", (q) => q.eq("storeId", storeId).eq("evidenceLifecycle", "retained")).take(take),
     ctx.db.query("agentRunGrant").withIndex("by_storeId_lifecycle", (q) => q.eq("storeId", storeId).eq("lifecycle", "retained")).take(take),
   ]);
@@ -153,6 +154,7 @@ async function contentCounts(ctx: QueryCtx, storeId: Id<"store">) {
     replays: replays.length,
     scratch: scratch.length,
     claims: claims.length,
+    calls: calls.length,
     retainedCitations: retainedCitations.length,
     retainedGrants: retainedGrants.length,
   };
@@ -256,7 +258,7 @@ describe("prompt/content expiry (scenario 8)", () => {
 
     await t.run(async (ctx) => {
       expect(await ctx.db.get("store", seeded.removed.storeId)).toBeNull();
-      expect(await contentCounts(ctx, seeded.removed.storeId)).toEqual({ prompts: 0, replays: 0, scratch: 0, claims: 0, retainedCitations: 0, retainedGrants: 0 });
+      expect(await contentCounts(ctx, seeded.removed.storeId)).toEqual({ prompts: 0, replays: 0, scratch: 0, claims: 0, calls: 0, retainedCitations: 0, retainedGrants: 0 });
       expect(await contentCounts(ctx, seeded.retained.storeId)).toMatchObject({ prompts: 1, replays: 3, scratch: 1, claims: 1, retainedCitations: 1, retainedGrants: 1 });
       const grant = await ctx.db.query("agentRunGrant").withIndex("by_runId", (q) => q.eq("runId", seeded.removedTurn.runId)).unique();
       // Audit metadata survives: only the lifecycle markers changed.
@@ -306,9 +308,11 @@ describe("prompt/content expiry (scenario 8)", () => {
 
     await t.run(async (ctx) => {
       expect(await ctx.db.get("organization", seeded.removed.organizationId)).toBeNull();
-      expect(await contentCounts(ctx, seeded.removed.storeId)).toEqual({ prompts: 0, replays: 0, scratch: 0, claims: 0, retainedCitations: 0, retainedGrants: 0 });
-      expect(await contentCounts(ctx, seeded.sibling)).toEqual({ prompts: 0, replays: 0, scratch: 0, claims: 0, retainedCitations: 0, retainedGrants: 0 });
-      expect(await contentCounts(ctx, seeded.other.storeId)).toMatchObject({ prompts: 1, retainedCitations: 1, retainedGrants: 1 });
+      // The call ledger is deleted directly through its organization index,
+      // for every store of the organization, and nowhere else.
+      expect(await contentCounts(ctx, seeded.removed.storeId)).toEqual({ prompts: 0, replays: 0, scratch: 0, claims: 0, calls: 0, retainedCitations: 0, retainedGrants: 0 });
+      expect(await contentCounts(ctx, seeded.sibling)).toEqual({ prompts: 0, replays: 0, scratch: 0, claims: 0, calls: 0, retainedCitations: 0, retainedGrants: 0 });
+      expect(await contentCounts(ctx, seeded.other.storeId)).toMatchObject({ prompts: 1, calls: 1, retainedCitations: 1, retainedGrants: 1 });
       const orphaned = await ctx.db.query("agentRunGrant").withIndex("by_organizationId_lifecycle", (q) => q.eq("organizationId", seeded.removed.organizationId).eq("lifecycle", "retained")).take(5);
       expect(orphaned).toHaveLength(0);
     });

@@ -175,7 +175,10 @@ async function listStoreProductSkus(
 /**
  * `maxPurchaseOrders` bounds one status slice of the store's lifetime
  * purchase-order history, one row past the ceiling for the same reason the
- * catalogue scan does.
+ * catalogue scan does. The bounded slice is read newest first: recent receipts
+ * and open orders are what a replenishment answer needs, so history, not the
+ * latest activity, is what falls off the end. The unbounded read keeps the
+ * index order the operator screens expect.
  */
 async function listStorePurchaseOrdersByStatus(
   ctx: QueryCtx,
@@ -192,7 +195,7 @@ async function listStorePurchaseOrdersByStatus(
     );
 
   if (args.maxPurchaseOrders !== undefined) {
-    return query.take(args.maxPurchaseOrders + 1);
+    return query.order("desc").take(args.maxPurchaseOrders + 1);
   }
 
   const purchaseOrders = [];

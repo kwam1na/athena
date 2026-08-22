@@ -158,6 +158,28 @@ describe("prepare → one-transaction commit → idempotent projection (scenario
     expect(await t.run((ctx) => ctx.db.get("agentTurnBinding", bindingId))).toMatchObject({ spendSettledAt: TEST_NOW_BASE + 42 });
   });
 
+  it("releases the turn's spend reservation when release is suppressed and finalize never ran", async () => {
+    const t = convexTest(schema, modules);
+    registerAgentRuntimeCleanupHook("athena_contract_fake", async () => ({ ok: true }));
+    const seeded = await seedReleasedRun(t, "outbox-suppress-spend");
+    const bindingId = seeded.run.bindingId!;
+    await reserveTurnSpend(t, seeded.run);
+    await t.run((ctx) => outbox.prepareCompletionWithCtx(ctx, { bindingId, runId: seeded.run.runId, preparedCompletionRef: "completion:ss", now: TEST_NOW_BASE + 30 }));
+    await t.run((ctx) => TEST_EXECUTOR_SEAMS.completeRunWithCtx(ctx, { runId: seeded.run.runId, idempotencyKey: "completion:ss", ...completionRequest(seeded.finished, seeded.citation), now: TEST_NOW_BASE + 40 }));
+    expect(await reservedCostUnits(t, seeded.run)).toEqual([turnProviderCostReservation(), turnProviderCostReservation()]);
+
+    // Revocation after the commit: the release is suppressed and the turn is
+    // over for good, so the reservation a dead host left behind is released.
+    await t.run((ctx) => ctx.db.delete("organizationMember", seeded.run.operator.membershipId!));
+    expect(await t.run((ctx) => outbox.suppressReleaseWithCtx(ctx, { bindingId, reason: "membership_revoked", now: TEST_NOW_BASE + 42 }))).toEqual({ outcome: "suppressed", cleanup: "succeeded" });
+    expect(await reservedCostUnits(t, seeded.run)).toEqual([0, 0]);
+    expect(await t.run((ctx) => ctx.db.get("agentTurnBinding", bindingId))).toMatchObject({ releaseSuppressedAt: TEST_NOW_BASE + 42, spendSettledAt: TEST_NOW_BASE + 42 });
+    // A second suppression settles nothing more.
+    expect(await t.run((ctx) => outbox.suppressReleaseWithCtx(ctx, { bindingId, reason: "membership_revoked", now: TEST_NOW_BASE + 43 }))).toEqual({ outcome: "already_suppressed", cleanup: "already_succeeded" });
+    expect(await reservedCostUnits(t, seeded.run)).toEqual([0, 0]);
+    expect(await t.run((ctx) => ctx.db.get("agentTurnBinding", bindingId))).toMatchObject({ spendSettledAt: TEST_NOW_BASE + 42 });
+  });
+
   it("backs off a failed projection and retries it later without touching the commit", async () => {
     const t = convexTest(schema, modules);
     const seeded = await seedReleasedRun(t, "outbox-retry");

@@ -13,7 +13,7 @@ applies_when:
   - "A caller can retry, so a denial has to be machine-actionable"
   - "A deletion cascade has to be audited against what rows actually carry"
 tags: [athena, convex, agent-harness, delegated-authority, field-omission, denials, retention, rendering]
-delivery_diff_fingerprint: f8c6d5721f082d96239076fd5d8f6c5d9ca4b03cb4261b9872dedcf7ba188cb3
+delivery_diff_fingerprint: d7c60d140353d7b1948399bc63ee433f08d2c44c2883084d225e012be64f229f
 ---
 
 # Answering A Caller That Is Not A Person
@@ -195,9 +195,13 @@ The general check, worth running against any scope-deletion cascade:
 > For each row that survives, is **every** field an identity, a hash, or a
 > timestamp? If not, it is content and it should have been deleted.
 
-Watch the reverse direction too: organization-scope removal here reaches those
-rows only by cascading into each store, because the table has no organization
-index. That is a real coupling, and it should be stated rather than assumed.
+Watch the reverse direction too: organization-scope removal deletes the call
+ledger directly through its own `by_organizationId_createdAt` index, the same
+as every other table in `deleteAgentHarnessContentWithCtx` — it does not
+cascade into the organization's stores. Every content table in that function
+needs both a store index and an organization index for exactly this reason,
+and the retention test pins the ledger count at zero for every store of a
+removed organization.
 
 ### 8. Inert rendering should be a property of the code
 

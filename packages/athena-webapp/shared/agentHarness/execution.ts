@@ -179,14 +179,6 @@ export function evaluateTransition<S extends string>(
   return { kind: "advance", from, to };
 }
 
-export const AGENT_RUN_TERMINAL_STATUSES = terminalStatesOf(AGENT_RUN_TRANSITIONS);
-export const AGENT_PROGRAM_ATTEMPT_TERMINAL_STATUSES = terminalStatesOf(
-  AGENT_PROGRAM_ATTEMPT_TRANSITIONS,
-);
-export const AGENT_CAPABILITY_CALL_TERMINAL_STATUSES = terminalStatesOf(
-  AGENT_CAPABILITY_CALL_TRANSITIONS,
-);
-
 export const AGENT_RUN_ACTIVE_STATUSES = AGENT_RUN_STATUSES.filter(
   (status) => !isTerminalState(AGENT_RUN_TRANSITIONS, status),
 );

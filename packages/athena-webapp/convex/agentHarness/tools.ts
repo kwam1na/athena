@@ -255,8 +255,13 @@ export type AgentToolHostContext = {
   readonly executeProgram: (input: { runId: Id<"intelligenceRun">; attemptIdempotencyKey: string; source: string; signal: AbortSignal }) => Promise<AgentExecuteProgramResult>;
   readonly reportProgress?: (milestone: AgentProgressMilestone) => Promise<void>;
   readonly now: () => number;
-  /** Class of the projected history this turn replayed into the provider; the answer cannot be classed below it. */
-  readonly egressFloor?: AgentEgressClass;
+  /**
+   * Class of the projected history this turn replayed into the provider. The
+   * answer can never be classed below it, so the host must state it: a host
+   * that forgot would silently label an answer written from sensitive history
+   * as operational.
+   */
+  readonly egressFloor: AgentEgressClass;
   /** Discovery schemas (tests bind the test package; production defaults to the generated index). */
   readonly schemas?: AgentCapabilitySchemaIndex;
 };
@@ -436,7 +441,7 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
       // provider — never the model-chosen cited subset, which would let a
       // narrative carrying sensitive figures ship labelled `operational`. The
       // projected history was shown to the provider too, so it is the floor.
-      const egressClass = attempts.reduce<AgentEgressClass>((max, attempt) => maxEgressClass(max, attempt.egressClass), host.egressFloor ?? "operational");
+      const egressClass = attempts.reduce<AgentEgressClass>((max, attempt) => maxEgressClass(max, attempt.egressClass), host.egressFloor);
       const namespaceOf = new Map<string, string>();
       for (const attempt of attempts) for (const citation of attempt.citations) namespaceOf.set(citation.citation, citation.namespace);
       const limitedEvidence = args.limitedEvidence === true || args.outcome === "no_usable_sources" || attempts.some((attempt) => cited.has(attempt.attemptRef) && attempt.completeness === "partial");
@@ -479,7 +484,7 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
     },
   };
 
-  const registrations: AgentAnyToolRegistration[] = [discover, describe, executeProgram, scratch, completeRun] as unknown as AgentAnyToolRegistration[];
+  const registrations: AgentAnyToolRegistration[] = [discover, describe, executeProgram, scratch, completeRun];
   return {
     registrations,
     state: {

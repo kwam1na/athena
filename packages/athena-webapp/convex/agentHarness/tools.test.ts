@@ -67,7 +67,7 @@ function toolsUnderTest(attemptClasses: readonly AgentEgressClass[], egressFloor
       } as never;
     },
     now: () => 1_700_000_000_000,
-    ...(egressFloor ? { egressFloor } : {}),
+    egressFloor: egressFloor ?? "operational",
   } satisfies Partial<AgentToolHostContext> as unknown as AgentToolHostContext;
 
   const { registrations } = createAthenaToolRegistrations(host);

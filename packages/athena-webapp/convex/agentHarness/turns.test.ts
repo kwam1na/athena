@@ -142,6 +142,59 @@ describe("startTurn (scenarios 7, 9, 15)", () => {
     expect(await t.run((ctx) => entry.startTurn(admitted(ctx, operator.userId), baseArgs(operator.storeId, { turnIdempotencyKey: "turn-over", threadKey: "thread-over" })))).toMatchObject({ outcome: "denied", code: "active_run_limit", retryable: true });
   });
 
+  /** A second full admin in the operator's organization: authority passes, so only per-operator rules separate the two. */
+  async function seedColleague(t: TestConvex<typeof schema>, operator: Awaited<ReturnType<typeof seedDelegatedOperator>>, slug: string) {
+    return t.run(async (ctx) => {
+      const colleagueId = await ctx.db.insert("athenaUser", { email: `${slug}-colleague@test` });
+      await ctx.db.insert("organizationMember", { organizationId: operator.organizationId, userId: colleagueId, role: "full_admin", operationalRoles: [] });
+      return colleagueId;
+    });
+  }
+
+  it("admits a colleague's turn on the same thread key while this operator's turn is active, and still blocks each operator's own second submission", async () => {
+    const t = convexTest(schema, modules);
+    const operator = await t.run((ctx) => seedDelegatedOperator(ctx, "two-op", { role: "full_admin" }));
+    const colleagueId = await seedColleague(t, operator, "two-op");
+    const shared = (turnIdempotencyKey: string) => baseArgs(operator.storeId, { threadKey: "thread-shared", turnIdempotencyKey });
+
+    const first = await t.run((ctx) => entry.startTurn(admitted(ctx, operator.userId), shared("turn-a1")));
+    expect(first).toMatchObject({ outcome: "started" });
+    const second = await t.run((ctx) => entry.startTurn(admitted(ctx, colleagueId), shared("turn-b1")));
+    expect(second).toMatchObject({ outcome: "started" });
+    expect(await t.run((ctx) => entry.startTurn(admitted(ctx, operator.userId), shared("turn-a2")))).toMatchObject({ outcome: "denied", code: "thread_busy", retryable: true });
+    expect(await t.run((ctx) => entry.startTurn(admitted(ctx, colleagueId), shared("turn-b2")))).toMatchObject({ outcome: "denied", code: "thread_busy", retryable: true });
+    expect(scheduled.drive).toHaveLength(2);
+
+    // Each operator's history on the shared key is their own turn and nothing else.
+    if (first.outcome !== "started" || second.outcome !== "started") throw new Error("unreachable");
+    const ownerHistory = await t.run((ctx) => entry.getThreadHistory(admitted(ctx, operator.userId), { storeId: operator.storeId, profileId: TEST_PROFILE_ID, threadKey: "thread-shared" }));
+    expect(ownerHistory).toMatchObject({ kind: "history", entries: [{ bindingId: first.bindingId, state: "active" }] });
+    const colleagueHistory = await t.run((ctx) => entry.getThreadHistory(admitted(ctx, colleagueId), { storeId: operator.storeId, profileId: TEST_PROFILE_ID, threadKey: "thread-shared" }));
+    expect(colleagueHistory).toMatchObject({ kind: "history", entries: [{ bindingId: second.bindingId, state: "active" }] });
+  });
+
+  it("denies a colleague who reuses another operator's turn key instead of resuming that operator's turn", async () => {
+    const t = convexTest(schema, modules);
+    const operator = await t.run((ctx) => seedDelegatedOperator(ctx, "key-conflict", { role: "full_admin" }));
+    const colleagueId = await seedColleague(t, operator, "key-conflict");
+
+    const first = await t.run((ctx) => entry.startTurn(admitted(ctx, operator.userId), baseArgs(operator.storeId, { threadKey: "thread-owner", turnIdempotencyKey: "turn-shared-key" })));
+    expect(first).toMatchObject({ outcome: "started" });
+    if (first.outcome !== "started") throw new Error("unreachable");
+
+    const conflict = await t.run((ctx) => entry.startTurn(admitted(ctx, colleagueId), baseArgs(operator.storeId, { threadKey: "thread-colleague", turnIdempotencyKey: "turn-shared-key" })));
+    expect(conflict).toMatchObject({ outcome: "denied", code: "turn_key_conflict", retryable: false });
+    assertConformsToExportedReturns(startTurn, conflict);
+    expect(JSON.stringify(conflict)).not.toContain(first.bindingId);
+    expect(JSON.stringify(conflict)).not.toContain(first.runId);
+
+    // Nothing was persisted for the colleague; the owner still resumes their own turn on the key.
+    const bindings = await t.run((ctx) => ctx.db.query("agentTurnBinding").withIndex("by_storeId_turnIdempotencyKey", (q) => q.eq("storeId", operator.storeId).eq("turnIdempotencyKey", "turn-shared-key")).take(3));
+    expect(bindings.map((binding) => binding._id)).toEqual([first.bindingId]);
+    expect(scheduled.drive).toEqual([first.bindingId]);
+    expect(await t.run((ctx) => entry.startTurn(admitted(ctx, operator.userId), baseArgs(operator.storeId, { threadKey: "thread-owner", turnIdempotencyKey: "turn-shared-key" })))).toMatchObject({ outcome: "resumed", bindingId: first.bindingId });
+  });
+
   it("a POS-only member with nothing granted is refused with no_granted_capabilities; a disabled profile fails closed", async () => {
     const t = convexTest(schema, modules);
     // Revoke the member intent the test package binds by narrowing the profile instead: profile switch off.

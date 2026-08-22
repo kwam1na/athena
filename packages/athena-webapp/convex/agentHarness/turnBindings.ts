@@ -43,11 +43,6 @@ import {
   type AgentRunStatus,
   type AgentTurnBindingStep,
 } from "../../shared/agentHarness/execution";
-import { agentBudgetPolicyValidator } from "../schemas/agentHarness";
-import {
-  intelligencePrincipalKindValidator,
-  intelligenceVisibilityModeValidator,
-} from "../schemas/intelligence";
 import {
   createAgentRunWithCtx,
   failAgentRunWithCtx,
@@ -542,35 +537,6 @@ const turnBindingStepValidator = v.union(
   v.literal("runtime_projected"),
 );
 
-export const recordTurnIntent = internalMutation({
-  args: {
-    storeId: v.id("store"),
-    organizationId: v.id("organization"),
-    principalKind: intelligencePrincipalKindValidator,
-    actorRef: v.string(),
-    policyRef: v.optional(v.string()),
-    visibilityMode: intelligenceVisibilityModeValidator,
-    profileKey: v.string(),
-    profileVersion: v.string(),
-    packageKeys: v.array(v.string()),
-    grantDigest: v.string(),
-    registryDigest: v.string(),
-    compatibilityDigest: v.string(),
-    adapterKind: v.string(),
-    adapterVersion: v.string(),
-    budgetPolicy: agentBudgetPolicyValidator,
-    egressClass: v.string(),
-    turnIdempotencyKey: v.string(),
-    runtimeThreadRef: v.optional(v.string()),
-    threadKey: v.optional(v.string()),
-    promptPayload: v.record(v.string(), v.any()),
-    promptPayloadHash: v.optional(v.string()),
-    now: v.optional(v.number()),
-  },
-  handler: async (ctx, args) =>
-    recordTurnIntentWithCtx(ctx, { ...args, now: args.now ?? Date.now() }),
-});
-
 export const advanceTurnBinding = internalMutation({
   args: {
     bindingId: v.id("agentTurnBinding"),
@@ -585,12 +551,6 @@ export const advanceTurnBinding = internalMutation({
   },
   handler: async (ctx, args) =>
     advanceTurnBindingWithCtx(ctx, { ...args, now: args.now ?? Date.now() }),
-});
-
-export const resumeTurnBinding = internalMutation({
-  args: { bindingId: v.id("agentTurnBinding"), now: v.optional(v.number()) },
-  handler: async (ctx, args) =>
-    resumeTurnBindingWithCtx(ctx, { bindingId: args.bindingId, now: args.now ?? Date.now() }),
 });
 
 export const sweepStaleTurnBindings = internalMutation({

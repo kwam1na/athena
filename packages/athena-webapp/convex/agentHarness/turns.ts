@@ -63,6 +63,7 @@ import {
 import { cancelAgentRunWithCtx, failAgentRunWithCtx, checkRunEpochFenceWithCtx } from "./lifecycle";
 import { AGENT_PROGRAM_RUNTIME_CEILINGS } from "./programRuntime/types";
 import { requestRuntimeCleanupWithCtx } from "./retention";
+import { encodeDelegatedActorRef } from "./grants";
 import { admitTurnStartWithCtx, settleTurnSpendOnceWithCtx, turnProviderCostReservation, validateOperatorPrompt } from "./runAdmission";
 import { acknowledgeOperatorViewWithCtx, advanceTurnBindingWithCtx, recordTurnIntentWithCtx, resolveTurnWithCtx, resumeTurnBindingWithCtx } from "./turnBindings";
 import type { AgentDescribeGrantOutcome } from "./tools";
@@ -695,6 +696,13 @@ export function createAgentTurnEntryPoints(config: AgentTurnEntryPointConfig) {
 
     const existing = await resolveTurnWithCtx(ctx, { storeId: args.storeId, turnIdempotencyKey: args.turnIdempotencyKey });
     if (existing.kind !== "none") {
+      // A turn key resumes only the turn the SAME operator opened with it. A
+      // colleague reusing the key is refused and never handed that turn's
+      // binding or run.
+      const existingRun = await ctx.db.get("intelligenceRun", existing.runId);
+      if (existingRun?.actorRef !== encodeDelegatedActorRef(operator)) {
+        return deniedResult("turn_key_conflict", "This question reference is already in use. Ask again.");
+      }
       const binding = await ctx.db.get("agentTurnBinding", existing.bindingId);
       return { outcome: "resumed" as const, bindingId: existing.bindingId, runId: existing.runId, threadKey: binding?.threadKey ?? args.threadKey, step: existing.step, runStatus: existing.runStatus, terminal: existing.kind === "terminal" };
     }
@@ -725,6 +733,13 @@ export function createAgentTurnEntryPoints(config: AgentTurnEntryPointConfig) {
       throw new Error(`Turn intent rejected after admission: ${intent.denial.code}`);
     }
     if (intent.outcome === "resumed") {
+      // Same guard as above. The key was free at the resolve step of this
+      // transaction, so another operator's turn appearing here is a defect;
+      // throwing rolls the spend reservation back with the rest.
+      const resumedRun = await ctx.db.get("intelligenceRun", intent.runId);
+      if (resumedRun?.actorRef !== prepared.runInput.actorRef) {
+        throw new Error("Turn key conflict after admission: turn_key_conflict");
+      }
       return { outcome: "resumed" as const, bindingId: intent.bindingId, runId: intent.runId, threadKey: args.threadKey, step: intent.step, runStatus: intent.runStatus, terminal: isTerminalRunStatus(intent.runStatus) };
     }
     await config.scheduleDriveTurn(ctx, intent.bindingId);

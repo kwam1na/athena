@@ -161,6 +161,19 @@ export function isAgentHarnessRun(
   return run.harnessKind === "agent";
 }
 
+/**
+ * Ask Athena answers are read only through the harness turn views, which
+ * reauthorize the viewer against the turn's own grant, suppression, and
+ * egress class on every read. The legacy panel surfaces in this module carry
+ * none of that, so they never return or withdraw one; the kind stays in the
+ * shared validator because the schema names it.
+ */
+export function isAgentAnswerArtifact(
+  artifact: Pick<Doc<"intelligenceArtifact">, "kind">,
+): boolean {
+  return artifact.kind === "agent_answer";
+}
+
 export function isActiveRunStale(
   run: Pick<Doc<"intelligenceRun">, "createdAt" | "status" | "updatedAt">,
   now = Date.now(),
@@ -429,7 +442,7 @@ export const failRun = internalMutation({
  * Cancel a provider-backed intelligence run. Idempotent on an already
  * canceled run; a run that ended differently is left as it is and reported.
  * Agent-harness runs (`harnessKind: "agent"`) must be canceled through
- * `agentHarness/lifecycle.cancelAgentRun`, which also clamps their child
+ * `agentHarness/lifecycle.cancelAgentRunWithCtx`, which also clamps their child
  * attempts, calls, reservations, and turn binding.
  */
 export const cancelRun = internalMutation({
@@ -570,7 +583,9 @@ export const latestArtifact = query({
         artifacts
           .filter(
             (artifact) =>
-              artifact.kind === args.kind && statuses.includes(artifact.status),
+              artifact.kind === args.kind &&
+              statuses.includes(artifact.status) &&
+              !isAgentAnswerArtifact(artifact),
           )
           .sort((a, b) => b.createdAt - a.createdAt)[0] ?? null
       );
@@ -614,6 +629,7 @@ export const latestArtifactBySubject = query({
       return (
         artifacts
           .flat()
+          .filter((artifact) => !isAgentAnswerArtifact(artifact))
           .sort((a, b) => b.createdAt - a.createdAt)[0] ?? null
       );
     },
@@ -643,7 +659,7 @@ export async function getLatestDebugRunBySubject(
     .order("desc")
     .first();
 
-  if (indexedRun) return indexedRun;
+  if (indexedRun && !isAgentHarnessRun(indexedRun)) return indexedRun;
 
   const fallbackRuns = await getBoundedDebugRunsByCapability(ctx, args);
   return selectLatestDebugRunFromCandidates(fallbackRuns, args);
@@ -677,7 +693,7 @@ async function getBoundedDebugRunsByCapability(
     ),
   );
 
-  return runs.flat();
+  return runs.flat().filter((run) => !isAgentHarnessRun(run));
 }
 
 function summarizeError(error: Doc<"intelligenceRun">["error"] | undefined) {
@@ -815,7 +831,7 @@ export const latestRunDebug = query({
         args.sourceRefTable && args.sourceRefId
           ? await getLatestDebugRunBySubject(ctx, args)
           : await getLatestDebugRunByCapability(ctx, args);
-      if (!run) return null;
+      if (!run || isAgentHarnessRun(run)) return null;
 
       const [snapshot, artifact, providerInvocations] = await Promise.all([
         run.contextSnapshotId
@@ -869,6 +885,11 @@ export const dismissArtifact = mutation({
       const artifact = await ctx.db.get("intelligenceArtifact", args.artifactId);
       if (!artifact) throw new Error("Intelligence artifact not found");
       if (!artifact.storeId) throw new Error("Store-scoped artifact required");
+      if (isAgentAnswerArtifact(artifact)) {
+        throw new Error(
+          "Athena answers are withdrawn through the conversation that produced them, not dismissed as insights.",
+        );
+      }
       const { athenaUser } = await requireStoreFullAdminAccess(ctx, artifact.storeId);
       if (artifact.status !== "dismissed") {
         assertArtifactTransition(artifact.status, "dismissed");

@@ -34,7 +34,7 @@ Pinned exactly in `packages/athena-webapp/package.json`, mirrored in `CONVEX_AGE
 | `quickjs-emscripten-core` | 0.32.0 | Sandbox engine API. |
 | `@jitl/quickjs-singlefile-mjs-release-sync` | 0.32.0 | Engine build with the wasm embedded (no file or network loading inside the Convex bundle). |
 | `@babel/parser` | 7.29.8 | Static validation and type stripping (see section 3 for why not `typescript`). |
-| `zod` | `^3.25.76` (installed 3.25.76) | AI SDK v7 accepts `zod ^3.25.76 || ^4.1.8`; the floor was raised from `^3.23.8` to make the peer explicit. No application schema was migrated; the adapter uses `jsonSchema` tools and no Zod. |
+| `zod` | `^3.23.8` declared (lockfile resolves 3.25.76) | AI SDK v7 accepts `zod ^3.25.76 || ^4.1.8`; the resolved version satisfies the peer and the declared floor was left as is. No application schema was migrated; the adapter uses `jsonSchema` tools and no Zod. |
 
 `CONVEX_AGENT_ADAPTER_VERSION` (`convex_agent@0.7.1+ai@7.0.76+athena.1`) is part of every tool fingerprint. Changing it makes every recorded idempotency key mismatch on replay by design, so an upgrade never silently reuses results produced by another runtime version.
 

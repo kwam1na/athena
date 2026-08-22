@@ -15,7 +15,7 @@ import { describe, expect, it } from "vitest";
 import type { AgentReadPortHandlerInput } from "../../agentHarness/readPorts";
 import schema from "../../schema";
 import { getInventoryUnitSummaryWithCtx, listInventorySnapshotWithCtx } from "../adjustments";
-import { listReplenishmentRecommendationsWithCtx } from "../replenishment";
+import { listBoundedReplenishmentRecommendationsWithCtx, listReplenishmentRecommendationsWithCtx } from "../replenishment";
 import { seedDailyOperationsStore } from "../../agentHarness/evals/dailyOperations.fixture";
 import { REPLENISHMENT_PURCHASE_ORDER_CEILING, REPLENISHMENT_SKU_CEILING, listReplenishmentHandler } from "./inventoryPorts";
 import { REPLENISHMENT_PORT_KEY } from "./inventory";
@@ -131,19 +131,114 @@ describe("inventory.replenishment read ceiling", () => {
         .take(1);
       // One more historical purchase order than the per-status ceiling covers,
       // so the continuity scan is bounded even though the catalogue is small.
+      // Orders are inserted oldest first with distinct timestamps; the oldest
+      // and the newest each received one unit of the low-stock SKU.
+      const edges = new Set([0, REPLENISHMENT_PURCHASE_ORDER_CEILING]);
       for (let index = 0; index <= REPLENISHMENT_PURCHASE_ORDER_CEILING; index += 1) {
-        await ctx.db.insert("purchaseOrder", {
+        const createdAt = 1_700_000_000_000 + index * 60_000;
+        const purchaseOrderId = await ctx.db.insert("purchaseOrder", {
           storeId: seeded.storeId,
           organizationId: seeded.organizationId,
           vendorId: vendors[0]!._id,
           poNumber: `PO-${String(index).padStart(4, "0")}`,
           status: "received",
-          lineItemCount: 0,
-          totalUnits: 0,
+          lineItemCount: edges.has(index) ? 1 : 0,
+          totalUnits: edges.has(index) ? 1 : 0,
           subtotalAmount: 0,
           totalAmount: 0,
-          createdAt: 1_700_000_000_000,
-          receivedAt: 1_700_000_000_000,
+          createdAt,
+          receivedAt: createdAt,
+        });
+        if (edges.has(index)) {
+          await ctx.db.insert("purchaseOrderLineItem", {
+            purchaseOrderId,
+            storeId: seeded.storeId,
+            productSkuId: seeded.lowStockSkuId,
+            orderedQuantity: 1,
+            receivedQuantity: 1,
+            unitCost: 100,
+            lineTotal: 100,
+            createdAt,
+          });
+        }
+      }
+      return seeded;
+    });
+
+    // The bounded slice keeps the NEWEST orders: the most recent receipt is
+    // what a replenishment answer needs, and the oldest is what gets dropped.
+    const bounded = await t.run((ctx) =>
+      listBoundedReplenishmentRecommendationsWithCtx(ctx, {
+        maxSkus: REPLENISHMENT_SKU_CEILING,
+        maxPurchaseOrdersPerStatus: REPLENISHMENT_PURCHASE_ORDER_CEILING,
+        maxPurchaseOrderLineItems: REPLENISHMENT_PURCHASE_ORDER_CEILING,
+        storeId: fixture.storeId,
+      }),
+    );
+    expect(bounded.purchaseOrderCeilingReached).toBe(true);
+    const lowStock = bounded.recommendations.find((recommendation) => recommendation._id === fixture.lowStockSkuId);
+    const receivedPoNumbers = lowStock?.receivedPurchaseOrders.map((order) => order.poNumber) ?? [];
+    expect(receivedPoNumbers).toContain(`PO-${String(REPLENISHMENT_PURCHASE_ORDER_CEILING).padStart(4, "0")}`);
+    expect(receivedPoNumbers).not.toContain("PO-0000");
+
+    const output = await t.run((ctx) =>
+      listReplenishmentHandler(ctx, {
+        portKey: REPLENISHMENT_PORT_KEY,
+        capabilityId: "inventory.replenishment",
+        verb: "list",
+        scope: { kind: "store", storeId: fixture.storeId, organizationId: fixture.organizationId },
+        args: {},
+        pageIndex: 0,
+        pageSize: 100,
+        grantedProjections: [],
+        now: Date.now(),
+      }),
+    );
+
+    expect(output.kind).toBe("data");
+    if (output.kind !== "data") throw new Error("unreachable");
+    expect(output.sources.find((source) => source.sourceKey === "recommendations")).toMatchObject({
+      status: "truncated",
+      reason: "purchase_order_ceiling_reached",
+    });
+    expect(output.warnings).toMatchObject([{ code: "replenishment_source_truncated", sourceKey: "recommendations" }]);
+  });
+
+  it("reports the recommendations source as truncated and warns when one purchase order carries more line items than the read ceiling", async () => {
+    const t = convexTest(schema, modules);
+    const fixture = await t.run(async (ctx) => {
+      const seeded = await seedDailyOperationsStore(ctx, { slug: "replenishment-line-ceiling" });
+      const vendors = await ctx.db
+        .query("vendor")
+        .withIndex("by_storeId_status", (q) => q.eq("storeId", seeded.storeId).eq("status", "active"))
+        .take(1);
+      const createdAt = 1_700_000_000_000;
+      const lineItemCount = REPLENISHMENT_PURCHASE_ORDER_CEILING + 1;
+      // One received order, one line past the per-order ceiling, every line
+      // for the low-stock SKU: the line-item scan, not the order scan, bounds it.
+      const purchaseOrderId = await ctx.db.insert("purchaseOrder", {
+        storeId: seeded.storeId,
+        organizationId: seeded.organizationId,
+        vendorId: vendors[0]!._id,
+        poNumber: "PO-LINES",
+        status: "received",
+        lineItemCount,
+        totalUnits: lineItemCount,
+        subtotalAmount: 0,
+        totalAmount: 0,
+        createdAt,
+        receivedAt: createdAt,
+      });
+      for (let index = 0; index < lineItemCount; index += 1) {
+        await ctx.db.insert("purchaseOrderLineItem", {
+          purchaseOrderId,
+          storeId: seeded.storeId,
+          productSkuId: seeded.lowStockSkuId,
+          orderedQuantity: 1,
+          receivedQuantity: 1,
+          unitCost: 100,
+          lineTotal: 100,
+          createdAt: createdAt + index,
         });
       }
       return seeded;

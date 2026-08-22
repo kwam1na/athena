@@ -139,10 +139,6 @@ export function readGeneratedRegistry(source: string): AgentCapabilityRegistry |
   return readRegionJson<AgentCapabilityRegistry>(source, REGISTRY_REGION);
 }
 
-export function readGeneratedSchemas(source: string): AgentCapabilitySchemaIndex | null {
-  return readRegionJson<AgentCapabilitySchemaIndex>(source, SCHEMAS_REGION);
-}
-
 const GENERATED_HEADER = (subject: string, notes: readonly string[]) =>
   [
     "/**",

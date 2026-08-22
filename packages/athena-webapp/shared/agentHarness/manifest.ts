@@ -41,7 +41,6 @@ import {
   isPositiveInteger,
   isRawIdentifierFieldName,
   looksLikeRawDocumentId,
-  throwContractIssues,
   versionedExtensionRequired,
   type AgentAuthorityTier,
   type AgentContractIssue,
@@ -765,12 +764,6 @@ export function validateCapabilityManifest(manifest: AgentCapabilityManifest): A
   return collector.issues.length === 0
     ? { ok: true, manifest }
     : { ok: false, issues: collector.issues };
-}
-
-export function assertCapabilityManifest(manifest: AgentCapabilityManifest): AgentCapabilityManifest {
-  const validation = validateCapabilityManifest(manifest);
-  if (!validation.ok) throwContractIssues(`capability ${manifest?.capabilityId ?? "<unknown>"}`, validation.issues);
-  return manifest;
 }
 
 // ---------------------------------------------------------------------------
