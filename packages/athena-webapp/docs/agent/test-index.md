@@ -191,6 +191,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/migrations/backfillReportingCycleStart.test.ts`](../../convex/migrations/backfillReportingCycleStart.test.ts)
 - [`convex/migrations/backfillStoreCurrencyCase.test.ts`](../../convex/migrations/backfillStoreCurrencyCase.test.ts)
 - [`convex/migrations/backfillStoreTimezoneAuthority.test.ts`](../../convex/migrations/backfillStoreTimezoneAuthority.test.ts)
+- [`convex/migrations/migrateAmountsToPesewas.characterization.test.ts`](../../convex/migrations/migrateAmountsToPesewas.characterization.test.ts)
 - [`convex/migrations/migratePosAmountsToPesewas.test.ts`](../../convex/migrations/migratePosAmountsToPesewas.test.ts)
 - [`convex/mtn/client.test.ts`](../../convex/mtn/client.test.ts)
 - [`convex/mtn/config.test.ts`](../../convex/mtn/config.test.ts)
