@@ -17,21 +17,12 @@ const CONVEX_BROWSER_WARNING =
 const TEST_FILE_SUFFIX = ".test.ts";
 const TEST_TSX_FILE_SUFFIX = ".test.tsx";
 
-const ALLOWED_CONVEX_IMPORT_PATTERNS = [
-  /(?:^|\/)convex\/_generated\//,
-  /(?:^|\/)convex\/lib\/currency$/,
-  /(?:^|\/)convex\/utils$/,
-  /(?:^|\/)convex\/inventory\/utils$/,
-  /(?:^|\/)convex\/emails\//,
-  // Pure validator/policy modules: no Convex server imports (only
-  // `convex/values`), so they are safe to pull into the browser bundle.
-  /(?:^|\/)convex\/schemas\/notifications$/,
-  /(?:^|\/)convex\/notifications\/deliveryPolicy$/,
-  // Pure schedule math (no imports at all): the Store Hours UI shares the
-  // reporting-cycle boundary calculation with the schedule mutation so the
-  // staged-anchor confirmation names the same effective date the server uses.
-  /(?:^|\/)convex\/lib\/storeScheduleTime$/,
-];
+// The generated client is the ONLY Convex module the browser bundle may
+// import. Everything else that the browser and the server genuinely share —
+// currency conversion, order math, schedule math, notification policy — lives
+// in `shared/`, and presentation that only the browser renders lives under
+// `src/`. Do not add an exception here: move the code instead.
+const ALLOWED_CONVEX_IMPORT_PATTERNS = [/(?:^|\/)convex\/_generated\//];
 
 function collectSourceFiles(directory: string): string[] {
   return readdirSync(directory).flatMap((entry) => {
