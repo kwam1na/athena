@@ -179843,7 +179843,7 @@
       "relation": "contains",
       "source": "scripts_harness_app_registry_ts",
       "source_file": "scripts/harness-app-registry.ts",
-      "source_location": "L1409",
+      "source_location": "L1419",
       "target": "harness_app_registry_getharnesspackageregistration",
       "weight": 1
     },
@@ -212545,7 +212545,7 @@
       "label": "getHarnessPackageRegistration()",
       "norm_label": "getharnesspackageregistration()",
       "source_file": "scripts/harness-app-registry.ts",
-      "source_location": "L1409"
+      "source_location": "L1419"
     },
     {
       "community": 1010,

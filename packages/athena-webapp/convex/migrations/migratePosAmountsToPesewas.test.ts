@@ -541,15 +541,27 @@ describe("completion marker coverage guards", () => {
     );
   });
 
-  it("keeps an applying batch from reporting zero work left before it is done", async () => {
+  it("does not let an applying batch overwrite a dry run's measurement of work left", async () => {
     const harness = createCtx({
       posTransaction: sixEligibleTransactions(),
       posAmountMigrationRun: [],
     });
 
-    // One applying page of three, leaving three rows unconverted. The batch
-    // has no measurement of its own to contribute, so it must not overwrite
-    // the record with a structural zero that reads as "nothing left".
+    // The dry run is the only thing that can measure the table: it reports six
+    // rows pending and banks nothing.
+    await runChain(harness, {
+      autoContinue: true,
+      cutoffTimestamp: CUTOFF,
+      limit: 3,
+      table: "posTransaction",
+    });
+    expect(harness.tables!.get("posAmountMigrationRun")![0]).toEqual(
+      expect.objectContaining({ complete: false, migrated: 0, remaining: 6 }),
+    );
+
+    // One applying page of three. Its own pending count is structurally zero,
+    // so it must carry the measurement forward rather than overwrite it with a
+    // zero that would read as "nothing left" while three rows are unconverted.
     await migratePosAmountTableWithCtx(harness.ctx, {
       cutoffTimestamp: CUTOFF,
       dryRun: false,
@@ -557,9 +569,8 @@ describe("completion marker coverage guards", () => {
       table: "posTransaction",
     } as never);
 
-    const record = harness.tables!.get("posAmountMigrationRun")![0];
-    expect(record).toEqual(
-      expect.objectContaining({ complete: false, migrated: 3 }),
+    expect(harness.tables!.get("posAmountMigrationRun")![0]).toEqual(
+      expect.objectContaining({ complete: false, migrated: 3, remaining: 6 }),
     );
   });
 });
