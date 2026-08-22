@@ -8,8 +8,8 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 
 ## Repo Summary
 - Code files discovered: 2999
-- Graph nodes: 12963
-- Graph edges: 16046
+- Graph nodes: 12975
+- Graph edges: 16084
 - Communities: 2923
 
 ## Graph Hotspots
@@ -20,7 +20,7 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - `dailyOperations.ts` (76 edges, Community 4) - [`packages/athena-webapp/convex/operations/dailyOperations.ts`](../../packages/athena-webapp/convex/operations/dailyOperations.ts)
 - `terminalHealthPresentation.ts` (76 edges, Community 5) - [`packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts`](../../packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts)
 - `catalogImport.ts` (75 edges, Community 6) - [`packages/athena-webapp/convex/inventory/catalogImport.ts`](../../packages/athena-webapp/convex/inventory/catalogImport.ts)
-- `DailyCloseView.tsx` (71 edges, Community 7) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
+- `projectLocalEvents.ts` (72 edges, Community 7) - [`packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts)
 
 ## Registered Packages
 - [Athena Webapp](packages/athena-webapp.md)

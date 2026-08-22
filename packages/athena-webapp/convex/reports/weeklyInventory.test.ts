@@ -74,6 +74,45 @@ describe("projectLiveWeeklyInventoryAttention", () => {
     });
   });
 
+  it("includes expense members in the mixed-source SKU attention group", () => {
+    const logicalWork = projectLogicalOperationalWork({
+      items: [
+        inventoryReview({
+          _id: "sale-member" as Id<"operationalWorkItem">,
+          createdAt: 99,
+          metadata: { localTransactionId: "sale-carried", sourceKind: "sale" },
+        }),
+        inventoryReview({
+          _id: "expense-member" as Id<"operationalWorkItem">,
+          createdAt: 101,
+          metadata: {
+            localExpenseEventId: "local-expense-event-1",
+            localExpenseSessionId: "local-expense-session-1",
+            sourceKind: "expense",
+            terminalId: "terminal-1",
+          },
+        }),
+      ],
+      sourceCompleteness: "complete",
+    });
+
+    const attention = projectLiveWeeklyInventoryAttention({
+      frameStartAt: 100,
+      logicalWork,
+    });
+
+    expect(attention.observedCount).toBe(1);
+    expect(attention.groups).toEqual([
+      expect.objectContaining({
+        classification: "carried_forward",
+        hasNewActivity: true,
+        key: "synced_sale_inventory_review:store-1:sku-1",
+        memberCount: 2,
+      }),
+    ]);
+    expect(logicalWork.groups[0].sourceIdentities).toHaveLength(2);
+  });
+
   it("preserves the canonical missing-SKU fallback rather than merging unrelated reviews", () => {
     const logicalWork = projectLogicalOperationalWork({
       items: [

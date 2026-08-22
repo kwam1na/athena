@@ -380,7 +380,8 @@ export function createLocalSyncIngestionService(
 
               if (
                 existing.status === "projected" &&
-                retryParseResult.event.eventType === "sale_completed"
+                (retryParseResult.event.eventType === "sale_completed" ||
+                  retryParseResult.event.eventType === "expense_recorded")
               ) {
                 const acceptedAt = existing.acceptedAt ?? dependencies.now();
                 const projection = await projectLocalSyncEvent(

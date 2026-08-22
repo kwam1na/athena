@@ -678,6 +678,97 @@ describe("getQueueSnapshot", () => {
     ).not.toHaveBeenCalled();
   });
 
+  it("exposes only sanitized source kind and context for expense inventory review rows", async () => {
+    const ctx = createQueueContext({
+      workItems: [
+        workItem({
+          _id: "work-expense" as Id<"operationalWorkItem">,
+          metadata: {
+            expenseSessionId: "expense-session-1",
+            localEventId: "event-expense-recorded-1",
+            localExpenseEventId: "local-expense-event-1",
+            localExpenseSessionId: "local-expense-session-1",
+            primaryProductSkuId: "sku-1",
+            skippedMutationItems: [{ productSkuId: "sku-1" }],
+            sourceId: "expense-transaction-1",
+            sourceKind: "expense",
+            sourceType: "expenseTransaction",
+            staffProofToken: "proof-token-1",
+            terminalId: "terminal-1",
+            trustedInventoryLines: [{ productSkuId: "sku-1" }],
+          },
+          productSkuId: "sku-1" as Id<"productSku">,
+          status: "open",
+          title: "Review inventory for Repair Kit",
+          type: "synced_sale_inventory_review",
+        }),
+      ],
+    });
+
+    const result = await getHandler(getQueueSnapshot)(ctx, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result.workItems).toHaveLength(1);
+    expect(result.workItems[0].details).toEqual({
+      inventoryReviewLineCount: 1,
+      localExpenseEventId: "local-expense-event-1",
+      localExpenseSessionId: "local-expense-session-1",
+      localRegisterSessionId: null,
+      localTransactionId: null,
+      primaryProductSkuId: "sku-1",
+      receiptNumber: null,
+      registerSessionId: null,
+      sourceId: "expense-transaction-1",
+      sourceKind: "expense",
+      terminalId: "terminal-1",
+    });
+    expect(JSON.stringify(result.workItems[0])).not.toContain(
+      "staffProofToken",
+    );
+    expect(JSON.stringify(result.workItems[0])).not.toContain(
+      "trustedInventoryLines",
+    );
+    expect(result.workItems[0].sourceIdentity).toBe(
+      "synced_sale_inventory_review:expense:store-1:terminal-1:local-expense-session-1:local-expense-event-1",
+    );
+  });
+
+  it("marks sale inventory review rows with a sale source kind", async () => {
+    const ctx = createQueueContext({
+      workItems: [
+        workItem({
+          _id: "work-sale" as Id<"operationalWorkItem">,
+          metadata: {
+            localRegisterSessionId: "local-register-1",
+            localTransactionId: "local-txn-1",
+            primaryProductSkuId: "sku-1",
+            receiptNumber: "LR-001",
+            registerSessionId: "register-session-1",
+            sourceId: "transaction-1",
+            sourceType: "posTransaction",
+            terminalId: "terminal-1",
+          },
+          productSkuId: "sku-1" as Id<"productSku">,
+          status: "open",
+          type: "synced_sale_inventory_review",
+        }),
+      ],
+    });
+
+    const result = await getHandler(getQueueSnapshot)(ctx, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result.workItems[0].details).toMatchObject({
+      localExpenseEventId: null,
+      localExpenseSessionId: null,
+      receiptNumber: "LR-001",
+      sourceId: "transaction-1",
+      sourceKind: "sale",
+    });
+  });
+
   it("includes current open work items and excludes terminal rows from the queue snapshot", async () => {
     const ctx = createQueueContext({
       workItems: [
