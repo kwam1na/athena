@@ -767,6 +767,45 @@ describe("POSTerminalHealthViewContent", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("counts a local-review terminal in the review tile even when the server lane is needs_terminal_action", () => {
+    // Local-runtime review work classifies as "Needs review", but the server
+    // routes it to needs_terminal_action rather than a review lane. Counting
+    // only the server review lanes would leave this terminal in no tile at all.
+    render(
+      <POSTerminalHealthViewContent
+        healthSummaries={[
+          {
+            ...baseSummary,
+            health: "needs_attention",
+            runtimeStatus: {
+              ...baseSummary.runtimeStatus,
+              sync: {
+                ...baseSummary.runtimeStatus.sync,
+                reviewEventCount: 3,
+              },
+            },
+            operationalExplanation: serverExplanation({
+              blockingDomain: "sync_review",
+              detail: "Local review events are waiting on the terminal.",
+              headline: "Terminal action needed",
+              lane: "needs_terminal_action",
+              nextStep: "Collect the local review events from the terminal.",
+              primaryOwner: "terminal",
+              saleImpact: "can_transact_now",
+              severity: "warning",
+              supportAction: "collect_local_review",
+            }),
+          },
+        ]}
+        isLoading={false}
+        orgUrlSlug="acme"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(metricCard("Needs review")).toHaveTextContent("1");
+  });
+
   it("states plainly when a terminal health summary carries no server aggregate", () => {
     render(
       <POSTerminalHealthViewContent

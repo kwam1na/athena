@@ -156,6 +156,7 @@ type BatchArgs = {
   pendingSoFar?: number;
   processedSoFar?: number;
   skippedSoFar?: number;
+  startedAtBeginning?: boolean;
   table: PosMoneyTable;
 };
 
@@ -250,16 +251,34 @@ export async function migratePosAmountTableWithCtx(
     skipped: (args.skippedSoFar ?? 0) + skipped,
   };
 
-  const complete = !dryRun && page.isDone && totals.pending === 0;
-  const run = await upsertMigrationRun(ctx, {
-    complete,
-    cutoffTimestamp: args.cutoffTimestamp,
-    migrated,
-    now,
-    remaining: totals.pending,
-    skipped,
-    table: args.table,
-  });
+  // A chain only proves the table is drained when it walked the whole table.
+  // Resuming from a caller-supplied cursor skips every page before it, so
+  // reaching the last page says nothing about the rows behind the start point.
+  const startedAtBeginning = args.startedAtBeginning ?? args.cursor == null;
+  const complete =
+    !dryRun && page.isDone && startedAtBeginning && totals.pending === 0;
+
+  // A dry run must never touch the run record: it is the gate a production
+  // cutover reads, and re-inspecting a finished table would otherwise clear it.
+  const run = dryRun
+    ? {
+        complete: false,
+        cutoffTimestamp: args.cutoffTimestamp,
+        migrated: 0,
+        remaining: totals.pending,
+        skipped,
+        table: args.table,
+        updatedAt: now,
+      }
+    : await upsertMigrationRun(ctx, {
+        complete,
+        cutoffTimestamp: args.cutoffTimestamp,
+        migrated,
+        now,
+        remaining: totals.pending,
+        skipped,
+        table: args.table,
+      });
 
   console.log(
     `[migratePosAmountsToPesewas] ${JSON.stringify({
@@ -295,6 +314,7 @@ export async function migratePosAmountTableWithCtx(
         pendingSoFar: totals.pending,
         processedSoFar: totals.processed,
         skippedSoFar: totals.skipped,
+        startedAtBeginning,
         table: args.table,
       },
     );
@@ -380,6 +400,7 @@ export const migratePosAmountsToPesewas = internalMutation({
     pendingSoFar: v.optional(v.number()),
     processedSoFar: v.optional(v.number()),
     skippedSoFar: v.optional(v.number()),
+    startedAtBeginning: v.optional(v.boolean()),
     table: posTableValidator,
   },
   handler: migratePosAmountTableWithCtx,

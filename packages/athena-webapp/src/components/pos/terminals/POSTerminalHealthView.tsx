@@ -428,10 +428,14 @@ export function POSTerminalHealthViewContent({
       }
       return left.originalIndex - right.originalIndex;
     });
-  // Review ownership comes from the server operational lane. The roster does not
-  // recount review work from runtime or sync evidence.
+  // Badges come from the server operational lane; this count does not. The
+  // roster tiles are still classification-driven, and local-runtime review work
+  // surfaces as a "Needs review" classification while the server routes it to
+  // the needs_terminal_action lane. Dropping the classification disjunct here
+  // would leave such a terminal counted by no tile at all.
   const reviewCount = healthRows.filter(
     (row) =>
+      row.classification.label === "Needs review" ||
       row.operationalExplanation.lane === "sale_ready_with_review_backlog" ||
       row.operationalExplanation.lane === "needs_manual_review",
   ).length;

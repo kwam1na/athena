@@ -418,3 +418,122 @@ describe("verifyPosAmountsToPesewasWithCtx", () => {
     expect(after.migratedCount).toBe(8);
   });
 });
+
+describe("completion marker coverage guards", () => {
+  const CUTOFF = 1_000_000;
+
+  const sixEligibleTransactions = () =>
+    Array.from({ length: 6 }, (_, index) => ({
+      _id: `txn-${index}`,
+      _creationTime: CUTOFF - 1,
+      subtotal: 10,
+      tax: 0,
+      total: 10,
+      totalPaid: 10,
+    }));
+
+  it("does not claim completion when an apply chain resumes from a caller cursor", async () => {
+    // Six eligible rows, but the operator resumes mid-table. Pages before the
+    // supplied cursor are never visited, so reaching the last page proves
+    // nothing about the rows behind the start point.
+    const harness = createCtx({
+      posTransaction: sixEligibleTransactions(),
+      posAmountMigrationRun: [],
+    });
+
+    const { last } = await runChain(harness, {
+      autoContinue: true,
+      // Offset cursor: rows 0-2 are never visited by this chain.
+      cursor: "3",
+      cutoffTimestamp: CUTOFF,
+      dryRun: false,
+      limit: 3,
+      table: "posTransaction",
+    });
+
+    expect(last.isDone).toBe(true);
+    expect(last.complete).toBe(false);
+    expect(harness.tables!.get("posAmountMigrationRun")![0]).toEqual(
+      expect.objectContaining({ complete: false }),
+    );
+  });
+
+  it("still records completion when the chain starts at the beginning", async () => {
+    const harness = createCtx({
+      posTransaction: sixEligibleTransactions(),
+      posAmountMigrationRun: [],
+    });
+
+    const { last } = await runChain(harness, {
+      autoContinue: true,
+      cutoffTimestamp: CUTOFF,
+      dryRun: false,
+      limit: 3,
+      table: "posTransaction",
+    });
+
+    expect(last.complete).toBe(true);
+    expect(last.totals.migrated).toBe(6);
+  });
+
+  it("leaves a recorded completion untouched when a dry run re-inspects the table", async () => {
+    const harness = createCtx({
+      posTransaction: [
+        {
+          _id: "txn-1",
+          _creationTime: CUTOFF - 1,
+          subtotal: 10,
+          tax: 0,
+          total: 10,
+          totalPaid: 10,
+        },
+      ],
+      posAmountMigrationRun: [],
+    });
+
+    await runChain(harness, {
+      autoContinue: true,
+      cutoffTimestamp: CUTOFF,
+      dryRun: false,
+      table: "posTransaction",
+    });
+    expect(harness.tables!.get("posAmountMigrationRun")![0]).toEqual(
+      expect.objectContaining({ complete: true }),
+    );
+
+    // A sanity dry run immediately before cutover must not clear the gate.
+    await migratePosAmountTableWithCtx(harness.ctx, {
+      cutoffTimestamp: CUTOFF,
+      table: "posTransaction",
+    } as never);
+
+    expect(harness.tables!.get("posAmountMigrationRun")![0]).toEqual(
+      expect.objectContaining({ complete: true }),
+    );
+  });
+
+  it("writes no run record when a dry run is the first thing to touch a table", async () => {
+    const harness = createCtx({
+      posTransaction: [
+        {
+          _id: "txn-1",
+          _creationTime: CUTOFF - 1,
+          subtotal: 10,
+          tax: 0,
+          total: 10,
+          totalPaid: 10,
+        },
+      ],
+      posAmountMigrationRun: [],
+    });
+
+    const result = await migratePosAmountTableWithCtx(harness.ctx, {
+      cutoffTimestamp: CUTOFF,
+      table: "posTransaction",
+    } as never);
+
+    expect(result.dryRun).toBe(true);
+    expect(result.complete).toBe(false);
+    expect(harness.tables!.get("posAmountMigrationRun")!).toHaveLength(0);
+  });
+});
