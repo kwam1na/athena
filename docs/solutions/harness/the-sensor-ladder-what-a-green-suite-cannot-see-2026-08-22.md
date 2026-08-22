@@ -20,7 +20,7 @@ tags:
   - convex-test
   - playwright
   - agent-harness
-delivery_diff_fingerprint: de2898dc54c678c7fe4b3fafae510c5741bec933e410e0d76c1ecd7d3a725267
+delivery_diff_fingerprint: 6b9c64cc49ad0ebd53e183191ae119b9745bb783c57799206675d5b43beb7890
 ---
 
 # The Sensor Ladder — What A Green Vitest Suite Cannot See
