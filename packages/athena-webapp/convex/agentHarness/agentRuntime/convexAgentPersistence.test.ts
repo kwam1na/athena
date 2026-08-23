@@ -133,8 +133,11 @@ describe("Convex Agent component persistence", () => {
     const harness = createConvexAgentContractHarness();
     const k = kernel(harness.adapter.descriptor.adapterVersion);
 
-    // Success with a tool call whose result carries a sensitive row.
+    // Success with a tool call whose result carries a sensitive row. The model
+    // narrates before the call and again at the end, so the component-side
+    // assertions below are made about a turn that really streamed.
     harness.scriptTurn("t-success", [
+      { kind: "narrative", deltas: ["Checking which registers need attention."] },
       { kind: "tool_call", callId: "c-read", toolId: "athena.test.read", args: { ref: "source:a" } },
       { kind: "complete", narrative: `Two registers need attention. ${SECRET_ROW}` },
     ]);
@@ -215,9 +218,14 @@ describe("Convex Agent component persistence", () => {
     // Opaque bindings only: nothing Athena wrote looks like a raw document id.
     for (const message of messages) expect(scanForRawIdentifiers(athenaMetadataOf(message) ?? {})).toEqual([]);
 
-    // No streaming deltas were persisted.
+    // The turn streamed its narrative in process, and none of it was persisted:
+    // no component stream rows, and the narrative never entered a stored message.
+    const deltas = k.events.filter((event) => event.kind === "narrative_delta");
+    expect(deltas.length).toBeGreaterThan(0);
+    expect(deltas.map((event) => (event.kind === "narrative_delta" ? event.text : "")).join("")).toContain("Checking which registers need attention.");
     const streams = await harness.t.query(AGENT_COMPONENT.streams.list, { threadId: threads0(messages) });
     expect(streams).toEqual([]);
+    expect(serialized).not.toContain("Checking which registers need attention.");
     expect(k.handlerCalls).toEqual(["c-read"]);
   });
 
@@ -240,6 +248,7 @@ describe("Convex Agent component persistence", () => {
     });
 
     harness.scriptTurn("t-provider", [
+      { kind: "narrative", deltas: ["Reading the source rows now."] },
       { kind: "tool_call", callId: "c-read", toolId: "athena.test.read", args: { ref: "source:b" } },
       { kind: "complete", narrative: "done" },
     ]);

@@ -33,6 +33,18 @@ export function flush(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * The turn's event skeleton with narration removed. Whether a scripted turn's
+ * own final prose reaches the host as `narrative_delta` events is an adapter
+ * property — an adapter that consumes a provider text stream emits it, the
+ * deterministic fake hands it over only in `turn_completed` — so narration is
+ * asserted exactly in the narration case and elsewhere left out of the
+ * skeleton.
+ */
+function eventSkeleton(events: readonly AgentRuntimeEvent[]): AgentRuntimeEvent["kind"][] {
+  return events.map((event) => event.kind).filter((kind) => kind !== "narrative_delta");
+}
+
 // ---------------------------------------------------------------------------
 // Kernel-side fixtures (Athena-owned tools and handlers)
 // ---------------------------------------------------------------------------
@@ -242,7 +254,7 @@ export function runAgentRuntimeAdapterContractSuite(
       const { thread, turnRef } = await openTurn(harness, kernel, "turn-1");
       await harness.settle(turnRef);
 
-      expect(kernel.events.map((event) => event.kind)).toEqual([
+      expect(eventSkeleton(kernel.events)).toEqual([
         "turn_started",
         "progress",
         "progress",
@@ -337,7 +349,7 @@ export function runAgentRuntimeAdapterContractSuite(
         { kind: "narrative", deltas: ["Checking which shifts are open", " on the current day."] },
         { kind: "tool_call", callId: "call-n", toolId: "athena.test.echo", args: { value: "shifts" } },
         { kind: "narrative", deltas: ["Two shifts are still open."] },
-        { kind: "complete", narrative: "Two shifts are open: morning and evening." },
+        { kind: "complete", narrative: "Two shifts are still open." },
       ]);
       const { turnRef } = await openTurn(harness, kernel, "turn-n");
       await harness.settle(turnRef);
@@ -368,9 +380,11 @@ export function runAgentRuntimeAdapterContractSuite(
         expect(scanForRawIdentifiers(event)).toEqual([]);
         expect(JSON.parse(JSON.stringify(event))).toEqual(event);
       }
-      // The committed narrative is an independent string, not the deltas joined.
+      // `turn_completed.narrative` is the model's own final prose — the last
+      // draft, not every draft joined, and never the committed answer (that is
+      // the independent `athena.completeRun` argument the kernel holds).
       const completed = kernel.events.at(-1);
-      expect(completed).toMatchObject({ kind: "turn_completed", outcome: "completed", narrative: "Two shifts are open: morning and evening." });
+      expect(completed).toMatchObject({ kind: "turn_completed", outcome: "completed", narrative: "Two shifts are still open." });
       expect(kernel.events.findIndex((event) => event.kind === "turn_completed")).toBe(kernel.events.length - 1);
 
       // A late delta after terminalization never reaches the kernel.
@@ -393,7 +407,7 @@ export function runAgentRuntimeAdapterContractSuite(
       expect(results).toHaveLength(1);
       expect(outcomeOf(results[0])).toEqual({ kind: "success", result: { echoed: "hi" } });
       expect(results[0]).toMatchObject({ kind: "outcome", callId: "call-1", toolId: "athena.test.echo", replayed: false });
-      expect(kernel.events.map((event) => event.kind)).toEqual([
+      expect(eventSkeleton(kernel.events)).toEqual([
         "turn_started",
         "tool_call_requested",
         "tool_call_completed",

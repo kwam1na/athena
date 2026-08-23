@@ -9,6 +9,7 @@
  * is exercised without provider spend; `model: "openai"` uses the default
  * resolver and the deployment's credentials for a single cheap real turn.
  */
+import type { LanguageModelV4StreamPart } from "@ai-sdk/provider";
 import { MockLanguageModelV4 } from "ai/test";
 import { v } from "convex/values";
 
@@ -103,34 +104,47 @@ export const run = internalAction({
     const mockModel = new MockLanguageModelV4({
       provider: "athena-smoke",
       modelId: "smoke-1",
-      doGenerate: (() => {
+      // The deployed path is the streaming path: the mock narrates before its
+      // tool call and splits its closing sentence across two chunks, so the
+      // smoke proves deltas reach the host and that the coalescer joins them.
+      doStream: (() => {
         let call = 0;
         return async () => {
           call += 1;
-          const usageShape = {
+          const usage = {
             inputTokens: { total: 40 * call, noCache: 40 * call, cacheRead: undefined, cacheWrite: undefined },
             outputTokens: { total: 12, text: 12, reasoning: undefined },
           };
-          if (call === 1) {
-            return {
-              content: [
-                {
-                  type: "tool-call" as const,
-                  toolCallId: "smoke-call-1",
-                  toolName: toNativeToolName(executeProgramTool.toolId),
-                  input: JSON.stringify({ source: SMOKE_PROGRAM }),
-                },
-              ],
-              finishReason: { unified: "tool-calls" as const, raw: "tool_calls" },
-              usage: usageShape,
-              warnings: [],
-            };
-          }
+          const parts: LanguageModelV4StreamPart[] =
+            call === 1
+              ? [
+                  { type: "stream-start", warnings: [] },
+                  { type: "text-start", id: "smoke-preamble" },
+                  { type: "text-delta", id: "smoke-preamble", delta: "Running the smoke program now." },
+                  { type: "text-end", id: "smoke-preamble" },
+                  {
+                    type: "tool-call",
+                    toolCallId: "smoke-call-1",
+                    toolName: toNativeToolName(executeProgramTool.toolId),
+                    input: JSON.stringify({ source: SMOKE_PROGRAM }),
+                  },
+                  { type: "finish", usage, finishReason: { unified: "tool-calls", raw: "tool_calls" } },
+                ]
+              : [
+                  { type: "stream-start", warnings: [] },
+                  { type: "text-start", id: "smoke-answer" },
+                  { type: "text-delta", id: "smoke-answer", delta: "Smoke turn complete: " },
+                  { type: "text-delta", id: "smoke-answer", delta: "the program returned its output." },
+                  { type: "text-end", id: "smoke-answer" },
+                  { type: "finish", usage, finishReason: { unified: "stop", raw: "stop" } },
+                ];
           return {
-            content: [{ type: "text" as const, text: "Smoke turn complete: the program returned its output." }],
-            finishReason: { unified: "stop" as const, raw: "stop" },
-            usage: usageShape,
-            warnings: [],
+            stream: new ReadableStream<LanguageModelV4StreamPart>({
+              start(controller) {
+                for (const part of parts) controller.enqueue(part);
+                controller.close();
+              },
+            }),
           };
         };
       })(),
@@ -161,10 +175,12 @@ export const run = internalAction({
     });
     const beforeTurn = Date.now();
     let firstProgressAt: number | undefined;
+    let firstDeltaAt: number | undefined;
     const observingHooks: AgentRuntimeTurnHooks = {
       ...hooks,
       onEvent: (event) => {
         if (firstProgressAt === undefined && (event.kind === "tool_call_requested" || event.kind === "progress")) firstProgressAt = Date.now();
+        if (firstDeltaAt === undefined && event.kind === "narrative_delta") firstDeltaAt = Date.now();
         return hooks.onEvent(event);
       },
     };
@@ -205,6 +221,7 @@ export const run = internalAction({
       persisted,
       usage: { tokens: settlement.tokens, streams: settlement.streams.length },
       timings: {
+        firstDeltaMs: firstDeltaAt === undefined ? null : firstDeltaAt - beforeTurn,
         firstProgressMs: firstProgressAt === undefined ? null : firstProgressAt - beforeTurn,
         completionMs: completedAt - beforeTurn,
         totalMs: Date.now() - startedAt,

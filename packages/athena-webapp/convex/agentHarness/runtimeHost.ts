@@ -140,8 +140,28 @@ export type AgentTurnHostReport = {
   readonly usage?: AgentTurnUsageSettlement;
   readonly projection?: AgentProjectionResult;
   readonly finalize?: AgentFinalizeTurnOutcome;
-  readonly timings: { readonly totalMs: number; readonly firstProgressMs: number | null; readonly completionMs: number | null };
+  readonly timings: {
+    readonly totalMs: number;
+    readonly firstDeltaMs: number | null;
+    readonly firstProgressMs: number | null;
+    readonly completionMs: number | null;
+  };
 };
+
+/**
+ * `["a","b","b","b"]` becomes `"a,b×3"`. A narrated turn emits hundreds of
+ * deltas; run-length collapsing keeps the operator log line one readable line
+ * while preserving the order the kinds arrived in.
+ */
+export function collapseEventKinds(kinds: readonly AgentRuntimeEvent["kind"][]): string {
+  const runs: { kind: string; count: number }[] = [];
+  for (const kind of kinds) {
+    const last = runs.at(-1);
+    if (last && last.kind === kind) last.count += 1;
+    else runs.push({ kind, count: 1 });
+  }
+  return runs.map((run) => (run.count === 1 ? run.kind : `${run.kind}×${run.count}`)).join(",");
+}
 
 type PeekState =
   | { found: false }
@@ -201,15 +221,37 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
     const { bindingId } = input;
     const events: AgentRuntimeEvent["kind"][] = [];
     const dispatch: string[] = [];
-    const timings = { firstProgressMs: null as number | null, completionMs: null as number | null };
-    const report = (outcome: AgentTurnHostReport["outcome"], extra: Partial<AgentTurnHostReport> = {}): AgentTurnHostReport => ({
-      bindingId,
-      outcome,
-      events,
-      dispatch,
-      timings: { totalMs: now() - startedAt, ...timings },
-      ...extra,
-    });
+    const timings = { firstDeltaMs: null as number | null, firstProgressMs: null as number | null, completionMs: null as number | null };
+    let runId: Id<"intelligenceRun"> | undefined;
+    const report = (outcome: AgentTurnHostReport["outcome"], extra: Partial<AgentTurnHostReport> = {}): AgentTurnHostReport => {
+      const built: AgentTurnHostReport = {
+        bindingId,
+        outcome,
+        events,
+        dispatch,
+        timings: { totalMs: now() - startedAt, ...timings },
+        ...extra,
+      };
+      // One line per driven turn. `driveTurn` is a scheduled action whose
+      // return value the scheduler discards, so this is the only read path for
+      // what the turn did — ordered event kinds, time to the first narrative
+      // delta, and completion latency — through `bunx convex logs`. Opaque
+      // refs and kinds only: no prompt text and no narrative text.
+      console.log(
+        `[agentHarness:driveTurn] ${JSON.stringify({
+          turnId: bindingId,
+          runId,
+          outcome: built.outcome,
+          code: built.code,
+          events: collapseEventKinds(events),
+          firstDeltaMs: built.timings.firstDeltaMs,
+          firstProgressMs: built.timings.firstProgressMs,
+          completionMs: built.timings.completionMs,
+          elapsedMs: built.timings.totalMs,
+        })}`,
+      );
+      return built;
+    };
 
     // Every exit before the runtime turn starts still finalizes: the turn's
     // provider-spend reservation is released by finalize, not by the provider
@@ -232,6 +274,7 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
     if (prepared.kind === "terminal") return report("terminal", { code: prepared.runStatus, finalize: await finalizeUnstarted("canceled", prepared.runStatus) });
     if (prepared.kind === "refused") return refused(prepared.code);
     const { plan } = prepared;
+    runId = plan.runId;
 
     // Thread and input: resume-safe rungs recording opaque refs only.
     const thread = await adapter.ensureThread({ threadKey: plan.adapter.threadKey, contextBindingRef: plan.adapter.contextBindingRef as never, correlation: plan.adapter.correlation });
@@ -278,6 +321,7 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
       onEvent: async (event) => {
         events.push(event.kind);
         if (event.kind === "turn_started" || event.kind === "turn_resumed") ledger.beginTurn(event.turnRef);
+        if (event.kind === "narrative_delta" && timings.firstDeltaMs === null) timings.firstDeltaMs = now() - startedAt;
         if (event.kind === "progress" && timings.firstProgressMs === null) timings.firstProgressMs = now() - startedAt;
         if (event.kind === "tool_call_requested" && timings.firstProgressMs === null) timings.firstProgressMs = now() - startedAt;
         if (event.kind === "usage") usage.record(event.usage);

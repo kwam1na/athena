@@ -8,7 +8,7 @@
  * and normalized events.
  */
 import { convexTest, type TestConvex } from "convex-test";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import schema from "../schema";
 import type { AgentToolLedgerEntry } from "../../shared/agentHarness/agentRuntime";
@@ -25,7 +25,7 @@ import { createQuickJsProgramRuntime } from "./programRuntime/quickJsRuntime";
 import { reserveTurnSpendWithCtx, settleTurnSpendWithCtx, spendWindowKey, turnProviderCostReservation } from "./runAdmission";
 import type { AgentProgramRuntime } from "./programRuntime/types";
 import { registerAgentRuntimeCleanupHook, resetAgentRuntimeCleanupHooksForTests, type AgentRuntimeCleanupDescriptor } from "./retention";
-import { createTurnHost, type AgentTurnHostRefs } from "./runtimeHost";
+import { collapseEventKinds, createTurnHost, type AgentTurnHostRefs } from "./runtimeHost";
 import { TEST_ADMISSION } from "./delegatedAdmission.testPorts";
 import { TEST_TOOL_REFS, TEST_TURN_REFS, TEST_TURN_SEAMS, seedRecordedTurn } from "./turns.testSeams";
 import { turnKeyFor } from "./turns";
@@ -161,7 +161,83 @@ afterEach(() => {
   resetAgentRuntimeCleanupHooksForTests();
 });
 
+describe("driveTurn operator log line", () => {
+  it("run-length collapses adjacent event kinds and keeps their order", () => {
+    expect(collapseEventKinds([])).toBe("");
+    expect(collapseEventKinds(["turn_started", "turn_completed"])).toBe("turn_started,turn_completed");
+    expect(
+      collapseEventKinds([
+        "turn_started",
+        "narrative_delta",
+        "narrative_delta",
+        "narrative_delta",
+        "tool_call_requested",
+        "tool_call_completed",
+        "narrative_delta",
+        "turn_completed",
+      ]),
+    ).toBe("turn_started,narrative_delta×3,tool_call_requested,tool_call_completed,narrative_delta,turn_completed");
+  });
+});
+
 describe.each(ADAPTERS)("turn host parity — $name", ({ create }) => {
+  it("stamps time to the first narrative delta and reports the turn on one collapsed operator log line", async () => {
+    const t = backend();
+    const harness = create(t);
+    const seeded = await seedAdmittedTurn(t, "narrated");
+    const { captured, observe } = captureProgramResult();
+    const turnKey = turnKeyFor(seeded.bindingId);
+    harness.scriptTurn(turnKey, [
+      { kind: "narrative", deltas: ["Checking which shifts are open", " right now."] },
+      { kind: "tool_call", callId: "c1", toolId: "athena.executeProgram", args: { source: PROGRAM } },
+      { kind: "tool_call", callId: "c2", toolId: "athena.completeRun", args: () => ({ title: "Open shifts", narrative: "One shift is open.", citedAttemptRefs: [captured.attemptRef], citations: [{ ref: captured.citation, claim: "One shift is open." }] }) },
+      { kind: "complete", narrative: "MODEL-NARRATIVE-NEVER-LOGGED" },
+    ]);
+    const lines: string[] = [];
+    const logged = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      lines.push(args.map((arg) => String(arg)).join(" "));
+    });
+    let report;
+    try {
+      const host = await hostFor(t, harness, { observe });
+      report = await host.driveTurn({ bindingId: seeded.bindingId });
+    } finally {
+      logged.mockRestore();
+    }
+    expect(report, JSON.stringify(report)).toMatchObject({ outcome: "completed" });
+
+    // The host stamps the first delta, and it arrives before the first tool call.
+    expect(typeof report.timings.firstDeltaMs).toBe("number");
+    expect(report.timings.firstDeltaMs!).toBeLessThanOrEqual(report.timings.totalMs);
+    expect(report.events.indexOf("narrative_delta")).toBeLessThan(report.events.indexOf("tool_call_requested"));
+
+    const driveLines = lines.filter((line) => line.startsWith("[agentHarness:driveTurn] "));
+    expect(driveLines).toHaveLength(1);
+    const payload = JSON.parse(driveLines[0].slice("[agentHarness:driveTurn] ".length)) as {
+      turnId: string;
+      runId: string;
+      outcome: string;
+      events: string;
+      firstDeltaMs: number | null;
+      completionMs: number | null;
+      elapsedMs: number;
+    };
+    expect(payload.turnId).toBe(seeded.bindingId);
+    expect(payload.runId).toBe(seeded.runId);
+    expect(payload.outcome).toBe("completed");
+    // Run-length collapsed, ordered, and narration precedes the first tool call.
+    expect(payload.events).toContain("narrative_delta×2");
+    expect(payload.events.indexOf("narrative_delta")).toBeLessThan(payload.events.indexOf("tool_call_requested"));
+    expect(payload.firstDeltaMs).toBe(report.timings.firstDeltaMs);
+    expect(payload.completionMs).toBe(report.timings.completionMs);
+    expect(payload.elapsedMs).toBeGreaterThanOrEqual(0);
+    // Refs and kinds only: no prompt text, no narrative text.
+    expect(driveLines[0]).not.toContain("Which shifts are open?");
+    expect(driveLines[0]).not.toContain("Checking which shifts are open");
+    expect(driveLines[0]).not.toContain("MODEL-NARRATIVE-NEVER-LOGGED");
+    expect(driveLines[0]).not.toContain("One shift is open.");
+  });
+
   it("drives one operator turn: ladder, fixed tools, program, private completion, one-transaction commit, projection; narrative never persisted (scenarios 1, 3, 4, 19)", async () => {
     const t = backend();
     const harness = create(t);
