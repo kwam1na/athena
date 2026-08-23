@@ -22,6 +22,54 @@ import { vi, beforeEach } from "vitest";
 // instead of 1s.
 configure({ asyncUtilTimeout: 5000 });
 
+// Opt-in timing-parity mode (`ATHENA_TEST_TIMER_LAG=<factor>`, wired to
+// `bun run test:timing-parity`).
+//
+// CI runs the suite under v8 coverage instrumentation, where a whole run takes
+// ~18 minutes and scheduled callbacks land far later relative to microtask
+// work than they do on an idle laptop. That is where `await waitFor(positive)`
+// immediately followed by `expect(...).not.toHaveBeenCalled()` breaks: the
+// awaited work keeps advancing between the poll that satisfies `waitFor` and
+// the negative assertion. Plain local runs never widen that window, so the
+// merge gate reported green on trees CI rejected.
+//
+// Multiplying every scheduled delay reproduces exactly that skew — timer-driven
+// polling (including Testing Library's `waitFor`) is stretched while
+// promise/microtask chains keep running at full speed — without needing a
+// coverage run. Timeouts scale with it, so honest waits do not turn into
+// spurious failures.
+//
+// Inert unless the variable is set, so normal `bun run test` is untouched. A
+// test that installs fake timers replaces these wrappers, and
+// `vi.useRealTimers()` restores the unwrapped originals; timing-parity mode
+// therefore only affects real-timer tests, which are the ones that can race.
+const timerLagFactor = Number(process.env.ATHENA_TEST_TIMER_LAG ?? "0");
+if (Number.isFinite(timerLagFactor) && timerLagFactor > 1) {
+  const realSetTimeout = globalThis.setTimeout;
+  const realSetInterval = globalThis.setInterval;
+  const lag = (delay?: number) => (delay ?? 0) * timerLagFactor;
+  globalThis.setTimeout = ((
+    handler: TimerHandler,
+    delay?: number,
+    ...args: unknown[]
+  ) =>
+    realSetTimeout(
+      handler as never,
+      lag(delay),
+      ...(args as never[]),
+    )) as unknown as typeof globalThis.setTimeout;
+  globalThis.setInterval = ((
+    handler: TimerHandler,
+    delay?: number,
+    ...args: unknown[]
+  ) =>
+    realSetInterval(
+      handler as never,
+      lag(delay),
+      ...(args as never[]),
+    )) as unknown as typeof globalThis.setInterval;
+}
+
 // Mock toast notifications
 vi.mock("react-hot-toast", () => ({
   toast: {
