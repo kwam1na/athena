@@ -1,7 +1,7 @@
 ---
 title: "Provisional Exposure Is Its Own Class: Delete-Only Rows, Reauthorizing Reads, and a Log Line as the Acceptance Sensor"
 date: 2026-08-23
-last_updated: 2026-08-23
+last_updated: 2026-08-24
 category: harness
 module: agentHarness
 problem_type: architecture_pattern
@@ -22,7 +22,7 @@ tags:
   - delete-only-table
   - driveturn-log
   - convex
-delivery_diff_fingerprint: 84816520eb214cb7d172c253226c4bacf54d77fd2a3ffff107deffcb995b2091
+delivery_diff_fingerprint: 9739807597b208e5ef45bfb196e7993bfbdc92352a624610b74435a5a3cba08b
 ---
 
 # Provisional Exposure Is Its Own Class: Delete-Only Rows, Reauthorizing Reads, and a Log Line as the Acceptance Sensor
@@ -51,6 +51,8 @@ Streaming the narrative the obvious way — persist deltas through the Convex Ag
 
 `narrative_delta` precedes the first `tool_call_requested`; `firstDeltaMs` is the time-to-first-provisional-text metric the rollout monitors.
 
+**Keep what the operator asked to keep — as its own class again.** The first cut discarded finished drafts. The iterative session that followed kept them three ways, each with the exposure rule applied afresh: a per-turn session timeline in the client (never persisted); a durable trail (`agentTurnNarrativeTrail`) written at commit and read only through the answer's own reauthorization ladder, so nobody who cannot read the answer can read how it was reached, and a commit-then-provider-failure keeps it because the trail is written with the commit, not at the end of the drive; and an engineer-only trace (`agentTurnTraceEvent`, `standard` — 365 days by operator decision, because it is the dataset the agent is refined from; internal functions only, `bun run agent-trace:export`) carrying every event, tool argument, tool outcome and draft, because refining the agent needs the data the operator must never see. The reveal layer on top (kwamina-fyi's stream reveal and ink wipe, intent-interrupted scroll follow, the composer) paints only prefixes that go through the same inert renderer, never splits a code point or a citation key, and does nothing under reduced motion.
+
 ## Why This Matters
 
 Streaming looks like a UI feature but it is an exposure-policy change. Every place the foundation's release gate was strong — one transaction, per-read reauthorization, revocation before recall — is a place a naive stream would be weak. Treating streamed text as its own class with its own markers, its own table, and its own deletion contract keeps the release invariant intact ("the narrative never enters Athena's durable record, projected history, a citation, or a prompt, and never survives a terminal cause") while still giving operators the thing they asked for.
@@ -67,6 +69,9 @@ The log line matters because the generic smoke cannot see the behaviour under te
 - A flush that reauthorizes on every write and a query that reauthorizes on every read should refuse on the same conditions; when one fails closed on a missing fact (`egress_class_missing`), the other must not skip that rung once anything has been released.
 - For behaviour only a real provider exhibits, ship a structured log line with opaque refs and timings and read it back with `bunx convex logs --history`; make that line the acceptance criterion.
 - Bootstrapping a worktree with `scripts/worktree-manager.sh setup-env` can leave `@convex-dev/agent` uninstalled; 39 harness tests then fail with `Could not find the "_generated" directory`. Run `bun install` in the worktree before reading failures as your own.
+- Anything retained from the stream — a trail, a timeline, a trace — gets the exposure rule applied to it on its own: who can read it (the answer's ladder, or nobody public), when it is written (with the commit, not at drive end), and which retention class sweeps it.
+- Reveal animation paints prefixes through the inert renderer and cuts on code points and outside `[citation:…]` keys; the reduced-motion preference is read on the first render, not in an effect, so no frame ever animates before it is known.
+- Scroll following that glides is withdrawn by intent (wheel, pointer, touch, navigation key), never by position: a smooth scroll in flight is away from the bottom for a few frames and a position check cancels itself.
 
 ## Examples
 
@@ -101,4 +106,5 @@ if (row && !input.rowExpired) return "streaming";
 - Plan: `docs/plans/2026-08-22-001-feat-agent-response-streaming-plan.md`; foundation amendment in `docs/plans/2026-08-21-001-feat-athena-agent-harness-foundation-plan.md`.
 - Docs: `packages/athena-webapp/docs/agent/agent-harness-runtime.md` §5, `capability-authoring.md` §11/§14, `architecture.md`, `intelligence.md`.
 - Linear: V26-1305 (epic), V26-1290, V26-1298, V26-1299, V26-1300, V26-1301.
+- Reveal, wipe, scroll follow and composer are ported from the chat panel in the kwamina-fyi project (`src/chat/chat-panel.jsx`, `src/chat/stream-reveal.js`).
 - Related notes: `docs/solutions/performance/athena-convex-read-amplification-2026-06-29.md`, `docs/solutions/harness/convex-query-write-boundary-proof-2026-06-18.md`, `docs/solutions/harness/convex-return-validator-contract-proof-2026-06-18.md`, `docs/solutions/architecture-patterns/athena-answering-a-non-human-caller-2026-08-22.md`.
