@@ -447,8 +447,9 @@ export function AthenaAgentPanel({
       // the host state rather than by the turn it was keyed to.
       focusClaimedTurnRef.current = null;
     }
+    // Sending a question moves nothing: the operator stays in the composer,
+    // and the status region announces the start on its own.
     if (
-      run.hostState === "submitting" ||
       run.hostState === "cancellation_requested" ||
       run.hostState === "terminal_denied" ||
       run.hostState === "expired_content"
@@ -562,6 +563,9 @@ export function AthenaAgentPanel({
       followRef.current = true;
       const node = scrollRef.current;
       if (node) anchorToBottom(node);
+      // Focus stays in the composer: a send from the button would otherwise
+      // leave it on a control that disables as the draft clears.
+      promptRef.current?.focus();
       await run.submit(prompt);
       onDraftChange("");
     },

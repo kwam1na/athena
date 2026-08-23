@@ -853,7 +853,7 @@ describe("accessibility", () => {
     );
   });
 
-  it("moves focus to the status when a request starts", async () => {
+  it("keeps focus in the composer when a request starts", async () => {
     const user = userEvent.setup();
     backend.results.startTurn = {
       outcome: "started",
@@ -869,8 +869,10 @@ describe("accessibility", () => {
     });
 
     await waitFor(() =>
-      expect(screen.getByTestId("athena-agent-status")).toHaveFocus(),
+      expect(screen.getByTestId("athena-agent-status")).toHaveTextContent(/./),
     );
+    expect(screen.getByTestId("athena-agent-status")).not.toHaveFocus();
+    expect(screen.getByTestId("athena-agent-prompt")).toHaveFocus();
   });
 });
 
@@ -1722,7 +1724,7 @@ describe("focus while a draft is withdrawn", () => {
     expect(screen.getByTestId("athena-agent-provisional-withdrawn")).toBeInTheDocument();
   });
 
-  it("still moves focus for the next turn after a withdrawn one", () => {
+  it("moves no focus to the status for the next turn after a withdrawn one", () => {
     const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
     anchorFocusOutsideComposer();
 
@@ -1741,7 +1743,8 @@ describe("focus while a draft is withdrawn", () => {
       />,
     );
 
-    expect(screen.getByTestId("athena-agent-status")).toHaveFocus();
+    expect(screen.getByTestId("athena-agent-status")).not.toHaveFocus();
+    expect(screen.getByTestId("athena-agent-new-thread")).toHaveFocus();
   });
 
   it("shares one focus move with the terminal denial when the view drops after a release", () => {
