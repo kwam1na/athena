@@ -130,7 +130,7 @@ parity gap by definition. Reproduce the *cause*, not the correlate: here, timer
 callbacks landing late relative to microtask work. Scaling `setTimeout` and
 `setInterval` by 10x reproduced the verbatim CI failure 5/5 in 71 seconds, where
 coverage never reproduced it in 15 minutes. That sensor then found a *second*
-genuinely racy test that grep could not distinguish from the 85 sound ones.
+genuinely racy test that grep could not distinguish from the sound candidates.
 
 ## Why This Works
 
