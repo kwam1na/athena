@@ -8,6 +8,7 @@
  * and normalized events.
  */
 import { convexTest, type TestConvex } from "convex-test";
+import { getFunctionName } from "convex/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import schema from "../schema";
@@ -16,12 +17,13 @@ import { createAgentRuntimeContractFake, createDeterministicClock } from "../../
 import type { AgentRuntimeContractHarness } from "../../shared/agentHarness/agentRuntimeHarness";
 import { AGENT_FIXED_TOOL_IDS } from "../../shared/agentHarness/bridge";
 import { createConvexAgentContractHarness, registerAgentComponent } from "./agentRuntime/convexAgent.contractHarness";
-import { TEST_CLOCK, TEST_NOW_BASE, TEST_PROFILE_ID } from "./delegatedAdmission.testPorts";
+import { TEST_BUFFERED_PROFILE_ID, TEST_CLOCK, TEST_NOW_BASE, TEST_PROFILE_ID } from "./delegatedAdmission.testPorts";
 import { createProgramExecutor, type AgentExecutorCtx } from "./executor";
 import { TEST_EXECUTOR_SEAMS, TEST_SCHEMAS, TEST_SEAM_REFS } from "./executor.testSeams";
 import { projectThreadHistoryWithCtx } from "./historyProjection";
 import { cancelAgentRunWithCtx, getBudgetLedgerForRun, listProgramAttemptsForRun } from "./lifecycle";
 import { createQuickJsProgramRuntime } from "./programRuntime/quickJsRuntime";
+import { loadProvisionalNarrativeByBindingWithCtx } from "./provisionalNarrative";
 import { reserveTurnSpendWithCtx, settleTurnSpendWithCtx, spendWindowKey, turnProviderCostReservation } from "./runAdmission";
 import type { AgentProgramRuntime } from "./programRuntime/types";
 import { registerAgentRuntimeCleanupHook, resetAgentRuntimeCleanupHooksForTests, type AgentRuntimeCleanupDescriptor } from "./retention";
@@ -74,8 +76,17 @@ return { open: shifts.kind === "result" ? shifts.envelope.data.length : -1 };`;
 const AUDIT_PROGRAM = `const entries = await athena.ops.auditTrail.list({});
 return { entries: entries.kind === "result" ? entries.envelope.data.length : -1 };`;
 
-async function hostFor(t: Harness, harness: AgentRuntimeContractHarness, options: { observe?: (entry: AgentToolLedgerEntry) => void } = {}) {
-  const ctx = executorCtx(t);
+async function hostFor(t: Harness, harness: AgentRuntimeContractHarness, options: { observe?: (entry: AgentToolLedgerEntry) => void; observeMutation?: (functionName: string) => void } = {}) {
+  const base = executorCtx(t);
+  const ctx: AgentExecutorCtx = options.observeMutation
+    ? {
+        runQuery: base.runQuery,
+        runMutation: (reference, args) => {
+          options.observeMutation!(getFunctionName(reference as never));
+          return base.runMutation(reference, args);
+        },
+      }
+    : base;
   const executor = createProgramExecutor({
     runtime: await runtime(),
     seams: TEST_SEAM_REFS,
@@ -126,8 +137,15 @@ async function rows(t: Harness, seeded: { runId: Awaited<ReturnType<typeof seedR
     invocations: await ctx.db.query("intelligenceProviderInvocation").withIndex("by_runId", (q) => q.eq("runId", seeded.runId)).take(3),
     attempts: await listProgramAttemptsForRun(ctx, seeded.runId),
     ledger: await getBudgetLedgerForRun(ctx, seeded.runId),
+    // The provisional draft is inspected with everything else: the amended
+    // invariant is that the narrative never enters Athena's durable record and
+    // never survives a terminal cause, not that it is never written at all.
+    provisional: await ctx.db.query("agentProvisionalNarrative").withIndex("by_turnBindingId", (q) => q.eq("turnBindingId", seeded.bindingId)).take(3),
   }));
 }
+
+const provisionalRow = (t: Harness, bindingId: Awaited<ReturnType<typeof seedRecordedTurn>>["bindingId"]) =>
+  t.run((ctx) => loadProvisionalNarrativeByBindingWithCtx(ctx, bindingId));
 
 /** Both spend windows the turn's reservation was taken against. */
 async function reservations(t: Harness, seeded: Awaited<ReturnType<typeof seedRecordedTurn>>) {
@@ -283,8 +301,11 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ create }) => {
     expect(after.invocations[0].requestSummary).toMatchObject({ policyClass: "sensitive", retentionMode: "provider_default", redaction: "prompt_hash_only" });
     expect(JSON.stringify(after.invocations[0].requestSummary)).not.toMatch(/key|secret/i);
     expect((after.invocations[0].responseSummary as { usage: { input: number } }).usage.input).toBeGreaterThan(0);
-    // The model's own narrative is buffered server-side and never written to Athena.
+    // The amended invariant: the model's narrative never enters Athena's
+    // durable record, its projected history, a citation, or a prompt — and no
+    // provisional draft survives the turn, whatever ended it.
     expect(JSON.stringify(after)).not.toContain("MODEL-NARRATIVE-NEVER-STORED");
+    expect(after.provisional).toEqual([]);
     // Spend settled to the turn's REAL cost on both windows: `finalizeTurn`
     // books it before the outbox's zero-cost settle can stamp the marker.
     expect(await reservations(t, seeded)).toEqual([
@@ -651,5 +672,120 @@ describe("turn host — a turn that ends before the model runs", () => {
     const after = await rows(t, seeded);
     expect(after.run).toMatchObject({ status: "failed", error: { code: "prompt_unavailable" } });
     expect(after.binding?.spendSettledAt).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Provisional narrative: the host's in-memory coalescer and single-flight flush
+// ---------------------------------------------------------------------------
+
+describe("turn host — the provisional draft", () => {
+  const completeRunArgs = (captured: { attemptRef?: string; citation?: string }) => () => ({
+    title: "Open shifts",
+    narrative: "One shift is open.",
+    citedAttemptRefs: [captured.attemptRef],
+    citations: [{ ref: captured.citation, claim: "One shift is open." }],
+  });
+
+  it("coalesces a draft's deltas into one row, replaces it on the next draft, quiesces before the commit, and leaves nothing at rest", async () => {
+    const t = backend();
+    const harness = createAgentRuntimeContractFake({ clock: createDeterministicClock(TEST_NOW_BASE + 1_000) });
+    const seeded = await seedAdmittedTurn(t, "flush-drain");
+    const { captured, observe } = captureProgramResult();
+    harness.scriptTurn(turnKeyFor(seeded.bindingId), [
+      { kind: "narrative", deltas: ["Checking which shifts", " are open."] },
+      { kind: "pause", gate: "first-draft" },
+      { kind: "tool_call", callId: "c1", toolId: "athena.executeProgram", args: { source: PROGRAM } },
+      { kind: "narrative", deltas: ["One shift is open,", " writing it up."] },
+      { kind: "pause", gate: "second-draft" },
+      { kind: "tool_call", callId: "c2", toolId: "athena.completeRun", args: completeRunArgs(captured) },
+      { kind: "complete", narrative: "MODEL-NARRATIVE-NEVER-STORED" },
+    ]);
+    const mutations: string[] = [];
+    const host = await hostFor(t, harness, { observe, observeMutation: (name) => mutations.push(name) });
+    const drive = host.driveTurn({ bindingId: seeded.bindingId });
+
+    // One row for the whole draft — the deltas are coalesced in memory, not one write each.
+    await waitFor(async () => (await provisionalRow(t, seeded.bindingId))?.text === "Checking which shifts are open.");
+    expect(await provisionalRow(t, seeded.bindingId)).toMatchObject({ draftOrdinal: 0, truncated: false });
+    expect((await t.run((ctx) => ctx.db.get("agentTurnBinding", seeded.bindingId)))?.provisionalReleasedAt).toBeDefined();
+    const releasedAt = (await t.run((ctx) => ctx.db.get("agentTurnBinding", seeded.bindingId)))!.provisionalReleasedAt;
+    harness.release("first-draft");
+
+    // A tool step ends the draft: the next one replaces the text in the same row.
+    await waitFor(async () => (await provisionalRow(t, seeded.bindingId))?.draftOrdinal === 1);
+    await waitFor(async () => (await provisionalRow(t, seeded.bindingId))?.text === "One shift is open, writing it up.");
+    expect(await t.run((ctx) => ctx.db.query("agentProvisionalNarrative").withIndex("by_turnBindingId", (q) => q.eq("turnBindingId", seeded.bindingId)).take(3))).toHaveLength(1);
+    // Streaming writes the binding exactly once, however many drafts and deltas there were.
+    expect((await t.run((ctx) => ctx.db.get("agentTurnBinding", seeded.bindingId)))?.provisionalReleasedAt).toBe(releasedAt);
+    harness.release("second-draft");
+
+    const report = await drive;
+    expect(report, JSON.stringify(report)).toMatchObject({ outcome: "completed", projection: "projected" });
+    // Quiescence: the chain is drained at the completeRun request, so no flush
+    // is issued once the commit is under way.
+    const commitIndex = mutations.findIndex((name) => name.includes("prepareCompletion"));
+    expect(commitIndex).toBeGreaterThan(-1);
+    expect(mutations.slice(0, commitIndex).some((name) => name.includes("flushProvisionalNarrative"))).toBe(true);
+    expect(mutations.slice(commitIndex).filter((name) => name.includes("flushProvisionalNarrative"))).toEqual([]);
+    // Finalize deleted the row; the release marker is irrevocable.
+    const after = await rows(t, seeded);
+    expect(after.provisional).toEqual([]);
+    expect(after.binding?.provisionalReleasedAt).toBe(releasedAt);
+    expect(JSON.stringify(after)).not.toContain("MODEL-NARRATIVE-NEVER-STORED");
+    expect(JSON.stringify(after)).not.toContain("writing it up");
+  });
+
+  it("resumes with a new draft after completeRun is denied, and the later commit still clears the row", async () => {
+    const t = backend();
+    const harness = createAgentRuntimeContractFake({ clock: createDeterministicClock(TEST_NOW_BASE + 1_000) });
+    const seeded = await seedAdmittedTurn(t, "flush-resume");
+    const { captured, observe } = captureProgramResult();
+    harness.scriptTurn(turnKeyFor(seeded.bindingId), [
+      { kind: "narrative", deltas: ["Checking which shifts are open."] },
+      { kind: "tool_call", callId: "c1", toolId: "athena.executeProgram", args: { source: PROGRAM } },
+      // Denied before the commit is ever prepared: the draft must not be frozen.
+      { kind: "tool_call", callId: "c2", toolId: "athena.completeRun", args: { narrative: "One shift is open.", citedAttemptRefs: [], citations: [] } },
+      { kind: "narrative", deltas: ["Citing the shift roster now."] },
+      { kind: "pause", gate: "after-denial" },
+      { kind: "tool_call", callId: "c3", toolId: "athena.completeRun", args: completeRunArgs(captured) },
+      { kind: "complete", narrative: "MODEL-NARRATIVE-NEVER-STORED" },
+    ]);
+    const host = await hostFor(t, harness, { observe });
+    const drive = host.driveTurn({ bindingId: seeded.bindingId });
+
+    await waitFor(async () => (await provisionalRow(t, seeded.bindingId))?.text === "Citing the shift roster now.");
+    const resumed = await provisionalRow(t, seeded.bindingId);
+    expect(resumed!.draftOrdinal).toBeGreaterThan(0);
+    harness.release("after-denial");
+
+    const report = await drive;
+    expect(report, JSON.stringify(report)).toMatchObject({ outcome: "completed" });
+    expect(report.dispatch).toEqual(["athena.executeProgram:success", "athena.completeRun:denied", "athena.completeRun:success"]);
+    expect((await rows(t, seeded)).provisional).toEqual([]);
+  });
+
+  it("stops offering text for the rest of the turn when the flush refuses, and the turn still completes", async () => {
+    const t = backend();
+    const harness = createAgentRuntimeContractFake({ clock: createDeterministicClock(TEST_NOW_BASE + 1_000) });
+    // A buffered profile: the kernel refuses every flush, so no row ever exists.
+    const seeded = await seedAdmittedTurn(t, "flush-buffered", { profileId: TEST_BUFFERED_PROFILE_ID });
+    const { captured, observe } = captureProgramResult();
+    harness.scriptTurn(turnKeyFor(seeded.bindingId), [
+      { kind: "narrative", deltas: ["Checking which shifts", " are open."] },
+      { kind: "tool_call", callId: "c1", toolId: "athena.executeProgram", args: { source: PROGRAM } },
+      { kind: "narrative", deltas: ["One shift is open."] },
+      { kind: "tool_call", callId: "c2", toolId: "athena.completeRun", args: completeRunArgs(captured) },
+      { kind: "complete", narrative: "MODEL-NARRATIVE-NEVER-STORED" },
+    ]);
+    const mutations: string[] = [];
+    const host = await hostFor(t, harness, { observe, observeMutation: (name) => mutations.push(name) });
+    const report = await host.driveTurn({ bindingId: seeded.bindingId });
+    expect(report, JSON.stringify(report)).toMatchObject({ outcome: "completed" });
+    // The chain is dropped on the first refusal rather than retried per delta.
+    expect(mutations.filter((name) => name.includes("flushProvisionalNarrative"))).toHaveLength(1);
+    const after = await rows(t, seeded);
+    expect(after.provisional).toEqual([]);
+    expect(after.binding?.provisionalReleasedAt).toBeUndefined();
   });
 });

@@ -534,6 +534,15 @@ export const readOperatorTurn = internalQuery({
       storeId: target.storeId,
       bindingId: args.bindingId,
     });
+    if (args.include === "preview") {
+      // The rollout's provisional-streaming check, on the admitted path: the
+      // same ladder the browser reads, under the driver's resolved operator.
+      const preview = await agentTurnEntryPoints.previewTurnNarrative(admitted, {
+        storeId: target.storeId,
+        bindingId: args.bindingId,
+      });
+      return { view, preview };
+    }
     if (args.include !== "answer") return view;
     const answer = await agentTurnEntryPoints.getTurnAnswer(admitted, {
       storeId: target.storeId,

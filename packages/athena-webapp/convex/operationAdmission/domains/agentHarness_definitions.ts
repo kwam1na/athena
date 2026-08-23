@@ -72,10 +72,17 @@ export const inspectCitationEvidenceOperationDefinition = turnManageOperation({
   operationId: "agentHarness/turns.inspectCitationEvidence",
 });
 
+/** First paint of provisional text: a bookkeeping write on the operator's own turn, like acknowledging the answer. */
+export const acknowledgeProvisionalViewOperationDefinition = turnManageOperation({
+  functionName: "agentHarness/turns:acknowledgeProvisionalView",
+  operationId: "agentHarness/turns.acknowledgeProvisionalView",
+});
+
 export const AGENT_HARNESS_DEFINITIONS: readonly OperationDefinition[] = [
   startTurnOperationDefinition,
   resumeTurnOperationDefinition,
   cancelTurnOperationDefinition,
   acknowledgeTurnAnswerOperationDefinition,
   inspectCitationEvidenceOperationDefinition,
+  acknowledgeProvisionalViewOperationDefinition,
 ];

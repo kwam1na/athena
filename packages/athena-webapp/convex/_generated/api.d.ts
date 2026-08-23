@@ -47,6 +47,7 @@ import type * as agentHarness_programRuntime_outputCeiling from "../agentHarness
 import type * as agentHarness_programRuntime_programValidation from "../agentHarness/programRuntime/programValidation.js";
 import type * as agentHarness_programRuntime_quickJsRuntime from "../agentHarness/programRuntime/quickJsRuntime.js";
 import type * as agentHarness_programRuntime_types from "../agentHarness/programRuntime/types.js";
+import type * as agentHarness_provisionalNarrative from "../agentHarness/provisionalNarrative.js";
 import type * as agentHarness_readPorts from "../agentHarness/readPorts.js";
 import type * as agentHarness_registry from "../agentHarness/registry.js";
 import type * as agentHarness_retention from "../agentHarness/retention.js";
@@ -779,6 +780,7 @@ declare const fullApi: ApiFromModules<{
   "agentHarness/programRuntime/programValidation": typeof agentHarness_programRuntime_programValidation;
   "agentHarness/programRuntime/quickJsRuntime": typeof agentHarness_programRuntime_quickJsRuntime;
   "agentHarness/programRuntime/types": typeof agentHarness_programRuntime_types;
+  "agentHarness/provisionalNarrative": typeof agentHarness_provisionalNarrative;
   "agentHarness/readPorts": typeof agentHarness_readPorts;
   "agentHarness/registry": typeof agentHarness_registry;
   "agentHarness/retention": typeof agentHarness_retention;

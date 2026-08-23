@@ -24,18 +24,24 @@ import {
 } from "./delegatedAdmission.testPorts";
 import { TEST_EXECUTOR_SEAMS, beginExecutingAttempt, bridgeCall } from "./executor.testSeams";
 import { buildAnswerArtifactPayload } from "./historyProjection";
-import { markAgentRunRunningWithCtx } from "./lifecycle";
-import { advanceTurnBindingWithCtx } from "./turnBindings";
+import { advanceCompatibilityEpochWithCtx, cancelAgentRunWithCtx, failAgentRunWithCtx, getCurrentCompatibilityEpochWithCtx, markAgentRunRunningWithCtx } from "./lifecycle";
+import { AGENT_PROVISIONAL_NARRATIVE_TTL_MS, loadProvisionalNarrativeByBindingWithCtx, upsertProvisionalNarrativeWithCtx } from "./provisionalNarrative";
+import { advanceTurnBindingWithCtx, markProvisionalReleaseWithCtx } from "./turnBindings";
 import { AGENT_OPERATOR_ACTIVE_RUN_LIMIT } from "./runAdmission";
 import { registerAgentRuntimeCleanupHook, resetAgentRuntimeCleanupHooksForTests } from "./retention";
+import { AGENT_TOOL_NARRATIVE_MAX_BYTES } from "./tools";
 import {
+  acknowledgeProvisionalView,
   acknowledgeTurnAnswer,
   cancelTurn,
   createAgentTurnEntryPoints,
+  describeTurnExposureWithCtx,
+  flushProvisionalNarrative,
   getThreadHistory,
   getTurnAnswer,
   getTurnView,
   inspectCitationEvidence,
+  previewTurnNarrative,
   resumeTurn,
   startTurn,
 } from "./turns";
@@ -75,6 +81,7 @@ afterEach(() => {
   scheduled.repair.length = 0;
   clockNow = TEST_NOW_BASE + 1_000;
   TEST_CLOCK.now = TEST_NOW_BASE;
+  TEST_ENABLEMENT.reset();
 });
 
 const baseArgs = (storeId: Id<"store">, overrides: Partial<{ profileId: string; threadKey: string; turnIdempotencyKey: string; prompt: string; context: Record<string, string> }> = {}) => ({
@@ -409,5 +416,337 @@ describe("narrative policy across the test profiles", () => {
     const shared = await t.run((ctx) => seedRecordedTurn(ctx, "buffered-peer", { threadKey: "thread-peer", key: "turn-peer", operator: seeded.operator }));
     const sharedGrant = await grantFor(shared.runId);
     expect(sharedGrant).toMatchObject({ profileKey: TEST_PROFILE_ID });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Provisional narrative: flush, preview ladder, acknowledgement, deletion, exposure
+// ---------------------------------------------------------------------------
+
+/** Walk a recorded turn to `running` the way the host does (prepare stamps the provider-invocation row). */
+async function startStreamingTurn(t: TestConvex<typeof schema>, seeded: Awaited<ReturnType<typeof seedRecordedTurn>>) {
+  const prepared = await t.run((ctx) => TEST_TURN_SEAMS.prepareTurnWithCtx(ctx, { bindingId: seeded.bindingId, now: TEST_NOW_BASE + 1 }));
+  if (prepared.kind !== "ready") throw new Error(JSON.stringify(prepared));
+  for (const rung of [
+    { step: "runtime_thread_bound" as const, runtimeThreadRef: `runtime_thread:${seeded.bindingId}` },
+    { step: "runtime_input_saved" as const, runtimeInputRef: `runtime_input:${seeded.bindingId}` },
+  ]) {
+    const advanced = await t.run((ctx) => advanceTurnBindingWithCtx(ctx, { bindingId: seeded.bindingId, idempotencyKey: `stream:${rung.step}`, now: TEST_NOW_BASE + 2, ...rung }));
+    if (advanced.outcome === "rejected") throw new Error(advanced.denial.code);
+  }
+  const running = await t.run((ctx) => TEST_TURN_SEAMS.markTurnRunningWithCtx(ctx, { bindingId: seeded.bindingId, now: TEST_NOW_BASE + 3 }));
+  if (running.outcome !== "running") throw new Error(JSON.stringify(running));
+  return prepared.plan;
+}
+
+const flush = (t: TestConvex<typeof schema>, bindingId: Id<"agentTurnBinding">, text: string, draftOrdinal = 0, now = clockNow + 1) =>
+  t.run((ctx) => TEST_TURN_SEAMS.flushProvisionalNarrativeWithCtx(ctx, { bindingId, draftOrdinal, text, now }));
+const row = (t: TestConvex<typeof schema>, bindingId: Id<"agentTurnBinding">) => t.run((ctx) => loadProvisionalNarrativeByBindingWithCtx(ctx, bindingId));
+const binding = (t: TestConvex<typeof schema>, bindingId: Id<"agentTurnBinding">) => t.run((ctx) => ctx.db.get("agentTurnBinding", bindingId));
+const preview = (t: TestConvex<typeof schema>, userId: Id<"athenaUser">, args: { storeId: Id<"store">; bindingId: Id<"agentTurnBinding"> }) =>
+  t.run(async (ctx) => {
+    const result = await entry.previewTurnNarrative(admitted(ctx, userId), args);
+    assertConformsToExportedReturns(previewTurnNarrative, result);
+    return result;
+  });
+const acknowledge = (t: TestConvex<typeof schema>, userId: Id<"athenaUser">, args: { storeId: Id<"store">; bindingId: Id<"agentTurnBinding"> }) =>
+  t.run(async (ctx) => {
+    const result = await entry.acknowledgeProvisionalView(admitted(ctx, userId), args);
+    assertConformsToExportedReturns(acknowledgeProvisionalView, result);
+    return result;
+  });
+const exposure = (t: TestConvex<typeof schema>, bindingId: Id<"agentTurnBinding">) => t.run((ctx) => describeTurnExposureWithCtx(ctx, bindingId));
+/** A stray row, as a host that died mid-flush could leave one: the deletion paths must remove it regardless of who wrote it. */
+const plantRow = (t: TestConvex<typeof schema>, seeded: Awaited<ReturnType<typeof seedRecordedTurn>>, text = "planted draft") =>
+  t.run((ctx) =>
+    upsertProvisionalNarrativeWithCtx(ctx, {
+      runId: seeded.runId,
+      turnBindingId: seeded.bindingId,
+      storeId: seeded.operator.storeId,
+      organizationId: seeded.operator.organizationId,
+      text,
+      draftOrdinal: 9,
+      truncated: false,
+      egressClass: "sensitive",
+      updatedAt: clockNow,
+      expiresAt: TEST_CLOCK.now + AGENT_PROVISIONAL_NARRATIVE_TTL_MS,
+    }),
+  );
+
+describe("provisional narrative: flush, preview ladder, acknowledgement, and terminal deletion", () => {
+  it("streams to the owner only, overwrites per draft, refreshes expiry from the server clock, releases the binding once, and is superseded by the commit then deleted by finalize", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run((ctx) => seedRecordedTurn(ctx, "stream"));
+    const other = await t.run((ctx) => seedDelegatedOperator(ctx, "stream-other", { role: "full_admin" }));
+    const args = { storeId: seeded.operator.storeId, bindingId: seeded.bindingId };
+
+    // Queued: nothing released, no invocation row yet, so the egress rung is skipped and the ladder falls through.
+    expect(await preview(t, seeded.operator.userId, args)).toEqual({ state: "awaiting_first_text", released: false });
+    // A flush before the run is running is refused (the grant reauthorization covers run state) and writes nothing.
+    expect(await flush(t, seeded.bindingId, "too early")).toMatchObject({ outcome: "refused", reason: "run_context_captured" });
+    expect(await row(t, seeded.bindingId)).toBeNull();
+    // The flush is host-only: an internal mutation, never public ingress; the preview and acknowledgement are public.
+    expect({ isInternal: flushProvisionalNarrative.isInternal, isMutation: flushProvisionalNarrative.isMutation, public: Object.hasOwn(flushProvisionalNarrative, "isPublic") }).toEqual({ isInternal: true, isMutation: true, public: false });
+    expect({ isPublic: previewTurnNarrative.isPublic, isQuery: previewTurnNarrative.isQuery }).toEqual({ isPublic: true, isQuery: true });
+    expect({ isPublic: acknowledgeProvisionalView.isPublic, isMutation: acknowledgeProvisionalView.isMutation }).toEqual({ isPublic: true, isMutation: true });
+
+    const plan = await startStreamingTurn(t, seeded);
+    expect(plan.egressClass).toBe("sensitive");
+    expect(await preview(t, seeded.operator.userId, args)).toEqual({ state: "awaiting_first_text", released: false });
+
+    // Whitespace-only text never creates a row or releases anything.
+    expect(await flush(t, seeded.bindingId, "   \n\t")).toMatchObject({ outcome: "refused", reason: "empty_text" });
+    expect(await row(t, seeded.bindingId)).toBeNull();
+    expect((await binding(t, seeded.bindingId))?.provisionalReleasedAt).toBeUndefined();
+
+    const firstAt = clockNow + 10;
+    expect(await flush(t, seeded.bindingId, "Checking which shifts are open", 0, firstAt)).toEqual({ outcome: "stored", truncated: false });
+    const stored = await row(t, seeded.bindingId);
+    // The egress class is stamped from the provider-invocation row (the turn class), the expiry from the server clock.
+    expect(stored).toMatchObject({ text: "Checking which shifts are open", draftOrdinal: 0, truncated: false, egressClass: "sensitive", retentionClass: "short_lived", updatedAt: firstAt, expiresAt: TEST_CLOCK.now + AGENT_PROVISIONAL_NARRATIVE_TTL_MS });
+    const afterFirst = await binding(t, seeded.bindingId);
+    expect(afterFirst).toMatchObject({ provisionalReleasedAt: firstAt, updatedAt: firstAt });
+    const streaming = await preview(t, seeded.operator.userId, args);
+    expect(streaming).toMatchObject({ state: "streaming", released: true, text: "Checking which shifts are open", truncated: false, draftOrdinal: 0, updatedAt: firstAt, expiresAt: TEST_CLOCK.now + AGENT_PROVISIONAL_NARRATIVE_TTL_MS });
+    expect((streaming as { ttlMs: number }).ttlMs).toBe(TEST_CLOCK.now + AGENT_PROVISIONAL_NARRATIVE_TTL_MS - clockNow);
+    // The turn view projects the release marker for hosts whose preview subscription has ended.
+    const view = await t.run((ctx) => entry.getTurnView(admitted(ctx, seeded.operator.userId), args));
+    expect(view).toMatchObject({ kind: "view", phase: "running", provisionalReleasedAt: firstAt });
+    assertConformsToExportedReturns(getTurnView, view);
+
+    // Nobody else: a colleague in the same store and the owner against another store both get the bare pre-ownership arm.
+    expect(await preview(t, other.userId, args)).toEqual({ state: "not_found" });
+    expect(await preview(t, seeded.operator.userId, { ...args, storeId: other.storeId })).toEqual({ state: "not_found" });
+    expect(await acknowledge(t, other.userId, args)).toEqual({ kind: "unavailable", reason: "not_your_turn" });
+    expect(await row(t, seeded.bindingId)).not.toBeNull();
+
+    // Later flushes overwrite the one row and never touch the binding again; a new draft replaces the old text.
+    const secondAt = clockNow + 20;
+    expect(await flush(t, seeded.bindingId, "Checking which shifts are open right now.", 0, secondAt)).toEqual({ outcome: "stored", truncated: false });
+    expect(await flush(t, seeded.bindingId, "One shift is open.", 1, secondAt + 1)).toEqual({ outcome: "stored", truncated: false });
+    expect(await preview(t, seeded.operator.userId, args)).toMatchObject({ state: "streaming", text: "One shift is open.", draftOrdinal: 1, updatedAt: secondAt + 1 });
+    expect(await t.run((ctx) => ctx.db.query("agentProvisionalNarrative").withIndex("by_turnBindingId", (q) => q.eq("turnBindingId", seeded.bindingId)).take(3))).toHaveLength(1);
+    expect(await binding(t, seeded.bindingId)).toMatchObject({ provisionalReleasedAt: firstAt, updatedAt: afterFirst!.updatedAt });
+
+    // Over the cap: cut server-side at a codepoint boundary, flagged, still streaming.
+    const huge = "é".repeat(AGENT_TOOL_NARRATIVE_MAX_BYTES);
+    expect(await flush(t, seeded.bindingId, huge, 1)).toEqual({ outcome: "stored", truncated: true });
+    const truncated = await preview(t, seeded.operator.userId, args);
+    expect(truncated).toMatchObject({ state: "streaming", truncated: true });
+    expect(new TextEncoder().encode((truncated as { text: string }).text).byteLength).toBe(AGENT_TOOL_NARRATIVE_MAX_BYTES);
+
+    // First paint: acknowledged once, first write wins.
+    const acknowledged = await acknowledge(t, seeded.operator.userId, args);
+    expect(acknowledged).toMatchObject({ kind: "acknowledged" });
+    const viewedAt = (acknowledged as { provisionalViewedAt: number }).provisionalViewedAt;
+    expect(await acknowledge(t, seeded.operator.userId, args)).toEqual({ kind: "acknowledged", provisionalViewedAt: viewedAt });
+    expect(await binding(t, seeded.bindingId)).toMatchObject({ provisionalViewedAt: viewedAt, provisionalViewedByActorRef: `athenaUser:${seeded.operator.userId}` });
+    expect(await exposure(t, seeded.bindingId)).toMatchObject({ provisionalExposurePresumed: true, provisionalReleasedAt: firstAt, provisionalViewed: true, provisionalViewedAt: viewedAt, revokedAfterProvisionalExposure: false, operatorReleaseCommitted: false });
+
+    // The commit flips the run mid-turn; the row survives until finalize, and a completed run never reads as a withdrawal.
+    await commitAnswer(t, seeded);
+    expect(await row(t, seeded.bindingId)).not.toBeNull();
+    expect(await preview(t, seeded.operator.userId, args)).toEqual({ state: "superseded", released: true });
+    // A late flush after the commit is refused and deletes rather than inserts.
+    expect(await flush(t, seeded.bindingId, "late draft", 2)).toMatchObject({ outcome: "refused", reason: "run_completed" });
+    expect(await row(t, seeded.bindingId)).toBeNull();
+    await plantRow(t, seeded);
+    // Commit, then the provider fails before the turn ends: finalize still deletes, above its already-terminal path.
+    expect(await t.run((ctx) => TEST_TURN_SEAMS.finalizeTurnWithCtx(ctx, { bindingId: seeded.bindingId, outcome: "failed", error: { code: "provider_failure", message: "x", retryable: true }, now: clockNow + 50 }))).toMatchObject({ outcome: "completed", runStatus: "completed" });
+    expect(await row(t, seeded.bindingId)).toBeNull();
+    expect(await preview(t, seeded.operator.userId, args)).toEqual({ state: "superseded", released: true });
+    expect(await exposure(t, seeded.bindingId)).toMatchObject({ provisionalExposurePresumed: true, revokedAfterProvisionalExposure: false, operatorReleaseCommitted: true, releaseSuppressed: false });
+  });
+
+  it("a buffered profile never stores a row: the preview reports disabled before a release and policy_disabled after one", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run((ctx) => seedRecordedTurn(ctx, "buffered-stream", { profileId: TEST_BUFFERED_PROFILE_ID }));
+    const args = { storeId: seeded.operator.storeId, bindingId: seeded.bindingId };
+    await startStreamingTurn(t, seeded);
+    expect(await preview(t, seeded.operator.userId, args)).toEqual({ state: "disabled", released: false });
+    expect(await flush(t, seeded.bindingId, "Checking shifts")).toMatchObject({ outcome: "refused", reason: "policy_buffered" });
+    expect(await row(t, seeded.bindingId)).toBeNull();
+    expect((await binding(t, seeded.bindingId))?.provisionalReleasedAt).toBeUndefined();
+    expect(await preview(t, seeded.operator.userId, args)).toEqual({ state: "disabled", released: false });
+    // Acknowledging before any release is refused and writes nothing.
+    expect(await acknowledge(t, seeded.operator.userId, args)).toEqual({ kind: "unavailable", reason: "not_released" });
+    expect((await binding(t, seeded.bindingId))?.provisionalViewedAt).toBeUndefined();
+    // A profile flipped to buffered after text was on screen withdraws with a notice instead of vanishing silently.
+    await t.run((ctx) => markProvisionalReleaseWithCtx(ctx, { bindingId: seeded.bindingId, now: clockNow }));
+    expect(await preview(t, seeded.operator.userId, args)).toEqual({ state: "withdrawn", reason: "policy_disabled", released: true });
+  });
+
+  it("withdraws the moment membership is revoked: the preview refuses with no payload, the next flush deletes, the revoked owner's acknowledgement deletes, and the clamp records the revocation", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run((ctx) => seedRecordedTurn(ctx, "revoke-stream"));
+    const args = { storeId: seeded.operator.storeId, bindingId: seeded.bindingId };
+    await startStreamingTurn(t, seeded);
+    expect(await flush(t, seeded.bindingId, "Checking shifts")).toEqual({ outcome: "stored", truncated: false });
+    expect(await preview(t, seeded.operator.userId, args)).toMatchObject({ state: "streaming" });
+
+    await t.run((ctx) => ctx.db.delete("organizationMember", seeded.operator.membershipId!));
+    const withdrawn = await preview(t, seeded.operator.userId, args);
+    expect(withdrawn).toEqual({ state: "withdrawn", reason: "membership_revoked", released: true });
+    expect(Object.keys(withdrawn).sort()).toEqual(["reason", "released", "state"]);
+    // The row is still at rest until a writer runs; the refused reader cannot watch it.
+    expect(await row(t, seeded.bindingId)).not.toBeNull();
+    expect(await flush(t, seeded.bindingId, "Checking shifts and cash")).toMatchObject({ outcome: "refused", reason: "membership_revoked" });
+    expect(await row(t, seeded.bindingId)).toBeNull();
+    // A refused acknowledgement on the caller's own turn deletes whatever is at rest.
+    await plantRow(t, seeded);
+    expect(await acknowledge(t, seeded.operator.userId, args)).toEqual({ kind: "unavailable", reason: "membership_revoked" });
+    expect(await row(t, seeded.bindingId)).toBeNull();
+    expect((await binding(t, seeded.bindingId))?.provisionalViewedAt).toBeUndefined();
+    // The authority revocation ends the run moments later; this zero-attempt turn is reported as revoked after exposure.
+    await t.run((ctx) => cancelAgentRunWithCtx(ctx, { runId: seeded.runId, idempotencyKey: "revoked", reason: "authority_revoked", now: clockNow + 5 }));
+    expect(await preview(t, seeded.operator.userId, args)).toEqual({ state: "withdrawn", reason: "membership_revoked", released: true });
+    expect(await exposure(t, seeded.bindingId)).toMatchObject({ runStatus: "canceled", binding: "abandoned", provisionalExposurePresumed: true, provisionalViewed: false, revokedAfterProvisionalExposure: true });
+  });
+
+  it("withdraws on profile disablement and on an epoch advance while deltas continue", async () => {
+    const t = convexTest(schema, modules);
+    const disabled = await t.run((ctx) => seedRecordedTurn(ctx, "disable-stream"));
+    const fenced = await t.run((ctx) => seedRecordedTurn(ctx, "fence-stream"));
+    await startStreamingTurn(t, disabled);
+    await startStreamingTurn(t, fenced);
+    for (const seeded of [disabled, fenced]) expect(await flush(t, seeded.bindingId, "Checking")).toEqual({ outcome: "stored", truncated: false });
+
+    TEST_ENABLEMENT.narrow({ profiles: { [TEST_PROFILE_ID]: "disabled" } });
+    expect(await preview(t, disabled.operator.userId, { storeId: disabled.operator.storeId, bindingId: disabled.bindingId })).toEqual({ state: "withdrawn", reason: "profile_disabled", released: true });
+    expect(await flush(t, disabled.bindingId, "Checking more")).toMatchObject({ outcome: "refused", reason: "profile_disabled" });
+    expect(await row(t, disabled.bindingId)).toBeNull();
+    TEST_ENABLEMENT.reset();
+
+    await t.run(async (ctx) => {
+      const current = await getCurrentCompatibilityEpochWithCtx(ctx);
+      await advanceCompatibilityEpochWithCtx(ctx, { epoch: current.epoch + 1, digest: "fnv1a64:next", idempotencyKey: "deploy-next", now: clockNow });
+    });
+    expect(await preview(t, fenced.operator.userId, { storeId: fenced.operator.storeId, bindingId: fenced.bindingId })).toEqual({ state: "withdrawn", reason: "compatibility_epoch_fenced", released: true });
+    expect(await flush(t, fenced.bindingId, "Checking more")).toMatchObject({ outcome: "refused", reason: "compatibility_epoch_fenced" });
+    expect(await row(t, fenced.bindingId)).toBeNull();
+  });
+
+  it("refuses provisional text to an operator whose live egress class ranks below the turn's stamped class, while a mere capability narrowing keeps streaming", async () => {
+    const t = convexTest(schema, modules);
+    // Narrowing: the audit trail (operational) is switched off; the full admin still holds the sensitive projections.
+    const narrowed = await t.run((ctx) => seedRecordedTurn(ctx, "narrow-stream"));
+    const narrowedArgs = { storeId: narrowed.operator.storeId, bindingId: narrowed.bindingId };
+    await startStreamingTurn(t, narrowed);
+    expect(await flush(t, narrowed.bindingId, "Checking")).toEqual({ outcome: "stored", truncated: false });
+    TEST_ENABLEMENT.narrow({ capabilities: { cap_test_ops_audit_trail: "disabled" } });
+    expect(await flush(t, narrowed.bindingId, "Checking shifts")).toEqual({ outcome: "stored", truncated: false });
+    expect(await preview(t, narrowed.operator.userId, narrowedArgs)).toMatchObject({ state: "streaming", text: "Checking shifts" });
+    TEST_ENABLEMENT.reset();
+
+    // Downgrade mid-turn: the turn was stamped sensitive for a full admin; a POS-only member ranks below it.
+    await t.run((ctx) => ctx.db.patch("organizationMember", narrowed.operator.membershipId!, { role: "pos_only", operationalRoles: [] }));
+    const withdrawn = await preview(t, narrowed.operator.userId, narrowedArgs);
+    expect(withdrawn).toEqual({ state: "withdrawn", reason: "egress_beyond_authority", released: true });
+    expect(await flush(t, narrowed.bindingId, "Checking shifts and revenue")).toMatchObject({ outcome: "refused", reason: "egress_beyond_authority" });
+    expect(await row(t, narrowed.bindingId)).toBeNull();
+    // The verdict survives the deletion: a remount still sees the withdrawal, never a stall.
+    expect(await preview(t, narrowed.operator.userId, narrowedArgs)).toEqual({ state: "withdrawn", reason: "egress_beyond_authority", released: true });
+    // The downgraded owner's acknowledgement is refused and deletes whatever is at rest.
+    await plantRow(t, narrowed);
+    expect(await acknowledge(t, narrowed.operator.userId, narrowedArgs)).toEqual({ kind: "unavailable", reason: "egress_beyond_authority" });
+    expect(await row(t, narrowed.bindingId)).toBeNull();
+
+    // Stamped before any flush: the very first flush is refused and nothing is ever released; the preview withdraws on an otherwise healthy turn.
+    const early = await t.run((ctx) => seedRecordedTurn(ctx, "early-downgrade"));
+    const earlyArgs = { storeId: early.operator.storeId, bindingId: early.bindingId };
+    await startStreamingTurn(t, early);
+    await t.run((ctx) => ctx.db.patch("organizationMember", early.operator.membershipId!, { role: "pos_only", operationalRoles: [] }));
+    expect(await flush(t, early.bindingId, "Checking")).toMatchObject({ outcome: "refused", reason: "egress_beyond_authority" });
+    expect(await row(t, early.bindingId)).toBeNull();
+    expect((await binding(t, early.bindingId))?.provisionalReleasedAt).toBeUndefined();
+    expect(await preview(t, early.operator.userId, earlyArgs)).toEqual({ state: "withdrawn", reason: "egress_beyond_authority", released: false });
+    // The committed answer still follows the answer surface's own rules.
+    await commitAnswer(t, early);
+    expect(await t.run((ctx) => entry.getTurnAnswer(admitted(ctx, early.operator.userId), earlyArgs))).toEqual({ kind: "unavailable", reason: "egress_beyond_authority" });
+
+    // An invocation row with no egress class at all refuses the flush (fail closed), and an unknown class normalizes to restricted.
+    const missing = await t.run((ctx) => seedRecordedTurn(ctx, "egress-missing"));
+    await startStreamingTurn(t, missing);
+    await t.run(async (ctx) => {
+      const invocation = (await ctx.db.query("intelligenceProviderInvocation").withIndex("by_runId", (q) => q.eq("runId", missing.runId)).take(1))[0];
+      await ctx.db.patch("intelligenceProviderInvocation", invocation._id, { requestSummary: { ...invocation.requestSummary, egressClass: "mystery" } });
+    });
+    expect(await flush(t, missing.bindingId, "Checking")).toMatchObject({ outcome: "refused", reason: "egress_beyond_authority" });
+    expect(await preview(t, missing.operator.userId, { storeId: missing.operator.storeId, bindingId: missing.bindingId })).toEqual({ state: "withdrawn", reason: "egress_beyond_authority", released: false });
+    await t.run(async (ctx) => {
+      const invocation = (await ctx.db.query("intelligenceProviderInvocation").withIndex("by_runId", (q) => q.eq("runId", missing.runId)).take(1))[0];
+      await ctx.db.delete("intelligenceProviderInvocation", invocation._id);
+    });
+    expect(await flush(t, missing.bindingId, "Checking")).toMatchObject({ outcome: "refused", reason: "egress_class_missing" });
+    expect(await row(t, missing.bindingId)).toBeNull();
+  });
+
+  it("reports stalled past the expiry bound, withdrawn for canceled, failed, and suppressed turns, and the exposure truth table for a post-commit suppression", async () => {
+    const t = convexTest(schema, modules);
+    const stalled = await t.run((ctx) => seedRecordedTurn(ctx, "stalled-stream"));
+    const stalledArgs = { storeId: stalled.operator.storeId, bindingId: stalled.bindingId };
+    await startStreamingTurn(t, stalled);
+    expect(await flush(t, stalled.bindingId, "Checking")).toEqual({ outcome: "stored", truncated: false });
+    // The expiry bound is a server fact: past it the row is unreadable even though it is still at rest.
+    await t.run(async (ctx) => {
+      const current = await loadProvisionalNarrativeByBindingWithCtx(ctx, stalled.bindingId);
+      await ctx.db.patch("agentProvisionalNarrative", current!._id, { expiresAt: clockNow });
+    });
+    const stalledPreview = await preview(t, stalled.operator.userId, stalledArgs);
+    expect(stalledPreview).toEqual({ state: "stalled", released: true });
+    // A released turn whose row is gone is also stalled, never awaiting_first_text.
+    await t.run(async (ctx) => {
+      const current = await loadProvisionalNarrativeByBindingWithCtx(ctx, stalled.bindingId);
+      await ctx.db.delete("agentProvisionalNarrative", current!._id);
+    });
+    expect(await preview(t, stalled.operator.userId, stalledArgs)).toEqual({ state: "stalled", released: true });
+    // The next flush refreshes the bound and streaming returns.
+    expect(await flush(t, stalled.bindingId, "Checking again", 1)).toEqual({ outcome: "stored", truncated: false });
+    expect(await preview(t, stalled.operator.userId, stalledArgs)).toMatchObject({ state: "streaming", text: "Checking again", draftOrdinal: 1 });
+
+    // A commit prepared and then refused leaves the binding at
+    // `completion_prepared`: the insert guard admits that step too, so a
+    // resumed draft is not frozen out of the pane.
+    const prepared = await t.run((ctx) => advanceTurnBindingWithCtx(ctx, { bindingId: stalled.bindingId, step: "completion_prepared", idempotencyKey: "prepared-once", preparedCompletionRef: "prepared:1", now: clockNow }));
+    expect(prepared.outcome).not.toBe("rejected");
+    expect(await flush(t, stalled.bindingId, "Retrying the citation.", 2)).toEqual({ outcome: "stored", truncated: false });
+    expect(await preview(t, stalled.operator.userId, stalledArgs)).toMatchObject({ state: "streaming", text: "Retrying the citation.", draftOrdinal: 2 });
+
+    // Operator cancel: the clamp deletes in the same transaction; the earlier acknowledgement is preserved as audit.
+    expect(await acknowledge(t, stalled.operator.userId, stalledArgs)).toMatchObject({ kind: "acknowledged" });
+    expect(await t.run((ctx) => entry.cancelTurn(admitted(ctx, stalled.operator.userId), stalledArgs))).toEqual({ outcome: "canceled" });
+    expect(await row(t, stalled.bindingId)).toBeNull();
+    expect(await binding(t, stalled.bindingId)).toMatchObject({ provisionalViewedAt: expect.any(Number), provisionalReleasedAt: expect.any(Number) });
+    expect(await preview(t, stalled.operator.userId, stalledArgs)).toEqual({ state: "withdrawn", reason: "run_canceled", released: true });
+    expect(await flush(t, stalled.bindingId, "late", 2)).toMatchObject({ outcome: "refused", reason: "run_canceled" });
+    expect(await row(t, stalled.bindingId)).toBeNull();
+
+    const failed = await t.run((ctx) => seedRecordedTurn(ctx, "failed-stream", { threadKey: "thread-failed", key: "turn-failed", operator: stalled.operator }));
+    const failedArgs = { storeId: failed.operator.storeId, bindingId: failed.bindingId };
+    await startStreamingTurn(t, failed);
+    expect(await flush(t, failed.bindingId, "Checking")).toEqual({ outcome: "stored", truncated: false });
+    await t.run((ctx) => failAgentRunWithCtx(ctx, { runId: failed.runId, idempotencyKey: "fail", error: { code: "provider_failure", message: "x", retryable: true }, now: clockNow + 1 }));
+    expect(await row(t, failed.bindingId)).toBeNull();
+    expect(await preview(t, failed.operator.userId, failedArgs)).toEqual({ state: "withdrawn", reason: "run_failed", released: true });
+    expect(await exposure(t, failed.bindingId)).toMatchObject({ runStatus: "failed", provisionalExposurePresumed: true, revokedAfterProvisionalExposure: true });
+
+    // Post-commit suppression: committed binding, yet the draft is withdrawn and the exposure records the recall.
+    const suppressed = await t.run((ctx) => seedRecordedTurn(ctx, "suppressed-stream", { threadKey: "thread-suppressed", key: "turn-suppressed", operator: stalled.operator }));
+    const suppressedArgs = { storeId: suppressed.operator.storeId, bindingId: suppressed.bindingId };
+    await startStreamingTurn(t, suppressed);
+    expect(await flush(t, suppressed.bindingId, "Checking")).toEqual({ outcome: "stored", truncated: false });
+    await commitAnswer(t, suppressed);
+    expect(await preview(t, suppressed.operator.userId, suppressedArgs)).toEqual({ state: "superseded", released: true });
+    await t.run((ctx) => TEST_TURN_SEAMS.outbox.suppressReleaseWithCtx(ctx, { bindingId: suppressed.bindingId, reason: "membership_revoked", now: clockNow + 2 }));
+    expect(await row(t, suppressed.bindingId)).toBeNull();
+    expect(await preview(t, suppressed.operator.userId, suppressedArgs)).toEqual({ state: "withdrawn", reason: "suppressed", released: true });
+    expect(await exposure(t, suppressed.bindingId)).toMatchObject({ runStatus: "completed", operatorReleaseCommitted: true, releaseSuppressed: true, provisionalExposurePresumed: true, revokedAfterProvisionalExposure: true });
+    // A never-released binding is never reported as exposed, whatever happened later.
+    const untouched = await t.run((ctx) => seedRecordedTurn(ctx, "untouched-stream", { threadKey: "thread-untouched", key: "turn-untouched", operator: stalled.operator }));
+    await t.run((ctx) => cancelAgentRunWithCtx(ctx, { runId: untouched.runId, idempotencyKey: "cancel", reason: "operator_canceled", now: clockNow + 3 }));
+    expect(await exposure(t, untouched.bindingId)).toMatchObject({ runStatus: "canceled", provisionalExposurePresumed: false, revokedAfterProvisionalExposure: false });
+    // A binding that no longer exists has no exposure to report.
+    await t.run((ctx) => ctx.db.delete("agentTurnBinding", untouched.bindingId));
+    expect(await exposure(t, untouched.bindingId)).toBeNull();
   });
 });

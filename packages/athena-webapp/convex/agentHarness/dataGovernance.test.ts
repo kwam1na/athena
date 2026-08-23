@@ -17,6 +17,7 @@
 import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, it } from "vitest";
 
+import type { Id } from "../_generated/dataModel";
 import schema from "../schema";
 import {
   SHORT_LIVED_RETENTION_MS,
@@ -40,6 +41,7 @@ import {
   runRuntimeCleanupBatchWithCtx,
   sweepExpiredAgentContentWithCtx,
 } from "./retention";
+import { loadProvisionalNarrativeByBindingWithCtx, upsertProvisionalNarrativeWithCtx } from "./provisionalNarrative";
 import { recordTurnIntentWithCtx } from "./turnBindings";
 import {
   CURRENT_OPERATING_DATE,
@@ -223,11 +225,57 @@ describe("evidence lifecycle", () => {
   });
 });
 
+/**
+ * A live provisional draft in one scope. It is content of the most sensitive
+ * kind — unverified model prose — so the store/organization cascade must take
+ * it with everything else rather than leave it behind unindexed.
+ */
+async function seedProvisionalDraft(t: Harness, fixture: { storeId: Id<"store">; organizationId: Id<"organization">; userId: Id<"athenaUser"> }, key: string) {
+  return t.run(async (ctx) => {
+    const recorded = await recordTurnIntentWithCtx(ctx, {
+      storeId: fixture.storeId,
+      organizationId: fixture.organizationId,
+      principalKind: "athenaUser",
+      actorRef: `athenaUser:${fixture.userId}`,
+      visibilityMode: "store_admin",
+      profileKey: DAILY_OPERATIONS_PROFILE_ID,
+      profileVersion: "1",
+      packageKeys: ["operations"],
+      grantDigest: "fnv1a64:governance",
+      registryDigest: "fnv1a64:governance",
+      compatibilityDigest: "fnv1a64:governance",
+      adapterKind: AGENT_NOOP_ADAPTER_KIND,
+      adapterVersion: "noop.1",
+      budgetPolicy: { runLimits: { calls: 4, rows: 100, bytes: 4_096, costUnits: 4, elapsedMs: 1_000 }, maxAttempts: 1 },
+      egressClass: "operational",
+      turnIdempotencyKey: `provisional-${key}`,
+      promptPayload: { question: "cleanup" },
+      now: FIXTURE_NOW,
+    });
+    if (recorded.outcome !== "created") throw new Error(JSON.stringify(recorded));
+    await upsertProvisionalNarrativeWithCtx(ctx, {
+      runId: recorded.runId,
+      turnBindingId: recorded.bindingId,
+      storeId: fixture.storeId,
+      organizationId: fixture.organizationId,
+      text: "Checking the day so far.",
+      draftOrdinal: 0,
+      truncated: false,
+      egressClass: "operational",
+      updatedAt: FIXTURE_NOW,
+      expiresAt: FIXTURE_NOW + 300_000,
+    });
+    return recorded.bindingId;
+  });
+}
+
 describe("scope removal", () => {
   it("removes the store's agent content and leaves another store's untouched", async () => {
     const t = convexTest(schema, modules);
     const doomed = await seedCompletedRun(t, "doomed");
     const survivor = await seedCompletedRun(t, "survivor");
+    const doomedDraft = await seedProvisionalDraft(t, doomed.fixture, "doomed");
+    const survivorDraft = await seedProvisionalDraft(t, survivor.fixture, "survivor");
 
     let removed = 0;
     for (let pass = 0; pass < 20; pass += 1) {
@@ -255,6 +303,13 @@ describe("scope removal", () => {
     );
     expect(survivorCalls.length).toBeGreaterThan(0);
 
+    // No unverified draft survives the removed store; the other store keeps its own.
+    await t.run(async (ctx) => {
+      expect(await loadProvisionalNarrativeByBindingWithCtx(ctx, doomedDraft)).toBeNull();
+      expect(await loadProvisionalNarrativeByBindingWithCtx(ctx, survivorDraft)).not.toBeNull();
+      expect(await ctx.db.query("agentProvisionalNarrative").withIndex("by_storeId", (q) => q.eq("storeId", doomed.fixture.storeId)).take(5)).toEqual([]);
+    });
+
     // The removed store's citation now answers as lifecycle-deleted rather
     // than as missing, so an investigation can tell the two apart.
     const evidence = await readEvidence(
@@ -278,6 +333,7 @@ describe("scope removal", () => {
   it("removes the organization's agent content", async () => {
     const t = convexTest(schema, modules);
     const { fixture, started } = await seedCompletedRun(t, "org-removal");
+    const draft = await seedProvisionalDraft(t, fixture, "org-removal");
     const seededCalls = await t.run(async (ctx) =>
       ctx.db
         .query("agentCapabilityCall")
@@ -322,6 +378,11 @@ describe("scope removal", () => {
         .take(50),
     );
     expect(calls).toEqual([]);
+    // The provisional draft is content too: deleted through the organization index.
+    await t.run(async (ctx) => {
+      expect(await loadProvisionalNarrativeByBindingWithCtx(ctx, draft)).toBeNull();
+      expect(await ctx.db.query("agentProvisionalNarrative").withIndex("by_organizationId", (q) => q.eq("organizationId", fixture.organizationId)).take(5)).toEqual([]);
+    });
   });
 });
 

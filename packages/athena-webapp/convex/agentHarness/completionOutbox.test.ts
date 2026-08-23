@@ -22,6 +22,7 @@ import { buildAnswerArtifactPayload } from "./historyProjection";
 import { cancelAgentRunWithCtx, failAgentRunWithCtx, listCapabilityCallsForRun } from "./lifecycle";
 import { reserveTurnSpendWithCtx, spendWindowKey, turnProviderCostReservation } from "./runAdmission";
 import { resumeTurnBindingWithCtx } from "./turnBindings";
+import { loadProvisionalNarrativeByBindingWithCtx, upsertProvisionalNarrativeWithCtx } from "./provisionalNarrative";
 import { registerAgentRuntimeCleanupHook, resetAgentRuntimeCleanupHooksForTests, type AgentRuntimeCleanupDescriptor } from "./retention";
 
 const modules = Object.fromEntries(
@@ -252,8 +253,30 @@ describe("revocation ordering (scenario 13)", () => {
     await t.run((ctx) => TEST_EXECUTOR_SEAMS.completeRunWithCtx(ctx, { runId: seeded.run.runId, idempotencyKey: "completion:l", ...completionRequest(seeded.finished, seeded.citation), now: TEST_NOW_BASE + 40 }));
     await t.run((ctx) => ctx.db.delete("organizationMember", seeded.run.operator.membershipId!));
     expect(await t.run((ctx) => outbox.loadProjectionWithCtx(ctx, { bindingId, now: TEST_NOW_BASE + 41 }))).toEqual({ kind: "suppressed", reason: "membership_revoked" });
+    // A provisional row that outlived the commit (the host died before
+    // finalize) is deleted by the suppression — and again by a repeat
+    // suppression from the outbox cron, outside the already-suppressed guard.
+    const provisionalRow = (text: string) =>
+      t.run((ctx) =>
+        upsertProvisionalNarrativeWithCtx(ctx, {
+          runId: seeded.run.runId,
+          turnBindingId: bindingId,
+          storeId: seeded.run.operator.storeId,
+          organizationId: seeded.run.operator.organizationId,
+          text,
+          draftOrdinal: 0,
+          truncated: false,
+          egressClass: "operational",
+          updatedAt: TEST_NOW_BASE + 41,
+          expiresAt: TEST_NOW_BASE + 60_000,
+        }),
+      );
+    await provisionalRow("One shift is open (draft).");
     expect(await t.run((ctx) => outbox.suppressReleaseWithCtx(ctx, { bindingId, reason: "membership_revoked", now: TEST_NOW_BASE + 42 }))).toEqual({ outcome: "suppressed", cleanup: "succeeded" });
+    expect(await t.run((ctx) => loadProvisionalNarrativeByBindingWithCtx(ctx, bindingId))).toBeNull();
+    await provisionalRow("late draft");
     expect(await t.run((ctx) => outbox.suppressReleaseWithCtx(ctx, { bindingId, reason: "membership_revoked", now: TEST_NOW_BASE + 43 }))).toEqual({ outcome: "already_suppressed", cleanup: "already_succeeded" });
+    expect(await t.run((ctx) => loadProvisionalNarrativeByBindingWithCtx(ctx, bindingId))).toBeNull();
     expect(purged).toHaveLength(1);
     expect(purged[0]).toMatchObject({ bindingId, runtimeThreadRef: "runtime_thread:outbox-late", runtimeInputRef: "runtime_input:outbox-late" });
     const binding = await t.run((ctx) => ctx.db.get("agentTurnBinding", bindingId));

@@ -28,6 +28,7 @@ import { isBindingStepAtOrBeyond, isTerminalRunStatus, type AgentTurnBindingStep
 import { egressClassRank } from "../../shared/agentHarness/values";
 import type { DelegatedAdmission } from "./delegatedAdmission";
 import { parseAnswerPayload, resolveViewerAuthorityWithCtx } from "./historyProjection";
+import { deleteProvisionalNarrativeByBindingWithCtx } from "./provisionalNarrative";
 import { requestRuntimeCleanupWithCtx } from "./retention";
 import { settleTurnSpendOnceWithCtx } from "./runAdmission";
 import { AGENT_OUTBOX_EXHAUSTED_PREFIX, advanceTurnBindingWithCtx } from "./turnBindings";
@@ -217,6 +218,11 @@ export function createCompletionOutbox(config: CompletionOutboxConfig) {
         updatedAt: input.now,
       });
     }
+    // Post-commit revocation never transitions the run, so the clamp never
+    // runs for it: the provisional draft is deleted here, outside the guard,
+    // so a repeat suppression from the outbox cron still cleans up a row a
+    // dead host left behind.
+    await deleteProvisionalNarrativeByBindingWithCtx(ctx, binding._id);
     // Suppression ends the turn for good: a host that died between the commit
     // and `finalizeTurn` left its reservation held, so it is released here on
     // the same once-only terms as a projection. Nothing is booked as spent.

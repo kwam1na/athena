@@ -170,6 +170,7 @@ import {
   agentEvidenceAccessAuditSchema,
   agentProgramAttemptSchema,
   agentPromptPayloadSchema,
+  agentProvisionalNarrativeSchema,
   agentReplayPayloadSchema,
   agentRunGrantSchema,
   agentScratchDescriptorSchema,
@@ -710,6 +711,11 @@ const schema = defineSchema({
   agentScratchDescriptor: defineTable(agentScratchDescriptorSchema)
     .index("by_runId_scratchKey", ["runId", "scratchKey"])
     .index("by_retentionClass_expiresAt", ["retentionClass", "expiresAt"])
+    .index("by_storeId", ["storeId"])
+    .index("by_organizationId", ["organizationId"]),
+  agentProvisionalNarrative: defineTable(agentProvisionalNarrativeSchema)
+    .index("by_turnBindingId", ["turnBindingId"])
+    .index("by_expiresAt", ["expiresAt"])
     .index("by_storeId", ["storeId"])
     .index("by_organizationId", ["organizationId"]),
   agentEvidenceAccessAudit: defineTable(agentEvidenceAccessAuditSchema)

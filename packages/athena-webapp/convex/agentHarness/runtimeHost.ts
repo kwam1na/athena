@@ -54,9 +54,9 @@ import { historyEgressClass } from "./historyProjection";
 import { getProductionProgramExecutor, type AgentExecuteProgramResult, type AgentExecutorCtx } from "./executor";
 // eslint-disable-next-line @convex-dev/import-wrong-runtime -- this module is "use node" too; the rule only inspects the imported file
 import { createAthenaModelResolver, rateCardFor } from "./modelRegistry";
-import { createAthenaToolRegistrations, AGENT_AUTHORITY_REVOCATION_REASONS, type AgentToolSeamRefs } from "./tools";
+import { createAthenaToolRegistrations, completeRunTool, AGENT_AUTHORITY_REVOCATION_REASONS, type AgentToolSeamRefs } from "./tools";
 import type { AdvanceTurnBindingResult } from "./turnBindings";
-import type { AgentFinalizeTurnOutcome, AgentTurnPreparation, AgentTurnUsageSettlement } from "./turns";
+import type { AgentFinalizeTurnOutcome, AgentProvisionalFlushOutcome, AgentTurnPreparation, AgentTurnUsageSettlement } from "./turns";
 
 // ---------------------------------------------------------------------------
 // Dependencies (production or test-bound)
@@ -99,6 +99,17 @@ export type AgentTurnHostRefs = AgentToolSeamRefs & {
   readonly recordTurnProgress: FunctionReference<"mutation", "internal", { bindingId: Id<"agentTurnBinding">; milestone: AgentProgressMilestone; now?: number }, null>;
   readonly peekTurnState: FunctionReference<"query", "internal", { bindingId: Id<"agentTurnBinding"> }, PeekState>;
   readonly finalizeTurn: FunctionReference<"mutation", "internal", AgentTurnHostFinalizeRequest, AgentFinalizeTurnOutcome>;
+  /**
+   * Host-only: overwrite the operator's provisional draft. Never public
+   * ingress — it authorizes the grant's pinned operator, not its caller — and
+   * every policy, authority, and egress decision lives behind it.
+   */
+  readonly flushProvisionalNarrative: FunctionReference<
+    "mutation",
+    "internal",
+    { bindingId: Id<"agentTurnBinding">; draftOrdinal: number; text: string; now?: number },
+    AgentProvisionalFlushOutcome
+  >;
   readonly advanceTurnBinding: FunctionReference<
     "mutation",
     "internal",
@@ -317,13 +328,82 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
       settle = resolve;
     });
 
+    // ----- provisional narrative: in-memory coalescer, single-flight flush ---
+    //
+    // Deltas arrive at token rate; the row must not. The draft is accumulated
+    // here and written whole, one flush at a time, with newer text coalesced
+    // behind the one in flight — so the row is always an overwrite, a new
+    // draft replaces the previous one, and a dropped flush loses nothing (the
+    // next carries the full text). Nothing here decides whether the operator
+    // may see the draft: `flushProvisionalNarrative` is the enforcement point,
+    // and its `refused` verdict is the host's signal to stop offering text.
+    const provisional = {
+      draftOrdinal: -1,
+      draftText: "",
+      /** The newest whole draft not yet handed to a flush. */
+      pending: null as { draftOrdinal: number; text: string } | null,
+      inFlight: null as Promise<void> | null,
+      /** Set at the completeRun request so the commit transaction is never contended. */
+      stopped: false,
+      /** The kernel withdrew the draft; it deleted the row, so stop writing for this turn. */
+      refused: false,
+    };
+    /** Settle without rethrowing, the same shape the milestone queue uses. */
+    const settleQuietly = (work: Promise<unknown> | null): Promise<void> => (work ? work.then(() => undefined, () => undefined) : Promise.resolve());
+
+    function pumpProvisional(): void {
+      if (provisional.inFlight || provisional.stopped || provisional.refused) return;
+      const next = provisional.pending;
+      if (!next) return;
+      provisional.pending = null;
+      provisional.inFlight = (async () => {
+        try {
+          const flushed = await runMutation(refs.flushProvisionalNarrative, { bindingId, draftOrdinal: next.draftOrdinal, text: next.text, now: now() });
+          if (flushed.outcome === "refused") provisional.refused = true;
+        } catch {
+          // OCC against a concurrent turn writer, or a transport failure: this
+          // flush is dropped and the next one carries the whole draft again.
+        } finally {
+          provisional.inFlight = null;
+        }
+        pumpProvisional();
+      })();
+    }
+
     const hooks: AgentRuntimeTurnHooks = {
       onEvent: async (event) => {
         events.push(event.kind);
         if (event.kind === "turn_started" || event.kind === "turn_resumed") ledger.beginTurn(event.turnRef);
         if (event.kind === "narrative_delta" && timings.firstDeltaMs === null) timings.firstDeltaMs = now() - startedAt;
+        if (event.kind === "narrative_delta") {
+          if (event.draftOrdinal !== provisional.draftOrdinal) {
+            provisional.draftOrdinal = event.draftOrdinal;
+            provisional.draftText = "";
+          }
+          provisional.draftText += event.text;
+          // Whitespace alone is not a draft: it would only be refused.
+          if (provisional.draftText.trim().length > 0) {
+            provisional.pending = { draftOrdinal: provisional.draftOrdinal, text: provisional.draftText };
+            pumpProvisional();
+          }
+        }
         if (event.kind === "progress" && timings.firstProgressMs === null) timings.firstProgressMs = now() - startedAt;
         if (event.kind === "tool_call_requested" && timings.firstProgressMs === null) timings.firstProgressMs = now() - startedAt;
+        if (event.kind === "tool_call_requested" && event.toolId === completeRunTool.toolId) {
+          // Quiescence: the request is emitted before the tool runs and `emit`
+          // awaits this hook, so stopping here and draining the one flight in
+          // progress guarantees the commit transaction is never contended by
+          // streaming. The drain must never reject the awaited `emit`.
+          provisional.stopped = true;
+          await settleQuietly(provisional.inFlight);
+        }
+        if (event.kind === "tool_call_completed" && event.toolId === completeRunTool.toolId && event.outcomeKind !== "success") {
+          // Denied, retryably failed, or rejected as a protocol violation: the
+          // turn continues, so the pane must not freeze. The next draft ordinal
+          // arrives with the model's next step and overwrites the row.
+          provisional.stopped = false;
+          pumpProvisional();
+        }
         if (event.kind === "usage") usage.record(event.usage);
         if (event.kind === "tool_call_completed") {
           const last = ledger.entries().find((entry) => entry.callId === event.callId);
@@ -378,6 +458,9 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
     stopPolling = true;
     await poll.catch(() => undefined);
     await Promise.allSettled(milestoneQueue);
+    // Nothing may still be writing the draft when finalize deletes it.
+    provisional.stopped = true;
+    await settleQuietly(provisional.inFlight);
 
     const outcome = completed?.outcome ?? "failed";
     const reason: AgentUsageSettlementReason = outcome === "completed" ? "terminal_total" : outcome === "canceled" ? "cancel" : "missing_final";
@@ -466,6 +549,7 @@ const PRODUCTION_REFS: AgentTurnHostRefs = {
   recordTurnProgress: internal.agentHarness.turns.recordTurnProgress,
   peekTurnState: internal.agentHarness.turns.peekTurnState,
   finalizeTurn: internal.agentHarness.turns.finalizeTurn,
+  flushProvisionalNarrative: internal.agentHarness.turns.flushProvisionalNarrative,
   advanceTurnBinding: internal.agentHarness.turnBindings.advanceTurnBinding,
   loadProjection: internal.agentHarness.completionOutbox.loadProjection,
   recordProjection: internal.agentHarness.completionOutbox.recordProjection,

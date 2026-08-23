@@ -25,9 +25,12 @@ function turnRead(functionName: string, operationId: string) {
 export const getTurnViewReadDefinition = turnRead("agentHarness/turns:getTurnView", "agentHarness/turns.getTurnView.read");
 export const getTurnAnswerReadDefinition = turnRead("agentHarness/turns:getTurnAnswer", "agentHarness/turns.getTurnAnswer.read");
 export const getThreadHistoryReadDefinition = turnRead("agentHarness/turns:getThreadHistory", "agentHarness/turns.getThreadHistory.read");
+/** The provisional-narrative preview: same rail, same store clamp, reauthorized per read; only the initiating operator is ever served. */
+export const previewTurnNarrativeReadDefinition = turnRead("agentHarness/turns:previewTurnNarrative", "agentHarness/turns.previewTurnNarrative.read");
 
 export const AGENT_HARNESS_READ_DEFINITIONS: readonly OperationReadDefinition[] = [
   getTurnViewReadDefinition,
   getTurnAnswerReadDefinition,
   getThreadHistoryReadDefinition,
+  previewTurnNarrativeReadDefinition,
 ];

@@ -37,6 +37,7 @@ import {
   recoverStaleAttemptsWithCtx,
   repairFencedRunsWithCtx,
 } from "./lifecycle";
+import { deleteExpiredProvisionalNarrativesWithCtx } from "./provisionalNarrative";
 import { ensureConvexAgentRuntimeCleanupRegistered } from "./runtimeRetention";
 import { sweepStaleTurnBindingsWithCtx } from "./turnBindings";
 
@@ -478,7 +479,16 @@ export const sweepExpiredAgentContent = internalMutation({
   },
 });
 
-/** Bounded repair safety net: stale attempts, stalled turns, fenced runs. */
+/**
+ * Bounded repair safety net: stale attempts, stalled turns, fenced runs, and
+ * provisional drafts past their exposure bound.
+ *
+ * The provisional phase is a pure delete over the expiry index — no marker, no
+ * grant patch, nothing retained — and covers the one cause no transaction can:
+ * a host that died mid-turn. Its count is the dead-host signal, and because
+ * this mutation is cron-invoked and its return value discarded, a nonzero pass
+ * logs one line (read with `bunx convex logs`, like the drive-turn line).
+ */
 export const repairSweep = internalMutation({
   args: { now: v.optional(v.number()), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
@@ -486,16 +496,20 @@ export const repairSweep = internalMutation({
     const attempts = await recoverStaleAttemptsWithCtx(ctx, { now, limit: args.limit });
     const bindings = await sweepStaleTurnBindingsWithCtx(ctx, { now, limit: args.limit });
     const fenced = await repairFencedRunsWithCtx(ctx, { now, limit: args.limit });
-    const hasMore = attempts.hasMore || bindings.hasMore || fenced.hasMore;
+    const provisional = await deleteExpiredProvisionalNarrativesWithCtx(ctx, { now, limit: args.limit });
+    const hasMore = attempts.hasMore || bindings.hasMore || fenced.hasMore || provisional.hasMore;
     if (hasMore) {
       await ctx.scheduler.runAfter(0, internal.agentHarness.retention.repairSweep, { limit: args.limit });
     }
-    return {
+    const result = {
       recoveredAttempts: attempts.recovered,
       failedTurns: bindings.failed,
       canceledFencedRuns: fenced.canceled,
+      expiredProvisionalNarratives: provisional.deleted,
       hasMore,
     };
+    if (provisional.deleted > 0) console.log(`[agentHarness:repairSweep] ${JSON.stringify(result)}`);
+    return result;
   },
 });
 
@@ -562,6 +576,16 @@ export async function deleteAgentHarnessContentWithCtx(
       : await ctx.db.query("agentClaimSupport").withIndex("by_organizationId", (q) => q.eq("organizationId", scope.organizationId)).take(batch);
   for (const row of claims) await ctx.db.delete("agentClaimSupport", row._id);
   countDeleted(claims.length);
+
+  // A provisional draft belongs to a live turn; the runs are canceled below,
+  // which clamps them, but the scope's own index is what makes the removal
+  // complete for a row whose run was already terminal.
+  const provisional =
+    "storeId" in scope
+      ? await ctx.db.query("agentProvisionalNarrative").withIndex("by_storeId", (q) => q.eq("storeId", scope.storeId)).take(batch)
+      : await ctx.db.query("agentProvisionalNarrative").withIndex("by_organizationId", (q) => q.eq("organizationId", scope.organizationId)).take(batch);
+  for (const row of provisional) await ctx.db.delete("agentProvisionalNarrative", row._id);
+  countDeleted(provisional.length);
 
   // Capability-call rows carry request arguments and human-readable source
   // labels taken from the store's own records, so they are content, not audit.

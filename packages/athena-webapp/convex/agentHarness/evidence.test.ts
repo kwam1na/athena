@@ -39,6 +39,8 @@ import {
   immutableRevisionOf,
   normalizeHostCall,
   normalizedRequestDigest,
+  resolveAttemptExposure,
+  resolveTurnExposure,
   summarizeAttemptInputs,
   type AgentExecutionFacadeEntry,
 } from "./evidence";
@@ -270,6 +272,41 @@ describe("attempt derivations (scenarios 3, 9)", () => {
     expect(immutableRevisionOf(accepted)).toBe("source:audit-1@rev-7");
     expect(immutableRevisionOf(listEnvelope([]))).toBeUndefined();
     expect(immutableRevisionOf(null)).toBeUndefined();
+  });
+});
+
+describe("turn exposure: provisional release and recall", () => {
+  const run = (status: Doc<"intelligenceRun">["status"]) => ({ status }) as Doc<"intelligenceRun">;
+  const binding = (fields: Partial<Doc<"agentTurnBinding">>) => fields as Doc<"agentTurnBinding">;
+
+  it("derives presumed exposure from the release marker and recall from the run's terminal state or a suppressed release", () => {
+    // Never released: nothing was exposed, whatever happened to the run.
+    expect(resolveTurnExposure({ run: run("canceled"), binding: binding({}) })).toMatchObject({ provisionalExposurePresumed: false, provisionalViewed: false, revokedAfterProvisionalExposure: false, binding: "active" });
+    // Released, still running: presumed exposure, not yet revoked.
+    expect(resolveTurnExposure({ run: run("running"), binding: binding({ provisionalReleasedAt: 10 }) })).toMatchObject({ provisionalExposurePresumed: true, provisionalReleasedAt: 10, provisionalViewed: false, revokedAfterProvisionalExposure: false });
+    // Released then canceled or failed (including a provider timeout): revoked after exposure — the same coarse basis the provider-egress flag uses.
+    expect(resolveTurnExposure({ run: run("canceled"), binding: binding({ provisionalReleasedAt: 10 }) })).toMatchObject({ revokedAfterProvisionalExposure: true });
+    expect(resolveTurnExposure({ run: run("failed"), binding: binding({ provisionalReleasedAt: 10 }) })).toMatchObject({ revokedAfterProvisionalExposure: true });
+    // Released, committed, and then suppressed after the commit: revoked even though the run completed.
+    expect(resolveTurnExposure({ run: run("completed"), binding: binding({ provisionalReleasedAt: 10, operatorReleaseCommittedAt: 20, releaseSuppressedAt: 30 }) })).toMatchObject({
+      provisionalExposurePresumed: true,
+      revokedAfterProvisionalExposure: true,
+      operatorReleaseCommitted: true,
+      operatorReleaseCommittedAt: 20,
+      releaseSuppressed: true,
+      releaseSuppressedAt: 30,
+    });
+    // Released and committed cleanly: exposed, superseded by the answer, nothing revoked.
+    expect(resolveTurnExposure({ run: run("completed"), binding: binding({ provisionalReleasedAt: 10, operatorReleaseCommittedAt: 20 }) })).toMatchObject({ provisionalExposurePresumed: true, revokedAfterProvisionalExposure: false, releaseSuppressed: false });
+    // A confirmed view is reported as such; an abandoned binding is named.
+    expect(resolveTurnExposure({ run: run("canceled"), binding: binding({ provisionalReleasedAt: 10, provisionalViewedAt: 12, abandonedAt: 15 }) })).toMatchObject({ provisionalViewed: true, provisionalViewedAt: 12, binding: "abandoned" });
+    expect(resolveTurnExposure({ run: run("queued"), binding: null })).toMatchObject({ binding: "none", provisionalExposurePresumed: false });
+  });
+
+  it("the attempt exposure delegates its shared turn fields to the same derivation", () => {
+    const attempt = { status: "result_produced", providerEgress: { state: "committed", at: 5, authorizationEpoch: 0 } } as Doc<"agentProgramAttempt">;
+    const exposure = resolveAttemptExposure({ attempt, run: run("canceled"), binding: binding({ operatorReleaseCommittedAt: 20, operatorViewedAt: 21, abandonedAt: 30 }) });
+    expect(exposure).toMatchObject({ providerExposed: true, revokedAfterProviderExposure: true, operatorReleaseCommitted: true, operatorReleaseCommittedAt: 20, operatorViewed: true, operatorViewedAt: 21, binding: "abandoned" });
   });
 });
 

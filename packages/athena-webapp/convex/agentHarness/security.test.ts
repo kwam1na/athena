@@ -13,8 +13,10 @@
  * Anything that fails here blocks enablement.
  */
 import { convexTest, type TestConvex } from "convex-test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import { internal } from "../_generated/api";
+import type { Id } from "../_generated/dataModel";
 import schema from "../schema";
 import { AGENT_GENERATED_REGISTRY } from "./_generated/registry";
 import { AGENT_GENERATED_CAPABILITY_SCHEMAS } from "./_generated/schemas";
@@ -28,7 +30,16 @@ import {
 import { createQuickJsProgramRuntime } from "./programRuntime/quickJsRuntime";
 import type { AgentProgramRuntime } from "./programRuntime/types";
 import { DAILY_OPERATIONS_PROFILE_ID } from "./profiles/dailyOperations";
-import { setCapabilityEnablementWithCtx } from "./deploymentState";
+import { setCapabilityEnablementWithCtx, setProfileEnablementWithCtx } from "./deploymentState";
+import { advanceCompatibilityEpochWithCtx, getCurrentCompatibilityEpochWithCtx } from "./lifecycle";
+import {
+  acknowledgeProvisionalView,
+  agentTurnEntryPoints,
+  flushProvisionalNarrative,
+  previewTurnNarrative,
+} from "./turns";
+import { AGENT_HARNESS_DEFINITIONS, acknowledgeProvisionalViewOperationDefinition } from "../operationAdmission/domains/agentHarness_definitions";
+import { AGENT_HARNESS_READ_DEFINITIONS, previewTurnNarrativeReadDefinition } from "../operationAdmission/domains/agentHarness_readDefinitions";
 import { mintAgentResourceRef } from "../lib/agentCapabilitySupport";
 import {
   ATHENA_TOOL_DEFINITIONS,
@@ -719,5 +730,204 @@ describe("the read runtime has no proposal or apply capability", () => {
       expect(port.handler.kind).toBe("internal_query");
       expect(port.verbs.every((verb) => verb === "get" || verb === "list")).toBe(true);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Provisional narrative exposure, over the published composition
+// ---------------------------------------------------------------------------
+
+/**
+ * The provisional draft is the harness's most exposed artifact: unverified
+ * model prose, readable while the turn is live. This block points the adversary
+ * at the REAL preview — the real registry, the real Daily Operations profile,
+ * the real admission definitions, no test seams — and asks who can read it.
+ *
+ * Getting a real turn to `running` without a provider takes the same rungs the
+ * host walks: enable the default-off profile, give the operator the
+ * `normalizedEmail` the driver looks up, freeze the clock so the `driveTurn`
+ * the production `startTurn` schedules never runs, start the turn through the
+ * non-prod driver, walk the binding ladder with its opaque refs, then invoke
+ * the production `prepareTurn` / `markTurnRunning`.
+ */
+describe("provisional narrative exposure", () => {
+  const OPERATOR_EMAIL = "provisional@athena.test";
+
+  async function seedStreamingTurn(t: Harness, slug: string, options: { role?: "full_admin" | "pos_only" } = {}) {
+    const fixture = await t.run(async (ctx) => {
+      const seeded = await seedDailyOperationsStore(ctx, { slug, role: options.role });
+      // The driver resolves operators by normalized email; the store seed never sets one.
+      await ctx.db.patch("athenaUser", seeded.userId, { normalizedEmail: OPERATOR_EMAIL });
+      // Profiles are default-off in the published baseline, so `startTurn`
+      // would otherwise deny `profile_unavailable`.
+      await setProfileEnablementWithCtx(ctx, AGENT_GENERATED_REGISTRY.enablement, {
+        profileId: DAILY_OPERATIONS_PROFILE_ID,
+        state: "enabled",
+        reason: "security gate",
+        now: FIXTURE_NOW,
+      });
+      return seeded;
+    });
+
+    const driver = { organizationSlug: `${slug}-org`, storeSlug: slug, operatorEmail: OPERATOR_EMAIL };
+    const started = (await t.mutation(internal.agentHarness.evals.directHarness.startOperatorTurn, {
+      ...driver,
+      profileId: DAILY_OPERATIONS_PROFILE_ID,
+      threadKey: `thread-${slug}`,
+      turnIdempotencyKey: `turn-${slug}`,
+      prompt: "Which shifts are open?",
+    })) as { outcome: string; bindingId: Id<"agentTurnBinding">; runId: Id<"intelligenceRun"> };
+    if (started.outcome !== "started") throw new Error(JSON.stringify(started));
+
+    for (const rung of [
+      { step: "runtime_thread_bound" as const, runtimeThreadRef: `runtime_thread:${started.bindingId}` },
+      { step: "runtime_input_saved" as const, runtimeInputRef: `runtime_input:${started.bindingId}` },
+    ]) {
+      const advanced = (await t.mutation(internal.agentHarness.turnBindings.advanceTurnBinding, {
+        bindingId: started.bindingId,
+        idempotencyKey: `${rung.step}:gate`,
+        ...rung,
+      })) as { outcome: string; denial?: { code: string } };
+      if (advanced.outcome === "rejected") throw new Error(advanced.denial!.code);
+    }
+    const prepared = (await t.mutation(internal.agentHarness.turns.prepareTurn, { bindingId: started.bindingId })) as { kind: string };
+    if (prepared.kind !== "ready") throw new Error(JSON.stringify(prepared));
+    const running = (await t.mutation(internal.agentHarness.turns.markTurnRunning, { bindingId: started.bindingId })) as { outcome: string };
+    if (running.outcome !== "running") throw new Error(JSON.stringify(running));
+
+    return { fixture, driver, bindingId: started.bindingId, runId: started.runId };
+  }
+
+  const provisionalRows = (t: Harness, bindingId: Id<"agentTurnBinding">) =>
+    t.run((ctx) => ctx.db.query("agentProvisionalNarrative").withIndex("by_turnBindingId", (q) => q.eq("turnBindingId", bindingId)).take(3));
+
+  const preview = (t: Harness, athenaUserId: Id<"athenaUser">, args: { storeId: Id<"store">; bindingId: Id<"agentTurnBinding"> }) =>
+    t.run(async (ctx) =>
+      agentTurnEntryPoints.previewTurnNarrative(
+        Object.assign(ctx, { operationAdmission: { actor: { kind: "normal_user" as const, athenaUserId } } }) as never,
+        args,
+      ),
+    );
+
+  it("serves the live draft to the initiating operator alone, and withdraws it the moment authority moves", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("OPENAI_API_KEY", "sk-test-security-gate");
+    let t: Harness;
+    let turn: Awaited<ReturnType<typeof seedStreamingTurn>>;
+    let intruder: Awaited<ReturnType<typeof seedDailyOperationsStore>>;
+    try {
+      t = convexTest(schema, modules);
+      turn = await seedStreamingTurn(t, "provisional-gate");
+      intruder = await t.run((ctx) => seedDailyOperationsStore(ctx, { slug: "provisional-intruder" }));
+    } finally {
+      vi.unstubAllEnvs();
+      vi.useRealTimers();
+    }
+    const args = { storeId: turn.fixture.storeId, bindingId: turn.bindingId };
+
+    // Nothing released yet: the owner sees the milestone-only state, and only the owner sees anything at all.
+    expect(await preview(t, turn.fixture.userId, args)).toEqual({ state: "awaiting_first_text", released: false });
+    // Another store's admin and a colleague who did not start the turn get the
+    // bare pre-ownership arm — the same answer as a binding that does not exist.
+    expect(await preview(t, intruder.userId, args)).toEqual({ state: "not_found" });
+    expect(await preview(t, turn.fixture.userId, { ...args, bindingId: turn.bindingId, storeId: intruder.storeId })).toEqual({ state: "not_found" });
+
+    // The host writes a draft through the host-only flush.
+    const flushed = await t.mutation(internal.agentHarness.turns.flushProvisionalNarrative, {
+      bindingId: turn.bindingId,
+      draftOrdinal: 0,
+      text: "Checking which shifts are open.",
+    });
+    expect(flushed).toMatchObject({ outcome: "stored", truncated: false });
+    expect(await preview(t, turn.fixture.userId, args)).toMatchObject({ state: "streaming", released: true, text: "Checking which shifts are open." });
+    // Still nobody else, now that there is something to read.
+    expect(await preview(t, intruder.userId, args)).toEqual({ state: "not_found" });
+
+    // Membership revoked: the refusal carries a reason and nothing else — no
+    // text, no ordinal, no clock the refused reader could watch tick.
+    await t.run(async (ctx) => {
+      const membership = await ctx.db
+        .query("organizationMember")
+        .withIndex("by_organizationId_userId", (q) => q.eq("organizationId", turn.fixture.organizationId).eq("userId", turn.fixture.userId))
+        .first();
+      await ctx.db.delete("organizationMember", membership!._id);
+    });
+    const withdrawn = await preview(t, turn.fixture.userId, args);
+    expect(withdrawn).toEqual({ state: "withdrawn", reason: "membership_revoked", released: true });
+    expect(Object.keys(withdrawn).sort()).toEqual(["reason", "released", "state"]);
+    // The next flush refuses and takes the row with it.
+    expect(await t.mutation(internal.agentHarness.turns.flushProvisionalNarrative, { bindingId: turn.bindingId, draftOrdinal: 0, text: "Checking the roster too." })).toMatchObject({ outcome: "refused" });
+    expect(await provisionalRows(t, turn.bindingId)).toEqual([]);
+  });
+
+  it("withdraws the moment a digest-moving deploy fences the run, before any sweep runs", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("OPENAI_API_KEY", "sk-test-security-gate");
+    let t: Harness;
+    let turn: Awaited<ReturnType<typeof seedStreamingTurn>>;
+    try {
+      t = convexTest(schema, modules);
+      turn = await seedStreamingTurn(t, "provisional-fence");
+    } finally {
+      vi.unstubAllEnvs();
+      vi.useRealTimers();
+    }
+    const args = { storeId: turn.fixture.storeId, bindingId: turn.bindingId };
+    await t.mutation(internal.agentHarness.turns.flushProvisionalNarrative, { bindingId: turn.bindingId, draftOrdinal: 0, text: "Checking which shifts are open." });
+    expect(await preview(t, turn.fixture.userId, args)).toMatchObject({ state: "streaming" });
+
+    await t.run(async (ctx) => {
+      const current = await getCurrentCompatibilityEpochWithCtx(ctx);
+      await advanceCompatibilityEpochWithCtx(ctx, { epoch: current.epoch + 1, digest: "fnv1a64:security-gate", idempotencyKey: "gate-deploy", now: FIXTURE_NOW + 1 });
+    });
+    // Withdrawn on the read, without waiting for the fenced-run repair to cancel the run.
+    expect(await preview(t, turn.fixture.userId, args)).toEqual({ state: "withdrawn", reason: "compatibility_epoch_fenced", released: true });
+    expect(await t.mutation(internal.agentHarness.turns.flushProvisionalNarrative, { bindingId: turn.bindingId, draftOrdinal: 1, text: "Still checking." })).toMatchObject({ outcome: "refused", reason: "compatibility_epoch_fenced" });
+    expect(await provisionalRows(t, turn.bindingId)).toEqual([]);
+  });
+
+  it("takes the draft with the run when the kill switch disables the profile", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("OPENAI_API_KEY", "sk-test-security-gate");
+    let t: Harness;
+    let turn: Awaited<ReturnType<typeof seedStreamingTurn>>;
+    try {
+      t = convexTest(schema, modules);
+      turn = await seedStreamingTurn(t, "provisional-kill");
+    } finally {
+      vi.unstubAllEnvs();
+      vi.useRealTimers();
+    }
+    const args = { storeId: turn.fixture.storeId, bindingId: turn.bindingId };
+    await t.mutation(internal.agentHarness.turns.flushProvisionalNarrative, { bindingId: turn.bindingId, draftOrdinal: 0, text: "Checking which shifts are open." });
+    expect(await provisionalRows(t, turn.bindingId)).toHaveLength(1);
+
+    // The kill switch cancels the profile's active runs; the terminal clamp
+    // deletes the draft in the same transaction as the cancellation.
+    expect(
+      await t.run((ctx) =>
+        setProfileEnablementWithCtx(ctx, AGENT_GENERATED_REGISTRY.enablement, { profileId: DAILY_OPERATIONS_PROFILE_ID, state: "disabled", reason: "incident", now: FIXTURE_NOW + 2 }),
+      ),
+    ).toMatchObject({ effective: "disabled", canceledRuns: 1 });
+    expect(await provisionalRows(t, turn.bindingId)).toEqual([]);
+    expect(await t.run((ctx) => ctx.db.get("intelligenceRun", turn.runId))).toMatchObject({ status: "canceled" });
+    expect(await preview(t, turn.fixture.userId, args)).toEqual({ state: "withdrawn", reason: "profile_disabled", released: true });
+  });
+
+  it("keeps the two operator entry points off the demo and public rails and the flush off ingress entirely", () => {
+    for (const definition of [previewTurnNarrativeReadDefinition, acknowledgeProvisionalViewOperationDefinition]) {
+      expect(definition.actors).toMatchObject({ normalUser: "admit", sharedDemo: "deny", public: "deny" });
+      expect(definition.scope).toMatchObject({ kind: "store", storeIdArg: "storeId" });
+    }
+    // The flush writes an operator's pane and is reachable only from the host.
+    expect(previewTurnNarrative.isPublic).toBe(true);
+    expect(acknowledgeProvisionalView.isPublic).toBe(true);
+    expect(flushProvisionalNarrative.isInternal).toBe(true);
+    // Not merely false: an internal registration carries no public marker at all.
+    expect(Object.hasOwn(flushProvisionalNarrative, "isPublic")).toBe(false);
+    const ingress = [...AGENT_HARNESS_DEFINITIONS, ...AGENT_HARNESS_READ_DEFINITIONS].map((definition) => definition.functionName ?? "");
+    expect(ingress).toContain("agentHarness/turns:previewTurnNarrative");
+    expect(ingress).toContain("agentHarness/turns:acknowledgeProvisionalView");
+    expect(ingress.some((name) => name.includes("flushProvisionalNarrative"))).toBe(false);
   });
 });

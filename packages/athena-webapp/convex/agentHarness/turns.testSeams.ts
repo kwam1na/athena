@@ -12,7 +12,7 @@ import { anyApi, type FunctionReference } from "convex/server";
 
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
-import { TEST_ADMISSION, TEST_NOW_BASE, TEST_PROFILE_ID, seedDelegatedOperator } from "./delegatedAdmission.testPorts";
+import { TEST_ADMISSION, TEST_CLOCK, TEST_NOW_BASE, TEST_PROFILE_ID, seedDelegatedOperator } from "./delegatedAdmission.testPorts";
 import { createCompletionOutbox } from "./completionOutbox";
 import { TEST_EXECUTOR_SEAMS } from "./executor.testSeams";
 import type { AgentToolSeamRefs } from "./tools";
@@ -27,6 +27,8 @@ export const TEST_TURN_SEAMS = createAgentTurnSeams({
   outbox: TEST_OUTBOX,
   // The contract-fake provider is "configured" only in tests.
   isProviderConfigured: (providerId) => providerId === "athena_contract_fake",
+  // Server facts (the provisional exposure bound) come from the pinned test clock, never the host's.
+  clock: () => TEST_CLOCK.now,
 });
 
 export const describeGrant = TEST_TURN_SEAMS.functions.describeGrant;
@@ -36,6 +38,7 @@ export const recordRuntimeTurnRef = TEST_TURN_SEAMS.functions.recordRuntimeTurnR
 export const recordTurnProgress = TEST_TURN_SEAMS.functions.recordTurnProgress;
 export const peekTurnState = TEST_TURN_SEAMS.functions.peekTurnState;
 export const finalizeTurn = TEST_TURN_SEAMS.functions.finalizeTurn;
+export const flushProvisionalNarrative = TEST_TURN_SEAMS.functions.flushProvisionalNarrative;
 export const prepareCompletion = TEST_OUTBOX.functions.prepareCompletion;
 export const loadProjection = TEST_OUTBOX.functions.loadProjection;
 export const recordProjection = TEST_OUTBOX.functions.recordProjection;
@@ -55,6 +58,7 @@ export const TEST_TURN_REFS = {
   recordTurnProgress: turns.testTurns.recordTurnProgress,
   peekTurnState: turns.testTurns.peekTurnState,
   finalizeTurn: turns.testTurns.finalizeTurn,
+  flushProvisionalNarrative: turns.testTurns.flushProvisionalNarrative,
   prepareCompletion: turns.testTurns.prepareCompletion,
   loadProjection: turns.testTurns.loadProjection,
   recordProjection: turns.testTurns.recordProjection,

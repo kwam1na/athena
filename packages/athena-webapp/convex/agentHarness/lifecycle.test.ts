@@ -33,7 +33,9 @@ import {
   transitionAgentRunWithCtx,
   transitionProgramAttemptWithCtx,
 } from "./lifecycle";
-import { TEST_NOW, seedRun, seedTenant } from "./testSupport";
+import { loadProvisionalNarrativeByBindingWithCtx, upsertProvisionalNarrativeWithCtx } from "./provisionalNarrative";
+import { TEST_NOW, buildRunInput, seedRun, seedTenant } from "./testSupport";
+import { advanceTurnBindingWithCtx, recordTurnIntentWithCtx } from "./turnBindings";
 
 const modules = Object.fromEntries(
   Object.entries(import.meta.glob("../**/*.ts")).map(([path, loader]) => [
@@ -331,6 +333,71 @@ describe("run transitions (scenarios 1-3)", () => {
       expect(await completeAgentRunWithCtx(ctx, input)).toMatchObject({ outcome: "rejected", denial: { code: "citation_not_supported" } });
       expect((await ctx.db.get("intelligenceRun", seeded.run.runId))?.status).toBe("running");
       expect(await completeAgentRunWithCtx(ctx, completionInput(seeded.run.runId, seeded.attempt, seeded.call))).toMatchObject({ outcome: "completed" });
+    });
+  });
+});
+
+describe("terminal clamp and the provisional narrative", () => {
+  /** A running turn with a binding (so the clamp has something to key on) and one provisional row. */
+  async function seedStreamingTurn(ctx: MutationCtx, tenant: Tenant, key: string) {
+    const { runIdempotencyKey: _k, promptPayloadHash: _h, ...base } = buildRunInput(tenant);
+    const intent = await recordTurnIntentWithCtx(ctx, { ...base, turnIdempotencyKey: key, runtimeThreadRef: `thread:${key}`, promptPayload: { prompt: key } });
+    if (intent.outcome !== "created") throw new Error(intent.outcome);
+    for (const [step, refs] of [
+      ["runtime_thread_bound", {}],
+      ["runtime_input_saved", { runtimeInputRef: `message:${key}` }],
+      ["scheduled", { runtimeScheduleRef: `job:${key}` }],
+      ["running", {}],
+    ] as const) {
+      const result = await advanceTurnBindingWithCtx(ctx, { bindingId: intent.bindingId, step, idempotencyKey: `${key}-${step}`, now: TEST_NOW, ...refs });
+      if (result.outcome === "rejected") throw new Error(result.denial.code);
+    }
+    await upsertProvisionalNarrativeWithCtx(ctx, {
+      runId: intent.runId,
+      turnBindingId: intent.bindingId,
+      storeId: tenant.storeId,
+      organizationId: tenant.organizationId,
+      text: "Checking the day.",
+      draftOrdinal: 0,
+      truncated: false,
+      egressClass: "operational",
+      updatedAt: TEST_NOW,
+      expiresAt: TEST_NOW + 60_000,
+    });
+    return intent;
+  }
+
+  it("deletes the row atomically with every non-completed terminal transition, keyed on the run's binding", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const tenant = await seedTenant(ctx, "clamp");
+      const canceled = await seedStreamingTurn(ctx, tenant, "c1");
+      const failed = await seedStreamingTurn(ctx, tenant, "f1");
+      // The binding is abandoned by the same clamp: the row delete must not sit
+      // inside that guard, so a second terminal write on an already-abandoned
+      // binding still has nothing left to leak.
+      expect(await cancelAgentRunWithCtx(ctx, { runId: canceled.runId, idempotencyKey: "cancel", reason: "operator_canceled", now: TEST_NOW + 1 })).toMatchObject({ outcome: "advanced" });
+      expect(await loadProvisionalNarrativeByBindingWithCtx(ctx, canceled.bindingId)).toBeNull();
+      expect(await ctx.db.get("agentTurnBinding", canceled.bindingId)).toMatchObject({ abandonedAt: TEST_NOW + 1 });
+
+      expect(await transitionAgentRunWithCtx(ctx, { runId: failed.runId, to: "failed", idempotencyKey: "fail", now: TEST_NOW + 2, error: { code: "provider_failure", message: "x", retryable: true } })).toMatchObject({ outcome: "advanced" });
+      expect(await loadProvisionalNarrativeByBindingWithCtx(ctx, failed.bindingId)).toBeNull();
+    });
+  });
+
+  it("leaves the row to finalize on a successful commit: the commit transaction itself ends in the clamp", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const tenant = await seedTenant(ctx, "clamp-commit");
+      const turn = await seedStreamingTurn(ctx, tenant, "k1");
+      const attemptId = await seedExecutingAttempt(ctx, turn.runId);
+      const callId = await admitAndSettleCall(ctx, { runId: turn.runId, attemptId, key: "call-1" });
+      await transitionProgramAttemptWithCtx(ctx, { attemptId, to: "result_produced", now: TEST_NOW, result: { resultHash: "program:1" } });
+      const completed = await completeAgentRunWithCtx(ctx, completionInput(turn.runId, attemptId, callId));
+      expect(completed.outcome).toBe("completed");
+      expect(await ctx.db.get("intelligenceRun", turn.runId)).toMatchObject({ status: "completed" });
+      expect(await ctx.db.get("agentTurnBinding", turn.bindingId)).toMatchObject({ step: "athena_committed" });
+      expect(await loadProvisionalNarrativeByBindingWithCtx(ctx, turn.bindingId)).not.toBeNull();
     });
   });
 });

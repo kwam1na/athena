@@ -222,6 +222,7 @@ describe("delegated agent read ports stay off the public ingress rail", () => {
     ).map((definition) => definition.operationId);
 
     expect([...agentWrites].sort()).toEqual([
+      "agentHarness/turns.acknowledgeProvisionalView",
       "agentHarness/turns.acknowledgeTurnAnswer",
       "agentHarness/turns.cancelTurn",
       "agentHarness/turns.inspectCitationEvidence",
@@ -232,7 +233,11 @@ describe("delegated agent read ports stay off the public ingress rail", () => {
       "agentHarness/turns.getThreadHistory.read",
       "agentHarness/turns.getTurnAnswer.read",
       "agentHarness/turns.getTurnView.read",
+      "agentHarness/turns.previewTurnNarrative.read",
     ]);
+    // The host-only flush writes the provisional row and is never ingress:
+    // only the two operator-facing functions above join the rail.
+    expect([...agentWrites, ...agentReads].some((id) => id.includes("flushProvisionalNarrative"))).toBe(false);
   });
 
   it("keeps every published read port an internal query, bound and reachable", () => {

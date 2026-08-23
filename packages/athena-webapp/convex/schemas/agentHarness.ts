@@ -233,6 +233,16 @@ export const agentTurnBindingSchema = v.object({
   /** Release suppressed after commit because authority shrank before an authorized fetch. */
   releaseSuppressedAt: v.optional(v.number()),
   releaseSuppressedReason: v.optional(v.string()),
+  /**
+   * Provisional-narrative exposure markers. `provisionalReleasedAt` is set once,
+   * by the first stored flush: from then on the draft is presumed to have
+   * reached the operator's pane (it cannot be recalled from a screen). The
+   * viewed pair is the operator's own first-paint acknowledgement — confirmed
+   * receipt, first write wins — paired like `operatorViewedAt`.
+   */
+  provisionalReleasedAt: v.optional(v.number()),
+  provisionalViewedAt: v.optional(v.number()),
+  provisionalViewedByActorRef: v.optional(v.string()),
   /** Completion outbox bookkeeping: projection retries after `athena_committed`. */
   outboxAttempts: v.optional(v.number()),
   outboxNextAttemptAt: v.optional(v.number()),
@@ -462,6 +472,27 @@ export const agentScratchDescriptorSchema = v.object({
   expiresAt: v.number(),
   createdAt: v.number(),
   updatedAt: v.number(),
+});
+
+/**
+ * Provisional narrative: the model's thinking-out-loud for ONE live turn,
+ * servable only while the run is `running` and still admitted. Delete-only —
+ * every terminal cause (clamp, suppression, finalize, scope removal, expiry)
+ * removes the row; nothing here is ever retained, projected, cited, or audited.
+ * No state column: the run, the binding, and `expiresAt` say everything.
+ */
+export const agentProvisionalNarrativeSchema = v.object({
+  runId: v.id("intelligenceRun"),
+  turnBindingId: v.id("agentTurnBinding"),
+  storeId: v.id("store"),
+  organizationId: v.id("organization"),
+  text: v.string(),
+  draftOrdinal: v.number(),
+  truncated: v.boolean(),
+  egressClass: v.string(),
+  retentionClass: v.literal("short_lived"),
+  updatedAt: v.number(),
+  expiresAt: v.number(),
 });
 
 export const agentEvidenceAccessAuditSchema = v.object({
