@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-23T13:31:58.077Z",
+  "branch": "codex/agent-response-streaming-plan",
+  "headSha": "dc1e8d7b9509ac096b31ee6d5886cb97f8be44f6",
+  "deliverableDiffFingerprint": "84816520eb214cb7d172c253226c4bacf54d77fd2a3ffff107deffcb995b2091",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 5,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 1163952.9744179999
+  },
+  "reviewLoop": {
+    "providerId": "execute",
+    "runId": "20260823-streaming-r4",
+    "finalPassId": "20260823-streaming-r4",
+    "recordedAt": "2026-08-23T13:02:32.675Z",
+    "iterationCount": 4,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 3,
+      "P3": 3
+    },
+    "deferredExpansionCount": 1,
+    "deferredIssueIds": [
+      "V26-1321"
+    ],
+    "reviewCost": {
+      "unit": "subagent_tokens",
+      "total": 6663881,
+      "reportedBy": "Claude Code Agent tool subagent_tokens, summed over four review rounds",
+      "perReviewer": {
+        "frontend-races": 492024,
+        "api-contract": 462694,
+        "standards": 440915,
+        "correctness": 497251,
+        "security": 451136,
+        "agent-native": 371692,
+        "maintainability": 418558,
+        "adversarial": 555096,
+        "learnings": 396930,
+        "reliability": 439321,
+        "typescript": 489174,
+        "testing": 1311076,
+        "performance": 338014
+      }
+    }
+  }
+}
