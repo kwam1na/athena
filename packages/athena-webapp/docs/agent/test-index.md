@@ -459,6 +459,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`shared/intelligence/contextTracking.test.ts`](../../shared/intelligence/contextTracking.test.ts)
 - [`shared/inventoryImportReviewPayload.test.ts`](../../shared/inventoryImportReviewPayload.test.ts)
 - [`shared/inventoryImportSource.test.ts`](../../shared/inventoryImportSource.test.ts)
+- [`shared/orderMath.test.ts`](../../shared/orderMath.test.ts)
 - [`shared/pos/terminalRuntimeMaterial.test.ts`](../../shared/pos/terminalRuntimeMaterial.test.ts)
 - [`shared/posRegisterSessionActivityContract.test.ts`](../../shared/posRegisterSessionActivityContract.test.ts)
 - [`shared/productDisplayName.test.ts`](../../shared/productDisplayName.test.ts)

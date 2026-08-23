@@ -14,7 +14,7 @@ This key-folder index highlights the main directories agents are likely to need 
 - [`src/hooks`](../../src/hooks) — React hooks that fan out auth, shell, and feature state. Currently 55 file(s); key children: use-image-upload.ts, use-mobile.tsx, use-navigate-back.ts, use-navigation-keyboard-shortcuts.ts, use-pagination-persistence.test.ts.
 - [`src/contexts`](../../src/contexts) — Context providers for app-wide state and wiring. Currently 13 file(s); key children: AppShellFullscreenContext.test.tsx, AppShellFullscreenContext.tsx, ManagerElevationContext.test.tsx, ManagerElevationContext.tsx, OnlineOrderContext.test.tsx.
 - [`src/lib`](../../src/lib) — Shared frontend helpers, schemas, and package utilities. Currently 299 file(s); key children: access, app-messages, app-update, aws.ts, behaviorUtils.ts.
-- [`shared`](../../shared) — Browser-safe helpers shared with Convex-backed workflows. Currently 79 file(s); key children: agentHarness, approvalPolicy.ts, auth.ts, commandResult.test.ts, commandResult.ts.
+- [`shared`](../../shared) — Browser-safe helpers shared with Convex-backed workflows. Currently 80 file(s); key children: agentHarness, approvalPolicy.ts, auth.ts, commandResult.test.ts, commandResult.ts.
 - [`src/utils`](../../src/utils) — Cross-cutting browser helpers and lower-level utilities. Currently 4 file(s); key children: formatNumber.ts, index.ts, versionChecker.test.ts, versionChecker.ts.
 
 ## Backend and test surfaces
@@ -25,7 +25,7 @@ This key-folder index highlights the main directories agents are likely to need 
 - [`convex/storeTime`](../../convex/storeTime) — Store timezone authority and operating-day resolution shared by reporting and operational surfaces. Currently 6 file(s); key children: ensureTimezoneAuthority.test.ts, ensureTimezoneAuthority.ts, operatingPeriods.test.ts, operatingPeriods.ts, storeTimeAuthority.test.ts.
 - [`convex/serviceOps`](../../convex/serviceOps) — Service catalog, appointment, and service-case workflows layered on operational work items. Currently 8 file(s); key children: appointments.ts, catalog.ts, catalogAppointments.test.ts, moduleWiring.test.ts, serviceCaseTracing.test.ts.
 - [`convex/workflowTraces`](../../convex/workflowTraces) — Shared workflow trace creation, lookup, presentation, and adapter helpers. Currently 20 file(s); key children: adapters, core.ts, presentation.test.ts, presentation.ts, public.test.ts.
-- [`convex`](../../convex) — Convex functions, HTTP composition, schemas, and backend tests. Currently 1172 file(s); key children: README.md, _generated, agentHarness, app.test.ts, app.ts.
+- [`convex`](../../convex) — Convex functions, HTTP composition, schemas, and backend tests. Currently 1173 file(s); key children: README.md, _generated, agentHarness, app.test.ts, app.ts.
 - [`src/tests`](../../src/tests) — Focused browser-facing regression tests. Currently 11 file(s); key children: README.md, SUMMARY.md, agent, pos, prod.
 - [`src/test`](../../src/test) — Package test harness helpers and setup. Currently 1 file(s); key children: setup.ts.
 

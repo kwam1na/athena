@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-23T04:42:53.941Z",
+  "branch": "codex/v26-1312-followups",
+  "headSha": "2932d83d45dd95bfcd1ea7c153dc2b6674cf6a47",
+  "deliverableDiffFingerprint": "d7fd2899aef7bfa3ba61870a898a05e529fd780ea0a43c62977238b356a738dd",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 10,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 1324163.3172499998
+  },
+  "reviewLoop": {
+    "providerId": "execute",
+    "runId": "v26-1312-followups-run1",
+    "finalPassId": "final-pass-12423cd5",
+    "recordedAt": "2026-08-23T04:20:39.990Z",
+    "iterationCount": 3,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 3,
+      "P3": 8
+    },
+    "deferredExpansionCount": 2,
+    "deferredIssueIds": [
+      "V26-1319",
+      "V26-1320"
+    ],
+    "reviewCost": {
+      "unit": "subagent_tokens",
+      "total": 1336977,
+      "reportedBy": "claude-code-agent-tool"
+    }
+  }
+}

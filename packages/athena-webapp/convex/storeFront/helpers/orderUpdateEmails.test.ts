@@ -4,7 +4,7 @@ const sendOrderEmail = vi.hoisted(() => vi.fn());
 
 vi.mock("../../mailersend", () => ({ sendOrderEmail }));
 
-import { handleOrderStatusUpdate } from "./orderUpdateEmails";
+import { formatOrderItems, handleOrderStatusUpdate } from "./orderUpdateEmails";
 
 const store = {
   currency: "GHS",
@@ -97,5 +97,48 @@ describe("fulfillment order update emails", () => {
       }),
     ).resolves.toEqual({ didSendReadyEmail: true });
     expect(sendOrderEmail).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("fulfillment email line-item discount units", () => {
+  const items = [
+    {
+      price: 15_000,
+      productName: "body wave",
+      productSkuId: "sku_a",
+      quantity: 2,
+    },
+  ];
+
+  it("renders a fixed-amount discount as pesewas converted once at display", () => {
+    // GHS 25.00 off, stored as 2_500 pesewas.
+    const [line] = formatOrderItems(items, "GHS", {
+      discountType: "amount",
+      discountValue: 2_500,
+      span: "entire-order",
+    });
+
+    // `savings` is the per-unit discount times quantity, which is how this
+    // helper has always summarised an entire-order fixed discount. Pinned as
+    // observed behaviour; only the pesewas scale is asserted as a contract.
+    expect(line).toMatchObject({
+      price: "GH\u20B5150",
+      discountedPrice: "GH\u20B5125",
+      savings: "GH\u20B550",
+    });
+  });
+
+  it("renders a percentage discount on the same pesewas scale", () => {
+    const [line] = formatOrderItems(items, "GHS", {
+      discountType: "percentage",
+      discountValue: 10,
+      span: "entire-order",
+    });
+
+    expect(line).toMatchObject({
+      price: "GH\u20B5150",
+      discountedPrice: "GH\u20B5135",
+      savings: "GH\u20B530",
+    });
   });
 });

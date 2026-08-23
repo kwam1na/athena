@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Platform Hygiene Follow-ups</title>
+  </head>
+  <body>
+    <article
+      data-athena-landed-change-report="v2"
+      data-athena-report-diff-fingerprint="d7fd2899aef7bfa3ba61870a898a05e529fd780ea0a43c62977238b356a738dd"
+      data-athena-report-base="origin/main"
+    >
+      <header data-report-section="header">
+        <h1>Follow-ups: closing what the epic deferred</h1>
+        <ul data-report-pills>
+          <li>Delivery candidate</li>
+          <li>Branch codex/v26-1312-followups</li>
+          <li>4 tickets + 2 gaps closed in-flight</li>
+          <li>9,968 webapp tests green</li>
+          <li>1,105 tests green under timer lag</li>
+        </ul>
+        <dl data-report-meta>
+          <dt>Tickets</dt><dd>V26-1315, V26-1316, V26-1317, V26-1318</dd>
+          <dt>Also closed</dt><dd>Two gaps found mid-delivery, no ticket — handled here rather than deferred</dd>
+          <dt>Status</dt><dd>Delivery candidate — not yet merged, not yet deployed</dd>
+          <dt>Base</dt><dd>origin/main (epic V26-1312 merged as 93ce9c34)</dd>
+          <dt>New follow-ups filed</dt><dd>V26-1319, V26-1320</dd>
+        </dl>
+      </header>
+
+      <section data-report-section="summary">
+        <h2>Executive summary</h2>
+        <p>
+          The platform-hygiene epic deferred four things with filed tickets. This
+          batch delivers all four, plus two gaps discovered while doing so that
+          were closed here rather than filed — both were the same defect class the
+          batch exists to fix, and deferring them would have been filing a ticket
+          against work already open on the bench.
+        </p>
+        <p>
+          Two of the four tickets turned out to be partly wrong about their own
+          subject, and finding that out was most of the value. <strong>V26-1315's
+          stated diagnosis was inverted</strong> and its acceptance criteria were
+          mutually unsatisfiable; the real defect was larger than described and
+          reached the computed order total. <strong>V26-1318's suggested
+          reproduction lever did not work</strong>, and the agent diagnosed the
+          actual mechanism instead, producing a sensor that reproduces in 71
+          seconds what coverage instrumentation never reproduced in 15 minutes.
+        </p>
+        <p>
+          Two further defects surfaced and were deliberately <em>not</em> folded
+          in: entire-order discounts applied per line item in fulfillment emails
+          (V26-1319, High), and promo-code percentage discounts rendering as a
+          currency figure because the promo path writes
+          <code>discountType</code>/<code>discountValue</code> where the reader
+          expects <code>type</code>/<code>value</code> (V26-1320). Both are
+          pre-existing, both are discount-presentation defects on axes other than
+          units, and each needs its own characterization pass.
+        </p>
+      </section>
+
+      <section data-report-section="problem">
+        <h2>What was deferred, and why it came back</h2>
+        <p>
+          <strong>V26-1315 — discounts rendering at 100x.</strong> Found while
+          delivering a behavior-preserving refactor, so it was characterized as-is
+          rather than fixed: correcting it inside that refactor would have hidden a
+          behavior change inside a move.
+        </p>
+        <p>
+          <strong>V26-1316 — six Convex id fields left as <code>any</code>.</strong>
+          Typing them was attempted during the epic and reverted, because branded
+          id types break plain-string test fixtures across unrelated files.
+        </p>
+        <p>
+          <strong>V26-1317 — advisory migration signals that lied.</strong> The
+          gate itself was sound, but the field an operator polls to see outstanding
+          work could report zero while rows remained. Expressing "never measured"
+          needed a schema change.
+        </p>
+        <p>
+          <strong>V26-1318 — a CI-only flake.</strong> A test failed remotely and
+          passed on re-run of the identical commit. The deeper problem was that
+          local validation could not reproduce it at all.
+        </p>
+        <p>
+          <strong>The two gaps.</strong> The browser-boundary sensor scanned
+          <code>src/</code> only, never <code>shared/</code> — the directory the
+          epic had just moved ten browser-safe modules into. And
+          <code>getProductDiscountValue</code> documented its value as GHS while
+          operating on pesewas.
+        </p>
+      </section>
+
+      <section data-report-section="mental-model">
+        <h2>The thread running through all six</h2>
+        <p>
+          Every item here is a <em>sensor that could not fail</em> — an assertion,
+          a scan, or a status field that reported success while the thing it
+          described was untrue.
+        </p>
+        <ul>
+          <li>A test name promising an assertion it did not make.</li>
+          <li>A fixture whose line items were 100x smaller than their own order,
+          pinning fictional behavior.</li>
+          <li>A boundary scan that never looked at the directory the code moved to.</li>
+          <li>A regex rule that a path alias walked straight through.</li>
+          <li>A <code>remaining: 0</code> that meant "never measured".</li>
+          <li>A comment asserting units the code did not use.</li>
+        </ul>
+        <p>
+          A passing sensor and a sensor that cannot fail produce identical output.
+          The only way to tell them apart is to introduce the defect and watch. That
+          discipline — re-break the code, confirm red, restore — was required of
+          every workstream here and is now recorded as a durable note.
+        </p>
+      </section>
+
+      <section data-report-section="before-after">
+        <h2>Before and after</h2>
+        <h3>Order discounts (V26-1315)</h3>
+        <p>
+          Before: a local <code>getDiscountValue</code> carried an
+          <code>isInCents</code> multiplier that diverged from the shared order-math
+          authority. After: it delegates to that authority, with one
+          <code>toDisplayAmount</code> at the display boundary. The stored value was
+          always pesewas — the label rendered it as cedis while the amount line
+          multiplied and divided by 100.
+        </p>
+        <h3>Migration run record (V26-1317)</h3>
+        <p>
+          Before: <code>remaining</code> was a required number, so an applying
+          first-touch wrote <code>0</code> — indistinguishable from a drained table.
+          After: it is optional and paired with <code>remainingMeasuredAt</code>;
+          absent means never measured, and the status query reports
+          <code>null</code>. A sticky <code>cutoffChangedAt</code> prevents a chain
+          run at the wrong cutoff from banking a completion.
+        </p>
+        <h3>Browser boundary (gap)</h3>
+        <p>
+          Before: scanned <code>src/</code> only, matched only
+          <code>from "…"</code> imports, and missed the <code>@cvx/*</code> alias
+          entirely. After: scans <code>src/</code> and <code>shared/</code> —
+          1,090 files — normalizes aliases before applying the allowlist, catches
+          dynamic and side-effect imports, and asserts each scan root is non-empty.
+        </p>
+        <h3>Timing parity (V26-1318)</h3>
+        <p>
+          Before: no local way to reproduce a CI-only race. After:
+          <code>test:timing-parity</code> scales timers by a configurable factor,
+          reproducing the cause in 71 seconds; registered in the validation map.
+        </p>
+      </section>
+
+      <section data-report-section="key-files">
+        <h2>Key files</h2>
+        <table>
+          <thead>
+            <tr><th>File</th><th>Why it matters</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>src/components/orders/utils.ts</code></td><td>The divergent discount multiplier removed; now delegates to the shared authority.</td></tr>
+            <tr><td><code>shared/orderMath.ts</code></td><td>The single order-math authority; its pesewas contract is now pinned by tests rather than asserted by a comment.</td></tr>
+            <tr><td><code>convex/migrations/migratePosAmountsToPesewas.ts</code></td><td>Advisory signals made truthful without touching the verified-sound completion gate.</td></tr>
+            <tr><td><code>convex/schemas/pos/posAmountMigrationRun.ts</code></td><td><code>remaining</code> widened to optional so absence is expressible.</td></tr>
+            <tr><td><code>convex/lib/testIds.ts</code></td><td>Shared branded-id helper; passes values through verbatim so fixture assertions keep working.</td></tr>
+            <tr><td><code>src/routeTree.browser-boundary.test.ts</code></td><td>The boundary sensor, now covering the directory the epic moved code into.</td></tr>
+            <tr><td><code>packages/athena-webapp/vitest.setup.ts</code></td><td>Timer-lag shim, inert unless the env var is set.</td></tr>
+            <tr><td><code>docs/solutions/test-failures/athena-sensors-that-cannot-fail-2026-08-23.md</code></td><td>The durable rule this batch produced.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section data-report-section="changes">
+        <h2>What changed — and what did not</h2>
+        <h3>Changed</h3>
+        <ul>
+          <li>Operator order summary, order detail and orders-list totals now render and compute discounts in pesewas consistently. Percentage discounts were also affected on realistic data, and the clamp capping a fixed-amount discount at the eligible subtotal stopped holding — not because it compared mixed units, but because the <code>&times;100</code> scaling ran on the clamp's result: the comparison was like-unit and bound correctly, then the cap was destroyed downstream.</li>
+          <li>The POS migration run record distinguishes unmeasured from zero, and a wrong-cutoff run is now visible in the status query rather than presenting as a clean board. <code>skipped</code> is cumulative, matching <code>migrated</code>.</li>
+          <li>Two genuinely racy POS tests fixed; a third-party-visible sensor added to find more.</li>
+          <li>The browser boundary covers <code>shared/</code>, alias forms, and dynamic imports.</li>
+        </ul>
+        <h3>Deliberately unchanged</h3>
+        <ul>
+          <li><strong>The completion gate.</strong> <code>complete</code> and cumulative <code>migrated</code> were verified sound across 24 executed sequences in the epic; V26-1317 was required to leave them untouched, and the existing guard tests pass byte-identical.</li>
+          <li><strong>Runtime retry and backoff behavior</strong> of the POS local sync runtime. V26-1318 is a test-determinism and parity ticket; the injected regression used to falsify the fix was reverted.</li>
+          <li><strong>Discount storage and the minor-unit domain model.</strong> Only presentation and the shared read path changed.</li>
+          <li><strong>Entire-order-vs-line-item discount scope</strong> in fulfillment emails. Real, customer-visible, and filed as V26-1319 — a modelling question on a different axis, pinned as observed behavior with a comment so the test is not read as an endorsement.</li>
+          <li><strong>Promo-code discount field shape.</strong> <code>redeem</code> writes <code>discountType</code>/<code>discountValue</code> where readers expect <code>type</code>/<code>value</code>, so a promo-code percentage discount renders as a currency figure. Pre-existing, strictly improved here, and filed as V26-1320 — normalizing the shape is a separate decision about where the canonical contract lives.</li>
+          <li><strong>The <code>athena-contracts</code> type-only Convex seam.</strong> An instrumented build proved <code>convexModel.ts</code> is not in the bundle at all; extending a runtime-boundary scan across a package line to flag an erased edge would be a design decision, not a fix.</li>
+        </ul>
+      </section>
+
+      <section data-report-section="validation">
+        <h2>Validation</h2>
+        <p><strong>Status: delivery candidate.</strong> Not merged, not deployed, Linear not yet <code>Done</code>, root checkout not yet fast-forwarded.</p>
+        <table>
+          <thead><tr><th>Check</th><th>Result</th></tr></thead>
+          <tbody>
+            <tr><td>Webapp Vitest</td><td>827 files, 9,968 tests passed</td></tr>
+            <tr><td><code>test:timing-parity</code> (10x lag)</td><td>70 files, 1,105 tests passed</td></tr>
+            <tr><td>Same at 40x lag</td><td>70 files, 1,105 tests passed</td></tr>
+            <tr><td><code>tsc --noEmit</code></td><td>clean</td></tr>
+            <tr><td>Browser boundary sensor</td><td>6 passed, and falsified with planted violations in both <code>src/</code> and <code>shared/</code></td></tr>
+            <tr><td><code>architecture:check</code></td><td>passed, both packages</td></tr>
+            <tr><td><code>compound:check</code> / <code>docs:links:check</code></td><td>passed, 264 solution docs</td></tr>
+          </tbody>
+        </table>
+        <p>
+          Every workstream falsified its own fix. Selected evidence: re-breaking the
+          discount path reproduced the ticket's exact <code>GH₵2,000</code>, and a
+          label-only break failed 5 tests, proving the label assertion is
+          independently load-bearing. Injecting a real regression into the POS sync
+          runtime made the fixed flake test fail in both plain and timing-parity
+          modes. Planting <code>@cvx/operations/serviceIntake</code> into
+          <code>shared/currency.ts</code> made the extended boundary sensor name that
+          exact file. Reverting the branded-id helper to a value-mangling version
+          would have broken four exact-string assertions — caught before running.
+        </p>
+      </section>
+
+      <section data-report-section="guidance">
+        <h2>Guidance</h2>
+        <ul>
+          <li><strong>A ticket's diagnosis is a hypothesis.</strong> Two of four here were wrong about their own subject. Verify the premise against the code before implementing to it — and when acceptance criteria conflict, say which you chose and why rather than silently satisfying one.</li>
+          <li><strong>Check that a characterization fixture is internally coherent</strong> before trusting what it pins. Line items that cannot sum to their own order describe a system that does not exist.</li>
+          <li><strong>Reproduce the cause, not the correlate.</strong> Coverage instrumentation was where the flake appeared, so it looked like the lever; it never reproduced locally. Timer lag did, in a fiftieth of the time.</li>
+          <li><strong>Let the sensor discriminate.</strong> Grep found far more candidate racy sites than could be triaged by eye — and no reproducible count, since the total swings by hundreds with how the pattern is defined. The parity sensor found the 2 that were real. Do not triage by eye what a tool can decide, and do not report a number a rescan will not reproduce.</li>
+          <li><strong>An allowlist is a deferred decision.</strong> Resolving a new boundary violation by adding an exception undoes the ticket that removed the exceptions.</li>
+          <li><strong>Close a gap when it is the same defect class you already have open.</strong> Filing a ticket against work sitting on the bench is deferral with extra steps — but a genuinely different axis, like V26-1319, still deserves its own characterization pass.</li>
+        </ul>
+      </section>
+
+      <section data-report-section="quiz" data-quiz-pass-threshold="8">
+        <h2>Comprehension quiz</h2>
+        <p>Ten questions on what actually happened here.</p>
+        <ol data-quiz>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What was wrong with V26-1315's stated diagnosis?</p>
+            <ol data-quiz-options>
+              <li>The discount was not rendering incorrectly at all.</li>
+              <li data-quiz-correct>It claimed the stored value was cedis; it is actually minor units, so the direction of the error was inverted.</li>
+              <li>The defect was in the storefront, not the operator surface.</li>
+              <li>Percentage discounts were the only ones affected.</li>
+            </ol>
+            <p data-quiz-explanation>Promo fixed amounts are parsed to minor units and copied onto the order unchanged. The label rendered pesewas as cedis. Same symptom, opposite cause.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Why could V26-1315's acceptance criteria 1 and 4 not both be satisfied?</p>
+            <ol data-quiz-options>
+              <li>They referred to different components.</li>
+              <li data-quiz-correct>AC1 presumes the stored value is cedis while AC4's cross-surface agreement requires pesewas, which five other surfaces already use.</li>
+              <li>AC4 was added after the work started.</li>
+              <li>AC1 required a schema change that AC4 forbade.</li>
+            </ol>
+            <p data-quiz-explanation>Honouring AC1 literally would have broken emails, storefront order detail and review, and the checkout panel. AC4 was chosen; AC1 holds in substance.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>How did the characterization fixture hide a second defect?</p>
+            <ol data-quiz-options>
+              <li>It omitted percentage discounts entirely.</li>
+              <li>It used a mocked formatter.</li>
+              <li data-quiz-correct>Its line items were 100x smaller than the order total, so the multiplier cancelled out invisibly for percentage discounts, and the fixed-amount value was small enough that the clamp never bound — hiding the fact that scaling destroyed the cap.</li>
+              <li>It ran only in CI.</li>
+            </ol>
+            <p data-quiz-explanation>The fixed-amount 100x was always visible on the old fixture — it rendered GH₵2,000 for an entered 20, and the test pinned that as characterized-as-is. What the fixture hid was different in each case: the percentage error cancelled to a correct-looking GH₵150, and <code>Math.min(20, 1500)</code> never bound, so the destroyed cap left no trace. On coherent data the percentage renders GH₵15,000 and <code>Math.min(200000, 150000)</code> binds at 150,000 pesewas and is then scaled to GH₵15,000,000.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Why did coverage instrumentation fail as a reproduction lever for the flake?</p>
+            <ol data-quiz-options>
+              <li>It could not be run locally.</li>
+              <li data-quiz-correct>It was correlated with the failure but not its cause; the cause is timer callbacks landing late relative to microtask work.</li>
+              <li>It disabled the test entirely.</li>
+              <li>It changed the retry threshold.</li>
+            </ol>
+            <p data-quiz-explanation>Coverage stayed green 8/8 locally and under 24 competing busy-loop processes. Scaling timers 10x reproduced the verbatim CI failure 5/5.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What makes <code>await waitFor(positive)</code> followed by a negative assertion unsound?</p>
+            <ol data-quiz-options>
+              <li>waitFor does not support async callbacks.</li>
+              <li>The negative assertion runs before the render completes.</li>
+              <li data-quiz-correct>waitFor resolves on the first occurrence, so work the awaited chain will still perform can trigger the negative-asserted call afterwards.</li>
+              <li>Vitest evaluates assertions out of order.</li>
+            </ol>
+            <p data-quiz-explanation>Here the first ingest call resolved the wait roughly four drains before the retry chain hit its dead-letter threshold.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Why was the browser-boundary sensor's green result misleading before this batch?</p>
+            <ol data-quiz-options>
+              <li>It ran only on pull requests.</li>
+              <li data-quiz-correct>It resolved its scan root from its own file location, so it walked <code>src/</code> only and never <code>shared/</code>, where the epic had just moved ten browser-safe modules.</li>
+              <li>It excluded TypeScript files.</li>
+              <li>Its allowlist matched everything.</li>
+            </ol>
+            <p data-quiz-explanation>The gap was structural, not a rule error — the sensor could not fail on a directory it never opened.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Which import form was a genuine bypass of the old boundary rule?</p>
+            <ol data-quiz-options>
+              <li>Relative imports two levels up.</li>
+              <li data-quiz-correct>The <code>@cvx/*</code> path alias, which resolves to <code>./convex/*</code> but matched neither <code>~/convex/</code> nor a relative path.</li>
+              <li>Named imports with aliasing.</li>
+              <li>Re-exports from an index file.</li>
+            </ol>
+            <p data-quiz-explanation>It is a real alias in both the Vite and TypeScript configs. Specifiers are now normalized before the allowlist is applied.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What does an absent <code>remaining</code> now mean on the migration run record?</p>
+            <ol data-quiz-options>
+              <li>The table is drained.</li>
+              <li>The record is corrupt.</li>
+              <li data-quiz-correct>Never measured, or the measurement was invalidated — the status query reports it as null rather than zero.</li>
+              <li>The migration has not started.</li>
+            </ol>
+            <p data-quiz-explanation>Only a dry run can measure work left. A number is now a claim someone earned, rather than a default that reads as "nothing left".</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Why did the branded-id test helper have to pass its value through verbatim?</p>
+            <ol data-quiz-options>
+              <li>To keep the helper generic across tables.</li>
+              <li>Because Convex validates id formats at runtime in tests.</li>
+              <li data-quiz-correct>Several tests assert on the exact fixture strings, so prefixing the table name would have silently broken them.</li>
+              <li>To avoid a circular import.</li>
+            </ol>
+            <p data-quiz-explanation>The branding comes from the type parameter alone. Passing the table name in constrains the type without changing any observable value.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Why was the fulfillment-email discount defect filed rather than fixed here?</p>
+            <ol data-quiz-options>
+              <li>It is not customer-visible.</li>
+              <li>It was already covered by an existing ticket.</li>
+              <li data-quiz-correct>It is an order-level-versus-line-level modelling question on a different axis from the units work, needing its own characterization pass and a decision about how discount scope is represented.</li>
+              <li>The affected code is owned by another team.</li>
+            </ol>
+            <p data-quiz-explanation>It was pinned as observed behavior with an explicit comment so the existing test is not mistaken for an endorsement, and filed at High as V26-1319.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section data-report-section="subagent-evidence">
+        <h2>Subagent evidence</h2>
+        <dl>
+          <dt>Four ticket subagents, one per ticket, isolated worktrees</dt>
+          <dd>
+            Each held to its ticket's posture — test-first for the discount fix,
+            sensor-only for the id typing, characterization-first for the migration
+            signals and the flake. Each was required to falsify its own fix and
+            report the red output. Two reported that their ticket's premise or
+            suggested approach was wrong, which is the single most valuable thing
+            they produced.
+          </dd>
+          <dt>Two gap-closing subagents, dispatched mid-delivery</dt>
+          <dd>
+            One extended the boundary sensor and measured browser reachability with
+            an instrumented Vite build rather than reasoning about it; it found the
+            <code>@cvx</code> bypass that nobody had asked it to look for. The other
+            built the caller inventory for <code>getProductDiscountValue</code>,
+            concluded the comment was stale rather than the code wrong, and surfaced
+            the separate line-item scope defect.
+          </dd>
+          <dt>Process note</dt>
+          <dd>
+            The epic's review round was run inside the active delivery worktree and a
+            reviewer's cleanup destroyed staged work. This batch dispatched every
+            subagent into its own Claude-managed worktree from the start, and the
+            integration worktree was created with the repo's own
+            <code>worktree-manager.sh</code> script rather than raw
+            <code>git worktree add</code>.
+          </dd>
+        </dl>
+      </section>
+    </article>
+  </body>
+</html>

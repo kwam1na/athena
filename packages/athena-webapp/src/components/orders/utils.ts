@@ -1,3 +1,5 @@
+import { getDiscountValue as sharedGetDiscountValue } from "~/shared/orderMath";
+
 export function getOnlineOrderPlacedAt(order: {
   _creationTime: number;
   placedAt?: number;
@@ -10,9 +12,11 @@ type OrderRefund = {
 };
 
 type OrderDiscount = {
+  code?: string;
   productSkus?: string[];
-  span?: string;
-  type?: string;
+  span?: "entire-order" | "selected-products";
+  totalDiscount?: number;
+  type?: "percentage" | "amount";
   value?: number;
 };
 
@@ -62,7 +66,7 @@ export const getOrderState = (order: OrderStateInput) => {
   const amountRefunded =
     order?.refunds?.reduce(
       (acc: number, refund: OrderRefund) => acc + refund.amount,
-      0
+      0,
     ) || 0;
 
   const orderAmount = order.amount ?? 0;
@@ -75,7 +79,7 @@ export const getOrderState = (order: OrderStateInput) => {
   const hasIssuedRefund = order.status === "refunded";
 
   const isRefundPending = ["refund-pending", "refund-processing"].includes(
-    order.status
+    order.status,
   );
 
   const isOrderCompleted =
@@ -121,79 +125,34 @@ export function shouldShowPickupExceptionAction(input: {
 }
 
 /**
- * Calculate the discount value based on discount type and span
- * @param items - Array of bag items with productSkuId, quantity, and price
- * @param discount - Discount object with type, value, span, and optional productSkus
- * @returns The total discount amount in the same currency unit as item prices
+ * Discount value for an order, in pesewas.
+ *
+ * Delegates to `shared/orderMath`, which is the single authority every other
+ * discount surface reads: order emails, the storefront order views, and the
+ * checkout session panel. Order money — `items[].price`, `amount`,
+ * `deliveryFee` and a fixed discount's `value` — is stored in pesewas, so no
+ * scaling happens here. Callers convert once, at the display boundary.
  */
 export const getDiscountValue = (
   order: Pick<OrderStateInput, "discount" | "items">,
-  isInCents?: boolean
 ): number => {
-  const discount = order.discount;
-  const items = order.items ?? [];
+  const items = (order.items ?? [])
+    .filter((item): item is OrderLineItem & { productSkuId: string } =>
+      Boolean(item.productSkuId),
+    )
+    .map((item) => ({
+      productSkuId: item.productSkuId,
+      quantity: item.quantity,
+      price: item.price,
+    }));
 
-  if (!discount) return 0;
-
-  // Handle entire-order discounts
-  if (discount.span === "entire-order") {
-    const subtotal = items.reduce(
-      (sum: number, item: OrderLineItem) => sum + item.price * item.quantity,
-      0
-    );
-
-    const discountValue = discount.value ?? 0;
-
-    if (discount.type === "percentage") {
-      return subtotal * (discountValue / 100) * (isInCents ? 100 : 1);
-    }
-    // For amount type, apply discount value directly
-    return discountValue * (isInCents ? 100 : 1);
-  }
-
-  // Handle selected-products discounts
-  if (
-    discount.span === "selected-products" &&
-    discount.productSkus
-  ) {
-    // Calculate subtotal of only eligible items
-    const eligibleItemsSubtotal = items
-      .filter((item: OrderLineItem) =>
-        item.productSkuId
-          ? discount.productSkus?.includes(item.productSkuId)
-          : false
-      )
-      .reduce(
-        (sum: number, item: OrderLineItem) => sum + item.price * item.quantity,
-        0
-      );
-
-    const discountValue = discount.value ?? 0;
-
-    if (discount.type === "percentage") {
-      return (
-        eligibleItemsSubtotal *
-        (discountValue / 100) *
-        (isInCents ? 100 : 1)
-      );
-    }
-    // For amount type, apply discount value to eligible items
-    // Note: amount discounts are typically applied once, not per item
-    return (
-      Math.min(discountValue, eligibleItemsSubtotal) *
-      (isInCents ? 100 : 1)
-    );
-  }
-
-  return 0;
+  return sharedGetDiscountValue(items, order.discount);
 };
 
 export const getAmountPaidForOrder = (
-  order: Pick<OrderStateInput, "amount" | "deliveryFee" | "discount" | "items">
+  order: Pick<OrderStateInput, "amount" | "deliveryFee" | "discount" | "items">,
 ) => {
-  const discountValue = getDiscountValue(order, true); // returns pesewas
-
-  const discount = discountValue; // getDiscountValue always returns pesewas
+  const discount = getDiscountValue(order); // pesewas
 
   const orderAmount = (order.amount ?? 0) + (order.deliveryFee || 0); // both pesewas
 

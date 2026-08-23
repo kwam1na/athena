@@ -86,8 +86,15 @@ export const getDiscountValue = (
 
 /**
  * Calculate discount for a single product.
+ *
+ * Fixed-amount discount values are pesewas, the same scale as `price` — that is
+ * how `promoCodeMoney` persists them and how `convex/storeFront/payment.ts`
+ * copies them onto the order. Percentage values stay raw (`10` means 10%).
+ * Nothing here converts scale; callers convert once at their display boundary.
+ *
  * @param price - Product price in pesewas
- * @param discount - Discount object
+ * @param discount - Discount object; `value`/`discountValue` is pesewas for
+ *   `amount` and a raw percentage for `percentage`
  * @returns The discount amount in pesewas
  */
 export const getProductDiscountValue = (
@@ -104,7 +111,7 @@ export const getProductDiscountValue = (
   if (type === "percentage") {
     return price * (value / 100);
   }
-  // For amount type, discount value is in GHS, don't exceed product price
+  // Amount-type value is already pesewas; cap it at the product price.
   return Math.min(value, price);
 };
 

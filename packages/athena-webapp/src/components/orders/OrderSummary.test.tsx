@@ -15,6 +15,10 @@ vi.mock("~/src/hooks/useGetActiveStore", () => ({
   default: () => getActiveStoreMock(),
 }));
 
+import { getDiscountValue as sharedGetDiscountValue } from "~/shared/orderMath";
+import { toDisplayAmount } from "~/shared/currency";
+import { currencyFormatter } from "~/src/lib/utils";
+
 import { OrderSummary } from "./OrderSummary";
 
 type TestOrder = Record<string, unknown>;
@@ -107,7 +111,7 @@ describe("OrderSummary", () => {
         type: "percentage",
         value: 10,
       },
-      items: [{ price: 1500, quantity: 1, productSkuId: "sku_1" }],
+      items: [{ price: 150000, quantity: 1, productSkuId: "sku_1" }],
       status: "open",
     });
 
@@ -124,19 +128,155 @@ describe("OrderSummary", () => {
         code: "FLAT20",
         span: "selected-products",
         type: "amount",
-        value: 20,
+        value: 2000,
         productSkus: ["sku_1"],
       },
-      items: [{ price: 1500, quantity: 1, productSkuId: "sku_1" }],
+      items: [{ price: 150000, quantity: 1, productSkuId: "sku_1" }],
       status: "open",
     });
 
-    // Amount discounts are stated in major units on the order but the summary
-    // formats the pesewas-scaled value, so both the label and the amount read
-    // 100x the entered value. Characterized as-is; changing it is out of scope.
-    expect(screen.getByText("FLAT20 - GH₵2,000 off select items")).toBeVisible();
-    expect(amountFor("Discounts")).toBe("GH₵2,000");
+    // An operator who enters a GH₵20 flat discount stores 2000 pesewas. The
+    // label, the discount line, and the amount paid all read that one stored
+    // figure back through a single minor-unit conversion.
+    expect(screen.getByText("FLAT20 - GH₵20 off select items")).toBeVisible();
+    expect(amountFor("Discounts")).toBe("GH₵20");
     expect(amountFor("Amount paid")).toBe("GH₵1,480");
+  });
+
+  it("renders an entire-order amount discount unscaled", () => {
+    renderSummary({
+      amount: 150000,
+      deliveryFee: 0,
+      discount: {
+        code: "FLAT20",
+        span: "entire-order",
+        type: "amount",
+        value: 2000,
+      },
+      items: [{ price: 150000, quantity: 1, productSkuId: "sku_1" }],
+      status: "open",
+    });
+
+    expect(screen.getByText("FLAT20 - GH₵20 off entire order")).toBeVisible();
+    expect(amountFor("Discounts")).toBe("GH₵20");
+    expect(amountFor("Amount paid")).toBe("GH₵1,480");
+  });
+
+  it("keeps the amount discount label, line, and total in agreement", () => {
+    const order = {
+      amount: 150000,
+      deliveryFee: 3500,
+      discount: {
+        code: "FLAT20",
+        span: "entire-order",
+        type: "amount",
+        value: 2000,
+      },
+      items: [{ price: 150000, quantity: 1, productSkuId: "sku_1" }],
+      status: "open",
+    };
+
+    renderSummary(order);
+
+    const labelled = screen
+      .getByText(/^FLAT20 - /)
+      .textContent?.replace(/^FLAT20 - /, "")
+      .replace(/ off .*$/, "");
+
+    expect(labelled).toBe("GH₵20");
+    expect(amountFor("Discounts")).toBe(labelled);
+    // 1,500 subtotal + 35 delivery - 20 discount.
+    expect(amountFor("Amount paid")).toBe("GH₵1,515");
+  });
+
+  it("renders a zero amount discount without inflating it", () => {
+    renderSummary({
+      amount: 150000,
+      deliveryFee: 0,
+      discount: {
+        code: "FLAT0",
+        span: "entire-order",
+        type: "amount",
+        value: 0,
+      },
+      items: [{ price: 150000, quantity: 1, productSkuId: "sku_1" }],
+      status: "open",
+    });
+
+    expect(screen.getByText("FLAT0 - GH₵0 off entire order")).toBeVisible();
+    expect(amountFor("Discounts")).toBe("GH₵0");
+    expect(amountFor("Amount paid")).toBe("GH₵1,500");
+  });
+
+  it("renders an amount discount carrying sub-cedi precision", () => {
+    renderSummary({
+      amount: 150000,
+      deliveryFee: 0,
+      discount: {
+        code: "FLAT1550",
+        span: "entire-order",
+        type: "amount",
+        value: 1550,
+      },
+      items: [{ price: 150000, quantity: 1, productSkuId: "sku_1" }],
+      status: "open",
+    });
+
+    // The shared formatter drops trailing zeros, so 1,550 pesewas reads
+    // "GH₵15.5" — sub-cedi precision survives instead of being rounded away.
+    expect(
+      screen.getByText("FLAT1550 - GH₵15.5 off entire order"),
+    ).toBeVisible();
+    expect(amountFor("Discounts")).toBe("GH₵15.5");
+    expect(amountFor("Amount paid")).toBe("GH₵1,484.5");
+  });
+
+  it("clamps a select-items amount discount to the eligible subtotal", () => {
+    renderSummary({
+      amount: 150000,
+      deliveryFee: 0,
+      discount: {
+        code: "FLATMAX",
+        span: "selected-products",
+        type: "amount",
+        value: 200000,
+        productSkus: ["sku_1"],
+      },
+      items: [{ price: 150000, quantity: 1, productSkuId: "sku_1" }],
+      status: "open",
+    });
+
+    expect(
+      screen.getByText("FLATMAX - GH₵1,500 off select items"),
+    ).toBeVisible();
+    expect(amountFor("Discounts")).toBe("GH₵1,500");
+    expect(amountFor("Amount paid")).toBe("GH₵0");
+  });
+
+  it("renders the same discount figure the shared order math authority computes", () => {
+    const order = {
+      amount: 150000,
+      deliveryFee: 0,
+      discount: {
+        code: "FLAT20",
+        span: "selected-products" as const,
+        type: "amount" as const,
+        value: 2000,
+        productSkus: ["sku_1"],
+      },
+      items: [{ price: 150000, quantity: 1, productSkuId: "sku_1" }],
+      status: "open",
+    };
+
+    renderSummary(order);
+
+    // Emails, the storefront order views, and the checkout session panel all
+    // render this same authority, so the operator summary has to match it.
+    const shared = sharedGetDiscountValue(order.items, order.discount);
+
+    expect(amountFor("Discounts")).toBe(
+      currencyFormatter("GHS").format(toDisplayAmount(shared)),
+    );
   });
 
   it("renders refunded and net lines when refunds exist", () => {

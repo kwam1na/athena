@@ -35,6 +35,7 @@ async function createFixtureRepo() {
           "lint:frontend:changed": "bash ./scripts/frontend-lint-changed.sh",
           build: "vite build && tsc --noEmit",
           "storybook:build": "storybook build",
+          "test:timing-parity": "vitest run",
           "lint:architecture":
             "bun ../../scripts/architecture-boundary-check.ts athena-webapp",
         },
