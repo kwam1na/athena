@@ -26,6 +26,7 @@ vi.mock("~/convex/_generated/api", () => ({
         getTurnAnswer: "getTurnAnswer",
         getThreadHistory: "getThreadHistory",
         previewTurnNarrative: "previewTurnNarrative",
+        getTurnNarrativeTrail: "getTurnNarrativeTrail",
       },
     },
   },
@@ -76,6 +77,7 @@ type Backend = {
   view: unknown;
   answer: unknown;
   preview: unknown;
+  trail: unknown;
   calls: { name: string; args: unknown }[];
   results: Record<string, unknown>;
 };
@@ -130,6 +132,7 @@ beforeEach(() => {
     view: undefined,
     answer: undefined,
     preview: undefined,
+    trail: undefined,
     calls: [],
     results: {},
   };
@@ -141,6 +144,7 @@ beforeEach(() => {
     if (name === "getTurnView") return backend.view;
     if (name === "getTurnAnswer") return backend.answer;
     if (name === "previewTurnNarrative") return backend.preview;
+    if (name === "getTurnNarrativeTrail") return backend.trail;
     return undefined;
   }) as unknown as typeof useQuery);
 
@@ -1356,5 +1360,91 @@ describe("the provisional timeline", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("the durable narrative trail", () => {
+  const committedView = () =>
+    baseView({
+      phase: "completed",
+      canCancel: false,
+      provisionalReleasedAt: 90,
+      answer: { available: true, outcome: "answer", suppressed: false },
+    });
+  const committedAnswer = {
+    kind: "answer",
+    outcome: "answer",
+    narrative: "A different, checked answer.",
+    egressClass: "operational",
+    committedAt: 200,
+    citations: [],
+  };
+  const SERVER_ENTRIES = [
+    { draftOrdinal: 0, text: "Checking the registers.", truncated: false },
+    { draftOrdinal: 1, text: "Now the automation log.", truncated: false },
+    { draftOrdinal: 2, text: "Summing up.", truncated: false },
+  ];
+
+  it("replaces the in-memory timeline with the server's record once the turn commits", async () => {
+    backend.view = baseView({ provisionalReleasedAt: 90 });
+    backend.preview = streamingRow({ draftOrdinal: 0, text: "Checking the registers." });
+    const { result, rerender } = mountRun({ activeTurnId: BINDING_ID });
+    await waitFor(() => expect(result.current.provisionalState).toBe("streaming"));
+    // While the turn runs the trail is not read at all: the answer is not released.
+    expect(callsNamed("query:getTurnNarrativeTrail")).toHaveLength(0);
+
+    backend.view = committedView();
+    backend.preview = { state: "superseded", released: true };
+    backend.answer = committedAnswer;
+    backend.results.acknowledgeTurnAnswer = { kind: "acknowledged", operatorViewedAt: 210 };
+    backend.trail = { kind: "trail", committedAt: 200, entries: SERVER_ENTRIES };
+    rerender();
+
+    await waitFor(() => expect(result.current.provisionalState).toBe("superseded"));
+    await waitFor(() =>
+      expect(result.current.provisionalTimeline).toEqual([
+        { text: "Checking the registers.", truncated: false, draftOrdinal: 0 },
+        { text: "Now the automation log.", truncated: false, draftOrdinal: 1 },
+        { text: "Summing up.", truncated: false, draftOrdinal: 2 },
+      ]),
+    );
+    // Read under the same condition the answer is: same store, same binding.
+    expect(callsNamed("query:getTurnNarrativeTrail")[0]?.args).toMatchObject({ storeId: STORE_ID, bindingId: BINDING_ID });
+  });
+
+  it("survives a remount, where the in-memory timeline cannot", async () => {
+    backend.view = committedView();
+    backend.preview = { state: "superseded", released: true };
+    backend.answer = committedAnswer;
+    backend.results.acknowledgeTurnAnswer = { kind: "acknowledged", operatorViewedAt: 210 };
+    backend.trail = { kind: "trail", committedAt: 200, entries: SERVER_ENTRIES };
+
+    // A fresh mount painted no draft at all, so nothing is in memory to fold in.
+    const { result } = mountRun({ activeTurnId: BINDING_ID });
+    await waitFor(() => expect(result.current.provisionalState).toBe("superseded"));
+    await waitFor(() => expect(result.current.provisionalTimeline.map((draft) => draft.draftOrdinal)).toEqual([0, 1, 2]));
+    expect(result.current.provisionalTimeline[2]?.text).toBe("Summing up.");
+    expect(result.current.provisional).toBeNull();
+  });
+
+  it("shows nothing when the server refuses the trail, and nothing when it kept none", async () => {
+    backend.view = committedView();
+    backend.preview = { state: "superseded", released: true };
+    backend.answer = committedAnswer;
+    backend.results.acknowledgeTurnAnswer = { kind: "acknowledged", operatorViewedAt: 210 };
+    backend.trail = { kind: "unavailable", reason: "suppressed" };
+    const refused = mountRun({ activeTurnId: BINDING_ID });
+    await waitFor(() => expect(refused.result.current.provisionalState).toBe("superseded"));
+    expect(refused.result.current.provisionalTimeline).toEqual([]);
+
+    backend.trail = { kind: "trail", committedAt: 200, entries: [] };
+    const empty = mountRun({ activeTurnId: BINDING_ID });
+    await waitFor(() => expect(empty.result.current.provisionalState).toBe("superseded"));
+    expect(empty.result.current.provisionalTimeline).toEqual([]);
+  });
+
+  it("exposes the store the panel needs to read an earlier turn's trail", () => {
+    const { result } = mountRun();
+    expect(result.current.storeId).toBe(STORE_ID);
   });
 });

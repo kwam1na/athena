@@ -37,6 +37,7 @@ import type * as agentHarness_historyProjection from "../agentHarness/historyPro
 import type * as agentHarness_lifecycle from "../agentHarness/lifecycle.js";
 import type * as agentHarness_manifestRegistrations from "../agentHarness/manifestRegistrations.js";
 import type * as agentHarness_modelRegistry from "../agentHarness/modelRegistry.js";
+import type * as agentHarness_narrativeTrail from "../agentHarness/narrativeTrail.js";
 import type * as agentHarness_profiles_dailyOperations from "../agentHarness/profiles/dailyOperations.js";
 import type * as agentHarness_profiles_dailyOperationsConformance from "../agentHarness/profiles/dailyOperationsConformance.js";
 import type * as agentHarness_profiles_dailyOperationsUiCoverage from "../agentHarness/profiles/dailyOperationsUiCoverage.js";
@@ -771,6 +772,7 @@ declare const fullApi: ApiFromModules<{
   "agentHarness/lifecycle": typeof agentHarness_lifecycle;
   "agentHarness/manifestRegistrations": typeof agentHarness_manifestRegistrations;
   "agentHarness/modelRegistry": typeof agentHarness_modelRegistry;
+  "agentHarness/narrativeTrail": typeof agentHarness_narrativeTrail;
   "agentHarness/profiles/dailyOperations": typeof agentHarness_profiles_dailyOperations;
   "agentHarness/profiles/dailyOperationsConformance": typeof agentHarness_profiles_dailyOperationsConformance;
   "agentHarness/profiles/dailyOperationsUiCoverage": typeof agentHarness_profiles_dailyOperationsUiCoverage;

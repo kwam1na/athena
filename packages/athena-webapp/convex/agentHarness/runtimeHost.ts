@@ -79,6 +79,8 @@ export type AgentTurnHostFinalizeRequest = {
   outcome: "completed" | "failed" | "canceled";
   error?: { code: string; message: string; retryable: boolean };
   usage?: AgentTurnUsageSettlement;
+  /** The turn's finished drafts, ascending. Sent only when the answer committed. */
+  trail?: { draftOrdinal: number; text: string; truncated?: boolean }[];
   purgeRuntime?: boolean;
   now?: number;
 };
@@ -467,6 +469,13 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
     const provisional = {
       draftOrdinal: -1,
       draftText: "",
+      /**
+       * Every draft this turn finished, by ordinal, holding the ordinal's full
+       * coalesced text. The live row is overwritten per draft and deleted at
+       * finalize; this is what a COMMITTED turn hands to finalize so the
+       * operator can still read how the answer was reached after a reload.
+       */
+      drafts: new Map<number, { text: string; truncated: boolean }>(),
       /** The newest whole draft not yet handed to a flush. */
       pending: null as { draftOrdinal: number; text: string } | null,
       inFlight: null as Promise<void> | null,
@@ -486,6 +495,14 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
         try {
           const flushed = await runMutation(refs.flushProvisionalNarrative, { bindingId, draftOrdinal: next.draftOrdinal, text: next.text, now: now() });
           if (flushed.outcome === "refused") provisional.refused = true;
+          else {
+            // The kernel's verdict on this draft's size, carried onto the
+            // remembered draft so the durable trail reports the truncation the
+            // pane already showed. The TEXT comes from the delta stream, not
+            // from here: a draft's last slice can end without a flush.
+            const remembered = provisional.drafts.get(next.draftOrdinal);
+            if (remembered && flushed.truncated) remembered.truncated = true;
+          }
           // The outcome only: the deltas already carry the text, and a second
           // copy per flush would be the same draft written over and over.
           pushHostTrace("provisional_flush", {
@@ -562,6 +579,18 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
             provisional.draftText = "";
           }
           provisional.draftText += event.text;
+          // Remember the ordinal's text as it grows, so the draft a committed
+          // turn hands to finalize is the whole draft — including a last slice
+          // the tool boundary left unflushed. Only text the pane was still
+          // being offered is remembered: once the host has quiesced for the
+          // commit, or the kernel has withdrawn the draft, whatever the model
+          // keeps narrating was never the operator's to read and must not
+          // become a durable record of the turn either.
+          if (!provisional.stopped && !provisional.refused && provisional.draftText.trim().length > 0) {
+            const remembered = provisional.drafts.get(provisional.draftOrdinal);
+            if (remembered) remembered.text = provisional.draftText;
+            else provisional.drafts.set(provisional.draftOrdinal, { text: provisional.draftText, truncated: false });
+          }
           // Whitespace alone is not a draft: it would only be refused.
           if (provisional.draftText.trim().length > 0) {
             provisional.pending = { draftOrdinal: provisional.draftOrdinal, text: provisional.draftText };
@@ -681,7 +710,17 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
     let projection: AgentTurnHostReport["projection"];
     if (outcome === "completed" && committed) {
       await traceTurnReport("completed");
-      finalize = await runMutation(refs.finalizeTurn, { bindingId, outcome: "completed", usage: settlement, now: now() });
+      // Only a turn whose answer committed hands its drafts on: the trail is
+      // released and withdrawn with the answer, so a turn without one has
+      // nothing the operator is entitled to keep reading. A turn the kernel
+      // ever refused hands on nothing at all — that draft was withdrawn from
+      // the pane, and a durable copy would put it back.
+      const trail = provisional.refused
+        ? []
+        : [...provisional.drafts.entries()]
+            .sort((left, right) => left[0] - right[0])
+            .map(([draftOrdinal, draft]) => ({ draftOrdinal, text: draft.text, truncated: draft.truncated }));
+      finalize = await runMutation(refs.finalizeTurn, { bindingId, outcome: "completed", usage: settlement, ...(trail.length > 0 ? { trail } : {}), now: now() });
       projection = await projectCommitted(bindingId);
       return report("completed", { usage: settlement, finalize, projection });
     }

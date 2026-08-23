@@ -37,6 +37,7 @@ import { Button } from "../ui/button";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Textarea } from "../ui/textarea";
 import {
+  useAthenaAgentNarrativeTrail,
   useAthenaAgentRun,
   type AthenaAgentAnswer,
   type AthenaAgentHistoryEntry,
@@ -494,7 +495,7 @@ export function AthenaAgentPanel({
             </p>
           ) : (
             run.history.map((entry) => (
-              <HistoryEntry entry={entry} key={entry.turnId} />
+              <HistoryEntry entry={entry} key={entry.turnId} storeId={run.storeId} />
             ))
           )}
         </section>
@@ -920,9 +921,79 @@ function StarterIntents({
   );
 }
 
-function HistoryEntry({ entry }: { entry: AthenaAgentHistoryEntry }) {
+/**
+ * How Athena got to an earlier turn's answer.
+ *
+ * Lazily mounted and lazily read: a long thread must not open one subscription
+ * per turn, so the query starts on the first open and the server applies the
+ * answer's own ladder to it. The drafts render exactly as the live pane
+ * renders them — inert, labelled, and never part of the answer.
+ */
+function HistoryNarrativeTrail({
+  storeId,
+  turnId,
+}: {
+  storeId: Id<"store">;
+  turnId: string;
+}) {
+  const [opened, setOpened] = useState(false);
+  const trail = useAthenaAgentNarrativeTrail({ storeId, turnId, enabled: opened });
+  const copy = describeAthenaProvisionalTimeline();
   return (
-    <div className="space-y-1 border-b border-border/60 pb-layout-xs last:border-b-0">
+    <details
+      className="space-y-layout-xs rounded-md border border-dashed border-border px-3 py-2"
+      data-testid="athena-agent-history-trail"
+      onToggle={(event) => {
+        if (event.currentTarget.open) setOpened(true);
+      }}
+    >
+      <summary className="cursor-pointer text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+        {copy.summary}
+      </summary>
+      <p className="text-xs text-muted-foreground">{copy.detail}</p>
+      {trail.state === "unavailable" ? (
+        <div className="text-xs text-muted-foreground">
+          <p>{trail.headline}</p>
+          {trail.detail ? <p>{trail.detail}</p> : null}
+        </div>
+      ) : null}
+      {trail.state === "trail" ? (
+        <div className="space-y-layout-xs">
+          {trail.entries.map((draft, index) => (
+            <article
+              className="space-y-layout-2xs border-l-2 border-border pl-3"
+              data-ordinal={draft.draftOrdinal}
+              data-testid="athena-agent-provisional-entry"
+              key={draft.draftOrdinal}
+            >
+              <p className="text-xs font-medium text-muted-foreground">
+                {describeAthenaProvisionalEntry(index)}
+              </p>
+              <AthenaAgentSafeText
+                className="text-muted-foreground"
+                mode="provisional"
+                text={draft.text}
+              />
+            </article>
+          ))}
+        </div>
+      ) : null}
+    </details>
+  );
+}
+
+function HistoryEntry({
+  entry,
+  storeId,
+}: {
+  entry: AthenaAgentHistoryEntry;
+  storeId: Id<"store">;
+}) {
+  return (
+    <div
+      className="space-y-1 border-b border-border/60 pb-layout-xs last:border-b-0"
+      data-testid="athena-agent-history-entry"
+    >
       {entry.contextLabel ? (
         <p className="text-[11px] text-muted-foreground">{entry.contextLabel}</p>
       ) : null}
@@ -946,6 +1017,11 @@ function HistoryEntry({ entry }: { entry: AthenaAgentHistoryEntry }) {
       ) : null}
       {entry.failureHeadline ? (
         <p className="text-xs text-muted-foreground">{entry.failureHeadline}</p>
+      ) : null}
+      {/* Only a turn that committed an answer has drafts the operator may
+          still read: the trail is released and withdrawn with the answer. */}
+      {entry.answer ? (
+        <HistoryNarrativeTrail storeId={storeId} turnId={entry.turnId} />
       ) : null}
     </div>
   );

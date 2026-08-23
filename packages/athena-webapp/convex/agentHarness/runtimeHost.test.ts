@@ -23,6 +23,7 @@ import { TEST_EXECUTOR_SEAMS, TEST_SCHEMAS, TEST_SEAM_REFS } from "./executor.te
 import { projectThreadHistoryWithCtx } from "./historyProjection";
 import { cancelAgentRunWithCtx, getBudgetLedgerForRun, listProgramAttemptsForRun } from "./lifecycle";
 import { createQuickJsProgramRuntime } from "./programRuntime/quickJsRuntime";
+import { loadTurnNarrativeTrailByBindingWithCtx } from "./narrativeTrail";
 import { loadProvisionalNarrativeByBindingWithCtx } from "./provisionalNarrative";
 import { AGENT_TURN_TRACE_EVENT_PAYLOAD_MAX_BYTES, listTurnTraceByBindingWithCtx } from "./turnTrace";
 import { reserveTurnSpendWithCtx, settleTurnSpendWithCtx, spendWindowKey, turnProviderCostReservation } from "./runAdmission";
@@ -171,6 +172,10 @@ const tracePayload = <T,>(row: { payload: unknown }) => row.payload as T;
 const provisionalRow = (t: Harness, bindingId: Awaited<ReturnType<typeof seedRecordedTurn>>["bindingId"]) =>
   t.run((ctx) => loadProvisionalNarrativeByBindingWithCtx(ctx, bindingId));
 
+/** The durable trail of a committed turn's finished drafts. Written at finalize, never before. */
+const trailRow = (t: Harness, bindingId: Awaited<ReturnType<typeof seedRecordedTurn>>["bindingId"]) =>
+  t.run((ctx) => loadTurnNarrativeTrailByBindingWithCtx(ctx, bindingId));
+
 /**
  * The operator-facing preview, so a host test can assert what the pane would
  * render mid-turn rather than only what sits in the row.
@@ -298,6 +303,57 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ create }) => {
     expect(driveLines[0]).not.toContain("Checking which shifts are open");
     expect(driveLines[0]).not.toContain("MODEL-NARRATIVE-NEVER-LOGGED");
     expect(driveLines[0]).not.toContain("One shift is open.");
+  });
+
+  it("keeps every finished draft of a committed turn as a durable trail, and none of a canceled turn's", async () => {
+    const t = backend();
+    const harness = create(t);
+    const seeded = await seedAdmittedTurn(t, "trail-parity");
+    const { captured, observe } = captureProgramResult();
+    harness.scriptTurn(turnKeyFor(seeded.bindingId), [
+      { kind: "narrative", deltas: ["Checking which shifts", " are open."] },
+      { kind: "tool_call", callId: "c1", toolId: "athena.executeProgram", args: { source: PROGRAM } },
+      { kind: "narrative", deltas: ["One shift is open,", " writing it up."] },
+      { kind: "tool_call", callId: "c2", toolId: "athena.completeRun", args: () => ({ title: "Open shifts", narrative: "One shift is open.", citedAttemptRefs: [captured.attemptRef], citations: [{ ref: captured.citation, claim: "One shift is open." }] }) },
+      { kind: "complete", narrative: "MODEL-NARRATIVE-NEVER-STORED" },
+    ]);
+    const host = await hostFor(t, harness, { observe });
+    const report = await host.driveTurn({ bindingId: seeded.bindingId });
+    expect(report, JSON.stringify(report)).toMatchObject({ outcome: "completed" });
+
+    // Both drafts survive the turn, in order, each holding the ordinal's FINAL
+    // coalesced text — while the live provisional row is gone with the turn.
+    const trail = await trailRow(t, seeded.bindingId);
+    expect(trail!.entries).toEqual([
+      { draftOrdinal: 0, text: "Checking which shifts are open.", truncated: false },
+      { draftOrdinal: 1, text: "One shift is open, writing it up.", truncated: false },
+    ]);
+    expect(trail).toMatchObject({ runId: seeded.runId, storeId: seeded.operator.storeId, retentionClass: "standard" });
+    expect((await rows(t, seeded)).provisional).toEqual([]);
+    // The trail is the DRAFTS, never the model's private closing narrative.
+    expect(JSON.stringify(trail)).not.toContain("MODEL-NARRATIVE-NEVER-STORED");
+
+    // A canceled turn leaves nothing behind: no answer, so no trail. The
+    // narration precedes the tool call for the same reason the cancel scenario
+    // above does — that is the earliest point both adapters have emitted text.
+    const stopped = await seedAdmittedTurn(t, "trail-parity-cancel", { threadKey: "thread-trail-cancel", key: "turn-trail-cancel" });
+    harness.scriptTurn(turnKeyFor(stopped.bindingId), [
+      { kind: "narrative", deltas: ["Checking which shifts", " are open."] },
+      { kind: "tool_call", callId: "c1", toolId: "athena.executeProgram", args: { source: PROGRAM } },
+      { kind: "pause", gate: "trail-cancel" },
+      { kind: "tool_call", callId: "c2", toolId: "athena.completeRun", args: () => ({ title: "Open shifts", narrative: "One shift is open.", citedAttemptRefs: [captured.attemptRef], citations: [{ ref: captured.citation, claim: "One shift is open." }] }) },
+      { kind: "complete", narrative: "never" },
+    ]);
+    const stoppedHost = await hostFor(t, harness, { observe });
+    const driving = stoppedHost.driveTurn({ bindingId: stopped.bindingId });
+    await waitFor(async () => (await provisionalRow(t, stopped.bindingId))?.text === "Checking which shifts are open.");
+    await t.run((ctx) => cancelAgentRunWithCtx(ctx, { runId: stopped.runId, idempotencyKey: "trail-cancel", reason: "operator_canceled", now: clock() }));
+    const stoppedReport = await driving;
+    expect(stoppedReport.outcome).not.toBe("completed");
+    // The draft that was demonstrably at rest is gone, and nothing durable took its place.
+    expect(await provisionalRow(t, stopped.bindingId)).toBeNull();
+    expect(await trailRow(t, stopped.bindingId)).toBeNull();
+    harness.release("trail-cancel");
   });
 
   it("drives one operator turn: ladder, fixed tools, program, private completion, one-transaction commit, projection; narrative never persisted (scenarios 1, 3, 4, 19)", async () => {

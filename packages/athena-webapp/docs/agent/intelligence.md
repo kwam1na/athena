@@ -166,12 +166,20 @@ markers, not an early release. The streamed prose is the assistant thinking out
 loud and is a different string from the `narrative` the model later submits to
 `completeRun`; the committed artifact replaces it rather than growing into it,
 and the operator is told so. It is never citation-bearing, never a citation
-source, never promoted to the `standard` retention class. The one granted
-exception to that invariant is engineer-only and never operator-facing: the
+source, never promoted to the `standard` retention class. There are exactly two granted
+exceptions to that invariant, and neither reaches history, prompts, or
+citations. The first is engineer-only and never operator-facing: the
 turn trace (`agentTurnTraceEvent`) durably records a driven turn's deltas, tool
 arguments, and tool outcomes so the agent can be refined against what the model
 actually saw, and it is never projected into history, prompts, citations, or
-any operator-admitted query.
+any operator-admitted query. The second is the operator's own record of how an
+answer was reached: the narrative trail (`agentTurnNarrativeTrail`) keeps a
+**committed** turn's finished drafts, released and withdrawn with the answer
+itself — written only when the run reached `completed` with a committed
+release, stamped with that answer's egress class, and served by
+`getTurnNarrativeTrail` on exactly the ladder `getTurnAnswer` walks, so the
+drafts are never readable where the answer is not. A canceled, failed, or
+refused turn leaves none.
 
 Mechanically: the adapter emits `narrative_delta { draftOrdinal, text }` from
 the provider's text parts only, the turn host coalesces them in memory, and one
@@ -190,6 +198,19 @@ release suppression on post-commit revocation, the host's turn finalization at
 the end of every driven turn, store or organization removal through the table's
 scope indexes, and the repair sweep's expiry phase for rows a dead host left
 behind.
+
+The trail is the durable half of the same surface. At finalization a committed
+turn hands its drafts to `finalizeTurnWithCtx`, which writes one insert-once
+`agentTurnNarrativeTrail` row through the leaf module
+[convex/agentHarness/narrativeTrail.ts](../../convex/agentHarness/narrativeTrail.ts)
+— standard class, its own 365-day literal, a 96 KiB total cap that shortens the
+largest drafts rather than dropping any ordinal, and the committed artifact's
+egress class rather than the turn's, so the trail can never outrank the answer.
+The host hands on only text the operator's pane was still being offered:
+narration after quiescence for the commit, and every draft of a turn the kernel
+ever refused, are dropped rather than made durable. Store and organization
+removal delete the row through its scope indexes; the standard retention sweep
+expires it; release suppression leaves it at rest and refuses the read.
 
 The browser reads it only through `previewTurnNarrative`, an operation-admitted
 reactive query that reauthorizes on every read and never writes. Its

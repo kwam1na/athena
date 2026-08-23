@@ -38,6 +38,7 @@ import {
   repairFencedRunsWithCtx,
 } from "./lifecycle";
 import { deleteExpiredProvisionalNarrativesWithCtx } from "./provisionalNarrative";
+import { deleteExpiredTurnNarrativeTrailWithCtx } from "./narrativeTrail";
 import { deleteExpiredTurnTraceWithCtx } from "./turnTrace";
 import { ensureConvexAgentRuntimeCleanupRegistered } from "./runtimeRetention";
 import { sweepStaleTurnBindingsWithCtx } from "./turnBindings";
@@ -376,6 +377,7 @@ export type ExpirySweepResult = {
   deletedScratchDescriptors: number;
   deletedClaimSupport: number;
   deletedTurnTraceEvents: number;
+  deletedNarrativeTrails: number;
   expiredCitations: number;
   runtimeCleanupAttempted: number;
   runtimeCleanupSucceeded: number;
@@ -443,6 +445,11 @@ export async function sweepExpiredAgentContentWithCtx(
   const trace = await deleteExpiredTurnTraceWithCtx(ctx, { now, limit });
   hasMore ||= trace.hasMore;
 
+  // The operator-readable draft trail is standard-class content on the same
+  // terms: the committed answer keeps its own lineage, the drafts keep none.
+  const trail = await deleteExpiredTurnNarrativeTrailWithCtx(ctx, { now, limit });
+  hasMore ||= trail.hasMore;
+
   const citations = await ctx.db
     .query("agentCitationBinding")
     .withIndex("by_evidenceLifecycle_expiresAt", (q) => q.eq("evidenceLifecycle", "retained").lte("expiresAt", now))
@@ -464,6 +471,7 @@ export async function sweepExpiredAgentContentWithCtx(
     deletedScratchDescriptors: scratch.length,
     deletedClaimSupport: claims.length,
     deletedTurnTraceEvents: trace.deleted,
+    deletedNarrativeTrails: trail.deleted,
     expiredCitations: citations.length,
     runtimeCleanupAttempted: cleanup.attempted,
     runtimeCleanupSucceeded: cleanup.succeeded,
@@ -604,6 +612,16 @@ export async function deleteAgentHarnessContentWithCtx(
       : await ctx.db.query("agentTurnTraceEvent").withIndex("by_organizationId", (q) => q.eq("organizationId", scope.organizationId)).take(batch);
   for (const row of trace) await ctx.db.delete("agentTurnTraceEvent", row._id);
   countDeleted(trace.length);
+
+  // The draft trail is the removed scope's own content: the drafts of its
+  // turns, readable by its operators. It goes with them, not with its
+  // 365-day bound.
+  const trails =
+    "storeId" in scope
+      ? await ctx.db.query("agentTurnNarrativeTrail").withIndex("by_storeId", (q) => q.eq("storeId", scope.storeId)).take(batch)
+      : await ctx.db.query("agentTurnNarrativeTrail").withIndex("by_organizationId", (q) => q.eq("organizationId", scope.organizationId)).take(batch);
+  for (const row of trails) await ctx.db.delete("agentTurnNarrativeTrail", row._id);
+  countDeleted(trails.length);
 
   // Capability-call rows carry request arguments and human-readable source
   // labels taken from the store's own records, so they are content, not audit.

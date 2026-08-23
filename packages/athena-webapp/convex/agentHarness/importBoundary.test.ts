@@ -178,6 +178,14 @@ export const PROVISIONAL_NARRATIVE_LEAF = "convex/agentHarness/provisionalNarrat
  * `shared/agentHarness/execution`.
  */
 export const TURN_TRACE_LEAF = "convex/agentHarness/turnTrace.ts";
+/**
+ * The narrative-trail helper is called from `turns.ts` (the finalize-time write
+ * and the operator read) and `retention.ts` (scope removal and the
+ * standard-class expiry sweep). Same guarantee, same mechanism: it reaches only
+ * the generated types, so its 365-day retention bound is its own literal rather
+ * than an import of `shared/agentHarness/execution`.
+ */
+export const NARRATIVE_TRAIL_LEAF = "convex/agentHarness/narrativeTrail.ts";
 export const LEAF_ALLOWED_IMPORTS = ["convex/_generated/server", "convex/_generated/dataModel", "convex/values"] as const;
 
 export function findLeafImportViolations(file: SourceFile): string[] {
@@ -420,6 +428,24 @@ describe("agent harness import boundaries", () => {
       const file = kernelFiles.find((candidate) => candidate.path === caller);
       expect(file, caller).toBeDefined();
       expect(importsOf(file!).some(({ resolved }) => resolved === "convex/agentHarness/turnTrace"), caller).toBe(true);
+    }
+  });
+
+  it("keeps the narrative-trail helper a leaf: generated types only, no sibling", () => {
+    const leaf = collectSources(HARNESS_DIR, (relative) => relative === NARRATIVE_TRAIL_LEAF);
+    expect(leaf).toHaveLength(1);
+    expect(findLeafImportViolations(leaf[0])).toEqual([]);
+    expect(leaf[0].source).toMatch(/export const AGENT_TURN_NARRATIVE_TRAIL_RETENTION_MS = 365 \* 24 \* 60 \* 60 \* 1000;/);
+    expect(
+      findLeafImportViolations(fixture(NARRATIVE_TRAIL_LEAF, 'import { STANDARD_RETENTION_MS } from "../../shared/agentHarness/execution";\nimport { egressClassRank } from "../../shared/agentHarness/values";')),
+    ).toEqual([
+      `${NARRATIVE_TRAIL_LEAF} imports ../../shared/agentHarness/execution (shared/agentHarness/execution)`,
+      `${NARRATIVE_TRAIL_LEAF} imports ../../shared/agentHarness/values (shared/agentHarness/values)`,
+    ]);
+    for (const caller of ["convex/agentHarness/retention.ts", "convex/agentHarness/turns.ts"]) {
+      const file = kernelFiles.find((candidate) => candidate.path === caller);
+      expect(file, caller).toBeDefined();
+      expect(importsOf(file!).some(({ resolved }) => resolved === "convex/agentHarness/narrativeTrail"), caller).toBe(true);
     }
   });
 

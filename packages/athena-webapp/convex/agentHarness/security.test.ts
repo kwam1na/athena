@@ -32,14 +32,19 @@ import type { AgentProgramRuntime } from "./programRuntime/types";
 import { DAILY_OPERATIONS_PROFILE_ID } from "./profiles/dailyOperations";
 import { setCapabilityEnablementWithCtx, setProfileEnablementWithCtx } from "./deploymentState";
 import { advanceCompatibilityEpochWithCtx, getCurrentCompatibilityEpochWithCtx } from "./lifecycle";
+import { agentCompletionOutbox } from "./completionOutbox";
+import { agentExecutorSeams } from "./executorSeams";
+import { buildAnswerArtifactPayload } from "./historyProjection";
+import { loadTurnNarrativeTrailByBindingWithCtx } from "./narrativeTrail";
 import {
   acknowledgeProvisionalView,
   agentTurnEntryPoints,
   flushProvisionalNarrative,
+  getTurnNarrativeTrail,
   previewTurnNarrative,
 } from "./turns";
 import { AGENT_HARNESS_DEFINITIONS, acknowledgeProvisionalViewOperationDefinition } from "../operationAdmission/domains/agentHarness_definitions";
-import { AGENT_HARNESS_READ_DEFINITIONS, previewTurnNarrativeReadDefinition } from "../operationAdmission/domains/agentHarness_readDefinitions";
+import { AGENT_HARNESS_READ_DEFINITIONS, getTurnNarrativeTrailReadDefinition, previewTurnNarrativeReadDefinition } from "../operationAdmission/domains/agentHarness_readDefinitions";
 import { mintAgentResourceRef } from "../lib/agentCapabilitySupport";
 import {
   ATHENA_TOOL_DEFINITIONS,
@@ -929,5 +934,144 @@ describe("provisional narrative exposure", () => {
     expect(ingress).toContain("agentHarness/turns:previewTurnNarrative");
     expect(ingress).toContain("agentHarness/turns:acknowledgeProvisionalView");
     expect(ingress.some((name) => name.includes("flushProvisionalNarrative"))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The committed turn's durable draft trail
+// ---------------------------------------------------------------------------
+
+describe("narrative trail exposure", () => {
+  /** Drive the real profile's turn to `running`, narrate, commit an answer, then finalize with the drafts. */
+  async function seedCommittedTurn(t: Harness, slug: string, options: { role?: "full_admin" | "pos_only" } = {}) {
+    vi.useFakeTimers();
+    vi.stubEnv("OPENAI_API_KEY", "sk-test-security-gate");
+    let turn: { fixture: Awaited<ReturnType<typeof seedDailyOperationsStore>>; bindingId: Id<"agentTurnBinding">; runId: Id<"intelligenceRun"> };
+    try {
+      turn = await seedStreamingTurnForTrail(t, slug, options);
+    } finally {
+      vi.unstubAllEnvs();
+      vi.useRealTimers();
+    }
+
+    // A real draft, through the host-only flush the operator's pane reads.
+    expect(await t.mutation(internal.agentHarness.turns.flushProvisionalNarrative, { bindingId: turn.bindingId, draftOrdinal: 0, text: "Checking which shifts are open." })).toMatchObject({ outcome: "stored" });
+
+    // The real commit transaction, through the PRODUCTION seams the turn's
+    // grant is pinned to. The answer cites nothing on purpose: this suite is
+    // about who may read the drafts afterwards, and `no_usable_sources` is the
+    // shortest honest committed release the published ladder accepts.
+    await t.run((ctx) => ctx.db.patch("agentTurnBinding", turn.bindingId, { step: "running", runtimeTurnRef: `runtime_turn:${slug}` }));
+    await t.run((ctx) => agentCompletionOutbox.prepareCompletionWithCtx(ctx, { bindingId: turn.bindingId, runId: turn.runId, preparedCompletionRef: `completion:${slug}`, now: FIXTURE_NOW + 10 }));
+    const completed = await t.run((ctx) =>
+      agentExecutorSeams.completeRunWithCtx(ctx, {
+        runId: turn.runId,
+        idempotencyKey: `completion:${slug}`,
+        citedAttemptRefs: [],
+        citations: [],
+        artifact: { title: "Open shifts", payload: buildAnswerArtifactPayload({ outcome: "no_usable_sources", narrative: "Nothing readable answered that.", egressClass: "operational", citations: [] }) },
+        now: FIXTURE_NOW + 20,
+      }),
+    );
+    if (completed.outcome !== "completed") throw new Error(JSON.stringify(completed).slice(0, 800));
+
+    await t.mutation(internal.agentHarness.turns.finalizeTurn, {
+      bindingId: turn.bindingId,
+      outcome: "completed",
+      trail: [{ draftOrdinal: 0, text: "Checking which shifts are open.", truncated: false }],
+      now: FIXTURE_NOW + 30,
+    });
+    return turn;
+  }
+
+  /** The same ladder the provisional gate above walks, returning the ids the trail needs. */
+  async function seedStreamingTurnForTrail(t: Harness, slug: string, options: { role?: "full_admin" | "pos_only" } = {}) {
+    const fixture = await t.run(async (ctx) => {
+      const seeded = await seedDailyOperationsStore(ctx, { slug, role: options.role });
+      await ctx.db.patch("athenaUser", seeded.userId, { normalizedEmail: `${slug}@athena.test` });
+      await setProfileEnablementWithCtx(ctx, AGENT_GENERATED_REGISTRY.enablement, { profileId: DAILY_OPERATIONS_PROFILE_ID, state: "enabled", reason: "security gate", now: FIXTURE_NOW });
+      return seeded;
+    });
+    const started = (await t.mutation(internal.agentHarness.evals.directHarness.startOperatorTurn, {
+      organizationSlug: `${slug}-org`,
+      storeSlug: slug,
+      operatorEmail: `${slug}@athena.test`,
+      profileId: DAILY_OPERATIONS_PROFILE_ID,
+      threadKey: `thread-${slug}`,
+      turnIdempotencyKey: `turn-${slug}`,
+      prompt: "Which shifts are open?",
+    })) as { outcome: string; bindingId: Id<"agentTurnBinding">; runId: Id<"intelligenceRun"> };
+    if (started.outcome !== "started") throw new Error(JSON.stringify(started));
+    for (const rung of [
+      { step: "runtime_thread_bound" as const, runtimeThreadRef: `runtime_thread:${started.bindingId}` },
+      { step: "runtime_input_saved" as const, runtimeInputRef: `runtime_input:${started.bindingId}` },
+    ]) {
+      const advanced = (await t.mutation(internal.agentHarness.turnBindings.advanceTurnBinding, { bindingId: started.bindingId, idempotencyKey: `${rung.step}:trail`, ...rung })) as { outcome: string; denial?: { code: string } };
+      if (advanced.outcome === "rejected") throw new Error(advanced.denial!.code);
+    }
+    const prepared = (await t.mutation(internal.agentHarness.turns.prepareTurn, { bindingId: started.bindingId })) as { kind: string };
+    if (prepared.kind !== "ready") throw new Error(JSON.stringify(prepared));
+    const running = (await t.mutation(internal.agentHarness.turns.markTurnRunning, { bindingId: started.bindingId })) as { outcome: string };
+    if (running.outcome !== "running") throw new Error(JSON.stringify(running));
+    return { fixture, bindingId: started.bindingId, runId: started.runId };
+  }
+
+  const trail = (t: Harness, athenaUserId: Id<"athenaUser">, args: { storeId: Id<"store">; bindingId: Id<"agentTurnBinding"> }) =>
+    t.run(async (ctx) =>
+      agentTurnEntryPoints.getTurnNarrativeTrail(
+        Object.assign(ctx, { operationAdmission: { actor: { kind: "normal_user" as const, athenaUserId } } }) as never,
+        args,
+      ),
+    );
+
+  it("serves a committed turn's drafts to the initiating operator alone, and refuses them the moment the answer is refused", async () => {
+    const t = convexTest(schema, modules);
+    const turn = await seedCommittedTurn(t, "trail-gate");
+    const intruder = await t.run((ctx) => seedDailyOperationsStore(ctx, { slug: "trail-intruder" }));
+    const args = { storeId: turn.fixture.storeId, bindingId: turn.bindingId };
+
+    const served = await trail(t, turn.fixture.userId, args);
+    expect(served).toMatchObject({ kind: "trail", entries: [{ draftOrdinal: 0, text: "Checking which shifts are open.", truncated: false }] });
+
+    // Another store's admin, and the owner pointed at another store: the bare
+    // pre-ownership arm, the same answer a binding that does not exist gives.
+    expect(await trail(t, intruder.userId, args)).toEqual({ kind: "unavailable", reason: "not_your_turn" });
+    expect(await trail(t, turn.fixture.userId, { ...args, storeId: intruder.storeId })).toEqual({ kind: "unavailable", reason: "not_found" });
+
+    // Release suppressed after the commit: the row stays at rest and the
+    // ladder refuses, exactly as the answer surface does.
+    await t.run((ctx) => agentCompletionOutbox.suppressReleaseWithCtx(ctx, { bindingId: turn.bindingId, reason: "membership_revoked", now: FIXTURE_NOW + 40 }));
+    expect(await t.run((ctx) => loadTurnNarrativeTrailByBindingWithCtx(ctx, turn.bindingId))).not.toBeNull();
+    expect(await trail(t, turn.fixture.userId, args)).toEqual({ kind: "unavailable", reason: "suppressed" });
+    expect(await t.run((ctx) => agentTurnEntryPoints.getTurnAnswer(Object.assign(ctx, { operationAdmission: { actor: { kind: "normal_user" as const, athenaUserId: turn.fixture.userId } } }) as never, args))).toEqual({ kind: "unavailable", reason: "suppressed" });
+  });
+
+  it("withdraws a committed turn's drafts when the operator's membership is revoked", async () => {
+    const t = convexTest(schema, modules);
+    const turn = await seedCommittedTurn(t, "trail-revoke");
+    const args = { storeId: turn.fixture.storeId, bindingId: turn.bindingId };
+    expect(await trail(t, turn.fixture.userId, args)).toMatchObject({ kind: "trail" });
+
+    await t.run(async (ctx) => {
+      const membership = await ctx.db
+        .query("organizationMember")
+        .withIndex("by_organizationId_userId", (q) => q.eq("organizationId", turn.fixture.organizationId).eq("userId", turn.fixture.userId))
+        .first();
+      await ctx.db.delete("organizationMember", membership!._id);
+    });
+    const refused = await trail(t, turn.fixture.userId, args);
+    expect(refused).toEqual({ kind: "unavailable", reason: "membership_revoked" });
+    // The refusal carries a reason and nothing else: no drafts, no commit clock.
+    expect(Object.keys(refused).sort()).toEqual(["kind", "reason"]);
+    // Refusing is not deleting: removal is the scope sweep's job, not a read's.
+    expect(await t.run((ctx) => loadTurnNarrativeTrailByBindingWithCtx(ctx, turn.bindingId))).not.toBeNull();
+  });
+
+  it("keeps the trail read off the demo and public rails", () => {
+    expect(getTurnNarrativeTrailReadDefinition.actors).toMatchObject({ normalUser: "admit", sharedDemo: "deny", public: "deny" });
+    expect(getTurnNarrativeTrailReadDefinition.scope).toMatchObject({ kind: "store", storeIdArg: "storeId" });
+    expect(getTurnNarrativeTrail.isPublic).toBe(true);
+    expect(getTurnNarrativeTrail.isQuery).toBe(true);
+    expect(AGENT_HARNESS_READ_DEFINITIONS.map((definition) => definition.functionName ?? "")).toContain("agentHarness/turns:getTurnNarrativeTrail");
   });
 });

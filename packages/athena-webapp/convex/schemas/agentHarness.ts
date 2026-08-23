@@ -528,6 +528,35 @@ export const agentTurnTraceEventSchema = v.object({
   createdAt: v.number(),
 });
 
+/**
+ * Durable narrative trail: the finished drafts of ONE committed turn, in the
+ * order the model wrote them, kept so the operator can still read how Athena
+ * got to the answer — after a reload, and from an earlier turn in the thread.
+ *
+ * It is released and withdrawn WITH the answer: same ownership, same live
+ * authority, same suppression, and the committed artifact's own egress class,
+ * so the trail can never outrank the answer it accompanies. It is written once,
+ * only for a run that reached `completed` with a committed release, and never
+ * for a canceled, failed, or refused turn. Nothing projects it into thread
+ * history, a prompt, or a citation — the committed answer stays the only
+ * checked text and the engineer-only turn trace stays the full record.
+ */
+export const agentTurnNarrativeTrailSchema = v.object({
+  runId: v.id("intelligenceRun"),
+  turnBindingId: v.id("agentTurnBinding"),
+  storeId: v.id("store"),
+  organizationId: v.id("organization"),
+  /** One entry per draft ordinal, ascending; `truncated` marks a draft cut to fit. */
+  entries: v.array(v.object({ draftOrdinal: v.number(), text: v.string(), truncated: v.boolean() })),
+  byteLength: v.number(),
+  /** Copied from the committed answer's payload, so the read gate is the answer's gate. */
+  egressClass: v.string(),
+  retentionClass: v.literal("standard"),
+  expiresAt: v.number(),
+  committedAt: v.number(),
+  createdAt: v.number(),
+});
+
 export const agentEvidenceAccessAuditSchema = v.object({
   runId: v.id("intelligenceRun"),
   citationBindingId: v.optional(v.id("agentCitationBinding")),

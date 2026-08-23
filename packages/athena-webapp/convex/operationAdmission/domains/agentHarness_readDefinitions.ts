@@ -27,10 +27,13 @@ export const getTurnAnswerReadDefinition = turnRead("agentHarness/turns:getTurnA
 export const getThreadHistoryReadDefinition = turnRead("agentHarness/turns:getThreadHistory", "agentHarness/turns.getThreadHistory.read");
 /** The provisional-narrative preview: same rail, same store clamp, reauthorized per read; only the initiating operator is ever served. */
 export const previewTurnNarrativeReadDefinition = turnRead("agentHarness/turns:previewTurnNarrative", "agentHarness/turns.previewTurnNarrative.read");
+/** The committed turn's draft trail: the answer's own rail and gate, so the trail is never readable where the answer is not. */
+export const getTurnNarrativeTrailReadDefinition = turnRead("agentHarness/turns:getTurnNarrativeTrail", "agentHarness/turns.getTurnNarrativeTrail.read");
 
 export const AGENT_HARNESS_READ_DEFINITIONS: readonly OperationReadDefinition[] = [
   getTurnViewReadDefinition,
   getTurnAnswerReadDefinition,
   getThreadHistoryReadDefinition,
   previewTurnNarrativeReadDefinition,
+  getTurnNarrativeTrailReadDefinition,
 ];

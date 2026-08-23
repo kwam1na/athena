@@ -62,6 +62,7 @@ const noop = async () => {};
 function scriptedRun(overrides: Partial<AthenaAgentRun> = {}): AthenaAgentRun {
   return {
     hostState: "completed",
+    storeId: "store1" as AthenaAgentRun["storeId"],
     status: { headline: "Answered.", tone: "neutral" },
     context: {
       label: "Osu · 2026-08-21",

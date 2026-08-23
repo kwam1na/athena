@@ -281,6 +281,8 @@ export type AthenaAgentRunOptions = {
 
 export type AthenaAgentRun = {
   readonly hostState: AgentHostState;
+  /** The store every turn in this thread belongs to; the panel reads an earlier turn's trail with it. */
+  readonly storeId: Id<"store">;
   readonly status: AthenaAgentStatus;
   readonly context: AthenaAgentContextView;
   readonly threadKey: string;
@@ -352,6 +354,69 @@ type TurnView = {
 };
 
 type Unavailable = { kind: "unavailable"; reason: string };
+
+/**
+ * The durable trail contract, mirrored. `unavailable` speaks exactly the
+ * answer surface's closed reason vocabulary, because the trail is gated on
+ * exactly the answer's ladder.
+ */
+type NarrativeTrailResult =
+  | { readonly kind: "unavailable"; readonly reason: string }
+  | {
+      readonly kind: "trail";
+      readonly committedAt: number;
+      readonly entries: readonly { readonly draftOrdinal: number; readonly text: string; readonly truncated: boolean }[];
+    };
+
+/** How an earlier turn's trail reads while the panel has it open. */
+export type AthenaAgentNarrativeTrail =
+  | { readonly state: "loading" }
+  | { readonly state: "unavailable"; readonly headline: string; readonly detail?: string }
+  | { readonly state: "trail"; readonly committedAt: number; readonly entries: readonly AthenaAgentProvisionalDraft[] };
+
+function asTrail(value: unknown): NarrativeTrailResult | null {
+  if (!value || typeof value !== "object") return null;
+  const kind = (value as NarrativeTrailResult).kind;
+  return kind === "trail" || kind === "unavailable" ? (value as NarrativeTrailResult) : null;
+}
+
+const toProvisionalDrafts = (
+  entries: readonly { draftOrdinal: number; text: string; truncated: boolean }[],
+): readonly AthenaAgentProvisionalDraft[] =>
+  entries.map((entry) => ({ text: entry.text, truncated: entry.truncated, draftOrdinal: entry.draftOrdinal }));
+
+/**
+ * One earlier turn's draft trail, read only while the panel actually shows it.
+ *
+ * The panel mounts this lazily — a thread of twelve turns must not open twelve
+ * subscriptions — and the server applies the answer's own ladder, so a turn
+ * whose answer the operator may no longer read refuses here too.
+ */
+export function useAthenaAgentNarrativeTrail(input: {
+  storeId: Id<"store">;
+  turnId: string | null;
+  enabled: boolean;
+}): AthenaAgentNarrativeTrail {
+  const result = useQuery(
+    api.agentHarness.turns.getTurnNarrativeTrail,
+    input.enabled && input.turnId
+      ? { storeId: input.storeId, bindingId: input.turnId as TurnId }
+      : "skip",
+  );
+  const trail = asTrail(result);
+  return useMemo(() => {
+    if (!trail) return { state: "loading" };
+    if (trail.kind === "unavailable") {
+      const described = describeAthenaUnavailable(trail.reason);
+      return {
+        state: "unavailable",
+        headline: described.headline,
+        ...(described.detail ? { detail: described.detail } : {}),
+      };
+    }
+    return { state: "trail", committedAt: trail.committedAt, entries: toProvisionalDrafts(trail.entries) };
+  }, [trail]);
+}
 
 function asView(value: unknown): TurnView | null {
   return value && typeof value === "object" && (value as TurnView).kind === "view"
@@ -478,6 +543,13 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
     api.agentHarness.turns.getTurnAnswer,
     isActive && turnId && releaseReady ? { storeId, bindingId: turnId } : "skip",
   );
+  // The committed turn's drafts, read under exactly the answer's condition:
+  // the trail is released with the answer and refused wherever it is.
+  const trailResult = useQuery(
+    api.agentHarness.turns.getTurnNarrativeTrail,
+    isActive && turnId && releaseReady ? { storeId, bindingId: turnId } : "skip",
+  );
+  const serverTrail = asTrail(trailResult);
 
   // The preview is read while the panel is open and the turn is running, and
   // also while the turn view has gone `unavailable`: the view drops first on
@@ -766,14 +838,25 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
     if (provisional) lastPaintedDraftRef.current = { turnId, draft: provisional };
   }, [provisional, turnId]);
 
+  const serverTrailEntries: readonly AthenaAgentProvisionalDraft[] = useMemo(
+    () => (serverTrail?.kind === "trail" ? toProvisionalDrafts(serverTrail.entries) : EMPTY_TIMELINE),
+    [serverTrail],
+  );
+
   const provisionalTimeline: readonly AthenaAgentProvisionalDraft[] = useMemo(() => {
-    if (!turnId || !draftTimeline || draftTimeline.turnId !== turnId) return EMPTY_TIMELINE;
+    if (!turnId) return EMPTY_TIMELINE;
     if (!PROVISIONAL_TIMELINE_STATES.has(provisionalState)) return EMPTY_TIMELINE;
+    // Once the turn commits, the server's record is the timeline: it holds
+    // every draft, including those a mount that arrived late never painted,
+    // and it is what survives a reload. The in-memory list is the source only
+    // while the turn is still running and nothing durable exists yet.
+    if (provisionalState === "superseded" && serverTrailEntries.length > 0) return serverTrailEntries;
+    if (!draftTimeline || draftTimeline.turnId !== turnId) return EMPTY_TIMELINE;
     const live = provisional?.draftOrdinal ?? null;
     return live === null
       ? draftTimeline.entries
       : draftTimeline.entries.filter((entry) => entry.draftOrdinal !== live);
-  }, [draftTimeline, provisional, provisionalState, turnId]);
+  }, [draftTimeline, provisional, provisionalState, serverTrailEntries, turnId]);
 
   // Record the painted ordinal after the render that painted it, so the first
   // row of a mount or a reconnect is never mistaken for a restart and a genuine
@@ -1264,6 +1347,7 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
 
   return {
     hostState,
+    storeId,
     status,
     context: contextView,
     threadKey,

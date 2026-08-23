@@ -232,6 +232,7 @@ describe("delegated agent read ports stay off the public ingress rail", () => {
     expect([...agentReads].sort()).toEqual([
       "agentHarness/turns.getThreadHistory.read",
       "agentHarness/turns.getTurnAnswer.read",
+      "agentHarness/turns.getTurnNarrativeTrail.read",
       "agentHarness/turns.getTurnView.read",
       "agentHarness/turns.previewTurnNarrative.read",
     ]);

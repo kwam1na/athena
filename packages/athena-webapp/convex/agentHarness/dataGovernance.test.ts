@@ -41,6 +41,7 @@ import {
   runRuntimeCleanupBatchWithCtx,
   sweepExpiredAgentContentWithCtx,
 } from "./retention";
+import { loadTurnNarrativeTrailByBindingWithCtx, writeTurnNarrativeTrailWithCtx } from "./narrativeTrail";
 import { loadProvisionalNarrativeByBindingWithCtx, upsertProvisionalNarrativeWithCtx } from "./provisionalNarrative";
 import {
   AGENT_TURN_TRACE_RETENTION_MS,
@@ -288,6 +289,18 @@ async function seedProvisionalDraft(t: Harness, fixture: { storeId: Id<"store">;
         createdAt: FIXTURE_NOW,
       },
     ]);
+    // The operator-readable trail of the same committed turn: content too, and
+    // removed through the same scope index as everything else the store owns.
+    await writeTurnNarrativeTrailWithCtx(ctx, {
+      runId: recorded.runId,
+      turnBindingId: recorded.bindingId,
+      storeId: fixture.storeId,
+      organizationId: fixture.organizationId,
+      entries: [{ draftOrdinal: 0, text: "Checking the day so far.", truncated: false }],
+      egressClass: "operational",
+      committedAt: FIXTURE_NOW,
+      now: FIXTURE_NOW,
+    });
     return recorded.bindingId;
   });
 }
@@ -335,6 +348,10 @@ describe("scope removal", () => {
       expect(await listTurnTraceByBindingWithCtx(ctx, doomedDraft, 5)).toEqual([]);
       expect(await listTurnTraceByBindingWithCtx(ctx, survivorDraft, 5)).toHaveLength(1);
       expect(await ctx.db.query("agentTurnTraceEvent").withIndex("by_storeId", (q) => q.eq("storeId", doomed.fixture.storeId)).take(5)).toEqual([]);
+      // Nor the durable draft trail: the removed store keeps none of it.
+      expect(await loadTurnNarrativeTrailByBindingWithCtx(ctx, doomedDraft)).toBeNull();
+      expect(await loadTurnNarrativeTrailByBindingWithCtx(ctx, survivorDraft)).not.toBeNull();
+      expect(await ctx.db.query("agentTurnNarrativeTrail").withIndex("by_storeId", (q) => q.eq("storeId", doomed.fixture.storeId)).take(5)).toEqual([]);
     });
 
     // The removed store's citation now answers as lifecycle-deleted rather
@@ -411,6 +428,8 @@ describe("scope removal", () => {
       expect(await ctx.db.query("agentProvisionalNarrative").withIndex("by_organizationId", (q) => q.eq("organizationId", fixture.organizationId)).take(5)).toEqual([]);
       expect(await listTurnTraceByBindingWithCtx(ctx, draft, 5)).toEqual([]);
       expect(await ctx.db.query("agentTurnTraceEvent").withIndex("by_organizationId", (q) => q.eq("organizationId", fixture.organizationId)).take(5)).toEqual([]);
+      expect(await loadTurnNarrativeTrailByBindingWithCtx(ctx, draft)).toBeNull();
+      expect(await ctx.db.query("agentTurnNarrativeTrail").withIndex("by_organizationId", (q) => q.eq("organizationId", fixture.organizationId)).take(5)).toEqual([]);
     });
   });
 });

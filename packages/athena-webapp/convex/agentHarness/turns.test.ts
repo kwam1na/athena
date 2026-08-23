@@ -25,6 +25,7 @@ import {
 import { TEST_EXECUTOR_SEAMS, beginExecutingAttempt, bridgeCall } from "./executor.testSeams";
 import { buildAnswerArtifactPayload } from "./historyProjection";
 import { advanceCompatibilityEpochWithCtx, cancelAgentRunWithCtx, failAgentRunWithCtx, getCurrentCompatibilityEpochWithCtx, markAgentRunRunningWithCtx } from "./lifecycle";
+import { AGENT_TURN_NARRATIVE_TRAIL_RETENTION_MS, loadTurnNarrativeTrailByBindingWithCtx } from "./narrativeTrail";
 import { AGENT_PROVISIONAL_NARRATIVE_TTL_MS, loadProvisionalNarrativeByBindingWithCtx, upsertProvisionalNarrativeWithCtx } from "./provisionalNarrative";
 import { AGENT_TURN_TRACE_EVENT_PAYLOAD_MAX_BYTES, AGENT_TURN_TRACE_RETENTION_MS, listTurnTraceByBindingWithCtx } from "./turnTrace";
 import { advanceTurnBindingWithCtx, markProvisionalReleaseWithCtx } from "./turnBindings";
@@ -40,6 +41,7 @@ import {
   flushProvisionalNarrative,
   getThreadHistory,
   getTurnAnswer,
+  getTurnNarrativeTrail,
   getTurnView,
   inspectCitationEvidence,
   previewTurnNarrative,
@@ -867,5 +869,138 @@ describe("turn trace recording", () => {
     const seeded = await t.run((ctx) => seedRecordedTurn(ctx, "trace-missing"));
     await t.run((ctx) => ctx.db.delete("agentTurnBinding", seeded.bindingId));
     expect(await recordTrace(t, seeded.bindingId, [traceEvent()])).toEqual({ recorded: 0, enabled: true });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Narrative trail: the committed turn's finished drafts, released with the answer
+// ---------------------------------------------------------------------------
+
+const trailRow = (t: TestConvex<typeof schema>, bindingId: Id<"agentTurnBinding">) => t.run((ctx) => loadTurnNarrativeTrailByBindingWithCtx(ctx, bindingId));
+
+const readTrail = (t: TestConvex<typeof schema>, userId: Id<"athenaUser">, args: { storeId: Id<"store">; bindingId: Id<"agentTurnBinding"> }) =>
+  t.run(async (ctx) => {
+    const result = await entry.getTurnNarrativeTrail(admitted(ctx, userId), args);
+    assertConformsToExportedReturns(getTurnNarrativeTrail, result);
+    return result;
+  });
+
+const DRAFTS = [
+  { draftOrdinal: 0, text: "Checking which shifts are open.", truncated: false },
+  { draftOrdinal: 1, text: "One shift is open, writing it up.", truncated: false },
+];
+
+const finalizeCompleted = (t: TestConvex<typeof schema>, bindingId: Id<"agentTurnBinding">, trail = DRAFTS, now = clockNow + 60) =>
+  t.run((ctx) => TEST_TURN_SEAMS.finalizeTurnWithCtx(ctx, { bindingId, outcome: "completed", trail, now }));
+
+describe("narrative trail: written at commit, released and withdrawn with the answer", () => {
+  it("keeps a completed turn's drafts and serves them to the owner alone, on the answer's own gate", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run((ctx) => seedRecordedTurn(ctx, "trail"));
+    const other = await t.run((ctx) => seedDelegatedOperator(ctx, "trail-other", { role: "full_admin" }));
+    const args = { storeId: seeded.operator.storeId, bindingId: seeded.bindingId };
+    await startStreamingTurn(t, seeded);
+
+    // Before the commit there is nothing to read: the same reason the answer mints.
+    expect(await readTrail(t, seeded.operator.userId, args)).toEqual({ kind: "unavailable", reason: "not_ready" });
+    expect(await trailRow(t, seeded.bindingId)).toBeNull();
+
+    await flush(t, seeded.bindingId, DRAFTS[0].text, 0);
+    await commitAnswer(t, seeded);
+    // The commit alone writes nothing; the trail is a finalize-time record.
+    // In the window between the two the read is honest rather than refusing:
+    // the answer is readable, so the trail answers with the drafts it has.
+    expect(await trailRow(t, seeded.bindingId)).toBeNull();
+    const committedBinding = await t.run((ctx) => ctx.db.get("agentTurnBinding", seeded.bindingId));
+    expect(await readTrail(t, seeded.operator.userId, args)).toEqual({ kind: "trail", committedAt: committedBinding!.operatorReleaseCommittedAt, entries: [] });
+
+    const finalized = await finalizeCompleted(t, seeded.bindingId);
+    expect(finalized).toMatchObject({ outcome: "completed", runStatus: "completed" });
+    // The provisional row is still deleted by the same transaction.
+    expect(await row(t, seeded.bindingId)).toBeNull();
+
+    const stored = await trailRow(t, seeded.bindingId);
+    // The class is the COMMITTED ANSWER's, so the trail can never outrank it.
+    expect(stored).toMatchObject({ runId: seeded.runId, storeId: seeded.operator.storeId, organizationId: seeded.operator.organizationId, egressClass: "sensitive", retentionClass: "standard" });
+    expect(stored!.expiresAt).toBe(stored!.createdAt + AGENT_TURN_NARRATIVE_TRAIL_RETENTION_MS);
+
+    const binding = await t.run((ctx) => ctx.db.get("agentTurnBinding", seeded.bindingId));
+    const served = await readTrail(t, seeded.operator.userId, args);
+    expect(served).toEqual({ kind: "trail", committedAt: binding!.operatorReleaseCommittedAt, entries: DRAFTS });
+
+    // Nobody else: a colleague in the same store and the owner against another store.
+    expect(await readTrail(t, other.userId, args)).toEqual({ kind: "unavailable", reason: "not_your_turn" });
+    expect(await readTrail(t, seeded.operator.userId, { ...args, storeId: other.storeId })).toEqual({ kind: "unavailable", reason: "not_found" });
+
+    // Insert-once: a second finalize never rewrites the record, and the read never writes.
+    await finalizeCompleted(t, seeded.bindingId, [{ draftOrdinal: 0, text: "REWRITTEN", truncated: false }], clockNow + 70);
+    expect(JSON.stringify(await trailRow(t, seeded.bindingId))).not.toContain("REWRITTEN");
+    await readTrail(t, seeded.operator.userId, args);
+    expect(await t.run((ctx) => ctx.db.query("agentTurnNarrativeTrail").withIndex("by_turnBindingId", (q) => q.eq("turnBindingId", seeded.bindingId)).take(3))).toHaveLength(1);
+
+    // The read is a public query, admitted on the same rail as the answer.
+    expect({ isPublic: getTurnNarrativeTrail.isPublic, isQuery: getTurnNarrativeTrail.isQuery }).toEqual({ isPublic: true, isQuery: true });
+  });
+
+  it("writes nothing for a canceled or a failed turn, and nothing when the turn narrated nothing", async () => {
+    const t = convexTest(schema, modules);
+    const canceled = await t.run((ctx) => seedRecordedTurn(ctx, "trail-cancel"));
+    await startStreamingTurn(t, canceled);
+    expect(await t.run((ctx) => TEST_TURN_SEAMS.finalizeTurnWithCtx(ctx, { bindingId: canceled.bindingId, outcome: "canceled", trail: DRAFTS, error: { code: "operator_canceled", message: "stopped", retryable: false }, now: clockNow + 5 }))).toMatchObject({ outcome: "canceled" });
+    expect(await trailRow(t, canceled.bindingId)).toBeNull();
+    expect(await readTrail(t, canceled.operator.userId, { storeId: canceled.operator.storeId, bindingId: canceled.bindingId })).toEqual({ kind: "unavailable", reason: "not_ready" });
+
+    const failed = await t.run((ctx) => seedRecordedTurn(ctx, "trail-fail", { threadKey: "thread-trail-fail", key: "turn-trail-fail", operator: canceled.operator }));
+    await startStreamingTurn(t, failed);
+    expect(await t.run((ctx) => TEST_TURN_SEAMS.finalizeTurnWithCtx(ctx, { bindingId: failed.bindingId, outcome: "failed", trail: DRAFTS, error: { code: "provider_failure", message: "x", retryable: true }, now: clockNow + 6 }))).toMatchObject({ outcome: "failed" });
+    expect(await trailRow(t, failed.bindingId)).toBeNull();
+
+    // A committed turn the host narrated nothing on: no trail, and the read says so honestly with an empty one.
+    const silent = await t.run((ctx) => seedRecordedTurn(ctx, "trail-silent", { threadKey: "thread-trail-silent", key: "turn-trail-silent", operator: canceled.operator }));
+    const silentArgs = { storeId: silent.operator.storeId, bindingId: silent.bindingId };
+    await startStreamingTurn(t, silent);
+    await commitAnswer(t, silent);
+    expect(await finalizeCompleted(t, silent.bindingId, [], clockNow + 7)).toMatchObject({ outcome: "completed" });
+    expect(await trailRow(t, silent.bindingId)).toBeNull();
+    const binding = await t.run((ctx) => ctx.db.get("agentTurnBinding", silent.bindingId));
+    expect(await readTrail(t, silent.operator.userId, silentArgs)).toEqual({ kind: "trail", committedAt: binding!.operatorReleaseCommittedAt, entries: [] });
+  });
+
+  it("refuses the trail after a release is suppressed, after membership is revoked, and on an egress downgrade — the row stays at rest", async () => {
+    const t = convexTest(schema, modules);
+    const suppressed = await t.run((ctx) => seedRecordedTurn(ctx, "trail-suppress"));
+    const suppressedArgs = { storeId: suppressed.operator.storeId, bindingId: suppressed.bindingId };
+    await startStreamingTurn(t, suppressed);
+    await commitAnswer(t, suppressed);
+    await finalizeCompleted(t, suppressed.bindingId);
+    expect(await readTrail(t, suppressed.operator.userId, suppressedArgs)).toMatchObject({ kind: "trail" });
+
+    // Suppression never deletes the row — it refuses the ladder, exactly as the answer does.
+    await t.run((ctx) => TEST_TURN_SEAMS.outbox.suppressReleaseWithCtx(ctx, { bindingId: suppressed.bindingId, reason: "membership_revoked", now: clockNow + 80 }));
+    expect(await trailRow(t, suppressed.bindingId)).not.toBeNull();
+    expect(await readTrail(t, suppressed.operator.userId, suppressedArgs)).toEqual({ kind: "unavailable", reason: "suppressed" });
+    expect(await t.run((ctx) => entry.getTurnAnswer(admitted(ctx, suppressed.operator.userId), suppressedArgs))).toEqual({ kind: "unavailable", reason: "suppressed" });
+
+    // Membership revoked: the trail refuses before ownership facts are served.
+    const revoked = await t.run((ctx) => seedRecordedTurn(ctx, "trail-revoke"));
+    const revokedArgs = { storeId: revoked.operator.storeId, bindingId: revoked.bindingId };
+    await startStreamingTurn(t, revoked);
+    await commitAnswer(t, revoked);
+    await finalizeCompleted(t, revoked.bindingId);
+    expect(await readTrail(t, revoked.operator.userId, revokedArgs)).toMatchObject({ kind: "trail" });
+    await t.run((ctx) => ctx.db.delete("organizationMember", revoked.operator.membershipId!));
+    expect(await readTrail(t, revoked.operator.userId, revokedArgs)).toEqual({ kind: "unavailable", reason: "membership_revoked" });
+    expect(await trailRow(t, revoked.bindingId)).not.toBeNull();
+
+    // Egress downgrade: the trail carries the answer's class, so both refuse together.
+    const downgraded = await t.run((ctx) => seedRecordedTurn(ctx, "trail-downgrade"));
+    const downgradedArgs = { storeId: downgraded.operator.storeId, bindingId: downgraded.bindingId };
+    await startStreamingTurn(t, downgraded);
+    await commitAnswer(t, downgraded);
+    await finalizeCompleted(t, downgraded.bindingId);
+    expect(await readTrail(t, downgraded.operator.userId, downgradedArgs)).toMatchObject({ kind: "trail" });
+    await t.run((ctx) => ctx.db.patch("organizationMember", downgraded.operator.membershipId!, { role: "pos_only", operationalRoles: [] }));
+    expect(await readTrail(t, downgraded.operator.userId, downgradedArgs)).toEqual({ kind: "unavailable", reason: "egress_beyond_authority" });
+    expect(await t.run((ctx) => entry.getTurnAnswer(admitted(ctx, downgraded.operator.userId), downgradedArgs))).toEqual({ kind: "unavailable", reason: "egress_beyond_authority" });
   });
 });

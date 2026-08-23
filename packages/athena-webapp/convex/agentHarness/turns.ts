@@ -43,6 +43,7 @@ import {
 import {
   getThreadHistoryReadDefinition,
   getTurnAnswerReadDefinition,
+  getTurnNarrativeTrailReadDefinition,
   getTurnViewReadDefinition,
   previewTurnNarrativeReadDefinition,
 } from "../operationAdmission/domains/agentHarness_readDefinitions";
@@ -66,6 +67,11 @@ import {
 } from "./historyProjection";
 import { cancelAgentRunWithCtx, failAgentRunWithCtx, checkRunEpochFenceWithCtx } from "./lifecycle";
 import { AGENT_PROGRAM_RUNTIME_CEILINGS } from "./programRuntime/types";
+import {
+  loadTurnNarrativeTrailByBindingWithCtx,
+  writeTurnNarrativeTrailWithCtx,
+  type AgentTurnNarrativeTrailEntry,
+} from "./narrativeTrail";
 import {
   AGENT_PROVISIONAL_NARRATIVE_TTL_MS,
   deleteProvisionalNarrativeByBindingWithCtx,
@@ -484,6 +490,12 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
       outcome: "completed" | "failed" | "canceled";
       error?: { code: string; message: string; retryable: boolean };
       usage?: AgentTurnUsageSettlement;
+      /**
+       * The turn's finished drafts, ascending by ordinal. Kept only for a run
+       * that reached `completed` with a committed release; the host passes it
+       * on no other outcome, and the guard below refuses it anyway.
+       */
+      trail?: readonly { draftOrdinal: number; text: string; truncated?: boolean }[];
       purgeRuntime?: boolean;
       now: number;
     },
@@ -516,6 +528,33 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
       outcome = "completed";
     }
     const refreshed = await ctx.db.get("intelligenceRun", run._id);
+
+    // The drafts outlive the turn only when the ANSWER did: a completed run
+    // with a committed release. Everything else — canceled, failed, refused,
+    // or a turn whose commit never landed — keeps the provisional deletion
+    // above as the only outcome. The trail is stamped with the committed
+    // artifact's own egress class, the value `getTurnAnswer` gates on, so a
+    // reader who may not have the answer can never have the drafts either.
+    if (input.trail && input.trail.length > 0 && refreshed?.status === "completed" && binding.operatorReleaseCommittedAt !== undefined) {
+      const artifact = refreshed.artifactId ? await ctx.db.get("intelligenceArtifact", refreshed.artifactId) : null;
+      const payload = artifact ? parseAnswerPayload(artifact.payload) : null;
+      if (payload) {
+        const entries: AgentTurnNarrativeTrailEntry[] = input.trail
+          .filter((draft) => draft.text.trim().length > 0)
+          .map((draft) => ({ draftOrdinal: draft.draftOrdinal, text: draft.text, truncated: draft.truncated === true }))
+          .sort((left, right) => left.draftOrdinal - right.draftOrdinal);
+        await writeTurnNarrativeTrailWithCtx(ctx, {
+          runId: run._id,
+          turnBindingId: binding._id,
+          storeId: binding.storeId,
+          organizationId: binding.organizationId,
+          entries,
+          egressClass: payload.egressClass,
+          committedAt: binding.operatorReleaseCommittedAt,
+          now: input.now,
+        });
+      }
+    }
 
     // Usage settles exactly once: the provider invocation row records it.
     const usage = input.usage ?? { tokens: { input: 0, output: 0, cachedInput: 0, reasoning: 0 }, streams: 0, conservative: true, settledBy: [], lateEventCount: 0, costUnits: 0 };
@@ -728,6 +767,7 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
             costUnits: v.number(),
           }),
         ),
+        trail: v.optional(v.array(v.object({ draftOrdinal: v.number(), text: v.string(), truncated: v.optional(v.boolean()) }))),
         purgeRuntime: v.optional(v.boolean()),
         now: v.optional(v.number()),
       },
@@ -857,6 +897,15 @@ export type AgentTurnNarrativePreview =
       readonly expiresAt: number;
       readonly ttlMs: number;
     };
+
+/**
+ * The trail union. `unavailable` carries exactly the answer surface's closed
+ * reason vocabulary; `trail` carries the committed drafts and nothing else —
+ * no run id, no ordinal the refused reader could infer a turn's shape from.
+ */
+export type AgentTurnNarrativeTrailView =
+  | { readonly kind: "unavailable"; readonly reason: string }
+  | { readonly kind: "trail"; readonly committedAt: number; readonly entries: { draftOrdinal: number; text: string; truncated: boolean }[] };
 
 function phaseOf(status: Doc<"intelligenceRun">["status"]): "queued" | "running" | "completed" | "failed" | "canceled" {
   switch (status) {
@@ -1062,6 +1111,34 @@ export function createAgentTurnEntryPoints(config: AgentTurnEntryPointConfig) {
   }
 
   /**
+   * The committed turn's draft trail: how Athena got to this answer, kept for
+   * the operator after the pane's live draft is gone.
+   *
+   * The ladder is the ANSWER's, rung for rung — `reauthorizeTurnAccess`
+   * (`not_found` until ownership is established), then suppression, then the
+   * commit, then the stored class against the viewer's current grant — so
+   * there is no state in which the drafts are readable and the answer is not.
+   * `not_ready` is the same reason the answer mints for a turn that has not
+   * committed. Never writes; a committed turn that narrated nothing serves an
+   * honest empty trail rather than a refusal.
+   */
+  async function getTurnNarrativeTrail(ctx: AdmittedQueryCtx, args: TurnArgs): Promise<AgentTurnNarrativeTrailView> {
+    const access = await reauthorizeTurnAccess(ctx, ctx.operationAdmission.actor, args.storeId, args.bindingId, now());
+    if (access.kind === "unavailable") return unavailable(access.reason);
+    const { binding, run } = access;
+    if (binding.releaseSuppressedAt !== undefined) return unavailable("suppressed");
+    if (run.status !== "completed" || binding.operatorReleaseCommittedAt === undefined) return unavailable("not_ready");
+    const trail = await loadTurnNarrativeTrailByBindingWithCtx(ctx, binding._id);
+    if (!trail) return { kind: "trail", committedAt: binding.operatorReleaseCommittedAt, entries: [] };
+    if (egressClassRank(normalizeEgressClass(trail.egressClass)) > egressClassRank(access.viewerEgressClass)) return unavailable("egress_beyond_authority");
+    return {
+      kind: "trail",
+      committedAt: trail.committedAt,
+      entries: trail.entries.map((row) => ({ draftOrdinal: row.draftOrdinal, text: row.text, truncated: row.truncated })),
+    };
+  }
+
+  /**
    * First authorized fetch records `operatorViewedAt` (browser receipt that
    * cannot be recalled). Authority lost after commit but before this call
    * suppresses release and asks the adapter to purge.
@@ -1238,7 +1315,7 @@ export function createAgentTurnEntryPoints(config: AgentTurnEntryPointConfig) {
     return config.readCitationEvidence(ctx, { runId: access.run._id, citationRef: args.citationRef, viewer: access.viewer, purpose: "operator_evidence_panel", now: at });
   }
 
-  return { startTurn, getTurnView, getTurnAnswer, acknowledgeTurnAnswer, previewTurnNarrative, acknowledgeProvisionalView, cancelTurn, resumeTurn, getThreadHistory, inspectCitationEvidence };
+  return { startTurn, getTurnView, getTurnAnswer, getTurnNarrativeTrail, acknowledgeTurnAnswer, previewTurnNarrative, acknowledgeProvisionalView, cancelTurn, resumeTurn, getThreadHistory, inspectCitationEvidence };
 }
 
 export type AgentTurnEntryPoints = ReturnType<typeof createAgentTurnEntryPoints>;
@@ -1311,6 +1388,15 @@ const answerResult = v.union(
     committedAt: v.number(),
     viewedAt: v.optional(v.number()),
     citations: v.array(v.object({ citationRef: v.string(), namespace: v.optional(v.string()), label: v.optional(v.string()) })),
+  }),
+  v.object({ kind: v.literal("unavailable"), reason: v.string() }),
+);
+
+const narrativeTrailResult = v.union(
+  v.object({
+    kind: v.literal("trail"),
+    committedAt: v.number(),
+    entries: v.array(v.object({ draftOrdinal: v.number(), text: v.string(), truncated: v.boolean() })),
   }),
   v.object({ kind: v.literal("unavailable"), reason: v.string() }),
 );
@@ -1441,6 +1527,12 @@ export const getTurnAnswer = query({
   args: { storeId: v.id("store"), bindingId: v.id("agentTurnBinding") },
   returns: answerResult,
   handler: admitPublicQuery(getTurnAnswerReadDefinition, async (ctx, args: TurnArgs) => agentTurnEntryPoints.getTurnAnswer(ctx, args)),
+});
+
+export const getTurnNarrativeTrail = query({
+  args: { storeId: v.id("store"), bindingId: v.id("agentTurnBinding") },
+  returns: narrativeTrailResult,
+  handler: admitPublicQuery(getTurnNarrativeTrailReadDefinition, async (ctx, args: TurnArgs) => agentTurnEntryPoints.getTurnNarrativeTrail(ctx, args)),
 });
 
 export const acknowledgeTurnAnswer = mutation({

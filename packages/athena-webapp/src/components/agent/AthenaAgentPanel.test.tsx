@@ -37,6 +37,7 @@ vi.mock("~/convex/_generated/api", () => ({
         getTurnAnswer: "getTurnAnswer",
         getThreadHistory: "getThreadHistory",
         previewTurnNarrative: "previewTurnNarrative",
+        getTurnNarrativeTrail: "getTurnNarrativeTrail",
       },
     },
   },
@@ -129,6 +130,7 @@ type Backend = {
   history: unknown;
   view: unknown;
   answer: unknown;
+  trail: unknown;
   calls: { name: string; args: unknown }[];
   results: Record<string, unknown>;
 };
@@ -140,6 +142,7 @@ beforeEach(() => {
     history: { kind: "history", threadKey: "t", reauthorizedAt: 1, entries: [] },
     view: undefined,
     answer: undefined,
+    trail: undefined,
     calls: [],
     results: {},
   };
@@ -148,6 +151,7 @@ beforeEach(() => {
     if (name === "getThreadHistory") return backend.history;
     if (name === "getTurnView") return backend.view;
     if (name === "getTurnAnswer") return backend.answer;
+    if (name === "getTurnNarrativeTrail") return backend.trail;
     return undefined;
   }) as unknown as typeof useQuery);
   vi.mocked(useMutation).mockImplementation(((name: string) =>
@@ -183,6 +187,7 @@ function renderSurface(props: Record<string, unknown> = {}) {
 function baseRun(overrides: Partial<AthenaAgentRun> = {}): AthenaAgentRun {
   return {
     hostState: "idle",
+    storeId: STORE_ID,
     status: { headline: "Ask about this store day.", tone: "neutral" },
     context: {
       label: "Osu · 2026-08-21",
@@ -1793,5 +1798,75 @@ describe("the provisional timeline", () => {
       expect(screen.queryByTestId("athena-agent-provisional-timeline")).toBeNull();
       view.unmount();
     }
+  });
+});
+
+describe("an earlier turn's draft trail", () => {
+  const answered = {
+    turnId: "binding-earlier" as AthenaAgentRun["history"][number]["turnId"],
+    createdAt: 10,
+    state: "answered",
+    question: "What is blocking the close?",
+    questionState: "retained" as const,
+    answer: {
+      outcome: "answer" as const,
+      narrative: "The automation log is behind.",
+      egressClass: "operational",
+      committedAt: 200,
+      citations: [],
+    },
+  };
+
+  it("offers the collapsed block only for a history entry whose answer is committed", () => {
+    const withoutAnswer = { ...answered, turnId: "binding-failed" as typeof answered.turnId, answer: undefined, failureHeadline: "Stopped." };
+    render(<PanelHarness run={baseRun({ history: [answered, withoutAnswer] })} />);
+
+    const entries = screen.getAllByTestId("athena-agent-history-entry");
+    expect(entries).toHaveLength(2);
+    expect(within(entries[0]).getByTestId("athena-agent-history-trail")).toBeTruthy();
+    expect(within(entries[1]).queryByTestId("athena-agent-history-trail")).toBeNull();
+  });
+
+  it("reads the trail only once opened, and renders the fetched drafts inertly", async () => {
+    const user = userEvent.setup();
+    backend.trail = {
+      kind: "trail",
+      committedAt: 200,
+      entries: [
+        { draftOrdinal: 0, text: "Checking the registers.", truncated: false },
+        { draftOrdinal: 1, text: "<script>window.__athenaExecuted = true;</script> Now the log.", truncated: false },
+      ],
+    };
+    render(<PanelHarness run={baseRun({ history: [answered] })} />);
+
+    const block = screen.getByTestId("athena-agent-history-trail");
+    // Closed: nothing is fetched and nothing is rendered.
+    expect(within(block).queryAllByTestId("athena-agent-provisional-entry")).toHaveLength(0);
+    expect(screen.queryByText("Checking the registers.")).toBeNull();
+
+    await user.click(within(block).getByText("How Athena got here"));
+
+    await waitFor(() => expect(within(block).queryAllByTestId("athena-agent-provisional-entry")).toHaveLength(2));
+    const drafts = within(block).getAllByTestId("athena-agent-provisional-entry");
+    expect(within(drafts[0]).getByText("Earlier draft 1")).toBeTruthy();
+    expect(within(drafts[1]).getByText("Earlier draft 2")).toBeTruthy();
+    expect(drafts[0].textContent).toContain("Checking the registers.");
+    // The model's text is rendered inertly: no script, no link, no control.
+    expect(block.querySelector("script")).toBeNull();
+    expect(block.querySelector("a")).toBeNull();
+    expect(block.querySelector("button")).toBeNull();
+    expect((window as unknown as { __athenaExecuted?: boolean }).__athenaExecuted).toBeUndefined();
+  });
+
+  it("shows the closed-vocabulary line when the server refuses an earlier turn's trail", async () => {
+    const user = userEvent.setup();
+    backend.trail = { kind: "unavailable", reason: "membership_revoked" };
+    render(<PanelHarness run={baseRun({ history: [answered] })} />);
+
+    const block = screen.getByTestId("athena-agent-history-trail");
+    await user.click(within(block).getByText("How Athena got here"));
+
+    await waitFor(() => expect(within(block).getByText("This answer is no longer available to you.")).toBeTruthy());
+    expect(within(block).queryAllByTestId("athena-agent-provisional-entry")).toHaveLength(0);
   });
 });
