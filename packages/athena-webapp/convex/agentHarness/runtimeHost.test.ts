@@ -295,9 +295,15 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ name, create }) => {
     const { captured, observe } = captureProgramResult();
     const turnKey = turnKeyFor(seeded.bindingId);
     harness.scriptTurn(turnKey, [
+      // The turn narrates before it reaches for a tool, so a draft is at rest
+      // for the whole tool ladder and the finalize-time delete is what the
+      // no-draft-at-rest assertion below observes. Both adapters emit the text
+      // on the way past the first tool call.
+      { kind: "narrative", deltas: ["Checking which shifts", " are open."] },
       { kind: "tool_call", callId: "c1", toolId: "athena.discover", args: {} },
       { kind: "tool_call", callId: "c2", toolId: "athena.describe", args: { namespace: "ops.shifts" } },
       { kind: "tool_call", callId: "c3", toolId: "athena.executeProgram", args: { source: PROGRAM } },
+      { kind: "pause", gate: "drafted" },
       { kind: "tool_call", callId: "c4", toolId: "athena.completeRun", args: () => ({ title: "Open shifts", narrative: "One shift is open.", citedAttemptRefs: [captured.attemptRef], citations: [{ ref: captured.citation, claim: "One shift is open." }] }) },
       { kind: "usage", providerInvocationRef: "inv-1", retryIndex: 0, sequence: 1, eventKey: "inv-1#final", mode: "cumulative", tokens: { input: 40, output: 10 }, terminal: true },
       { kind: "complete", narrative: "MODEL-NARRATIVE-NEVER-STORED" },
@@ -305,11 +311,22 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ name, create }) => {
     harness.modelUsage?.(turnKey, [{ inputTokens: 10, outputTokens: 2 }, { inputTokens: 10, outputTokens: 2 }, { inputTokens: 10, outputTokens: 2 }, { inputTokens: 10, outputTokens: 2 }, { inputTokens: 10, outputTokens: 2 }]);
 
     const host = await hostFor(t, harness, { observe });
-    const report = await host.driveTurn({ bindingId: seeded.bindingId });
+    const driving = host.driveTurn({ bindingId: seeded.bindingId });
+    // The draft is genuinely at rest mid-turn, held there until the commit is released.
+    await waitFor(async () => (await provisionalRow(t, seeded.bindingId))?.text === "Checking which shifts are open.");
+    harness.release("drafted");
+    const report = await driving;
     expect(report, JSON.stringify(report)).toMatchObject({ outcome: "completed", projection: "projected", finalize: { outcome: "completed", runStatus: "completed" } });
     expect(report.dispatch).toEqual(["athena.discover:success", "athena.describe:success", "athena.executeProgram:success", "athena.completeRun:success"]);
-    expect(report.events[0]).toBe("turn_started");
+    // Run-length collapsed: the two scripted deltas coalesce into one `×2` run
+    // and the turn narrates before it reaches for a tool. Only this prefix is
+    // parity — past the first tool call the two adapters interleave `progress`
+    // and `usage` events differently, which is adapter detail, not host
+    // behaviour.
+    expect(collapseEventKinds(report.events).split(",").slice(0, 3)).toEqual(["turn_started", "narrative_delta×2", "tool_call_requested"]);
     expect(report.events).toContain("turn_completed");
+    expect(report.events.indexOf("narrative_delta")).toBeGreaterThan(-1);
+    expect(report.events.indexOf("narrative_delta")).toBeLessThan(report.events.indexOf("tool_call_requested"));
     expect(report.usage?.costUnits).toBeGreaterThan(0);
 
     const after = await rows(t, seeded);
@@ -338,6 +355,7 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ name, create }) => {
     // provisional draft survives the turn, whatever ended it.
     expect(JSON.stringify(after)).not.toContain("MODEL-NARRATIVE-NEVER-STORED");
     expect(after.provisional).toEqual([]);
+    expect(JSON.stringify(after)).not.toContain("Checking which shifts");
     // Spend settled to the turn's REAL cost on both windows: `finalizeTurn`
     // books it before the outbox's zero-cost settle can stamp the marker.
     expect(await reservations(t, seeded)).toEqual([
