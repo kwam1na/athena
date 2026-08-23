@@ -2633,9 +2633,12 @@ describe("daily operations automation adapter", () => {
       isCurrent: false,
       operatingDate: "2026-06-08",
       reportSnapshot: {
+        // The snapshot spans the store-local calendar day, not the 09:00–20:00
+        // trading window the schedule resolves to. The schedule stays the
+        // authority for automation timing, asserted below as evidence.
         closeMetadata: {
-          endAt: Date.UTC(2026, 5, 8, 20),
-          startAt: Date.UTC(2026, 5, 8, 9),
+          endAt: Date.UTC(2026, 5, 9),
+          startAt: Date.UTC(2026, 5, 8),
         },
       },
       summary: {
@@ -2651,6 +2654,124 @@ describe("daily operations automation adapter", () => {
         },
       },
       triggerType: "support_batch",
+    });
+  });
+
+  it("blocks historic EOD auto-close on a register opened after the scheduled close", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 0,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      posTransaction: [
+        completedTransaction({
+          _id: "txn-after-hours",
+          completedAt: Date.UTC(2026, 5, 8, 20, 22),
+          transactionNumber: "TXN-AFTER-HOURS",
+        }),
+      ],
+      registerSession: [
+        closedRegisterSession({
+          _id: "register-after-hours",
+          closedAt: undefined,
+          countedCash: undefined,
+          openedAt: Date.UTC(2026, 5, 8, 20, 22),
+          openedOperatingDate: "2026-06-08",
+          status: "active",
+        }),
+      ],
+      store: [store],
+      storeSchedule: [
+        storeSchedule({
+          weeklyWindows: [
+            { dayOfWeek: 1, startMinute: 9 * 60, endMinute: 19 * 60 },
+          ],
+        }),
+      ],
+    });
+
+    const result = await runHistoricEodAutoCloseForDateWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        asOfOperatingDate: "2026-06-10",
+        mode: "apply",
+        operatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      action: "skipped",
+      classification: "blocked",
+    });
+    expect(inserts.some((insert) => insert.table === "dailyClose")).toBe(false);
+    expect(inserts[0].value).toMatchObject({
+      decisionEvidence: {
+        classification: "blocked",
+        eligible: false,
+        observed: {
+          blockerCount: 1,
+          disqualifyingCategories: ["register_session"],
+        },
+      },
+      outcome: "skipped",
+    });
+  });
+
+  it("counts after-hours sales in the historic EOD snapshot summary", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 0,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      posTransaction: [
+        completedTransaction({
+          _id: "txn-after-hours",
+          completedAt: Date.UTC(2026, 5, 8, 20, 22),
+          transactionNumber: "TXN-AFTER-HOURS",
+        }),
+      ],
+      registerSession: [
+        closedRegisterSession({
+          closedAt: Date.UTC(2026, 5, 8, 21),
+          closeoutOperatingDate: "2026-06-08",
+          openedAt: Date.UTC(2026, 5, 8, 20),
+        }),
+      ],
+      store: [store],
+      storeSchedule: [
+        storeSchedule({
+          weeklyWindows: [
+            { dayOfWeek: 1, startMinute: 9 * 60, endMinute: 19 * 60 },
+          ],
+        }),
+      ],
+    });
+
+    const result = await runHistoricEodAutoCloseForDateWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        asOfOperatingDate: "2026-06-10",
+        mode: "apply",
+        operatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({ action: "applied" });
+    expect(
+      inserts.find((insert) => insert.table === "dailyClose")?.value,
+    ).toMatchObject({
+      summary: {
+        salesTotal: 12000,
+        transactionCount: 1,
+      },
     });
   });
 

@@ -8,6 +8,7 @@ import {
 import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { commandResultValidator } from "../lib/commandResultValidators";
+import { resolveStoreCalendarRangeForDateWithCtx } from "../inventory/storeScheduleCore";
 import { createOperationalWorkItemWithCtx } from "./operationalWorkItems";
 import {
   projectLogicalOperationalWork,
@@ -751,6 +752,44 @@ function resolveOperatingDateRange(args: {
   return dateRange;
 }
 
+/**
+ * The range a Daily Close snapshot reads over.
+ *
+ * An explicit caller range still wins. Otherwise the day is bounded in the
+ * store's own timezone rather than by `safeOperatingDateRange`, whose UTC day
+ * silently shifts the boundary for every store that is not on UTC — so a sale
+ * rung late on the operating date could fold into the neighbouring day. Stores
+ * with no resolvable schedule keep the UTC day they have always had.
+ */
+async function resolveSnapshotOperatingDateRangeWithCtx(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    endAt?: number;
+    operatingDate: string;
+    startAt?: number;
+    storeId: Id<"store">;
+  },
+) {
+  const dateRange = safeOperatingDateRange(args.operatingDate);
+
+  if (!dateRange) {
+    return null;
+  }
+
+  if (isValidOperatingDateRange(args.startAt, args.endAt)) {
+    return { startAt: args.startAt!, endAt: args.endAt! };
+  }
+
+  const { range } = await resolveStoreCalendarRangeForDateWithCtx(ctx, {
+    operatingDate: args.operatingDate,
+    storeId: args.storeId,
+  });
+
+  return range.kind === "resolved"
+    ? { startAt: range.startAt, endAt: range.endAt }
+    : dateRange;
+}
+
 function isInRange(value: unknown, startAt: number, endAt: number) {
   return typeof value === "number" && value >= startAt && value < endAt;
 }
@@ -1353,9 +1392,14 @@ async function listRegisterSessionsForDailyClose(
     Doc<"registerSession">
   >();
 
+  // These rows were read by `openedOperatingDate <= operatingDate`, so the
+  // operating-date stamp already places them in the day. Re-filtering them on
+  // wall-clock `openedAt` would drop any session opened outside the caller's
+  // range — a session opened after the store's scheduled close still belongs
+  // to the operating day it is stamped with. The stamped review-only read
+  // below has always trusted its stamp the same way.
   activeIndexedSessionPages
     .flat()
-    .filter((session) => registerSessionIntersectsRange(session, range))
     .forEach((session) => activeSessionsById.set(session._id, session));
   activeMissingDateSessionPages
     .flat()
@@ -2721,7 +2765,7 @@ export async function buildDailyCloseSnapshotWithCtx(
 ): Promise<DailyCloseSnapshot> {
   const includeManagerReviewEvidence =
     args.includeManagerReviewEvidence ?? true;
-  const range = resolveOperatingDateRange(args);
+  const range = await resolveSnapshotOperatingDateRangeWithCtx(ctx, args);
   const store = await getStore(ctx, args.storeId);
   const automationStatus =
     await getLatestDailyOperationsAutomationStatusWithCtx(ctx, {

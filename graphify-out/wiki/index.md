@@ -8,12 +8,12 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 
 ## Repo Summary
 - Code files discovered: 3183
-- Graph nodes: 14061
-- Graph edges: 17447
+- Graph nodes: 14064
+- Graph edges: 17454
 - Communities: 3107
 
 ## Graph Hotspots
-- `dailyClose.ts` (104 edges, Community 0) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
+- `dailyClose.ts` (105 edges, Community 0) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
 - `convex-operation-admission-check.ts` (102 edges, Community 1) - [`scripts/convex-operation-admission-check.ts`](../../scripts/convex-operation-admission-check.ts)
 - `harness-inferential-review.ts` (89 edges, Community 3) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
 - `posLocalStore.ts` (87 edges, Community 2) - [`packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts`](../../packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts)

@@ -70,7 +70,8 @@ type TableName =
   | "registerSession"
   | "reportDirtyDay"
   | "staffProfile"
-  | "store";
+  | "store"
+  | "storeSchedule";
 
 type Row = Record<string, unknown> & { _id: string };
 
@@ -937,6 +938,80 @@ describe("end-of-day review backend foundation", () => {
       policyMode: "enabled",
     });
     expect(snapshot.completedClose).toBeNull();
+  });
+
+  it("bounds the default snapshot range by the store's own calendar day", async () => {
+    const { db } = createDb({
+      store: [store],
+      storeSchedule: [
+        {
+          _id: "storeSchedule-1",
+          dateExceptions: [],
+          effectiveFrom: Date.UTC(2026, 0, 1),
+          status: "active",
+          storeId: "store-1",
+          timezone: "America/New_York",
+          weeklyClosedDays: [],
+          weeklyWindows: [
+            { dayOfWeek: 4, startMinute: 9 * 60, endMinute: 17 * 60 },
+          ],
+        },
+      ],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+
+    // Midnight-to-midnight in New York (UTC-4 on this date), not the UTC day.
+    expect(snapshot.startAt).toBe(Date.UTC(2026, 4, 7, 4));
+    expect(snapshot.endAt).toBe(Date.UTC(2026, 4, 8, 4));
+  });
+
+  it("keeps the UTC day for a store with no resolvable schedule", async () => {
+    const { db } = createDb({ store: [store] });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.startAt).toBe(Date.UTC(2026, 4, 7));
+    expect(snapshot.endAt).toBe(Date.UTC(2026, 4, 8));
+  });
+
+  it("lets an explicit caller range override the store calendar day", async () => {
+    const { db } = createDb({
+      store: [store],
+      storeSchedule: [
+        {
+          _id: "storeSchedule-1",
+          dateExceptions: [],
+          effectiveFrom: Date.UTC(2026, 0, 1),
+          status: "active",
+          storeId: "store-1",
+          timezone: "America/New_York",
+          weeklyClosedDays: [],
+          weeklyWindows: [
+            { dayOfWeek: 4, startMinute: 9 * 60, endMinute: 17 * 60 },
+          ],
+        },
+      ],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        endAt: Date.UTC(2026, 4, 7, 18),
+        operatingDate: "2026-05-07",
+        startAt: Date.UTC(2026, 4, 7, 12),
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot.startAt).toBe(Date.UTC(2026, 4, 7, 12));
+    expect(snapshot.endAt).toBe(Date.UTC(2026, 4, 7, 18));
   });
 
   it("includes all closed register sessions for the day and records complete register source evidence", async () => {
