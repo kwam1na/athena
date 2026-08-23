@@ -1065,6 +1065,10 @@ describe("turn host — the provisional draft", () => {
     expect(after.artifacts).toHaveLength(1);
     expect(after.provisional).toEqual([]);
     expect(JSON.stringify(after)).not.toContain("Adding a closing thought.");
+    // The answer committed, so its drafts outlive the turn even though the
+    // provider died afterwards: the trail rides with the answer, not the outcome.
+    const trail = await trailRow(t, seeded.bindingId);
+    expect(trail?.entries.map((entry) => entry.text)).toEqual(["Adding a closing thought."]);
   });
 
   it("stops offering text for the rest of the turn when the flush refuses, and the turn still completes", async () => {

@@ -708,19 +708,24 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
 
     let finalize: AgentFinalizeTurnOutcome;
     let projection: AgentTurnHostReport["projection"];
+    // Only a turn whose answer committed hands its drafts on: the trail is
+    // released and withdrawn with the answer, so a turn without one has
+    // nothing the operator is entitled to keep reading. The drafts ride with
+    // the commit, not with the host's outcome — a provider that dies after
+    // the answer landed still leaves the answer, and so its trail. A turn the
+    // kernel ever refused hands on nothing at all: that draft was withdrawn
+    // from the pane, and a durable copy would put it back. Finalize itself
+    // writes the trail only for a completed, committed run.
+    const trail =
+      committed && !provisional.refused
+        ? [...provisional.drafts.entries()]
+            .sort((left, right) => left[0] - right[0])
+            .map(([draftOrdinal, draft]) => ({ draftOrdinal, text: draft.text, truncated: draft.truncated }))
+        : [];
+    const trailArg = trail.length > 0 ? { trail } : {};
     if (outcome === "completed" && committed) {
       await traceTurnReport("completed");
-      // Only a turn whose answer committed hands its drafts on: the trail is
-      // released and withdrawn with the answer, so a turn without one has
-      // nothing the operator is entitled to keep reading. A turn the kernel
-      // ever refused hands on nothing at all — that draft was withdrawn from
-      // the pane, and a durable copy would put it back.
-      const trail = provisional.refused
-        ? []
-        : [...provisional.drafts.entries()]
-            .sort((left, right) => left[0] - right[0])
-            .map(([draftOrdinal, draft]) => ({ draftOrdinal, text: draft.text, truncated: draft.truncated }));
-      finalize = await runMutation(refs.finalizeTurn, { bindingId, outcome: "completed", usage: settlement, ...(trail.length > 0 ? { trail } : {}), now: now() });
+      finalize = await runMutation(refs.finalizeTurn, { bindingId, outcome: "completed", usage: settlement, ...trailArg, now: now() });
       projection = await projectCommitted(bindingId);
       return report("completed", { usage: settlement, finalize, projection });
     }
@@ -732,13 +737,14 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
         error: { code: "authority_revoked", message: `Authority changed during the turn: ${revoked[0]}.`, retryable: false },
         usage: settlement,
         purgeRuntime: exposed,
+        ...trailArg,
         now: now(),
       });
       return report("canceled", { code: "authority_revoked", usage: settlement, finalize });
     }
     if (outcome === "canceled") {
       await traceTurnReport("canceled", completed?.reason);
-      finalize = await runMutation(refs.finalizeTurn, { bindingId, outcome: "canceled", error: { code: completed?.reason ?? "canceled", message: "The turn was stopped.", retryable: false }, usage: settlement, now: now() });
+      finalize = await runMutation(refs.finalizeTurn, { bindingId, outcome: "canceled", error: { code: completed?.reason ?? "canceled", message: "The turn was stopped.", retryable: false }, usage: settlement, ...trailArg, now: now() });
       return report("canceled", { code: completed?.reason, usage: settlement, finalize });
     }
     const error =
@@ -746,7 +752,7 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
         ? { code: "completion_missing", message: "The turn ended without athena.completeRun.", retryable: true }
         : { code: completed?.error?.code ?? "provider_failure", message: completed?.error?.message ?? "The turn failed.", retryable: completed?.error?.code === "turn_elapsed_ceiling" || completed?.error?.code === "provider_failure" };
     await traceTurnReport("failed", error.code);
-    finalize = await runMutation(refs.finalizeTurn, { bindingId, outcome: "failed", error, usage: settlement, now: now() });
+    finalize = await runMutation(refs.finalizeTurn, { bindingId, outcome: "failed", error, usage: settlement, ...trailArg, now: now() });
     return report("failed", { code: error.code, usage: settlement, finalize });
   }
 
