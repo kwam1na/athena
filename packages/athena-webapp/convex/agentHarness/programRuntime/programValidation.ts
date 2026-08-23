@@ -298,18 +298,28 @@ function analyze(source: string, root: BabelNode, wrapper: BabelNode, facade: Fa
     if (typeof node.start === "number" && typeof node.end === "number") deletions.push([node.start, node.end]);
   };
 
+  const grantedPaths = () => {
+    const paths: string[] = [];
+    for (const [pkg, resources] of facade) {
+      for (const [resource, verbs] of resources) paths.push(`${pkg}.${resource}.${[...verbs].sort().join("|")}`);
+    }
+    return paths.sort().join(", ");
+  };
   const checkFacadeUse = (node: BabelNode, parent: BabelNode | undefined, key: string) => {
     const chain = memberChain(node);
     if (!chain || (chain.root.name as string) !== "athena" || declared.has("athena")) return;
     facadeRoots.add(chain.root);
     const path = chain.segments.join(".");
     if (chain.segments.length !== 3 || !parent || parent.type !== "CallExpression" || key !== "callee") {
-      add("facade_misuse", node, `\`athena${path ? `.${path}` : ""}\` must be called as \`athena.<package>.<resource>.<verb>(args)\`; it cannot be aliased, assigned, passed, or partially applied.`);
+      // A wrong-arity path is a guessed namespace, not aliasing: name what is
+      // actually granted so the correction is a lookup, not another guess.
+      const hint = chain.segments.length > 0 && chain.segments.length !== 3 ? ` Granted reads: ${grantedPaths()}.` : "";
+      add("facade_misuse", node, `\`athena${path ? `.${path}` : ""}\` must be called as \`athena.<package>.<resource>.<verb>(args)\`; it cannot be aliased, assigned, passed, or partially applied.${hint}`);
       return;
     }
     const [pkg, resource, verb] = chain.segments;
     const verbs = facade.get(pkg)?.get(resource);
-    if (!verbs || !verbs.has(verb)) add("facade_path_unknown", node, `\`athena.${path}\` is not part of the granted facade.`);
+    if (!verbs || !verbs.has(verb)) add("facade_path_unknown", node, `\`athena.${path}\` is not part of the granted facade. Granted reads: ${grantedPaths()}.`);
     const args = parent.arguments as BabelNode[];
     if (args.length > 1) add("facade_args_invalid", node, "Facade calls take a single arguments object.");
     const [arg] = args;

@@ -108,7 +108,7 @@ export const CONVEX_AGENT_DEFAULT_TERMINAL_TOOL_ID = "athena.completeRun" as con
 
 /** Nudge for the forced terminal-tool continuation (exported for adapter tests). */
 export function terminalToolNudge(toolId: string): string {
-  return `You ended your turn without submitting an answer. Call the ${toolId} tool now with the answer you already wrote — prose is not a submission; only the tool call commits it. If nothing usable was read, call it with outcome "no_usable_sources".`;
+  return `You ended your turn without submitting an answer. Call the ${toolId} tool now with the answer you already wrote — prose is not a submission; only the tool call commits it. Put attempt refs (values starting "attempt_") in citedAttemptRefs and citation refs (starting "citation:") in citations. If nothing usable was read, call it with outcome "no_usable_sources".`;
 }
 
 /**
@@ -563,7 +563,10 @@ export function createConvexAgentRuntimeAdapter(options: ConvexAgentRuntimeAdapt
             tools: nativeTools(turn, definitions),
             toolChoice: { type: "tool", toolName: nativeTerminal as string },
             ...(options.providerOptions ? { providerOptions: options.providerOptions as never } : {}),
-            stopWhen: stepCountIs(1),
+            // Two steps, not one: a submission the kernel refuses (misfiled
+            // refs, missing citations) gets exactly one corrective retry with
+            // the refusal in context. A success stops the loop immediately.
+            stopWhen: [stepCountIs(2), () => turn.terminalToolSettled],
             abortSignal: turn.abort.signal,
             repairToolCall: repairToolCall(turn),
           },

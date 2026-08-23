@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import type { AgentToolHandlerContext } from "../../shared/agentHarness/agentRuntime";
 import { opaqueRef, type AgentEgressClass } from "../../shared/agentHarness/values";
-import { createAthenaToolRegistrations, type AgentToolHostContext } from "./tools";
+import { completeRunTool, createAthenaToolRegistrations, type AgentToolHostContext } from "./tools";
 
 type CompleteRunCall = { artifact: { payload: Record<string, unknown> } };
 
@@ -167,5 +167,50 @@ describe("athena.executeProgram field diagnostics", () => {
     expect((outcome.result as { fieldDiagnostics?: readonly string[] }).fieldDiagnostics).toEqual([
       "`totalSales` is not a field of reports.daySales; its fields are: grossRevenue, paymentGroups.",
     ]);
+  });
+});
+
+describe("athena.completeRun submission canonicalization", () => {
+  it("re-buckets refs filed under the wrong argument by prefix", () => {
+    const validated = completeRunTool.validateInput({
+      outcome: "answer",
+      narrative: "One shift is open.",
+      citedAttemptRefs: ["attempt_v1.2.abc", "citation:v1.2.3.def"],
+      citations: [
+        { ref: "attempt_v1.2.abc" },
+        { ref: "citation:v1.2.4.9a8", claim: "day sales" },
+      ],
+    });
+    expect(validated.ok).toBe(true);
+    if (!validated.ok) return;
+    expect(validated.args.citedAttemptRefs).toEqual(["attempt_v1.2.abc"]);
+    expect(validated.args.citations).toEqual([
+      { ref: "citation:v1.2.3.def" },
+      { ref: "citation:v1.2.4.9a8", claim: "day sales" },
+    ]);
+  });
+
+  it("completes honestly with no_usable_sources when every read failed", async () => {
+    const tools = toolsUnderTest(["operational"]);
+    const outcome = await tools.completeRun({
+      outcome: "no_usable_sources",
+      narrative: "No usable data sources were accessible in this run.",
+      citedAttemptRefs: [],
+      citations: [],
+    });
+    expect(outcome.kind).toBe("success");
+    expect(tools.completions).toHaveLength(1);
+    expect(tools.completions[0].artifact.payload).toMatchObject({ outcome: "no_usable_sources" });
+  });
+
+  it("still refuses an answer with zero successful attempts", async () => {
+    const tools = toolsUnderTest(["operational"]);
+    const outcome = await tools.completeRun({
+      outcome: "answer",
+      narrative: "Guessed.",
+      citedAttemptRefs: [],
+      citations: [],
+    });
+    expect(outcome).toMatchObject({ kind: "denied", denial: { code: "no_attempts" } });
   });
 });

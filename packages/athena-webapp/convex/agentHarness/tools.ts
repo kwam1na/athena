@@ -185,18 +185,37 @@ export const completeRunTool: AgentToolDefinition<AgentCompleteRunArgs, unknown>
     if (object.confidence !== undefined && (typeof object.confidence !== "number" || !(object.confidence >= 0 && object.confidence <= 1))) issues.push({ path: "confidence", message: "confidence must be between 0 and 1" });
     if (object.limitedEvidence !== undefined && typeof object.limitedEvidence !== "boolean") issues.push({ path: "limitedEvidence", message: "limitedEvidence must be a boolean" });
     if (issues.length > 0) return { ok: false, issues };
+    // Canonicalize the two ref buckets by prefix: models file attempt refs
+    // under `citations` and citation refs under `citedAttemptRefs`, and the
+    // kernel rightly rejects the whole submission for one misfiled ref.
+    // Re-bucketing reconstructs the unambiguous intent; a forged ref still
+    // dies in the kernel's resolvers.
+    const attemptRefs: string[] = [];
+    const citationEntries: { ref: string; claim?: string; claimShape?: string }[] = [];
+    for (const ref of citedAttemptRefs as string[]) {
+      if (ref.startsWith("citation:")) citationEntries.push({ ref });
+      else attemptRefs.push(ref);
+    }
+    for (const citation of citations as Record<string, unknown>[]) {
+      const ref = citation.ref as string;
+      if (ref.startsWith("attempt_")) {
+        attemptRefs.push(ref);
+        continue;
+      }
+      citationEntries.push({
+        ref,
+        ...(typeof citation.claim === "string" ? { claim: citation.claim } : {}),
+        ...(typeof citation.claimShape === "string" ? { claimShape: citation.claimShape } : {}),
+      });
+    }
     return {
       ok: true,
       args: {
         outcome: outcome as AgentAnswerOutcome,
         narrative: (narrative as string).trim(),
         ...(typeof object.title === "string" ? { title: object.title.trim() } : {}),
-        citedAttemptRefs: [...new Set(citedAttemptRefs as string[])],
-        citations: (citations as Record<string, unknown>[]).map((citation) => ({
-          ref: citation.ref as string,
-          ...(typeof citation.claim === "string" ? { claim: citation.claim } : {}),
-          ...(typeof citation.claimShape === "string" ? { claimShape: citation.claimShape } : {}),
-        })),
+        citedAttemptRefs: [...new Set(attemptRefs)],
+        citations: [...new Map(citationEntries.map((entry) => [entry.ref, entry])).values()],
         ...(typeof object.confidence === "number" ? { confidence: object.confidence } : {}),
         ...(typeof object.limitedEvidence === "boolean" ? { limitedEvidence: object.limitedEvidence } : {}),
       },
@@ -437,7 +456,12 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
     definition: completeRunTool,
     handler: async (args) => {
       if (completion.committed) return denied("already_completed", "The run already has its answer.");
-      if (attempts.length === 0) return denied("no_attempts", "Read at least one source with athena.executeProgram before completing.");
+      // `no_usable_sources` is precisely for the run whose every read failed:
+      // it must stay reachable with zero successful attempts, or a turn that
+      // spent its attempt budget on rejected programs can never end honestly.
+      if (attempts.length === 0 && args.outcome !== "no_usable_sources") {
+        return denied("no_attempts", "Read at least one source with athena.executeProgram before completing, or complete with outcome no_usable_sources.");
+      }
       if (args.outcome === "answer" && (args.citedAttemptRefs.length === 0 || args.citations.length === 0)) {
         return denied("citations_required", "An answer must cite at least one attempt and one citation; use outcome no_usable_sources when nothing usable was read.");
       }

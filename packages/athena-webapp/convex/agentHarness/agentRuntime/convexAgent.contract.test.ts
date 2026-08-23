@@ -670,3 +670,23 @@ describe("Convex Agent adapter terminal tool", () => {
     expect(harness.modelCalls("turn-forced-fallback")).toHaveLength(2);
   });
 });
+
+describe("Convex Agent adapter forced-continuation retry", () => {
+  it("gives the forced continuation one corrective step when the first submission is refused", async () => {
+    const harness = createConvexAgentContractHarness();
+    const kernel = terminalKernel(harness.adapter.descriptor.adapterVersion, ["denied", "success"]);
+    harness.scriptTurn("turn-forced-retry", [
+      { kind: "complete", narrative: "Prose ending." },
+      { kind: "tool_call", callId: "c1", toolId: "athena.completeRun", args: {} },
+      { kind: "tool_call", callId: "c2", toolId: "athena.completeRun", args: {} },
+    ]);
+    const { turnRef } = await openTerminalTurn(harness, kernel.hooks, "turn-forced-retry");
+    await harness.adapter.inspect.settled(turnRef);
+    expect(kernel.events.find((event) => event.kind === "turn_completed")).toMatchObject({ outcome: "completed" });
+    const outcomes = harness.adapter.inspect
+      .dispatchResults(turnRef)
+      .map((result) => (result.kind === "outcome" ? result.outcome.kind : result.kind));
+    expect(outcomes).toEqual(["denied", "success"]);
+    expect(harness.modelCalls("turn-forced-retry")).toHaveLength(3);
+  });
+});
