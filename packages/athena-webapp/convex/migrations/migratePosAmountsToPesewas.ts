@@ -216,11 +216,17 @@ function nextRemaining(input: {
     remaining: undefined,
     remainingMeasuredAt: undefined,
   };
+  // A record written before `remaining` became optional carries a number with
+  // no `remainingMeasuredAt` — a figure from a run that never proved it, which
+  // is exactly the unearned zero this pairing exists to eliminate. Carrying it
+  // forward would launder it into a measurement and break the schema's stated
+  // pairing, so an unpaired legacy number is dropped on first touch instead.
+  const carriedMeasured = input.existing?.remainingMeasuredAt !== undefined;
   const carried = input.cutoffChanged
     ? unmeasured
     : {
         cutoffChangedAt,
-        remaining: input.existing?.remaining,
+        remaining: carriedMeasured ? input.existing?.remaining : undefined,
         remainingMeasuredAt: input.existing?.remainingMeasuredAt,
       };
 

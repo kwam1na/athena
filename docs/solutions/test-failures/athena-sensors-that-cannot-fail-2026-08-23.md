@@ -14,7 +14,7 @@ root_cause: test_isolation
 resolution_type: test_fix
 severity: high
 tags: [testing, sensors, falsification, characterization, boundary-tests, flaky-tests]
-delivery_diff_fingerprint: 6d2ee68f0d3206fb462fafb7914644535668896dcdffbfbd00b6b94c537b3cfd
+delivery_diff_fingerprint: d7fd2899aef7bfa3ba61870a898a05e529fd780ea0a43c62977238b356a738dd
 ---
 
 # Sensors That Cannot Fail
@@ -46,7 +46,17 @@ production rows.
   `amount: 150000` — line items 100x smaller than the order containing them.
   The fixture was internally inconsistent, so it pinned a units bug in one
   direction while hiding a worse one: on realistic data, percentage discounts
-  inflated 100x and a `Math.min` clamp compared mixed units and never fired.
+  inflated 100x, and the `Math.min` clamp meant to cap a fixed-amount discount
+  at the eligible subtotal stopped holding. The clamp itself was sound: on
+  stored data both operands are pesewas, so `Math.min(200000, 150000)` compared
+  like units and correctly returned the subtotal. What broke it is that the
+  `isInCents` ×100 was applied to the clamp's *result*, and `OrderSummary`
+  multiplied by 100 again — a GH₵1,500 order rendered a GH₵15,000,000 discount
+  and an amount paid of −GH₵148,500. The cap bound and was then destroyed
+  downstream; it was never a mixed-unit comparison. The numbers on inconsistent
+  scales were the fixture's own — `Math.min(20, 1500)`, cedis-scaled operands
+  sitting next to a pesewas `amount` — which is precisely why the destroyed cap
+  never showed up in the assertion.
 - `findIllegalConvexImports` walked `dirname(import.meta.url)` and so scanned
   `src/` only — never `shared/`, the directory ten browser-safe modules had just
   been moved into by the very ticket that tightened the boundary.
@@ -62,9 +72,13 @@ production rows.
   behavior. A name is a claim about coverage, and claims are not evidence.
 - **Trusting a green full suite.** 9,927 tests passed on a tree where a stored
   `remaining` was lying and a boundary was unscanned.
-- **Grep for the racy pattern.** A static scan found 87 `waitFor`-then-negative
-  sites in `src/lib/pos/**`. Far too many to triage by eye, and the count says
-  nothing about which are genuinely racy — 85 were sound.
+- **Grep for the racy pattern.** A static scan of `src/lib/pos/**` found far
+  more `waitFor`-then-negative candidate sites than could be triaged by eye —
+  and no reproducible number: the total swings by hundreds depending on how the
+  pattern is defined, so it is not a finding, only an order of magnitude. The
+  count says nothing about which sites are genuinely racy either. Exactly two
+  were, and the timing-parity sensor found both; every other candidate was
+  sound.
 - **Coverage instrumentation as a proxy for CI timing.** The CI failure appeared
   under `test:coverage`, so coverage looked like the reproduction lever. It is
   not: 8/8 green locally under coverage, and still green under 24 competing

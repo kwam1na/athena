@@ -40,9 +40,14 @@ configure({ asyncUtilTimeout: 5000 });
 // spurious failures.
 //
 // Inert unless the variable is set, so normal `bun run test` is untouched. A
-// test that installs fake timers replaces these wrappers, and
-// `vi.useRealTimers()` restores the unwrapped originals; timing-parity mode
-// therefore only affects real-timer tests, which are the ones that can race.
+// test that installs fake timers replaces these wrappers for as long as the
+// fake clock is installed. `vi.useRealTimers()` does NOT hand back the
+// unwrapped originals: uninstalling restores whatever was on `globalThis` at
+// install time, which is these wrappers. Measured under
+// `ATHENA_TEST_TIMER_LAG=10`, a 50ms timeout takes 501ms before fake timers
+// and 502ms after `vi.useRealTimers()`. The consequence is the same either
+// way — timing-parity mode only stretches waits that run on the real clock,
+// which are the ones that can race.
 const timerLagFactor = Number(process.env.ATHENA_TEST_TIMER_LAG ?? "0");
 if (Number.isFinite(timerLagFactor) && timerLagFactor > 1) {
   const realSetTimeout = globalThis.setTimeout;

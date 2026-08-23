@@ -27,9 +27,18 @@ export const posAmountMigrationRunSchema = v.object({
   // because an applying batch converts what it sees and its own pending count
   // is structurally zero — to write `0`, turning absence into a positive claim
   // of "no work left". Widening to optional is safe for rows at rest: every
-  // existing record already carries a number.
+  // record written before the widening already carries a number, and that
+  // number is invalidated the first time a run touches the record (see
+  // `remainingMeasuredAt`).
   remaining: v.optional(v.number()),
-  // When `remaining` was measured. Absent exactly when `remaining` is absent.
+  // When `remaining` was measured. Every write by the current code emits the
+  // two together or omits both, so the pairing holds for every record this
+  // code has written. A record predating the widening can still be at rest
+  // with a `remaining` and no `remainingMeasuredAt` — an unearned number, and
+  // the only way that combination can occur. The next run to touch such a
+  // record drops the orphaned number instead of carrying it forward, so those
+  // rows self-heal on first touch rather than needing a backfill; until then
+  // they keep reporting the figure the old code left behind.
   remainingMeasuredAt: v.optional(v.number()),
   // Set when a run arrived with a different `cutoffTimestamp` than the record
   // already carried: the two runs measured different questions about the same

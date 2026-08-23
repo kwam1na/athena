@@ -170,7 +170,7 @@
         <h2>What changed — and what did not</h2>
         <h3>Changed</h3>
         <ul>
-          <li>Operator order summary, order detail and orders-list totals now render and compute discounts in pesewas consistently. Percentage discounts were also affected on realistic data, and the clamp that was supposed to cap a discount at the eligible subtotal never fired because it compared mixed units.</li>
+          <li>Operator order summary, order detail and orders-list totals now render and compute discounts in pesewas consistently. Percentage discounts were also affected on realistic data, and the clamp capping a fixed-amount discount at the eligible subtotal stopped holding — not because it compared mixed units, but because the <code>&times;100</code> scaling ran on the clamp's result: the comparison was like-unit and bound correctly, then the cap was destroyed downstream.</li>
           <li>The POS migration run record distinguishes unmeasured from zero, and a wrong-cutoff run is now visible in the status query rather than presenting as a clean board. <code>skipped</code> is cumulative, matching <code>migrated</code>.</li>
           <li>Two genuinely racy POS tests fixed; a third-party-visible sensor added to find more.</li>
           <li>The browser boundary covers <code>shared/</code>, alias forms, and dynamic imports.</li>
@@ -219,7 +219,7 @@
           <li><strong>A ticket's diagnosis is a hypothesis.</strong> Two of four here were wrong about their own subject. Verify the premise against the code before implementing to it — and when acceptance criteria conflict, say which you chose and why rather than silently satisfying one.</li>
           <li><strong>Check that a characterization fixture is internally coherent</strong> before trusting what it pins. Line items that cannot sum to their own order describe a system that does not exist.</li>
           <li><strong>Reproduce the cause, not the correlate.</strong> Coverage instrumentation was where the flake appeared, so it looked like the lever; it never reproduced locally. Timer lag did, in a fiftieth of the time.</li>
-          <li><strong>Let the sensor discriminate.</strong> Grep found 87 candidate racy sites; the parity sensor found the 2 that were real. Do not triage by eye what a tool can decide.</li>
+          <li><strong>Let the sensor discriminate.</strong> Grep found far more candidate racy sites than could be triaged by eye — and no reproducible count, since the total swings by hundreds with how the pattern is defined. The parity sensor found the 2 that were real. Do not triage by eye what a tool can decide, and do not report a number a rescan will not reproduce.</li>
           <li><strong>An allowlist is a deferred decision.</strong> Resolving a new boundary violation by adding an exception undoes the ticket that removed the exceptions.</li>
           <li><strong>Close a gap when it is the same defect class you already have open.</strong> Filing a ticket against work sitting on the bench is deferral with extra steps — but a genuinely different axis, like V26-1319, still deserves its own characterization pass.</li>
         </ul>
@@ -254,10 +254,10 @@
             <ol data-quiz-options>
               <li>It omitted percentage discounts entirely.</li>
               <li>It used a mocked formatter.</li>
-              <li data-quiz-correct>Its line items were 100x smaller than the order total, so the multiplier's effect on percentage discounts and the clamp cancelled out invisibly.</li>
+              <li data-quiz-correct>Its line items were 100x smaller than the order total, so the multiplier's effect on percentage discounts and on the clamped fixed-amount discount cancelled out invisibly.</li>
               <li>It ran only in CI.</li>
             </ol>
-            <p data-quiz-explanation>With a coherent fixture, a 10% discount on a GH₵1,500 order rendered GH₵15,000 and the mixed-unit clamp never fired.</p>
+            <p data-quiz-explanation>With a coherent fixture, a 10% discount on a GH₵1,500 order rendered GH₵15,000, and a fixed-amount discount clamped to the eligible subtotal was then scaled past it — <code>Math.min(200000, 150000)</code> bound correctly at 150,000 pesewas and still rendered GH₵15,000,000.</p>
           </li>
           <li data-quiz-question>
             <p data-quiz-prompt>Why did coverage instrumentation fail as a reproduction lever for the flake?</p>

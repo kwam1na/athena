@@ -649,6 +649,53 @@ describe("advisory signal truthfulness (remaining + cutoff)", () => {
     );
   });
 
+  it("invalidates a legacy record whose `remaining` predates `remainingMeasuredAt`", async () => {
+    // The shape the previous code left at rest: `remaining` was required, so a
+    // first-touch applying batch — which measures nothing — wrote `0`, and
+    // `remainingMeasuredAt` did not exist yet. Nothing about that zero was
+    // earned, and carrying it forward would launder it into a measurement.
+    const harness = createCtx({
+      posTransaction: eligibleTransactions(6),
+      posAmountMigrationRun: [
+        {
+          _id: "run-legacy",
+          _creationTime: 1,
+          complete: false,
+          cutoffTimestamp: CUTOFF,
+          migrated: 2,
+          remaining: 0,
+          skipped: 0,
+          table: "posTransaction",
+          updatedAt: 1,
+        },
+      ],
+    });
+
+    expect(storedRun(harness).remaining).toBe(0);
+    expect(storedRun(harness).remainingMeasuredAt).toBeUndefined();
+
+    // A mid-chain applying batch: not complete, cutoff unchanged, nothing
+    // drained to exhaustion — the branch that carries the prior measurement.
+    await migratePosAmountTableWithCtx(harness.ctx, {
+      cutoffTimestamp: CUTOFF,
+      dryRun: false,
+      limit: 2,
+      table: "posTransaction",
+    } as never);
+
+    expect(await actualPending(harness)).toBe(4);
+    expect(storedRun(harness).remaining).toBeUndefined();
+    expect(storedRun(harness).remainingMeasuredAt).toBeUndefined();
+    expect(await statusFor(harness)).toEqual(
+      expect.objectContaining({
+        complete: false,
+        migrated: 4,
+        remaining: null,
+        remainingMeasuredAt: null,
+      }),
+    );
+  });
+
   it("sequence 2: an apply chain draining from an explicit cursor invalidates the stale measurement", async () => {
     const harness = createCtx({
       posTransaction: eligibleTransactions(4),

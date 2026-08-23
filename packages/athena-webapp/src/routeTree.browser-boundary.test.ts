@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, extname, join, relative } from "node:path";
+import { dirname, extname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
@@ -60,8 +60,19 @@ const IMPORT_SPECIFIER_PATTERNS = [
  * `@cvx/*` is a real alias for `./convex/*` in both `vite.config.ts` and
  * `tsconfig.json`, so it has to be normalized here; matching only `~/convex/`
  * would let `@cvx/operations/...` walk straight past the boundary.
+ *
+ * A relative specifier is RESOLVED against the importing file rather than
+ * substring-matched. `src/lib/pos/infrastructure/convex/` is a real directory
+ * inside the browser source tree, so `./convex/gateway` written next to it
+ * contains `convex/` while never leaving `src/` — a substring test reports
+ * that as a boundary crossing. Only a relative import that escapes the
+ * browser source root it was found in and lands in a `convex` directory has
+ * actually crossed anything.
  */
-function toProjectConvexPath(specifier: string): string | null {
+function toProjectConvexPath(
+  specifier: string,
+  context: { filePath: string; reportRoot: string; sourceRoot: string },
+): string | null {
   if (specifier.startsWith("~/convex/")) {
     return specifier.slice("~/".length);
   }
@@ -70,8 +81,19 @@ function toProjectConvexPath(specifier: string): string | null {
     return `convex/${specifier.slice("@cvx/".length)}`;
   }
 
-  if (specifier.startsWith(".") && specifier.includes("convex/")) {
-    return specifier;
+  if (specifier.startsWith(".")) {
+    const resolved = resolve(dirname(context.filePath), specifier);
+    const withinSourceRoot = relative(context.sourceRoot, resolved);
+
+    if (withinSourceRoot !== "" && !withinSourceRoot.startsWith("..")) {
+      // Still inside `src/` (or `shared/`). Whatever it is named, it is a
+      // browser module, not a Convex one.
+      return null;
+    }
+
+    const fromPackage = relative(context.reportRoot, resolved);
+
+    return fromPackage.split(sep).includes("convex") ? fromPackage : null;
   }
 
   return null;
@@ -103,7 +125,11 @@ function findIllegalConvexImports(sourceRoot: string, reportRoot = sourceRoot) {
     );
 
     const illegalImports = imports.filter((specifier) => {
-      const convexPath = toProjectConvexPath(specifier);
+      const convexPath = toProjectConvexPath(specifier, {
+        filePath,
+        reportRoot,
+        sourceRoot,
+      });
 
       if (convexPath === null) {
         return false;
@@ -222,6 +248,41 @@ describe("Athena route tree browser boundary", () => {
         "~/convex/inventoryLedger/post",
         "~/convex/reports/foldDay",
         "~/convex/schemas/storeFront",
+      ]);
+    } finally {
+      rmSync(sourceRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("does not flag a relative import into a `convex/` directory that stays inside the source root", () => {
+    // `src/lib/pos/infrastructure/convex/` is a real directory in this package.
+    // A sibling importing `./convex/...` never leaves `src/`, so it is not a
+    // boundary crossing — but it does contain the substring `convex/`, which is
+    // all the previous check looked at. The genuine escape written from the
+    // same directory must still be reported, so the two are planted together.
+    const sourceRoot = mkdtempSync(join(tmpdir(), "athena-browser-boundary-"));
+    const infrastructure = join(sourceRoot, "lib", "pos", "infrastructure");
+
+    try {
+      mkdirSync(join(infrastructure, "convex"), { recursive: true });
+      writeFileSync(
+        join(infrastructure, "convex", "gateway.ts"),
+        "export const gateway = () => null;\n",
+      );
+      writeFileSync(
+        join(infrastructure, "useGateway.ts"),
+        'import { gateway } from "./convex/gateway";\n',
+      );
+      writeFileSync(
+        join(infrastructure, "leak.ts"),
+        'import { post } from "../../../../convex/inventoryLedger/post";\n',
+      );
+
+      expect(findIllegalConvexImports(sourceRoot)).toEqual([
+        {
+          file: "lib/pos/infrastructure/leak.ts",
+          specifier: "../../../../convex/inventoryLedger/post",
+        },
       ]);
     } finally {
       rmSync(sourceRoot, { recursive: true, force: true });
