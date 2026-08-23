@@ -1893,6 +1893,8 @@ describe("stream reveal of the live draft", () => {
   const fakeFrames = () =>
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "requestAnimationFrame", "cancelAnimationFrame", "performance", "Date"] });
   const paintedText = () => screen.getByTestId("athena-agent-provisional-text").textContent ?? "";
+  const wipedWords = () =>
+    screen.getByTestId("athena-agent-provisional-text").querySelectorAll(".athena-agent-wipe-word");
   const frames = (count: number) => {
     for (let frame = 0; frame < count; frame += 1) {
       act(() => {
@@ -1929,6 +1931,32 @@ describe("stream reveal of the live draft", () => {
       // 360 pending characters cap at the 180 ms streaming catch-up.
       expect(paintedText()).toBe(grown);
       expect(screen.getByTestId("athena-agent-provisional-text")).toHaveAttribute("data-reveal", "settled");
+      // Words keep arriving with the ink wipe for as long as the draft streams.
+      expect(wipedWords().length).toBeGreaterThan(0);
+      frames(60);
+      expect(wipedWords().length).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the ink wipe for one fade after the draft stops, then drops the word spans without moving a word", () => {
+    fakeFrames();
+    try {
+      const { rerender } = render(
+        <PanelHarness run={draftRun("streaming", { provisional: { text: long(40), truncated: false, draftOrdinal: 1 } })} />,
+      );
+      frames(15);
+      rerender(<PanelHarness run={draftRun("committing", { provisional: { text: long(120), truncated: false, draftOrdinal: 1 } })} />);
+      frames(9);
+      expect(paintedText()).toBe(long(120));
+      // Settled, but the last words are still fading in (760 ms).
+      expect(wipedWords().length).toBeGreaterThan(0);
+      frames(40);
+      expect(wipedWords().length).toBeGreaterThan(0);
+      frames(12);
+      expect(wipedWords()).toHaveLength(0);
+      expect(paintedText()).toBe(long(120));
     } finally {
       vi.useRealTimers();
     }
@@ -1994,8 +2022,10 @@ describe("stream reveal of the live draft", () => {
         <PanelHarness run={draftRun("streaming", { provisional: { text: long(40), truncated: false, draftOrdinal: 1 } })} />,
       );
       expect(paintedText()).toBe(long(40));
+      expect(wipedWords()).toHaveLength(0);
       rerender(<PanelHarness run={draftRun("streaming", { provisional: { text: long(400), truncated: false, draftOrdinal: 1 } })} />);
       expect(paintedText()).toBe(long(400));
+      expect(wipedWords()).toHaveLength(0);
     } finally {
       vi.useRealTimers();
     }
@@ -2023,6 +2053,8 @@ describe("stream reveal of the committed answer", () => {
       ...overrides,
     });
   const paintedAnswer = () => screen.getByTestId("athena-agent-answer-text").textContent ?? "";
+  const wipedWords = () =>
+    screen.getByTestId("athena-agent-answer-text").querySelectorAll(".athena-agent-wipe-word");
   const frames = (count: number) => {
     for (let frame = 0; frame < count; frame += 1) {
       act(() => {
@@ -2046,6 +2078,8 @@ describe("stream reveal of the committed answer", () => {
         const painted = paintedAnswer();
         lengths.push(painted.length);
         expect((painted.match(/\[/g) ?? []).length).toBe((painted.match(/\]/g) ?? []).length);
+        // Every word on screen arrives with the ink wipe.
+        expect(wipedWords().length).toBeGreaterThan(0);
       }
       for (let index = 1; index < lengths.length; index += 1) {
         expect(lengths[index]).toBeGreaterThanOrEqual(lengths[index - 1]!);
@@ -2054,6 +2088,11 @@ describe("stream reveal of the committed answer", () => {
       // A settled answer lands within 120 ms, rendered exactly as a mount would render it.
       expect(screen.getByTestId("athena-agent-answer-text")).toHaveAttribute("data-reveal", "settled");
       const settled = paintedAnswer();
+      // The wrapping stays for one fade so the last words land, then goes.
+      expect(wipedWords().length).toBeGreaterThan(0);
+      frames(50);
+      expect(wipedWords()).toHaveLength(0);
+      expect(paintedAnswer()).toBe(settled);
       cleanup();
       render(<PanelHarness run={answered()} />);
       expect(paintedAnswer()).toBe(settled);
@@ -2069,6 +2108,7 @@ describe("stream reveal of the committed answer", () => {
       render(<PanelHarness run={answered()} />);
       expect(paintedAnswer()).toBe(answerText);
       expect(screen.getByTestId("athena-agent-answer-text")).toHaveAttribute("data-reveal", "settled");
+      expect(wipedWords()).toHaveLength(0);
     } finally {
       vi.useRealTimers();
     }
@@ -2092,6 +2132,7 @@ describe("stream reveal of the committed answer", () => {
       );
       rerender(<PanelHarness run={answered()} />);
       expect(paintedAnswer()).toBe(answerText);
+      expect(wipedWords()).toHaveLength(0);
     } finally {
       vi.useRealTimers();
     }

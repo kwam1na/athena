@@ -9,6 +9,11 @@
  * as visible characters. Interactive destinations exist only for server-minted
  * citations, which the panel renders outside this component.
  *
+ * Wipe mode wraps each word in a bare, class-only span so a word that has just
+ * arrived can fade in (the ink wipe). The span carries nothing but a class,
+ * and the words are keyed by position, so a word that is already on screen
+ * keeps its element — and stays still — as the text grows past it.
+ *
  * Provisional mode narrows the vocabulary further. A draft is a partial buffer
  * the model is still writing, so anything that could read as Athena's own
  * structure — a rule, a heading, a quotation, a fenced block — is flattened to
@@ -224,36 +229,58 @@ function flattenForDraft(blocks: readonly InertBlock[]): readonly InertBlock[] {
   });
 }
 
-function renderSpans(spans: readonly InertSpan[]): ReactNode {
+/** The class the ink wipe animates; see `.athena-agent-wipe-word` in index.css. */
+export const WIPE_WORD_CLASS = "athena-agent-wipe-word";
+
+/**
+ * Split a run of text into words that each arrive with the ink wipe. The
+ * whitespace between them stays a plain string, so prose still wraps and a
+ * pre-wrapped paragraph keeps its line breaks; the keys are positional, so a
+ * word already on screen keeps its element as the text grows by prefix.
+ */
+function wipeWords(text: string, keyPrefix: string): ReactNode {
+  return text.split(/(\s+)/).map((part, index) =>
+    part.length === 0 || /^\s+$/.test(part) ? (
+      part
+    ) : (
+      <span className={WIPE_WORD_CLASS} key={`${keyPrefix}-w${index}`}>
+        {part}
+      </span>
+    ),
+  );
+}
+
+function renderSpans(spans: readonly InertSpan[], wipe: boolean): ReactNode {
   return spans.map((span, spanIndex) => {
     const key = `${span.kind}-${spanIndex}`;
+    const words = wipe ? wipeWords(span.text, key) : span.text;
     if (span.kind === "code") {
       return (
         <code
           className="rounded-sm bg-muted px-1 py-0.5 font-mono text-[0.85em]"
           key={key}
         >
-          {span.text}
+          {words}
         </code>
       );
     }
     if (span.kind === "strong") {
       return (
         <strong className="font-semibold text-foreground" key={key}>
-          {span.text}
+          {words}
         </strong>
       );
     }
     if (span.kind === "emphasis") {
       return (
         <em className="italic" key={key}>
-          {span.text}
+          {words}
         </em>
       );
     }
-    // A plain string child: no element, no attribute, nothing to hang a
-    // handler on.
-    return span.text;
+    // A plain string child (or, while wiping, class-only spans around one): no
+    // attribute, nothing to hang a handler on.
+    return words;
   });
 }
 
@@ -269,6 +296,8 @@ export type AthenaAgentSafeTextProps = {
   readonly maxCharacters?: number;
   /** `provisional` renders a draft the model is still writing. */
   readonly mode?: AthenaAgentSafeTextMode;
+  /** Words arrive with the ink wipe while the text is still being revealed. */
+  readonly wipe?: boolean;
 };
 
 /** Render untrusted narrative. Emits text nodes only — never a link or an asset. */
@@ -277,6 +306,7 @@ export function AthenaAgentSafeText({
   className,
   maxCharacters,
   mode = "answer",
+  wipe = false,
 }: AthenaAgentSafeTextProps) {
   // Parsed from the whole buffer on every render: a draft grows by prefix, and
   // a memoized parse would let a payload complete itself between frames.
@@ -290,7 +320,7 @@ export function AthenaAgentSafeText({
           const Tag = headingTag(block.level);
           return (
             <Tag className="text-sm font-semibold text-foreground" key={key}>
-              {renderSpans(block.spans)}
+              {renderSpans(block.spans, wipe)}
             </Tag>
           );
         }
@@ -305,7 +335,7 @@ export function AthenaAgentSafeText({
               key={key}
             >
               {block.items.map((item, itemIndex) => (
-                <li key={`item-${itemIndex}`}>{renderSpans(item)}</li>
+                <li key={`item-${itemIndex}`}>{renderSpans(item, wipe)}</li>
               ))}
             </ListTag>
           );
@@ -316,7 +346,7 @@ export function AthenaAgentSafeText({
               className="border-l-2 border-border pl-3 text-muted-foreground"
               key={key}
             >
-              <p className="whitespace-pre-wrap">{renderSpans(block.spans)}</p>
+              <p className="whitespace-pre-wrap">{renderSpans(block.spans, wipe)}</p>
             </blockquote>
           );
         }
@@ -342,7 +372,7 @@ export function AthenaAgentSafeText({
         }
         return (
           <p className="whitespace-pre-wrap" key={key}>
-            {renderSpans(block.spans)}
+            {renderSpans(block.spans, wipe)}
           </p>
         );
       })}

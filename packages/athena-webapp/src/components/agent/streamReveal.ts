@@ -10,6 +10,8 @@
  * through the same inert renderer as the full text.
  */
 
+/** One word's ink wipe (the `athena-agent-word-ink` animation in index.css). */
+export const WORD_INK_MS = 760;
 export const MIN_REVEAL_MS = 70;
 export const MAX_STREAM_REVEAL_MS = 180;
 export const MAX_SETTLE_REVEAL_MS = 120;

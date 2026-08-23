@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AthenaAgentSafeText } from "./AthenaAgentSafeText";
+import { AthenaAgentSafeText, WIPE_WORD_CLASS } from "./AthenaAgentSafeText";
 
 type NetworkSpy = ReturnType<typeof vi.fn<() => void>>;
 
@@ -327,5 +327,54 @@ describe("provisional mode renders a draft without letting it build chrome", () 
     expect(container.querySelector("h4")).not.toBeNull();
     expect(container.querySelector("blockquote")).not.toBeNull();
     expect(container.querySelector("pre")).not.toBeNull();
+  });
+});
+
+describe("wipe mode wraps each word so it can arrive with the ink wipe", () => {
+  const words = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll(`.${WIPE_WORD_CLASS}`));
+
+  it("wraps the words of prose, emphasis, and inline code, keeping the whitespace between them", () => {
+    const text = "Open lanes: **two** and `reg-4`\nstill counting.";
+    const { container } = render(<AthenaAgentSafeText text={text} wipe />);
+
+    expect(container.querySelector("p")?.textContent).toBe(
+      "Open lanes: two and reg-4\nstill counting.",
+    );
+    expect(words(container).map((word) => word.textContent)).toEqual([
+      "Open", "lanes:", "two", "and", "reg-4", "still", "counting.",
+    ]);
+    expect(container.querySelector(`strong .${WIPE_WORD_CLASS}`)?.textContent).toBe("two");
+    expect(container.querySelector(`code .${WIPE_WORD_CLASS}`)?.textContent).toBe("reg-4");
+    // A class and nothing else: no attribute that could start a request.
+    for (const word of words(container)) {
+      expect(word.getAttributeNames()).toEqual(["class"]);
+    }
+    expectNoNetworkRequest();
+  });
+
+  it("keeps a word's element as the text grows past it", () => {
+    const { container, rerender } = render(<AthenaAgentSafeText text="Checking the reg" wipe />);
+    const before = words(container);
+    expect(before.map((word) => word.textContent)).toEqual(["Checking", "the", "reg"]);
+
+    rerender(<AthenaAgentSafeText text="Checking the registers now" wipe />);
+    const after = words(container);
+    expect(after.map((word) => word.textContent)).toEqual(["Checking", "the", "registers", "now"]);
+    expect(after[0]).toBe(before[0]);
+    expect(after[1]).toBe(before[1]);
+    expect(after[2]).toBe(before[2]);
+  });
+
+  it("wraps list items and a provisional draft too, and nothing without wipe", () => {
+    const text = "- first lane\n- second lane";
+    const { container, rerender } = render(
+      <AthenaAgentSafeText mode="provisional" text={text} wipe />,
+    );
+    expect(container.querySelectorAll(`li .${WIPE_WORD_CLASS}`)).toHaveLength(4);
+
+    rerender(<AthenaAgentSafeText mode="provisional" text={text} />);
+    expect(words(container)).toHaveLength(0);
+    expect(container.querySelector("ul")?.textContent).toBe("first lanesecond lane");
   });
 });

@@ -23,7 +23,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import type { Id } from "~/convex/_generated/dataModel";
 
 import { AthenaAgentSafeText } from "./AthenaAgentSafeText";
-import { characterCount, revealDuration, revealedProse } from "./streamReveal";
+import { WORD_INK_MS, characterCount, revealDuration, revealedProse } from "./streamReveal";
 import {
   composeAthenaThreadKey,
   describeAthenaProvisionalCue,
@@ -169,8 +169,36 @@ function useStreamingText(input: {
   return { text: shown, settled: shown === text };
 }
 
+/**
+ * Whether the words of a text should arrive with the ink wipe. The wipe is on
+ * while the text is still streaming or being revealed, and is held for one
+ * more fade once it settles so the last words to arrive finish fading before
+ * their spans are dropped; the spans are keyed by position, so dropping them
+ * afterwards moves nothing.
+ */
+function useWordWipe(active: boolean): boolean {
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    if (active) {
+      setHeld(true);
+      return;
+    }
+    if (!held) return;
+    const timer = setTimeout(() => setHeld(false), WORD_INK_MS);
+    return () => clearTimeout(timer);
+  }, [active, held]);
+  return active || held;
+}
+
 function usePrefersReducedMotion() {
-  const [reduced, setReduced] = useState(false);
+  // Read on the first render: a reveal or a word wipe must never start on a
+  // frame that runs before the preference is known.
+  const [reduced, setReduced] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -280,13 +308,15 @@ export function AthenaAgentPanel({
   const draftText = run.provisional?.text ?? null;
   // The live draft is revealed flush by flush; a new draft is seen to start,
   // and a draft that stopped growing (committing, paused) settles briskly.
+  const draftStreaming = provisionalState === "streaming" || provisionalState === "reset";
   const draftReveal = useStreamingText({
     text: draftText,
     key: draftOrdinal === null || !run.activeTurnId ? null : `${run.activeTurnId}:${draftOrdinal}`,
-    isStreaming: provisionalState === "streaming" || provisionalState === "reset",
-    arrives: provisionalState === "streaming" || provisionalState === "reset",
+    isStreaming: draftStreaming,
+    arrives: draftStreaming,
     animate: !reducedMotion,
   });
+  const draftWipe = useWordWipe(!reducedMotion && draftText !== null && (draftStreaming || !draftReveal.settled));
   // The committed answer is seen to land only when it arrives while the panel
   // is already showing this turn run; a panel that mounts onto an answer, or
   // a turn read back from history, paints it whole.
@@ -306,6 +336,7 @@ export function AthenaAgentPanel({
     arrives: answerArrivalRef.current?.live === true,
     animate: !reducedMotion && answerArrivalRef.current?.live === true,
   });
+  const answerWipe = useWordWipe(!reducedMotion && !answerReveal.settled);
 
   /**
    * One coalesced line per draft, from the closed vocabulary — never a token of
@@ -764,6 +795,7 @@ export function AthenaAgentPanel({
                       className="text-muted-foreground"
                       mode="provisional"
                       text={draftReveal.text ?? run.provisional.text}
+                      wipe={draftWipe}
                     />
                   </div>
                 </>
@@ -812,7 +844,10 @@ export function AthenaAgentPanel({
                 data-reveal={answerReveal.settled ? "settled" : "revealing"}
                 data-testid="athena-agent-answer-text"
               >
-                <AthenaAgentSafeText text={answerReveal.text ?? run.answer.narrative} />
+                <AthenaAgentSafeText
+                  text={answerReveal.text ?? run.answer.narrative}
+                  wipe={answerWipe}
+                />
               </div>
               {run.answer.citations.length > 0 ? (
                 <div
