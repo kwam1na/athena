@@ -55,6 +55,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/agentHarness/security.test.ts`](../../convex/agentHarness/security.test.ts)
 - [`convex/agentHarness/tools.test.ts`](../../convex/agentHarness/tools.test.ts)
 - [`convex/agentHarness/turnBindings.test.ts`](../../convex/agentHarness/turnBindings.test.ts)
+- [`convex/agentHarness/turnTrace.test.ts`](../../convex/agentHarness/turnTrace.test.ts)
 - [`convex/agentHarness/turns.test.ts`](../../convex/agentHarness/turns.test.ts)
 - [`convex/app.test.ts`](../../convex/app.test.ts)
 - [`convex/auth.test.ts`](../../convex/auth.test.ts)

@@ -175,6 +175,7 @@ import {
   agentRunGrantSchema,
   agentScratchDescriptorSchema,
   agentTurnBindingSchema,
+  agentTurnTraceEventSchema,
 } from "./schemas/agentHarness";
 import {
   remoteAssistClientSchema,
@@ -718,6 +719,17 @@ const schema = defineSchema({
     .index("by_expiresAt", ["expiresAt"])
     .index("by_storeId", ["storeId"])
     .index("by_organizationId", ["organizationId"]),
+  /**
+   * Engineer-only turn trace. Never projected into history, prompts,
+   * citations, or any operator-admitted query; read only by internal
+   * investigation functions and the `agent-trace:export` script.
+   */
+  agentTurnTraceEvent: defineTable(agentTurnTraceEventSchema)
+    .index("by_turnBindingId_sequence", ["turnBindingId", "sequence"])
+    .index("by_runId", ["runId"])
+    .index("by_storeId", ["storeId"])
+    .index("by_organizationId", ["organizationId"])
+    .index("by_expiresAt", ["expiresAt"]),
   agentEvidenceAccessAudit: defineTable(agentEvidenceAccessAuditSchema)
     .index("by_runId_accessedAt", ["runId", "accessedAt"])
     .index("by_storeId_accessedAt", ["storeId", "accessedAt"])

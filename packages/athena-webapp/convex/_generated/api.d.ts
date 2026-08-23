@@ -57,6 +57,7 @@ import type * as agentHarness_runtimeRetention from "../agentHarness/runtimeRete
 import type * as agentHarness_testSupport from "../agentHarness/testSupport.js";
 import type * as agentHarness_tools from "../agentHarness/tools.js";
 import type * as agentHarness_turnBindings from "../agentHarness/turnBindings.js";
+import type * as agentHarness_turnTrace from "../agentHarness/turnTrace.js";
 import type * as agentHarness_turns from "../agentHarness/turns.js";
 import type * as app from "../app.js";
 import type * as auth from "../auth.js";
@@ -790,6 +791,7 @@ declare const fullApi: ApiFromModules<{
   "agentHarness/testSupport": typeof agentHarness_testSupport;
   "agentHarness/tools": typeof agentHarness_tools;
   "agentHarness/turnBindings": typeof agentHarness_turnBindings;
+  "agentHarness/turnTrace": typeof agentHarness_turnTrace;
   "agentHarness/turns": typeof agentHarness_turns;
   app: typeof app;
   auth: typeof auth;

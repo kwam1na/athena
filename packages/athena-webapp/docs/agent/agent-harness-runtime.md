@@ -132,6 +132,32 @@ The repair sweep logs only when its expiry phase deleted something:
 
 A nonzero `expiredProvisionalNarratives` means a draft outlived its exposure bound (`AGENT_PROVISIONAL_NARRATIVE_TTL_MS`, 5 minutes) without any terminal cause reaching it — the dead-host signal. The sweep runs every 5 minutes in production and every 60 minutes elsewhere, so such a row is unreadable after 5 minutes but stays at rest until the next sweep.
 
+### The engineer's turn trace
+
+The operator's pane shows a draft and then an answer; refining the agent needs the other half — what the model was actually handed and what it did with it. The turn trace (`agentTurnTraceEvent`) records, per driven turn, every runtime event in the order the host saw it, the narrative deltas, each tool call's **exact arguments** and the outcome object the model read back, each provisional-flush outcome, and the turn's own report. It is engineer-only: nothing projects it into thread history, a prompt, a citation, or any operator-admitted query, and no public ingress reads the table. It is the single deliberate exception to "the narrative never enters Athena's durable record".
+
+- **What is written.** `adapter` rows carry the runtime envelope (`kind`, `sequence`, `turnRef`, `at`) plus the kind's own fields. `host` rows carry the host's own monotone counter and one of four kinds: `tool_dispatch` (the arguments, the settled outcome, hashes, and the dispatch latency — the normalized `tool_call_requested` event carries no arguments, so this is where they live), `provisional_flush` (the flush outcome and ordinal, never the text — the deltas already carry it), `trace_capped`, and `turn_report` (the `[agentHarness:driveTurn]` payload plus the `dispatch` outcome list).
+- **When it is written.** The host buffers rows in memory and flushes them in batches of `AGENT_TURN_TRACE_FLUSH_BATCH` (200) at every `tool_call_completed`, and once more **before** `finalizeTurn` — so a crash after finalize cannot lose the record — never inside the commit transaction. Every write goes through the settle-never-rethrow wrapper: a failed trace write can never fail a turn.
+- **Bounds.** `AGENT_TURN_TRACE_EVENT_PAYLOAD_MAX_BYTES` is 32 KiB per row, re-enforced server-side in `recordTurnTrace` rather than trusted from the host: an over-cap payload loses its largest string leaves first (cut at a whole codepoint) and the row is marked `truncated`; a payload with no string leaf big enough to absorb the excess degrades to `{ omitted: true, byteLength }`. `AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN` is 4 000 rows per turn; past it the host records one `trace_capped` row and stops. An `athena.executeProgram` outcome links to the run's stored `program_result` through `replayPayloadId`, so the full body is one hop away instead of duplicated.
+- **Retention and removal.** Standard class, 365 days, expired by the `sweepExpiredAgentContent` phase; store and organization removal delete the rows through the scope indexes with the rest of the harness content.
+- **The switch.** `AGENT_TURN_TRACE` is read on the Convex side inside `recordTurnTrace`. `off`, `0`, or `false` disables capture — the mutation writes nothing and the host stops buffering for the rest of the turn; anything else, **including unset**, captures. Capture-by-default is the point: the turn worth tracing is the one nobody predicted. The `driveTurn` report carries `trace: { enabled, recorded, capped }`.
+
+Reading one turn:
+
+```bash
+# The most recent turns on the deployment.
+bunx convex data agentTurnBinding --limit 3
+
+# One turn's trace, in order (also accepts {"runId": "<intelligenceRun id>"}).
+bunx convex run agentHarness/evals/directHarness:listTurnTrace '{"bindingId":"<agentTurnBinding id>"}'
+
+# The same thing as JSONL, paged to the end, for offline replay.
+bun scripts/agent-trace-export.ts --binding <agentTurnBinding id> --out trace.jsonl
+bun scripts/agent-trace-export.ts --run <intelligenceRun id>
+```
+
+An exported file holds the model's narrative and the arguments of every capability call for one store: treat it as that store's content.
+
 ### Fence and rollback for `narrativePolicy`
 
 `narrativePolicy` (`provisional_streaming | buffered`) is a required per-profile field folded into the registry's compatibility digest, and the protocol version is part of the same digest — which is why this contract moved it to `fnv1a64:501827e670579cf1`. Changing either ships through the standing procedure in [capability-authoring.md](./capability-authoring.md) §10.1/§10.2: fence the deployment about to be replaced (`bun scripts/agent-harness-fence.ts --reason "<deploy id>"`, one transaction that disables the named profiles and advances the epoch) → deploy → smoke while the switch is off → `bun scripts/agent-harness-switch.ts --profile <id> --enable --reason "<id>"`.

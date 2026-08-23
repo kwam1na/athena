@@ -166,7 +166,12 @@ markers, not an early release. The streamed prose is the assistant thinking out
 loud and is a different string from the `narrative` the model later submits to
 `completeRun`; the committed artifact replaces it rather than growing into it,
 and the operator is told so. It is never citation-bearing, never a citation
-source, never promoted to the `standard` retention class.
+source, never promoted to the `standard` retention class. The one granted
+exception to that invariant is engineer-only and never operator-facing: the
+turn trace (`agentTurnTraceEvent`) durably records a driven turn's deltas, tool
+arguments, and tool outcomes so the agent can be refined against what the model
+actually saw, and it is never projected into history, prompts, citations, or
+any operator-admitted query.
 
 Mechanically: the adapter emits `narrative_delta { draftOrdinal, text }` from
 the provider's text parts only, the turn host coalesces them in memory, and one

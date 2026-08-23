@@ -170,6 +170,14 @@ export function findKernelImportViolations(files: readonly SourceFile[]): string
  * not `turnBindings.ts`'s step-staleness window).
  */
 export const PROVISIONAL_NARRATIVE_LEAF = "convex/agentHarness/provisionalNarrative.ts";
+/**
+ * The turn-trace helper is called from `turns.ts` (the recording mutation) and
+ * `retention.ts` (scope removal and the standard-class expiry sweep). Same
+ * guarantee, same mechanism: it reaches only the generated types, so its
+ * 365-day retention bound is its own literal rather than an import of
+ * `shared/agentHarness/execution`.
+ */
+export const TURN_TRACE_LEAF = "convex/agentHarness/turnTrace.ts";
 export const LEAF_ALLOWED_IMPORTS = ["convex/_generated/server", "convex/_generated/dataModel", "convex/values"] as const;
 
 export function findLeafImportViolations(file: SourceFile): string[] {
@@ -397,6 +405,21 @@ describe("agent harness import boundaries", () => {
       const file = kernelFiles.find((candidate) => candidate.path === caller);
       expect(file, caller).toBeDefined();
       expect(importsOf(file!).some(({ resolved }) => resolved === "convex/agentHarness/provisionalNarrative"), caller).toBe(true);
+    }
+  });
+
+  it("keeps the turn-trace helper a leaf: generated types only, no sibling", () => {
+    const leaf = collectSources(HARNESS_DIR, (relative) => relative === TURN_TRACE_LEAF);
+    expect(leaf).toHaveLength(1);
+    expect(findLeafImportViolations(leaf[0])).toEqual([]);
+    expect(leaf[0].source).toMatch(/export const AGENT_TURN_TRACE_RETENTION_MS = 365 \* 24 \* 60 \* 60 \* 1000;/);
+    expect(
+      findLeafImportViolations(fixture(TURN_TRACE_LEAF, 'import { STANDARD_RETENTION_MS } from "../../shared/agentHarness/execution";')),
+    ).toEqual([`${TURN_TRACE_LEAF} imports ../../shared/agentHarness/execution (shared/agentHarness/execution)`]);
+    for (const caller of ["convex/agentHarness/retention.ts", "convex/agentHarness/turns.ts"]) {
+      const file = kernelFiles.find((candidate) => candidate.path === caller);
+      expect(file, caller).toBeDefined();
+      expect(importsOf(file!).some(({ resolved }) => resolved === "convex/agentHarness/turnTrace"), caller).toBe(true);
     }
   });
 

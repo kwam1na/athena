@@ -236,8 +236,12 @@ describe("delegated agent read ports stay off the public ingress rail", () => {
       "agentHarness/turns.previewTurnNarrative.read",
     ]);
     // The host-only flush writes the provisional row and is never ingress:
-    // only the two operator-facing functions above join the rail.
+    // only the two operator-facing functions above join the rail. The
+    // engineer-only turn trace is the same: it is written by the host and read
+    // by internal investigation only, so no admitted function can reach it.
     expect([...agentWrites, ...agentReads].some((id) => id.includes("flushProvisionalNarrative"))).toBe(false);
+    expect([...agentWrites, ...agentReads].some((id) => id.includes("recordTurnTrace"))).toBe(false);
+    expect([...agentWrites, ...agentReads].some((id) => id.includes("listTurnTrace"))).toBe(false);
   });
 
   it("keeps every published read port an internal query, bound and reachable", () => {

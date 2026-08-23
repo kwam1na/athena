@@ -26,6 +26,7 @@ import { TEST_EXECUTOR_SEAMS, beginExecutingAttempt, bridgeCall } from "./execut
 import { buildAnswerArtifactPayload } from "./historyProjection";
 import { advanceCompatibilityEpochWithCtx, cancelAgentRunWithCtx, failAgentRunWithCtx, getCurrentCompatibilityEpochWithCtx, markAgentRunRunningWithCtx } from "./lifecycle";
 import { AGENT_PROVISIONAL_NARRATIVE_TTL_MS, loadProvisionalNarrativeByBindingWithCtx, upsertProvisionalNarrativeWithCtx } from "./provisionalNarrative";
+import { AGENT_TURN_TRACE_EVENT_PAYLOAD_MAX_BYTES, AGENT_TURN_TRACE_RETENTION_MS, listTurnTraceByBindingWithCtx } from "./turnTrace";
 import { advanceTurnBindingWithCtx, markProvisionalReleaseWithCtx } from "./turnBindings";
 import { AGENT_OPERATOR_ACTIVE_RUN_LIMIT } from "./runAdmission";
 import { registerAgentRuntimeCleanupHook, resetAgentRuntimeCleanupHooksForTests } from "./retention";
@@ -762,5 +763,109 @@ describe("provisional narrative: flush, preview ladder, acknowledgement, and ter
     // A binding that no longer exists has no exposure to report.
     await t.run((ctx) => ctx.db.delete("agentTurnBinding", untouched.bindingId));
     expect(await exposure(t, untouched.bindingId)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Turn trace: the engineer-only record of what the model and the harness exchanged
+// ---------------------------------------------------------------------------
+
+const traceRows = (t: TestConvex<typeof schema>, bindingId: Id<"agentTurnBinding">) => t.run((ctx) => listTurnTraceByBindingWithCtx(ctx, bindingId, 50));
+
+const recordTrace = (t: TestConvex<typeof schema>, bindingId: Id<"agentTurnBinding">, events: Parameters<typeof TEST_TURN_SEAMS.recordTurnTraceWithCtx>[1]["events"]) =>
+  t.run((ctx) => TEST_TURN_SEAMS.recordTurnTraceWithCtx(ctx, { bindingId, events }));
+
+const traceEvent = (overrides: Partial<Parameters<typeof TEST_TURN_SEAMS.recordTurnTraceWithCtx>[1]["events"][number]> = {}) => ({
+  source: "adapter" as const,
+  sequence: 0,
+  at: TEST_NOW_BASE + 5,
+  kind: "narrative_delta",
+  payload: { text: "Checking which shifts are open." },
+  ...overrides,
+});
+
+describe("turn trace recording", () => {
+  afterEach(() => {
+    delete process.env.AGENT_TURN_TRACE;
+  });
+
+  it("stamps every row with the binding's run and scope and keeps the order it was given", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run((ctx) => seedRecordedTurn(ctx, "trace-scope"));
+    const recorded = await recordTrace(t, seeded.bindingId, [
+      traceEvent({ sequence: 0, kind: "turn_started", payload: {} }),
+      traceEvent({ sequence: 1 }),
+      traceEvent({ source: "host", sequence: 2, kind: "tool_dispatch", payload: { toolId: "athena.executeProgram", args: { source: "return 1;" }, outcome: { kind: "success", result: { open: 1 } } } }),
+    ]);
+    expect(recorded).toEqual({ recorded: 3, enabled: true });
+
+    const rows = await traceRows(t, seeded.bindingId);
+    expect(rows.map((row) => [row.source, row.sequence, row.kind])).toEqual([
+      ["adapter", 0, "turn_started"],
+      ["adapter", 1, "narrative_delta"],
+      ["host", 2, "tool_dispatch"],
+    ]);
+    for (const row of rows) {
+      expect(row).toMatchObject({ runId: seeded.runId, storeId: seeded.operator.storeId, organizationId: seeded.operator.organizationId, retentionClass: "standard", truncated: false });
+      expect(row.expiresAt).toBe(row.createdAt + AGENT_TURN_TRACE_RETENTION_MS);
+    }
+    // The point of the table: the deltas, the exact arguments, and the outcome
+    // the model received are all replayable from it.
+    expect(rows[1].payload).toEqual({ text: "Checking which shifts are open." });
+    expect(rows[2].payload).toMatchObject({ toolId: "athena.executeProgram", args: { source: "return 1;" }, outcome: { kind: "success", result: { open: 1 } } });
+  });
+
+  it("re-fits an over-cap payload server-side rather than trusting the host", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run((ctx) => seedRecordedTurn(ctx, "trace-cap"));
+    const oversized = "x".repeat(AGENT_TURN_TRACE_EVENT_PAYLOAD_MAX_BYTES * 2);
+    expect(await recordTrace(t, seeded.bindingId, [traceEvent({ kind: "tool_dispatch", source: "host", payload: { toolId: "athena.executeProgram", args: { source: oversized } } })])).toEqual({ recorded: 1, enabled: true });
+    const [row] = await traceRows(t, seeded.bindingId);
+    expect(row.truncated).toBe(true);
+    expect(new TextEncoder().encode(JSON.stringify(row.payload)).byteLength).toBeLessThanOrEqual(AGENT_TURN_TRACE_EVENT_PAYLOAD_MAX_BYTES);
+    expect((row.payload as { toolId: string }).toolId).toBe("athena.executeProgram");
+  });
+
+  it("writes nothing when the capture switch is off", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run((ctx) => seedRecordedTurn(ctx, "trace-off"));
+    process.env.AGENT_TURN_TRACE = "off";
+    expect(await recordTrace(t, seeded.bindingId, [traceEvent()])).toEqual({ recorded: 0, enabled: false });
+    expect(await traceRows(t, seeded.bindingId)).toEqual([]);
+    delete process.env.AGENT_TURN_TRACE;
+    expect(await recordTrace(t, seeded.bindingId, [traceEvent()])).toEqual({ recorded: 1, enabled: true });
+  });
+
+  it("links a program tool outcome to the stored program result so the full body is one hop away", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run((ctx) => seedRecordedTurn(ctx, "trace-replay"));
+    const replayPayloadId = await t.run((ctx) =>
+      ctx.db.insert("agentReplayPayload", {
+        runId: seeded.runId,
+        storeId: seeded.operator.storeId,
+        organizationId: seeded.operator.organizationId,
+        subjectKind: "program_result",
+        contentHash: "fnv1a64:result",
+        content: { open: 1 },
+        byteLength: 12,
+        retentionClass: "short_lived",
+        expiresAt: TEST_NOW_BASE + 100_000,
+        createdAt: TEST_NOW_BASE + 5,
+      }),
+    );
+    await recordTrace(t, seeded.bindingId, [
+      traceEvent({ sequence: 0, kind: "tool_call_completed", payload: { toolId: "athena.executeProgram", callId: "c1", outcomeKind: "success" } }),
+      traceEvent({ sequence: 1, kind: "tool_call_completed", payload: { toolId: "athena.completeRun", callId: "c2", outcomeKind: "success" } }),
+    ]);
+    const rows = await traceRows(t, seeded.bindingId);
+    expect(rows[0].replayPayloadId).toBe(replayPayloadId);
+    expect(rows[1].replayPayloadId).toBeUndefined();
+  });
+
+  it("records nothing for a binding that no longer exists", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run((ctx) => seedRecordedTurn(ctx, "trace-missing"));
+    await t.run((ctx) => ctx.db.delete("agentTurnBinding", seeded.bindingId));
+    expect(await recordTrace(t, seeded.bindingId, [traceEvent()])).toEqual({ recorded: 0, enabled: true });
   });
 });

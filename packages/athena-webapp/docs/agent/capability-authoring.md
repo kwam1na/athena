@@ -675,6 +675,18 @@ Start from the run.
   gives the run status, the budget charged, each attempt's status and validator
   diagnostic, each capability call with its refusal, and the authored program
   text while its short-lived payload lives.
+- **What the model saw**: `internal.agentHarness.evals.directHarness.listTurnTrace`
+  (by `bindingId` or `runId`), or `bun scripts/agent-trace-export.ts --binding
+  <id> --out trace.jsonl` for the whole turn as JSONL. This is the engineer's
+  path — every runtime event in order, the narrative deltas, each tool call's
+  exact arguments and the outcome object the model read back, each
+  provisional-flush outcome, and the turn's report — and it is what you use to
+  refine prompts, tool response shapes, and retry behaviour. It is not
+  operator-facing and it is not evidence: an answer is still explained by
+  attempts, capability calls, and citations. Capture is on unless the
+  deployment sets `AGENT_TURN_TRACE=off`; rows are standard-class (365 days),
+  capped at 32 KiB each (over-cap rows are marked `truncated`) and 4 000 per
+  turn. See [agent-harness-runtime.md](./agent-harness-runtime.md) §5.
 - **What an answer was grounded in**: `api.agentHarness.turns.inspectCitationEvidence`
   (operator-facing, reauthorized, audited) or the seam
   `readCitationEvidence`. Every read writes an `agentEvidenceAccessAudit` row
@@ -724,6 +736,8 @@ Start from the run.
   call ledger directly through its own `by_organizationId_createdAt` index, the
   same as every other table in `deleteAgentHarnessContentWithCtx` — it does not
   cascade into the organization's stores.
+  The engineer-only turn trace is `standard` (365 days) and is deleted by both
+  the expiry sweep and scope removal like any other content row.
   Two tables are honestly outside this today: `agentEvidenceAccessAudit` and
   `agentSpendWindow` are written and asserted payload-free, but nothing expires
   them yet.

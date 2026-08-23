@@ -495,6 +495,39 @@ export const agentProvisionalNarrativeSchema = v.object({
   expiresAt: v.number(),
 });
 
+/**
+ * Engineer-only turn trace: one row per runtime or host event of one driven
+ * turn, in the order the host saw it, with the exact payload — the model's
+ * narrative deltas, each tool call's arguments, and the outcome the model
+ * received — so a turn can be replayed offline while the agent is being
+ * refined (prompts, tool response shapes, retry behaviour).
+ *
+ * It is the single deliberate exception to "the model's narrative never enters
+ * Athena's durable record". It is never projected into thread history, a
+ * prompt, a citation, or any operator-admitted query; only internal
+ * investigation functions read it. Standard (365-day) class, per-row payload
+ * cap, and one environment switch (`AGENT_TURN_TRACE`) that turns capture off.
+ */
+export const agentTurnTraceEventSchema = v.object({
+  runId: v.id("intelligenceRun"),
+  turnBindingId: v.id("agentTurnBinding"),
+  storeId: v.id("store"),
+  organizationId: v.id("organization"),
+  /** `adapter` rows carry the runtime envelope's sequence; `host` rows the host's own counter. */
+  source: v.union(v.literal("adapter"), v.literal("host")),
+  sequence: v.number(),
+  at: v.number(),
+  /** The runtime event kind, or a host kind: `tool_dispatch`, `provisional_flush`, `trace_capped`, `turn_report`. */
+  kind: v.string(),
+  payload: v.any(),
+  truncated: v.boolean(),
+  /** The full call output / program result, when one was already stored for replay. */
+  replayPayloadId: v.optional(v.id("agentReplayPayload")),
+  retentionClass: v.literal("standard"),
+  expiresAt: v.number(),
+  createdAt: v.number(),
+});
+
 export const agentEvidenceAccessAuditSchema = v.object({
   runId: v.id("intelligenceRun"),
   citationBindingId: v.optional(v.id("agentCitationBinding")),

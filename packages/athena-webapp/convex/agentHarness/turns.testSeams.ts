@@ -39,6 +39,7 @@ export const recordTurnProgress = TEST_TURN_SEAMS.functions.recordTurnProgress;
 export const peekTurnState = TEST_TURN_SEAMS.functions.peekTurnState;
 export const finalizeTurn = TEST_TURN_SEAMS.functions.finalizeTurn;
 export const flushProvisionalNarrative = TEST_TURN_SEAMS.functions.flushProvisionalNarrative;
+export const recordTurnTrace = TEST_TURN_SEAMS.functions.recordTurnTrace;
 export const prepareCompletion = TEST_OUTBOX.functions.prepareCompletion;
 export const loadProjection = TEST_OUTBOX.functions.loadProjection;
 export const recordProjection = TEST_OUTBOX.functions.recordProjection;
@@ -59,6 +60,7 @@ export const TEST_TURN_REFS = {
   peekTurnState: turns.testTurns.peekTurnState,
   finalizeTurn: turns.testTurns.finalizeTurn,
   flushProvisionalNarrative: turns.testTurns.flushProvisionalNarrative,
+  recordTurnTrace: turns.testTurns.recordTurnTrace,
   prepareCompletion: turns.testTurns.prepareCompletion,
   loadProjection: turns.testTurns.loadProjection,
   recordProjection: turns.testTurns.recordProjection,

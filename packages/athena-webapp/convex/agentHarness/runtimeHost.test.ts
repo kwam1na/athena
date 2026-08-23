@@ -24,6 +24,7 @@ import { projectThreadHistoryWithCtx } from "./historyProjection";
 import { cancelAgentRunWithCtx, getBudgetLedgerForRun, listProgramAttemptsForRun } from "./lifecycle";
 import { createQuickJsProgramRuntime } from "./programRuntime/quickJsRuntime";
 import { loadProvisionalNarrativeByBindingWithCtx } from "./provisionalNarrative";
+import { AGENT_TURN_TRACE_EVENT_PAYLOAD_MAX_BYTES, listTurnTraceByBindingWithCtx } from "./turnTrace";
 import { reserveTurnSpendWithCtx, settleTurnSpendWithCtx, spendWindowKey, turnProviderCostReservation } from "./runAdmission";
 import type { AgentProgramRuntime } from "./programRuntime/types";
 import { registerAgentRuntimeCleanupHook, resetAgentRuntimeCleanupHooksForTests, type AgentRuntimeCleanupDescriptor } from "./retention";
@@ -153,8 +154,19 @@ async function rows(t: Harness, seeded: { runId: Awaited<ReturnType<typeof seedR
     // invariant is that the narrative never enters Athena's durable record and
     // never survives a terminal cause, not that it is never written at all.
     provisional: await ctx.db.query("agentProvisionalNarrative").withIndex("by_turnBindingId", (q) => q.eq("turnBindingId", seeded.bindingId)).take(3),
+    // `agentTurnTraceEvent` is deliberately EXCLUDED from this snapshot. It is
+    // the engineer-only turn trace and the single granted exception to "the
+    // narrative never enters Athena's durable record": it holds the deltas, the
+    // tool arguments, and the outcomes on purpose. Folding it in here would
+    // silently retire the invariant this helper exists to police, so it is
+    // read through `traceRows` and asserted separately.
   }));
 }
+
+/** The engineer-only trace of one turn, in sequence order. Never part of `rows`. */
+const traceRows = (t: Harness, bindingId: Awaited<ReturnType<typeof seedRecordedTurn>>["bindingId"]) => t.run((ctx) => listTurnTraceByBindingWithCtx(ctx, bindingId, 500));
+
+const tracePayload = <T,>(row: { payload: unknown }) => row.payload as T;
 
 const provisionalRow = (t: Harness, bindingId: Awaited<ReturnType<typeof seedRecordedTurn>>["bindingId"]) =>
   t.run((ctx) => loadProvisionalNarrativeByBindingWithCtx(ctx, bindingId));
@@ -356,6 +368,61 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ create }) => {
     expect(JSON.stringify(after)).not.toContain("MODEL-NARRATIVE-NEVER-STORED");
     expect(after.provisional).toEqual([]);
     expect(JSON.stringify(after)).not.toContain("Checking which shifts");
+
+    // ...and the one granted exception, which is the whole point of the trace:
+    // an engineer can replay this turn offline. The deltas, the exact tool
+    // arguments, and the outcome the model received are all here, in order.
+    expect(report.trace).toMatchObject({ enabled: true, capped: false });
+    expect(report.trace!.recorded).toBeGreaterThan(0);
+    const traced = await traceRows(t, seeded.bindingId);
+    expect(traced).toHaveLength(report.trace!.recorded);
+    expect(traced.map((row) => row.sequence)).toEqual([...traced.map((row) => row.sequence)].sort((left, right) => left - right));
+
+    const deltas = traced.filter((row) => row.kind === "narrative_delta");
+    // The whole draft, reassembled from the rows in order. (The Convex Agent
+    // adapter also narrates the final answer as deltas; the contract fake does
+    // not — so this asserts the drafted text is all there, not that it is all
+    // there is.)
+    expect(deltas.map((row) => tracePayload<{ text: string }>(row).text).join("")).toContain("Checking which shifts are open.");
+    expect(deltas.every((row) => row.source === "adapter")).toBe(true);
+
+    // The model's final narrative — the one string Athena never stores anywhere else.
+    const completedRow = traced.find((row) => row.kind === "turn_completed");
+    expect(tracePayload<{ narrative?: string; outcome: string }>(completedRow!)).toMatchObject({ outcome: "completed", narrative: "MODEL-NARRATIVE-NEVER-STORED" });
+
+    // Every tool call: its exact arguments and the outcome object the model read back.
+    const dispatched = traced.filter((row) => row.kind === "tool_dispatch");
+    expect(dispatched.map((row) => tracePayload<{ toolId: string }>(row).toolId)).toEqual(["athena.discover", "athena.describe", "athena.executeProgram", "athena.completeRun"]);
+    expect(dispatched.every((row) => row.source === "host")).toBe(true);
+    const program = dispatched.find((row) => tracePayload<{ toolId: string }>(row).toolId === "athena.executeProgram")!;
+    const programPayload = tracePayload<{ args: { source: string }; idempotencyKey: string; outcome: { kind: string; result: { attemptRef: string } } }>(program);
+    expect(programPayload.args.source).toBe(PROGRAM);
+    expect(programPayload.idempotencyKey).toBeTruthy();
+    expect(programPayload.outcome.kind).toBe("success");
+    expect(programPayload.outcome.result.attemptRef).toBe(captured.attemptRef);
+    // The full program result body is one hop away rather than duplicated.
+    expect(program.replayPayloadId).toBeDefined();
+    const describeCall = dispatched.find((row) => tracePayload<{ toolId: string }>(row).toolId === "athena.describe")!;
+    expect(tracePayload<{ args: { namespace: string } }>(describeCall).args).toEqual({ namespace: "ops.shifts" });
+
+    // The completed adapter event carries the same outcome object the ledger settled.
+    const programCompleted = traced.find((row) => row.kind === "tool_call_completed" && tracePayload<{ toolId: string }>(row).toolId === "athena.executeProgram")!;
+    expect(tracePayload<{ outcomeKind: string; outcome: { kind: string } }>(programCompleted)).toMatchObject({ outcomeKind: "success", outcome: { kind: "success" } });
+
+    // Each flush of the operator's draft is recorded as an outcome, without the text.
+    const flushes = traced.filter((row) => row.kind === "provisional_flush");
+    expect(flushes.length).toBeGreaterThan(0);
+    expect(flushes.map((row) => tracePayload<{ outcome: string }>(row).outcome)).toContain("stored");
+    expect(JSON.stringify(flushes)).not.toContain("Checking which shifts");
+
+    // The last row is the turn's own report: the operator log line plus dispatch outcomes.
+    const turnReport = traced.at(-1)!;
+    expect(turnReport.kind).toBe("turn_report");
+    expect(tracePayload<{ outcome: string; runId: string; dispatch: string[]; events: string }>(turnReport)).toMatchObject({
+      outcome: "completed",
+      runId: seeded.runId,
+      dispatch: ["athena.discover:success", "athena.describe:success", "athena.executeProgram:success", "athena.completeRun:success"],
+    });
     // Spend settled to the turn's REAL cost on both windows: `finalizeTurn`
     // books it before the outbox's zero-cost settle can stamp the marker.
     expect(await reservations(t, seeded)).toEqual([
@@ -966,5 +1033,62 @@ describe("turn host — the provisional draft", () => {
     const after = await rows(t, seeded);
     expect(after.provisional).toEqual([]);
     expect(after.binding?.provisionalReleasedAt).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Turn trace: the switch, and the per-row cap
+// ---------------------------------------------------------------------------
+
+describe("turn trace capture", () => {
+  afterEach(() => {
+    delete process.env.AGENT_TURN_TRACE;
+  });
+
+  it("writes nothing when the deployment switches capture off, and the turn is unaffected", async () => {
+    const t = backend();
+    const harness = createAgentRuntimeContractFake({ clock: createDeterministicClock(TEST_NOW_BASE + 1_000) });
+    const seeded = await seedAdmittedTurn(t, "trace-off");
+    const { captured, observe } = captureProgramResult();
+    harness.scriptTurn(turnKeyFor(seeded.bindingId), [
+      { kind: "narrative", deltas: ["Checking which shifts", " are open."] },
+      { kind: "tool_call", callId: "c1", toolId: "athena.executeProgram", args: { source: PROGRAM } },
+      { kind: "tool_call", callId: "c2", toolId: "athena.completeRun", args: () => ({ title: "Open shifts", narrative: "One shift is open.", citedAttemptRefs: [captured.attemptRef], citations: [{ ref: captured.citation, claim: "One shift is open." }] }) },
+      { kind: "complete", narrative: "MODEL-NARRATIVE-NEVER-STORED" },
+    ]);
+    process.env.AGENT_TURN_TRACE = "off";
+    const host = await hostFor(t, harness, { observe });
+    const report = await host.driveTurn({ bindingId: seeded.bindingId });
+
+    expect(report, JSON.stringify(report)).toMatchObject({ outcome: "completed" });
+    expect(report.trace).toMatchObject({ enabled: false, recorded: 0 });
+    expect(await traceRows(t, seeded.bindingId)).toEqual([]);
+  });
+
+  it("truncates an over-cap row rather than dropping it or overflowing the table", async () => {
+    const t = backend();
+    const harness = createAgentRuntimeContractFake({ clock: createDeterministicClock(TEST_NOW_BASE + 1_000) });
+    const seeded = await seedAdmittedTurn(t, "trace-cap");
+    const oversized = "x".repeat(AGENT_TURN_TRACE_EVENT_PAYLOAD_MAX_BYTES * 2);
+    harness.scriptTurn(turnKeyFor(seeded.bindingId), [
+      { kind: "narrative", deltas: [oversized] },
+      { kind: "complete", narrative: "MODEL-NARRATIVE-NEVER-STORED" },
+    ]);
+    const host = await hostFor(t, harness);
+    // No `completeRun`: the turn fails as completion_missing, which is beside
+    // the point — the trace is written either way.
+    const report = await host.driveTurn({ bindingId: seeded.bindingId });
+    expect(report.code).toBe("completion_missing");
+
+    const traced = await traceRows(t, seeded.bindingId);
+    const delta = traced.find((row) => row.kind === "narrative_delta")!;
+    expect(delta.truncated).toBe(true);
+    expect(new TextEncoder().encode(JSON.stringify(delta.payload)).byteLength).toBeLessThanOrEqual(AGENT_TURN_TRACE_EVENT_PAYLOAD_MAX_BYTES);
+    // The shape survives the cut: the row still says which event it was.
+    expect(tracePayload<{ kind: string; draftOrdinal: number; text: string }>(delta)).toMatchObject({ kind: "narrative_delta", draftOrdinal: 0 });
+    expect(tracePayload<{ text: string }>(delta).text.length).toBeGreaterThan(0);
+    // Every other row is intact.
+    expect(traced.filter((row) => row.truncated)).toHaveLength(1);
+    expect(traced.at(-1)!.kind).toBe("turn_report");
   });
 });

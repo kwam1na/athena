@@ -41,6 +41,11 @@ import {
   type AgentRuntimeCleanupDescriptor,
 } from "./retention";
 import { TEST_NOW, buildRunInput, seedTenant } from "./testSupport";
+import {
+  AGENT_TURN_TRACE_RETENTION_MS,
+  appendTurnTraceEventsWithCtx,
+  listTurnTraceByBindingWithCtx,
+} from "./turnTrace";
 import { advanceTurnBindingWithCtx, recordTurnIntentWithCtx } from "./turnBindings";
 
 // Cuts the module cycle `platform/operationAdmission` -> `sharedDemo/...`,
@@ -159,9 +164,34 @@ async function seedProvisionalDraft(ctx: MutationCtx, tenant: Tenant, turn: { ru
   });
 }
 
+async function seedTurnTrace(
+  ctx: MutationCtx,
+  tenant: Tenant,
+  turn: { runId: Id<"intelligenceRun">; bindingId: Id<"agentTurnBinding"> },
+  rows: readonly { sequence: number; expiresAt: number }[],
+) {
+  await appendTurnTraceEventsWithCtx(
+    ctx,
+    rows.map((row) => ({
+      runId: turn.runId,
+      turnBindingId: turn.bindingId,
+      storeId: tenant.storeId,
+      organizationId: tenant.organizationId,
+      source: "adapter" as const,
+      sequence: row.sequence,
+      at: TEST_NOW,
+      kind: "narrative_delta",
+      payload: { text: "Checking which shifts are open." },
+      truncated: false,
+      expiresAt: row.expiresAt,
+      createdAt: TEST_NOW,
+    })),
+  );
+}
+
 async function contentCounts(ctx: QueryCtx, storeId: Id<"store">) {
   const take = 50;
-  const [prompts, replays, scratch, claims, calls, retainedCitations, retainedGrants, provisional] = await Promise.all([
+  const [prompts, replays, scratch, claims, calls, retainedCitations, retainedGrants, provisional, trace] = await Promise.all([
     ctx.db.query("agentPromptPayload").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(take),
     ctx.db.query("agentReplayPayload").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(take),
     ctx.db.query("agentScratchDescriptor").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(take),
@@ -170,6 +200,7 @@ async function contentCounts(ctx: QueryCtx, storeId: Id<"store">) {
     ctx.db.query("agentCitationBinding").withIndex("by_storeId_evidenceLifecycle", (q) => q.eq("storeId", storeId).eq("evidenceLifecycle", "retained")).take(take),
     ctx.db.query("agentRunGrant").withIndex("by_storeId_lifecycle", (q) => q.eq("storeId", storeId).eq("lifecycle", "retained")).take(take),
     ctx.db.query("agentProvisionalNarrative").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(take),
+    ctx.db.query("agentTurnTraceEvent").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(take),
   ]);
   return {
     prompts: prompts.length,
@@ -180,6 +211,7 @@ async function contentCounts(ctx: QueryCtx, storeId: Id<"store">) {
     retainedCitations: retainedCitations.length,
     retainedGrants: retainedGrants.length,
     provisional: provisional.length,
+    trace: trace.length,
   };
 }
 
@@ -276,6 +308,10 @@ describe("prompt/content expiry (scenario 8)", () => {
       // removal must take the removed store's with the rest of its content.
       await seedProvisionalDraft(ctx, removed, activeTurn);
       await seedProvisionalDraft(ctx, retained, retainedTurn);
+      // The engineer's trace of each store's turn: content, and the removal
+      // must take the removed store's long before its 365-day bound.
+      await seedTurnTrace(ctx, removed, activeTurn, [{ sequence: 0, expiresAt: TEST_NOW + AGENT_TURN_TRACE_RETENTION_MS }]);
+      await seedTurnTrace(ctx, retained, retainedTurn, [{ sequence: 0, expiresAt: TEST_NOW + AGENT_TURN_TRACE_RETENTION_MS }]);
       const grantBefore = await ctx.db.query("agentRunGrant").withIndex("by_runId", (q) => q.eq("runId", removedTurn.runId)).unique();
       return { removed, retained, removedTurn, activeTurn, retainedTurn, grantBefore: grantBefore! };
     });
@@ -285,8 +321,8 @@ describe("prompt/content expiry (scenario 8)", () => {
 
     await t.run(async (ctx) => {
       expect(await ctx.db.get("store", seeded.removed.storeId)).toBeNull();
-      expect(await contentCounts(ctx, seeded.removed.storeId)).toEqual({ prompts: 0, replays: 0, scratch: 0, claims: 0, calls: 0, retainedCitations: 0, retainedGrants: 0, provisional: 0 });
-      expect(await contentCounts(ctx, seeded.retained.storeId)).toMatchObject({ prompts: 1, replays: 3, scratch: 1, claims: 1, retainedCitations: 1, retainedGrants: 1, provisional: 1 });
+      expect(await contentCounts(ctx, seeded.removed.storeId)).toEqual({ prompts: 0, replays: 0, scratch: 0, claims: 0, calls: 0, retainedCitations: 0, retainedGrants: 0, provisional: 0, trace: 0 });
+      expect(await contentCounts(ctx, seeded.retained.storeId)).toMatchObject({ prompts: 1, replays: 3, scratch: 1, claims: 1, retainedCitations: 1, retainedGrants: 1, provisional: 1, trace: 1 });
       const grant = await ctx.db.query("agentRunGrant").withIndex("by_runId", (q) => q.eq("runId", seeded.removedTurn.runId)).unique();
       // Audit metadata survives: only the lifecycle markers changed.
       expect(grant).toMatchObject({
@@ -325,6 +361,10 @@ describe("prompt/content expiry (scenario 8)", () => {
       await seedProvisionalDraft(ctx, removed, removedTurn);
       await seedProvisionalDraft(ctx, { ...removed, storeId: sibling }, siblingTurn);
       await seedProvisionalDraft(ctx, other, otherTurn);
+      const trace = [{ sequence: 0, expiresAt: TEST_NOW + AGENT_TURN_TRACE_RETENTION_MS }];
+      await seedTurnTrace(ctx, removed, removedTurn, trace);
+      await seedTurnTrace(ctx, { ...removed, storeId: sibling }, siblingTurn, trace);
+      await seedTurnTrace(ctx, other, otherTurn, trace);
       return { removed, sibling, other };
     });
 
@@ -340,9 +380,9 @@ describe("prompt/content expiry (scenario 8)", () => {
       expect(await ctx.db.get("organization", seeded.removed.organizationId)).toBeNull();
       // The call ledger is deleted directly through its organization index,
       // for every store of the organization, and nowhere else.
-      expect(await contentCounts(ctx, seeded.removed.storeId)).toEqual({ prompts: 0, replays: 0, scratch: 0, claims: 0, calls: 0, retainedCitations: 0, retainedGrants: 0, provisional: 0 });
-      expect(await contentCounts(ctx, seeded.sibling)).toEqual({ prompts: 0, replays: 0, scratch: 0, claims: 0, calls: 0, retainedCitations: 0, retainedGrants: 0, provisional: 0 });
-      expect(await contentCounts(ctx, seeded.other.storeId)).toMatchObject({ prompts: 1, calls: 1, retainedCitations: 1, retainedGrants: 1, provisional: 1 });
+      expect(await contentCounts(ctx, seeded.removed.storeId)).toEqual({ prompts: 0, replays: 0, scratch: 0, claims: 0, calls: 0, retainedCitations: 0, retainedGrants: 0, provisional: 0, trace: 0 });
+      expect(await contentCounts(ctx, seeded.sibling)).toEqual({ prompts: 0, replays: 0, scratch: 0, claims: 0, calls: 0, retainedCitations: 0, retainedGrants: 0, provisional: 0, trace: 0 });
+      expect(await contentCounts(ctx, seeded.other.storeId)).toMatchObject({ prompts: 1, calls: 1, retainedCitations: 1, retainedGrants: 1, provisional: 1, trace: 1 });
       const orphaned = await ctx.db.query("agentRunGrant").withIndex("by_organizationId_lifecycle", (q) => q.eq("organizationId", seeded.removed.organizationId).eq("lifecycle", "retained")).take(5);
       expect(orphaned).toHaveLength(0);
     });
@@ -497,5 +537,35 @@ describe("repair sweep: provisional drafts a dead host left behind", () => {
     const expiryLines = logged.filter((line) => line.includes("[agentHarness:repairSweep]"));
     expect(expiryLines).toHaveLength(2);
     expect(JSON.parse(expiryLines[0].replace("[agentHarness:repairSweep] ", ""))).toMatchObject({ expiredProvisionalNarratives: 1, hasMore: true });
+  });
+});
+
+describe("turn trace expiry", () => {
+  it("expires the engineer-only trace with the standard class and leaves a live turn's rows alone", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const tenant = await seedTenant(ctx, "trace-expiry");
+      const old = await seedCompletedTurn(ctx, tenant, "old", { complete: false });
+      const recent = await seedCompletedTurn(ctx, tenant, "recent", { complete: false });
+      await seedTurnTrace(ctx, tenant, old, [
+        { sequence: 0, expiresAt: TEST_NOW + AGENT_TURN_TRACE_RETENTION_MS },
+        { sequence: 1, expiresAt: TEST_NOW + AGENT_TURN_TRACE_RETENTION_MS },
+      ]);
+      await seedTurnTrace(ctx, tenant, recent, [{ sequence: 0, expiresAt: TEST_NOW + AGENT_TURN_TRACE_RETENTION_MS + 1_000 }]);
+      return { tenant, old, recent };
+    });
+
+    await t.run(async (ctx) => {
+      // A standard-class row is not short-lived: the 30-day pass leaves it.
+      expect(await sweepExpiredAgentContentWithCtx(ctx, { now: TEST_NOW + SHORT_LIVED_RETENTION_MS, limit: 10 })).toMatchObject({ deletedTurnTraceEvents: 0 });
+      expect((await contentCounts(ctx, seeded.tenant.storeId)).trace).toBe(3);
+
+      // The batch limit bounds the phase and asks for another pass.
+      expect(await sweepExpiredAgentContentWithCtx(ctx, { now: TEST_NOW + STANDARD_RETENTION_MS, limit: 1 })).toMatchObject({ deletedTurnTraceEvents: 1, hasMore: true });
+      expect(await sweepExpiredAgentContentWithCtx(ctx, { now: TEST_NOW + STANDARD_RETENTION_MS, limit: 10 })).toMatchObject({ deletedTurnTraceEvents: 1, hasMore: false });
+
+      expect(await listTurnTraceByBindingWithCtx(ctx, seeded.old.bindingId, 10)).toEqual([]);
+      expect(await listTurnTraceByBindingWithCtx(ctx, seeded.recent.bindingId, 10)).toHaveLength(1);
+    });
   });
 });

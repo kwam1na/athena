@@ -42,6 +42,11 @@ import {
   sweepExpiredAgentContentWithCtx,
 } from "./retention";
 import { loadProvisionalNarrativeByBindingWithCtx, upsertProvisionalNarrativeWithCtx } from "./provisionalNarrative";
+import {
+  AGENT_TURN_TRACE_RETENTION_MS,
+  appendTurnTraceEventsWithCtx,
+  listTurnTraceByBindingWithCtx,
+} from "./turnTrace";
 import { recordTurnIntentWithCtx } from "./turnBindings";
 import {
   CURRENT_OPERATING_DATE,
@@ -265,6 +270,24 @@ async function seedProvisionalDraft(t: Harness, fixture: { storeId: Id<"store">;
       updatedAt: FIXTURE_NOW,
       expiresAt: FIXTURE_NOW + 300_000,
     });
+    // The engineer-only trace of the same turn: the deltas and the tool
+    // arguments the model exchanged. Scope removal owns it like any content.
+    await appendTurnTraceEventsWithCtx(ctx, [
+      {
+        runId: recorded.runId,
+        turnBindingId: recorded.bindingId,
+        storeId: fixture.storeId,
+        organizationId: fixture.organizationId,
+        source: "adapter",
+        sequence: 0,
+        at: FIXTURE_NOW,
+        kind: "narrative_delta",
+        payload: { text: "Checking the day so far." },
+        truncated: false,
+        expiresAt: FIXTURE_NOW + AGENT_TURN_TRACE_RETENTION_MS,
+        createdAt: FIXTURE_NOW,
+      },
+    ]);
     return recorded.bindingId;
   });
 }
@@ -308,6 +331,10 @@ describe("scope removal", () => {
       expect(await loadProvisionalNarrativeByBindingWithCtx(ctx, doomedDraft)).toBeNull();
       expect(await loadProvisionalNarrativeByBindingWithCtx(ctx, survivorDraft)).not.toBeNull();
       expect(await ctx.db.query("agentProvisionalNarrative").withIndex("by_storeId", (q) => q.eq("storeId", doomed.fixture.storeId)).take(5)).toEqual([]);
+      // Nor does the trace of the removed store's turn survive; the other store keeps its own.
+      expect(await listTurnTraceByBindingWithCtx(ctx, doomedDraft, 5)).toEqual([]);
+      expect(await listTurnTraceByBindingWithCtx(ctx, survivorDraft, 5)).toHaveLength(1);
+      expect(await ctx.db.query("agentTurnTraceEvent").withIndex("by_storeId", (q) => q.eq("storeId", doomed.fixture.storeId)).take(5)).toEqual([]);
     });
 
     // The removed store's citation now answers as lifecycle-deleted rather
@@ -382,6 +409,8 @@ describe("scope removal", () => {
     await t.run(async (ctx) => {
       expect(await loadProvisionalNarrativeByBindingWithCtx(ctx, draft)).toBeNull();
       expect(await ctx.db.query("agentProvisionalNarrative").withIndex("by_organizationId", (q) => q.eq("organizationId", fixture.organizationId)).take(5)).toEqual([]);
+      expect(await listTurnTraceByBindingWithCtx(ctx, draft, 5)).toEqual([]);
+      expect(await ctx.db.query("agentTurnTraceEvent").withIndex("by_organizationId", (q) => q.eq("organizationId", fixture.organizationId)).take(5)).toEqual([]);
     });
   });
 });

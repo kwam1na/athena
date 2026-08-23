@@ -74,6 +74,15 @@ import {
   upsertProvisionalNarrativeWithCtx,
 } from "./provisionalNarrative";
 import { requestRuntimeCleanupWithCtx } from "./retention";
+import {
+  AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN,
+  AGENT_TURN_TRACE_RETENTION_MS,
+  appendTurnTraceEventsWithCtx,
+  fitTracePayload,
+  isAgentTurnTraceEnabled,
+  type AgentTurnTraceEventInput,
+  type AgentTurnTraceSource,
+} from "./turnTrace";
 import { encodeDelegatedActorRef } from "./grants";
 import { admitTurnStartWithCtx, settleTurnSpendOnceWithCtx, turnProviderCostReservation, validateOperatorPrompt } from "./runAdmission";
 import {
@@ -234,6 +243,14 @@ export type AgentTurnUsageSettlement = {
 };
 
 export type AgentFinalizeTurnOutcome = { readonly outcome: "completed" | "failed" | "canceled" | "already_terminal"; readonly runStatus: Doc<"intelligenceRun">["status"] | null };
+
+/** What one host flush of the turn trace wrote, and whether the deployment captures at all. */
+export type AgentRecordTurnTraceOutcome = { readonly recorded: number; readonly enabled: boolean };
+
+/** The one tool whose outcome has a durable replay body to point the trace at. */
+const AGENT_PROGRAM_TOOL_ID = "athena.executeProgram";
+/** Replay rows scanned per trace batch to find the run's newest program result. */
+const AGENT_TURN_TRACE_REPLAY_LOOKUP_BOUND = 50;
 
 /**
  * What one host flush of the coalesced draft did. `refused` carries the closed
@@ -587,7 +604,89 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
     return { outcome: "stored", truncated: fitted.truncated };
   }
 
+  // ----- recordTurnTrace (mutation; host-only) --------------------------------
+
+  /**
+   * Persist one batch of the host's turn trace: the engineer-only record of
+   * everything the model and the harness exchanged on a driven turn — every
+   * runtime event in order, the narrative deltas, each tool call's exact
+   * arguments, and the outcome the model received.
+   *
+   * It is a capture, not an exposure: no operator surface reads the table, and
+   * this mutation is never admitted as public ingress. It fails soft on
+   * purpose — a missing binding, a disabled switch, or an over-cap payload
+   * records less rather than failing the turn — because losing a turn to a
+   * diagnostic write would be the worse outcome.
+   *
+   * The two things it does NOT delegate to the host: the switch (the
+   * deployment's environment is authoritative, not the host's) and the per-row
+   * payload cap (every payload is re-fitted here, whatever the host claimed).
+   */
+  async function recordTurnTraceWithCtx(
+    ctx: MutationCtx,
+    input: {
+      bindingId: Id<"agentTurnBinding">;
+      events: readonly { source: AgentTurnTraceSource; sequence: number; at: number; kind: string; payload: unknown }[];
+      now?: number;
+    },
+  ): Promise<AgentRecordTurnTraceOutcome> {
+    const enabled = isAgentTurnTraceEnabled();
+    if (!enabled) return { recorded: 0, enabled: false };
+    const binding = await ctx.db.get("agentTurnBinding", input.bindingId);
+    if (!binding) return { recorded: 0, enabled: true };
+    const createdAt = input.now ?? serverClock();
+
+    // The program result is looked up once per batch. The host flushes at every
+    // tool_call_completed, so the newest `program_result` of the run at this
+    // moment is the one the settling call just produced.
+    let programResultId: Id<"agentReplayPayload"> | undefined | null = null;
+    const linkProgramResult = async (): Promise<Id<"agentReplayPayload"> | undefined> => {
+      if (programResultId !== null) return programResultId;
+      const replays = await ctx.db
+        .query("agentReplayPayload")
+        .withIndex("by_runId", (q) => q.eq("runId", binding.runId))
+        .take(AGENT_TURN_TRACE_REPLAY_LOOKUP_BOUND);
+      const latest = replays
+        .filter((replay) => replay.subjectKind === "program_result")
+        .sort((left, right) => right.createdAt - left.createdAt)[0];
+      programResultId = latest?._id;
+      return programResultId;
+    };
+
+    const rows: AgentTurnTraceEventInput[] = [];
+    for (const event of input.events.slice(0, AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN)) {
+      const fitted = fitTracePayload(event.payload);
+      const toolId = (fitted.payload as { toolId?: unknown } | null)?.toolId;
+      const linkable = (event.kind === "tool_call_completed" || event.kind === "tool_dispatch") && toolId === AGENT_PROGRAM_TOOL_ID;
+      const replayPayloadId = linkable ? await linkProgramResult() : undefined;
+      rows.push({
+        runId: binding.runId,
+        turnBindingId: binding._id,
+        storeId: binding.storeId,
+        organizationId: binding.organizationId,
+        source: event.source,
+        sequence: event.sequence,
+        at: event.at,
+        kind: event.kind,
+        payload: fitted.payload,
+        truncated: fitted.truncated,
+        ...(replayPayloadId ? { replayPayloadId } : {}),
+        expiresAt: createdAt + AGENT_TURN_TRACE_RETENTION_MS,
+        createdAt,
+      });
+    }
+    const recorded = await appendTurnTraceEventsWithCtx(ctx, rows);
+    return { recorded, enabled: true };
+  }
+
   const milestoneValidator = v.union(...AGENT_PROGRESS_MILESTONES.map((milestone) => v.literal(milestone)));
+  const traceEventValidator = v.object({
+    source: v.union(v.literal("adapter"), v.literal("host")),
+    sequence: v.number(),
+    at: v.number(),
+    kind: v.string(),
+    payload: v.any(),
+  });
 
   const functions = {
     describeGrant: internalQuery({
@@ -638,6 +737,10 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
       args: { bindingId: v.id("agentTurnBinding"), draftOrdinal: v.number(), text: v.string(), now: v.optional(v.number()) },
       handler: async (ctx, args) => flushProvisionalNarrativeWithCtx(ctx, { ...args, now: args.now ?? Date.now() }),
     }),
+    recordTurnTrace: internalMutation({
+      args: { bindingId: v.id("agentTurnBinding"), events: v.array(traceEventValidator), now: v.optional(v.number()) },
+      handler: async (ctx, args) => recordTurnTraceWithCtx(ctx, args),
+    }),
   };
 
   return {
@@ -650,6 +753,7 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
     peekTurnStateWithCtx,
     finalizeTurnWithCtx,
     flushProvisionalNarrativeWithCtx,
+    recordTurnTraceWithCtx,
     outbox,
     functions,
   };
@@ -672,6 +776,8 @@ export const peekTurnState = agentTurnSeams.functions.peekTurnState;
 export const finalizeTurn = agentTurnSeams.functions.finalizeTurn;
 /** Host-only: the single-flight provisional flush. Never admitted as public ingress. */
 export const flushProvisionalNarrative = agentTurnSeams.functions.flushProvisionalNarrative;
+/** Host-only: the engineer's turn trace. Never admitted as public ingress, never read by an operator surface. */
+export const recordTurnTrace = agentTurnSeams.functions.recordTurnTrace;
 
 // ---------------------------------------------------------------------------
 // Turn-keyed exposure (investigation; reachable for zero-attempt turns)

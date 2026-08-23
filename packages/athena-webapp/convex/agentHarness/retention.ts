@@ -38,6 +38,7 @@ import {
   repairFencedRunsWithCtx,
 } from "./lifecycle";
 import { deleteExpiredProvisionalNarrativesWithCtx } from "./provisionalNarrative";
+import { deleteExpiredTurnTraceWithCtx } from "./turnTrace";
 import { ensureConvexAgentRuntimeCleanupRegistered } from "./runtimeRetention";
 import { sweepStaleTurnBindingsWithCtx } from "./turnBindings";
 
@@ -374,6 +375,7 @@ export type ExpirySweepResult = {
   deletedReplayPayloads: number;
   deletedScratchDescriptors: number;
   deletedClaimSupport: number;
+  deletedTurnTraceEvents: number;
   expiredCitations: number;
   runtimeCleanupAttempted: number;
   runtimeCleanupSucceeded: number;
@@ -436,6 +438,11 @@ export async function sweepExpiredAgentContentWithCtx(
   for (const claim of claims) await ctx.db.delete("agentClaimSupport", claim._id);
   hasMore ||= claims.length === limit;
 
+  // The engineer-only turn trace is standard-class content with no marker and
+  // no lineage to keep: past its bound it is simply deleted, like a replay body.
+  const trace = await deleteExpiredTurnTraceWithCtx(ctx, { now, limit });
+  hasMore ||= trace.hasMore;
+
   const citations = await ctx.db
     .query("agentCitationBinding")
     .withIndex("by_evidenceLifecycle_expiresAt", (q) => q.eq("evidenceLifecycle", "retained").lte("expiresAt", now))
@@ -456,6 +463,7 @@ export async function sweepExpiredAgentContentWithCtx(
     deletedReplayPayloads,
     deletedScratchDescriptors: scratch.length,
     deletedClaimSupport: claims.length,
+    deletedTurnTraceEvents: trace.deleted,
     expiredCitations: citations.length,
     runtimeCleanupAttempted: cleanup.attempted,
     runtimeCleanupSucceeded: cleanup.succeeded,
@@ -586,6 +594,16 @@ export async function deleteAgentHarnessContentWithCtx(
       : await ctx.db.query("agentProvisionalNarrative").withIndex("by_organizationId", (q) => q.eq("organizationId", scope.organizationId)).take(batch);
   for (const row of provisional) await ctx.db.delete("agentProvisionalNarrative", row._id);
   countDeleted(provisional.length);
+
+  // The turn trace holds the model's deltas and the exact tool arguments for
+  // the removed scope's turns: content, deleted through the scope's own index
+  // rather than left to its 365-day bound.
+  const trace =
+    "storeId" in scope
+      ? await ctx.db.query("agentTurnTraceEvent").withIndex("by_storeId", (q) => q.eq("storeId", scope.storeId)).take(batch)
+      : await ctx.db.query("agentTurnTraceEvent").withIndex("by_organizationId", (q) => q.eq("organizationId", scope.organizationId)).take(batch);
+  for (const row of trace) await ctx.db.delete("agentTurnTraceEvent", row._id);
+  countDeleted(trace.length);
 
   // Capability-call rows carry request arguments and human-readable source
   // labels taken from the store's own records, so they are content, not audit.
