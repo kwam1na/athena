@@ -61,6 +61,7 @@ import {
   getStoreScheduleContextForStoreAtWithCtx,
   resolveStoreOperatingRangeForDateWithCtx,
 } from "../inventory/storeSchedule";
+import { resolveStoreCalendarRangeForDateWithCtx } from "../inventory/storeScheduleCore";
 import {
   emitNotificationWithCtx,
   type EmitNotificationResult,
@@ -1087,11 +1088,32 @@ async function resolveHistoricEodStoreRangeForDateWithCtx(
     storeScheduleId: range.scheduleVersionId,
   };
 
+  // The Store Schedule window says when the store *trades*; it does not bound
+  // what the operating day *contains*. A sale rung after the scheduled close,
+  // or a register opened after it, still belongs to this operating date, so the
+  // daily-close snapshot is scoped to the store-local calendar day. The trading
+  // window remains the authority for automation timing, which is why
+  // `storeDayContext` and `scheduleEvidence` above still carry it.
+  const { range: calendarRange } = await resolveStoreCalendarRangeForDateWithCtx(
+    ctx,
+    { operatingDate: args.operatingDate, storeId: args.storeId },
+  );
+
+  if (calendarRange.kind !== "resolved") {
+    return {
+      kind: "quarantine",
+      classification: "quarantine_store_schedule_ambiguous",
+      reason: "store_schedule_ambiguous",
+      scheduleEvidence,
+      storeScheduleId: range.scheduleVersionId ?? undefined,
+    };
+  }
+
   return {
     kind: "resolved",
-    endAt: range.endAt,
+    endAt: calendarRange.endAt,
     scheduleEvidence,
-    startAt: range.startAt,
+    startAt: calendarRange.startAt,
     storeDayContext,
   };
 }
