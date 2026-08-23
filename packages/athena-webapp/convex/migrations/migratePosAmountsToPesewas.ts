@@ -170,11 +170,108 @@ async function posPage(
   });
 }
 
+/**
+ * `remaining` is advisory, but `posAmountMigrationStatus` reports it as the
+ * cutover signal, so it must never state a number the run did not earn. The
+ * field is optional precisely so a run can say "I did not measure this"
+ * instead of defaulting to `0`, which reads as a positive claim of no work
+ * left. Every branch below either writes a measurement it can stand behind or
+ * writes nothing at all.
+ */
+type RemainingState = {
+  cutoffChangedAt: number | undefined;
+  remaining: number | undefined;
+  remainingMeasuredAt: number | undefined;
+};
+
+function nextRemaining(input: {
+  complete: boolean;
+  cutoffChanged: boolean;
+  drainedWithoutProof: boolean;
+  existing: {
+    cutoffChangedAt?: number;
+    remaining?: number;
+    remainingMeasuredAt?: number;
+  } | null;
+  measurementOnly: boolean;
+  measuredWholeTable: boolean;
+  now: number;
+  remaining: number;
+}): RemainingState {
+  // Every key is always present in the result: on `ctx.db.patch` an explicit
+  // `undefined` removes the field, which is how an invalidated measurement
+  // stops being reported instead of lingering on the record.
+  //
+  // A run whose cutoff differs from the one on the record is answering a
+  // different question about the same table, and the disagreement outlives the
+  // batch that noticed it: the rest of that chain inherits the new cutoff and
+  // would otherwise look consistent. `cutoffChangedAt` carries the conflict
+  // forward until a whole-table dry run re-measures at the current cutoff,
+  // which is the only evidence that settles which cutoff the board describes.
+  const cutoffChangedAt = input.cutoffChanged
+    ? input.now
+    : input.existing?.cutoffChangedAt;
+  const unmeasured = {
+    cutoffChangedAt,
+    remaining: undefined,
+    remainingMeasuredAt: undefined,
+  };
+  const carried = input.cutoffChanged
+    ? unmeasured
+    : {
+        cutoffChangedAt,
+        remaining: input.existing?.remaining,
+        remainingMeasuredAt: input.existing?.remainingMeasuredAt,
+      };
+
+  if (input.measurementOnly) {
+    // Only a dry run that walked the whole table measured the whole table. A
+    // cursor-scoped dry run counted one page and must not present that page's
+    // pending count as the table's -- nor overwrite a real full-table figure.
+    return input.measuredWholeTable
+      ? {
+          // A fresh whole-table count at the current cutoff resolves any
+          // outstanding disagreement about which cutoff the record describes.
+          cutoffChangedAt: undefined,
+          remaining: input.remaining,
+          remainingMeasuredAt: input.now,
+        }
+      : carried;
+  }
+  if (input.cutoffChanged || cutoffChangedAt !== undefined) {
+    // Includes a "complete" chain run at a wrong cutoff: relative to the cutoff
+    // it was handed, nothing was pending, but that says nothing about the
+    // cutoff the earlier measurement used. The record stays unmeasured rather
+    // than banking a zero the run did not earn under the disputed cutoff.
+    return unmeasured;
+  }
+  if (input.complete) {
+    // The chain walked the whole table from the beginning and left nothing
+    // pending: a zero this run actually earned.
+    return {
+      cutoffChangedAt: undefined,
+      remaining: 0,
+      remainingMeasuredAt: input.now,
+    };
+  }
+  if (input.drainedWithoutProof) {
+    // Converted everything it saw but cannot prove coverage. The prior
+    // measurement counted rows this run has since converted, so it is now
+    // false; drop it rather than report a stale number as current.
+    return unmeasured;
+  }
+  // Mid-chain applying batch: its own pending count is structurally zero, so
+  // it carries the last real measurement forward untouched.
+  return carried;
+}
+
 async function upsertMigrationRun(
   ctx: MutationCtx,
   input: {
     complete: boolean;
     cutoffTimestamp: number;
+    drainedWithoutProof?: boolean;
+    measuredWholeTable?: boolean;
     measurementOnly?: boolean;
     migrated: number;
     now: number;
@@ -187,27 +284,35 @@ async function upsertMigrationRun(
     .query("posAmountMigrationRun")
     .withIndex("by_table", (q) => q.eq("table", input.table))
     .first();
+  const measurementOnly = input.measurementOnly === true;
   // Only a dry run can measure how much work is left -- an applying batch
   // converts what it sees, so its own "pending" is structurally zero. A dry
   // run therefore still records that measurement, but must never touch the
-  // gate: `complete` and the cumulative `migrated` are carried forward
+  // gate: `complete` and the cumulative counters are carried forward
   // untouched, so re-inspecting a finished table before cutover cannot clear
-  // it. An applying batch owns the gate and carries the last measurement
-  // forward instead of overwriting it with its structural zero.
+  // it. An applying batch owns the gate.
   const value = {
-    complete: input.measurementOnly
-      ? (existing?.complete ?? false)
-      : input.complete,
+    complete: measurementOnly ? (existing?.complete ?? false) : input.complete,
     cutoffTimestamp: input.cutoffTimestamp,
-    migrated: input.measurementOnly
+    migrated: measurementOnly
       ? (existing?.migrated ?? 0)
       : (existing?.migrated ?? 0) + input.migrated,
-    remaining: input.measurementOnly
-      ? input.remaining
-      : input.complete
-        ? 0
-        : (existing?.remaining ?? input.remaining),
-    skipped: input.skipped,
+    ...nextRemaining({
+      complete: input.complete,
+      cutoffChanged:
+        existing != null && existing.cutoffTimestamp !== input.cutoffTimestamp,
+      drainedWithoutProof: input.drainedWithoutProof === true,
+      existing,
+      measuredWholeTable: input.measuredWholeTable === true,
+      measurementOnly,
+      now: input.now,
+      remaining: input.remaining,
+    }),
+    // Cumulative, exactly like `migrated`: two adjacent counters with
+    // different scopes is a trap for whoever reads the record next.
+    skipped: measurementOnly
+      ? (existing?.skipped ?? 0)
+      : (existing?.skipped ?? 0) + input.skipped,
     table: input.table,
     updatedAt: input.now,
   };
@@ -274,9 +379,19 @@ export async function migratePosAmountTableWithCtx(
   const complete =
     !dryRun && page.isDone && startedAtBeginning && totals.pending === 0;
 
+  // A whole-table pending count exists only when the walk covered the whole
+  // table: from the first page through the last. A cursor-scoped dry run
+  // measured a slice, not the table.
+  const walkedWholeTable = page.isDone && startedAtBeginning;
   const run = await upsertMigrationRun(ctx, {
     complete,
     cutoffTimestamp: args.cutoffTimestamp,
+    // An applying chain that reached the end of what it walked with nothing
+    // pending, yet could not prove coverage: it drained rows a prior
+    // measurement had counted, so that measurement is now stale.
+    drainedWithoutProof:
+      !dryRun && page.isDone && !complete && totals.pending === 0,
+    measuredWholeTable: dryRun && walkedWholeTable,
     measurementOnly: dryRun,
     migrated,
     now,
@@ -372,6 +487,13 @@ export async function verifyPosAmountsToPesewasWithCtx(
   };
 }
 
+/**
+ * The cutover board. `remaining: null` means "not measured" — never "measured
+ * as zero"; only a number is a claim about outstanding work. `cutoffTimestamp`
+ * is projected so a chain run against a wrong cutoff (which can still satisfy
+ * the completion gate, because relative to that cutoff nothing was eligible)
+ * cannot present as a clean board: the wrong cutoff is on the row.
+ */
 export async function posAmountMigrationStatusWithCtx(ctx: QueryCtx) {
   // eslint-disable-next-line @convex-dev/no-collect-in-query -- one marker row per POS money table (bounded, tiny table)
   const runs = await ctx.db.query("posAmountMigrationRun").collect();
@@ -380,9 +502,14 @@ export async function posAmountMigrationStatusWithCtx(ctx: QueryCtx) {
     const run = byTable.get(table);
     return {
       complete: run?.complete ?? false,
+      cutoffChangedAt: run?.cutoffChangedAt ?? null,
+      cutoffTimestamp: run?.cutoffTimestamp ?? null,
       migrated: run?.migrated ?? 0,
       remaining: run?.remaining ?? null,
+      remainingMeasuredAt: run?.remainingMeasuredAt ?? null,
+      skipped: run?.skipped ?? 0,
       table,
+      updatedAt: run?.updatedAt ?? null,
     };
   });
 }
