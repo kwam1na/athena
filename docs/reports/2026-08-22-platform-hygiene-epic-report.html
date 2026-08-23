@@ -187,8 +187,10 @@
           seventh, <code>convex/emails/</code>, was resolved differently and
           left no shim: the two receipt templates had no server caller at all,
           so they moved to <code>src/lib/pos/receipts/</code> and their two
-          browser import sites were rewritten. That move is what required
-          regenerating <code>convex/_generated/api.d.ts</code>.
+          browser import sites were rewritten. That move is one of three
+          independent reasons this branch regenerated
+          <code>convex/_generated/api.d.ts</code> — the other two are the new
+          archive-precondition helper and the migration module swap.
         </p>
         <h3>Storefront contracts (V26-964)</h3>
         <p>
@@ -319,7 +321,7 @@
         <p>
           All three were introduced by this branch's own work and found by
           independent reviewers reading the code, not by a failing test. The
-          third was introduced by the fix for the first.
+          second was introduced by the fix for the first.
         </p>
         <h3>A migration that could claim it was finished when it was not</h3>
         <p>

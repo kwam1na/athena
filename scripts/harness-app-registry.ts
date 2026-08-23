@@ -1398,12 +1398,13 @@ const NON_HARNESS_PACKAGE_REGISTRY = [
     kind: "non-harness",
     packageDir: "packages/athena-contracts",
     note:
-      "Type-only contract surface shared by athena-webapp and storefront-webapp. " +
-      "Every export is a type apart from one frozen string-literal array, it " +
-      "owns no routes or behavior, and the single seam to convex/_generated is " +
-      "`import type` and erases at build -- so it has no independent validation " +
-      "surface to onboard. It is exercised through the typecheck and build of " +
-      "the two packages that consume it.",
+      "Neutral contract surface shared by athena-webapp and storefront-webapp. " +
+      "It owns no domain logic of its own: the index surface is types plus one " +
+      "string-literal array, its runtime exports are thin re-exports of " +
+      "athena-webapp/shared browser-safe helpers, and the seam to " +
+      "convex/_generated is `import type` and erases at build. That leaves no " +
+      "independent validation surface to onboard -- it is exercised through the " +
+      "typecheck, tests, and build of the two packages that consume it.",
   },
 ] as const satisfies readonly NonHarnessPackageRegistration[];
 
