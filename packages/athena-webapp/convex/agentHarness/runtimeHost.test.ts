@@ -230,7 +230,7 @@ describe("driveTurn operator log line", () => {
   });
 });
 
-describe.each(ADAPTERS)("turn host parity — $name", ({ create }) => {
+describe.each(ADAPTERS)("turn host parity — $name", ({ name, create }) => {
   it("stamps time to the first narrative delta and reports the turn on one collapsed operator log line", async () => {
     const t = backend();
     const harness = create(t);
@@ -359,20 +359,32 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ create }) => {
     const seeded = await t.run((ctx) => seedRecordedTurn(ctx, "provider-fail"));
     const turnKey = turnKeyFor(seeded.bindingId);
     harness.scriptTurn(turnKey, [
+      // A draft has to reach the row before the provider dies, or "no draft at
+      // rest" asserts nothing. Text queued behind a `pause`/`fail` never leaves
+      // the Convex Agent adapter's provider stream, which only returns at a
+      // tool-call or completion step — so the draft is narrated, flushed on the
+      // way past a real tool call, and only then is the failure released.
+      { kind: "narrative", deltas: ["Checking which shifts", " are open."] },
+      { kind: "tool_call", callId: "c1", toolId: "athena.executeProgram", args: { source: PROGRAM } },
+      { kind: "pause", gate: "drafted" },
       { kind: "usage", providerInvocationRef: "inv-1", retryIndex: 0, sequence: 1, eventKey: "inv-1#partial", mode: "delta", tokens: { input: 12 }, terminal: false },
       { kind: "usage", providerInvocationRef: "inv-1", retryIndex: 1, sequence: 1, eventKey: "inv-1#retry", mode: "delta", tokens: { input: 12, output: 3 }, terminal: true },
       { kind: "fail", code: "provider_failure", message: "model unavailable (api key sk-live-abcdefgh12345 rejected)" },
     ]);
     const host = await hostFor(t, harness);
-    const report = await host.driveTurn({ bindingId: seeded.bindingId });
+    const driving = host.driveTurn({ bindingId: seeded.bindingId });
+    await waitFor(async () => (await provisionalRow(t, seeded.bindingId))?.text === "Checking which shifts are open.");
+    harness.release("drafted");
+    const report = await driving;
     expect(report).toMatchObject({ outcome: "failed", code: "provider_failure", finalize: { outcome: "failed", runStatus: "failed" } });
     const after = await rows(t, seeded);
     expect(after.run).toMatchObject({ status: "failed", error: { code: "provider_failure", retryable: true } });
     expect(after.binding?.abandonedAt).toBeDefined();
     expect(after.invocations[0]).toMatchObject({ status: "failed" });
     expect(JSON.stringify(after.invocations[0])).not.toContain("sk-live-abcdefgh12345");
-    // A provider failure leaves no draft at rest.
+    // A provider failure clears the draft that was demonstrably at rest above.
     expect(after.provisional).toEqual([]);
+    expect(JSON.stringify(after)).not.toContain("Checking which shifts");
     expect(report.usage?.conservative).toBe(true);
     expect(report.usage?.streams).toBeGreaterThanOrEqual(1);
     // Terminal: a second drive does nothing.
@@ -400,6 +412,11 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ create }) => {
     const harness = create(t);
     const seeded = await t.run((ctx) => seedRecordedTurn(ctx, "cancel"));
     harness.scriptTurn(turnKeyFor(seeded.bindingId), [
+      // Narrated before the tool call so a draft is genuinely at rest when the
+      // operator presses Stop; both adapters flush the text on the way past the
+      // tool call, which is the earliest point the Convex Agent adapter's
+      // provider stream returns anything at all.
+      { kind: "narrative", deltas: ["Checking which shifts", " are open."] },
       { kind: "tool_call", callId: "c1", toolId: "athena.executeProgram", args: { source: PROGRAM } },
       { kind: "pause", gate: "after-read" },
       { kind: "tool_call", callId: "c2", toolId: "athena.executeProgram", args: { source: PROGRAM } },
@@ -408,6 +425,7 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ create }) => {
     const host = await hostFor(t, harness);
     const driving = host.driveTurn({ bindingId: seeded.bindingId });
     await waitFor(async () => (await t.run((ctx) => listProgramAttemptsForRun(ctx, seeded.runId))).some((attempt) => attempt.status === "result_produced"));
+    await waitFor(async () => (await provisionalRow(t, seeded.bindingId))?.text === "Checking which shifts are open.");
     await t.run((ctx) => cancelAgentRunWithCtx(ctx, { runId: seeded.runId, idempotencyKey: "operator", reason: "operator_canceled", now: clock() }));
     const report = await driving;
     expect(report).toMatchObject({ outcome: "canceled", finalize: { runStatus: "canceled" } });
@@ -420,12 +438,24 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ create }) => {
     const after = await rows(t, seeded);
     expect(after.run).toMatchObject({ status: "canceled" });
     expect(after.attempts).toHaveLength(1);
-    // An operator cancel leaves no draft at rest.
+    // An operator cancel clears the draft that was demonstrably at rest above.
     expect(after.provisional).toEqual([]);
-    // A late tool call from the released model never reaches a handler: the terminal ledger refuses it.
-    const results = harness.dispatchResults(after.binding!.runtimeTurnRef as never);
-    expect(results[0]).toMatchObject({ kind: "outcome", outcome: { kind: "success" } });
-    for (const late of results.slice(1)) expect(late).toMatchObject({ kind: "protocol_violation", code: "turn_terminal" });
+    expect(JSON.stringify(after)).not.toContain("Checking which shifts");
+    // A late tool call from the released model never reaches a handler, but the
+    // two adapters refuse it at different rungs, so the observable differs and
+    // an unconditional loop over `slice(1)` would assert nothing under either.
+    const dispatched = () => harness.dispatchResults(after.binding!.runtimeTurnRef as never);
+    expect(dispatched()[0]).toMatchObject({ kind: "outcome", outcome: { kind: "success" } });
+    if (name === "convex agent adapter") {
+      // The released provider stream really does emit the late tool call; the
+      // adapter's terminal ledger is what refuses it.
+      await waitFor(async () => dispatched().length > 1);
+      expect(dispatched().slice(1)).toMatchObject([{ kind: "protocol_violation", code: "turn_terminal" }]);
+    } else {
+      // The fake's scripted model observes the terminal turn before it issues
+      // the late call, so the call is never made at all.
+      expect(dispatched()).toHaveLength(1);
+    }
   });
 
   it("revocation after provider egress cancels the turn, suppresses release, purges runtime payloads, and keeps the exposure audit (scenario 13)", async () => {
@@ -439,6 +469,10 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ create }) => {
     const seeded = await t.run((ctx) => seedRecordedTurn(ctx, "revoke"));
     const { captured, observe } = captureProgramResult();
     harness.scriptTurn(turnKeyFor(seeded.bindingId), [
+      // Narrated before the egressing tool call so a draft is genuinely at rest
+      // when authority is revoked; both adapters flush the text on the way past
+      // the tool call.
+      { kind: "narrative", deltas: ["Checking which shifts", " are open."] },
       { kind: "tool_call", callId: "c1", toolId: "athena.executeProgram", args: { source: PROGRAM } },
       { kind: "pause", gate: "revoke" },
       { kind: "tool_call", callId: "c2", toolId: "athena.executeProgram", args: { source: PROGRAM } },
@@ -448,6 +482,7 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ create }) => {
     const host = await hostFor(t, harness, { observe });
     const driving = host.driveTurn({ bindingId: seeded.bindingId });
     await waitFor(async () => captured.attemptRef !== undefined);
+    await waitFor(async () => (await provisionalRow(t, seeded.bindingId))?.text === "Checking which shifts are open.");
     await t.run((ctx) => ctx.db.delete("organizationMember", seeded.operator.membershipId!));
     harness.release("revoke");
     const report = await driving;
@@ -457,8 +492,9 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ create }) => {
     const after = await rows(t, seeded);
     expect(after.run).toMatchObject({ status: "canceled", error: { code: "canceled", diagnostic: "authority_revoked" } });
     expect(after.artifacts).toHaveLength(0);
-    // Revocation after egress leaves no draft at rest.
+    // Revocation after egress clears the draft that was demonstrably at rest above.
     expect(after.provisional).toEqual([]);
+    expect(JSON.stringify(after)).not.toContain("Checking which shifts");
     expect(after.binding).toMatchObject({ runtimeCleanupStatus: "succeeded", adapterKind: harness.adapter.descriptor.adapterKind });
     if (harness.adapter.descriptor.adapterKind === "athena_contract_fake") {
       expect(purged).toHaveLength(1);
