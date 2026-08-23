@@ -48,4 +48,35 @@ describe("offer product price formatting", () => {
       product_url: "https://example.com/product",
     });
   });
+
+  it("reads a fixed-amount promo discount as pesewas, not GHS", () => {
+    const productSku = {
+      colorName: "Natural",
+      images: ["https://example.com/image.jpg"],
+      price: 15_000,
+      productCategory: "Hair",
+      productName: "Body Wave",
+      sku: "BW-18",
+    };
+    // GHS 25.00 off, stored as 2_500 pesewas by `promoCodeMoney`.
+    const promoCode = {
+      discountType: "amount",
+      discountValue: 2_500,
+    };
+
+    expect(getDiscountedOfferProductPrice(productSku.price, promoCode)).toBe(
+      12_500,
+    );
+    expect(
+      buildOfferProductEmailItem({
+        formatter,
+        productSku,
+        productUrl: "https://example.com/product",
+        promoCode,
+      }),
+    ).toMatchObject({
+      discounted_price: formatter.format(125),
+      original_price: formatter.format(150),
+    });
+  });
 });
