@@ -17,7 +17,10 @@ import {
   AthenaAgentPanel,
   AthenaAgentSurface,
 } from "./AthenaAgentPanel";
-import { defineAthenaAgentPresentation } from "./AthenaAgentPresentationAdapter";
+import {
+  defineAthenaAgentPresentation,
+  describeProvisionalWithdrawal,
+} from "./AthenaAgentPresentationAdapter";
 import type { AthenaAgentRun } from "./useAthenaAgentRun";
 
 vi.mock("~/convex/_generated/api", () => ({
@@ -29,9 +32,11 @@ vi.mock("~/convex/_generated/api", () => ({
         resumeTurn: "resumeTurn",
         acknowledgeTurnAnswer: "acknowledgeTurnAnswer",
         inspectCitationEvidence: "inspectCitationEvidence",
+        acknowledgeProvisionalView: "acknowledgeProvisionalView",
         getTurnView: "getTurnView",
         getTurnAnswer: "getTurnAnswer",
         getThreadHistory: "getThreadHistory",
+        previewTurnNarrative: "previewTurnNarrative",
       },
     },
   },
@@ -196,6 +201,9 @@ function baseRun(overrides: Partial<AthenaAgentRun> = {}): AthenaAgentRun {
     activeTurnId: null,
     answer: null,
     milestones: [],
+    provisionalState: "none",
+    provisional: null,
+    provisionalWithdrawal: null,
     denial: null,
     blockedSubmission: null,
     pendingContextChange: null,
@@ -985,5 +993,669 @@ describe("profile neutrality", () => {
     expect(
       within(screen.getByTestId("athena-agent-source")).getByRole("link"),
     ).toHaveAttribute("href", "/wigclub/stores");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Provisional narrative
+// ---------------------------------------------------------------------------
+
+const RUNNING_TURN = {
+  turnId: "binding-1" as Id<"agentTurnBinding">,
+  phase: "running" as const,
+  question: "What is blocking the close?",
+  questionState: "retained" as const,
+  contextLabel: "Osu · 2026-08-21",
+  createdAt: 1,
+  terminal: false,
+};
+
+function draftRun(
+  provisionalState: AthenaAgentRun["provisionalState"],
+  overrides: Partial<AthenaAgentRun> = {},
+): AthenaAgentRun {
+  const withText = ["streaming", "reset", "paused_at_limit", "committing"].includes(
+    provisionalState,
+  );
+  return baseRun({
+    hostState: "running",
+    status: { headline: "Reading sources", tone: "progress" },
+    canCancel: true,
+    canSubmit: false,
+    turn: RUNNING_TURN,
+    activeTurnId: RUNNING_TURN.turnId,
+    provisionalState,
+    provisional: withText
+      ? {
+          text: "Two lanes are still open.",
+          truncated: provisionalState === "paused_at_limit",
+          draftOrdinal: 1,
+        }
+      : null,
+    provisionalWithdrawal:
+      provisionalState === "withdrawn"
+        ? describeProvisionalWithdrawal("egress_beyond_authority")
+        : null,
+    ...overrides,
+  });
+}
+
+describe("the provisional draft region", () => {
+  it("renders a fixture for every provisional state", () => {
+    const expectations: {
+      state: AthenaAgentRun["provisionalState"];
+      container: boolean;
+      text: boolean;
+      notice: boolean;
+      live: string | null;
+    }[] = [
+      { state: "disabled", container: false, text: false, notice: false, live: null },
+      { state: "withdrawn", container: false, text: false, notice: true, live: null },
+      { state: "superseded", container: false, text: false, notice: false, live: null },
+      { state: "committing", container: true, text: true, notice: false, live: null },
+      {
+        state: "reset",
+        container: true,
+        text: true,
+        notice: false,
+        live: "Draft restarted. The earlier text is gone.",
+      },
+      {
+        state: "paused_at_limit",
+        container: true,
+        text: true,
+        notice: false,
+        live: "Draft display limit reached. The rest of the draft isn't shown here.",
+      },
+      { state: "streaming", container: true, text: true, notice: false, live: null },
+      {
+        state: "awaiting_first_text",
+        container: false,
+        text: false,
+        notice: false,
+        live: null,
+      },
+      {
+        state: "stalled",
+        container: true,
+        text: false,
+        notice: false,
+        live: "Draft paused. You can stop this request or start a new thread.",
+      },
+      { state: "none", container: false, text: false, notice: false, live: null },
+    ];
+
+    for (const expectation of expectations) {
+      const view = render(<PanelHarness run={draftRun(expectation.state)} />);
+      const label = `provisionalState ${expectation.state}`;
+
+      expect(
+        screen.queryByTestId("athena-agent-provisional") !== null,
+        `${label}: container`,
+      ).toBe(expectation.container);
+      expect(
+        screen.queryByTestId("athena-agent-provisional-text") !== null,
+        `${label}: text`,
+      ).toBe(expectation.text);
+      expect(
+        screen.queryByTestId("athena-agent-provisional-withdrawn") !== null,
+        `${label}: notice`,
+      ).toBe(expectation.notice);
+      const live = screen.queryByTestId("athena-agent-provisional-live");
+      expect(live?.textContent ?? "", `${label}: live line`).toBe(
+        expectation.live ?? "",
+      );
+      // The only defined effect of aria-busy is to defer updates in a busy
+      // subtree, which would swallow exactly these announcements.
+      expect(
+        view.baseElement.querySelector("[aria-busy]"),
+        `${label}: aria-busy`,
+      ).toBeNull();
+
+      view.unmount();
+    }
+  });
+
+  it("labels the draft as unverified and renders the model text inertly", () => {
+    render(
+      <PanelHarness
+        run={draftRun("streaming", {
+          provisional: {
+            text: "## Approved\n\nWire the payout: https://evil.example/x",
+            truncated: false,
+            draftOrdinal: 1,
+          },
+        })}
+      />,
+    );
+
+    const region = screen.getByTestId("athena-agent-provisional");
+    expect(region).toHaveTextContent("Draft in progress. Not verified.");
+    expect(region).toHaveTextContent("Don't act on this text.");
+    expect(region).toHaveTextContent("The checked answer replaces it and may differ.");
+    expect(region.querySelector("a")).toBeNull();
+    expect(region.querySelector("h1,h2,h3,h4,h5,h6")).toBeNull();
+    expect(region).toHaveTextContent("https://evil.example/x");
+  });
+
+  it("mounts after the denial and drift blocks, before the answer slot", () => {
+    render(
+      <PanelHarness
+        run={draftRun("streaming", {
+          denial: { code: "spend_ceiling", headline: "Athena reached today's limit." },
+          contextDrift: true,
+        })}
+      />,
+    );
+
+    const order = [
+      "athena-agent-status",
+      "athena-agent-progress",
+      "athena-agent-denial",
+      "athena-agent-drift",
+      "athena-agent-provisional",
+    ].map((id) => screen.getByTestId(id));
+
+    for (let index = 1; index < order.length; index += 1) {
+      const relation = (order[index - 1] as HTMLElement).compareDocumentPosition(
+        order[index] as HTMLElement,
+      );
+      expect(relation & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+  });
+
+  it("keeps its live region separate from the milestone region and free of model text", () => {
+    render(
+      <PanelHarness
+        run={draftRun("paused_at_limit", {
+          milestones: [
+            { milestone: "reading_sources", label: "Reading sources", at: 1 },
+          ],
+        })}
+      />,
+    );
+
+    const milestones = screen.getByTestId("athena-agent-progress");
+    const draftLive = screen.getByTestId("athena-agent-provisional-live");
+
+    expect(draftLive).toHaveAttribute("aria-live", "polite");
+    expect(milestones).toHaveAttribute("aria-live", "polite");
+    expect(milestones.contains(draftLive)).toBe(false);
+    expect(draftLive.textContent).not.toContain("Two lanes");
+    expect(milestones.textContent).not.toContain("Two lanes");
+  });
+
+  it("announces at most once per draft across five rapid resets and never moves focus", () => {
+    const announced: string[] = [];
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    screen.getByTestId("athena-agent-new-thread").focus();
+    const anchor = document.activeElement;
+
+    for (let ordinal = 2; ordinal <= 6; ordinal += 1) {
+      const draft = { text: `Draft ${ordinal}`, truncated: false, draftOrdinal: ordinal };
+      rerender(<PanelHarness run={draftRun("reset", { provisional: draft })} />);
+      announced.push(
+        screen.getByTestId("athena-agent-provisional-live").textContent ?? "",
+      );
+      rerender(<PanelHarness run={draftRun("streaming", { provisional: draft })} />);
+      announced.push(
+        screen.getByTestId("athena-agent-provisional-live").textContent ?? "",
+      );
+    }
+
+    // One live node per draft: the cue survives the draft it belongs to and is
+    // never repeated by the deltas that follow it.
+    expect(announced.every((line) => line === "Draft restarted. The earlier text is gone.")).toBe(true);
+    expect(document.activeElement).toBe(anchor);
+  });
+
+  it("distinguishes a paused draft from a stalled one", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("paused_at_limit")} />);
+
+    expect(screen.getByTestId("athena-agent-provisional-text")).toHaveTextContent(
+      "Two lanes are still open.",
+    );
+    expect(screen.getByTestId("athena-agent-provisional-live")).toHaveTextContent(
+      "Draft display limit reached.",
+    );
+
+    rerender(<PanelHarness run={draftRun("stalled")} />);
+
+    expect(screen.queryByTestId("athena-agent-provisional-text")).toBeNull();
+    expect(screen.getByTestId("athena-agent-provisional-live")).toHaveTextContent(
+      "Draft paused. You can stop this request or start a new thread.",
+    );
+    expect(screen.getByTestId("athena-agent-cancel")).toBeEnabled();
+    expect(screen.getByTestId("athena-agent-new-thread")).toBeEnabled();
+  });
+
+  it("swaps the draft for the committed answer, even when they disagree", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+
+    expect(screen.getByTestId("athena-agent-provisional-text")).toHaveTextContent(
+      "Two lanes are still open.",
+    );
+
+    rerender(
+      <PanelHarness
+        run={draftRun("superseded", {
+          hostState: "completed",
+          canCancel: false,
+          provisional: null,
+          answer: {
+            outcome: "answer",
+            narrative: "Only one lane is open.",
+            egressClass: "operational",
+            committedAt: 5,
+            citations: [],
+          },
+        })}
+      />,
+    );
+
+    expect(screen.queryByTestId("athena-agent-provisional")).toBeNull();
+    expect(screen.getByTestId("athena-agent-answer")).toHaveTextContent(
+      "Only one lane is open.",
+    );
+  });
+
+  it("says only what happened to the draft when it is withdrawn", () => {
+    render(<PanelHarness run={draftRun("withdrawn")} />);
+
+    const notice = screen.getByTestId("athena-agent-provisional-withdrawn");
+    expect(notice).toHaveAttribute("role", "alert");
+    expect(notice).toHaveTextContent("Draft withdrawn.");
+    expect(notice).toHaveTextContent("This draft went beyond what you can read here.");
+    expect(notice.textContent).not.toMatch(/answer/i);
+    expect(screen.queryByTestId("athena-agent-provisional-text")).toBeNull();
+  });
+
+  it("renders exactly today's host for a buffered profile", () => {
+    const buffered = render(<PanelHarness run={draftRun("disabled")} />);
+    const bufferedMarkup = screen.getByTestId("athena-agent-transcript").innerHTML;
+    buffered.unmount();
+
+    render(<PanelHarness run={draftRun("none")} />);
+
+    expect(screen.getByTestId("athena-agent-transcript").innerHTML).toBe(
+      bufferedMarkup,
+    );
+  });
+
+  it("follows the growing draft only while the operator is at the bottom", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    const scroll = screen.getByTestId("athena-agent-scroll");
+    Object.defineProperty(scroll, "clientHeight", { configurable: true, value: 100 });
+    Object.defineProperty(scroll, "scrollHeight", { configurable: true, value: 400 });
+
+    rerender(
+      <PanelHarness
+        run={draftRun("streaming", {
+          provisional: { text: "More and more text", truncated: false, draftOrdinal: 1 },
+        })}
+      />,
+    );
+    expect(scroll.scrollTop).toBe(300);
+
+    // The operator scrolls up: following stops.
+    scroll.scrollTop = 40;
+    fireEvent.scroll(scroll);
+    rerender(
+      <PanelHarness
+        run={draftRun("streaming", {
+          provisional: { text: "Even more text", truncated: false, draftOrdinal: 1 },
+        })}
+      />,
+    );
+    expect(scroll.scrollTop).toBe(40);
+
+    // A terminal draft state re-anchors.
+    rerender(<PanelHarness run={draftRun("stalled")} />);
+    expect(scroll.scrollTop).toBe(300);
+  });
+
+  it("keeps the draft out of storage and the URL", () => {
+    const before = window.location.href;
+    render(<PanelHarness run={draftRun("streaming")} />);
+
+    const writes = vi.mocked(window.sessionStorage.setItem).mock.calls;
+    for (const [, value] of writes) {
+      expect(value).not.toContain("Two lanes");
+    }
+    expect(window.location.href).toBe(before);
+  });
+
+  it("drops draft animation under reduced motion while keeping the cue", () => {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes("prefers-reduced-motion"),
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    render(<PanelHarness run={draftRun("reset")} />);
+
+    const panel = screen.getByTestId("athena-agent-panel");
+    expect(panel).toHaveAttribute("data-motion", "reduced");
+    expect(
+      screen.getByTestId("athena-agent-provisional").className,
+    ).not.toMatch(/animate-/);
+    expect(screen.getByTestId("athena-agent-provisional-live")).toHaveTextContent(
+      "Draft restarted.",
+    );
+  });
+});
+
+describe("focus while a draft is withdrawn", () => {
+  /** Focus lands somewhere neutral, as it does after a submission. */
+  function anchorFocusOutsideComposer() {
+    const status = screen.getByTestId("athena-agent-status");
+    status.focus();
+    return status;
+  }
+
+  it("moves focus to the notice once for a mid-run withdrawal", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    anchorFocusOutsideComposer();
+
+    rerender(<PanelHarness run={draftRun("withdrawn")} />);
+    expect(screen.getByTestId("athena-agent-provisional-withdrawn")).toHaveFocus();
+
+    // A later render of the same level-based state does not steal focus again.
+    screen.getByTestId("athena-agent-new-thread").focus();
+    rerender(<PanelHarness run={draftRun("withdrawn")} />);
+    expect(screen.getByTestId("athena-agent-new-thread")).toHaveFocus();
+  });
+
+  it("leaves the composer alone when the operator is typing a follow-up", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    const prompt = screen.getByTestId("athena-agent-prompt");
+    prompt.focus();
+
+    rerender(<PanelHarness run={draftRun("withdrawn")} />);
+
+    expect(prompt).toHaveFocus();
+    // The notice still announces without holding focus.
+    expect(screen.getByTestId("athena-agent-provisional-withdrawn")).toHaveAttribute(
+      "role",
+      "alert",
+    );
+  });
+
+  it("lets the existing terminal move win when both land together", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    anchorFocusOutsideComposer();
+    screen.getByTestId("athena-agent-new-thread").focus();
+
+    rerender(
+      <PanelHarness
+        run={draftRun("withdrawn", {
+          hostState: "terminal_denied",
+          status: { headline: "This answer is no longer available to you.", tone: "warning" },
+          canCancel: false,
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("athena-agent-status")).toHaveFocus();
+  });
+
+  it("keeps the operator's Stop focus when the withdrawal lands a render later", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    screen.getByTestId("athena-agent-new-thread").focus();
+
+    rerender(
+      <PanelHarness
+        run={draftRun("streaming", {
+          hostState: "cancellation_requested",
+          status: { headline: "Stopping…", tone: "progress" },
+        })}
+      />,
+    );
+    expect(screen.getByTestId("athena-agent-status")).toHaveFocus();
+
+    screen.getByTestId("athena-agent-new-thread").focus();
+    rerender(
+      <PanelHarness
+        run={draftRun("withdrawn", {
+          hostState: "cancellation_requested",
+          status: { headline: "Stopping…", tone: "progress" },
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("athena-agent-new-thread")).toHaveFocus();
+  });
+
+  it("moves focus once when the run terminates moments after the withdrawal", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    anchorFocusOutsideComposer();
+
+    rerender(<PanelHarness run={draftRun("withdrawn")} />);
+    expect(screen.getByTestId("athena-agent-provisional-withdrawn")).toHaveFocus();
+
+    rerender(
+      <PanelHarness
+        run={draftRun("withdrawn", {
+          hostState: "terminal_denied",
+          status: { headline: "Stopped.", tone: "neutral" },
+          canCancel: false,
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("athena-agent-provisional-withdrawn")).toHaveFocus();
+  });
+
+  it("still moves to the answer heading, and then to a later denial, after a withdrawal", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    anchorFocusOutsideComposer();
+
+    rerender(<PanelHarness run={draftRun("withdrawn")} />);
+    expect(screen.getByTestId("athena-agent-provisional-withdrawn")).toHaveFocus();
+
+    rerender(
+      <PanelHarness
+        run={draftRun("superseded", {
+          hostState: "completed",
+          canCancel: false,
+          provisionalWithdrawal: null,
+          answer: {
+            outcome: "answer",
+            narrative: "The checked answer.",
+            egressClass: "operational",
+            committedAt: 5,
+            citations: [],
+          },
+        })}
+      />,
+    );
+    expect(screen.getByTestId("athena-agent-answer-heading")).toHaveFocus();
+
+    rerender(
+      <PanelHarness
+        run={draftRun("none", {
+          hostState: "terminal_denied",
+          status: { headline: "This answer is no longer available to you.", tone: "warning" },
+          canCancel: false,
+          provisionalWithdrawal: null,
+        })}
+      />,
+    );
+    expect(screen.getByTestId("athena-agent-status")).toHaveFocus();
+  });
+
+  it("still moves focus when the operator stops a withdrawn turn", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    anchorFocusOutsideComposer();
+
+    rerender(<PanelHarness run={draftRun("withdrawn")} />);
+    screen.getByTestId("athena-agent-new-thread").focus();
+
+    rerender(
+      <PanelHarness
+        run={draftRun("withdrawn", {
+          hostState: "cancellation_requested",
+          status: { headline: "Stopping…", tone: "progress" },
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("athena-agent-status")).toHaveFocus();
+  });
+
+  it("moves no focus when a panel mounts into an already-withdrawn running turn", () => {
+    render(<PanelHarness run={draftRun("withdrawn")} />);
+
+    // The mount focuses the composer, as it always has; the notice does not
+    // take a focus move it never observed happening.
+    expect(screen.getByTestId("athena-agent-prompt")).toHaveFocus();
+    expect(screen.getByTestId("athena-agent-provisional-withdrawn")).toBeInTheDocument();
+  });
+
+  it("still moves focus for the next turn after a withdrawn one", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    anchorFocusOutsideComposer();
+
+    rerender(<PanelHarness run={draftRun("withdrawn")} />);
+    expect(screen.getByTestId("athena-agent-provisional-withdrawn")).toHaveFocus();
+
+    screen.getByTestId("athena-agent-new-thread").focus();
+    rerender(
+      <PanelHarness
+        run={draftRun("none", {
+          hostState: "submitting",
+          status: { headline: "Starting your request…", tone: "progress" },
+          provisionalWithdrawal: null,
+          activeTurnId: "binding-2" as Id<"agentTurnBinding">,
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("athena-agent-status")).toHaveFocus();
+  });
+
+  it("shares one focus move with the terminal denial when the view drops after a release", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    screen.getByTestId("athena-agent-new-thread").focus();
+
+    rerender(
+      <PanelHarness
+        run={draftRun("withdrawn", {
+          hostState: "terminal_denied",
+          status: {
+            headline: "This conversation is no longer available to you.",
+            tone: "warning",
+          },
+          canCancel: false,
+          provisionalWithdrawal: describeProvisionalWithdrawal("membership_revoked"),
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("athena-agent-status")).toHaveFocus();
+    expect(screen.getByTestId("athena-agent-provisional-withdrawn")).toHaveTextContent(
+      "This draft is no longer available to you.",
+    );
+  });
+
+  it("never moves focus for streaming, reset, pause, or stall", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    const anchor = screen.getByTestId("athena-agent-new-thread");
+    anchor.focus();
+
+    for (const state of ["reset", "paused_at_limit", "streaming", "stalled"] as const) {
+      rerender(<PanelHarness run={draftRun(state)} />);
+      expect(document.activeElement, `provisionalState ${state}`).toBe(anchor);
+    }
+  });
+});
+
+describe("the draft is profile-neutral", () => {
+  it("streams a second profile through the same components", () => {
+    render(
+      <PanelHarness
+        presentation={organizationPresentation as unknown as typeof storePresentation}
+        run={draftRun("streaming", {
+          context: {
+            label: "Wigclub · all stores",
+            entries: [
+              { key: "organizationRef", label: "Organization", value: "Wigclub" },
+            ],
+            changedKeys: [],
+            changedSnapshotKeys: [],
+          },
+          starterIntents: organizationPresentation.starterIntents,
+          provisional: {
+            text: "Three stores need attention",
+            truncated: false,
+            draftOrdinal: 1,
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("athena-agent-provisional")).toHaveTextContent(
+      "Draft in progress. Not verified.",
+    );
+    expect(screen.getByTestId("athena-agent-provisional-text")).toHaveTextContent(
+      "Three stores need attention",
+    );
+  });
+
+  it("shows milestones only, and moves no focus, for a buffered profile", () => {
+    const { rerender } = render(
+      <PanelHarness
+        run={draftRun("disabled", {
+          milestones: [
+            { milestone: "reading_sources", label: "Reading sources", at: 1 },
+          ],
+        })}
+      />,
+    );
+    const anchor = screen.getByTestId("athena-agent-new-thread");
+    anchor.focus();
+
+    rerender(
+      <PanelHarness
+        run={draftRun("disabled", {
+          milestones: [
+            { milestone: "reading_sources", label: "Reading sources", at: 1 },
+            { milestone: "composing_answer", label: "Composing the answer", at: 2 },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("athena-agent-progress")).toHaveTextContent(
+      "Composing the answer",
+    );
+    expect(screen.queryByTestId("athena-agent-provisional")).toBeNull();
+    expect(screen.queryByTestId("athena-agent-provisional-withdrawn")).toBeNull();
+    expect(document.activeElement).toBe(anchor);
+  });
+
+  it("shows no notice when a turn ends before any draft was released", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("awaiting_first_text")} />);
+    screen.getByTestId("athena-agent-new-thread").focus();
+
+    rerender(
+      <PanelHarness
+        run={draftRun("none", {
+          hostState: "terminal_denied",
+          status: { headline: "Stopped.", tone: "neutral" },
+          canCancel: false,
+        })}
+      />,
+    );
+
+    expect(screen.queryByTestId("athena-agent-provisional-withdrawn")).toBeNull();
+    expect(screen.queryByTestId("athena-agent-provisional")).toBeNull();
+    // The turn's own terminal move still happens; the draft adds nothing.
+    expect(screen.getByTestId("athena-agent-status")).toHaveFocus();
   });
 });

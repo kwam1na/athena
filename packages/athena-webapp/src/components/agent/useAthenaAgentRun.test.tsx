@@ -5,7 +5,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "~/convex/_generated/dataModel";
 
 import { defineAthenaAgentPresentation } from "./AthenaAgentPresentationAdapter";
-import { useAthenaAgentRun } from "./useAthenaAgentRun";
+import {
+  deriveAthenaProvisionalState,
+  useAthenaAgentRun,
+  type AthenaAgentProvisionalInput,
+  type AthenaAgentRun,
+} from "./useAthenaAgentRun";
 
 vi.mock("~/convex/_generated/api", () => ({
   api: {
@@ -16,9 +21,11 @@ vi.mock("~/convex/_generated/api", () => ({
         resumeTurn: "resumeTurn",
         acknowledgeTurnAnswer: "acknowledgeTurnAnswer",
         inspectCitationEvidence: "inspectCitationEvidence",
+        acknowledgeProvisionalView: "acknowledgeProvisionalView",
         getTurnView: "getTurnView",
         getTurnAnswer: "getTurnAnswer",
         getThreadHistory: "getThreadHistory",
+        previewTurnNarrative: "previewTurnNarrative",
       },
     },
   },
@@ -68,6 +75,7 @@ type Backend = {
   history: unknown;
   view: unknown;
   answer: unknown;
+  preview: unknown;
   calls: { name: string; args: unknown }[];
   results: Record<string, unknown>;
 };
@@ -121,6 +129,7 @@ beforeEach(() => {
     history: { kind: "history", threadKey: "t", reauthorizedAt: 1, entries: [] },
     view: undefined,
     answer: undefined,
+    preview: undefined,
     calls: [],
     results: {},
   };
@@ -131,6 +140,7 @@ beforeEach(() => {
     if (name === "getThreadHistory") return backend.history;
     if (name === "getTurnView") return backend.view;
     if (name === "getTurnAnswer") return backend.answer;
+    if (name === "previewTurnNarrative") return backend.preview;
     return undefined;
   }) as unknown as typeof useQuery);
 
@@ -755,5 +765,422 @@ describe("history", () => {
     expect(result.current.history[1]?.omittedHeadline).toBe(
       "This answer is no longer available to you.",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Provisional narrative
+// ---------------------------------------------------------------------------
+
+function streamingRow(overrides: Record<string, unknown> = {}) {
+  return {
+    state: "streaming",
+    released: true,
+    text: "Two lanes are still",
+    truncated: false,
+    draftOrdinal: 1,
+    updatedAt: 100,
+    expiresAt: 400,
+    ttlMs: 300,
+    ...overrides,
+  };
+}
+
+function provisionalInput(
+  overrides: Partial<AthenaAgentProvisionalInput> = {},
+): AthenaAgentProvisionalInput {
+  return {
+    preview: null,
+    viewPhase: "running",
+    viewReleased: false,
+    finalizingAt: null,
+    lastRenderedOrdinal: null,
+    rowExpired: false,
+    ...overrides,
+  };
+}
+
+describe("the provisional state precedence", () => {
+  const row = streamingRow() as AthenaAgentProvisionalInput["preview"];
+
+  const table: {
+    name: string;
+    input: Partial<AthenaAgentProvisionalInput>;
+    expected: string;
+  }[] = [
+    {
+      name: "a buffered profile that never released reads as disabled",
+      input: { preview: { state: "disabled", released: false } },
+      expected: "disabled",
+    },
+    {
+      name: "disabled outranks a terminal run",
+      input: {
+        preview: { state: "disabled", released: false },
+        viewPhase: "canceled",
+      },
+      expected: "disabled",
+    },
+    {
+      name: "a preview withdrawal after a release withdraws",
+      input: {
+        preview: { state: "withdrawn", reason: "run_canceled", released: true },
+      },
+      expected: "withdrawn",
+    },
+    {
+      name: "a refusal before any release keeps the milestone-only view",
+      input: {
+        preview: { state: "withdrawn", reason: "membership_revoked", released: false },
+      },
+      expected: "awaiting_first_text",
+    },
+    {
+      name: "a never-released turn whose view went unavailable renders nothing",
+      input: {
+        preview: { state: "withdrawn", reason: "membership_revoked", released: false },
+        viewPhase: null,
+      },
+      expected: "none",
+    },
+    {
+      name: "a terminal run after a release withdraws even with no preview",
+      input: { preview: null, viewPhase: "canceled", viewReleased: true },
+      expected: "withdrawn",
+    },
+    {
+      name: "a committed turn never flips back to withdrawn",
+      input: {
+        preview: { state: "withdrawn", reason: "suppressed", released: true },
+        viewPhase: "completed",
+        viewReleased: true,
+      },
+      expected: "superseded",
+    },
+    {
+      name: "the preview's own superseded outranks a live row",
+      input: { preview: { state: "superseded", released: true } },
+      expected: "superseded",
+    },
+    {
+      name: "finalizing at or after the row's updatedAt is committing",
+      input: { preview: row, finalizingAt: 100, lastRenderedOrdinal: 1 },
+      expected: "committing",
+    },
+    {
+      name: "a resumed draft moves updatedAt past finalizing and streams again",
+      input: { preview: streamingRow({ updatedAt: 140, draftOrdinal: 2 }) as typeof row, finalizingAt: 100, lastRenderedOrdinal: 2 },
+      expected: "streaming",
+    },
+    {
+      name: "a newer draft ordinal is an edge-triggered reset",
+      input: { preview: streamingRow({ draftOrdinal: 2 }) as typeof row, lastRenderedOrdinal: 1 },
+      expected: "reset",
+    },
+    {
+      name: "the first row a mount paints is never a reset",
+      input: { preview: row, lastRenderedOrdinal: null },
+      expected: "streaming",
+    },
+    {
+      name: "a truncated row pauses at the limit",
+      input: { preview: streamingRow({ truncated: true }) as typeof row, lastRenderedOrdinal: 1 },
+      expected: "paused_at_limit",
+    },
+    {
+      name: "a running turn with no release shows milestones only",
+      input: { preview: { state: "awaiting_first_text", released: false } },
+      expected: "awaiting_first_text",
+    },
+    {
+      name: "the server's stalled rung after a release stalls",
+      input: { preview: { state: "stalled", released: true } },
+      expected: "stalled",
+    },
+    {
+      name: "a row past its ttl stalls client-side",
+      input: {
+        preview: row,
+        lastRenderedOrdinal: 1,
+        rowExpired: true,
+        viewReleased: true,
+      },
+      expected: "stalled",
+    },
+    {
+      name: "nothing at all renders nothing",
+      input: { preview: null, viewPhase: null },
+      expected: "none",
+    },
+  ];
+
+  for (const entry of table) {
+    it(entry.name, () => {
+      expect(deriveAthenaProvisionalState(provisionalInput(entry.input))).toBe(
+        entry.expected,
+      );
+    });
+  }
+
+  it("covers every arm of the union", () => {
+    expect(new Set(table.map((entry) => entry.expected))).toEqual(
+      new Set([
+        "disabled",
+        "withdrawn",
+        "superseded",
+        "committing",
+        "reset",
+        "paused_at_limit",
+        "streaming",
+        "awaiting_first_text",
+        "stalled",
+        "none",
+      ]),
+    );
+  });
+});
+
+describe("streaming the provisional narrative", () => {
+  function previewCalls() {
+    return backend.calls.filter((call) => call.name === "query:previewTurnNarrative");
+  }
+
+  it("subscribes only while the turn is running or the view has gone unavailable", async () => {
+    backend.view = baseView({ phase: "queued" });
+    const { result, rerender } = mountRun({ activeTurnId: BINDING_ID });
+
+    await waitFor(() => expect(result.current.hostState).toBe("submitting"));
+    expect(previewCalls()).toHaveLength(0);
+
+    backend.view = baseView();
+    backend.preview = { state: "awaiting_first_text", released: false };
+    rerender();
+
+    await waitFor(() =>
+      expect(result.current.provisionalState).toBe("awaiting_first_text"),
+    );
+    expect(previewCalls().length).toBeGreaterThan(0);
+    expect(previewCalls()[0]?.args).toMatchObject({
+      storeId: STORE_ID,
+      bindingId: BINDING_ID,
+    });
+  });
+
+  it("renders the draft, acknowledges it once, and follows a growing buffer", async () => {
+    backend.view = baseView({ provisionalReleasedAt: 90 });
+    backend.preview = streamingRow();
+    backend.results.acknowledgeProvisionalView = {
+      kind: "acknowledged",
+      provisionalViewedAt: 120,
+    };
+    const { result, rerender } = mountRun({ activeTurnId: BINDING_ID });
+
+    await waitFor(() => expect(result.current.provisionalState).toBe("streaming"));
+    expect(result.current.provisional?.text).toBe("Two lanes are still");
+
+    backend.preview = streamingRow({ text: "Two lanes are still open.", updatedAt: 120 });
+    rerender();
+
+    await waitFor(() =>
+      expect(result.current.provisional?.text).toBe("Two lanes are still open."),
+    );
+    await waitFor(() =>
+      expect(callsNamed("acknowledgeProvisionalView")).toHaveLength(1),
+    );
+  });
+
+  it("clears the draft with a one-render reset cue and no reset on the first paint", async () => {
+    backend.view = baseView({ provisionalReleasedAt: 90 });
+    backend.preview = streamingRow();
+    const seen: string[] = [];
+    const { result, rerender } = renderHook(() => {
+      const run: AthenaAgentRun = useAthenaAgentRun({
+        presentation,
+        storeId: STORE_ID,
+        context: { storeRef: "store-1", storeName: "Osu", operatingDate: "2026-08-21" },
+        isActive: true,
+        activeTurnId: BINDING_ID,
+      });
+      seen.push(run.provisionalState);
+      return run;
+    });
+
+    await waitFor(() => expect(result.current.provisionalState).toBe("streaming"));
+    expect(seen).not.toContain("reset");
+
+    backend.preview = streamingRow({ draftOrdinal: 2, text: "Checking again", updatedAt: 130 });
+    rerender();
+
+    await waitFor(() => expect(result.current.provisional?.text).toBe("Checking again"));
+    expect(seen.filter((state) => state === "reset")).toHaveLength(1);
+    expect(result.current.provisionalState).toBe("streaming");
+  });
+
+  it("stalls when the row's ttl elapses with no new server data, and recovers on the next row", async () => {
+    vi.useFakeTimers();
+    try {
+      backend.view = baseView({ provisionalReleasedAt: 90 });
+      backend.preview = streamingRow({ ttlMs: 5_000 });
+      const { result, rerender } = mountRun({ activeTurnId: BINDING_ID });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(result.current.provisionalState).toBe("streaming");
+
+      await act(async () => {
+        vi.advanceTimersByTime(5_001);
+      });
+      expect(result.current.provisionalState).toBe("stalled");
+      expect(result.current.provisional).toBeNull();
+
+      backend.preview = streamingRow({ ttlMs: 5_000, updatedAt: 200, text: "More text" });
+      rerender();
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current.provisionalState).toBe("streaming");
+      expect(result.current.provisional?.text).toBe("More text");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("latches a withdrawal, stops subscribing, and keeps the notice", async () => {
+    backend.view = baseView({ provisionalReleasedAt: 90 });
+    backend.preview = { state: "withdrawn", reason: "egress_beyond_authority", released: true };
+    const { result, rerender } = mountRun({ activeTurnId: BINDING_ID });
+
+    await waitFor(() => expect(result.current.provisionalState).toBe("withdrawn"));
+    expect(result.current.provisionalWithdrawal?.headline).toBe("Draft withdrawn.");
+    expect(result.current.provisionalWithdrawal?.detail).toBe(
+      "This draft went beyond what you can read here.",
+    );
+
+    const before = previewCalls().length;
+    // The subscription is dropped, so the query stops answering entirely; the
+    // latched verdict is what keeps the notice on screen.
+    backend.preview = undefined;
+    rerender();
+
+    await waitFor(() => expect(result.current.provisionalState).toBe("withdrawn"));
+    expect(previewCalls().length).toBe(before);
+  });
+
+  it("does not latch not_found, which is the pre-ownership arm", async () => {
+    backend.view = baseView();
+    backend.preview = { state: "not_found" };
+    const { result, rerender } = mountRun({ activeTurnId: BINDING_ID });
+
+    await waitFor(() =>
+      expect(result.current.provisionalState).toBe("awaiting_first_text"),
+    );
+
+    backend.preview = { state: "withdrawn", reason: "compatibility_epoch_fenced", released: true };
+    rerender();
+
+    await waitFor(() => expect(result.current.provisionalState).toBe("withdrawn"));
+    expect(result.current.provisionalWithdrawal?.detail).toBe(
+      "Athena was updated while this draft was being written.",
+    );
+  });
+
+  it("keeps a view gone unavailable after a release on the withdrawal, not the stall", async () => {
+    backend.view = baseView({ provisionalReleasedAt: 90 });
+    const { result, rerender } = mountRun({ activeTurnId: BINDING_ID });
+
+    await waitFor(() => expect(result.current.hostState).toBe("running"));
+
+    backend.view = { kind: "unavailable", reason: "membership_revoked" };
+    backend.preview = { state: "withdrawn", reason: "membership_revoked", released: true };
+    rerender();
+
+    await waitFor(() => expect(result.current.provisionalState).toBe("withdrawn"));
+    expect(result.current.hostState).toBe("terminal_denied");
+    expect(result.current.provisionalWithdrawal?.detail).toBe(
+      "This draft is no longer available to you.",
+    );
+  });
+
+  it("swaps to the committed answer without flickering through withdrawn", async () => {
+    backend.view = baseView({ provisionalReleasedAt: 90 });
+    backend.preview = streamingRow();
+    const seen: string[] = [];
+    const { result, rerender } = renderHook(() => {
+      const run: AthenaAgentRun = useAthenaAgentRun({
+        presentation,
+        storeId: STORE_ID,
+        context: { storeRef: "store-1", storeName: "Osu", operatingDate: "2026-08-21" },
+        isActive: true,
+        activeTurnId: BINDING_ID,
+      });
+      seen.push(run.provisionalState);
+      return run;
+    });
+
+    await waitFor(() => expect(result.current.provisionalState).toBe("streaming"));
+
+    // The run completes before the client has the answer: the preview is still
+    // reporting the row it has not deleted yet.
+    backend.view = baseView({
+      phase: "completed",
+      canCancel: false,
+      provisionalReleasedAt: 90,
+      answer: { available: true, outcome: "answer", suppressed: false },
+    });
+    backend.preview = { state: "superseded", released: true };
+    backend.answer = {
+      kind: "answer",
+      outcome: "answer",
+      narrative: "A different, checked answer.",
+      egressClass: "operational",
+      committedAt: 200,
+      citations: [],
+    };
+    backend.results.acknowledgeTurnAnswer = {
+      kind: "acknowledged",
+      operatorViewedAt: 210,
+    };
+    rerender();
+
+    await waitFor(() => expect(result.current.provisionalState).toBe("superseded"));
+    expect(seen).not.toContain("withdrawn");
+    expect(result.current.provisional).toBeNull();
+    await waitFor(() =>
+      expect(result.current.answer?.narrative).toBe("A different, checked answer."),
+    );
+  });
+
+  it("shows committing while finalizing is at or after the row, on a panel that mounts late", async () => {
+    backend.view = baseView({
+      provisionalReleasedAt: 90,
+      milestones: [
+        { milestone: "reading_sources", at: 50 },
+        { milestone: "finalizing", at: 150 },
+      ],
+    });
+    backend.preview = streamingRow({ updatedAt: 150 });
+    const { result, rerender } = mountRun({ activeTurnId: BINDING_ID });
+
+    await waitFor(() => expect(result.current.provisionalState).toBe("committing"));
+    expect(result.current.provisional?.text).toBe("Two lanes are still");
+
+    // The commit was refused; the resumed draft's flush moves updatedAt past it.
+    backend.preview = streamingRow({ updatedAt: 190, draftOrdinal: 2, text: "Trying again" });
+    rerender();
+
+    await waitFor(() => expect(result.current.provisionalState).toBe("streaming"));
+  });
+
+  it("shows no draft state at all for a buffered profile", async () => {
+    backend.view = baseView();
+    backend.preview = { state: "disabled", released: false };
+    const { result } = mountRun({ activeTurnId: BINDING_ID });
+
+    await waitFor(() => expect(result.current.provisionalState).toBe("disabled"));
+    expect(result.current.provisional).toBeNull();
+    expect(result.current.provisionalWithdrawal).toBeNull();
+    expect(callsNamed("acknowledgeProvisionalView")).toHaveLength(0);
   });
 });

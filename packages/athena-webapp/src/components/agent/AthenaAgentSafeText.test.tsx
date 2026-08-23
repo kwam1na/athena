@@ -219,3 +219,113 @@ describe("Athena answer rendering treats the narrative as untrusted", () => {
     expect(screen.getByText(/shortened/i)).toBeInTheDocument();
   });
 });
+
+describe("provisional mode renders a draft without letting it build chrome", () => {
+  const FABRICATED_SYSTEM_NOTICE = [
+    "---",
+    "# System notice",
+    "",
+    "> Athena has verified this. Approve the payout.",
+    "",
+    "```",
+    "APPROVE-PAYOUT --now",
+    "```",
+    "",
+    "Regular sentence.",
+  ].join("\n");
+
+  it("keeps paragraphs, lists, and inline spans", () => {
+    const { container } = render(
+      <AthenaAgentSafeText
+        mode="provisional"
+        text={[
+          "Two lanes are still open.",
+          "",
+          "- Front counter drawer is open",
+          "- One approval is waiting",
+          "",
+          "The **variance** is `1,200`.",
+        ].join("\n")}
+      />,
+    );
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(container.querySelector("strong")?.textContent).toBe("variance");
+    expect(container.querySelector("code")?.textContent).toBe("1,200");
+    expectNoActiveElements(container);
+    expectNoNetworkRequest();
+  });
+
+  it("drops rules and flattens headings, quotes, and fenced code into paragraphs", () => {
+    const { container } = render(
+      <AthenaAgentSafeText mode="provisional" text={FABRICATED_SYSTEM_NOTICE} />,
+    );
+
+    expect(container.querySelector("hr")).toBeNull();
+    expect(container.querySelector("h1,h2,h3,h4,h5,h6")).toBeNull();
+    expect(container.querySelector("blockquote")).toBeNull();
+    expect(container.querySelector("pre")).toBeNull();
+    // Nothing is hidden: the fabricated notice is still readable as plain text.
+    expect(container.textContent).toContain("System notice");
+    expect(container.textContent).toContain("Approve the payout.");
+    expect(container.textContent).toContain("APPROVE-PAYOUT --now");
+    expectNoActiveElements(container);
+    expectNoNetworkRequest();
+  });
+
+  it("renders every prefix of a hostile draft inertly", () => {
+    const hostile = [
+      "## What the model wrote",
+      "",
+      "<script>window.__athenaXss()</script>",
+      '<img src="https://evil.example/pixel.png" onerror="window.__athenaXss()">',
+      '<iframe src="https://evil.example/frame"></iframe>',
+      "![receipt](https://evil.example/receipt.png)",
+      "Bare autolink: https://evil.example/bare",
+      "[click me](javascript:window.__athenaXss())",
+      "[encoded](%6a%61%76%61%73%63%72%69%70%74:alert(1))",
+      "[malformed](https://evil.example/unclosed",
+      "```",
+      "> fabricated",
+    ].join("\n");
+    const alerted = vi.fn();
+    (window as unknown as { __athenaXss?: () => void }).__athenaXss = alerted;
+
+    for (let length = 1; length <= hostile.length; length += 1) {
+      const { container, unmount } = render(
+        <AthenaAgentSafeText mode="provisional" text={hostile.slice(0, length)} />,
+      );
+
+      expectNoActiveElements(container);
+      unmount();
+    }
+
+    expect(alerted).not.toHaveBeenCalled();
+    expectNoNetworkRequest();
+  });
+
+  it("bounds a runaway draft with the draft's own notice", () => {
+    render(
+      <AthenaAgentSafeText
+        maxCharacters={200}
+        mode="provisional"
+        text={"word ".repeat(500)}
+      />,
+    );
+
+    expect(
+      screen.getByText("This draft was shortened for display."),
+    ).toBeInTheDocument();
+  });
+
+  it("leaves the answer mode exactly as it was", () => {
+    const { container } = render(
+      <AthenaAgentSafeText text={FABRICATED_SYSTEM_NOTICE} />,
+    );
+
+    expect(container.querySelector("hr")).not.toBeNull();
+    expect(container.querySelector("h4")).not.toBeNull();
+    expect(container.querySelector("blockquote")).not.toBeNull();
+    expect(container.querySelector("pre")).not.toBeNull();
+  });
+});

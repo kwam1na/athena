@@ -24,12 +24,14 @@ import {
   describeAthenaFailure,
   describeAthenaMilestone,
   describeAthenaUnavailable,
+  describeProvisionalWithdrawal,
   resolveAthenaSourceLink,
   snapshotAthenaContext,
   type AthenaAgentContext,
   type AthenaAgentContextView,
   type AthenaAgentDenial,
   type AthenaAgentPresentation,
+  type AthenaAgentProvisionalWithdrawal,
   type AthenaAgentSourceLink,
 } from "./AthenaAgentPresentationAdapter";
 
@@ -110,6 +112,128 @@ export type AthenaAgentSource = {
   readonly observedAt?: number;
 };
 
+/**
+ * How the provisional narrative reads right now. This is a client-derived
+ * presentation field, deliberately separate from the server-declared
+ * `AgentHostState`: the committed answer is still the only released artifact,
+ * and nothing here is allowed to widen that closed union.
+ */
+export type AthenaAgentProvisionalState =
+  | "disabled"
+  | "withdrawn"
+  | "superseded"
+  | "committing"
+  | "reset"
+  | "paused_at_limit"
+  | "streaming"
+  | "awaiting_first_text"
+  | "stalled"
+  | "none";
+
+/** The draft the host paints. Present only while there is text to show. */
+export type AthenaAgentProvisionalDraft = {
+  readonly text: string;
+  readonly truncated: boolean;
+  readonly draftOrdinal: number;
+};
+
+/** The preview contract, mirrored: only `streaming` ever carries text. */
+type NarrativePreview =
+  | { readonly state: "not_found" }
+  | { readonly state: "withdrawn"; readonly reason: string; readonly released: boolean }
+  | {
+      readonly state: "disabled" | "awaiting_first_text" | "stalled" | "superseded";
+      readonly released: boolean;
+    }
+  | {
+      readonly state: "streaming";
+      readonly released: true;
+      readonly text: string;
+      readonly truncated: boolean;
+      readonly draftOrdinal: number;
+      readonly updatedAt: number;
+      readonly expiresAt: number;
+      readonly ttlMs: number;
+    };
+
+export type AthenaAgentProvisionalInput = {
+  /** The preview's verdict: live, or the latched terminal one for this turn. */
+  readonly preview: NarrativePreview | null;
+  readonly viewPhase: AthenaAgentTurn["phase"] | null;
+  /** `provisionalReleasedAt` on the turn view: text was readable at least once. */
+  readonly viewReleased: boolean;
+  /** The newest `finalizing` milestone, which the commit reports before it runs. */
+  readonly finalizingAt: number | null;
+  /** The draft ordinal the client has already painted, if any. */
+  readonly lastRenderedOrdinal: number | null;
+  /** The row outlived the `ttlMs` the server returned with it. */
+  readonly rowExpired: boolean;
+};
+
+/**
+ * The provisional precedence, first match wins.
+ *
+ * Two rules carry most of the safety: a draft withdraws only after a release
+ * was observed on either query and only while no commit has been observed (so a
+ * post-commit suppression stays on the answer surface's own denial and a
+ * successful commit never flickers through a withdrawal), and a `completed`
+ * turn is `superseded` — the committed answer replaces the draft rather than
+ * the draft resolving into it.
+ */
+export function deriveAthenaProvisionalState(
+  input: AthenaAgentProvisionalInput,
+): AthenaAgentProvisionalState {
+  const preview = input.preview;
+  const row = preview?.state === "streaming" ? preview : null;
+  const released =
+    input.viewReleased ||
+    (preview !== null && preview.state !== "not_found" && preview.released);
+  const committed = input.viewPhase === "completed";
+  const runTerminalUncommitted =
+    input.viewPhase === "canceled" || input.viewPhase === "failed";
+
+  if (preview?.state === "disabled") return "disabled";
+  if (
+    released &&
+    !committed &&
+    (preview?.state === "withdrawn" || runTerminalUncommitted)
+  ) {
+    return "withdrawn";
+  }
+  if (preview?.state === "superseded" || committed) return "superseded";
+  if (row && input.finalizingAt !== null && input.finalizingAt >= row.updatedAt) {
+    return "committing";
+  }
+  if (
+    row &&
+    input.lastRenderedOrdinal !== null &&
+    row.draftOrdinal > input.lastRenderedOrdinal
+  ) {
+    return "reset";
+  }
+  if (row?.truncated) return "paused_at_limit";
+  if (row && !input.rowExpired) return "streaming";
+  if (input.viewPhase === "running" && !released && !row) {
+    return "awaiting_first_text";
+  }
+  if (
+    input.viewPhase === "running" &&
+    released &&
+    (preview?.state === "stalled" || (row !== null && input.rowExpired))
+  ) {
+    return "stalled";
+  }
+  return "none";
+}
+
+/** The states that paint draft text. Everything else clears it. */
+const PROVISIONAL_TEXT_STATES: ReadonlySet<AthenaAgentProvisionalState> = new Set([
+  "streaming",
+  "paused_at_limit",
+  "committing",
+  "reset",
+]);
+
 export type AthenaAgentBlockedSubmission = {
   readonly reason: "turn_active" | "context_change" | "unavailable";
   readonly headline: string;
@@ -147,6 +271,9 @@ export type AthenaAgentRun = {
   readonly activeTurnId: TurnId | null;
   readonly answer: AthenaAgentAnswer | null;
   readonly milestones: readonly AthenaAgentMilestone[];
+  readonly provisionalState: AthenaAgentProvisionalState;
+  readonly provisional: AthenaAgentProvisionalDraft | null;
+  readonly provisionalWithdrawal: AthenaAgentProvisionalWithdrawal | null;
   readonly denial: AthenaAgentDenial | null;
   readonly blockedSubmission: AthenaAgentBlockedSubmission | null;
   readonly pendingContextChange: { readonly keys: readonly string[]; readonly label: string } | null;
@@ -182,6 +309,7 @@ type TurnView = {
   bindingId: TurnId;
   phase: "queued" | "running" | "completed" | "failed" | "canceled";
   milestones: { milestone: string; at: number }[];
+  provisionalReleasedAt?: number;
   question?: string;
   context?: Record<string, string>;
   promptState: "retained" | "expired" | "deleted";
@@ -201,6 +329,12 @@ type Unavailable = { kind: "unavailable"; reason: string };
 function asView(value: unknown): TurnView | null {
   return value && typeof value === "object" && (value as TurnView).kind === "view"
     ? (value as TurnView)
+    : null;
+}
+
+function asPreview(value: unknown): NarrativePreview | null {
+  return value && typeof value === "object" && typeof (value as NarrativePreview).state === "string"
+    ? (value as NarrativePreview)
     : null;
 }
 
@@ -239,6 +373,24 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
     { turnId: TurnId; viewedAt?: number; suppressedReason?: string } | null
   >(null);
   const [sources, setSources] = useState<Record<string, AthenaAgentSource>>({});
+  // The preview's durable verdict, kept per turn exactly as the answer receipt
+  // is: the subscription ends at that verdict, and `useQuery(…, "skip")` drops
+  // its last value, so without this the notice would vanish as it appeared.
+  const [previewVerdict, setPreviewVerdict] = useState<{
+    turnId: TurnId;
+    state: "withdrawn" | "superseded";
+    reason?: string;
+    released: boolean;
+  } | null>(null);
+  // The draft ordinal already on screen. It is state, not a ref, because the
+  // reset cue is the render in which the row's ordinal is ahead of it.
+  const [renderedOrdinal, setRenderedOrdinal] = useState<{
+    turnId: TurnId;
+    ordinal: number;
+  } | null>(null);
+  // The one client-side timer this host owns: a row that outlives the `ttlMs`
+  // the server returned with it is dropped without waiting for new data.
+  const [expiredRowKey, setExpiredRowKey] = useState<string | null>(null);
 
   const baseThreadKey = composeAthenaThreadKey(presentation, context);
   const threadKey = useMemo(
@@ -255,6 +407,9 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
   );
   const inspectCitationEvidence = useMutation(
     api.agentHarness.turns.inspectCitationEvidence,
+  );
+  const acknowledgeProvisionalView = useMutation(
+    api.agentHarness.turns.acknowledgeProvisionalView,
   );
 
   const historyResult = useQuery(
@@ -287,15 +442,87 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
     isActive && turnId && releaseReady ? { storeId, bindingId: turnId } : "skip",
   );
 
+  // The preview is read while the panel is open and the turn is running, and
+  // also while the turn view has gone `unavailable`: the view drops first on
+  // disablement or membership loss, and the preview has to outlive it to
+  // deliver `released` and the withdrawal. It is dropped once a durable verdict
+  // for this turn is latched or the run reaches a terminal phase.
+  const latchedVerdict =
+    previewVerdict && previewVerdict.turnId === turnId ? previewVerdict : null;
+  const previewResult = useQuery(
+    api.agentHarness.turns.previewTurnNarrative,
+    isActive &&
+      turnId &&
+      latchedVerdict === null &&
+      (view?.phase === "running" || viewUnavailable !== null)
+      ? { storeId, bindingId: turnId }
+      : "skip",
+  );
+  const livePreview = asPreview(previewResult);
+
+  // `not_found` is the pre-ownership arm: it is neither latched nor a reason to
+  // stop reading, because a mid-turn epoch advance or egress downgrade has no
+  // other source of `withdrawn`.
+  useEffect(() => {
+    if (!turnId || !livePreview) return;
+    if (livePreview.state !== "withdrawn" && livePreview.state !== "superseded") {
+      return;
+    }
+    const next = {
+      turnId,
+      state: livePreview.state,
+      ...(livePreview.state === "withdrawn" ? { reason: livePreview.reason } : {}),
+      released: livePreview.released,
+    };
+    setPreviewVerdict((current) =>
+      current &&
+      current.turnId === next.turnId &&
+      current.state === next.state &&
+      current.reason === next.reason &&
+      current.released === next.released
+        ? current
+        : next,
+    );
+  }, [livePreview, turnId]);
+
+  const preview: NarrativePreview | null = latchedVerdict
+    ? latchedVerdict.state === "withdrawn"
+      ? {
+          state: "withdrawn",
+          reason: latchedVerdict.reason ?? "suppressed",
+          released: latchedVerdict.released,
+        }
+      : { state: "superseded", released: latchedVerdict.released }
+    : livePreview;
+
+  const row = preview?.state === "streaming" ? preview : null;
+  // The row's identity for the deadline timer: any new server data re-arms it.
+  const rowKey = row
+    ? `${turnId ?? ""}:${row.draftOrdinal}:${row.updatedAt}:${row.expiresAt}`
+    : null;
+  const rowTtlMs = row?.ttlMs ?? 0;
+  useEffect(() => {
+    if (rowKey === null) return;
+    const timer = window.setTimeout(
+      () => setExpiredRowKey(rowKey),
+      Math.max(0, rowTtlMs),
+    );
+    return () => window.clearTimeout(timer);
+  }, [rowKey, rowTtlMs]);
+  const rowExpired = rowKey !== null && expiredRowKey === rowKey;
+
   // Latest mutation handles for effects, so a re-created binding never re-fires one.
   const resumeRef = useRef(resumeTurn);
   resumeRef.current = resumeTurn;
   const acknowledgeRef = useRef(acknowledgeTurnAnswer);
   acknowledgeRef.current = acknowledgeTurnAnswer;
+  const acknowledgeProvisionalRef = useRef(acknowledgeProvisionalView);
+  acknowledgeProvisionalRef.current = acknowledgeProvisionalView;
 
   const startedHereRef = useRef<TurnId | null>(null);
   const resumedRef = useRef<TurnId | null>(null);
   const acknowledgedTurnRef = useRef<TurnId | null>(null);
+  const acknowledgedProvisionalTurnRef = useRef<TurnId | null>(null);
   const providedTurnRef = useRef<TurnId | null>(providedTurnId ?? null);
   const threadBaseRef = useRef(baseThreadKey);
   const notifiedTurnRef = useRef<TurnId | null>(providedTurnId ?? null);
@@ -319,6 +546,10 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
     setCancelRequested(false);
     setReceipt(null);
     setSources({});
+    setPreviewVerdict(null);
+    setRenderedOrdinal(null);
+    setExpiredRowKey(null);
+    acknowledgedProvisionalTurnRef.current = null;
     setAcknowledgedContext(snapshotAthenaContext(presentation, context));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the composed base key is the context identity.
   }, [baseThreadKey]);
@@ -410,6 +641,86 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
         : [];
     });
   }, [view]);
+
+  // `finalizing` fires after the cheap denials and before the commit, and the
+  // milestone array only grows, so the comparison is level-based: a panel that
+  // mounts after the milestone still reads `committing`, and a resumed draft's
+  // flush moves `updatedAt` past it to return to `streaming`.
+  const finalizingAt = useMemo(() => {
+    if (!view) return null;
+    let newest: number | null = null;
+    for (const entry of view.milestones) {
+      if (entry.milestone !== "finalizing") continue;
+      if (newest === null || entry.at > newest) newest = entry.at;
+    }
+    return newest;
+  }, [view]);
+
+  const provisionalState = deriveAthenaProvisionalState({
+    preview,
+    viewPhase: view?.phase ?? null,
+    viewReleased: view?.provisionalReleasedAt !== undefined,
+    finalizingAt,
+    lastRenderedOrdinal:
+      renderedOrdinal && renderedOrdinal.turnId === turnId
+        ? renderedOrdinal.ordinal
+        : null,
+    rowExpired,
+  });
+
+  const provisional: AthenaAgentProvisionalDraft | null = useMemo(
+    () =>
+      row && PROVISIONAL_TEXT_STATES.has(provisionalState)
+        ? {
+            text: row.text,
+            truncated: row.truncated,
+            draftOrdinal: row.draftOrdinal,
+          }
+        : null,
+    [provisionalState, row],
+  );
+
+  const provisionalWithdrawal: AthenaAgentProvisionalWithdrawal | null =
+    provisionalState === "withdrawn"
+      ? describeProvisionalWithdrawal(
+          preview?.state === "withdrawn"
+            ? preview.reason
+            : view?.phase === "canceled"
+              ? "run_canceled"
+              : "run_failed",
+        )
+      : null;
+
+  // Record the painted ordinal after the render that painted it, so the first
+  // row of a mount or a reconnect is never mistaken for a restart and a genuine
+  // restart lasts exactly one render.
+  useEffect(() => {
+    if (!turnId || !row) return;
+    setRenderedOrdinal((current) =>
+      current && current.turnId === turnId && current.ordinal >= row.draftOrdinal
+        ? current
+        : { turnId, ordinal: row.draftOrdinal },
+    );
+  }, [row, turnId]);
+
+  // Confirmed receipt of provisional text: best effort, once per turn, on the
+  // first paint of non-empty draft text. It is deliberately weaker than the
+  // answer receipt and never feeds a host state.
+  useEffect(() => {
+    if (!turnId) return;
+    if (acknowledgedProvisionalTurnRef.current === turnId) return;
+    if (!provisional || provisional.text.trim().length === 0) return;
+    acknowledgedProvisionalTurnRef.current = turnId;
+    const currentTurnId = turnId;
+    void runCommand(async () =>
+      ok(
+        await acknowledgeProvisionalRef.current({
+          storeId,
+          bindingId: currentTurnId,
+        }),
+      ),
+    );
+  }, [provisional, storeId, turnId]);
 
   const terminal = view ? TERMINAL_PHASES.has(view.phase) : false;
   const turnActive = Boolean(turnId) && !terminal && !viewUnavailable;
@@ -714,8 +1025,12 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
       }
       startedHereRef.current = result.bindingId;
       acknowledgedTurnRef.current = null;
+      acknowledgedProvisionalTurnRef.current = null;
       setReceipt(null);
       setSources({});
+      setPreviewVerdict(null);
+      setRenderedOrdinal(null);
+      setExpiredRowKey(null);
       setCancelRequested(false);
       setTurnId(result.bindingId);
     },
@@ -751,7 +1066,11 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
     setCancelRequested(false);
     setReceipt(null);
     setSources({});
+    setPreviewVerdict(null);
+    setRenderedOrdinal(null);
+    setExpiredRowKey(null);
     acknowledgedTurnRef.current = null;
+    acknowledgedProvisionalTurnRef.current = null;
   }, []);
 
   const confirmContextChange = useCallback(() => {
@@ -869,6 +1188,9 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
     activeTurnId: turnId,
     answer,
     milestones,
+    provisionalState,
+    provisional,
+    provisionalWithdrawal,
     denial,
     blockedSubmission,
     pendingContextChange,

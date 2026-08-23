@@ -23,7 +23,12 @@ const SPEC_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PACKAGE_DIR = path.resolve(SPEC_DIR, "../../..");
 const RENDERER = path.join(SPEC_DIR, "renderAgentHostMarkup.tsx");
 
-type Scenario = "narrative" | "panel";
+type Scenario =
+  | "narrative"
+  | "panel"
+  | "provisional"
+  | "withdrawn"
+  | "superseded";
 
 function render(scenario: Scenario): { markup: string; narrative: string } {
   const stdout = execFileSync("bun", [RENDERER, scenario], {
@@ -137,6 +142,108 @@ test.describe("the agent host renders model output inertly", () => {
   });
 });
 
+test.describe("the provisional draft holds up in a real engine", () => {
+  test("shows a labeled draft and renders a hostile buffer with zero requests", async ({
+    page,
+  }) => {
+    const requested: string[] = [];
+    page.on("request", (request) => requested.push(request.url()));
+
+    await mount(page, "provisional");
+    await page.waitForTimeout(500);
+
+    const region = page.locator('[data-testid="athena-agent-provisional"]');
+    await expect(region).toHaveCount(1);
+    await expect(region).toContainText("Draft in progress. Not verified.");
+    await expect(region).toContainText("Don't act on this text.");
+
+    expect(
+      requested.filter((url) => url.includes("athena-agent-host.invalid")),
+    ).toEqual([]);
+    expect(
+      await page.evaluate(
+        () => (window as unknown as Record<string, unknown>).__athenaExecuted,
+      ),
+    ).toBeUndefined();
+
+    const draft = page.locator('[data-testid="athena-agent-provisional-text"]');
+    for (const selector of [
+      "a",
+      "img",
+      "iframe",
+      "script",
+      "style",
+      "link",
+      "object",
+      "embed",
+      "hr",
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+      "h5",
+      "h6",
+      "blockquote",
+      "pre",
+    ]) {
+      expect(
+        await draft.locator(selector).count(),
+        `${selector} must not be rendered in a draft`,
+      ).toBe(0);
+    }
+
+    // The fabricated chrome is still readable — it is just plain text now.
+    await expect(draft).toContainText("Athena system notice");
+    await expect(draft).toContainText("APPROVE-PAYOUT --now");
+    await expect(draft).toContainText("https://athena-agent-host.invalid/bare");
+
+    // Stop stays reachable from the keyboard while the draft streams.
+    const stop = page.locator('[data-testid="athena-agent-cancel"]');
+    await stop.focus();
+    await expect(stop).toBeFocused();
+  });
+
+  test("shows a withdrawal notice with no draft text", async ({ page }) => {
+    await mount(page, "withdrawn");
+
+    const notice = page.locator(
+      '[data-testid="athena-agent-provisional-withdrawn"]',
+    );
+    await expect(notice).toHaveAttribute("role", "alert");
+    await expect(notice).toContainText("Draft withdrawn.");
+    await expect(notice).toContainText(
+      "This draft went beyond what you can read here.",
+    );
+    expect(
+      await page.locator('[data-testid="athena-agent-provisional"]').count(),
+    ).toBe(0);
+    expect(
+      await page.locator('[data-testid="athena-agent-answer"]').count(),
+    ).toBe(0);
+  });
+
+  test("shows the committed answer and its source once the draft is superseded", async ({
+    page,
+  }) => {
+    await mount(page, "superseded");
+
+    expect(
+      await page.locator('[data-testid="athena-agent-provisional"]').count(),
+    ).toBe(0);
+    expect(
+      await page
+        .locator('[data-testid="athena-agent-provisional-withdrawn"]')
+        .count(),
+    ).toBe(0);
+    await expect(
+      page.locator('[data-testid="athena-agent-answer"]'),
+    ).toBeVisible();
+    await expect(
+      page.locator('[data-testid="athena-agent-source"] a'),
+    ).toHaveAttribute("href", "/wigclub/store/osu/operations/daily-close");
+  });
+});
+
 test.describe("the docked panel holds up in a real engine", () => {
   test("keeps one scroll owner, the reading order, and operable controls", async ({
     page,
@@ -209,5 +316,51 @@ test.describe("the docked panel holds up in a real engine", () => {
       .locator('[data-testid="athena-agent-submit"]')
       .boundingBox();
     expect(submit?.height ?? 0).toBeGreaterThanOrEqual(44);
+  });
+
+  test("keeps one scroll owner and operable controls while a draft streams", async ({
+    page,
+  }) => {
+    for (const size of [
+      { width: 1280, height: 800 },
+      { width: 375, height: 812 },
+    ]) {
+      await page.setViewportSize(size);
+      await mount(page, "provisional");
+
+      const scrollOwners = await page.evaluate(() => {
+        const root = document.querySelector('[data-testid="athena-agent-panel"]');
+        if (!root) return [];
+        return Array.from(root.querySelectorAll("*"))
+          .filter((node) => {
+            if (["TEXTAREA", "INPUT", "SELECT"].includes(node.tagName)) return false;
+            const overflow = getComputedStyle(node).overflowY;
+            return overflow === "auto" || overflow === "scroll";
+          })
+          .map((node) => node.getAttribute("data-testid"));
+      });
+      expect(scrollOwners, `scroll owners at ${size.width}px`).toEqual([
+        "athena-agent-scroll",
+      ]);
+
+      const overflow = await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth -
+          document.documentElement.clientWidth,
+      );
+      expect(overflow, `page overflow at ${size.width}px`).toBeLessThanOrEqual(0);
+
+      for (const testId of [
+        "athena-agent-submit",
+        "athena-agent-cancel",
+        "athena-agent-new-thread",
+      ]) {
+        const box = await page.locator(`[data-testid="${testId}"]`).boundingBox();
+        expect(
+          box?.height ?? 0,
+          `${testId} height at ${size.width}px`,
+        ).toBeGreaterThanOrEqual(44);
+      }
+    }
   });
 });

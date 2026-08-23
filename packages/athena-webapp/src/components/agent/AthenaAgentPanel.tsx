@@ -25,6 +25,8 @@ import type { Id } from "~/convex/_generated/dataModel";
 import { AthenaAgentSafeText } from "./AthenaAgentSafeText";
 import {
   composeAthenaThreadKey,
+  describeAthenaProvisionalCue,
+  describeAthenaProvisionalNotice,
   type AthenaAgentContext,
   type AthenaAgentPresentation,
 } from "./AthenaAgentPresentationAdapter";
@@ -47,6 +49,29 @@ const WIDTH_STEP = 32;
 
 /** Every operable control clears the minimum touch target. */
 const TOUCH_TARGET = "min-h-[44px] min-w-[44px]";
+
+/** The draft states that paint text or a line of their own. */
+const PROVISIONAL_VISIBLE_STATES = new Set([
+  "streaming",
+  "reset",
+  "paused_at_limit",
+  "committing",
+  "stalled",
+]);
+
+/** Draft states that end the draft: the scroll container re-anchors on them. */
+const PROVISIONAL_SETTLED_STATES = new Set([
+  "withdrawn",
+  "superseded",
+  "stalled",
+]);
+
+/** Close enough to the bottom to count as following the draft. */
+const SCROLL_FOLLOW_SLACK = 24;
+
+function anchorToBottom(node: HTMLDivElement) {
+  node.scrollTop = Math.max(0, node.scrollHeight - node.clientHeight);
+}
 
 export type AthenaAgentLayout = "docked" | "fullscreen";
 
@@ -117,8 +142,26 @@ export function AthenaAgentPanel({
   const scrollRef = useRef<HTMLDivElement>(null);
   const citationRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const sourceHeadingRef = useRef<HTMLHeadingElement>(null);
-  const previousState = useRef<string | null>(null);
+  const withdrawnRef = useRef<HTMLDivElement>(null);
+  const previousState = useRef<{
+    hostState: AthenaAgentRun["hostState"];
+    provisionalState: AthenaAgentRun["provisionalState"];
+  } | null>(null);
+  /**
+   * The turn whose focus a withdrawal notice already claimed. Every cause that
+   * withdraws a draft also ends the run moments later, and that terminal denial
+   * would otherwise be a second move for one outcome. It is keyed by turn — the
+   * panel stays mounted across New thread — and it never suppresses the answer
+   * heading or the operator's own stop.
+   */
+  const focusClaimedTurnRef = useRef<AthenaAgentRun["activeTurnId"]>(null);
+  const followDraftRef = useRef(true);
   const [activeCitation, setActiveCitation] = useState<string | null>(null);
+  const [draftCue, setDraftCue] = useState<{
+    key: string;
+    ordinal: number | null;
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     promptRef.current?.focus();
@@ -131,18 +174,95 @@ export function AthenaAgentPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- restore once per mount.
   }, []);
 
-  // Deliberate focus moves: start, stop, completion, and terminal states.
+  const provisionalState = run.provisionalState;
+  const draftOrdinal = run.provisional?.draftOrdinal ?? null;
+  const draftText = run.provisional?.text ?? null;
+
+  /**
+   * One coalesced line per draft, from the closed vocabulary — never a token of
+   * model text. The key carries the draft it belongs to, so the deltas that
+   * follow a cue never repeat it and the next draft's cue is a new node the
+   * live region announces.
+   */
+  useEffect(() => {
+    if (
+      provisionalState === "reset" ||
+      provisionalState === "paused_at_limit" ||
+      provisionalState === "stalled"
+    ) {
+      const key = `${provisionalState}:${draftOrdinal ?? "none"}`;
+      setDraftCue((current) =>
+        current && current.key === key
+          ? current
+          : {
+              key,
+              ordinal: draftOrdinal,
+              text: describeAthenaProvisionalCue(provisionalState),
+            },
+      );
+      return;
+    }
+    if (provisionalState === "streaming" || provisionalState === "committing") {
+      // A cue raised for this draft stands while it keeps writing; one raised
+      // for a draft that has gone (a stall that recovered) does not.
+      setDraftCue((current) =>
+        current === null || current.ordinal === draftOrdinal ? current : null,
+      );
+      return;
+    }
+    setDraftCue((current) => (current === null ? current : null));
+  }, [provisionalState, draftOrdinal]);
+
+  // Sticky follow: the single scroll container tracks the growing draft only
+  // while the operator is already at the bottom.
+  useEffect(() => {
+    if (draftText === null) return;
+    const node = scrollRef.current;
+    if (!node || !followDraftRef.current) return;
+    anchorToBottom(node);
+  }, [draftText]);
+
+  // A draft that ends re-anchors, so the operator is not left mid-buffer.
+  useEffect(() => {
+    if (!PROVISIONAL_SETTLED_STATES.has(provisionalState)) return;
+    followDraftRef.current = true;
+    const node = scrollRef.current;
+    if (node) anchorToBottom(node);
+  }, [provisionalState]);
+
+  /**
+   * Every deliberate focus move the host makes, in one effect keyed on both the
+   * host state and the draft state. The terminal host transition is evaluated
+   * first and returns; only then can a mid-run withdrawal claim focus, and only
+   * while the run is still running and the operator is not typing.
+   */
   useEffect(() => {
     const previous = previousState.current;
-    previousState.current = run.hostState;
-    if (previous === run.hostState) return;
+    previousState.current = {
+      hostState: run.hostState,
+      provisionalState: run.provisionalState,
+    };
+    if (run.hostState === "submitting" || run.hostState === "idle") {
+      // `activeTurnId` lags the next turn's start, so the latch is released by
+      // the host state rather than by the turn it was keyed to.
+      focusClaimedTurnRef.current = null;
+    }
     if (
       run.hostState === "submitting" ||
       run.hostState === "cancellation_requested" ||
       run.hostState === "terminal_denied" ||
       run.hostState === "expired_content"
     ) {
+      if (previous && previous.hostState === run.hostState) return;
+      if (
+        run.hostState === "terminal_denied" &&
+        focusClaimedTurnRef.current !== null &&
+        focusClaimedTurnRef.current === run.activeTurnId
+      ) {
+        return;
+      }
       statusRef.current?.focus();
+      focusClaimedTurnRef.current = null;
       return;
     }
     if (
@@ -150,9 +270,32 @@ export function AthenaAgentPanel({
       run.hostState === "partial" ||
       run.hostState === "no_usable_sources"
     ) {
+      if (previous && previous.hostState === run.hostState) return;
       answerHeadingRef.current?.focus();
+      focusClaimedTurnRef.current = null;
+      return;
     }
-  }, [run.hostState]);
+    if (
+      run.provisionalState !== "withdrawn" ||
+      // A null previous value is a mount, never an edge: a panel that opens on
+      // an already-withdrawn turn announces the notice and moves nothing.
+      previous === null ||
+      previous.provisionalState === "withdrawn" ||
+      run.hostState !== "running"
+    ) {
+      return;
+    }
+    // The composer stays editable mid-stream; a follow-up being typed must not
+    // lose keystrokes. The alert still announces.
+    if (
+      promptRef.current !== null &&
+      document.activeElement === promptRef.current
+    ) {
+      return;
+    }
+    withdrawnRef.current?.focus();
+    focusClaimedTurnRef.current = run.activeTurnId;
+  }, [run.hostState, run.provisionalState, run.activeTurnId]);
 
   const openSource = useCallback(
     (citationRef: string) => {
@@ -176,6 +319,7 @@ export function AthenaAgentPanel({
   );
 
   const answerQuality = run.answer ? describeQuality(run.answer) : null;
+  const provisionalNotice = describeAthenaProvisionalNotice();
 
   useEffect(() => {
     if (!activeCitation) return;
@@ -290,9 +434,15 @@ export function AthenaAgentPanel({
       <div
         className="min-h-0 flex-1 overflow-y-auto"
         data-testid="athena-agent-scroll"
-        onScroll={(event) =>
-          onScrollTopChange?.((event.target as HTMLDivElement).scrollTop)
-        }
+        onScroll={(event) => {
+          const node = event.currentTarget;
+          onScrollTopChange?.(node.scrollTop);
+          // Scrolling up hands the reading position back to the operator; the
+          // draft stops chasing until they return to the bottom.
+          followDraftRef.current =
+            node.scrollHeight - node.scrollTop - node.clientHeight <=
+            SCROLL_FOLLOW_SLACK;
+        }}
         ref={scrollRef}
       >
         <section
@@ -400,6 +550,66 @@ export function AthenaAgentPanel({
               This answer is for {run.turn?.contextLabel ?? "another context"}.
               Return to it, or confirm the current context, to keep asking.
             </p>
+          ) : null}
+
+          {/* The draft sits in the slot the answer article later occupies, so a
+              denial, a withdrawal, and a resumed draft always read in that
+              order — and the committed answer replaces the draft in place. */}
+          {run.provisionalState === "withdrawn" && run.provisionalWithdrawal ? (
+            <div
+              className="rounded-md border border-border bg-surface px-3 py-2 text-sm"
+              data-testid="athena-agent-provisional-withdrawn"
+              ref={withdrawnRef}
+              role="alert"
+              tabIndex={-1}
+            >
+              <p className="font-medium text-foreground">
+                {run.provisionalWithdrawal.headline}
+              </p>
+              {run.provisionalWithdrawal.detail ? (
+                <p className="text-xs text-muted-foreground">
+                  {run.provisionalWithdrawal.detail}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {PROVISIONAL_VISIBLE_STATES.has(run.provisionalState) ? (
+            <section
+              aria-label="Provisional draft"
+              className="space-y-layout-xs rounded-md border border-dashed border-border bg-surface px-3 py-2"
+              data-state={run.provisionalState}
+              data-testid="athena-agent-provisional"
+            >
+              {run.provisional ? (
+                <>
+                  <div data-testid="athena-agent-provisional-label">
+                    <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                      {provisionalNotice.headline}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {provisionalNotice.detail}
+                    </p>
+                  </div>
+                  <div data-testid="athena-agent-provisional-text">
+                    <AthenaAgentSafeText
+                      className="text-muted-foreground"
+                      mode="provisional"
+                      text={run.provisional.text}
+                    />
+                  </div>
+                </>
+              ) : null}
+              {/* Its own region: the milestone region is server-authored
+                  progress, and this one carries at most one cue per draft. */}
+              <div
+                aria-live="polite"
+                className="text-xs text-muted-foreground"
+                data-testid="athena-agent-provisional-live"
+              >
+                {draftCue ? <p key={draftCue.key}>{draftCue.text}</p> : null}
+              </div>
+            </section>
           ) : null}
 
           {run.answer ? (

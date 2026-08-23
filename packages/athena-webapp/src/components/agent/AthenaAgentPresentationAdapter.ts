@@ -521,4 +521,113 @@ export function describeAthenaMilestone(milestone: string): string | null {
   return known ? MILESTONE_COPY[milestone as AgentProgressMilestone] : null;
 }
 
+// ---------------------------------------------------------------------------
+// Provisional draft copy
+// ---------------------------------------------------------------------------
+
+export type AthenaAgentProvisionalNotice = {
+  readonly headline: string;
+  readonly detail: string;
+};
+
+/**
+ * The persistent copy of the provisional container. It has three jobs and no
+ * others: name what the text is, say it is unverified and must not be acted on,
+ * and warn that the released answer replaces it and may say something else.
+ */
+export function describeAthenaProvisionalNotice(): AthenaAgentProvisionalNotice {
+  return {
+    headline: "Draft in progress. Not verified.",
+    detail:
+      "Athena is thinking out loud here. Don't act on this text. The checked answer replaces it and may differ.",
+  };
+}
+
+export type AthenaAgentProvisionalCue = "reset" | "paused_at_limit" | "stalled";
+
+const PROVISIONAL_CUE_COPY: Record<AthenaAgentProvisionalCue, string> = {
+  reset: "Draft restarted. The earlier text is gone.",
+  paused_at_limit:
+    "Draft display limit reached. The rest of the draft isn't shown here.",
+  // A stalled draft can be an operator's last signal — a dead host leaves the
+  // run open — so the line names the controls the panel keeps enabled.
+  stalled: "Draft paused. You can stop this request or start a new thread.",
+};
+
+/** The polite line for a draft cue. Never model text, never a token. */
+export function describeAthenaProvisionalCue(cue: AthenaAgentProvisionalCue): string {
+  return PROVISIONAL_CUE_COPY[cue];
+}
+
+/** The inert renderer's overflow notice, worded for what it is bounding. */
+export function describeAthenaShortenedNotice(
+  mode: "answer" | "provisional",
+): string {
+  return mode === "provisional"
+    ? "This draft was shortened for display."
+    : "This answer was shortened for display.";
+}
+
+export type AthenaAgentProvisionalWithdrawal = {
+  readonly reason: string;
+  readonly headline: string;
+  readonly detail?: string;
+};
+
+/**
+ * The reasons the preview ladder mints for a withdrawn draft, mirrored from the
+ * turn contract. The host may not import a Convex server module, so parity with
+ * the server's closed set is pinned by a test outside this directory.
+ */
+export const ATHENA_AGENT_PROVISIONAL_WITHDRAWAL_REASONS = [
+  "compatibility_epoch_fenced",
+  "policy_disabled",
+  "egress_beyond_authority",
+  "suppressed",
+  "abandoned",
+  "run_canceled",
+  "run_failed",
+] as const;
+
+const PROVISIONAL_WITHDRAWAL_DETAIL: Record<string, string> = {
+  compatibility_epoch_fenced:
+    "Athena was updated while this draft was being written.",
+  policy_disabled: "Live drafts are turned off for this store.",
+  egress_beyond_authority: "This draft went beyond what you can read here.",
+  suppressed: "This draft is no longer available to you.",
+  abandoned: "This request stopped unexpectedly.",
+  run_canceled: "This request was stopped.",
+  run_failed: "This request didn't finish.",
+};
+
+/**
+ * Operator copy for a withdrawn draft. It says what happened to the draft and
+ * why, and never what happens to the answer: the answer surface owns that, and
+ * a withdrawn draft does not predict it. Authority refusals arrive as an open
+ * string, so unrecognized reasons fall through the shared authority classes and
+ * then to a bare headline rather than repeating backend wording.
+ */
+export function describeProvisionalWithdrawal(
+  reason: string,
+): AthenaAgentProvisionalWithdrawal {
+  const known = PROVISIONAL_WITHDRAWAL_DETAIL[reason];
+  if (known) return { reason, headline: "Draft withdrawn.", detail: known };
+  const classified = describeAthenaUnavailable(reason);
+  if (classified.state === "authority_lost") {
+    return {
+      reason,
+      headline: "Draft withdrawn.",
+      detail: "This draft is no longer available to you.",
+    };
+  }
+  if (classified.state === "profile_unavailable") {
+    return {
+      reason,
+      headline: "Draft withdrawn.",
+      detail: "Ask Athena isn't available for this store right now.",
+    };
+  }
+  return { reason, headline: "Draft withdrawn." };
+}
+
 export type AthenaAgentPresentationInput = AgentPresentationAdapterInput;

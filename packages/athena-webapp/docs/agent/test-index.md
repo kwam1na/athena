@@ -847,6 +847,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/stories/storybook-config.test.ts`](../../src/stories/storybook-config.test.ts)
 - [`src/stories/storybook-theme-decorator.test.ts`](../../src/stories/storybook-theme-decorator.test.ts)
 - [`src/tests/agent/athenaAgentHost.spec.ts`](../../src/tests/agent/athenaAgentHost.spec.ts)
+- [`src/tests/agent/provisionalWithdrawalReasons.test.ts`](../../src/tests/agent/provisionalWithdrawalReasons.test.ts)
 - [`src/tests/pos/backend.test.ts`](../../src/tests/pos/backend.test.ts)
 - [`src/tests/pos/inventoryValidationLogic.test.ts`](../../src/tests/pos/inventoryValidationLogic.test.ts)
 - [`src/tests/pos/offlineRouteAccess.spec.ts`](../../src/tests/pos/offlineRouteAccess.spec.ts)
