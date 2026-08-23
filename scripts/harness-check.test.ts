@@ -144,6 +144,7 @@ async function createFixtureRepo() {
             "lint:architecture": "bun ../../scripts/architecture-boundary-check.ts athena-webapp",
             build: "vite build && tsc --noEmit",
             "storybook:build": "storybook build",
+            "test:timing-parity": "vitest run",
           }
         : {
             test: "vitest run",

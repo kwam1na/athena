@@ -229,6 +229,7 @@ Touched surfaces: `convex/workflowTraces`, `convex/schemas/observability`, `conv
 Run:
 
 - `bun run --filter '@athena/webapp' test -- convex/workflowTraces/presentation.test.ts convex/workflowTraces/queryUsage.test.ts convex/workflowTraces/schemaIndexes.test.ts convex/workflowTraces/adapters/posSession.test.ts convex/workflowTraces/adapters/registerSession.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts convex/pos/application/posSessionTracing.test.ts convex/pos/application/terminals.test.ts convex/pos/application/sync/ingestLocalEvents.test.ts convex/pos/application/sync/projectLocalEvents.test.ts convex/pos/public/sync.test.ts convex/pos/public/terminals.test.ts convex/inventory/posSessions.trace.test.ts convex/operations/registerSessionTracing.test.ts convex/operations/registerSessions.trace.test.ts convex/cashControls/registerSessionTraceLifecycle.test.ts src/components/traces/WorkflowTraceView.test.tsx 'src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.test.tsx' src/components/pos/PointOfSaleView.test.tsx src/components/pos/transactions/transactionColumns.test.tsx src/components/pos/transactions/TransactionView.test.tsx src/components/pos/transactions/TransactionsView.test.tsx src/components/pos/SessionManager.test.tsx src/components/pos/register/POSRegisterOpeningGuard.test.tsx src/components/pos/register/POSRegisterView.test.tsx src/components/pos/session/HeldSessionsList.test.tsx src/hooks/useGetTerminal.test.ts src/lib/pos/infrastructure/local/localPosEntryContext.test.ts src/lib/pos/infrastructure/local/localPosReadiness.test.ts src/lib/pos/infrastructure/local/posLocalStore.test.ts src/lib/pos/infrastructure/local/syncContract.test.ts src/lib/pos/infrastructure/local/syncScheduler.test.ts src/lib/pos/infrastructure/local/syncStatus.test.ts src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.test.ts src/lib/pos/infrastructure/local/registerReadModel.test.ts src/lib/pos/infrastructure/local/localCommandGateway.test.ts src/lib/pos/presentation/register/useRegisterViewModel.test.ts src/components/cash-controls/CashControlsDashboard.test.tsx src/components/cash-controls/RegisterSessionView.test.tsx src/lib/traces/createWorkflowTraceId.test.ts`
+- `bun run --filter '@athena/webapp' test:timing-parity`
 - `bun run --filter '@athena/webapp' audit:convex`
 - `bun run --filter '@athena/webapp' lint:convex:changed`
 - `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
@@ -240,7 +241,7 @@ Behavior scenarios:
 - `athena-convex-storefront-composition`
 - `athena-convex-storefront-failure-visibility`
 
-Use this when the shared workflow-trace or POS local sync contract, POS local sync repository, POS local-first sync/storage/read-model/command-gateway files, terminal seed lookup, POS local entry/readiness files, the POS register bootstrap or drawer gate, the `pos_session` / `register_session` trace writers, the trace route/view, or POS register, transaction, and cash-controls trace entry points change. It exercises the trace schema and presentation contract, the session/register trace writers, local sync ingestion/projection/repository/read-model adjacency, POS entry/readiness gating, the drawer-open bootstrap handoff, the shared trace route, terminal fallback behavior, and the operator-facing POS and cash-controls surfaces before broader package validation.
+Use this when the shared workflow-trace or POS local sync contract, POS local sync repository, POS local-first sync/storage/read-model/command-gateway files, terminal seed lookup, POS local entry/readiness files, the POS register bootstrap or drawer gate, the `pos_session` / `register_session` trace writers, the trace route/view, or POS register, transaction, and cash-controls trace entry points change. It exercises the trace schema and presentation contract, the session/register trace writers, local sync ingestion/projection/repository/read-model adjacency, POS entry/readiness gating, the drawer-open bootstrap handoff, the shared trace route, terminal fallback behavior, and the operator-facing POS and cash-controls surfaces before broader package validation. `test:timing-parity` re-runs the POS suites with every scheduled delay multiplied (`ATHENA_TEST_TIMER_LAG`), which is the only local sensor that reproduces the timing skew of the CI coverage run: it is where `await waitFor(positive)` followed by `expect(...).not.toHaveBeenCalled()` gets caught, because the awaited work keeps advancing between the poll and the negative assertion.
 
 ## POS hub app-session continuity edits
 
@@ -348,8 +349,9 @@ Touched surfaces: `src/test`, `src/tests`, `vitest.setup.ts`, `.env.test`
 Run:
 
 - `bun run --filter '@athena/webapp' test`
+- `bun run --filter '@athena/webapp' test:timing-parity`
 
-Run the package suite when package-local frontend test helpers, focused regression tests, or the test-mode env file change.
+Run the package suite when package-local frontend test helpers, focused regression tests, or the test-mode env file change. `vitest.setup.ts` also owns the opt-in `ATHENA_TEST_TIMER_LAG` shim behind `test:timing-parity`, so run that sensor too when the setup file changes.
 
 ## Convex or backend-adjacent edits
 

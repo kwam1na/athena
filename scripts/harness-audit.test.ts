@@ -117,6 +117,7 @@ async function createFixtureRepo() {
           "lint:frontend:changed": "echo lint frontend",
           test: "echo test",
           "test:e2e": "echo e2e",
+          "test:timing-parity": "echo timing parity",
         },
       },
       null,

@@ -21,6 +21,7 @@
     "test": "vitest run --maxWorkers=4",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage --maxWorkers=${ATHENA_COVERAGE_MAX_WORKERS:-2}",
+    "test:timing-parity": "ATHENA_TEST_TIMER_LAG=${ATHENA_TEST_TIMER_LAG:-10} vitest run --maxWorkers=2 --testTimeout=120000 --hookTimeout=120000 ${ATHENA_TIMING_PARITY_PATHS:-src/lib/pos}",
     "test:ui": "vitest --ui",
     "email:dev": "email dev --dir convex/emails",
     "reporting:purge-dev": "bash scripts/purge-reporting-dev.sh",

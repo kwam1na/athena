@@ -15,6 +15,14 @@ Use the repo-root harness commands together:
 
 Behavior runs emit `[harness:behavior:report]` JSON with per-phase latency and runtime-signal diagnostics. Thresholds are configured per scenario through `runtimeSignals[].minMatches` / `runtimeSignals[].maxMatches` and `thresholds.latency` in [scripts/harness-behavior-scenarios.ts](../../../../scripts/harness-behavior-scenarios.ts).
 
+## Timing parity with the CI coverage run
+
+CI validates this package under v8 coverage instrumentation (`test:coverage`), where a full run takes roughly eighteen minutes. Scheduled callbacks land much later relative to promise/microtask work than they do on an idle laptop, so a plain local `bun run test` can be green on a tree CI rejects. Any sensor CI runs that the local gate cannot is a parity gap.
+
+`bun run --filter '@athena/webapp' test:timing-parity` closes it for the class of failure that skew actually produces. It re-runs the POS suites with every scheduled delay multiplied by `ATHENA_TEST_TIMER_LAG` (default 10), which stretches timer-driven polling — including Testing Library's `waitFor` — while promise chains keep running at full speed. Timeouts scale with the lag, so honest waits do not turn into spurious failures. Override the surface with `ATHENA_TIMING_PARITY_PATHS` and the factor with `ATHENA_TEST_TIMER_LAG`; the shim lives in [vitest.setup.ts](../../vitest.setup.ts) and is inert unless the variable is set.
+
+The rule it enforces: **`await waitFor(<positive>)` followed by `expect(...).not.toHaveBeenCalled()` is unsound whenever the awaited work can also trigger the negative.** `waitFor` resolves on the first poll that passes, and the work it awaited keeps advancing while the negative assertion runs. Wait for the settled state instead — a signal that proves the work in question finished (a retry issued, a status published) — or freeze the state under test so the negative cannot be beaten. Freezing is usually the cleaner fix: let the first attempt fail and park every retry in flight, so an escalation that needs several consecutive failures can never fire behind the assertion. Both POS local-sync retry tests in [usePosLocalSyncRuntime.test.ts](../../src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.test.ts) use that shape.
+
 - [Test index](./test-index.md)
 - [Validation guide](./validation-guide.md)
 

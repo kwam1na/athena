@@ -599,6 +599,10 @@
         },
         {
           "kind": "script",
+          "script": "test:timing-parity"
+        },
+        {
+          "kind": "script",
           "script": "audit:convex"
         },
         {
@@ -905,6 +909,10 @@
         {
           "kind": "script",
           "script": "test"
+        },
+        {
+          "kind": "script",
+          "script": "test:timing-parity"
         }
       ],
       "behaviorScenarios": []

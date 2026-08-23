@@ -1728,12 +1728,23 @@ describe("usePosLocalSyncRuntimeStatus", () => {
   });
 
   it("does not persist terminal integrity for generic sync authorization failures", async () => {
-    mocks.ingestLocalEvents.mockResolvedValue({
-      kind: "user_error",
-      error: {
-        code: "authorization_failed",
-        message: "User session expired.",
-      },
+    // Same freeze as the demo-epoch retry test below: a generic
+    // authorization_failed is retryable, so letting every retry fail lets the
+    // dead-letter escalation park the batch for review while these negatives
+    // are being asserted. Only the first attempt fails; retries park in flight.
+    let attemptCount = 0;
+    mocks.ingestLocalEvents.mockImplementation(async () => {
+      attemptCount += 1;
+      if (attemptCount > 1) {
+        await new Promise(() => {});
+      }
+      return {
+        kind: "user_error",
+        error: {
+          code: "authorization_failed",
+          message: "User session expired.",
+        },
+      };
     });
     const store = {
       listEvents: vi.fn(async () => ({
@@ -1786,9 +1797,17 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       }),
     );
 
-    await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled(), {
-      timeout: 5_000,
-    });
+    // Wait for a retry rather than for the first call: the second attempt is
+    // the evidence that the first failure was handled by retrying, and the
+    // parked retries above mean no further failure can ever be recorded, so
+    // the negatives below read a state that cannot change under them.
+    await waitFor(
+      () =>
+        expect(
+          mocks.ingestLocalEvents.mock.calls.length,
+        ).toBeGreaterThanOrEqual(2),
+      { timeout: 5_000 },
+    );
     expect(store.markEventsNeedsReview).not.toHaveBeenCalled();
     expect(store.markEventsSynced).not.toHaveBeenCalled();
     expect(store.writeDrawerAuthorityState).not.toHaveBeenCalled();
@@ -1796,13 +1815,27 @@ describe("usePosLocalSyncRuntimeStatus", () => {
   });
 
   it("retries demo epoch precondition failures without creating review blocks", async () => {
-    mocks.ingestLocalEvents.mockResolvedValue({
-      kind: "user_error",
-      error: {
-        code: "precondition_failed",
-        message: "The demo register is refreshing. Try again shortly.",
-        retryable: true,
-      },
+    // Only the first attempt is allowed to fail; every retry parks in flight
+    // and never settles. That freezes the consecutive-failure streak at one,
+    // so the dead-letter escalation (which needs
+    // DEFAULT_PERSISTENT_FAILURE_THRESHOLD consecutive failures) can never fire
+    // behind the negative assertions below. Letting the retries fail freely
+    // made those negatives a race the retry loop wins on a slow or
+    // coverage-instrumented run.
+    let attemptCount = 0;
+    mocks.ingestLocalEvents.mockImplementation(async () => {
+      attemptCount += 1;
+      if (attemptCount > 1) {
+        await new Promise(() => {});
+      }
+      return {
+        kind: "user_error",
+        error: {
+          code: "precondition_failed",
+          message: "The demo register is refreshing. Try again shortly.",
+          retryable: true,
+        },
+      };
     });
     const store = {
       listEvents: vi.fn(async () => ({
@@ -1843,7 +1876,15 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       }),
     );
 
-    await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled());
+    // Wait for a retry rather than for the first call: the second attempt is
+    // the evidence that the first failure was handled by retrying, and the
+    // parked retries above mean no further failure can ever be recorded, so
+    // the negatives below read a state that cannot change under them.
+    await waitFor(() =>
+      expect(mocks.ingestLocalEvents.mock.calls.length).toBeGreaterThanOrEqual(
+        2,
+      ),
+    );
     expect(mocks.ingestLocalEvents).toHaveBeenCalledWith(
       expect.objectContaining({ expectedDemoEpoch: 7 }),
     );
