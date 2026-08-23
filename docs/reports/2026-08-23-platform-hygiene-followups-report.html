@@ -186,6 +186,7 @@
           <li><strong>Runtime retry and backoff behavior</strong> of the POS local sync runtime. V26-1318 is a test-determinism and parity ticket; the injected regression used to falsify the fix was reverted.</li>
           <li><strong>Discount storage and the minor-unit domain model.</strong> Only presentation and the shared read path changed.</li>
           <li><strong>Entire-order-vs-line-item discount scope</strong> in fulfillment emails. Real, customer-visible, and filed as V26-1319 — a modelling question on a different axis, pinned as observed behavior with a comment so the test is not read as an endorsement.</li>
+          <li><strong>Promo-code discount field shape.</strong> <code>redeem</code> writes <code>discountType</code>/<code>discountValue</code> where readers expect <code>type</code>/<code>value</code>, so a promo-code percentage discount renders as a currency figure. Pre-existing, strictly improved here, and filed as V26-1320 — normalizing the shape is a separate decision about where the canonical contract lives.</li>
           <li><strong>The <code>athena-contracts</code> type-only Convex seam.</strong> An instrumented build proved <code>convexModel.ts</code> is not in the bundle at all; extending a runtime-boundary scan across a package line to flag an erased edge would be a design decision, not a fix.</li>
         </ul>
       </section>
@@ -200,7 +201,7 @@
             <tr><td><code>test:timing-parity</code> (10x lag)</td><td>70 files, 1,105 tests passed</td></tr>
             <tr><td>Same at 40x lag</td><td>70 files, 1,105 tests passed</td></tr>
             <tr><td><code>tsc --noEmit</code></td><td>clean</td></tr>
-            <tr><td>Browser boundary sensor</td><td>5 passed, and falsified with planted violations in both <code>src/</code> and <code>shared/</code></td></tr>
+            <tr><td>Browser boundary sensor</td><td>6 passed, and falsified with planted violations in both <code>src/</code> and <code>shared/</code></td></tr>
             <tr><td><code>architecture:check</code></td><td>passed, both packages</td></tr>
             <tr><td><code>compound:check</code> / <code>docs:links:check</code></td><td>passed, 264 solution docs</td></tr>
           </tbody>
@@ -259,10 +260,10 @@
             <ol data-quiz-options>
               <li>It omitted percentage discounts entirely.</li>
               <li>It used a mocked formatter.</li>
-              <li data-quiz-correct>Its line items were 100x smaller than the order total, so the multiplier's effect on percentage discounts and on the clamped fixed-amount discount cancelled out invisibly.</li>
+              <li data-quiz-correct>Its line items were 100x smaller than the order total, so the multiplier cancelled out invisibly for percentage discounts, and the fixed-amount value was small enough that the clamp never bound — hiding the fact that scaling destroyed the cap.</li>
               <li>It ran only in CI.</li>
             </ol>
-            <p data-quiz-explanation>With a coherent fixture, a 10% discount on a GH₵1,500 order rendered GH₵15,000, and a fixed-amount discount clamped to the eligible subtotal was then scaled past it — <code>Math.min(200000, 150000)</code> bound correctly at 150,000 pesewas and still rendered GH₵15,000,000.</p>
+            <p data-quiz-explanation>The fixed-amount 100x was always visible on the old fixture — it rendered GH₵2,000 for an entered 20, and the test pinned that as characterized-as-is. What the fixture hid was different in each case: the percentage error cancelled to a correct-looking GH₵150, and <code>Math.min(20, 1500)</code> never bound, so the destroyed cap left no trace. On coherent data the percentage renders GH₵15,000 and <code>Math.min(200000, 150000)</code> binds at 150,000 pesewas and is then scaled to GH₵15,000,000.</p>
           </li>
           <li data-quiz-question>
             <p data-quiz-prompt>Why did coverage instrumentation fail as a reproduction lever for the flake?</p>
