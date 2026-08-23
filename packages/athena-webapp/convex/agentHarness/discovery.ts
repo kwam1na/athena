@@ -92,7 +92,7 @@ function grantedCapabilityIds(
 // Discover, describe, and the per-run declarations
 // ---------------------------------------------------------------------------
 
-/** Compact catalog: what exists under this grant, never what fields it carries. */
+/** Compact catalog for this grant: names, call shapes, and public field names; meanings and gated fields wait for describe. */
 export function discoverCapabilities(
   grant: AgentRuntimeGrant,
   options?: AgentDiscoveryOptions,

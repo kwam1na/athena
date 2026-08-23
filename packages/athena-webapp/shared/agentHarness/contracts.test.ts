@@ -670,13 +670,18 @@ describe("capability manifest contract", () => {
     expect(projectManifestForGrant(withSensitiveExample, { grantedProjections: [] }).examples).toHaveLength(1);
 
     const summary = summarizeCapability(storeDayManifest);
-    expect(summary).toEqual({
+    expect(summary).toMatchObject({
       capabilityId: "cap_fixture_storeday",
       namespace: "operations.storeDay",
       purpose: storeDayManifest.purpose,
       verbs: ["get"],
       scopeKind: "store",
     });
+    // Call shapes and public field names are disclosed so the first program is
+    // written against declared arguments; gated material still is not.
+    expect(summary.calls).toHaveLength(1);
+    expect(summary.calls[0]).toMatch(/^get\(\{ .*\}\)$/);
+    expect(summary.resultFields.length).toBeGreaterThan(0);
     expect(JSON.stringify(summary)).not.toContain("reviewEvidence");
   });
 

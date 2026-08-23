@@ -133,6 +133,7 @@ const facadeEntryValidator = v.object({
   verbs: v.array(v.union(v.literal("get"), v.literal("list"))),
   capabilityId: v.string(),
   namespace: v.string(),
+  fields: v.optional(v.array(v.string())),
 });
 
 const validationIssueValidator = v.object({
@@ -321,7 +322,14 @@ export function createAgentExecutorSeams(config: AgentExecutorSeamConfig) {
     const facade: AgentExecutionFacadeEntry[] = [];
     for (const [pkg, entry] of Object.entries(shape.packages)) {
       for (const [resource, resourceShape] of Object.entries(entry.resources)) {
-        facade.push({ package: pkg, resource, verbs: [...resourceShape.verbs], capabilityId: resourceShape.capabilityId, namespace: `${pkg}.${resource}` });
+        facade.push({
+          package: pkg,
+          resource,
+          verbs: [...resourceShape.verbs],
+          capabilityId: resourceShape.capabilityId,
+          namespace: `${pkg}.${resource}`,
+          fields: Object.keys(resourceShape.resultFields),
+        });
       }
     }
     facade.sort((a, b) => a.namespace.localeCompare(b.namespace));

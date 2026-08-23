@@ -45,6 +45,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/agentHarness/narrativeTrail.test.ts`](../../convex/agentHarness/narrativeTrail.test.ts)
 - [`convex/agentHarness/profileConformance.test.ts`](../../convex/agentHarness/profileConformance.test.ts)
 - [`convex/agentHarness/profiles/dailyOperations.test.ts`](../../convex/agentHarness/profiles/dailyOperations.test.ts)
+- [`convex/agentHarness/programRuntime/fieldAdvisories.test.ts`](../../convex/agentHarness/programRuntime/fieldAdvisories.test.ts)
 - [`convex/agentHarness/programRuntime/runtimeSpike.test.ts`](../../convex/agentHarness/programRuntime/runtimeSpike.test.ts)
 - [`convex/agentHarness/provisionalNarrative.test.ts`](../../convex/agentHarness/provisionalNarrative.test.ts)
 - [`convex/agentHarness/readPorts.test.ts`](../../convex/agentHarness/readPorts.test.ts)

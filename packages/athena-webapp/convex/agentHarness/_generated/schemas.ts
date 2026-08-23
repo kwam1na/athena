@@ -2619,54 +2619,143 @@ export const AGENT_GENERATED_CAPABILITY_SCHEMAS: AgentCapabilitySchemaIndex = {
   },
   "summaries": {
     "cap_dailyops_activity": {
+      "calls": [
+        "list({ operatingDate, before? })"
+      ],
       "capabilityId": "cap_dailyops_activity",
       "namespace": "operations.activity",
       "purpose": "What happened on an operating day, newest first, normalized across operational source families.",
+      "resultFields": [
+        "eventRef",
+        "operatingDate",
+        "operatingWindow",
+        "occurredAt",
+        "family",
+        "eventKind",
+        "summary",
+        "subjectKind",
+        "subjectLabel"
+      ],
       "scopeKind": "store",
       "verbs": [
         "list"
       ]
     },
     "cap_dailyops_approvals": {
+      "calls": [
+        "list({ operatingDate, state })"
+      ],
       "capabilityId": "cap_dailyops_approvals",
       "namespace": "operations.approvals",
       "purpose": "Approval requests still awaiting a decision on an operating day.",
+      "resultFields": [
+        "requestRef",
+        "operatingDate",
+        "requestKind",
+        "subjectKind",
+        "state",
+        "stateVersion",
+        "raisedAt",
+        "reason"
+      ],
       "scopeKind": "store",
       "verbs": [
         "list"
       ]
     },
     "cap_dailyops_attention": {
+      "calls": [
+        "list({ operatingDate, status? })"
+      ],
       "capabilityId": "cap_dailyops_attention",
       "namespace": "operations.attention",
       "purpose": "Items on an operating day that need an operator, with the lane each one came from.",
+      "resultFields": [
+        "itemRef",
+        "operatingDate",
+        "operatingWindow",
+        "lane",
+        "status",
+        "title",
+        "subjectKind",
+        "subjectLabel",
+        "registerLabel"
+      ],
       "scopeKind": "store",
       "verbs": [
         "list"
       ]
     },
     "cap_dailyops_automation": {
+      "calls": [
+        "list({ operatingDate, action? })"
+      ],
       "capabilityId": "cap_dailyops_automation",
       "namespace": "automation.dailyOperations",
       "purpose": "What Athena's Daily Operations automation did on an operating day, and under which policy.",
+      "resultFields": [
+        "runRef",
+        "operatingDate",
+        "operatingWindow",
+        "action",
+        "lane",
+        "outcome",
+        "disposition",
+        "policyMode",
+        "policyVersion",
+        "idempotencyToken",
+        "occurredAt",
+        "decisionReason",
+        "failure"
+      ],
       "scopeKind": "store",
       "verbs": [
         "list"
       ]
     },
     "cap_dailyops_day_sales": {
+      "calls": [
+        "get({ operatingDate })"
+      ],
       "capabilityId": "cap_dailyops_day_sales",
       "namespace": "reports.daySales",
       "purpose": "One operating day of sales: volume, revenue, payment groups, and the top items behind them.",
+      "resultFields": [
+        "operatingDate",
+        "operatingWindow",
+        "recordState",
+        "recordRevision",
+        "transactionCount",
+        "unitsSold",
+        "unitsReturned",
+        "topItems[]"
+      ],
       "scopeKind": "store",
       "verbs": [
         "get"
       ]
     },
     "cap_dailyops_inventory_positions": {
+      "calls": [
+        "get({ skuRef })",
+        "list({ category?, stockState? })"
+      ],
       "capabilityId": "cap_dailyops_inventory_positions",
       "namespace": "inventory.positions",
       "purpose": "Live stock position for the store's sellable SKUs.",
+      "resultFields": [
+        "skuRef",
+        "skuCode",
+        "displayName",
+        "variantLabel",
+        "category",
+        "subcategory",
+        "onHand",
+        "available",
+        "reserved",
+        "stockState",
+        "adjustmentBlockedReason"
+      ],
       "scopeKind": "store",
       "verbs": [
         "get",
@@ -2674,9 +2763,27 @@ export const AGENT_GENERATED_CAPABILITY_SCHEMAS: AgentCapabilitySchemaIndex = {
       ]
     },
     "cap_dailyops_register_sessions": {
+      "calls": [
+        "get({ sessionRef })",
+        "list({ operatingDate, status? })"
+      ],
       "capabilityId": "cap_dailyops_register_sessions",
       "namespace": "cash.registerSessions",
       "purpose": "Register (drawer) sessions for an operating day and the closeout state of each one.",
+      "resultFields": [
+        "sessionRef",
+        "registerLabel",
+        "terminalLabel",
+        "status",
+        "openedOperatingDate",
+        "closeoutOperatingDate",
+        "operatingWindow",
+        "openedAt",
+        "closedAt",
+        "hasPendingApproval",
+        "closeoutEventCount",
+        "closeoutVersion"
+      ],
       "scopeKind": "store",
       "verbs": [
         "get",
@@ -2684,63 +2791,153 @@ export const AGENT_GENERATED_CAPABILITY_SCHEMAS: AgentCapabilitySchemaIndex = {
       ]
     },
     "cap_dailyops_replenishment": {
+      "calls": [
+        "list({ continuityStatus? })"
+      ],
       "capabilityId": "cap_dailyops_replenishment",
       "namespace": "inventory.replenishment",
       "purpose": "Replenishment recommendations derived from stock pressure and purchase-order coverage.",
+      "resultFields": [
+        "recommendationRef",
+        "skuRef",
+        "skuCode",
+        "displayName",
+        "continuityStatus",
+        "needsAction",
+        "onHand",
+        "available",
+        "suggestedOrderQuantity",
+        "inboundQuantity",
+        "plannedQuantity",
+        "guidance",
+        "derivationVersion",
+        "inputFreshness",
+        "nextExpectedAt"
+      ],
       "scopeKind": "store",
       "verbs": [
         "list"
       ]
     },
     "cap_dailyops_store_day": {
+      "calls": [
+        "get({ operatingDate })"
+      ],
       "capabilityId": "cap_dailyops_store_day",
       "namespace": "operations.storeDay",
       "purpose": "Store-day lifecycle, readiness, and close state for one operating date, with the accepted opening and close records that prove it.",
+      "resultFields": [
+        "operatingDate",
+        "operatingWindow",
+        "lifecycleStage",
+        "lifecycleSummary",
+        "openingStatus",
+        "openingReadiness",
+        "closeStatus",
+        "closeReadiness",
+        "attentionCount",
+        "openWorkItemCount",
+        "pendingApprovalCount",
+        "registerBlockerCount",
+        "transactionCount",
+        "completedCloseAt",
+        "completedCloseActor",
+        "openingRecordRef",
+        "closeRecordRef"
+      ],
       "scopeKind": "store",
       "verbs": [
         "get"
       ]
     },
     "cap_dailyops_store_pulse": {
+      "calls": [
+        "get({ operatingDate, window })"
+      ],
       "capabilityId": "cap_dailyops_store_pulse",
       "namespace": "reports.storePulse",
       "purpose": "A bounded trading pulse for today or the current week, with its own comparison window.",
+      "resultFields": [
+        "operatingDate",
+        "operatingWindow",
+        "window",
+        "transactionCount",
+        "itemsSold",
+        "historyDayCount",
+        "isLimitedHistory",
+        "busiestHour",
+        "topItems[]"
+      ],
       "scopeKind": "store",
       "verbs": [
         "get"
       ]
     },
     "cap_dailyops_week_performance": {
+      "calls": [
+        "get({ weekEndOperatingDate })"
+      ],
       "capabilityId": "cap_dailyops_week_performance",
       "namespace": "reports.weekPerformance",
       "purpose": "Seven operating days of performance ending on a chosen day, plus the prior week's boundary day.",
+      "resultFields": [
+        "weekEndOperatingDate",
+        "weekStartOperatingDate",
+        "priorBoundaryOperatingDate",
+        "days[]"
+      ],
       "scopeKind": "store",
       "verbs": [
         "get"
       ]
     },
     "cap_synthetic_directory_teams": {
+      "calls": [
+        "list({ role? })"
+      ],
       "capabilityId": "cap_synthetic_directory_teams",
       "namespace": "directory.teams",
       "purpose": "Teams across the organization and their headcount.",
+      "resultFields": [
+        "teamRef",
+        "name",
+        "memberCount"
+      ],
       "scopeKind": "organization",
       "verbs": [
         "list"
       ]
     },
     "cap_synthetic_fleet_store_health": {
+      "calls": [
+        "get({ storeRef })"
+      ],
       "capabilityId": "cap_synthetic_fleet_store_health",
       "namespace": "fleet.storeHealth",
       "purpose": "One store's health snapshot: uptime, last incident, and review notes.",
+      "resultFields": [
+        "storeRef",
+        "uptimePercent",
+        "lastIncidentRef"
+      ],
       "scopeKind": "organization",
       "verbs": [
         "get"
       ]
     },
     "cap_synthetic_fleet_stores": {
+      "calls": [
+        "list({ region?, health? })"
+      ],
       "capabilityId": "cap_synthetic_fleet_stores",
       "namespace": "fleet.stores",
       "purpose": "Stores in the organization with their current health band.",
+      "resultFields": [
+        "storeRef",
+        "name",
+        "region",
+        "health"
+      ],
       "scopeKind": "organization",
       "verbs": [
         "list"
@@ -2752,4 +2949,4 @@ export const AGENT_GENERATED_CAPABILITY_SCHEMAS: AgentCapabilitySchemaIndex = {
 
 
 /** Identity of the model-visible schema set; changes whenever a declaration changes. */
-export const AGENT_GENERATED_SCHEMAS_DIGEST = "fnv1a64:49a4a969924e44b4";
+export const AGENT_GENERATED_SCHEMAS_DIGEST = "fnv1a64:e1305fdd60c6c36d";

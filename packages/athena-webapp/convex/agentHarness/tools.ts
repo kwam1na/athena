@@ -121,6 +121,8 @@ export const executeProgramTool: AgentToolDefinition<AgentExecuteProgramArgs, un
     "The source is a program BODY, not a module: top-level `await` is allowed, and it must end with exactly one top-level `return` of one JSON value.\n" +
     "Read only through the full path `athena.<package>.<resource>.get({...})` or `.list({...})` — never destructure or alias `athena`, and never reference a package name on its own.\n" +
     "Every read returns `{ kind, envelope }`; check `kind === \"result\"` before reading `envelope.data`, and report the other kinds honestly instead of guessing.\n" +
+    "Guarded fields (money and similar) arrive as `{ state, value }`: read `value` only when `state === \"known\"`, and report any other state as unavailable rather than missing.\n" +
+    "If the result carries `fieldDiagnostics`, the program read a field the capability does not declare — rewrite using the named fields instead of concluding the data is unreadable.\n" +
     "Arguments are ONLY the filters `athena.describe` lists for that capability: the store is fixed by the run, so a store name or id is never an argument.\n" +
     "No imports, no `require`, no timers, no randomness, no clock.\n" +
     "Example:\n" +
@@ -156,7 +158,7 @@ export const scratchTool: AgentToolDefinition<AgentScratchArgs, unknown> = {
 export const completeRunTool: AgentToolDefinition<AgentCompleteRunArgs, unknown> = {
   toolId: "athena.completeRun",
   description:
-    "Finish the run exactly once with the final answer. Arguments: { outcome?: \"answer\" | \"no_usable_sources\", narrative: string, title?: string, citedAttemptRefs: string[] (attemptRef values from executeProgram results the answer relies on), citations: [{ ref: string (citation refs from those results), claim?: string }], confidence?: 0..1, limitedEvidence?: boolean }. An answer needs at least one cited attempt and citation; use no_usable_sources when nothing usable was read.",
+    "Finish the run exactly once with the final answer. Arguments: { outcome?: \"answer\" | \"no_usable_sources\", narrative: string, title?: string, citedAttemptRefs: string[] (attemptRef values from executeProgram results the answer relies on), citations: [{ ref: string (citation refs from those results), claim?: string }], confidence?: 0..1, limitedEvidence?: boolean }. An answer needs at least one cited attempt and citation; use no_usable_sources when nothing usable was read. Submit by CALLING this tool — arguments written out as prose are not a submission. Say a value was unavailable only when its read returned kind !== \"result\" or its state was not \"known\".",
   validateInput: (raw): Validation<AgentCompleteRunArgs> => {
     const object = objectOf(raw);
     if (!object) return { ok: false, issues: [{ path: "$", message: "completeRun takes an object" }] };
@@ -394,6 +396,9 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
                 ...(call.reason ? { reason: call.reason } : {}),
                 ...(call.detail ? { detail: call.detail } : {}),
               })),
+              ...(result.fieldAdvisories && result.fieldAdvisories.length > 0
+                ? { fieldDiagnostics: result.fieldAdvisories.map((advisory) => advisory.message) }
+                : {}),
             },
           };
         }

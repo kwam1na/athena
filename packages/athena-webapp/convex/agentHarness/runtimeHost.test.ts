@@ -372,6 +372,11 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ create }) => {
       { kind: "tool_call", callId: "c2", toolId: "athena.describe", args: { namespace: "ops.shifts" } },
       { kind: "tool_call", callId: "c3", toolId: "athena.executeProgram", args: { source: PROGRAM } },
       { kind: "pause", gate: "drafted" },
+      // The final prose rides in the same provider step as the commit: the
+      // loop stops at a successful completeRun, so a post-commit prose step
+      // no longer exists to script for the streaming adapter (the contract
+      // fake still ends on the `complete` step below).
+      { kind: "narrative", deltas: ["MODEL-NARRATIVE-NEVER-STORED"] },
       { kind: "tool_call", callId: "c4", toolId: "athena.completeRun", args: () => ({ title: "Open shifts", narrative: "One shift is open.", citedAttemptRefs: [captured.attemptRef], citations: [{ ref: captured.citation, claim: "One shift is open." }] }) },
       { kind: "usage", providerInvocationRef: "inv-1", retryIndex: 0, sequence: 1, eventKey: "inv-1#final", mode: "cumulative", tokens: { input: 40, output: 10 }, terminal: true },
       { kind: "complete", narrative: "MODEL-NARRATIVE-NEVER-STORED" },

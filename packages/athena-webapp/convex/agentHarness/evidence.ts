@@ -65,6 +65,8 @@ export type AgentExecutionFacadeEntry = {
   readonly verbs: readonly AgentProgramFacadeVerb[];
   readonly capabilityId: string;
   readonly namespace: string;
+  /** Public top-level result field names (grant-projected); advisory field checks only, never enforcement. */
+  readonly fields?: readonly string[];
 };
 
 export type AgentNormalizedInvocation = {

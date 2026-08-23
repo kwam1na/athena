@@ -131,3 +131,41 @@ describe("athena.completeRun answer egress class", () => {
     expect(tools.completions[0].artifact.payload.egressClass).toBe("sensitive");
   });
 });
+
+describe("athena.executeProgram field diagnostics", () => {
+  it("passes field advisories through to the model as fieldDiagnostics messages", async () => {
+    const host = {
+      runId: "run_1" as Id<"intelligenceRun">,
+      bindingId: "binding_1" as Id<"agentTurnBinding">,
+      ctx: { runQuery: async () => ({}), runMutation: async () => ({}) },
+      refs: {} as unknown as AgentToolHostContext["refs"],
+      executeProgram: async () =>
+        ({
+          outcome: "result",
+          attemptRef: "attempt_0",
+          attemptId: "attempt_id_0" as Id<"agentProgramAttempt">,
+          result: {
+            output: { total: null },
+            egressClass: "operational",
+            completeness: { status: "complete", sources: [] },
+            freshness: { class: "live", authority: "live_read" },
+          },
+          citations: [],
+          calls: [],
+          fieldAdvisories: [
+            { namespace: "reports.daySales", field: "totalSales", message: "`totalSales` is not a field of reports.daySales; its fields are: grossRevenue, paymentGroups." },
+          ],
+        }) as never,
+      now: () => 1_700_000_000_000,
+      egressFloor: "operational",
+    } satisfies Partial<AgentToolHostContext> as unknown as AgentToolHostContext;
+    const { registrations } = createAthenaToolRegistrations(host);
+    const executeProgram = registrations.find((registration) => registration.definition.toolId === "athena.executeProgram")!;
+    const outcome = await executeProgram.handler({ source: "return 1;" } as never, handlerContext("exec_advisory"));
+    expect(outcome.kind).toBe("success");
+    if (outcome.kind !== "success") return;
+    expect((outcome.result as { fieldDiagnostics?: readonly string[] }).fieldDiagnostics).toEqual([
+      "`totalSales` is not a field of reports.daySales; its fields are: grossRevenue, paymentGroups.",
+    ]);
+  });
+});
