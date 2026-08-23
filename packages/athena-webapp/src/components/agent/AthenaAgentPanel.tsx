@@ -1007,7 +1007,7 @@ export function AthenaAgentPanel({
         </label>
         <Textarea
           className={cn(
-            // Two lines from `rows`, then it scrolls; no resize handle, so the
+            // Four lines from `rows`, then it scrolls; no resize handle, so the
             // field cannot be dragged out past the panel it lives in.
             "min-h-0 resize-none rounded-none border-0 bg-transparent px-3 pb-0 pt-2.5 leading-6 shadow-none",
             "focus-visible:ring-0 focus-visible:ring-offset-0",
@@ -1029,7 +1029,7 @@ export function AthenaAgentPanel({
               : "Ask about this context"
           }
           ref={promptRef}
-          rows={2}
+          rows={4}
           size="sm"
           value={draft}
         />
