@@ -1,3 +1,5 @@
+import type { Id } from "../convex/_generated/dataModel";
+
 type ScheduleStatus = "active" | "superseded" | "candidate";
 type ScheduleSource = "admin" | "seed" | "import" | "system";
 
@@ -22,12 +24,9 @@ export type StoreScheduleDateException = {
 };
 
 export type StoreScheduleDraft = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Convex id fields kept untyped by the verbatim move out of convex/; see V26-1316.
-  _id?: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Convex id fields kept untyped by the verbatim move out of convex/; see V26-1316.
-  organizationId: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Convex id fields kept untyped by the verbatim move out of convex/; see V26-1316.
-  storeId: any;
+  _id?: Id<"storeSchedule">;
+  organizationId: Id<"organization">;
+  storeId: Id<"store">;
   timezone: string;
   weeklyWindows: StoreScheduleWindow[];
   weeklyClosedDays: number[];
@@ -39,13 +38,10 @@ export type StoreScheduleDraft = {
   source: ScheduleSource;
   createdAt: number;
   updatedAt: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Convex id fields kept untyped by the verbatim move out of convex/; see V26-1316.
-  createdByUserId?: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Convex id fields kept untyped by the verbatim move out of convex/; see V26-1316.
-  updatedByUserId?: any;
+  createdByUserId?: Id<"athenaUser">;
+  updatedByUserId?: Id<"athenaUser">;
   supersededAt?: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Convex id fields kept untyped by the verbatim move out of convex/; see V26-1316.
-  supersededByScheduleId?: any;
+  supersededByScheduleId?: Id<"storeSchedule">;
 };
 
 export type StoreScheduleContextWindow = {

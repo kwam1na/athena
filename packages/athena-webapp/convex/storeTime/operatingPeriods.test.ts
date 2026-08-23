@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { StoreScheduleDraft } from "../lib/storeScheduleTime";
+import { testId } from "../lib/testIds";
 import {
   buildSameElapsedOperatingComparison,
   resolveReportingFinancialPeriod,
@@ -16,9 +17,9 @@ function schedule(
   overrides: Partial<StoreScheduleDraft> = {},
 ): StoreScheduleDraft {
   return {
-    _id: "schedule-1",
-    organizationId: "org-1",
-    storeId: "store-1",
+    _id: testId("storeSchedule", "schedule-1"),
+    organizationId: testId("organization", "org-1"),
+    storeId: testId("store", "store-1"),
     timezone: "America/New_York",
     weeklyWindows: [
       { dayOfWeek: 1, startMinute: 22 * 60, endMinute: 2 * 60 },
@@ -239,7 +240,7 @@ describe("reporting operating periods", () => {
       ],
     });
     const comparisonSchedule = schedule({
-      _id: "schedule-prior",
+      _id: testId("storeSchedule", "schedule-prior"),
       weeklyWindows: [
         { dayOfWeek: 1, startMinute: 8 * 60, endMinute: 12 * 60 },
         { dayOfWeek: 1, startMinute: 13 * 60, endMinute: 18 * 60 },
@@ -283,7 +284,7 @@ describe("reporting operating periods", () => {
 
   it("uses actual DST-aware operating duration and excludes comparison future time", () => {
     const dstSchedule = schedule({
-      _id: "schedule-dst",
+      _id: testId("storeSchedule", "schedule-dst"),
       dateExceptions: [
         {
           localDate: "2026-03-08",
@@ -293,7 +294,7 @@ describe("reporting operating periods", () => {
       ],
     });
     const priorSchedule = schedule({
-      _id: "schedule-prior",
+      _id: testId("storeSchedule", "schedule-prior"),
       dateExceptions: [
         {
           localDate: "2026-03-01",
@@ -377,7 +378,7 @@ describe("reporting operating periods", () => {
 
   it("uses the schedule version that governed the fallback operating day", async () => {
     const currentSchedule = schedule({
-      _id: "schedule-current",
+      _id: testId("storeSchedule", "schedule-current"),
       effectiveFrom: Date.parse("2026-07-12T00:00:00.000Z"),
       timezone: "Africa/Accra",
       weeklyClosedDays: [0, 6],
@@ -386,7 +387,7 @@ describe("reporting operating periods", () => {
       ],
     });
     const historicalSchedule = schedule({
-      _id: "schedule-historical",
+      _id: testId("storeSchedule", "schedule-historical"),
       effectiveTo: Date.parse("2026-07-12T00:00:00.000Z"),
       status: "superseded",
       timezone: "Africa/Accra",
