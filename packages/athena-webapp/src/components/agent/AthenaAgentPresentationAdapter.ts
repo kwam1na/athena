@@ -546,7 +546,7 @@ export function describeAthenaProvisionalNotice(): AthenaAgentProvisionalNotice 
 export type AthenaAgentProvisionalCue = "reset" | "paused_at_limit" | "stalled";
 
 const PROVISIONAL_CUE_COPY: Record<AthenaAgentProvisionalCue, string> = {
-  reset: "Draft restarted. The earlier text is gone.",
+  reset: "Moved on to the next step. The earlier draft stays in the timeline.",
   paused_at_limit:
     "Draft display limit reached. The rest of the draft isn't shown here.",
   // A stalled draft can be an operator's last signal — a dead host leaves the
@@ -557,6 +557,28 @@ const PROVISIONAL_CUE_COPY: Record<AthenaAgentProvisionalCue, string> = {
 /** The polite line for a draft cue. Never model text, never a token. */
 export function describeAthenaProvisionalCue(cue: AthenaAgentProvisionalCue): string {
   return PROVISIONAL_CUE_COPY[cue];
+}
+
+/** The label of a finished draft in the timeline, by position (oldest first). */
+export function describeAthenaProvisionalEntry(index: number): string {
+  return `Earlier draft ${index + 1}`;
+}
+
+export type AthenaAgentProvisionalTimelineCopy = {
+  readonly summary: string;
+  readonly detail: string;
+};
+
+/**
+ * The collapsed timeline behind a committed answer. It names what the drafts
+ * are and, like the live container, says they are not the checked text.
+ */
+export function describeAthenaProvisionalTimeline(): AthenaAgentProvisionalTimelineCopy {
+  return {
+    summary: "How Athena got here",
+    detail:
+      "Athena's drafts along the way. Not verified — the answer above is the only checked text.",
+  };
 }
 
 /** The inert renderer's overflow notice, worded for what it is bounding. */

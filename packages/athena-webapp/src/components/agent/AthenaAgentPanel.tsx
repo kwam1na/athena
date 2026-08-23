@@ -26,7 +26,9 @@ import { AthenaAgentSafeText } from "./AthenaAgentSafeText";
 import {
   composeAthenaThreadKey,
   describeAthenaProvisionalCue,
+  describeAthenaProvisionalEntry,
   describeAthenaProvisionalNotice,
+  describeAthenaProvisionalTimeline,
   type AthenaAgentContext,
   type AthenaAgentPresentation,
 } from "./AthenaAgentPresentationAdapter";
@@ -38,6 +40,7 @@ import {
   useAthenaAgentRun,
   type AthenaAgentAnswer,
   type AthenaAgentHistoryEntry,
+  PROVISIONAL_TIMELINE_STATES,
   type AthenaAgentProvisionalState,
   type AthenaAgentRun,
   type AthenaAgentSource,
@@ -328,6 +331,33 @@ export function AthenaAgentPanel({
 
   const answerQuality = run.answer ? describeQuality(run.answer) : null;
   const provisionalNotice = describeAthenaProvisionalNotice();
+  const provisionalTimelineCopy = describeAthenaProvisionalTimeline();
+  // Finished drafts, rendered only where the live draft itself may show:
+  // inside the provisional container while the turn runs, and behind the
+  // committed answer once it has superseded them. The hook already empties
+  // the list for withdrawn, stalled, and disabled drafts; this guard keeps the
+  // panel honest if it is ever fed a run by hand.
+  const provisionalEntries = PROVISIONAL_TIMELINE_STATES.has(run.provisionalState)
+    ? run.provisionalTimeline
+    : [];
+  const renderProvisionalEntries = () =>
+    provisionalEntries.map((entry, index) => (
+      <article
+        className="space-y-layout-2xs border-l-2 border-border pl-3"
+        data-ordinal={entry.draftOrdinal}
+        data-testid="athena-agent-provisional-entry"
+        key={entry.draftOrdinal}
+      >
+        <p className="text-xs font-medium text-muted-foreground">
+          {describeAthenaProvisionalEntry(index)}
+        </p>
+        <AthenaAgentSafeText
+          className="text-muted-foreground"
+          mode="provisional"
+          text={entry.text}
+        />
+      </article>
+    ));
 
   useEffect(() => {
     if (!activeCitation) return;
@@ -589,6 +619,14 @@ export function AthenaAgentPanel({
               data-state={run.provisionalState}
               data-testid="athena-agent-provisional"
             >
+              {provisionalEntries.length > 0 ? (
+                <div
+                  className="space-y-layout-xs"
+                  data-testid="athena-agent-provisional-entries"
+                >
+                  {renderProvisionalEntries()}
+                </div>
+              ) : null}
               {run.provisional ? (
                 <>
                   <div data-testid="athena-agent-provisional-label">
@@ -680,6 +718,24 @@ export function AthenaAgentPanel({
                 </div>
               ) : null}
             </article>
+          ) : null}
+
+          {/* Behind the committed answer, the finished drafts stay readable as
+              a collapsed block — still labelled unverified, still inert, and
+              never part of the answer article or its focus target. */}
+          {run.provisionalState === "superseded" && provisionalEntries.length > 0 ? (
+            <details
+              className="space-y-layout-xs rounded-md border border-dashed border-border bg-surface px-3 py-2"
+              data-testid="athena-agent-provisional-timeline"
+            >
+              <summary className="cursor-pointer text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                {provisionalTimelineCopy.summary}
+              </summary>
+              <p className="text-xs text-muted-foreground">
+                {provisionalTimelineCopy.detail}
+              </p>
+              <div className="space-y-layout-xs">{renderProvisionalEntries()}</div>
+            </details>
           ) : null}
 
           {/* Source detail sits beside the answer, never inside it: the answer

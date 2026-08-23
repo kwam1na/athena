@@ -1247,3 +1247,114 @@ describe("streaming the provisional narrative", () => {
     expect(callsNamed("acknowledgeProvisionalView")).toHaveLength(0);
   });
 });
+
+describe("the provisional timeline", () => {
+  it("keeps each finished draft in order as the ordinal advances, then folds the last one in at commit", async () => {
+    backend.view = baseView({ provisionalReleasedAt: 90 });
+    backend.preview = streamingRow({ draftOrdinal: 0, text: "Checking the registers." });
+    const { result, rerender } = mountRun({ activeTurnId: BINDING_ID });
+
+    await waitFor(() => expect(result.current.provisionalState).toBe("streaming"));
+    expect(result.current.provisionalTimeline).toEqual([]);
+
+    backend.preview = streamingRow({ draftOrdinal: 1, text: "Now the automation log.", updatedAt: 130 });
+    rerender();
+    await waitFor(() => expect(result.current.provisional?.text).toBe("Now the automation log."));
+    await waitFor(() =>
+      expect(result.current.provisionalTimeline).toEqual([
+        { text: "Checking the registers.", truncated: false, draftOrdinal: 0 },
+      ]),
+    );
+
+    backend.preview = streamingRow({ draftOrdinal: 2, text: "Summing up.", updatedAt: 140 });
+    rerender();
+    await waitFor(() =>
+      expect(result.current.provisionalTimeline.map((entry) => entry.draftOrdinal)).toEqual([0, 1]),
+    );
+    expect(result.current.provisionalTimeline[1]?.text).toBe("Now the automation log.");
+    // The live draft is never also a timeline entry.
+    expect(result.current.provisionalTimeline.some((entry) => entry.draftOrdinal === 2)).toBe(false);
+
+    backend.view = baseView({
+      phase: "completed",
+      canCancel: false,
+      provisionalReleasedAt: 90,
+      answer: { available: true, outcome: "answer", suppressed: false },
+    });
+    backend.preview = { state: "superseded", released: true };
+    backend.answer = {
+      kind: "answer",
+      outcome: "answer",
+      narrative: "A different, checked answer.",
+      egressClass: "operational",
+      committedAt: 200,
+      citations: [],
+    };
+    backend.results.acknowledgeTurnAnswer = { kind: "acknowledged", operatorViewedAt: 210 };
+    rerender();
+
+    await waitFor(() => expect(result.current.provisionalState).toBe("superseded"));
+    expect(result.current.provisional).toBeNull();
+    await waitFor(() =>
+      expect(result.current.provisionalTimeline.map((entry) => entry.draftOrdinal)).toEqual([0, 1, 2]),
+    );
+    expect(result.current.provisionalTimeline[2]?.text).toBe("Summing up.");
+  });
+
+  it("hides the timeline when the draft is withdrawn and drops it for the next thread", async () => {
+    backend.view = baseView({ provisionalReleasedAt: 90 });
+    backend.preview = streamingRow({ draftOrdinal: 0, text: "Checking the registers." });
+    const { result, rerender } = mountRun({ activeTurnId: BINDING_ID });
+    await waitFor(() => expect(result.current.provisionalState).toBe("streaming"));
+
+    backend.preview = streamingRow({ draftOrdinal: 1, text: "Now the log.", updatedAt: 130 });
+    rerender();
+    await waitFor(() => expect(result.current.provisionalTimeline).toHaveLength(1));
+
+    backend.preview = { state: "withdrawn", reason: "membership_revoked", released: true };
+    rerender();
+    await waitFor(() => expect(result.current.provisionalState).toBe("withdrawn"));
+    expect(result.current.provisionalTimeline).toEqual([]);
+
+    act(() => {
+      result.current.startNewThread();
+    });
+    expect(result.current.provisionalTimeline).toEqual([]);
+  });
+
+  it("hides the timeline while a draft is stalled and shows it again when the draft resumes", async () => {
+    vi.useFakeTimers();
+    try {
+      backend.view = baseView({ provisionalReleasedAt: 90 });
+      backend.preview = streamingRow({ draftOrdinal: 0, text: "Checking the registers." });
+      const { result, rerender } = mountRun({ activeTurnId: BINDING_ID });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(result.current.provisionalState).toBe("streaming");
+
+      backend.preview = streamingRow({ draftOrdinal: 1, text: "Now the log.", updatedAt: 130, ttlMs: 1_000 });
+      rerender();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(result.current.provisionalTimeline).toHaveLength(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_001);
+      });
+      expect(result.current.provisionalState).toBe("stalled");
+      expect(result.current.provisionalTimeline).toEqual([]);
+
+      backend.preview = streamingRow({ draftOrdinal: 1, text: "Now the log, continued.", updatedAt: 2_000, ttlMs: 5_000 });
+      rerender();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(result.current.provisionalState).toBe("streaming");
+      expect(result.current.provisionalTimeline).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

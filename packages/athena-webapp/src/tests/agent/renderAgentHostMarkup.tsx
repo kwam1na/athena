@@ -96,6 +96,7 @@ function scriptedRun(overrides: Partial<AthenaAgentRun> = {}): AthenaAgentRun {
     milestones: [],
     provisionalState: "none",
     provisional: null,
+    provisionalTimeline: [],
     provisionalWithdrawal: null,
     denial: null,
     blockedSubmission: null,

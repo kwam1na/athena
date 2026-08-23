@@ -9,6 +9,8 @@ import {
   describeAthenaFailure,
   describeAthenaMilestone,
   describeAthenaProvisionalCue,
+  describeAthenaProvisionalEntry,
+  describeAthenaProvisionalTimeline,
   describeAthenaProvisionalNotice,
   describeAthenaShortenedNotice,
   describeAthenaUnavailable,
@@ -293,7 +295,7 @@ describe("provisional draft copy", () => {
 
   it("gives the reset, limit, and pause cues their own polite lines", () => {
     expect(describeAthenaProvisionalCue("reset")).toBe(
-      "Draft restarted. The earlier text is gone.",
+      "Moved on to the next step. The earlier draft stays in the timeline.",
     );
     expect(describeAthenaProvisionalCue("paused_at_limit")).toBe(
       "Draft display limit reached. The rest of the draft isn't shown here.",
@@ -353,5 +355,16 @@ describe("provisional draft copy", () => {
     expect(unknown.headline).toBe("Draft withdrawn.");
     expect(unknown.detail).toBeUndefined();
     expect(JSON.stringify(unknown)).not.toContain("some_new_backend_reason".toUpperCase());
+  });
+});
+
+describe("the provisional timeline copy", () => {
+  it("labels finished drafts by position and the collapsed timeline as unverified", () => {
+    expect(describeAthenaProvisionalEntry(0)).toBe("Earlier draft 1");
+    expect(describeAthenaProvisionalEntry(2)).toBe("Earlier draft 3");
+    expect(describeAthenaProvisionalTimeline()).toEqual({
+      summary: "How Athena got here",
+      detail: "Athena's drafts along the way. Not verified — the answer above is the only checked text.",
+    });
   });
 });

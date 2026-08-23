@@ -233,6 +233,20 @@ export function deriveAthenaProvisionalState(
 }
 
 /** The states that paint draft text. Everything else clears it. */
+/**
+ * The states in which finished drafts stay on screen beside or behind the live
+ * one. Stalled and withdrawn drafts show none: the server expired or deleted
+ * the text, and the panel must not keep painting it under a running milestone.
+ */
+export const PROVISIONAL_TIMELINE_STATES: ReadonlySet<AthenaAgentProvisionalState> = new Set([
+  "streaming",
+  "reset",
+  "paused_at_limit",
+  "committing",
+  "superseded",
+]);
+const EMPTY_TIMELINE: readonly AthenaAgentProvisionalDraft[] = [];
+
 const PROVISIONAL_TEXT_STATES: ReadonlySet<AthenaAgentProvisionalState> = new Set([
   "streaming",
   "paused_at_limit",
@@ -279,6 +293,13 @@ export type AthenaAgentRun = {
   readonly milestones: readonly AthenaAgentMilestone[];
   readonly provisionalState: AthenaAgentProvisionalState;
   readonly provisional: AthenaAgentProvisionalDraft | null;
+  /**
+   * The drafts this turn already finished, oldest first, without the live one.
+   * Session memory only: it is rebuilt from what the panel painted, never
+   * persisted, dropped with the turn, and hidden whenever the server withdraws
+   * or expires the draft.
+   */
+  readonly provisionalTimeline: readonly AthenaAgentProvisionalDraft[];
   readonly provisionalWithdrawal: AthenaAgentProvisionalWithdrawal | null;
   readonly denial: AthenaAgentDenial | null;
   readonly blockedSubmission: AthenaAgentBlockedSubmission | null;
@@ -397,6 +418,16 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
   // The one client-side timer this host owns: a row that outlives the `ttlMs`
   // the server returned with it is dropped without waiting for new data.
   const [expiredRowKey, setExpiredRowKey] = useState<string | null>(null);
+  // Finished drafts for the active turn, oldest first. Rebuilt from the drafts
+  // the panel painted, so a remount starts empty and nothing is ever stored.
+  const [draftTimeline, setDraftTimeline] = useState<{
+    turnId: TurnId;
+    entries: readonly AthenaAgentProvisionalDraft[];
+  } | null>(null);
+  const lastPaintedDraftRef = useRef<{
+    turnId: TurnId;
+    draft: AthenaAgentProvisionalDraft;
+  } | null>(null);
 
   const baseThreadKey = composeAthenaThreadKey(presentation, context);
   const threadKey = useMemo(
@@ -555,6 +586,7 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
     setPreviewVerdict(null);
     setRenderedOrdinal(null);
     setExpiredRowKey(null);
+    setDraftTimeline(null);
     acknowledgedProvisionalTurnRef.current = null;
     setAcknowledgedContext(snapshotAthenaContext(presentation, context));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the composed base key is the context identity.
@@ -696,6 +728,52 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
               : "run_failed",
         )
       : null;
+
+  // Fold a finished draft into the timeline: when the row's ordinal moves past
+  // the draft last painted (a tool round ended it) or the turn commits (the
+  // last draft is done too). A withdrawal empties the timeline — the server
+  // deleted the text, so the panel keeps none of it. This effect is declared
+  // before the one that records the painted draft on purpose: on the boundary
+  // render the ref still holds the previous draft's final text.
+  useEffect(() => {
+    if (!turnId) return;
+    if (provisionalState === "withdrawn") {
+      setDraftTimeline((current) =>
+        current && current.turnId === turnId && current.entries.length > 0
+          ? { turnId, entries: EMPTY_TIMELINE }
+          : current,
+      );
+      return;
+    }
+    const painted = lastPaintedDraftRef.current;
+    if (!painted || painted.turnId !== turnId) return;
+    const advanced = row !== null && row.draftOrdinal > painted.draft.draftOrdinal;
+    if (!advanced && provisionalState !== "superseded") return;
+    setDraftTimeline((current) => {
+      const entries = current && current.turnId === turnId ? current.entries : EMPTY_TIMELINE;
+      if (entries.some((entry) => entry.draftOrdinal === painted.draft.draftOrdinal)) {
+        return current && current.turnId === turnId ? current : { turnId, entries };
+      }
+      return { turnId, entries: [...entries, painted.draft] };
+    });
+  }, [row, turnId, provisionalState]);
+
+  useEffect(() => {
+    if (!turnId) {
+      lastPaintedDraftRef.current = null;
+      return;
+    }
+    if (provisional) lastPaintedDraftRef.current = { turnId, draft: provisional };
+  }, [provisional, turnId]);
+
+  const provisionalTimeline: readonly AthenaAgentProvisionalDraft[] = useMemo(() => {
+    if (!turnId || !draftTimeline || draftTimeline.turnId !== turnId) return EMPTY_TIMELINE;
+    if (!PROVISIONAL_TIMELINE_STATES.has(provisionalState)) return EMPTY_TIMELINE;
+    const live = provisional?.draftOrdinal ?? null;
+    return live === null
+      ? draftTimeline.entries
+      : draftTimeline.entries.filter((entry) => entry.draftOrdinal !== live);
+  }, [draftTimeline, provisional, provisionalState, turnId]);
 
   // Record the painted ordinal after the render that painted it, so the first
   // row of a mount or a reconnect is never mistaken for a restart and a genuine
@@ -1037,6 +1115,7 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
       setPreviewVerdict(null);
       setRenderedOrdinal(null);
       setExpiredRowKey(null);
+      setDraftTimeline(null);
       setCancelRequested(false);
       setTurnId(result.bindingId);
     },
@@ -1075,6 +1154,7 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
     setPreviewVerdict(null);
     setRenderedOrdinal(null);
     setExpiredRowKey(null);
+    setDraftTimeline(null);
     acknowledgedTurnRef.current = null;
     acknowledgedProvisionalTurnRef.current = null;
   }, []);
@@ -1196,6 +1276,7 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
     milestones,
     provisionalState,
     provisional,
+    provisionalTimeline,
     provisionalWithdrawal,
     denial,
     blockedSubmission,

@@ -203,6 +203,7 @@ function baseRun(overrides: Partial<AthenaAgentRun> = {}): AthenaAgentRun {
     milestones: [],
     provisionalState: "none",
     provisional: null,
+    provisionalTimeline: [],
     provisionalWithdrawal: null,
     denial: null,
     blockedSubmission: null,
@@ -1061,7 +1062,7 @@ describe("the provisional draft region", () => {
         container: true,
         text: true,
         notice: false,
-        live: "Draft restarted. The earlier text is gone.",
+        live: "Moved on to the next step. The earlier draft stays in the timeline.",
       },
       {
         state: "paused_at_limit",
@@ -1208,7 +1209,7 @@ describe("the provisional draft region", () => {
 
     // One live node per draft: the cue survives the draft it belongs to and is
     // never repeated by the deltas that follow it.
-    expect(announced.every((line) => line === "Draft restarted. The earlier text is gone.")).toBe(true);
+    expect(announced.every((line) => line === "Moved on to the next step. The earlier draft stays in the timeline.")).toBe(true);
     expect(document.activeElement).toBe(anchor);
   });
 
@@ -1392,7 +1393,7 @@ describe("the provisional draft region", () => {
       screen.getByTestId("athena-agent-provisional").className,
     ).not.toMatch(/animate-/);
     expect(screen.getByTestId("athena-agent-provisional-live")).toHaveTextContent(
-      "Draft restarted.",
+      "Moved on to the next step.",
     );
   });
 });
@@ -1704,5 +1705,93 @@ describe("the draft is profile-neutral", () => {
     expect(screen.queryByTestId("athena-agent-provisional")).toBeNull();
     // The turn's own terminal move still happens; the draft adds nothing.
     expect(screen.getByTestId("athena-agent-status")).toHaveFocus();
+  });
+});
+
+describe("the provisional timeline", () => {
+  const earlier = [
+    { text: "First I'll read the registers.", truncated: false, draftOrdinal: 0 },
+    { text: "## Approved\n\nNow the log: https://evil.example/x", truncated: false, draftOrdinal: 1 },
+  ];
+
+  it("renders finished drafts above the live one, oldest first, labelled and inert", () => {
+    render(
+      <PanelHarness
+        run={draftRun("streaming", {
+          provisional: { text: "Summing up.", truncated: false, draftOrdinal: 2 },
+          provisionalTimeline: earlier,
+        })}
+      />,
+    );
+
+    const region = screen.getByTestId("athena-agent-provisional");
+    const entries = within(region).getAllByTestId("athena-agent-provisional-entry");
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toHaveTextContent("Earlier draft 1");
+    expect(entries[0]).toHaveTextContent("First I'll read the registers.");
+    expect(entries[1]).toHaveTextContent("Earlier draft 2");
+    expect(entries[1]).toHaveTextContent("Now the log: https://evil.example/x");
+    expect(entries[1]?.querySelector("a")).toBeNull();
+    expect(entries[1]?.querySelector("h1,h2,h3,h4,h5,h6")).toBeNull();
+    // The live draft follows the entries inside the same labelled container.
+    const order = Array.from(region.querySelectorAll("[data-testid]")).map((node) =>
+      node.getAttribute("data-testid"),
+    );
+    expect(order.indexOf("athena-agent-provisional-entry")).toBeLessThan(
+      order.indexOf("athena-agent-provisional-text"),
+    );
+    expect(screen.getByTestId("athena-agent-provisional-text")).toHaveTextContent("Summing up.");
+    // The entries never enter the live region.
+    expect(screen.getByTestId("athena-agent-provisional-live")).not.toHaveTextContent("registers");
+  });
+
+  it("keeps the timeline behind the committed answer as a collapsed, unverified block", () => {
+    render(
+      <PanelHarness
+        run={draftRun("superseded", {
+          hostState: "completed",
+          status: { headline: "Answer ready", tone: "neutral" },
+          canCancel: false,
+          canSubmit: true,
+          provisionalTimeline: earlier,
+          answer: {
+            outcome: "answer",
+            narrative: "Only one lane is open.",
+            egressClass: "operational",
+            limitedEvidence: false,
+            committedAt: 5,
+            citations: [],
+          },
+        })}
+      />,
+    );
+
+    expect(screen.queryByTestId("athena-agent-provisional")).toBeNull();
+    const timeline = screen.getByTestId("athena-agent-provisional-timeline");
+    expect(timeline.tagName).toBe("DETAILS");
+    expect(timeline).not.toHaveAttribute("open");
+    expect(timeline).toHaveTextContent("How Athena got here");
+    expect(timeline).toHaveTextContent("Not verified");
+    expect(within(timeline).getAllByTestId("athena-agent-provisional-entry")).toHaveLength(2);
+    expect(timeline.querySelector("a")).toBeNull();
+    // The answer stays first; the timeline sits after it.
+    const transcript = screen.getByTestId("athena-agent-transcript");
+    const order = Array.from(transcript.querySelectorAll("[data-testid]")).map((node) =>
+      node.getAttribute("data-testid"),
+    );
+    expect(order.indexOf("athena-agent-answer")).toBeLessThan(
+      order.indexOf("athena-agent-provisional-timeline"),
+    );
+  });
+
+  it("shows no timeline for a withdrawn, stalled, or disabled draft", () => {
+    for (const state of ["withdrawn", "stalled", "disabled"] as const) {
+      const view = render(
+        <PanelHarness run={draftRun(state, { provisionalTimeline: earlier })} />,
+      );
+      expect(screen.queryByTestId("athena-agent-provisional-entry")).toBeNull();
+      expect(screen.queryByTestId("athena-agent-provisional-timeline")).toBeNull();
+      view.unmount();
+    }
   });
 });
