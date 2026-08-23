@@ -574,3 +574,133 @@ describe("completion marker coverage guards", () => {
     );
   });
 });
+
+describe("advisory signal truthfulness (remaining + cutoff)", () => {
+  const CUTOFF = 1_000_000;
+
+  const eligibleTransactions = (count: number) =>
+    Array.from({ length: count }, (_, index) => ({
+      _id: `txn-${index}`,
+      _creationTime: CUTOFF - 1,
+      subtotal: 10,
+      tax: 0,
+      total: 10,
+      totalPaid: 10,
+    }));
+
+  /** The truth the record is meant to describe: rows still needing work. */
+  async function actualPending(
+    harness: ReturnType<typeof createCtx>,
+    cutoffTimestamp = CUTOFF,
+  ) {
+    const verified = await verifyPosAmountsToPesewasWithCtx(harness.ctx, {
+      cutoffTimestamp,
+      limit: 100,
+      table: "posTransaction",
+    });
+    return verified.pendingCount;
+  }
+
+  const storedRun = (harness: ReturnType<typeof createCtx>) =>
+    harness.tables!.get("posAmountMigrationRun")![0];
+
+  it("sequence 1: an applying batch with no prior measurement never claims zero remaining", async () => {
+    const harness = createCtx({
+      posTransaction: eligibleTransactions(6),
+      posAmountMigrationRun: [],
+    });
+
+    await migratePosAmountTableWithCtx(harness.ctx, {
+      cutoffTimestamp: CUTOFF,
+      dryRun: false,
+      limit: 2,
+      table: "posTransaction",
+    } as never);
+
+    expect(await actualPending(harness)).toBe(4);
+    expect(storedRun(harness)).toEqual(
+      expect.objectContaining({ complete: false, migrated: 2, remaining: 0 }),
+    );
+  });
+
+  it("sequence 2: an apply chain draining from an explicit cursor leaves the measurement", async () => {
+    const harness = createCtx({
+      posTransaction: eligibleTransactions(4),
+      posAmountMigrationRun: [],
+    });
+
+    // Whole-table dry run measures four.
+    await migratePosAmountTableWithCtx(harness.ctx, {
+      cutoffTimestamp: CUTOFF,
+      limit: 100,
+      table: "posTransaction",
+    } as never);
+    expect(storedRun(harness).remaining).toBe(4);
+
+    // Apply resumed from an explicit cursor: converts everything it sees, but
+    // cannot prove coverage, so the completion gate stays closed.
+    const { last } = await runChain(harness, {
+      autoContinue: true,
+      cursor: "0",
+      cutoffTimestamp: CUTOFF,
+      dryRun: false,
+      limit: 100,
+      table: "posTransaction",
+    });
+    expect(last.complete).toBe(false);
+
+    expect(await actualPending(harness)).toBe(0);
+    expect(storedRun(harness)).toEqual(
+      expect.objectContaining({ complete: false, migrated: 4, remaining: 4 }),
+    );
+  });
+
+  it("sequence 3: a cursor-scoped dry run records the page count as a table count", async () => {
+    const harness = createCtx({
+      posTransaction: eligibleTransactions(6),
+      posAmountMigrationRun: [],
+    });
+
+    await migratePosAmountTableWithCtx(harness.ctx, {
+      cursor: "4",
+      cutoffTimestamp: CUTOFF,
+      limit: 100,
+      table: "posTransaction",
+    } as never);
+
+    expect(await actualPending(harness)).toBe(6);
+    expect(storedRun(harness)).toEqual(
+      expect.objectContaining({ complete: false, migrated: 0, remaining: 2 }),
+    );
+  });
+
+  it("sequence 4: a wrong-cutoff apply chain presents as a clean board", async () => {
+    const harness = createCtx({
+      posTransaction: eligibleTransactions(6),
+      posAmountMigrationRun: [],
+    });
+
+    await migratePosAmountTableWithCtx(harness.ctx, {
+      cutoffTimestamp: CUTOFF,
+      limit: 100,
+      table: "posTransaction",
+    } as never);
+    expect(storedRun(harness).remaining).toBe(6);
+
+    // Operator supplies cutoff 0: nothing is eligible, so the chain walks the
+    // whole table, converts nothing, and satisfies the completion gate.
+    const { last } = await runChain(harness, {
+      autoContinue: true,
+      cutoffTimestamp: 0,
+      dryRun: false,
+      limit: 3,
+      table: "posTransaction",
+    });
+    expect(last.complete).toBe(true);
+
+    expect(await actualPending(harness)).toBe(6);
+    expect(storedRun(harness)).toEqual(
+      expect.objectContaining({ complete: true, migrated: 0, remaining: 0 }),
+    );
+  });
+});
