@@ -20,17 +20,30 @@ import {
 
 export type { ConvexAgentModelResolver, ConvexAgentRuntimeAdapter, ConvexAgentRuntimeCtx };
 
+/**
+ * Dev experiment knob: when set (e.g. "low"), every provider call carries
+ * `providerOptions.openai.reasoningEffort`. Unset in production.
+ */
+export const CONVEX_AGENT_REASONING_EFFORT_ENV = "ATHENA_AGENT_REASONING_EFFORT" as const;
+
+function experimentProviderOptions(): Record<string, Record<string, unknown>> | undefined {
+  const effort = process.env[CONVEX_AGENT_REASONING_EFFORT_ENV];
+  return effort && effort.length > 0 ? { openai: { reasoningEffort: effort } } : undefined;
+}
+
 export function createProductionConvexAgentRuntimeAdapter(input: {
   readonly ctx: ConvexAgentRuntimeCtx;
   readonly resolveModel: ConvexAgentModelResolver;
   readonly clock?: () => number;
   readonly maxRetries?: number;
 }): ConvexAgentRuntimeAdapter {
+  const providerOptions = experimentProviderOptions();
   return createConvexAgentRuntimeAdapter({
     ctx: input.ctx,
     component: components.agent,
     resolveModel: input.resolveModel,
     clock: input.clock,
     maxRetries: input.maxRetries,
+    ...(providerOptions ? { providerOptions } : {}),
   });
 }

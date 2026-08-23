@@ -17,6 +17,13 @@ import { ConvexAgentAdapterError, type ConvexAgentLanguageModel } from "./convex
 export const CONVEX_AGENT_DEFAULT_PROVIDER_ID = "openai" as const;
 export const CONVEX_AGENT_DEFAULT_MODEL_ID = "gpt-5-nano" as const;
 export const CONVEX_AGENT_PROVIDER_API_KEY_ENV = "OPENAI_API_KEY" as const;
+/**
+ * Dev experiment knob: overrides the profile-selected OpenAI model id for the
+ * whole deployment when set (e.g. "gpt-5-mini"). Spend settlement still rates
+ * the profile's selection, so treat recorded cost units as approximate while
+ * this is set. Never set in production.
+ */
+export const CONVEX_AGENT_MODEL_OVERRIDE_ENV = "ATHENA_AGENT_MODEL_OVERRIDE" as const;
 
 export type ResolveDefaultLanguageModelOptions = {
   readonly apiKey?: string;
@@ -33,5 +40,6 @@ export function resolveDefaultLanguageModel(
   if (!apiKey) {
     throw new ConvexAgentAdapterError("provider_credentials_missing", `${CONVEX_AGENT_PROVIDER_API_KEY_ENV} is not configured.`);
   }
-  return createOpenAI({ apiKey })(selection.modelId);
+  const override = process.env[CONVEX_AGENT_MODEL_OVERRIDE_ENV];
+  return createOpenAI({ apiKey })(override && override.length > 0 ? override : selection.modelId);
 }

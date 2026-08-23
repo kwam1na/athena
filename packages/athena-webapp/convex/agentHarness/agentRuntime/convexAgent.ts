@@ -251,6 +251,8 @@ export type ConvexAgentRuntimeAdapterOptions = {
    * not carry it (contract-suite kernels) behave exactly as before.
    */
   readonly terminalToolId?: string;
+  /** Per-call provider options (e.g. `{ openai: { reasoningEffort: "low" } }`); dev experiment knob. */
+  readonly providerOptions?: Record<string, Record<string, unknown>>;
 };
 
 /** The contract plus the Athena-side authoring seams the runtime host and adapter tests need. */
@@ -560,6 +562,7 @@ export function createConvexAgentRuntimeAdapter(options: ConvexAgentRuntimeAdapt
             ],
             tools: nativeTools(turn, definitions),
             toolChoice: { type: "tool", toolName: nativeTerminal as string },
+            ...(options.providerOptions ? { providerOptions: options.providerOptions as never } : {}),
             stopWhen: stepCountIs(1),
             abortSignal: turn.abort.signal,
             repairToolCall: repairToolCall(turn),
@@ -590,6 +593,7 @@ export function createConvexAgentRuntimeAdapter(options: ConvexAgentRuntimeAdapt
           messages: history,
           tools: nativeTools(turn, definitions),
           stopWhen: nativeTerminal ? [stepCountIs(limits.maxToolCalls + 1), () => turn.terminalToolSettled] : stepCountIs(limits.maxToolCalls + 1),
+          ...(options.providerOptions ? { providerOptions: options.providerOptions as never } : {}),
           abortSignal: turn.abort.signal,
           repairToolCall: repairToolCall(turn),
           ...(limits.maxOutputTokens !== undefined ? { maxOutputTokens: limits.maxOutputTokens } : {}),
