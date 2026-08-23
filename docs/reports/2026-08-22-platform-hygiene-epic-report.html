@@ -178,17 +178,24 @@
         <h3>Convex/browser boundary (V26-965)</h3>
         <p>
           Before: an allowlist of eight patterns. After: exactly one entry, for
-          generated Convex modules. Each of the other seven was resolved by
+          generated Convex modules. Six of the other seven were resolved by
           moving the implementation into <code>shared/</code> and leaving a
-          thin re-export shim at the old Convex path — so no server import site
-          changed at all.
+          re-export at the old Convex path, so no server import site changed.
+          (<code>convex/utils.ts</code> is a partial extraction rather than a
+          pure shim — it still owns <code>toSlug</code>,
+          <code>getAddressString</code>, and <code>getProductName</code>.) The
+          seventh, <code>convex/emails/</code>, was resolved differently and
+          left no shim: the two receipt templates had no server caller at all,
+          so they moved to <code>src/lib/pos/receipts/</code> and their two
+          browser import sites were rewritten. That move is what required
+          regenerating <code>convex/_generated/api.d.ts</code>.
         </p>
         <h3>Storefront contracts (V26-964)</h3>
         <p>
           Before: the storefront imported <code>@athena/webapp</code>. After: a
           new <code>@athena/contracts</code> package, with exactly one
           type-only seam to the generated Convex model. The admin app's
-          <code>types.ts</code> shrank from 358 lines to a 16-line facade, so
+          <code>types.ts</code> shrank from 350 lines to a 16-line facade, so
           roughly 200 existing call sites were untouched.
         </p>
         <h3>Terminal Health (V26-967)</h3>
@@ -276,7 +283,8 @@
           <li>
             <strong>V26-964 and V26-965 change no runtime behavior.</strong> The
             evidence is in the tree: re-export shims at every old import path,
-            the <code>types.ts</code> facade, byte-identical file renames, and
+            the <code>types.ts</code> facade, file renames whose contents are
+            unchanged, and
             characterization tests written <em>before</em> each move.
           </li>
           <li>
@@ -307,10 +315,11 @@
       </section>
 
       <section data-report-section="failure-boundaries">
-        <h2>The two defects review caught</h2>
+        <h2>The three defects review caught</h2>
         <p>
-          Both were introduced by this branch's own work and found by
-          independent reviewers reading the code, not by a failing test.
+          All three were introduced by this branch's own work and found by
+          independent reviewers reading the code, not by a failing test. The
+          third was introduced by the fix for the first.
         </p>
         <h3>A migration that could claim it was finished when it was not</h3>
         <p>
@@ -410,7 +419,8 @@
         </p>
         <p>
           <strong>Known operational edge:</strong> the archive scan limits are
-          500 SKUs and 500 open review rows. Beyond either, the archive fails
+          500 SKUs and 500 open review rows <em>per status lane</em>
+          (<code>open</code> and <code>in_progress</code>, so up to 1000 rows). Beyond either, the archive fails
           closed and the operator is told to try again shortly — which will not
           resolve on its own at that scale. Fail-closed is the right default;
           the copy is optimistic about transience.
@@ -544,7 +554,7 @@
             <p data-quiz-prompt>How did the boundary refactor avoid changing any server import site?</p>
             <ol data-quiz-options>
               <li>It updated every server import in the same commit.</li>
-              <li data-quiz-correct>Implementations moved into <code>shared/</code> while the old Convex paths were kept as thin re-export shims.</li>
+              <li data-quiz-correct>Implementations moved into <code>shared/</code> while the old Convex paths were kept as re-exports — except the email templates, which had no server caller and so needed no shim.</li>
               <li>It added a bundler alias mapping old paths to new ones.</li>
               <li>Server code never imported those modules to begin with.</li>
             </ol>
@@ -645,8 +655,8 @@
           <dd>
             Independent of the implementers, each given the delivery contract so
             scope was judged against the actual tickets. They cleared the
-            archive slice and both boundary refactors, and produced the two
-            defects fixed here. One verified the moved modules byte-for-byte
+            archive slice and both boundary refactors, and produced the
+            three defects fixed here. One verified the moved modules byte-for-byte
             against their originals; another traced every write path to
             <code>availability</code> rather than trusting the two named in the
             ticket.
@@ -655,7 +665,7 @@
           <dd>
             Produced the changed-file map, the before/after per boundary, the
             risk list, and the test inventory used throughout this report, and
-            independently confirmed both defect descriptions against the code.
+            independently confirmed the defect descriptions against the code.
           </dd>
         </dl>
         <p>

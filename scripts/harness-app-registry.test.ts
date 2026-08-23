@@ -1397,11 +1397,14 @@ describe("HARNESS_PACKAGE_REGISTRY", () => {
     ).toBeGreaterThan(0);
   });
 
-  it("covers every package directory exactly once", () => {
+  it("registers each package directory at most once", () => {
     const packageDirs = HARNESS_PACKAGE_REGISTRY.map(
       (entry) => entry.packageDir,
     );
 
+    // Uniqueness only -- that every directory under packages/ is registered at
+    // all is enforced by collectHarnessOnboardingErrors in harness-check.ts,
+    // not here, because this registry cannot see the filesystem.
     expect(new Set(packageDirs).size).toBe(packageDirs.length);
   });
 
