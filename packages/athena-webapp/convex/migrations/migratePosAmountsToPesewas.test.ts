@@ -574,3 +574,371 @@ describe("completion marker coverage guards", () => {
     );
   });
 });
+
+describe("advisory signal truthfulness (remaining + cutoff)", () => {
+  const CUTOFF = 1_000_000;
+
+  const eligibleTransactions = (count: number) =>
+    Array.from({ length: count }, (_, index) => ({
+      _id: `txn-${index}`,
+      _creationTime: CUTOFF - 1,
+      subtotal: 10,
+      tax: 0,
+      total: 10,
+      totalPaid: 10,
+    }));
+
+  /** The truth the record is meant to describe: rows still needing work. */
+  async function actualPending(
+    harness: ReturnType<typeof createCtx>,
+    table: "posTransaction" | "posSession" = "posTransaction",
+    cutoffTimestamp = CUTOFF,
+  ) {
+    const verified = await verifyPosAmountsToPesewasWithCtx(harness.ctx, {
+      cutoffTimestamp,
+      limit: 100,
+      table,
+    });
+    return verified.pendingCount;
+  }
+
+  const storedRun = (
+    harness: ReturnType<typeof createCtx>,
+    table = "posTransaction",
+  ) =>
+    harness.tables!.get("posAmountMigrationRun")!.find(
+      (row) => row.table === table,
+    )!;
+
+  const statusFor = async (
+    harness: ReturnType<typeof createCtx>,
+    table = "posTransaction",
+  ) =>
+    (await posAmountMigrationStatusWithCtx(harness.ctx)).find(
+      (entry) => entry.table === table,
+    )!;
+
+  it("sequence 1: an applying batch with no prior measurement reports unmeasured, not zero", async () => {
+    const harness = createCtx({
+      posTransaction: eligibleTransactions(6),
+      posAmountMigrationRun: [],
+    });
+
+    await migratePosAmountTableWithCtx(harness.ctx, {
+      cutoffTimestamp: CUTOFF,
+      dryRun: false,
+      limit: 2,
+      table: "posTransaction",
+    } as never);
+
+    expect(await actualPending(harness)).toBe(4);
+    expect(storedRun(harness)).toEqual(
+      expect.objectContaining({ complete: false, migrated: 2 }),
+    );
+    // Was `0` -- a positive claim of "no work left" over four pending rows.
+    expect(storedRun(harness).remaining).toBeUndefined();
+    expect(storedRun(harness).remainingMeasuredAt).toBeUndefined();
+    expect(await statusFor(harness)).toEqual(
+      expect.objectContaining({
+        complete: false,
+        cutoffTimestamp: CUTOFF,
+        migrated: 2,
+        remaining: null,
+        remainingMeasuredAt: null,
+      }),
+    );
+  });
+
+  it("sequence 2: an apply chain draining from an explicit cursor invalidates the stale measurement", async () => {
+    const harness = createCtx({
+      posTransaction: eligibleTransactions(4),
+      posAmountMigrationRun: [],
+    });
+
+    // Whole-table dry run measures four.
+    await migratePosAmountTableWithCtx(harness.ctx, {
+      cutoffTimestamp: CUTOFF,
+      limit: 100,
+      table: "posTransaction",
+    } as never);
+    expect(storedRun(harness).remaining).toBe(4);
+
+    // Apply resumed from an explicit cursor: converts everything it sees, but
+    // cannot prove coverage, so the completion gate stays closed.
+    const { last } = await runChain(harness, {
+      autoContinue: true,
+      cursor: "0",
+      cutoffTimestamp: CUTOFF,
+      dryRun: false,
+      limit: 100,
+      table: "posTransaction",
+    });
+    expect(last.complete).toBe(false);
+
+    expect(await actualPending(harness)).toBe(0);
+    expect(storedRun(harness)).toEqual(
+      expect.objectContaining({ complete: false, migrated: 4 }),
+    );
+    // Was `4`, over a table with nothing pending. The drain falsified that
+    // measurement, and the chain cannot substitute an unproven zero.
+    expect(storedRun(harness).remaining).toBeUndefined();
+    expect((await statusFor(harness)).remaining).toBeNull();
+  });
+
+  it("sequence 3: a cursor-scoped dry run records no whole-table measurement", async () => {
+    const harness = createCtx({
+      posTransaction: eligibleTransactions(6),
+      posAmountMigrationRun: [],
+    });
+
+    await migratePosAmountTableWithCtx(harness.ctx, {
+      cursor: "4",
+      cutoffTimestamp: CUTOFF,
+      limit: 100,
+      table: "posTransaction",
+    } as never);
+
+    expect(await actualPending(harness)).toBe(6);
+    expect(storedRun(harness)).toEqual(
+      expect.objectContaining({ complete: false, migrated: 0 }),
+    );
+    // Was `2` -- that page's pending count reported as the table's.
+    expect(storedRun(harness).remaining).toBeUndefined();
+  });
+
+  it("sequence 3b: a partial-page dry run cannot overwrite a whole-table measurement", async () => {
+    const harness = createCtx({
+      posTransaction: eligibleTransactions(6),
+      posAmountMigrationRun: [],
+    });
+
+    await migratePosAmountTableWithCtx(harness.ctx, {
+      cutoffTimestamp: CUTOFF,
+      limit: 100,
+      table: "posTransaction",
+    } as never);
+    expect(storedRun(harness).remaining).toBe(6);
+
+    await migratePosAmountTableWithCtx(harness.ctx, {
+      cursor: "4",
+      cutoffTimestamp: CUTOFF,
+      limit: 100,
+      table: "posTransaction",
+    } as never);
+
+    expect(storedRun(harness).remaining).toBe(6);
+  });
+
+  it("sequence 4: a wrong-cutoff apply chain cannot present as a clean board", async () => {
+    const harness = createCtx({
+      posTransaction: eligibleTransactions(6),
+      posAmountMigrationRun: [],
+    });
+
+    await migratePosAmountTableWithCtx(harness.ctx, {
+      cutoffTimestamp: CUTOFF,
+      limit: 100,
+      table: "posTransaction",
+    } as never);
+    expect(storedRun(harness).remaining).toBe(6);
+
+    // Operator supplies cutoff 0: nothing is eligible, so the chain walks the
+    // whole table, converts nothing, and satisfies the completion gate.
+    const { last } = await runChain(harness, {
+      autoContinue: true,
+      cutoffTimestamp: 0,
+      dryRun: false,
+      limit: 3,
+      table: "posTransaction",
+    });
+    // The gate keeps its existing semantics exactly.
+    expect(last.complete).toBe(true);
+
+    expect(await actualPending(harness)).toBe(6);
+    // Was `0`. A run at a different cutoff answered a different question, so
+    // the earlier measurement is invalidated rather than replaced by a zero
+    // this run did not earn.
+    expect(storedRun(harness).remaining).toBeUndefined();
+
+    const wrongCutoff = await statusFor(harness);
+    expect(wrongCutoff).toEqual(
+      expect.objectContaining({
+        complete: true,
+        cutoffTimestamp: 0,
+        remaining: null,
+      }),
+    );
+    // The conflict is sticky: later batches of the same chain inherit the new
+    // cutoff and must not look consistent again.
+    expect(wrongCutoff.cutoffChangedAt).toBeTypeOf("number");
+
+    // Test scenario 5: the status query alone separates this from a genuine
+    // completion, which carries the real cutoff and an earned zero.
+    const genuine = createCtx({
+      posTransaction: eligibleTransactions(6),
+      posAmountMigrationRun: [],
+    });
+    await runChain(genuine, {
+      autoContinue: true,
+      cutoffTimestamp: CUTOFF,
+      dryRun: false,
+      limit: 3,
+      table: "posTransaction",
+    });
+    expect(await statusFor(genuine)).toEqual(
+      expect.objectContaining({
+        complete: true,
+        cutoffTimestamp: CUTOFF,
+        remaining: 0,
+      }),
+    );
+    expect((await statusFor(genuine)).remainingMeasuredAt).toBeTypeOf("number");
+    expect((await statusFor(genuine)).cutoffChangedAt).toBeNull();
+  });
+
+  it("re-measuring at the corrected cutoff clears the conflict and reports again", async () => {
+    const harness = createCtx({
+      posTransaction: eligibleTransactions(6),
+      posAmountMigrationRun: [],
+    });
+
+    await migratePosAmountTableWithCtx(harness.ctx, {
+      cutoffTimestamp: CUTOFF,
+      limit: 100,
+      table: "posTransaction",
+    } as never);
+    await runChain(harness, {
+      autoContinue: true,
+      cutoffTimestamp: 0,
+      dryRun: false,
+      limit: 3,
+      table: "posTransaction",
+    });
+    expect(storedRun(harness).cutoffChangedAt).toBeTypeOf("number");
+
+    // A whole-table dry run at the corrected cutoff is the evidence that
+    // settles which cutoff the board describes.
+    await migratePosAmountTableWithCtx(harness.ctx, {
+      cutoffTimestamp: CUTOFF,
+      limit: 100,
+      table: "posTransaction",
+    } as never);
+
+    expect(await statusFor(harness)).toEqual(
+      expect.objectContaining({
+        cutoffChangedAt: null,
+        cutoffTimestamp: CUTOFF,
+        // The six unconverted rows the wrong-cutoff run reported as drained.
+        remaining: 6,
+      }),
+    );
+  });
+
+  it("converges on a truthful record whichever way apply and dry are ordered", async () => {
+    // dry → apply
+    const dryFirst = createCtx({
+      posTransaction: eligibleTransactions(6),
+      posAmountMigrationRun: [],
+    });
+    await migratePosAmountTableWithCtx(dryFirst.ctx, {
+      cutoffTimestamp: CUTOFF,
+      limit: 100,
+      table: "posTransaction",
+    } as never);
+    await runChain(dryFirst, {
+      autoContinue: true,
+      cutoffTimestamp: CUTOFF,
+      dryRun: false,
+      limit: 2,
+      table: "posTransaction",
+    });
+    expect(await actualPending(dryFirst)).toBe(0);
+    expect(storedRun(dryFirst)).toEqual(
+      expect.objectContaining({ complete: true, migrated: 6, remaining: 0 }),
+    );
+
+    // apply → dry
+    const applyFirst = createCtx({
+      posTransaction: eligibleTransactions(6),
+      posAmountMigrationRun: [],
+    });
+    await runChain(applyFirst, {
+      autoContinue: true,
+      cutoffTimestamp: CUTOFF,
+      dryRun: false,
+      limit: 2,
+      table: "posTransaction",
+    });
+    await migratePosAmountTableWithCtx(applyFirst.ctx, {
+      cutoffTimestamp: CUTOFF,
+      limit: 100,
+      table: "posTransaction",
+    } as never);
+    expect(await actualPending(applyFirst)).toBe(0);
+    expect(storedRun(applyFirst)).toEqual(
+      expect.objectContaining({ complete: true, migrated: 6, remaining: 0 }),
+    );
+  });
+
+  it("keeps separate, truthful records for interleaved chains on two tables", async () => {
+    const harness = createCtx({
+      posTransaction: eligibleTransactions(6),
+      posSession: [
+        { _id: "s1", _creationTime: CUTOFF - 1, total: 5 },
+        { _id: "s2", _creationTime: CUTOFF - 1, total: 5 },
+      ],
+      posAmountMigrationRun: [],
+    });
+
+    // Measure both tables, then drain only posSession.
+    await migratePosAmountTableWithCtx(harness.ctx, {
+      cutoffTimestamp: CUTOFF,
+      limit: 100,
+      table: "posTransaction",
+    } as never);
+    await migratePosAmountTableWithCtx(harness.ctx, {
+      cutoffTimestamp: CUTOFF,
+      limit: 100,
+      table: "posSession",
+    } as never);
+    await migratePosAmountTableWithCtx(harness.ctx, {
+      cutoffTimestamp: CUTOFF,
+      dryRun: false,
+      limit: 100,
+      table: "posSession",
+    } as never);
+
+    expect(await actualPending(harness, "posTransaction")).toBe(6);
+    expect(await actualPending(harness, "posSession")).toBe(0);
+    expect(await statusFor(harness, "posTransaction")).toEqual(
+      expect.objectContaining({ complete: false, migrated: 0, remaining: 6 }),
+    );
+    expect(await statusFor(harness, "posSession")).toEqual(
+      expect.objectContaining({ complete: true, migrated: 2, remaining: 0 }),
+    );
+  });
+
+  it("accumulates skipped across applying batches, like migrated", async () => {
+    const harness = createCtx({
+      posTransaction: [
+        ...eligibleTransactions(2),
+        { _id: "post-1", _creationTime: CUTOFF + 1, total: 500 },
+        { _id: "post-2", _creationTime: CUTOFF + 1, total: 500 },
+      ],
+      posAmountMigrationRun: [],
+    });
+
+    await runChain(harness, {
+      autoContinue: true,
+      cutoffTimestamp: CUTOFF,
+      dryRun: false,
+      limit: 2,
+      table: "posTransaction",
+    });
+
+    expect(storedRun(harness)).toEqual(
+      expect.objectContaining({ migrated: 2, skipped: 2, complete: true }),
+    );
+  });
+});
+
