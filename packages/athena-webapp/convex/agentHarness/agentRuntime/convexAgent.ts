@@ -18,10 +18,11 @@
  *   projection / cleanup events; native usage objects are normalized in
  *   `normalizeNativeUsage` and never escape.
  *
- * The model narrative is buffered server-side until `completeRun`, but
- * exposed in-process as ordered `narrative_delta` events that a host may
- * surface as provisional text; the committed artifact remains the only
- * released answer, and no narrative is persisted by the component.
+ * The model narrative is not buffered anywhere. It is consumed from the
+ * provider stream in process and emitted as ordered `narrative_delta` events
+ * as it arrives, so a host may surface it as explicitly provisional text; the
+ * committed artifact remains the only released answer, and the component
+ * persists no narrative and no stream deltas.
  *
  * What the component persists: the operator prompt text
  * with hashes and opaque bindings, one per-turn assistant record that carries

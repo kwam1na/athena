@@ -414,6 +414,24 @@ starter intents, source destinations, thread-key policy).
 - `egressPolicy.providers` must list a provider that is actually configured. A
   profile whose only allowance is the contract fake is `no_compatible_provider`
   in production.
+- `narrativePolicy` is **required and has no default**: `"provisional_streaming"`
+  or `"buffered"`. It is validated like every other enum field and folded into
+  the compatibility digest, so choosing it — or changing it later — moves the
+  digest and needs the fence (§10.1). `provisional_streaming` means the model's
+  running narrative reaches the operator live, as explicitly provisional text,
+  through the reusable host; `buffered` means it does not, and the host shows
+  milestones only. Both shipped profiles declare `provisional_streaming`.
+  Nothing else about the profile changes: the narration is not the answer, and
+  `completeRun`'s committed artifact is still the only release.
+
+  What the policy actually governs is one server-side check. The adapter
+  streams `narrative_delta { draftOrdinal, text }` regardless (the narration
+  directive lives in the adapter's default instructions, not in the profile),
+  and the turn host's single-flight flush reads `narrativePolicy` from the
+  digest-pinned registry profile and refuses — deleting whatever is at rest —
+  when it is `buffered`. On a `buffered` profile the narration simply ends up
+  in `turn_completed.narrative` as it always did. Rolling a surface back is
+  therefore a policy flip plus a fence, not a redeploy of the host.
 - Every starter intent must be answerable entirely through published resources.
 - `resolveSourceDestination` must be total over every citation kind any selected
   resource can mint, and must resolve from the reference **kind**, never from a
@@ -471,6 +489,28 @@ The copy for denials, unavailable states, failures, and milestones is host-owned
 too (`describeAthenaDenial`, `describeAthenaUnavailable`,
 `describeAthenaFailure`, `describeAthenaMilestone`) so two surfaces cannot
 describe the same backend state differently.
+
+The provisional draft's copy is host-owned on the same terms, and a profile
+supplies none of it. `describeAthenaProvisionalNotice` is the persistent line
+saying the text is unverified, must not be acted on, and will be replaced;
+`describeProvisionalWithdrawal(reason)` is the `role="alert"` notice shown when
+a draft is pulled. Both live in
+`src/components/agent/AthenaAgentPresentationAdapter.ts`. Two rules make that
+copy safe to keep closed:
+
+- Withdrawal copy is keyed on the preview's **structured** reason, never on
+  `error.diagnostic` or `binding.abandonReason` (neither is projected to the
+  browser), and it states only what happened to the draft — never whether an
+  answer is still coming.
+- `ATHENA_AGENT_PROVISIONAL_WITHDRAWAL_REASONS` is the browser-side copy of the
+  server's closed set (`AGENT_PROVISIONAL_WITHDRAWAL_REASONS` in
+  `convex/agentHarness/turns.ts`). The host may not import a Convex server
+  module, so `src/tests/agent/provisionalWithdrawalReasons.test.ts` sits outside
+  the host directory and holds both lists at once: adding, renaming, or dropping
+  a server reason fails there rather than falling through to the default arm in
+  front of an operator. `describeProvisionalWithdrawal` keeps that default arm
+  anyway, because authority refusals from `reauthorizeTurnAccess`
+  (`membership_revoked`, `profile_disabled`, …) pass through the preview as-is.
 
 **Model-authored text is rendered only by `AthenaAgentSafeText`**
 (`src/components/agent/AthenaAgentSafeText.tsx`). It parses a closed block and
@@ -639,16 +679,42 @@ Start from the run.
   (operator-facing, reauthorized, audited) or the seam
   `readCitationEvidence`. Every read writes an `agentEvidenceAccessAudit` row
   recording who read what and for what purpose — never the payload.
-- **Exposure**: `describeAttemptExposure` answers whether an attempt reached the
-  provider, whether the operator released or viewed it, and whether authority was
-  revoked after provider exposure.
+- **Exposure**: two internal queries, keyed differently on purpose.
+  `describeAttemptExposure` answers whether a given attempt reached the
+  provider, whether the operator released or viewed it, and whether authority
+  was revoked after provider exposure. `describeTurnExposure`
+  (`internal.agentHarness.turns.describeTurnExposure`, by `bindingId`) answers
+  the same questions for the **whole turn**, and is the only one reachable for a
+  turn with zero attempts — which is exactly the shape a turn has when the model
+  narrated and the turn was then canceled. It adds two facts:
+  `provisionalExposurePresumed` (a draft became readable — the binding's
+  `provisionalReleasedAt` marker, written once by the first flush) and
+  `revokedAfterProvisionalExposure` (that happened *and* the run was canceled or
+  failed, or release was suppressed). Both markers are irrevocable.
+  Treat `provisionalExposurePresumed` as the investigative fact: the confirmed
+  marker, `provisionalViewedAt`, is a best-effort client acknowledgement and is
+  strictly weaker than `operatorViewedAt` — it under-reports, never over-reports.
+- **What a capability may assume about the provisional draft**: nothing, in the
+  sense that matters. The streamed narrative is the model thinking out loud and
+  it is a different string from the `narrative` the model later hands
+  `completeRun`. It is never citation-bearing, is never a citation source, never
+  enters projected history or a prompt, never enters Athena's durable record,
+  and never survives a terminal cause. So it cannot explain an answer and it
+  cannot be evidence: reconstruct what a turn did from attempts, capability
+  calls, and citations, not from what the operator saw scroll past. The one
+  thing it *does* change for an investigation is exposure — an operator may have
+  read claims that never passed the citation gate, which is what
+  `provisionalExposurePresumed` records.
 - **Evidence states**: `reconstructible` (a claim slice, replay payload, or
   immutable revision still exists), `provenance_only` (identity and hashes only),
   `evidence_expired` (retention window closed), `evidence_deleted_by_lifecycle`
   (store or organization removal). These are different answers on purpose;
   "missing" is not one of them.
 - **Retention**: prompts, scratch, provisional program and call bodies are
-  30-day `short_lived`. Completion promotes only the cited attempts' exact
+  30-day `short_lived`. The provisional narrative row is `short_lived` too but
+  never reaches 30 days: it is deleted on every terminal cause, and a row a dead
+  host left behind stops being readable after 5 minutes and is deleted by the
+  repair sweep, not the retention sweep. Completion promotes only the cited attempts' exact
   validated program, structured result, and minimal claim slices to the 365-day
   `standard` class. Store and organization removal deletes agent content —
   including the capability-call ledger, whose rows carry request arguments and

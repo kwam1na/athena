@@ -8,7 +8,7 @@ For what the harness is and where it sits, read [architecture.md](./architecture
 
 | Piece | Path | Boundary |
 | --- | --- | --- |
-| Component mount | root `convex/convex.config.ts` + `convex/agentHarness/agentRuntime/convexAgentRegistration.ts` (constants only) | The root config imports `@convex-dev/agent/convex.config` directly and calls `app.use(agent, { name: CONVEX_AGENT_COMPONENT_NAME })` itself — the one runtime-native import allowed outside `agentRuntime/`. Mounting through a local module makes the Convex backend reject the push (section 6). The shim carries only the mount name; `importBoundary.test.ts` enforces both rules. |
+| Component mount | root `convex/convex.config.ts` + `convex/agentHarness/agentRuntime/convexAgentRegistration.ts` (constants only) | The root config imports `@convex-dev/agent/convex.config` directly and calls `app.use(agent, { name: CONVEX_AGENT_COMPONENT_NAME })` itself — the one runtime-native import allowed outside `agentRuntime/`. Mounting through a local module makes the Convex backend reject the push (section 7). The shim carries only the mount name; `importBoundary.test.ts` enforces both rules. |
 | Runtime adapter | `convex/agentHarness/agentRuntime/convexAgent.ts` (`"use node"`) | Implements `shared/agentHarness/agentRuntime.ts` (`AgentRuntimeAdapter`) over Convex Agent. Only `agentRuntime/` may import `@convex-dev/agent`, `ai`, `@ai-sdk/*` (enforced by `convex/agentHarness/importBoundary.test.ts`). |
 | Opaque refs and lookups | `convex/agentHarness/agentRuntime/convexAgentRefs.ts` (V8-safe) | Token minting/parsing and component lookups; type-only runtime imports so mutations can use it. |
 | Retention cleanup | `convex/agentHarness/agentRuntime/convexAgentCleanup.ts` (V8-safe) | `cleanupConvexAgentRuntime` and `createConvexAgentCleanupHook` for the retention registry's `registerAgentRuntimeCleanupHook`; the adapter's `cleanup` delegates here. |
@@ -94,12 +94,51 @@ What the validator guarantees: syntax, import/export bans, host/network/fs/eval/
 
 - `threads`: one per Athena thread key, found through the correlation `userId` `athena:thread:<thread token>` (correlation only, never authorization), `title` = profile id, `summary` = `<contextBindingRef>|<operatorRef>`.
 - `messages`: the operator prompt text (`kind: "input"`, with `promptHash`, `projectionDigest`, `egressClass`, opaque refs), one assistant record per attempt (`kind: "turn"`, empty content, status `pending -> success|failed`), and one assistant message per committed artifact projection (`kind: "projection"`, the artifact narrative plus citation keys/labels). Nothing else: `saveMessages: "none"` keeps tool calls, tool results, model drafts, and failure messages out of the component. The component does not persist a caller-supplied message `id`, so Athena's token lives in `providerMetadata.athena.token`.
-- `streams`: empty. The component persists no stream deltas; the model narrative is buffered server-side until `completeRun` and exposed in-process as ordered `narrative_delta` runtime events that a host may surface as provisional text, and the committed artifact remains the only released answer.
+- `streams`: empty, and it stays empty. The component persists no stream deltas: the adapter passes `saveStreamDeltas: false` and consumes the provider stream in process, so the model's narrative leaves the adapter only as ordered `narrative_delta` runtime events (section 5). Athena holds no buffer of it either — the turn host writes the coalesced draft into one short-lived `agentProvisionalNarrative` row that is deleted on every terminal cause. The committed artifact `completeRun` mints remains the only released answer.
 - Provider requests (the mock model's recorded calls): system instructions, the Athena-projected history, and the prompt — a message seeded directly into the component thread never reaches the provider. The adapter installs a `contextHandler` that returns only `inputMessages` and `inputPrompt`, with `recentMessages: 0`, so raw component replay is structurally impossible.
 
 Opaque refs: `runtime_thread:th_<40 hex>`, and `runtime_input|runtime_turn|runtime_projection:<in|tn|pj>_<thread token>.<24 hex>` (SHA-256 digests; thread-scoped so a fresh adapter can resolve any ref from the ref alone). They never match a raw document id and component ids never leave `agentRuntime/`.
 
-## 5. Safety ceilings
+## 5. The provisional narrative stream
+
+The adapter calls `agent.streamText(…, { saveStreamDeltas: false })` and consumes `result.fullStream` inside the same action. The text never becomes component state and it is never held until completion; it is normalized into runtime events as it arrives.
+
+- **Part allowlist (default deny).** Only `text-delta` parts feed the narrative. Reasoning, tool input, tool calls and results, sources, files, and raw provider frames are dropped and can never reach a host. Control parts drive lifecycle only: a mid-stream `error` part fails the turn with the existing provider-failure code (a provider error arrives as a part here, not as a throw), `abort` cancels it, and `finish-step` advances `draftOrdinal`.
+- **The event.** `narrative_delta { draftOrdinal, text }`, under protocol `athena.agent-runtime.v2`. It carries no stream identifier and no per-delta index: the envelope's `turnRef` and `sequence` already identify and order every event, and `draftOrdinal` identifies the draft. Malformed fields fail as `event_invalid`; an unknown kind still fails as `versioned_extension_required`.
+- **Coalescing rule.** One event per provider token would swamp the host, so a slice is released at a sentence boundary, at the end of a provider text block (`text-end`), or once the buffer reaches `NARRATIVE_COALESCE_MIN_CHARS` (24). There are no timers, so the cadence is the same under `convex-test` as it is against a live provider. Two flushes are **normative, not tuning knobs**: `dispatch()` flushes at its top, before it emits `tool_call_requested`, so a preamble reaches the operator before the tool call it precedes; and the stream's end flushes whatever is left. `finish-step` flushes before it advances the draft.
+- **Narration directive.** `DEFAULT_INSTRUCTIONS` asks the model to narrate in one or two sentences before its first tool call and between tool rounds, and says plainly that the narration is provisional and that the answer is the one submitted through `athena.completeRun`. Without the ask, providers routinely emit no assistant text on a step that ends in a tool call and the turn shows nothing until it completes.
+
+The turn host coalesces deltas in memory and writes them through one single-flight `internal.agentHarness.turns.flushProvisionalNarrative` — internal and host-only, never admitted as public ingress. That flush is the enforcement point for provisional exposure; the row, the preview query, and deletion on every terminal cause are described in [architecture.md](./architecture.md).
+
+### Reading a driven turn
+
+`driveTurn` is a scheduled action whose return value the scheduler discards, so one log line per driven turn is the only read path for what the turn did:
+
+```bash
+bunx convex logs --history 200
+```
+
+```
+[agentHarness:driveTurn] {"turnId":…,"runId":…,"outcome":…,"code":…,"events":"turn_started,narrative_delta×4,tool_call_requested,…","firstDeltaMs":812,"firstProgressMs":…,"completionMs":9214,"elapsedMs":9530}
+```
+
+`events` is the turn's event kinds with consecutive repeats collapsed (`kind×n`), `firstDeltaMs` is time to the first provisional text, `completionMs` is time to `turn_completed`, and `elapsedMs` covers the whole driven turn. Opaque refs and event kinds only: no prompt text and no narrative text. This is the first-turn monitoring hook for time-to-first-provisional-text and completion latency.
+
+The repair sweep logs only when its expiry phase deleted something:
+
+```
+[agentHarness:repairSweep] {"recoveredAttempts":…,"failedTurns":…,"canceledFencedRuns":…,"expiredProvisionalNarratives":1,"hasMore":true}
+```
+
+A nonzero `expiredProvisionalNarratives` means a draft outlived its exposure bound (`AGENT_PROVISIONAL_NARRATIVE_TTL_MS`, 5 minutes) without any terminal cause reaching it — the dead-host signal. The sweep runs every 5 minutes in production and every 60 minutes elsewhere, so such a row is unreadable after 5 minutes but stays at rest until the next sweep.
+
+### Fence and rollback for `narrativePolicy`
+
+`narrativePolicy` (`provisional_streaming | buffered`) is a required per-profile field folded into the registry's compatibility digest, and the protocol version is part of the same digest — which is why this contract moved it to `fnv1a64:501827e670579cf1`. Changing either ships through the standing procedure in [capability-authoring.md](./capability-authoring.md) §10.1/§10.2: fence the deployment about to be replaced (`bun scripts/agent-harness-fence.ts --reason "<deploy id>"`, one transaction that disables the named profiles and advances the epoch) → deploy → smoke while the switch is off → `bun scripts/agent-harness-switch.ts --profile <id> --enable --reason "<id>"`.
+
+Rollback has two rungs and neither needs a code deploy to take effect for new turns: set the profiles' policy to `buffered` and fence again — the flush then refuses server-side and deletes whatever is at rest, and a turn whose text was already on screen withdraws with the `policy_disabled` reason rather than vanishing silently — or use the profile kill switch, which denies new turns and cancels active ones.
+
+## 6. Safety ceilings
 
 `AGENT_PROGRAM_RUNTIME_CEILINGS` in `programRuntime/types.ts` (frozen; the executor consumes the object and may lower values per profile, never raise the stack ceiling):
 
@@ -121,7 +160,7 @@ Opaque refs: `runtime_thread:th_<40 hex>`, and `runtime_input|runtime_turn|runti
 
 These are initial safety limits, not release benchmarks; tune from observed use.
 
-## 6. Deployment findings (scenario 1)
+## 7. Deployment findings (scenario 1)
 
 - `convex.json` with `node.nodeVersion: "22"` is accepted; the deployed action reports `process.version` `v22.23.1`.
 - **Component mounting must be direct.** Pushing the Agent component fails server-side with `POST /api/deploy2/start_push 500 Internal Server Error` whenever the mount happens through a local module (`registerConvexAgent(app)` in a shim, even a constants-only-looking one that calls `app.use`). The orchestrator's 14-push bisect on the same dev deployment ruled out Node 22, app volume, the monorepo `node_modules` layout, the `{ name }` option, agent 0.6.4/0.7.0/0.7.1, and CLI 1.43/1.45; `import agent from "@convex-dev/agent/convex.config"` + `app.use(agent, { name: "agent" })` directly in the root config pushes ("Remounted component agent. Convex functions ready!"). Same class as get-convex/convex-backend#467 (facade-style component imports). Plan decision 8 ("root `convex.config.ts` imports only the local shim") is therefore amended: the root config owns the mount; the shim is constants only; no other file under `convex/` may import a `convex.config` or call `defineApp` (enforced).
@@ -141,7 +180,7 @@ These are initial safety limits, not release benchmarks; tune from observed use.
 
 - `_generated/api.d.ts` now carries `components.agent`; no casts remain.
 
-## 7. Construction guide for the executor and the turn host
+## 8. Construction guide for the executor and the turn host
 
 ```ts
 import type { AgentComponent } from "@convex-dev/agent";           // only inside agentRuntime/ or adapter tests

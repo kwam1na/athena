@@ -898,7 +898,8 @@ describe("profile contract", () => {
       expect(validateProfileDefinition({ ...profile, narrativePolicy: policy })).toMatchObject({ ok: true });
     }
 
-    const { narrativePolicy: _omitted, ...withoutPolicy } = profile;
+    const withoutPolicy: Record<string, unknown> = { ...profile };
+    delete withoutPolicy.narrativePolicy;
     const missing = validateProfileDefinition(withoutPolicy as unknown as typeof profile);
     expect(issueCodes(missing)).toContain("versioned_extension_required");
     expect(missing.ok === false && missing.issues.map((issue) => issue.path)).toContain("narrativePolicy");

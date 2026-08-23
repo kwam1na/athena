@@ -853,11 +853,12 @@ export type AgentRuntimeEvent = EventBase &
         readonly kind: "turn_completed";
         readonly outcome: AgentTurnOutcome;
         /**
-         * The model's final narrative for the turn, buffered server-side until
-         * `completeRun`. It is exposed in-process as ordered `narrative_delta`
-         * events that a host may surface as provisional text; the committed
-         * artifact remains the only released answer, and it is an independent
-         * string from anything streamed here.
+         * The model's final narrative for the turn. The running text is not
+         * held back for it: it is emitted as it arrives, as ordered
+         * `narrative_delta` events a host may surface as explicitly provisional
+         * text. This field is an independent string from anything streamed
+         * there, and neither is a release — the committed artifact remains the
+         * only released answer.
          */
         readonly narrative?: string;
         readonly error?: { readonly code: string; readonly message: string };
