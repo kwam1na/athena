@@ -13,12 +13,8 @@ export const OrderSummary = () => {
 
   const formatter = currencyFormatter(activeStore.currency);
 
-  const discountValue = getDiscountValue(order, true);
-
-  const discount =
-    order.discount && order.discount?.type === "percentage"
-      ? discountValue
-      : discountValue * 100;
+  // Pesewas, whatever the discount type. Converted once, below.
+  const discountValue = getDiscountValue(order);
 
   const amountPaid = getAmountPaidForOrder(order);
 
@@ -39,7 +35,7 @@ export const OrderSummary = () => {
   const discountText =
     order.discount?.type === "percentage"
       ? `${order.discount.value}%`
-      : `${formatter.format(discountValue)}`;
+      : `${formatter.format(toDisplayAmount(discountValue))}`;
 
   const discountSpan =
     order.discount?.span == "entire-order" ? "entire order" : "select items";
@@ -77,7 +73,7 @@ export const OrderSummary = () => {
             </div>
 
             <p className="text-sm">
-              {formatter.format(toDisplayAmount(discount))}
+              {formatter.format(toDisplayAmount(discountValue))}
             </p>
           </div>
 
