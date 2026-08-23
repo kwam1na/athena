@@ -573,6 +573,11 @@ export type AthenaAgentProvisionalTimelineCopy = {
  * The collapsed timeline behind a committed answer. It names what the drafts
  * are and, like the live container, says they are not the checked text.
  */
+/** A committed turn that kept no drafts (it narrated nothing, or predates the trail). */
+export function describeAthenaProvisionalTimelineEmpty(): string {
+  return "No drafts were kept for this turn.";
+}
+
 export function describeAthenaProvisionalTimeline(): AthenaAgentProvisionalTimelineCopy {
   return {
     summary: "How Athena got here",

@@ -11,6 +11,7 @@ import {
   describeAthenaProvisionalCue,
   describeAthenaProvisionalEntry,
   describeAthenaProvisionalTimeline,
+  describeAthenaProvisionalTimelineEmpty,
   describeAthenaProvisionalNotice,
   describeAthenaShortenedNotice,
   describeAthenaUnavailable,
@@ -366,5 +367,6 @@ describe("the provisional timeline copy", () => {
       summary: "How Athena got here",
       detail: "Athena's drafts along the way. Not verified — the answer above is the only checked text.",
     });
+    expect(describeAthenaProvisionalTimelineEmpty()).toBe("No drafts were kept for this turn.");
   });
 });

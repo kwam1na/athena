@@ -1858,6 +1858,18 @@ describe("an earlier turn's draft trail", () => {
     expect((window as unknown as { __athenaExecuted?: boolean }).__athenaExecuted).toBeUndefined();
   });
 
+  it("says so when a committed turn kept no drafts", async () => {
+    const user = userEvent.setup();
+    backend.trail = { kind: "trail", committedAt: 200, entries: [] };
+    render(<PanelHarness run={baseRun({ history: [answered] })} />);
+
+    const block = screen.getByTestId("athena-agent-history-trail");
+    await user.click(within(block).getByText("How Athena got here"));
+
+    await waitFor(() => expect(within(block).getByText("No drafts were kept for this turn.")).toBeTruthy());
+    expect(within(block).queryAllByTestId("athena-agent-provisional-entry")).toHaveLength(0);
+  });
+
   it("shows the closed-vocabulary line when the server refuses an earlier turn's trail", async () => {
     const user = userEvent.setup();
     backend.trail = { kind: "unavailable", reason: "membership_revoked" };

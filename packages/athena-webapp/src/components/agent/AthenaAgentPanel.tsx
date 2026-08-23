@@ -29,6 +29,7 @@ import {
   describeAthenaProvisionalEntry,
   describeAthenaProvisionalNotice,
   describeAthenaProvisionalTimeline,
+  describeAthenaProvisionalTimelineEmpty,
   type AthenaAgentContext,
   type AthenaAgentPresentation,
 } from "./AthenaAgentPresentationAdapter";
@@ -956,6 +957,9 @@ function HistoryNarrativeTrail({
           <p>{trail.headline}</p>
           {trail.detail ? <p>{trail.detail}</p> : null}
         </div>
+      ) : null}
+      {trail.state === "trail" && trail.entries.length === 0 ? (
+        <p className="text-xs text-muted-foreground">{describeAthenaProvisionalTimelineEmpty()}</p>
       ) : null}
       {trail.state === "trail" ? (
         <div className="space-y-layout-xs">
