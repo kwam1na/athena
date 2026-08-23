@@ -30,7 +30,7 @@ import { registerAgentRuntimeCleanupHook, resetAgentRuntimeCleanupHooksForTests,
 import { collapseEventKinds, createTurnHost, type AgentTurnHostRefs } from "./runtimeHost";
 import { TEST_ADMISSION } from "./delegatedAdmission.testPorts";
 import { TEST_TOOL_REFS, TEST_TURN_REFS, TEST_TURN_SEAMS, seedRecordedTurn } from "./turns.testSeams";
-import { turnKeyFor } from "./turns";
+import { createAgentTurnEntryPoints, turnKeyFor } from "./turns";
 
 const modules = Object.fromEntries(
   Object.entries(import.meta.glob("../**/*.ts")).map(([path, loader]) => [
@@ -76,17 +76,29 @@ return { open: shifts.kind === "result" ? shifts.envelope.data.length : -1 };`;
 const AUDIT_PROGRAM = `const entries = await athena.ops.auditTrail.list({});
 return { entries: entries.kind === "result" ? entries.envelope.data.length : -1 };`;
 
-async function hostFor(t: Harness, harness: AgentRuntimeContractHarness, options: { observe?: (entry: AgentToolLedgerEntry) => void; observeMutation?: (functionName: string) => void } = {}) {
+async function hostFor(
+  t: Harness,
+  harness: AgentRuntimeContractHarness,
+  options: {
+    observe?: (entry: AgentToolLedgerEntry) => void;
+    observeMutation?: (functionName: string) => void;
+    /** Hold a host mutation before it is issued, to pin the order two host rungs land in. */
+    delayMutation?: (functionName: string) => Promise<void> | void;
+  } = {},
+) {
   const base = executorCtx(t);
-  const ctx: AgentExecutorCtx = options.observeMutation
-    ? {
-        runQuery: base.runQuery,
-        runMutation: (reference, args) => {
-          options.observeMutation!(getFunctionName(reference as never));
-          return base.runMutation(reference, args);
-        },
-      }
-    : base;
+  const ctx: AgentExecutorCtx =
+    options.observeMutation || options.delayMutation
+      ? {
+          runQuery: base.runQuery,
+          runMutation: async (reference, args) => {
+            const functionName = getFunctionName(reference as never);
+            options.observeMutation?.(functionName);
+            await options.delayMutation?.(functionName);
+            return base.runMutation(reference, args);
+          },
+        }
+      : base;
   const executor = createProgramExecutor({
     runtime: await runtime(),
     seams: TEST_SEAM_REFS,
@@ -146,6 +158,26 @@ async function rows(t: Harness, seeded: { runId: Awaited<ReturnType<typeof seedR
 
 const provisionalRow = (t: Harness, bindingId: Awaited<ReturnType<typeof seedRecordedTurn>>["bindingId"]) =>
   t.run((ctx) => loadProvisionalNarrativeByBindingWithCtx(ctx, bindingId));
+
+/**
+ * The operator-facing preview, so a host test can assert what the pane would
+ * render mid-turn rather than only what sits in the row.
+ */
+const TURN_ENTRY_POINTS = createAgentTurnEntryPoints({
+  seams: TEST_TURN_SEAMS,
+  readCitationEvidence: (ctx, input) => TEST_EXECUTOR_SEAMS.readCitationEvidenceWithCtx(ctx, input),
+  scheduleDriveTurn: async () => undefined,
+  scheduleOutboxRepair: async () => undefined,
+  now: () => clock(),
+});
+
+const previewFor = (t: Harness, seeded: Awaited<ReturnType<typeof seedRecordedTurn>>) =>
+  t.run((ctx) =>
+    TURN_ENTRY_POINTS.previewTurnNarrative(
+      Object.assign(ctx, { operationAdmission: { actor: { kind: "normal_user" as const, athenaUserId: seeded.operator.userId } } }),
+      { storeId: seeded.operator.storeId, bindingId: seeded.bindingId },
+    ),
+  );
 
 /** Both spend windows the turn's reservation was taken against. */
 async function reservations(t: Harness, seeded: Awaited<ReturnType<typeof seedRecordedTurn>>) {
@@ -437,6 +469,61 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ create }) => {
     }
     const exposure = await t.run((ctx) => TEST_EXECUTOR_SEAMS.describeAttemptExposureWithCtx(ctx, after.attempts[0]._id));
     expect(exposure).toMatchObject({ providerExposed: true, operatorReleaseCommitted: false, operatorViewed: false, revokedAfterProviderExposure: true });
+  });
+
+  it("stores and serves a draft the model narrated before the runtime turn ref rung landed", async () => {
+    const t = backend();
+    const harness = create(t);
+    const seeded = await seedAdmittedTurn(t, "narrate-first");
+    const { captured, observe } = captureProgramResult();
+    harness.scriptTurn(turnKeyFor(seeded.bindingId), [
+      // Narration is the model's very first step: the host is still on the
+      // `startTurn` rung, and the runtime turn ref is not recorded until that
+      // rung resolves and its own round trip lands.
+      { kind: "narrative", deltas: ["Checking which shifts", " are open."] },
+      { kind: "tool_call", callId: "c1", toolId: "athena.executeProgram", args: { source: PROGRAM } },
+      { kind: "pause", gate: "narrated-first" },
+      { kind: "tool_call", callId: "c2", toolId: "athena.completeRun", args: () => ({ title: "Open shifts", narrative: "One shift is open.", citedAttemptRefs: [captured.attemptRef], citations: [{ ref: captured.citation, claim: "One shift is open." }] }) },
+      { kind: "complete", narrative: "MODEL-NARRATIVE-NEVER-STORED" },
+    ]);
+
+    // Both adapters drive the scripted model concurrently with the ref rung, so
+    // which of the two lands first is a race. Holding the rung until the draft
+    // has been offered pins the order a fast provider produces on its own —
+    // text first — and nothing in the flush ladder reads the ref, so the draft
+    // must still be stored: the drop-on-refusal rule must never fire here.
+    let draftOffered!: () => void;
+    const offered = new Promise<void>((resolve) => {
+      draftOffered = resolve;
+    });
+    const refWhenOffered: (string | undefined)[] = [];
+    const host = await hostFor(t, harness, {
+      observe,
+      delayMutation: async (name) => {
+        if (name.includes("flushProvisionalNarrative")) {
+          refWhenOffered.push((await t.run((ctx) => ctx.db.get("agentTurnBinding", seeded.bindingId)))?.runtimeTurnRef);
+          draftOffered();
+          return;
+        }
+        if (name.includes("recordRuntimeTurnRef")) await Promise.race([offered, new Promise((resolve) => setTimeout(resolve, 4_000))]);
+      },
+    });
+    const drive = host.driveTurn({ bindingId: seeded.bindingId });
+
+    // The operator's pane serves the first draft whole, from a row written
+    // while the binding still carried no runtime turn ref.
+    await waitFor(async () => (await previewFor(t, seeded)).state === "streaming");
+    expect(await previewFor(t, seeded)).toMatchObject({ state: "streaming", released: true, text: "Checking which shifts are open.", draftOrdinal: 0, truncated: false });
+    expect(refWhenOffered[0]).toBeUndefined();
+    harness.release("narrated-first");
+
+    const report = await drive;
+    expect(report, JSON.stringify(report)).toMatchObject({ outcome: "completed" });
+    // Nothing survives the commit, and the model's own prose never lands anywhere.
+    const after = await rows(t, seeded);
+    expect(after.provisional).toEqual([]);
+    expect(after.binding?.provisionalReleasedAt).toBeDefined();
+    expect(JSON.stringify(after)).not.toContain("MODEL-NARRATIVE-NEVER-STORED");
   });
 });
 
