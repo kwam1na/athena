@@ -1041,10 +1041,7 @@ export function AthenaAgentPanel({
             the last line running underneath the button. Context drift disables
             follow-up until the operator returns to the answer's context or
             confirms the current one. */}
-        <div className="flex items-center justify-between gap-layout-sm px-3 pb-2 pt-1">
-          <p className="text-xs text-muted-foreground">
-            Athena answers from sources you are allowed to read.
-          </p>
+        <div className="flex items-center justify-end px-3 pb-2 pt-1">
           <Button
             aria-label="Ask"
             className={cn(TOUCH_TARGET, "shrink-0 rounded-full")}
