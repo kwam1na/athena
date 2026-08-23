@@ -230,7 +230,7 @@ describe("driveTurn operator log line", () => {
   });
 });
 
-describe.each(ADAPTERS)("turn host parity — $name", ({ name, create }) => {
+describe.each(ADAPTERS)("turn host parity — $name", ({ create }) => {
   it("stamps time to the first narrative delta and reports the turn on one collapsed operator log line", async () => {
     const t = backend();
     const harness = create(t);
@@ -464,15 +464,15 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ name, create }) => {
     // an unconditional loop over `slice(1)` would assert nothing under either.
     const dispatched = () => harness.dispatchResults(after.binding!.runtimeTurnRef as never);
     expect(dispatched()[0]).toMatchObject({ kind: "outcome", outcome: { kind: "success" } });
-    if (name === "convex agent adapter") {
+    if (harness.adapter.descriptor.adapterKind === "athena_contract_fake") {
+      // The fake's scripted model observes the terminal turn before it issues
+      // the late call, so the call is never made at all.
+      expect(dispatched()).toHaveLength(1);
+    } else {
       // The released provider stream really does emit the late tool call; the
       // adapter's terminal ledger is what refuses it.
       await waitFor(async () => dispatched().length > 1);
       expect(dispatched().slice(1)).toMatchObject([{ kind: "protocol_violation", code: "turn_terminal" }]);
-    } else {
-      // The fake's scripted model observes the terminal turn before it issues
-      // the late call, so the call is never made at all.
-      expect(dispatched()).toHaveLength(1);
     }
   });
 
