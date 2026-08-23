@@ -16,7 +16,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { ArrowDown, ChevronLeft, Loader2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronLeft, Loader2, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -555,6 +555,7 @@ export function AthenaAgentPanel({
     sourceHeadingRef.current?.focus();
   }, [activeCitation, run.sources]);
 
+  const canSend = run.canSubmit && run.canFollowUp && draft.trim().length > 0;
   const submit = useCallback(
     async (prompt: string) => {
       // A new question takes precedence over the prior reading position.
@@ -985,8 +986,16 @@ export function AthenaAgentPanel({
       </button>
       </div>
 
+      {/* The composer, after the chat panel in kwamina-fyi: one bordered shell
+          holding the field and its button rather than a field beside one.
+          Focus lands on the shell, so the field draws no second box inside
+          it, and no rule sits above it — the shell's own border already
+          separates it from the transcript. */}
       <form
-        className="space-y-layout-xs border-t border-border px-layout-md py-layout-sm"
+        className={cn(
+          "mx-layout-md mb-layout-xs mt-layout-xs flex flex-col rounded-xl border border-border bg-background",
+          "transition-colors focus-within:border-primary-border motion-reduce:transition-none",
+        )}
         data-testid="athena-agent-composer"
         onSubmit={(event) => {
           event.preventDefault();
@@ -997,36 +1006,54 @@ export function AthenaAgentPanel({
           Ask a question about this context
         </label>
         <Textarea
+          className={cn(
+            // Two lines from `rows`, then it scrolls; no resize handle, so the
+            // field cannot be dragged out past the panel it lives in.
+            "min-h-0 resize-none rounded-none border-0 bg-transparent px-3 pb-0 pt-2.5 leading-6 shadow-none",
+            "focus-visible:ring-0 focus-visible:ring-offset-0",
+          )}
           data-testid="athena-agent-prompt"
           id="athena-agent-prompt"
           onChange={(event) => onDraftChange(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-              event.preventDefault();
-              if (run.canSubmit && run.canFollowUp) void submit(draft);
-            }
+            if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+            // Enter sends; Shift+Enter is a newline, as in every chat the
+            // operator already uses. Cmd/Ctrl+Enter still sends.
+            if (event.shiftKey) return;
+            event.preventDefault();
+            if (canSend) void submit(draft);
           }}
-          placeholder="Ask about this context"
+          placeholder={
+            run.answer || run.history.length > 0
+              ? "Ask a follow-up…"
+              : "Ask about this context"
+          }
           ref={promptRef}
+          rows={2}
           size="sm"
           value={draft}
         />
-        {/* Context drift disables follow-up until the operator returns to the
-            answer's context or confirms the current one. */}
-        <div className="flex items-center justify-between gap-layout-sm">
+        {/* Its own row rather than floating over the text, which would leave
+            the last line running underneath the button. Context drift disables
+            follow-up until the operator returns to the answer's context or
+            confirms the current one. */}
+        <div className="flex items-center justify-between gap-layout-sm px-3 pb-2 pt-1">
           <p className="text-xs text-muted-foreground">
             Athena answers from sources you are allowed to read.
           </p>
           <Button
-            className={cn(TOUCH_TARGET)}
+            aria-label="Ask"
+            className={cn(TOUCH_TARGET, "shrink-0 rounded-full")}
             data-testid="athena-agent-submit"
-            disabled={!run.canSubmit || !run.canFollowUp}
+            disabled={!canSend}
+            size="icon"
             type="submit"
           >
             {run.isSubmitting ? (
               <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
-            ) : null}
-            Ask
+            ) : (
+              <ArrowUp aria-hidden="true" className="h-4 w-4" />
+            )}
           </Button>
         </div>
         {run.blockedSubmission ? (

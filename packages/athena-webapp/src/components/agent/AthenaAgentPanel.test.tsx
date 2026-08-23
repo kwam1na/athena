@@ -2039,6 +2039,67 @@ describe("an earlier turn's draft trail", () => {
   });
 });
 
+describe("composer", () => {
+  const prompt = () => screen.getByTestId("athena-agent-prompt") as HTMLTextAreaElement;
+  const send = () => screen.getByTestId("athena-agent-submit");
+
+  it("sends on Enter, keeps Shift+Enter as a newline, and stays disabled while empty", async () => {
+    const submit = vi.fn(async () => {});
+    render(<PanelHarness run={baseRun({ submit })} />);
+    expect(send()).toBeDisabled();
+    expect(send()).toHaveAccessibleName("Ask");
+
+    fireEvent.keyDown(prompt(), { key: "Enter" });
+    expect(submit).not.toHaveBeenCalled();
+
+    fireEvent.change(prompt(), { target: { value: "Which lanes are open?" } });
+    expect(send()).toBeEnabled();
+    const shiftEnter = fireEvent.keyDown(prompt(), { key: "Enter", shiftKey: true });
+    // Not prevented: the browser inserts the newline.
+    expect(shiftEnter).toBe(true);
+    expect(submit).not.toHaveBeenCalled();
+
+    const enter = fireEvent.keyDown(prompt(), { key: "Enter" });
+    expect(enter).toBe(false);
+    await waitFor(() => expect(submit).toHaveBeenCalledWith("Which lanes are open?"));
+    await waitFor(() => expect(prompt()).toHaveValue(""));
+  });
+
+  it("does not send mid-composition or while a follow-up is blocked", () => {
+    const submit = vi.fn(async () => {});
+    const { rerender } = render(<PanelHarness run={baseRun({ submit })} />);
+    fireEvent.change(prompt(), { target: { value: "どの" } });
+    const composing = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, isComposing: true } as KeyboardEventInit);
+    prompt().dispatchEvent(composing);
+    expect(submit).not.toHaveBeenCalled();
+
+    rerender(<PanelHarness run={baseRun({ submit, canFollowUp: false })} />);
+    expect(send()).toBeDisabled();
+    fireEvent.keyDown(prompt(), { key: "Enter" });
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("asks for a follow-up once the thread has an answer", () => {
+    const { rerender } = render(<PanelHarness run={baseRun()} />);
+    expect(prompt()).toHaveAttribute("placeholder", "Ask about this context");
+    rerender(
+      <PanelHarness
+        run={baseRun({
+          answer: {
+            outcome: "answer",
+            narrative: "Two lanes are open.",
+            egressClass: "operational",
+            limitedEvidence: false,
+            committedAt: 5,
+            citations: [],
+          },
+        })}
+      />,
+    );
+    expect(prompt()).toHaveAttribute("placeholder", "Ask a follow-up…");
+  });
+});
+
 describe("stream reveal of the live draft", () => {
   const long = (chars: number) => "Checking the registers one by one, lane by lane. ".repeat(Math.ceil(chars / 50)).slice(0, chars);
   const fakeFrames = () =>
