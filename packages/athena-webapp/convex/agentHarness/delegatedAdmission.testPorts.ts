@@ -43,6 +43,12 @@ import {
 } from "./registry";
 
 export const TEST_PROFILE_ID = "test_operations";
+/**
+ * A second profile over the same package, identical except that it keeps the
+ * model narrative buffered. Every host and turn test pins `TEST_PROFILE_ID`,
+ * so the buffered scenarios need their own profile to run against.
+ */
+export const TEST_BUFFERED_PROFILE_ID = "test_operations_buffered";
 export const TEST_PACKAGE = "ops";
 export const TEST_NOW_BASE = 1_700_000_000_000;
 
@@ -248,6 +254,7 @@ export const TEST_PROFILE = defineAgentProfile({
     providers: [{ providerId: "athena_contract_fake", modelId: "fake-1", region: "local", maxClass: "sensitive" }],
   },
   runtimeAdapterKind: "athena_contract_fake",
+  narrativePolicy: "provisional_streaming",
   presentation: TEST_PRESENTATION,
   evaluation: {
     scenarios: [
@@ -258,10 +265,37 @@ export const TEST_PROFILE = defineAgentProfile({
   },
 });
 
+export const TEST_BUFFERED_PRESENTATION = definePresentationAdapter({
+  contractVersion: 1,
+  profileId: TEST_BUFFERED_PROFILE_ID,
+  contextBinding: { scopeKind: "store", keys: ["storeRef"] },
+  contextLabel: (context) => `${context.storeRef} (buffered)`,
+  entry: { label: "Ask Athena", location: "operations.toolbar.buffered" },
+  mountMode: "docked_panel",
+  starterIntents: [
+    { id: "open_shifts", label: "Open shifts", prompt: "Which shifts are still open?", requiresPackages: [TEST_PACKAGE] },
+  ],
+  resolveSourceDestination: () => null,
+  threadKeyPolicy: {
+    parts: ["profileId", "storeRef"],
+    onContextChange: "confirm_before_next_turn",
+    activeTurnPolicy: "block_second_submission",
+  },
+});
+
+export const TEST_BUFFERED_PROFILE = defineAgentProfile({
+  ...TEST_PROFILE,
+  profileId: TEST_BUFFERED_PROFILE_ID,
+  narrativePolicy: "buffered",
+  presentation: TEST_BUFFERED_PRESENTATION,
+});
+
+export const TEST_PROFILES = [TEST_PROFILE, TEST_BUFFERED_PROFILE] as const;
+
 const build = buildAgentCapabilityRegistry({
   manifests: TEST_MANIFESTS,
   readPorts: TEST_READ_PORTS,
-  profiles: [TEST_PROFILE],
+  profiles: TEST_PROFILES,
   runtimeAdapter: { adapterKind: "athena_contract_fake", adapterVersion: "fake.1" },
   admissionPolicyVersion: "u4.test",
 });
@@ -276,7 +310,7 @@ export const TEST_REGISTRY = build.registry;
  * narrowing applied by a test is observed by the next dispatch.
  */
 export const TEST_ENABLEMENT = (() => {
-  const baseline: AgentEnablementOverlay = baselineEnablement(TEST_MANIFESTS, [TEST_PROFILE]);
+  const baseline: AgentEnablementOverlay = baselineEnablement(TEST_MANIFESTS, TEST_PROFILES);
   let current = baseline;
   return {
     current: () => current,

@@ -2,7 +2,8 @@
  * Agent profile and presentation-adapter contracts (browser-safe).
  *
  * A profile selects packages, lifecycle, scope policy, budgets, prompt and
- * egress policy, a presentation adapter, and evaluation scenarios. It never
+ * egress policy, the narrative-exposure policy, a presentation adapter, and
+ * evaluation scenarios. It never
  * adds kernel behavior: anything a profile needs that these contracts cannot
  * express is a versioned contract evolution, not a profile exception.
  *
@@ -196,6 +197,17 @@ export type AgentProfileEgressPolicy = {
   readonly providers: readonly AgentProviderAllowance[];
 };
 
+/**
+ * Whether the model's in-progress narrative may leave the server as
+ * explicitly provisional text. `provisional_streaming` lets the host surface
+ * the ordered `narrative_delta` events a turn produces; `buffered` keeps the
+ * narrative server-side until `completeRun`. Either way the committed
+ * artifact is the only released answer, so this is an exposure policy, not a
+ * release policy.
+ */
+export const AGENT_NARRATIVE_POLICIES = ["provisional_streaming", "buffered"] as const;
+export type AgentNarrativePolicy = (typeof AGENT_NARRATIVE_POLICIES)[number];
+
 export type AgentProfileDefinition = {
   readonly contractVersion: AgentHarnessContractVersion;
   readonly profileId: string;
@@ -208,6 +220,8 @@ export type AgentProfileDefinition = {
   readonly egressPolicy: AgentProfileEgressPolicy;
   /** Runtime adapter kind selected for the profile (the Convex Agent adapter registers `convex_agent`). */
   readonly runtimeAdapterKind: string;
+  /** Required, kernel-visible exposure policy for the model's in-progress narrative. */
+  readonly narrativePolicy: AgentNarrativePolicy;
   readonly presentation: AgentPresentationAdapter;
   readonly evaluation: { readonly scenarios: readonly AgentEvaluationScenario[] };
 };
@@ -315,6 +329,10 @@ export function validateProfileDefinition(profile: AgentProfileDefinition): Agen
 
   if (!isNonEmptyString(raw.runtimeAdapterKind)) {
     add("metadata_incomplete", "runtimeAdapterKind", "Select a runtime adapter kind.");
+  }
+
+  if (!isOneOf(AGENT_NARRATIVE_POLICIES, raw.narrativePolicy)) {
+    extension("narrativePolicy", raw.narrativePolicy, "narrativePolicy");
   }
 
   const presentation = raw.presentation;

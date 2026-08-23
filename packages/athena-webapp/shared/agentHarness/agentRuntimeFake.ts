@@ -2,8 +2,8 @@
  * Deterministic contract fake for `AgentRuntimeAdapter`.
  *
  * It implements the Athena runtime contract with a scripted "model": tests
- * describe what the model does on a turn (progress, tool calls, usage,
- * pauses, completion, failure) and the fake drives the kernel through the
+ * describe what the model does on a turn (progress, narration, tool calls,
+ * usage, pauses, completion, failure) and the fake drives the kernel through the
  * same hooks a real adapter would. No `Date.now`, no `Math.random`, no
  * timers: references come from counters, timestamps from an injected clock,
  * and ordering from the script plus microtask scheduling, so executor and
@@ -76,6 +76,8 @@ type TurnState = {
   status: "running" | "completed" | "failed" | "canceled";
   hooks: AgentRuntimeTurnHooks;
   nextSequence: number;
+  /** Which narrative draft the scripted model is on; a tool step ends a draft. */
+  draftOrdinal: number;
   events: AgentRuntimeEvent[];
   dispatchResults: AgentToolDispatchResult[];
   settled: Deferred;
@@ -169,11 +171,19 @@ export function createAgentRuntimeContractFake(
         case "progress":
           await emit(turn, { kind: "progress", milestone: step.milestone });
           break;
+        case "narrative":
+          for (const text of step.deltas) {
+            await emit(turn, { kind: "narrative_delta", draftOrdinal: turn.draftOrdinal, text });
+            if (turn.status !== "running") return;
+          }
+          break;
         case "tool_call":
           await runCall(turn, step);
+          turn.draftOrdinal += 1;
           break;
         case "tool_calls_parallel":
           await Promise.all(step.calls.map((call) => runCall(turn, call)));
+          turn.draftOrdinal += 1;
           break;
         case "usage": {
           const usage: AgentUsageEvent = {
@@ -242,6 +252,7 @@ export function createAgentRuntimeContractFake(
         status: "running",
         hooks,
         nextSequence: 0,
+        draftOrdinal: 0,
         events: [],
         dispatchResults: [],
         settled: deferred(),
@@ -315,6 +326,7 @@ export function createAgentRuntimeContractFake(
   return {
     adapter,
     clock,
+    supportsNarrativeStreaming: true,
     scriptTurn: (turnKey, steps) => {
       scripts.set(turnKey, steps);
     },

@@ -45,12 +45,28 @@ export type AgentRuntimeScriptStep =
       readonly tokens: { readonly input?: number; readonly output?: number };
       readonly terminal: boolean;
     }
+  | {
+      /**
+       * Opt-in narration: the scripted model thinks out loud, one
+       * `narrative_delta` per entry, all within the turn's current draft.
+       * A tool step ends the draft, so the next `narrative` step narrates
+       * under the next draft ordinal.
+       */
+      readonly kind: "narrative";
+      readonly deltas: readonly string[];
+    }
   | { readonly kind: "pause"; readonly gate: string }
   | { readonly kind: "complete"; readonly narrative: string }
   | { readonly kind: "fail"; readonly code: string; readonly message: string };
 
 export type AgentRuntimeContractHarness = {
   readonly adapter: AgentRuntimeAdapter;
+  /**
+   * Whether this harness's scripted model honours the `narrative` step. The
+   * shared suite's narration case is opt-in so an adapter whose scripted model
+   * cannot narrate yet skips it instead of failing.
+   */
+  readonly supportsNarrativeStreaming?: boolean;
   /** Script what the model does on the turn bound to `turnKey`. */
   readonly scriptTurn: (turnKey: string, steps: readonly AgentRuntimeScriptStep[]) => void;
   /** Release a `pause` gate so the scripted turn continues. */

@@ -184,6 +184,13 @@ export function createConvexAgentContractHarness(options: ConvexAgentContractHar
                 });
               }
               break;
+            case "narrative":
+              // Inert here: this mock answers `doGenerate`, which yields no
+              // text stream, so the adapter has nothing to coalesce into
+              // `narrative_delta` events. The harness therefore declares no
+              // narrative-streaming support and the shared suite skips its
+              // narration case.
+              break;
             case "pause":
               await waitGate(step.gate);
               break;

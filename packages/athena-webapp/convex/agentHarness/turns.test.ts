@@ -12,10 +12,20 @@ import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import schema from "../schema";
-import { TEST_ADMISSION, TEST_CLOCK, TEST_NOW_BASE, TEST_PROFILE_ID, seedDelegatedOperator } from "./delegatedAdmission.testPorts";
+import {
+  TEST_ADMISSION,
+  TEST_BUFFERED_PROFILE_ID,
+  TEST_CLOCK,
+  TEST_ENABLEMENT,
+  TEST_NOW_BASE,
+  TEST_PROFILE_ID,
+  TEST_REGISTRY,
+  seedDelegatedOperator,
+} from "./delegatedAdmission.testPorts";
 import { TEST_EXECUTOR_SEAMS, beginExecutingAttempt, bridgeCall } from "./executor.testSeams";
 import { buildAnswerArtifactPayload } from "./historyProjection";
 import { markAgentRunRunningWithCtx } from "./lifecycle";
+import { advanceTurnBindingWithCtx } from "./turnBindings";
 import { AGENT_OPERATOR_ACTIVE_RUN_LIMIT } from "./runAdmission";
 import { registerAgentRuntimeCleanupHook, resetAgentRuntimeCleanupHooksForTests } from "./retention";
 import {
@@ -355,5 +365,49 @@ describe("turn view, answer, acknowledgement, cancel, resume, history, evidence 
     expect(projection).toMatchObject({ outcome: "projection_scheduled", step: "athena_committed", runStatus: "completed" });
     expect(scheduled.repair).toEqual([committed.bindingId]);
     expect(await t.run((ctx) => entry.cancelTurn(admitted(ctx, seeded.operator.userId), { storeId: seeded.operator.storeId, bindingId: committed.bindingId }))).toEqual({ outcome: "already_terminal", runStatus: "completed" });
+  });
+});
+
+describe("narrative policy across the test profiles", () => {
+  it("carries both policies in the digest-pinned registry and starts a real turn on the buffered profile", async () => {
+    expect(TEST_REGISTRY.profiles[TEST_PROFILE_ID].narrativePolicy).toBe("provisional_streaming");
+    expect(TEST_REGISTRY.profiles[TEST_BUFFERED_PROFILE_ID].narrativePolicy).toBe("buffered");
+    expect(TEST_ENABLEMENT.current().profiles[TEST_BUFFERED_PROFILE_ID]).toBe("enabled");
+
+    const t = convexTest(schema, modules);
+    const seeded = await t.run((ctx) => seedRecordedTurn(ctx, "buffered", { profileId: TEST_BUFFERED_PROFILE_ID }));
+    const grantFor = (runId: Id<"intelligenceRun">) =>
+      t.run(async (ctx) => (await ctx.db.query("agentRunGrant").withIndex("by_runId", (q) => q.eq("runId", runId)).take(1))[0]);
+    const grant = await grantFor(seeded.runId);
+    expect(grant).toMatchObject({
+      profileKey: TEST_BUFFERED_PROFILE_ID,
+      compatibilityDigest: TEST_REGISTRY.compatibilityDigest,
+    });
+
+    // The production preparation ladder runs unchanged for a `buffered` profile.
+    const prepared = await t.run((ctx) => TEST_TURN_SEAMS.prepareTurnWithCtx(ctx, { bindingId: seeded.bindingId, now: TEST_NOW_BASE + 1 }));
+    expect(prepared, JSON.stringify(prepared)).toMatchObject({ kind: "ready", plan: { profileId: TEST_BUFFERED_PROFILE_ID, step: "intent_recorded" } });
+    // Walk the binding ladder exactly as the host does; each rung carries the
+    // opaque runtime ref the next one depends on.
+    const rungs = [
+      { step: "runtime_thread_bound" as const, runtimeThreadRef: "runtime_thread:buffered" },
+      { step: "runtime_input_saved" as const, runtimeInputRef: "runtime_input:buffered" },
+      { step: "scheduled" as const, runtimeScheduleRef: "runtime_schedule:buffered" },
+    ];
+    for (const rung of rungs) {
+      const advanced = await t.run((ctx) =>
+        advanceTurnBindingWithCtx(ctx, { bindingId: seeded.bindingId, idempotencyKey: `buffered:${rung.step}`, now: TEST_NOW_BASE + 2, ...rung }),
+      );
+      expect(advanced, JSON.stringify(advanced)).toMatchObject({ outcome: "advanced", step: rung.step });
+    }
+    const running = await t.run((ctx) => TEST_TURN_SEAMS.markTurnRunningWithCtx(ctx, { bindingId: seeded.bindingId, now: TEST_NOW_BASE + 3 }));
+    expect(running).toMatchObject({ outcome: "running" });
+    const view = await t.run((ctx) => entry.getTurnView(admitted(ctx, seeded.operator.userId), { storeId: seeded.operator.storeId, bindingId: seeded.bindingId }));
+    expect(view).toMatchObject({ kind: "view", phase: "running" });
+
+    // The shared test profile every other host and turn test pins is untouched.
+    const shared = await t.run((ctx) => seedRecordedTurn(ctx, "buffered-peer", { threadKey: "thread-peer", key: "turn-peer", operator: seeded.operator }));
+    const sharedGrant = await grantFor(shared.runId);
+    expect(sharedGrant).toMatchObject({ profileKey: TEST_PROFILE_ID });
   });
 });

@@ -37,7 +37,7 @@ import {
   type Timestamp,
 } from "./values";
 
-export const AGENT_RUNTIME_PROTOCOL_VERSION = "athena.agent-runtime.v1" as const;
+export const AGENT_RUNTIME_PROTOCOL_VERSION = "athena.agent-runtime.v2" as const;
 
 export type RuntimeThreadRef = OpaqueRef<"runtime_thread">;
 export type RuntimeInputRef = OpaqueRef<"runtime_input">;
@@ -799,6 +799,7 @@ export const AGENT_RUNTIME_EVENT_KINDS = [
   "turn_started",
   "turn_resumed",
   "progress",
+  "narrative_delta",
   "tool_call_requested",
   "tool_call_completed",
   "usage",
@@ -824,6 +825,22 @@ export type AgentRuntimeEvent = EventBase &
     | { readonly kind: "turn_started" }
     | { readonly kind: "turn_resumed" }
     | { readonly kind: "progress"; readonly milestone: AgentProgressMilestone }
+    | {
+        /**
+         * One coalesced slice of the model's in-progress narrative. It is the
+         * assistant thinking out loud, not the answer forming: a host may
+         * surface it as explicitly provisional text, and the committed
+         * artifact `completeRun` mints stays the only released answer.
+         *
+         * There is no stream identifier and no per-delta index — the
+         * envelope's `turnRef` identifies the turn and its `sequence` orders
+         * the deltas; `draftOrdinal` identifies the draft, and advances
+         * whenever the model starts over (a tool step, or a resumed attempt).
+         */
+        readonly kind: "narrative_delta";
+        readonly draftOrdinal: number;
+        readonly text: string;
+      }
     | { readonly kind: "tool_call_requested"; readonly callId: string; readonly toolId: string }
     | {
         readonly kind: "tool_call_completed";
@@ -835,7 +852,13 @@ export type AgentRuntimeEvent = EventBase &
     | {
         readonly kind: "turn_completed";
         readonly outcome: AgentTurnOutcome;
-        /** Model narrative, buffered server-side; never streamed to the browser. */
+        /**
+         * The model's final narrative for the turn, buffered server-side until
+         * `completeRun`. It is exposed in-process as ordered `narrative_delta`
+         * events that a host may surface as provisional text; the committed
+         * artifact remains the only released answer, and it is an independent
+         * string from anything streamed here.
+         */
         readonly narrative?: string;
         readonly error?: { readonly code: string; readonly message: string };
         readonly reason?: string;
@@ -874,6 +897,14 @@ export function validateRuntimeEvent(event: AgentRuntimeEvent): AgentRuntimeEven
     case "progress":
       if (!isOneOf(AGENT_PROGRESS_MILESTONES, raw.milestone)) {
         issues.push(versionedExtensionRequired("progress.milestone", String(raw.milestone), "milestone"));
+      }
+      break;
+    case "narrative_delta":
+      if (!isNonNegativeInteger(raw.draftOrdinal)) {
+        add("event_invalid", "draftOrdinal", "Narrative deltas carry a non-negative integer draft ordinal.");
+      }
+      if (!isNonEmptyString(raw.text)) {
+        add("event_invalid", "text", "Narrative deltas carry non-empty text.");
       }
       break;
     case "tool_call_requested":

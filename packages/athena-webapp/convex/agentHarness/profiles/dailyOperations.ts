@@ -225,6 +225,7 @@ export const DAILY_OPERATIONS_PROFILE = defineAgentProfile({
     providers: [{ providerId: "openai", modelId: "gpt-5-nano", region: "us", maxClass: "sensitive" }],
   },
   runtimeAdapterKind: "convex_agent",
+  narrativePolicy: "provisional_streaming",
   presentation: DAILY_OPERATIONS_PRESENTATION,
   evaluation: {
     scenarios: [

@@ -367,6 +367,14 @@ describe("turn host — kernel boundaries", () => {
     expect(promptText).toContain("retrieved_store_data");
     expect(promptText).not.toContain(String(seeded.runId));
     expect(promptText).not.toContain(String(seeded.operator.storeId));
+    // The provider is asked to narrate before and between tool rounds, without
+    // loosening the tools-only posture: providers routinely emit no assistant
+    // text on a step that ends in a tool call, so the ask has to be explicit.
+    const system = calls[0].prompt.filter((message) => message.role === "system").map((message) => JSON.stringify(message.content)).join("\n");
+    expect(system).toContain("Answer only from the tools you are given.");
+    expect(system).toMatch(/before your first tool call/i);
+    expect(system).toMatch(/between tool/i);
+    expect(system).toMatch(/provisional/i);
   });
 
   it("a second turn on the same thread receives the Athena-projected prior answer, never raw runtime history (scenarios 3, 17)", async () => {

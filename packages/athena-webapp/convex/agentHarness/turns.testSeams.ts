@@ -81,13 +81,23 @@ export const TEST_TOOL_REFS: AgentToolSeamRefs = {
 export async function seedRecordedTurn(
   ctx: MutationCtx,
   slug: string,
-  options: { role?: "full_admin" | "pos_only"; operationalRoles?: ("manager" | "cashier")[]; key?: string; threadKey?: string; question?: string; now?: number; operator?: Awaited<ReturnType<typeof seedDelegatedOperator>> } = {},
+  options: {
+    role?: "full_admin" | "pos_only";
+    operationalRoles?: ("manager" | "cashier")[];
+    key?: string;
+    threadKey?: string;
+    question?: string;
+    now?: number;
+    operator?: Awaited<ReturnType<typeof seedDelegatedOperator>>;
+    /** Defaults to the shared test profile every host and turn test pins. */
+    profileId?: string;
+  } = {},
 ) {
   const now = options.now ?? TEST_NOW_BASE;
   const operator = options.operator ?? (await seedDelegatedOperator(ctx, slug, { role: options.role ?? "full_admin", operationalRoles: options.operationalRoles }));
   const prepared = await prepareDelegatedRunGrantWithCtx(ctx, TEST_ADMISSION.config, {
     operator: { kind: "normal_user", athenaUserId: operator.userId },
-    profileId: TEST_PROFILE_ID,
+    profileId: options.profileId ?? TEST_PROFILE_ID,
     organizationId: operator.organizationId,
     storeId: operator.storeId,
     now,

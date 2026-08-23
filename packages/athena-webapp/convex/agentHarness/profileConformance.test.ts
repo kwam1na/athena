@@ -279,13 +279,13 @@ describe("synthetic second surface conformance", () => {
     expect(() =>
       defineAgentProfile({ ...SYNTHETIC_SECOND_SURFACE_PROFILE, lifecycle: "canary" } as unknown as typeof SYNTHETIC_SECOND_SURFACE_PROFILE),
     ).toThrow(AgentVersionedExtensionError);
-    const streamingEvent = validateRuntimeEvent({
-      kind: "narrative_delta",
+    const unknownEvent = validateRuntimeEvent({
+      kind: "model_thought_stream",
       sequence: 1,
       turnRef: opaqueRef("runtime_turn", "t"),
       at: 1,
     } as unknown as AgentRuntimeEvent);
-    expect(codes(streamingEvent)).toEqual(["versioned_extension_required"]);
+    expect(codes(unknownEvent)).toEqual(["versioned_extension_required"]);
     const registry = buildAgentCapabilityRegistry({
       manifests: [regionScoped],
       readPorts: { contractVersion: 1, ports: [] },

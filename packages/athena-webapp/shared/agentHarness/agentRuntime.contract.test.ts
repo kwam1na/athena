@@ -8,10 +8,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   AGENT_RUNTIME_EVENT_KINDS,
+  AGENT_RUNTIME_PROTOCOL_VERSION,
   calculateUsageCost,
   computeToolFingerprint,
   createAgentToolDispatchLedger,
   createUsageReconciler,
+  hashCanonical,
   validateRuntimeEvent,
   type AgentRuntimeEvent,
   type AgentToolRegistration,
@@ -19,7 +21,10 @@ import {
 } from "./agentRuntime";
 import { runAgentRuntimeAdapterContractSuite } from "./agentRuntime.contractSuite";
 import { createAgentRuntimeContractFake, createDeterministicClock } from "./agentRuntimeFake";
-import { opaqueRef } from "./values";
+import { AGENT_HARNESS_PROTOCOL_VERSION, opaqueRef } from "./values";
+
+/** The runtime protocol this contract superseded when `narrative_delta` was added. */
+const SUPERSEDED_RUNTIME_PROTOCOL_VERSION = "athena.agent-runtime.v1";
 
 runAgentRuntimeAdapterContractSuite("deterministic contract fake", () =>
   createAgentRuntimeContractFake({ clock: createDeterministicClock(1_000) }),
@@ -66,7 +71,7 @@ describe("contract fake determinism", () => {
     expect(await run()).toEqual(await run());
   });
 
-  it("rejects runtime event kinds outside v1 as versioned extensions", () => {
+  it("rejects runtime event kinds outside the contract as versioned extensions", () => {
     const result = validateRuntimeEvent({
       kind: "model_thought_stream",
       sequence: 1,
@@ -75,6 +80,7 @@ describe("contract fake determinism", () => {
     } as unknown as AgentRuntimeEvent);
     expect(result.ok).toBe(false);
     if (!result.ok) {
+      expect(result.issues.map((issue) => issue.code)).toEqual(["versioned_extension_required"]);
       expect(result.issues[0]).toMatchObject({
         code: "versioned_extension_required",
         primitive: "runtimeEvent.kind",
@@ -82,6 +88,63 @@ describe("contract fake determinism", () => {
       });
     }
     expect(AGENT_RUNTIME_EVENT_KINDS).not.toContain("model_thought_stream");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Provisional narrative deltas (a normalized event kind, not an extension)
+// ---------------------------------------------------------------------------
+
+function narrativeDelta(overrides: Record<string, unknown> = {}): AgentRuntimeEvent {
+  return {
+    kind: "narrative_delta",
+    sequence: 3,
+    turnRef: opaqueRef("runtime_turn", "t"),
+    at: 12,
+    draftOrdinal: 0,
+    text: "Checking the open shifts first.",
+    ...overrides,
+  } as unknown as AgentRuntimeEvent;
+}
+
+describe("narrative_delta contract", () => {
+  it("is a normalized kind whose well-formed events validate and survive a JSON round trip", () => {
+    expect(AGENT_RUNTIME_EVENT_KINDS).toContain("narrative_delta");
+    const event = narrativeDelta();
+    expect(validateRuntimeEvent(event)).toEqual({ ok: true });
+    expect(JSON.parse(JSON.stringify(event))).toEqual(event);
+    expect(validateRuntimeEvent(narrativeDelta({ draftOrdinal: 4 }))).toEqual({ ok: true });
+  });
+
+  it("carries no stream identifier and no per-delta index: the envelope orders it", () => {
+    expect(Object.keys(narrativeDelta()).sort()).toEqual(["at", "draftOrdinal", "kind", "sequence", "text", "turnRef"]);
+  });
+
+  it("rejects a malformed draft ordinal or text as event_invalid, not as an extension", () => {
+    const cases: readonly [Record<string, unknown>, string][] = [
+      [{ draftOrdinal: -1 }, "draftOrdinal"],
+      [{ draftOrdinal: 1.5 }, "draftOrdinal"],
+      [{ draftOrdinal: "0" }, "draftOrdinal"],
+      [{ draftOrdinal: undefined }, "draftOrdinal"],
+      [{ text: "" }, "text"],
+      [{ text: "   " }, "text"],
+      [{ text: 7 }, "text"],
+      [{ text: undefined }, "text"],
+    ];
+    for (const [override, path] of cases) {
+      const result = validateRuntimeEvent(narrativeDelta(override));
+      expect(result.ok, JSON.stringify(override)).toBe(false);
+      if (result.ok) continue;
+      expect(result.issues.map((issue) => issue.code)).toEqual(["event_invalid"]);
+      expect(result.issues[0].path).toBe(path);
+    }
+  });
+
+  it("still enforces the envelope on a narrative delta", () => {
+    const result = validateRuntimeEvent(narrativeDelta({ sequence: -1, turnRef: "not-a-ref" }));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.issues.map((issue) => issue.path)).toEqual(["sequence", "turnRef"]);
   });
 });
 
@@ -141,6 +204,22 @@ describe("tool dispatch ledger", () => {
         callId: "c1",
       }),
     );
+  });
+
+  it("folds the runtime protocol version in, so a protocol evolution moves every fingerprint", () => {
+    const turnRef = opaqueRef("runtime_turn", "turn-1");
+    const input = { adapterVersion: "fake.1", turnRef, toolId: "echo", argsHash: "sha256:args", callId: "c1" } as const;
+    const underSuperseded = hashCanonical({
+      protocolVersion: AGENT_HARNESS_PROTOCOL_VERSION,
+      runtimeProtocolVersion: SUPERSEDED_RUNTIME_PROTOCOL_VERSION,
+      adapterVersion: input.adapterVersion,
+      turnRef: input.turnRef,
+      toolId: input.toolId,
+      argsHash: input.argsHash,
+      callId: input.callId,
+    });
+    expect(AGENT_RUNTIME_PROTOCOL_VERSION).not.toBe(SUPERSEDED_RUNTIME_PROTOCOL_VERSION);
+    expect(computeToolFingerprint(input)).not.toBe(underSuperseded);
   });
 
   it("canonicalizes arguments so key order does not change the fingerprint", async () => {
