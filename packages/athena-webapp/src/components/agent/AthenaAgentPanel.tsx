@@ -16,7 +16,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { ChevronLeft, Loader2, X } from "lucide-react";
+import { ArrowDown, ChevronLeft, Loader2, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -66,19 +66,44 @@ const PROVISIONAL_VISIBLE_STATES: ReadonlySet<AthenaAgentProvisionalState> = new
   "stalled",
 ]);
 
-/** Draft states that end the draft: the scroll container re-anchors on them. */
-const PROVISIONAL_SETTLED_STATES: ReadonlySet<AthenaAgentProvisionalState> = new Set([
-  "withdrawn",
-  "superseded",
-  "stalled",
-]);
-
-/** Close enough to the bottom to count as following the draft. */
+/** Close enough to the bottom to count as reading the latest. */
 const SCROLL_FOLLOW_SLACK = 24;
 
+/**
+ * Scroll following, after the chat panel in kwamina-fyi. The transcript keeps
+ * the latest text in view as it arrives, a question or the floating button
+ * starts the follow, and direct interaction with the transcript — a wheel, a
+ * pointer, a touch, a navigation key — hands the reading position back until
+ * the operator asks for the latest again. The container scrolls smoothly, so
+ * the follow is withdrawn by intent, never by position: a smooth scroll in
+ * flight is away from the bottom for a few frames and must not cancel itself.
+ */
 function anchorToBottom(node: HTMLDivElement) {
   node.scrollTop = Math.max(0, node.scrollHeight - node.clientHeight);
 }
+
+/** Position without a glide: a mount or a restored position is not a movement. */
+function positionAt(node: HTMLDivElement, top: number | "bottom") {
+  const previous = node.style.scrollBehavior;
+  node.style.scrollBehavior = "auto";
+  if (top === "bottom") anchorToBottom(node);
+  else node.scrollTop = top;
+  node.style.scrollBehavior = previous;
+}
+
+function awayFromLatest(node: HTMLDivElement) {
+  return node.scrollHeight - node.clientHeight - node.scrollTop > SCROLL_FOLLOW_SLACK;
+}
+
+/** Keys that scroll the transcript from wherever focus is inside it. */
+const SCROLL_INTERRUPT_KEYS: ReadonlySet<string> = new Set([
+  "ArrowUp",
+  "ArrowDown",
+  "PageUp",
+  "PageDown",
+  "Home",
+  "End",
+]);
 
 export type AthenaAgentLayout = "docked" | "fullscreen";
 
@@ -277,7 +302,9 @@ export function AthenaAgentPanel({
    * heading or the operator's own stop.
    */
   const focusClaimedTurnRef = useRef<AthenaAgentRun["activeTurnId"]>(null);
-  const followDraftRef = useRef(true);
+  const followRef = useRef(true);
+  const mountedScrollRef = useRef(false);
+  const [latestVisible, setLatestVisible] = useState(false);
   const [activeCitation, setActiveCitation] = useState<string | null>(null);
   const [draftCue, setDraftCue] = useState<{
     key: string;
@@ -290,15 +317,13 @@ export function AthenaAgentPanel({
   }, []);
 
   // Restore the reading position when the layout swaps the panel out. The
-  // restored position decides whether the draft is still being followed, or the
-  // sticky-follow effect would re-anchor to the bottom and discard it.
+  // restored position decides whether the latest is still being followed, or
+  // the follow would re-anchor to the bottom and discard it.
   useEffect(() => {
     const node = scrollRef.current;
     if (node && scrollTop > 0) {
-      node.scrollTop = scrollTop;
-      followDraftRef.current =
-        node.scrollHeight - node.scrollTop - node.clientHeight <=
-        SCROLL_FOLLOW_SLACK;
+      positionAt(node, scrollTop);
+      followRef.current = !awayFromLatest(node);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- restore once per mount.
   }, []);
@@ -373,23 +398,37 @@ export function AthenaAgentPanel({
     setDraftCue((current) => (current === null ? current : null));
   }, [provisionalState, draftOrdinal]);
 
-  // Sticky follow: the single scroll container tracks the growing draft only
-  // while the operator is already at the bottom.
-  const paintedDraft = draftReveal.text;
-  useEffect(() => {
-    if (paintedDraft === null) return;
+  /** The floating control shows once the operator has left the latest behind. */
+  const syncLatest = useCallback(() => {
     const node = scrollRef.current;
-    if (!node || !followDraftRef.current) return;
-    anchorToBottom(node);
-  }, [paintedDraft]);
+    const visible = node !== null && !followRef.current && awayFromLatest(node);
+    setLatestVisible((current) => (current === visible ? current : visible));
+  }, []);
 
-  // A draft that ends re-anchors, so the operator is not left mid-buffer.
+  // Follow the latest on every commit: a revealed draft or answer, a new
+  // milestone, a new entry — anything that grows the transcript while the
+  // operator is following. The first commit positions without a glide.
   useEffect(() => {
-    if (!PROVISIONAL_SETTLED_STATES.has(provisionalState)) return;
-    followDraftRef.current = true;
+    const node = scrollRef.current;
+    if (node && followRef.current) {
+      if (mountedScrollRef.current) anchorToBottom(node);
+      else positionAt(node, "bottom");
+    }
+    mountedScrollRef.current = true;
+    syncLatest();
+  });
+
+  const interruptFollowing = useCallback(() => {
+    followRef.current = false;
+  }, []);
+
+  const scrollToLatest = useCallback(() => {
+    followRef.current = true;
     const node = scrollRef.current;
     if (node) anchorToBottom(node);
-  }, [provisionalState]);
+    syncLatest();
+    promptRef.current?.focus();
+  }, [syncLatest]);
 
   /**
    * Every deliberate focus move the host makes, in one effect keyed on both the
@@ -518,6 +557,10 @@ export function AthenaAgentPanel({
 
   const submit = useCallback(
     async (prompt: string) => {
+      // A new question takes precedence over the prior reading position.
+      followRef.current = true;
+      const node = scrollRef.current;
+      if (node) anchorToBottom(node);
       await run.submit(prompt);
       onDraftChange("");
     },
@@ -619,18 +662,20 @@ export function AthenaAgentPanel({
         ) : null}
       </section>
 
+      <div className="relative flex min-h-0 flex-1 flex-col">
       <div
-        className="min-h-0 flex-1 overflow-y-auto"
+        className={cn("min-h-0 flex-1 overflow-y-auto", reducedMotion ? null : "scroll-smooth")}
         data-testid="athena-agent-scroll"
-        onScroll={(event) => {
-          const node = event.currentTarget;
-          onScrollTopChange?.(node.scrollTop);
-          // Scrolling up hands the reading position back to the operator; the
-          // draft stops chasing until they return to the bottom.
-          followDraftRef.current =
-            node.scrollHeight - node.scrollTop - node.clientHeight <=
-            SCROLL_FOLLOW_SLACK;
+        onKeyDown={(event) => {
+          if (SCROLL_INTERRUPT_KEYS.has(event.key)) interruptFollowing();
         }}
+        onPointerDown={interruptFollowing}
+        onScroll={(event) => {
+          onScrollTopChange?.(event.currentTarget.scrollTop);
+          syncLatest();
+        }}
+        onTouchMove={interruptFollowing}
+        onWheel={interruptFollowing}
         ref={scrollRef}
       >
         <section
@@ -915,6 +960,29 @@ export function AthenaAgentPanel({
             />
           ))}
         </section>
+      </div>
+      {/* Floats over the transcript, above the composer, once the operator has
+          scrolled away; a tap restarts the follow. */}
+      <button
+        aria-hidden={!latestVisible}
+        aria-label="Scroll to latest"
+        className={cn(
+          "absolute bottom-3 left-1/2 z-10 grid -translate-x-1/2 place-items-center rounded-full border border-border bg-background text-foreground shadow-md",
+          TOUCH_TARGET,
+          "transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none",
+          "hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+          latestVisible
+            ? "opacity-100"
+            : "pointer-events-none translate-y-1.5 scale-95 opacity-0",
+        )}
+        data-testid="athena-agent-latest"
+        data-visible={latestVisible ? "true" : "false"}
+        onClick={scrollToLatest}
+        tabIndex={latestVisible ? 0 : -1}
+        type="button"
+      >
+        <ArrowDown aria-hidden="true" className="h-4 w-4" />
+      </button>
       </div>
 
       <form

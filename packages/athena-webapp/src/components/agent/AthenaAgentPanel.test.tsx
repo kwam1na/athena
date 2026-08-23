@@ -1288,11 +1288,16 @@ describe("the provisional draft region", () => {
     );
   });
 
-  it("follows the growing draft only while the operator is at the bottom", async () => {
-    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
-    const scroll = screen.getByTestId("athena-agent-scroll");
+  const sized = (scroll: HTMLElement) => {
     Object.defineProperty(scroll, "clientHeight", { configurable: true, value: 100 });
     Object.defineProperty(scroll, "scrollHeight", { configurable: true, value: 400 });
+  };
+  const latest = () => screen.getByTestId("athena-agent-latest");
+
+  it("follows the growing draft until the operator scrolls the transcript themselves", async () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    const scroll = screen.getByTestId("athena-agent-scroll");
+    sized(scroll);
 
     rerender(
       <PanelHarness
@@ -1302,10 +1307,17 @@ describe("the provisional draft region", () => {
       />,
     );
     await waitFor(() => expect(scroll.scrollTop).toBe(300));
+    // At the latest: the floating control stays out of the way and out of the tab order.
+    expect(latest()).toHaveAttribute("data-visible", "false");
+    expect(latest()).toHaveAttribute("aria-hidden", "true");
+    expect(latest()).toHaveAttribute("tabindex", "-1");
 
-    // The operator scrolls up: following stops.
+    // The operator scrolls up: following stops, and the control appears.
+    fireEvent.wheel(scroll);
     scroll.scrollTop = 40;
     fireEvent.scroll(scroll);
+    expect(latest()).toHaveAttribute("data-visible", "true");
+    expect(latest()).toHaveAttribute("aria-hidden", "false");
     rerender(
       <PanelHarness
         run={draftRun("streaming", {
@@ -1319,9 +1331,148 @@ describe("the provisional draft region", () => {
     );
     expect(scroll.scrollTop).toBe(40);
 
-    // A terminal draft state re-anchors.
+    // A draft that ends does not take the reading position back either.
     rerender(<PanelHarness run={draftRun("stalled")} />);
+    expect(scroll.scrollTop).toBe(40);
+
+    // The control brings the operator back and the follow resumes.
+    fireEvent.click(latest());
     expect(scroll.scrollTop).toBe(300);
+    fireEvent.scroll(scroll);
+    expect(latest()).toHaveAttribute("data-visible", "false");
+    rerender(
+      <PanelHarness
+        run={draftRun("streaming", {
+          provisional: { text: "A later draft", truncated: false, draftOrdinal: 2 },
+        })}
+      />,
+    );
+    scroll.scrollTop = 200;
+    rerender(
+      <PanelHarness
+        run={draftRun("streaming", {
+          provisional: { text: "A later draft, longer", truncated: false, draftOrdinal: 2 },
+        })}
+      />,
+    );
+    await waitFor(() => expect(scroll.scrollTop).toBe(300));
+  });
+
+  it("is handed back by a pointer, a touch, or a navigation key, never by the smooth scroll itself", () => {
+    for (const interrupt of [
+      (scroll: HTMLElement) => fireEvent.pointerDown(scroll),
+      (scroll: HTMLElement) => fireEvent.touchMove(scroll),
+      (scroll: HTMLElement) => fireEvent.keyDown(scroll, { key: "PageUp" }),
+    ]) {
+      const { rerender, unmount } = render(<PanelHarness run={draftRun("streaming")} />);
+      const scroll = screen.getByTestId("athena-agent-scroll");
+      sized(scroll);
+      // A smooth scroll in flight is away from the bottom: that alone changes nothing.
+      scroll.scrollTop = 200;
+      fireEvent.scroll(scroll);
+      rerender(
+        <PanelHarness
+          run={draftRun("streaming", {
+            provisional: { text: "Still following", truncated: false, draftOrdinal: 1 },
+          })}
+        />,
+      );
+      expect(scroll.scrollTop).toBe(300);
+      expect(latest()).toHaveAttribute("data-visible", "false");
+
+      interrupt(scroll);
+      scroll.scrollTop = 200;
+      fireEvent.scroll(scroll);
+      rerender(
+        <PanelHarness
+          run={draftRun("streaming", {
+            provisional: { text: "Still following, no longer", truncated: false, draftOrdinal: 1 },
+          })}
+        />,
+      );
+      expect(scroll.scrollTop).toBe(200);
+      expect(latest()).toHaveAttribute("data-visible", "true");
+      unmount();
+    }
+  });
+
+  it("follows the answer as it lands and a new question restarts the follow", async () => {
+    const submit = vi.fn(async () => {});
+    const { rerender } = render(<PanelHarness run={draftRun("streaming", { submit })} />);
+    const scroll = screen.getByTestId("athena-agent-scroll");
+    sized(scroll);
+    fireEvent.wheel(scroll);
+    scroll.scrollTop = 40;
+    fireEvent.scroll(scroll);
+
+    rerender(
+      <PanelHarness
+        run={draftRun("superseded", {
+          submit,
+          hostState: "completed",
+          status: { headline: "Answer ready", tone: "neutral" },
+          canCancel: false,
+          canSubmit: true,
+          answer: {
+            outcome: "answer",
+            narrative: "Two lanes are open.",
+            egressClass: "operational",
+            limitedEvidence: false,
+            committedAt: 5,
+            citations: [],
+          },
+        })}
+      />,
+    );
+    // The operator had scrolled away: the answer does not take the position back.
+    expect(scroll.scrollTop).toBe(40);
+
+    fireEvent.change(screen.getByTestId("athena-agent-prompt"), { target: { value: "And card?" } });
+    fireEvent.submit(screen.getByTestId("athena-agent-composer"));
+    await waitFor(() => expect(submit).toHaveBeenCalledWith("And card?"));
+    expect(scroll.scrollTop).toBe(300);
+
+    // Following again: the next answer is kept in view as it reveals.
+    scroll.scrollTop = 120;
+    rerender(
+      <PanelHarness
+        run={draftRun("superseded", {
+          submit,
+          hostState: "completed",
+          status: { headline: "Answer ready", tone: "neutral" },
+          canCancel: false,
+          canSubmit: true,
+          answer: {
+            outcome: "answer",
+            narrative: "Two lanes are open, and one card payment landed.",
+            egressClass: "operational",
+            limitedEvidence: false,
+            committedAt: 9,
+            citations: [],
+          },
+        })}
+      />,
+    );
+    expect(scroll.scrollTop).toBe(300);
+  });
+
+  it("glides between positions, except under reduced motion", () => {
+    const { unmount } = render(<PanelHarness run={draftRun("streaming")} />);
+    expect(screen.getByTestId("athena-agent-scroll")).toHaveClass("scroll-smooth");
+    unmount();
+
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes("prefers-reduced-motion"),
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    render(<PanelHarness run={draftRun("streaming")} />);
+    expect(screen.getByTestId("athena-agent-scroll")).not.toHaveClass("scroll-smooth");
   });
 
   it("keeps a reading position restored on remount while the draft keeps growing", () => {
