@@ -177,8 +177,9 @@ answer was reached: the narrative trail (`agentTurnNarrativeTrail`) keeps a
 **committed** turn's finished drafts, released and withdrawn with the answer
 itself — written only when the run reached `completed` with a committed
 release, stamped with that answer's egress class, and served by
-`getTurnNarrativeTrail` on exactly the ladder `getTurnAnswer` walks, so the
-drafts are never readable where the answer is not. A canceled, failed, or
+`getTurnNarrativeTrail` on the ladder `getTurnAnswer` walks plus the
+narrative-policy rung (a buffered profile serves no drafts, `policy_disabled`),
+so the drafts are never readable where the answer is not. A canceled, failed, or
 refused turn leaves none.
 
 Mechanically: the adapter emits `narrative_delta { draftOrdinal, text }` from

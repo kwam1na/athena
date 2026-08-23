@@ -5,12 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "~/convex/_generated/dataModel";
 
 import { defineAthenaAgentPresentation } from "./AthenaAgentPresentationAdapter";
-import {
-  deriveAthenaProvisionalState,
-  useAthenaAgentRun,
-  type AthenaAgentProvisionalInput,
-  type AthenaAgentRun,
-} from "./useAthenaAgentRun";
+import { deriveAthenaProvisionalState, useAthenaAgentRun, type AthenaAgentProvisionalInput, type AthenaAgentRun, useAthenaAgentNarrativeTrail } from "./useAthenaAgentRun";
 
 vi.mock("~/convex/_generated/api", () => ({
   api: {
@@ -1474,6 +1469,20 @@ describe("the durable narrative trail", () => {
     const empty = mountRun({ activeTurnId: BINDING_ID });
     await waitFor(() => expect(empty.result.current.provisionalState).toBe("superseded"));
     expect(empty.result.current.provisionalTimeline).toEqual([]);
+  });
+
+  it("tells the operator the drafts are off, not that the answer is gone, when a buffered profile refuses the trail", async () => {
+    backend.view = committedView();
+    backend.preview = { state: "superseded", released: true };
+    backend.answer = committedAnswer;
+    backend.results.acknowledgeTurnAnswer = { kind: "acknowledged", operatorViewedAt: 210 };
+    backend.trail = { kind: "unavailable", reason: "policy_disabled" };
+    const { result } = renderHook(() =>
+      useAthenaAgentNarrativeTrail({ storeId: STORE_ID, turnId: BINDING_ID, enabled: true }),
+    );
+    await waitFor(() => expect(result.current.state).toBe("unavailable"));
+    expect(result.current).toMatchObject({ headline: "Live drafts are turned off for this store." });
+    expect(JSON.stringify(result.current)).not.toContain("answer");
   });
 
   it("exposes the store the panel needs to read an earlier turn's trail", () => {

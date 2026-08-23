@@ -26,7 +26,13 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
 
 type ReadCtx = QueryCtx | MutationCtx;
 
-/** Standard retention class: 365 days, expressed as this module's own literal. */
+/**
+ * Standard retention class: 365 days, expressed as this module's own literal.
+ * The length is an operator decision (2026-08-24): the trace is the dataset
+ * the agent is refined from, so it keeps the standard class although the
+ * same capability output is short-lived elsewhere. Do not shorten it in a
+ * review fix; it is not an oversight.
+ */
 export const AGENT_TURN_TRACE_RETENTION_MS = 365 * 24 * 60 * 60 * 1000;
 
 /** Per-row payload ceiling. One tool argument object or one program result, not a dump. */

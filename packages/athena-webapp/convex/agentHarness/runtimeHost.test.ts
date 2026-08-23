@@ -1154,7 +1154,9 @@ describe("turn host — the provisional draft", () => {
     const failures = logged.filter((line) => line.startsWith("[agentHarness:turnTrace]"));
     expect(failures.length).toBeGreaterThan(0);
     expect(failures[0]).toContain("\"trace\":\"flush_failed\"");
-    expect(failures[0]).toContain("trace store rejected the batch");
+    // The error's class, never its text: a message can quote the batch.
+    expect(failures[0]).toContain("\"error\":\"Error\"");
+    expect(failures[0]).not.toContain("trace store rejected the batch");
     // The answer committed regardless.
     const after = await rows(t, seeded);
     expect(after.run).toMatchObject({ status: "completed" });

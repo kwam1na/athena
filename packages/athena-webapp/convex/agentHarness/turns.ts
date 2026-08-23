@@ -900,8 +900,9 @@ export type AgentTurnNarrativePreview =
     };
 
 /**
- * The trail union. `unavailable` carries exactly the answer surface's closed
- * reason vocabulary; `trail` carries the committed drafts and nothing else —
+ * The trail union. `unavailable` carries the answer surface's closed reason
+ * vocabulary plus `policy_disabled`, the one reason the trail mints on its
+ * own; `trail` carries the committed drafts and nothing else —
  * no run id, no ordinal the refused reader could infer a turn's shape from.
  */
 export type AgentTurnNarrativeTrailView =
@@ -1115,10 +1116,12 @@ export function createAgentTurnEntryPoints(config: AgentTurnEntryPointConfig) {
    * The committed turn's draft trail: how Athena got to this answer, kept for
    * the operator after the pane's live draft is gone.
    *
-   * The ladder is the ANSWER's, rung for rung — `reauthorizeTurnAccess`
-   * (`not_found` until ownership is established), then suppression, then the
-   * commit, then the stored class against the viewer's current grant — so
-   * there is no state in which the drafts are readable and the answer is not.
+   * The ladder is the ANSWER's plus one rung — `reauthorizeTurnAccess`
+   * (`not_found` until ownership is established), then the narrative policy
+   * (`policy_disabled`: the answer is readable, the drafts are not a thing this
+   * profile serves), then suppression, then the commit, then the stored class
+   * against the viewer's current grant — so there is no state in which the
+   * drafts are readable and the answer is not.
    * `not_ready` is the same reason the answer mints for a turn that has not
    * committed. Never writes; a committed turn that narrated nothing serves an
    * honest empty trail rather than a refusal.

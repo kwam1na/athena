@@ -23,6 +23,7 @@ import {
   describeAthenaDenial,
   describeAthenaFailure,
   describeAthenaMilestone,
+  describeAthenaTrailUnavailable,
   describeAthenaUnavailable,
   describeProvisionalWithdrawal,
   resolveAthenaSourceLink,
@@ -356,9 +357,9 @@ type TurnView = {
 type Unavailable = { kind: "unavailable"; reason: string };
 
 /**
- * The durable trail contract, mirrored. `unavailable` speaks exactly the
- * answer surface's closed reason vocabulary, because the trail is gated on
- * exactly the answer's ladder.
+ * The durable trail contract, mirrored. `unavailable` speaks the answer
+ * surface's closed reason vocabulary plus `policy_disabled`, because the
+ * trail is gated on the answer's ladder plus the narrative-policy rung.
  */
 type NarrativeTrailResult =
   | { readonly kind: "unavailable"; readonly reason: string }
@@ -407,7 +408,7 @@ export function useAthenaAgentNarrativeTrail(input: {
   return useMemo(() => {
     if (!trail) return { state: "loading" };
     if (trail.kind === "unavailable") {
-      const described = describeAthenaUnavailable(trail.reason);
+      const described = describeAthenaTrailUnavailable(trail.reason);
       return {
         state: "unavailable",
         headline: described.headline,

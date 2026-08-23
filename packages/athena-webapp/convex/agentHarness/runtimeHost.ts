@@ -333,7 +333,8 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
       try {
         await flushTrace();
       } catch (error) {
-        console.log(`[agentHarness:turnTrace] ${JSON.stringify({ turnId: bindingId, trace: "flush_failed", dropped: pending - trace.buffer.length, message: error instanceof Error ? error.message : String(error) })}`);
+        // The class only: a validation error's message can quote the batch.
+        console.log(`[agentHarness:turnTrace] ${JSON.stringify({ turnId: bindingId, trace: "flush_failed", dropped: pending - trace.buffer.length, error: error instanceof Error ? error.name : "unknown" })}`);
       }
     };
 

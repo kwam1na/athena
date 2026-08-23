@@ -306,6 +306,20 @@ export function AthenaAgentPanel({
   const followRef = useRef(true);
   const mountedScrollRef = useRef(false);
   const latestRef = useRef<HTMLButtonElement>(null);
+  // The panel's own focus moves (status, answer heading, withdrawn notice,
+  // citation, source) land inside the transcript; they are not the operator
+  // reading there and must not withdraw the follow. `focus()` dispatches its
+  // events synchronously, so a flag around the call is enough.
+  const ownFocusRef = useRef(false);
+  const focusOwn = useCallback((node: HTMLElement | null | undefined) => {
+    if (!node) return;
+    ownFocusRef.current = true;
+    try {
+      node.focus();
+    } finally {
+      ownFocusRef.current = false;
+    }
+  }, []);
   const [latestVisible, setLatestVisible] = useState(false);
   const [activeCitation, setActiveCitation] = useState<string | null>(null);
   const [draftCue, setDraftCue] = useState<{
@@ -469,7 +483,7 @@ export function AthenaAgentPanel({
       ) {
         return;
       }
-      statusRef.current?.focus();
+      focusOwn(statusRef.current);
       focusClaimedTurnRef.current = null;
       return;
     }
@@ -479,7 +493,7 @@ export function AthenaAgentPanel({
       run.hostState === "no_usable_sources"
     ) {
       if (previous && previous.hostState === run.hostState) return;
-      answerHeadingRef.current?.focus();
+      focusOwn(answerHeadingRef.current);
       focusClaimedTurnRef.current = null;
       return;
     }
@@ -501,9 +515,9 @@ export function AthenaAgentPanel({
     ) {
       return;
     }
-    withdrawnRef.current?.focus();
+    focusOwn(withdrawnRef.current);
     focusClaimedTurnRef.current = run.activeTurnId;
-  }, [run.hostState, run.provisionalState, run.activeTurnId]);
+  }, [run.hostState, run.provisionalState, run.activeTurnId, focusOwn]);
 
   const openSource = useCallback(
     (citationRef: string) => {
@@ -516,9 +530,9 @@ export function AthenaAgentPanel({
   const closeSource = useCallback(
     (citationRef: string) => {
       setActiveCitation(null);
-      citationRefs.current[citationRef]?.focus();
+      focusOwn(citationRefs.current[citationRef]);
     },
-    [],
+    [focusOwn],
   );
 
   const sourceEntries = useMemo(
@@ -560,8 +574,8 @@ export function AthenaAgentPanel({
     if (!activeCitation) return;
     const source = run.sources[activeCitation];
     if (!source || source.state === "loading") return;
-    sourceHeadingRef.current?.focus();
-  }, [activeCitation, run.sources]);
+    focusOwn(sourceHeadingRef.current);
+  }, [activeCitation, run.sources, focusOwn]);
 
   const canSend = run.canSubmit && run.canFollowUp && draft.trim().length > 0;
   const submit = useCallback(
@@ -680,7 +694,9 @@ export function AthenaAgentPanel({
         data-testid="athena-agent-scroll"
         // Keyboard travel into the transcript (a citation, a trail summary)
         // is the operator reading there; the follow must not pull it away.
-        onFocusCapture={interruptFollowing}
+        onFocusCapture={() => {
+          if (!ownFocusRef.current) interruptFollowing();
+        }}
         onKeyDown={(event) => {
           if (SCROLL_INTERRUPT_KEYS.has(event.key)) interruptFollowing();
         }}

@@ -383,6 +383,18 @@ const CONTENT_GONE_REASONS = new Set([
 ]);
 
 /**
+ * Why a committed turn's draft trail cannot be shown. One reason is the
+ * trail's own — `policy_disabled`, the answer is readable but a buffered
+ * profile serves no drafts — and every other reason is the answer's.
+ */
+export function describeAthenaTrailUnavailable(reason: string): AthenaAgentUnavailable {
+  if (reason === "policy_disabled") {
+    return { reason, state: "profile_unavailable", headline: "Live drafts are turned off for this store." };
+  }
+  return describeAthenaUnavailable(reason);
+}
+
+/**
  * Why a turn, answer, or source cannot be shown. `subject` names what the
  * operator was looking at so the same reason reads correctly in each surface.
  */

@@ -1388,6 +1388,64 @@ describe("the provisional draft region", () => {
     expect(screen.getByTestId("athena-agent-prompt")).toHaveFocus();
   });
 
+  it("keeps following through the panel's own focus moves", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    const scroll = screen.getByTestId("athena-agent-scroll");
+    sized(scroll);
+    // Stop: the status line takes focus, inside the transcript.
+    rerender(
+      <PanelHarness
+        run={draftRun("streaming", {
+          hostState: "cancellation_requested",
+          status: { headline: "Stopping…", tone: "progress" },
+        })}
+      />,
+    );
+    expect(screen.getByTestId("athena-agent-status")).toHaveFocus();
+    scroll.scrollTop = 120;
+    rerender(
+      <PanelHarness
+        run={draftRun("streaming", {
+          hostState: "cancellation_requested",
+          status: { headline: "Stopping…", tone: "progress" },
+          provisional: { text: "A last flush lands", truncated: false, draftOrdinal: 1 },
+        })}
+      />,
+    );
+    // Still following: the panel moved focus, not the operator.
+    expect(scroll.scrollTop).toBe(300);
+  });
+
+  it("keeps following through the commit, when the answer heading takes focus and the answer reveals", async () => {
+    const { rerender } = render(
+      <PanelHarness run={draftRun("streaming", { provisional: { text: "Checking the lanes.", truncated: false, draftOrdinal: 1 } })} />,
+    );
+    const scroll = screen.getByTestId("athena-agent-scroll");
+    sized(scroll);
+    await waitFor(() => expect(scroll.scrollTop).toBe(300));
+    const answered = draftRun("superseded", {
+      hostState: "completed",
+      status: { headline: "Answer ready", tone: "neutral" },
+      canCancel: false,
+      canSubmit: true,
+      answer: {
+        outcome: "answer",
+        narrative: "Two lanes are open, and one card payment landed. ".repeat(6),
+        egressClass: "operational",
+        limitedEvidence: false,
+        committedAt: 5,
+        citations: [],
+      },
+    });
+    rerender(<PanelHarness run={answered} />);
+    expect(screen.getByTestId("athena-agent-answer-heading")).toHaveFocus();
+    // The answer keeps arriving below the heading the panel focused; the follow holds.
+    scroll.scrollTop = 150;
+    rerender(<PanelHarness run={{ ...answered, milestones: answered.milestones }} />);
+    await waitFor(() => expect(scroll.scrollTop).toBe(300));
+    expect(latest()).toHaveAttribute("data-visible", "false");
+  });
+
   it("is handed back when keyboard focus travels into the transcript", () => {
     const { rerender } = render(
       <PanelHarness
@@ -1407,7 +1465,7 @@ describe("the provisional draft region", () => {
     );
     const scroll = screen.getByTestId("athena-agent-scroll");
     sized(scroll);
-    const inside = scroll.querySelector("summary, button, [tabindex]") as HTMLElement | null;
+    const inside = scroll.querySelector("summary") as HTMLElement | null;
     expect(inside).not.toBeNull();
     scroll.scrollTop = 120;
     fireEvent.scroll(scroll);

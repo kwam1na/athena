@@ -424,7 +424,9 @@ starter intents, source destinations, thread-key policy).
   Nothing else about the profile changes: the narration is not the answer, and
   `completeRun`'s committed artifact is still the only release.
 
-  What the policy actually governs is one server-side check. The adapter
+  What the policy actually governs is three server-side checks that share one
+  rung — the turn host's flush, `previewTurnNarrative`, and the committed
+  turn's `getTurnNarrativeTrail` all refuse on `buffered`. The adapter
   streams `narrative_delta { draftOrdinal, text }` regardless (the narration
   directive lives in the adapter's default instructions, not in the profile),
   and the turn host's single-flight flush reads `narrativePolicy` from the
