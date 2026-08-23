@@ -7,7 +7,7 @@
   <body>
     <article
       data-athena-landed-change-report="v2"
-      data-athena-report-diff-fingerprint="6d2ee68f0d3206fb462fafb7914644535668896dcdffbfbd00b6b94c537b3cfd"
+      data-athena-report-diff-fingerprint="d7fd2899aef7bfa3ba61870a898a05e529fd780ea0a43c62977238b356a738dd"
       data-athena-report-base="origin/main"
     >
       <header data-report-section="header">
@@ -16,7 +16,7 @@
           <li>Delivery candidate</li>
           <li>Branch codex/v26-1312-followups</li>
           <li>4 tickets + 2 gaps closed in-flight</li>
-          <li>9,962 webapp tests green</li>
+          <li>9,968 webapp tests green</li>
           <li>1,105 tests green under timer lag</li>
         </ul>
         <dl data-report-meta>
@@ -24,7 +24,7 @@
           <dt>Also closed</dt><dd>Two gaps found mid-delivery, no ticket — handled here rather than deferred</dd>
           <dt>Status</dt><dd>Delivery candidate — not yet merged, not yet deployed</dd>
           <dt>Base</dt><dd>origin/main (epic V26-1312 merged as 93ce9c34)</dd>
-          <dt>New follow-up filed</dt><dd>V26-1319</dd>
+          <dt>New follow-ups filed</dt><dd>V26-1319, V26-1320</dd>
         </dl>
       </header>
 
@@ -48,9 +48,14 @@
           seconds what coverage instrumentation never reproduced in 15 minutes.
         </p>
         <p>
-          One new defect surfaced and was deliberately <em>not</em> folded in:
-          entire-order discounts applied per line item in fulfillment emails, filed
-          as V26-1319 at High.
+          Two further defects surfaced and were deliberately <em>not</em> folded
+          in: entire-order discounts applied per line item in fulfillment emails
+          (V26-1319, High), and promo-code percentage discounts rendering as a
+          currency figure because the promo path writes
+          <code>discountType</code>/<code>discountValue</code> where the reader
+          expects <code>type</code>/<code>value</code> (V26-1320). Both are
+          pre-existing, both are discount-presentation defects on axes other than
+          units, and each needs its own characterization pass.
         </p>
       </section>
 
@@ -191,7 +196,7 @@
         <table>
           <thead><tr><th>Check</th><th>Result</th></tr></thead>
           <tbody>
-            <tr><td>Webapp Vitest</td><td>827 files, 9,962 tests passed</td></tr>
+            <tr><td>Webapp Vitest</td><td>827 files, 9,968 tests passed</td></tr>
             <tr><td><code>test:timing-parity</code> (10x lag)</td><td>70 files, 1,105 tests passed</td></tr>
             <tr><td>Same at 40x lag</td><td>70 files, 1,105 tests passed</td></tr>
             <tr><td><code>tsc --noEmit</code></td><td>clean</td></tr>
