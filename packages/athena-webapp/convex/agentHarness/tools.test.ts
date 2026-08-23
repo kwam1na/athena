@@ -214,3 +214,96 @@ describe("athena.completeRun submission canonicalization", () => {
     expect(outcome).toMatchObject({ kind: "denied", denial: { code: "no_attempts" } });
   });
 });
+
+describe("athena.completeRun ref resolution by content-hash tail", () => {
+  /** Attempts whose refs carry realistic 32-hex tails, as the harness mints them. */
+  function hashedTools() {
+    const completions: CompleteRunCall[] = [];
+    let sequence = 0;
+    const host = {
+      runId: "run_1" as Id<"intelligenceRun">,
+      bindingId: "binding_1" as Id<"agentTurnBinding">,
+      ctx: {
+        runQuery: async () => ({}),
+        runMutation: async (reference: unknown, args: unknown) => {
+          if (reference === PREPARE_COMPLETION) return { outcome: "prepared", preparedCompletionRef: "prepared_1" };
+          completions.push(args as CompleteRunCall);
+          return { outcome: "completed", artifactId: "artifact_1", citations: [] };
+        },
+      },
+      refs: { prepareCompletion: PREPARE_COMPLETION, completeRun: COMPLETE_RUN } as unknown as AgentToolHostContext["refs"],
+      executeProgram: async () => {
+        const index = sequence++;
+        return {
+          outcome: "result",
+          attemptRef: `attempt_v1.${index + 1}.aaaabbbbccccdddd0000111122223333`,
+          attemptId: `attempt_id_${index}` as Id<"agentProgramAttempt">,
+          result: { output: { index }, egressClass: "operational", completeness: { status: "complete", sources: [] }, freshness: { class: "live", authority: "live_read" } },
+          citations: [{ citation: `citation:v1.${index + 1}.${index + 1}.9999888877776666555544443333222${index}`, namespace: "inventory.positions", verb: "list" }],
+          calls: [],
+        } as never;
+      },
+      now: () => 1_700_000_000_000,
+      egressFloor: "operational",
+    } satisfies Partial<AgentToolHostContext> as unknown as AgentToolHostContext;
+    const { registrations } = createAthenaToolRegistrations(host);
+    const byId = new Map(registrations.map((registration) => [registration.definition.toolId, registration]));
+    return {
+      completions,
+      executeProgram: () => byId.get("athena.executeProgram")!.handler({ source: "return 1;" } as never, handlerContext(`exec_${sequence}`)),
+      completeRun: (args: Record<string, unknown>) => byId.get("athena.completeRun")!.handler(args as never, handlerContext("complete_1")),
+    };
+  }
+
+  it("snaps prefix-dropped and segment-dropped refs to the minted handles by hash tail", async () => {
+    const tools = hashedTools();
+    await tools.executeProgram();
+    const outcome = await tools.completeRun({
+      outcome: "answer",
+      narrative: "One line.",
+      // Dropped "citation:" prefix on the citation; version segment intact on the attempt.
+      citedAttemptRefs: ["attempt_v1.1.aaaabbbbccccdddd0000111122223333"],
+      citations: [{ ref: "v1.1.1.99998888777766665555444433332220", claim: "positions read" }],
+    });
+    expect(outcome.kind).toBe("success");
+    const call = tools.completions[0] as unknown as { citedAttemptRefs: string[]; citations: { ref: string; claim?: string }[] };
+    expect(call.citedAttemptRefs).toEqual(["attempt_v1.1.aaaabbbbccccdddd0000111122223333"]);
+    expect(call.citations).toEqual([{ ref: "citation:v1.1.1.99998888777766665555444433332220", claim: "positions read" }]);
+  });
+
+  it("re-buckets a citation hash wearing an attempt prefix", async () => {
+    const tools = hashedTools();
+    await tools.executeProgram();
+    const outcome = await tools.completeRun({
+      outcome: "answer",
+      narrative: "One line.",
+      citedAttemptRefs: [
+        "attempt_v1.1.aaaabbbbccccdddd0000111122223333",
+        // A citation's hash tail wearing an attempt-shaped prefix.
+        "attempt_v1.1.1.99998888777766665555444433332220",
+      ],
+      citations: [],
+    });
+    expect(outcome.kind).toBe("success");
+    const call = tools.completions[0] as unknown as { citedAttemptRefs: string[]; citations: { ref: string }[] };
+    expect(call.citedAttemptRefs).toEqual(["attempt_v1.1.aaaabbbbccccdddd0000111122223333"]);
+    expect(call.citations).toEqual([{ ref: "citation:v1.1.1.99998888777766665555444433332220" }]);
+  });
+
+  it("names the minted refs when an answer still lacks a resolvable citation", async () => {
+    const tools = hashedTools();
+    await tools.executeProgram();
+    // A namespace string resolves to no known handle, so no citation survives
+    // normalization — and the denial names exactly what would be valid.
+    const denied = await tools.completeRun({
+      outcome: "answer",
+      narrative: "One line.",
+      citedAttemptRefs: ["attempt_v1.1.aaaabbbbccccdddd0000111122223333"],
+      citations: [{ ref: "operations.storeDay.get" }],
+    });
+    expect(denied).toMatchObject({ kind: "denied", denial: { code: "citations_required" } });
+    if (denied.kind !== "denied") return;
+    expect(denied.denial.message).toContain("attempt_v1.1.aaaabbbbccccdddd0000111122223333");
+    expect(denied.denial.message).toContain("citation:v1.1.1.99998888777766665555444433332220");
+  });
+});

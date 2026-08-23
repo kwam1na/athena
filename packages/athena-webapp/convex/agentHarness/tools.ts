@@ -462,14 +462,54 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
       if (attempts.length === 0 && args.outcome !== "no_usable_sources") {
         return denied("no_attempts", "Read at least one source with athena.executeProgram before completing, or complete with outcome no_usable_sources.");
       }
-      if (args.outcome === "answer" && (args.citedAttemptRefs.length === 0 || args.citations.length === 0)) {
-        return denied("citations_required", "An answer must cite at least one attempt and one citation; use outcome no_usable_sources when nothing usable was read.");
+      // Refs are opaque handles this turn itself handed out, and models
+      // transcribe them imperfectly (dropped prefixes, dropped version
+      // segments, attempt/citation hybrids). The content-hash tail identifies
+      // the intended handle exactly, so resolve each passed ref to the unique
+      // known ref sharing its tail — including across buckets — and leave
+      // anything unresolvable for the kernel to reject. Nothing is granted
+      // that this run's reads did not already return.
+      const knownAttemptRefs = attempts.map((attempt) => attempt.attemptRef);
+      const knownCitationRefs = attempts.flatMap((attempt) => attempt.citations.map((citation) => citation.citation));
+      const hashTail = (ref: string) => /([0-9a-f]{24,})$/.exec(ref)?.[1];
+      const byTail = (refs: readonly string[]) => {
+        const map = new Map<string, string | null>();
+        for (const ref of refs) {
+          const tail = hashTail(ref);
+          if (!tail) continue;
+          map.set(tail, map.has(tail) ? null : ref);
+        }
+        return map;
+      };
+      const attemptByTail = byTail(knownAttemptRefs);
+      const citationByTail = byTail(knownCitationRefs);
+      const knownAttempts = new Set(knownAttemptRefs);
+      const knownCitations = new Set(knownCitationRefs);
+      const resolvedAttemptRefs: string[] = [];
+      const resolvedCitations: { ref: string; claim?: string; claimShape?: string }[] = [];
+      const resolveRef = (ref: string, claim?: { claim?: string; claimShape?: string }) => {
+        const tail = hashTail(ref);
+        const asAttempt = knownAttempts.has(ref) ? ref : tail ? (attemptByTail.get(tail) ?? undefined) : undefined;
+        const asCitation = knownCitations.has(ref) ? ref : tail ? (citationByTail.get(tail) ?? undefined) : undefined;
+        if (asCitation) resolvedCitations.push({ ref: asCitation, ...(claim ?? {}) });
+        else if (asAttempt) resolvedAttemptRefs.push(asAttempt);
+        else if (ref.startsWith("citation:")) resolvedCitations.push({ ref, ...(claim ?? {}) });
+        else resolvedAttemptRefs.push(ref);
+      };
+      for (const ref of args.citedAttemptRefs) resolveRef(ref);
+      for (const citation of args.citations) resolveRef(citation.ref, { ...(citation.claim !== undefined ? { claim: citation.claim } : {}), ...(citation.claimShape !== undefined ? { claimShape: citation.claimShape } : {}) });
+      const citedAttemptRefs = [...new Set(resolvedAttemptRefs)];
+      const citations = [...new Map(resolvedCitations.map((entry) => [entry.ref, entry])).values()];
+      const validRefsHint = () =>
+        ` Valid citedAttemptRefs: ${knownAttemptRefs.join(", ") || "(none)"}. Valid citation refs: ${knownCitationRefs.join(", ") || "(none)"}. Copy them verbatim.`;
+      if (args.outcome === "answer" && (citedAttemptRefs.length === 0 || citations.length === 0)) {
+        return denied("citations_required", `An answer must cite at least one attempt and one citation; use outcome no_usable_sources when nothing usable was read.${validRefsHint()}`);
       }
       await host.reportProgress?.("finalizing");
       const preparedRef = completionRequestRef(args);
       const prepared = (await host.ctx.runMutation(host.refs.prepareCompletion, { bindingId: host.bindingId, runId: host.runId, preparedCompletionRef: preparedRef, now: host.now() })) as AgentPrepareCompletionOutcome;
       if (prepared.outcome === "rejected") return denied(prepared.code, prepared.message);
-      const cited = new Set(args.citedAttemptRefs);
+      const cited = new Set(citedAttemptRefs);
       // The narrative may quote anything the provider was shown, so the answer's
       // class is the maximum over EVERY attempt whose result was released to the
       // provider — never the model-chosen cited subset, which would let a
@@ -482,8 +522,8 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
       const committed = (await host.ctx.runMutation(host.refs.completeRun, {
         runId: host.runId,
         idempotencyKey: prepared.preparedCompletionRef,
-        citedAttemptRefs: [...args.citedAttemptRefs],
-        citations: args.citations.map((citation) => ({ ...citation })),
+        citedAttemptRefs: [...citedAttemptRefs],
+        citations: citations.map((citation) => ({ ...citation })),
         artifact: {
           ...(args.title ? { title: args.title } : {}),
           summary: args.narrative.slice(0, 280),
@@ -491,7 +531,7 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
             outcome: args.outcome,
             narrative: args.narrative,
             egressClass,
-            citations: args.citations.map((citation) => ({ ref: citation.ref, ...(namespaceOf.has(citation.ref) ? { namespace: namespaceOf.get(citation.ref) } : {}) })),
+            citations: citations.map((citation) => ({ ref: citation.ref, ...(namespaceOf.has(citation.ref) ? { namespace: namespaceOf.get(citation.ref) } : {}) })),
             ...(args.outcome === "no_usable_sources" ? { sourcesTried: [...new Set(attempts.flatMap((attempt) => attempt.citations.map((citation) => citation.namespace)))] } : {}),
           }),
           ...(args.confidence !== undefined ? { confidence: args.confidence } : {}),
@@ -513,7 +553,7 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
           if (AGENT_AUTHORITY_REVOCATION_REASONS.has(committed.reason)) revocations.push(committed.reason);
           return denied(committed.reason, "The answer could not be released.");
         case "rejected":
-          return failure(committed.reason, committed.message, true);
+          return failure(committed.reason, `${committed.message}${validRefsHint()}`, true);
       }
     },
   };
