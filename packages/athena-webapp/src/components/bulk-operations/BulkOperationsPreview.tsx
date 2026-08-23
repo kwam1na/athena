@@ -17,7 +17,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, ArrowRight, Loader2 } from "lucide-react";
-import { toDisplayAmount } from "~/convex/lib/currency";
+import { toDisplayAmount } from "~/shared/currency";
 import { useGetCurrencyFormatter } from "~/src/hooks/useGetCurrencyFormatter";
 import { getProductName } from "~/src/lib/productUtils";
 import type { PreviewRow } from "~/src/hooks/useBulkOperations";

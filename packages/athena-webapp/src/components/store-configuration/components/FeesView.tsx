@@ -7,7 +7,7 @@ import { Switch } from "../../ui/switch";
 import { Label } from "../../ui/label";
 import { useStoreConfigUpdate } from "../hooks/useStoreConfigUpdate";
 import { getStoreConfigV2 } from "~/src/lib/storeConfig";
-import { toDisplayAmount } from "~/convex/lib/currency";
+import { toDisplayAmount } from "~/shared/currency";
 import { parseDisplayAmountInput } from "~/src/lib/pos/displayAmounts";
 import { toast } from "sonner";
 

@@ -2,7 +2,11 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
+import {
+  HARNESS_APP_REGISTRY,
+  HARNESS_PACKAGE_REGISTRY,
+  getHarnessPackageRegistration,
+} from "./harness-app-registry";
 import { projectReviewActivation } from "./harness-candidate";
 import { HARNESS_GATE_REGISTRY } from "./harness-gate-registry";
 
@@ -1375,5 +1379,40 @@ describe("HARNESS_APP_REGISTRY", () => {
     );
 
     expect(statuses).toEqual(["active", "active", "active"]);
+  });
+});
+
+describe("HARNESS_PACKAGE_REGISTRY", () => {
+  it("registers athena-contracts as a non-harness package with a reason", () => {
+    const registration = getHarnessPackageRegistration(
+      "packages/athena-contracts",
+    );
+
+    expect(registration).toBeDefined();
+    expect(registration!.kind).toBe("non-harness");
+    // The note is the audit trail for why this package has no validation
+    // surface of its own; an empty one would make the exemption unreviewable.
+    expect(
+      (registration as { note: string }).note.length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("registers each package directory at most once", () => {
+    const packageDirs = HARNESS_PACKAGE_REGISTRY.map(
+      (entry) => entry.packageDir,
+    );
+
+    // Uniqueness only -- that every directory under packages/ is registered at
+    // all is enforced by collectHarnessOnboardingErrors in harness-check.ts,
+    // not here, because this registry cannot see the filesystem.
+    expect(new Set(packageDirs).size).toBe(packageDirs.length);
+  });
+
+  it("keeps harness apps registered as harness-app, not exempted", () => {
+    for (const entry of HARNESS_APP_REGISTRY) {
+      const registration = getHarnessPackageRegistration(entry.packageDir);
+
+      expect(registration?.kind).toBe("harness-app");
+    }
   });
 });

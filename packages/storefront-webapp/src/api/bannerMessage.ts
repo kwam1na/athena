@@ -1,5 +1,5 @@
 import config from "@/config";
-import { BannerMessage } from "@athena/webapp";
+import { BannerMessage } from "@athena/contracts";
 
 export async function getBannerMessage(): Promise<BannerMessage | null> {
   const response = await fetch(`${config.apiGateway.URL}/banner-message`, {

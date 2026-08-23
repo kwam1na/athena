@@ -13,7 +13,7 @@ import { useExpenseLocalRuntime } from "@/hooks/useExpenseLocalRuntime";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useGetTerminal } from "@/hooks/useGetTerminal";
 import { api } from "~/convex/_generated/api";
-import { currencyFormatter } from "~/convex/utils";
+import { currencyFormatter } from "~/shared/currencyFormatter";
 import { expenseReportColumns, ExpenseReportRow } from "./expenseReportColumns";
 import { toExpenseReportRows } from "./expenseReportRows";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";

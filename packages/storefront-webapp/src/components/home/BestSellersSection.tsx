@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import { ProductSkuCard } from "../ProductCard";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { ProductSku } from "@athena/webapp";
+import { ProductSku } from "@athena/contracts";
 import type { HomepageDisplaySku } from "./homePageContent";
 
 interface BestSellersSectionProps {

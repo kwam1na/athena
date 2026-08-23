@@ -2,7 +2,7 @@ import { Discount, Address } from "./types";
 import { ALL_COUNTRIES } from "@/lib/countries";
 import { GHANA_REGIONS } from "@/lib/ghanaRegions";
 import { accraNeighborhoods } from "@/lib/ghana";
-import { OnlineOrder } from "@athena/webapp";
+import { OnlineOrder } from "@athena/contracts";
 
 export type BagItem = {
   productSkuId: string;

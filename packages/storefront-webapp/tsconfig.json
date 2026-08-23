@@ -29,7 +29,10 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@athena/webapp": ["../athena-webapp"]
+      // Shared DTOs live in the neutral contract package, never in the Athena
+      // admin application root. See packages/athena-contracts/README.md.
+      "@athena/contracts": ["../athena-contracts/index.ts"],
+      "@athena/contracts/*": ["../athena-contracts/*"]
     },
     "types": ["vitest/globals", "vite/client", "@testing-library/jest-dom"]
   }

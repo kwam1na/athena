@@ -65,6 +65,8 @@ import {
   completeCatalogTaxonomySetupWorkForProductWithCtx,
   completeFinalizedLegacyImportRowsForProductTaxonomyWithCtx,
 } from "./catalogImport";
+import { guardProductArchiveTransition } from "./helpers/productArchivePrecondition";
+import { ok } from "../../shared/commandResult";
 import { applyInventoryEffectWithCtx } from "../inventoryLedger/effects";
 import {
   knownUnitCostBasis,
@@ -1323,9 +1325,24 @@ export const update = mutation({
   handler: admitPublicMutation(
     updateProductOperationDefinition,
     async (ctx: OperationMutationCtx, args: any) => {
-    await requireAuthenticatedAthenaUserWithCtx(ctx);
+    const actor = await requireAuthenticatedAthenaUserWithCtx(ctx);
     const { id, ...rest } = args;
     const productBefore = await ctx.db.get("product", args.id);
+
+    // Every public path into `archived` shares one precondition, and it runs
+    // before any write so a rejected transition leaves the product untouched.
+    if (
+      args.availability === "archived" &&
+      productBefore &&
+      productBefore.availability !== "archived"
+    ) {
+      const blockedResult = await guardProductArchiveTransition(ctx, {
+        actorUserId: actor?._id,
+        product: productBefore,
+      });
+      if (blockedResult) return blockedResult;
+    }
+
     const taxonomyChanged =
       productBefore &&
       ((args.categoryId !== undefined &&
@@ -1426,7 +1443,7 @@ export const update = mutation({
       await refreshCatalogSummaryWithCtx(ctx, product.storeId);
     }
 
-    return product;
+    return ok(product);
     },
   ),
 });
@@ -1441,12 +1458,20 @@ export const archive = mutation({
     async (ctx: OperationMutationCtx,
       args: { id: Id<"product">; storeId: Id<"store"> },
     ) => {
-    await requireStoreFullAdminAccess(ctx, args.storeId);
+    const access = await requireStoreFullAdminAccess(ctx, args.storeId);
 
     const product = await ctx.db.get("product", args.id);
 
     if (!product || product.storeId !== args.storeId) {
-      return null;
+      return ok(null);
+    }
+
+    if (product.availability !== "archived") {
+      const blockedResult = await guardProductArchiveTransition(ctx, {
+        actorUserId: access?.athenaUser?._id,
+        product,
+      });
+      if (blockedResult) return blockedResult;
     }
 
     await ctx.db.patch("product", args.id, { availability: "archived" });
@@ -1465,7 +1490,7 @@ export const archive = mutation({
       },
     );
 
-    return await ctx.db.get("product", args.id);
+    return ok(await ctx.db.get("product", args.id));
     },
   ),
 });

@@ -3,7 +3,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { useBannerMessageQueries } from "@/lib/queries/bannerMessage";
 import { cn } from "@/lib/utils";
-import { PromoCode, BannerMessage } from "@athena/webapp";
+import { PromoCode, BannerMessage } from "@athena/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";

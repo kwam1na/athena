@@ -1,6 +1,6 @@
 import config from "@/config";
 import type { OrganizationStoreEntityApiParams } from "./types";
-import { Store } from "@athena/webapp";
+import { Store } from "@athena/contracts";
 
 const getBaseUrl = (organizationId: string) =>
   `${config.apiGateway.URL}/organizations/${organizationId}/stores`;

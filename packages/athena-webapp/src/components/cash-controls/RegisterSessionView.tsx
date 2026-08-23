@@ -60,7 +60,7 @@ import {
 import { formatRegisterSessionCode } from "@/lib/pos/presentation/registerSessionCode";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
-import { toDisplayAmount } from "~/convex/lib/currency";
+import { toDisplayAmount } from "~/shared/currency";
 import { userError, type CommandResult } from "~/shared/commandResult";
 import type {
   ApprovalRequesterBinding,

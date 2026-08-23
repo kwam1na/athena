@@ -1,11 +1,10 @@
 import { currencyFormatter } from "@/lib/utils";
-import { Store, StoreFrontUser } from "@athena/webapp";
+import { Id, Store, StoreFrontUser } from "@athena/contracts";
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { MaintenanceMode } from "@/components/states/maintenance/Maintenance";
 import { useGetStore } from "@/hooks/useGetStore";
 import { ORGANIZATION_ID_KEY, STORE_ID_KEY } from "@/lib/constants";
-import { Id } from "../../../athena-webapp/convex/_generated/dataModel";
 
 type StoreContextType = {
   organizationId: string;

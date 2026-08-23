@@ -1,5 +1,5 @@
 import React from "react";
-import { Review } from "@athena/webapp";
+import { Review } from "@athena/contracts";
 
 interface DimensionBarProps {
   reviews: Review[];

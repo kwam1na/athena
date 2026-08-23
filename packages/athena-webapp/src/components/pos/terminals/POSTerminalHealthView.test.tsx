@@ -111,7 +111,34 @@ vi.mock("@/components/states/signed-out/ProtectedAdminSignInView", () => ({
   ),
 }));
 
+function serverExplanation(
+  overrides: Partial<
+    NonNullable<TerminalHealthSummary["operationalExplanation"]>
+  > = {},
+): NonNullable<TerminalHealthSummary["operationalExplanation"]> {
+  return {
+    blockingDomain: "none",
+    detail: "A drawer is open for this terminal.",
+    evidenceReferences: [],
+    headline: "Drawer open",
+    lane: "drawer_open",
+    nextStep: "No support action needed.",
+    primaryOwner: "none",
+    saleImpact: "unknown",
+    secondaryActions: [],
+    severity: "info",
+    summaryMeta: {
+      hasSecondarySafeRepair: false,
+      reviewBacklogCount: 0,
+      targetResolutionIncomplete: false,
+    },
+    supportAction: "none",
+    ...overrides,
+  };
+}
+
 const baseSummary: TerminalHealthSummary = {
+  operationalExplanation: serverExplanation(),
   registerSessionLink: {
     registerSessionId: "register-session-1",
     status: "open",
@@ -237,6 +264,17 @@ describe("POSTerminalHealthViewContent", () => {
                 type: "local_review",
               },
             ],
+            operationalExplanation: serverExplanation({
+              blockingDomain: "manual_review",
+              detail: "1 local review item is still on this terminal.",
+              headline: "Manager review needed",
+              lane: "needs_manual_review",
+              nextStep:
+                "Use the linked review workspace before running support repair.",
+              primaryOwner: "manager",
+              severity: "critical",
+              supportAction: "manual_review",
+            }),
             runtimeStatus: null,
             health: "needs_attention",
             terminal: {
@@ -265,6 +303,16 @@ describe("POSTerminalHealthViewContent", () => {
               },
             ],
             health: "needs_attention",
+            operationalExplanation: serverExplanation({
+              blockingDomain: "sync_review",
+              detail: "1 synced item is held before projection.",
+              headline: "Review needed",
+              lane: "needs_manual_review",
+              nextStep: "Use the linked review workspace to clear the backlog.",
+              primaryOwner: "operations",
+              severity: "critical",
+              supportAction: "manual_review",
+            }),
             runtimeStatus: {
               ...baseSummary.runtimeStatus!,
               localStore: {
@@ -455,6 +503,12 @@ describe("POSTerminalHealthViewContent", () => {
           {
             ...baseSummary,
             health: "online",
+            operationalExplanation: serverExplanation({
+              detail:
+                "App session unverified; local sales stay on this terminal until cloud validation returns.",
+              headline: "Local continuation",
+              lane: "healthy_idle",
+            }),
             runtimeStatus: {
               ...baseSummary.runtimeStatus!,
               appSessionRecovery: {
@@ -495,6 +549,11 @@ describe("POSTerminalHealthViewContent", () => {
         healthSummaries={[
           {
             ...baseSummary,
+            operationalExplanation: serverExplanation({
+              detail: "A drawer is open for this terminal.",
+              headline: "Drawer open",
+              lane: "drawer_open",
+            }),
             recovery: {
               evidence: {
                 activeRegisterSession: true,
@@ -507,6 +566,13 @@ describe("POSTerminalHealthViewContent", () => {
           },
           {
             ...baseSummary,
+            operationalExplanation: serverExplanation({
+              detail:
+                "Fresh runtime evidence reports an active drawer with sale authority.",
+              headline: "Ready for sales",
+              lane: "able_to_transact_now",
+              saleImpact: "can_transact_now",
+            }),
             recovery: {
               readiness: {
                 status: "able_to_transact_now",
@@ -527,16 +593,13 @@ describe("POSTerminalHealthViewContent", () => {
       />,
     );
 
-    expect(screen.getByText("Drawer open")).toBeInTheDocument();
+    expect(screen.getAllByText("Drawer open").length).toBeGreaterThan(0);
     expect(
-      screen.getByText("Drawer is open. Sign in before selling."),
+      screen.getByText("A drawer is open for this terminal."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Able to transact now")).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Able to transact now. Drawer, cashier, and sale authority are active.",
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Ready")).toBeInTheDocument();
+    expect(screen.getByText("Ready for sales")).toBeInTheDocument();
+    expect(screen.getByText("Sales can continue")).toBeInTheDocument();
   });
 
   it("shows sale-ready review backlog as review-owned without raw operational payloads", () => {
@@ -555,7 +618,7 @@ describe("POSTerminalHealthViewContent", () => {
                   count: 9,
                   source: "cloud_sync",
                   summary: "M Supplies conflict-raw-001 payment payload",
-                  type: "synced_sale_inventory_review",
+                  type: "cloud_held",
                 },
               ],
               headline: "M Supplies review needed",
@@ -617,6 +680,11 @@ describe("POSTerminalHealthViewContent", () => {
               },
             ],
             health: "needs_attention",
+            operationalExplanation: serverExplanation({
+              detail: "No terminal health blockers are reported.",
+              headline: "Healthy idle",
+              lane: "healthy_idle",
+            }),
             recovery: {
               commandStatus: {
                 commandType: "repair_terminal_seed",
@@ -653,6 +721,114 @@ describe("POSTerminalHealthViewContent", () => {
         "Terminal setup needs repair before this checkout station can record new sales.",
       ),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps inventory-only review out of terminal attention on the roster", () => {
+    render(
+      <POSTerminalHealthViewContent
+        healthSummaries={[
+          {
+            ...baseSummary,
+            health: "needs_attention",
+            operationalExplanation: serverExplanation({
+              blockingDomain: "sync_review",
+              detail: "Inventory counts need review before close.",
+              evidenceReferences: [
+                {
+                  count: 4,
+                  source: "cloud_sync",
+                  summary: "Inventory review backlog",
+                  type: "synced_sale_inventory_review",
+                },
+              ],
+              headline: "Review needed",
+              lane: "sale_ready_with_review_backlog",
+              nextStep: "Use the linked review workspace to clear the backlog.",
+              primaryOwner: "operations",
+              saleImpact: "can_transact_now",
+              severity: "warning",
+              supportAction: "manual_review",
+            }),
+          },
+        ]}
+        isLoading={false}
+        orgUrlSlug="acme"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(metricCard("Needs review")).toHaveTextContent("0");
+    expect(screen.getByText("No action needed")).toBeInTheDocument();
+    expect(
+      screen.getByText("Inventory review is tracked in Operations."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Inventory counts need review before close."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("counts a local-review terminal in the review tile even when the server lane is needs_terminal_action", () => {
+    // Local-runtime review work classifies as "Needs review", but the server
+    // routes it to needs_terminal_action rather than a review lane. Counting
+    // only the server review lanes would leave this terminal in no tile at all.
+    render(
+      <POSTerminalHealthViewContent
+        healthSummaries={[
+          {
+            ...baseSummary,
+            health: "needs_attention",
+            runtimeStatus: {
+              ...baseSummary.runtimeStatus!,
+              sync: {
+                ...baseSummary.runtimeStatus!.sync,
+                reviewEventCount: 3,
+              },
+            },
+            operationalExplanation: serverExplanation({
+              blockingDomain: "sync_review",
+              detail: "Local review events are waiting on the terminal.",
+              headline: "Terminal action needed",
+              lane: "needs_terminal_action",
+              nextStep: "Collect the local review events from the terminal.",
+              primaryOwner: "terminal",
+              saleImpact: "can_transact_now",
+              severity: "warning",
+              supportAction: "terminal_command",
+            }),
+          },
+        ]}
+        isLoading={false}
+        orgUrlSlug="acme"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(metricCard("Needs review")).toHaveTextContent("1");
+  });
+
+  it("states plainly when a terminal health summary carries no server aggregate", () => {
+    render(
+      <POSTerminalHealthViewContent
+        healthSummaries={[
+          {
+            ...baseSummary,
+            operationalExplanation: undefined,
+          },
+        ]}
+        isLoading={false}
+        orgUrlSlug="acme"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(screen.getByText("Health unavailable")).toBeInTheDocument();
+    expect(screen.getByText("Health status unavailable")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Athena has not received a health summary for this terminal.",
+      ),
+    ).toBeInTheDocument();
+    expect(metricCard("Needs review")).toHaveTextContent("0");
   });
 });
 

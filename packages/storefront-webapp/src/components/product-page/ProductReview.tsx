@@ -1,4 +1,4 @@
-import { Review } from "@athena/webapp";
+import { Review } from "@athena/contracts";
 import { Star, ThumbsUp } from "lucide-react";
 import { getProductName } from "@/lib/productUtils";
 import { RatingDimension } from "@/api/reviews";

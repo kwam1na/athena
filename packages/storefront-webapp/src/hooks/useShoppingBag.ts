@@ -21,7 +21,7 @@ import {
   ProductSku,
   PromoCodeItem,
   SavedBagItem,
-} from "@athena/webapp";
+} from "@athena/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";

@@ -1393,8 +1393,20 @@ export const HARNESS_APP_REGISTRY = [
   },
 ] satisfies HarnessAppRegistryEntry[];
 
-const NON_HARNESS_PACKAGE_REGISTRY =
-  [] as const satisfies readonly NonHarnessPackageRegistration[];
+const NON_HARNESS_PACKAGE_REGISTRY = [
+  {
+    kind: "non-harness",
+    packageDir: "packages/athena-contracts",
+    note:
+      "Neutral contract surface shared by athena-webapp and storefront-webapp. " +
+      "It owns no domain logic of its own: the index surface is types plus one " +
+      "string-literal array, its runtime exports are thin re-exports of " +
+      "athena-webapp/shared browser-safe helpers, and the seam to " +
+      "convex/_generated is `import type` and erases at build. That leaves no " +
+      "independent validation surface to onboard -- it is exercised through the " +
+      "typecheck, tests, and build of the two packages that consume it.",
+  },
+] as const satisfies readonly NonHarnessPackageRegistration[];
 
 export const HARNESS_PACKAGE_REGISTRY = [
   ...HARNESS_APP_REGISTRY.map((entry) => ({

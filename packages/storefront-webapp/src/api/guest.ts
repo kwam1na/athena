@@ -1,5 +1,5 @@
 import config from "@/config";
-import { Guest } from "@athena/webapp";
+import { Guest } from "@athena/contracts";
 
 export async function updateGuest({
   data,

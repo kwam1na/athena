@@ -13,6 +13,7 @@ root_cause: missing_workflow_step
 resolution_type: code_fix
 severity: high
 tags: [athena-webapp, pending-checkout, open-work, eod-review, convex]
+delivery_diff_fingerprint: 48d7ae901ff36c06321095c2ee40ee11b1a12cf82e4b08d71f4b7f6e8fc852cf
 ---
 
 # Athena Pending Checkout Archive Work Lifecycle
@@ -76,6 +77,34 @@ The repair path should be dry-run first:
    item, valid ids, and archived provisional product before cancellation.
 4. Malformed metadata is reported as a skip reason instead of aborting the batch.
 
+## Also On This Transition: The Synced-Sale Inventory Archive Precondition
+Cancelling pending checkout review work is only one of the dispositions product
+archive owes its dependent work. `synced_sale_inventory_review` work takes the
+opposite one: archiving is **blocked** while any of the product's SKUs still has
+open or in-progress sale inventory review work.
+
+The two rules are not in tension. Pending checkout review work becomes
+genuinely non-actionable when its provisional product is archived, so the
+transition can terminate it. A sale inventory review still needs a real stock
+decision the archive cannot supply, and its destination workspace (Stock
+adjustments) hides archived SKUs — so archiving would strand it instead of
+resolving it.
+
+The precondition lives in
+`packages/athena-webapp/convex/inventory/helpers/productArchivePrecondition.ts`
+behind one entry point, `guardProductArchiveTransition`, and both public
+transitions into `archived` (`archive` and the generic `update` in
+`packages/athena-webapp/convex/inventory/products.ts`) call it before any write.
+It is store-scoped, bounded, and fails closed when it cannot prove the scan was
+complete. Because a thrown Convex rejection would roll back its own audit row,
+the block is returned as a `CommandResult` `user_error` (`conflict`), which is
+why both mutations now return `ok(...)` on success.
+
+When adding a new work type that hangs off a product, decide which disposition
+applies before shipping it. The reusable form of that decision, the read-model
+invariant it protects, and the throw-versus-return constraint are in
+[Athena Source Transition Operational Work Reachability](../architecture-patterns/athena-source-transition-operational-work-reachability-2026-08-22.md).
+
 ## Why This Works
 Open Work is an aggregate read surface, not the owner of every source workflow.
 The source workflow must terminally update its own work item when the underlying
@@ -91,6 +120,9 @@ keeps production cleanup aligned with the reviewed dry-run output.
 ## Prevention
 - Whenever a source subject becomes non-actionable, patch its current work item
   to a terminal status instead of relying on read-model filters.
+- Whenever the source subject stays actionable but its destination workspace
+  would hide it, block the transition instead. Never complete inventory work as
+  a side effect of an availability change; there is no stock evidence behind it.
 - Treat `operationalWorkItemId` pointers and stable metadata identities as
   complementary; use the pointer for the current row and metadata scans for
   duplicates.
@@ -102,6 +134,7 @@ keeps production cleanup aligned with the reviewed dry-run output.
   snapshots do not reappear in carry-forward workflows.
 
 ## Related Issues
+- [Athena Source Transition Operational Work Reachability](../architecture-patterns/athena-source-transition-operational-work-reachability-2026-08-22.md)
 - [Athena Open Work Resolution Ownership](../architecture-patterns/athena-open-work-resolution-ownership-2026-07-02.md)
 - [Athena Pending Checkout Inventory Resolution](../architecture-patterns/athena-pending-checkout-inventory-resolution-2026-07-03.md)
 - [Athena POS Pending Checkout Item Recovery](../architecture/athena-pos-pending-checkout-item-recovery-2026-06-06.md)

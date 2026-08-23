@@ -477,8 +477,13 @@ export type TerminalOperationalExplanationServerLane =
   | "stale_runtime"
   | "unknown";
 
+/**
+ * Terminal operational lanes are owned by the server aggregate. The frontend
+ * does not add lanes of its own; it renders what the Convex terminal health
+ * queries return.
+ */
 export type TerminalOperationalExplanationLane =
-  TerminalOperationalExplanationServerLane | "healthy" | "sync_failed";
+  TerminalOperationalExplanationServerLane;
 
 export type TerminalOperationalExplanationServerSeverity =
   "info" | "warning" | "critical";

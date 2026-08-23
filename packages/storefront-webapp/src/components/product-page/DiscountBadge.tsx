@@ -2,7 +2,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { useProductDiscount } from "@/hooks/useProductDiscount";
 import { formatStoredAmount } from "@/lib/currency";
 import { cn } from "@/lib/utils";
-import { ProductSku } from "@athena/webapp";
+import { ProductSku } from "@athena/contracts";
 import { motion } from "framer-motion";
 
 export const DiscountBadge = ({

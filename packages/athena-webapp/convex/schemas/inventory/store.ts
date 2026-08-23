@@ -53,6 +53,10 @@ export const storeSchema = v.object({
   weeklyReportingAcceptanceFloor: v.optional(v.number()),
   /** Internal barrier while destructive reporting source reconstruction runs. */
   reportingReseedStartedAt: v.optional(v.number()),
+  // Idempotency marker for the cedis->pesewas backfill
+  // (migrations/backfillAmountsToPesewas.ts). Set in the same patch that
+  // converts the money fields; its presence means "already minor units".
+  pesewasMigratedAt: v.optional(v.number()),
 });
 
 export const storeAssetSchema = v.object({

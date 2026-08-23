@@ -17,7 +17,7 @@ import { UserActivity } from "./UserActivity";
 import { UserBag } from "./UserBag";
 import { UserOnlineOrders } from "./UserOnlineOrders";
 import { UserInsightsSection } from "./UserInsightsSection";
-import { formatDate } from "~/convex/utils";
+import { formatDate } from "~/shared/formatDate";
 import { formatUserId, getRelativeTime } from "~/src/lib/utils";
 import { LoadingButton } from "../ui/loading-button";
 import { useState } from "react";

@@ -1,5 +1,5 @@
 import { useStoreContext } from "@/contexts/StoreContext";
-import { Product, ProductSku } from "@athena/webapp";
+import { Product, ProductSku } from "@athena/contracts";
 import { Link, useParams } from "@tanstack/react-router";
 import { Skeleton } from "./ui/skeleton";
 import { ProductCard, ProductSkuCard } from "./ProductCard";

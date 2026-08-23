@@ -177,6 +177,28 @@ function pendingCheckoutReviewWorkItem(overrides: Partial<Row> = {}) {
   };
 }
 
+function syncedSaleInventoryReviewWorkItem(overrides: Partial<Row> = {}) {
+  const { _id = "syncreview001", ...rest } = overrides;
+
+  return {
+    _id,
+    approvalState: "not_required",
+    createdAt: 1,
+    metadata: {
+      receiptNumber: "RCP-0001",
+      sourceType: "pos_transaction",
+    },
+    organizationId: "org0001",
+    priority: "normal",
+    productSkuId: "sku001",
+    status: "open",
+    storeId: "storezzzz",
+    title: "Confirm inventory for synced sale",
+    type: "synced_sale_inventory_review",
+    ...rest,
+  };
+}
+
 function createSkuMutationCtx(seed: Partial<Record<TableName, Row[]>>) {
   const tables: Record<TableName, Map<string, Row>> = {
     catalogSummary: new Map(
@@ -848,8 +870,11 @@ describe("product archiving", () => {
       "storezzzz",
     );
     expect(result).toMatchObject({
-      _id: "product001",
-      availability: "archived",
+      data: {
+        _id: "product001",
+        availability: "archived",
+      },
+      kind: "ok",
     });
     expect(tables.product.get("product001")).toMatchObject({
       availability: "archived",
@@ -911,6 +936,11 @@ describe("product archiving", () => {
       operationalWorkItemId: undefined,
     });
     expect(Array.from(tables.operationalEvent.values())).toEqual([
+      expect.objectContaining({
+        eventType: "product_availability_archive_allowed",
+        subjectId: "product001",
+        subjectType: "product",
+      }),
       expect.objectContaining({
         eventType: "pos_pending_checkout_item_review_work_cancelled",
         subjectId: "pending001",
@@ -1460,6 +1490,11 @@ describe("product archiving", () => {
       operationalWorkItemId: undefined,
     });
     expect(Array.from(tables.operationalEvent.values())).toEqual([
+      expect.objectContaining({
+        eventType: "product_availability_archive_allowed",
+        subjectId: "product001",
+        subjectType: "product",
+      }),
       expect.objectContaining({
         eventType: "pos_pending_checkout_item_review_work_cancelled",
         subjectId: "pending001",
@@ -2244,6 +2279,440 @@ describe("product archiving", () => {
       admittedCtx(ctx),
       ["productSku002"],
       "storebbbb",
+    );
+  });
+});
+
+describe("product archive synced-sale inventory review precondition", () => {
+  function seedWithOpenReview(
+    extra: Partial<Record<TableName, Row[]>> = {},
+    workItems: Row[] = [syncedSaleInventoryReviewWorkItem()],
+  ) {
+    return {
+      operationalWorkItem: workItems,
+      product: [
+        {
+          _id: "product001",
+          availability: "live",
+          name: "Edge control",
+          organizationId: "org0001",
+          storeId: "storezzzz",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku001",
+          productId: "product001",
+          storeId: "storezzzz",
+        },
+      ],
+      ...extra,
+    } satisfies Partial<Record<TableName, Row[]>>;
+  }
+
+  function armFullAdmin() {
+    mocks.requireStoreFullAdminAccess.mockResolvedValue({
+      athenaUser: { _id: "athena-user-1" },
+      store: { _id: "storezzzz", organizationId: "org0001" },
+    });
+  }
+
+  it("blocks archive while a SKU has open synced-sale inventory review work", async () => {
+    armFullAdmin();
+    const { ctx, tables } = createSkuMutationCtx(seedWithOpenReview());
+
+    const result = await getHandler(archive)(ctx, {
+      id: "product001" as Id<"product">,
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    expect(result).toEqual({
+      error: {
+        code: "conflict",
+        message:
+          "Resolve 1 open sale inventory review for this product before archiving.",
+        metadata: {
+          openSyncedSaleInventoryReviewGroupCount: 1,
+          reason: "open_synced_sale_inventory_review_work",
+        },
+        title: "Archiving on hold",
+      },
+      kind: "user_error",
+    });
+    expect(tables.product.get("product001")).toMatchObject({
+      availability: "live",
+    });
+    expect(tables.operationalWorkItem.get("syncreview001")).toMatchObject({
+      status: "open",
+    });
+    expect(mocks.refreshProductSkuSearchForProduct).not.toHaveBeenCalled();
+    expect(tables.catalogSummary.size).toBe(0);
+    expect(getTestScheduler(ctx).runAfter).not.toHaveBeenCalled();
+  });
+
+  it("counts one archive conflict group when several reviews share a SKU", async () => {
+    armFullAdmin();
+    const { ctx } = createSkuMutationCtx(
+      seedWithOpenReview({}, [
+        syncedSaleInventoryReviewWorkItem({
+          _id: "syncreview001",
+          metadata: { receiptNumber: "RCP-0001" },
+        }),
+        syncedSaleInventoryReviewWorkItem({
+          _id: "syncreview002",
+          metadata: { receiptNumber: "RCP-0002" },
+        }),
+      ]),
+    );
+
+    const result = await getHandler(archive)(ctx, {
+      id: "product001" as Id<"product">,
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    expect(result.error.message).toBe(
+      "Resolve 1 open sale inventory review for this product before archiving.",
+    );
+    expect(result.error.metadata.openSyncedSaleInventoryReviewGroupCount).toBe(
+      1,
+    );
+  });
+
+  it("counts each SKU group separately when archive is blocked", async () => {
+    armFullAdmin();
+    const { ctx } = createSkuMutationCtx(
+      seedWithOpenReview(
+        {
+          productSku: [
+            { _id: "sku001", productId: "product001", storeId: "storezzzz" },
+            { _id: "sku002", productId: "product001", storeId: "storezzzz" },
+          ],
+        },
+        [
+          syncedSaleInventoryReviewWorkItem({ _id: "syncreview001" }),
+          syncedSaleInventoryReviewWorkItem({
+            _id: "syncreview002",
+            productSkuId: "sku002",
+          }),
+        ],
+      ),
+    );
+
+    const result = await getHandler(archive)(ctx, {
+      id: "product001" as Id<"product">,
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    expect(result.error.message).toBe(
+      "Resolve 2 open sale inventory reviews for this product before archiving.",
+    );
+  });
+
+  it("blocks archive while synced-sale inventory review work is in progress", async () => {
+    armFullAdmin();
+    const { ctx, tables } = createSkuMutationCtx(
+      seedWithOpenReview({}, [
+        syncedSaleInventoryReviewWorkItem({ status: "in_progress" }),
+      ]),
+    );
+
+    const result = await getHandler(archive)(ctx, {
+      id: "product001" as Id<"product">,
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    expect(result.kind).toBe("user_error");
+    expect(tables.product.get("product001")).toMatchObject({
+      availability: "live",
+    });
+  });
+
+  it("blocks archive when the work is anchored by metadata instead of the SKU column", async () => {
+    armFullAdmin();
+    const { ctx, tables } = createSkuMutationCtx(
+      seedWithOpenReview({}, [
+        syncedSaleInventoryReviewWorkItem({
+          metadata: {
+            primaryProductSkuId: "sku001",
+            receiptNumber: "RCP-0001",
+          },
+          productSkuId: undefined,
+        }),
+      ]),
+    );
+
+    const result = await getHandler(archive)(ctx, {
+      id: "product001" as Id<"product">,
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    expect(result.kind).toBe("user_error");
+    expect(tables.product.get("product001")).toMatchObject({
+      availability: "live",
+    });
+  });
+
+  it("blocks a generic availability update that would archive the product", async () => {
+    const { ctx, tables } = createSkuMutationCtx(seedWithOpenReview());
+
+    const result = await getHandler(update)(ctx, {
+      availability: "archived",
+      id: "product001" as Id<"product">,
+    });
+
+    expect(result).toMatchObject({
+      error: {
+        code: "conflict",
+        metadata: {
+          openSyncedSaleInventoryReviewGroupCount: 1,
+          reason: "open_synced_sale_inventory_review_work",
+        },
+      },
+      kind: "user_error",
+    });
+    expect(tables.product.get("product001")).toMatchObject({
+      availability: "live",
+    });
+    expect(mocks.refreshProductSkuSearchForProduct).not.toHaveBeenCalled();
+  });
+
+  it("does not let a generic update smuggle other field writes past a blocked archive", async () => {
+    const { ctx, tables } = createSkuMutationCtx(seedWithOpenReview());
+
+    await getHandler(update)(ctx, {
+      availability: "archived",
+      id: "product001" as Id<"product">,
+      name: "Renamed while archiving",
+    });
+
+    expect(tables.product.get("product001")).toMatchObject({
+      availability: "live",
+      name: "Edge control",
+    });
+    expect(tables.productSku.get("sku001")).not.toMatchObject({
+      productName: "Renamed while archiving",
+    });
+  });
+
+  it("still archives when a generic update leaves availability alone", async () => {
+    const { ctx, tables } = createSkuMutationCtx(seedWithOpenReview());
+
+    const result = await getHandler(update)(ctx, {
+      id: "product001" as Id<"product">,
+      isVisible: false,
+    });
+
+    expect(result).toMatchObject({ kind: "ok" });
+    expect(tables.product.get("product001")).toMatchObject({
+      availability: "live",
+      isVisible: false,
+    });
+  });
+
+  it("ignores terminal, cross-product, and cross-store review work when archiving", async () => {
+    armFullAdmin();
+    const { ctx, tables } = createSkuMutationCtx(
+      seedWithOpenReview({}, [
+        syncedSaleInventoryReviewWorkItem({
+          _id: "syncreview-completed",
+          status: "completed",
+        }),
+        syncedSaleInventoryReviewWorkItem({
+          _id: "syncreview-cancelled",
+          status: "cancelled",
+        }),
+        syncedSaleInventoryReviewWorkItem({
+          _id: "syncreview-other-product",
+          productSkuId: "sku-other",
+        }),
+        syncedSaleInventoryReviewWorkItem({
+          _id: "syncreview-other-store",
+          storeId: "store-other",
+        }),
+      ]),
+    );
+
+    const result = await getHandler(archive)(ctx, {
+      id: "product001" as Id<"product">,
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    expect(result).toMatchObject({
+      data: { _id: "product001", availability: "archived" },
+      kind: "ok",
+    });
+    expect(tables.product.get("product001")).toMatchObject({
+      availability: "archived",
+    });
+  });
+
+  it("fails closed and blocks archive when open review discovery is over budget", async () => {
+    armFullAdmin();
+    const overBudget = Array.from({ length: 501 }, (_unused, index) =>
+      syncedSaleInventoryReviewWorkItem({
+        _id: `syncreview-budget-${index}`,
+        productSkuId: "sku-unrelated",
+      }),
+    );
+    const { ctx, tables } = createSkuMutationCtx(
+      seedWithOpenReview({}, overBudget),
+    );
+
+    const result = await getHandler(archive)(ctx, {
+      id: "product001" as Id<"product">,
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    expect(result).toMatchObject({
+      error: {
+        code: "conflict",
+        message:
+          "Athena could not confirm this product's open sale inventory reviews. Try again shortly.",
+        metadata: {
+          reason: "open_synced_sale_inventory_review_scan_incomplete",
+        },
+      },
+      kind: "user_error",
+    });
+    expect(tables.product.get("product001")).toMatchObject({
+      availability: "live",
+    });
+    expect(mocks.refreshProductSkuSearchForProduct).not.toHaveBeenCalled();
+    expect(tables.catalogSummary.size).toBe(0);
+  });
+
+  it("records a sanitized blocked decision on the operational event rail when archive is rejected", async () => {
+    armFullAdmin();
+    const { ctx, tables } = createSkuMutationCtx(seedWithOpenReview());
+
+    await getHandler(archive)(ctx, {
+      id: "product001" as Id<"product">,
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    const events = Array.from(tables.operationalEvent.values());
+    expect(events).toEqual([
+      expect.objectContaining({
+        actorType: "human",
+        actorUserId: "athena-user-1",
+        eventType: "product_availability_archive_blocked",
+        organizationId: "org0001",
+        reason: "open_synced_sale_inventory_review_work",
+        storeId: "storezzzz",
+        subjectId: "product001",
+        subjectLabel: "Edge control",
+        subjectType: "product",
+      }),
+    ]);
+    expect(events[0]).toMatchObject({
+      metadata: {
+        openSyncedSaleInventoryReviewGroupCount: 1,
+        priorAvailability: "live",
+        requestedAvailability: "archived",
+        result: "blocked",
+        workDiscovery: "complete",
+      },
+    });
+    expect(JSON.stringify(events[0])).not.toContain("syncreview001");
+    expect(JSON.stringify(events[0])).not.toContain("RCP-0001");
+  });
+
+  it("records an allowed decision on the operational event rail when archive succeeds", async () => {
+    armFullAdmin();
+    const { ctx, tables } = createSkuMutationCtx(seedWithOpenReview({}, []));
+
+    await getHandler(archive)(ctx, {
+      id: "product001" as Id<"product">,
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    expect(Array.from(tables.operationalEvent.values())).toEqual([
+      expect.objectContaining({
+        actorType: "human",
+        actorUserId: "athena-user-1",
+        eventType: "product_availability_archive_allowed",
+        metadata: expect.objectContaining({
+          openSyncedSaleInventoryReviewGroupCount: 0,
+          priorAvailability: "live",
+          requestedAvailability: "archived",
+          result: "allowed",
+          workDiscovery: "complete",
+        }),
+        reason: "no_open_synced_sale_inventory_review_work",
+        storeId: "storezzzz",
+        subjectId: "product001",
+        subjectType: "product",
+      }),
+    ]);
+    expect(tables.product.get("product001")).toMatchObject({
+      availability: "archived",
+    });
+  });
+
+  it("keeps repeated blocked archive attempts idempotent", async () => {
+    armFullAdmin();
+    const { ctx, tables } = createSkuMutationCtx(seedWithOpenReview());
+
+    await getHandler(archive)(ctx, {
+      id: "product001" as Id<"product">,
+      storeId: "storezzzz" as Id<"store">,
+    });
+    await getHandler(archive)(ctx, {
+      id: "product001" as Id<"product">,
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    expect(tables.product.get("product001")).toMatchObject({
+      availability: "live",
+    });
+    expect(tables.operationalWorkItem.get("syncreview001")).toMatchObject({
+      status: "open",
+    });
+    expect(Array.from(tables.operationalEvent.values())).toHaveLength(1);
+  });
+
+  it("archives normally and still retires pending checkout review work when no synced-sale review work is open", async () => {
+    armFullAdmin();
+    const { ctx, tables } = createSkuMutationCtx({
+      operationalWorkItem: [
+        pendingCheckoutReviewWorkItem({
+          metadata: { pendingCheckoutItemId: "pending001" },
+        }),
+        syncedSaleInventoryReviewWorkItem({ status: "completed" }),
+      ],
+      posPendingCheckoutItem: [pendingCheckoutItem()],
+      product: [
+        {
+          _id: "product001",
+          availability: "live",
+          name: "Edge control",
+          organizationId: "org0001",
+          storeId: "storezzzz",
+        },
+      ],
+      productSku: [
+        { _id: "sku001", productId: "product001", storeId: "storezzzz" },
+      ],
+    });
+
+    const result = await getHandler(archive)(ctx, {
+      id: "product001" as Id<"product">,
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    expect(result).toMatchObject({ kind: "ok" });
+    expect(tables.product.get("product001")).toMatchObject({
+      availability: "archived",
+    });
+    expect(tables.operationalWorkItem.get("work001")).toMatchObject({
+      metadata: expect.objectContaining({
+        retiredReason: "provisional_product_archived",
+      }),
+      status: "cancelled",
+    });
+    expect(mocks.refreshProductSkuSearchForProduct).toHaveBeenCalledWith(
+      admittedCtx(ctx),
+      "product001",
     );
   });
 });

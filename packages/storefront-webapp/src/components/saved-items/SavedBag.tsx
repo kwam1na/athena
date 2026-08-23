@@ -5,7 +5,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { Link, useSearch } from "@tanstack/react-router";
 import placeholder from "@/assets/placeholder.png";
 import { ShoppingBagAction, useShoppingBag } from "@/hooks/useShoppingBag";
-import { ProductSku, SavedBagItem } from "@athena/webapp";
+import { ProductSku, SavedBagItem } from "@athena/contracts";
 import { capitalizeWords, getProductName } from "@/lib/utils";
 import { AnimatePresence, easeInOut, motion } from "framer-motion";
 import { EmptyState } from "../states/empty/empty-state";

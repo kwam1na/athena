@@ -1,4 +1,4 @@
-import { Review } from "@athena/webapp";
+import { Review } from "@athena/contracts";
 import { Star } from "lucide-react";
 
 interface ReviewSummaryProps {

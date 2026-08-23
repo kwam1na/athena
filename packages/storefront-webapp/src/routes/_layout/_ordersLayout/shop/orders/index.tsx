@@ -9,7 +9,7 @@ import { capitalizeFirstLetter, formatDate, slugToWords } from "@/lib/utils";
 import { getOrderAmount } from "@/components/checkout/utils";
 import ImageWithFallback from "@/components/ui/image-with-fallback";
 import { useOnlineOrderQueries } from "@/lib/queries/onlineOrder";
-import { OnlineOrder } from "@athena/webapp";
+import { OnlineOrder } from "@athena/contracts";
 import { FadeIn } from "@/components/common/FadeIn";
 import { Badge } from "@/components/ui/badge";
 import { Banknote, Smartphone, Clock, CircleCheck } from "lucide-react";

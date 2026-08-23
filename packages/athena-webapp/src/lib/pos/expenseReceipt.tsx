@@ -1,6 +1,6 @@
 import { render } from "@react-email/components";
 
-import ExpenseReceiptEmail from "~/convex/emails/ExpenseReceiptEmail";
+import ExpenseReceiptEmail from "~/src/lib/pos/receipts/ExpenseReceiptEmail";
 import config from "~/src/config";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 import { getStoreConfigV2 } from "~/src/lib/storeConfig";

@@ -58,6 +58,8 @@ import {
   buildTerminalOperationalExplanationPresentation,
   buildTerminalRecoveryPresentation,
   classifyTerminalHealth,
+  hasAuthoritativeTerminalOperationalExplanation,
+  hasOnlyInventoryReviewEvidence,
   formatAge,
   formatRegisterNumber,
   formatStatusLabel,
@@ -2612,10 +2614,8 @@ function RecoveryPanel({
   const recovery = buildTerminalRecoveryPresentation(detail);
   const operationalExplanation =
     buildTerminalOperationalExplanationPresentation(detail);
-  const hasServerOperationalExplanation = Boolean(
-    detail.operationalExplanation &&
-    !shouldSuppressInventoryOperationalExplanation(detail),
-  );
+  const hasServerOperationalExplanation =
+    hasAuthoritativeTerminalOperationalExplanation(detail);
   const hasCurrentRecoveryWork = hasCurrentSupportRecoveryWork(recovery);
   const supportReadiness = hasCurrentRecoveryWork
     ? recovery.readiness
@@ -2752,49 +2752,6 @@ function RecoveryPanel({
         </>
       ) : null}
     </DetailPanel>
-  );
-}
-
-function hasOnlyInventoryReviewEvidence(detail: TerminalHealthDetail) {
-  const recoveryPreview = detail.recoveryPreview ?? detail.recovery;
-  const conflicts = detail.syncEvidence.unresolvedConflicts ?? [];
-  const manualReview = recoveryPreview?.manualReview ?? [];
-  const explanationReferences =
-    detail.operationalExplanation?.evidenceReferences ?? [];
-  const hasInventoryReviewEvidence =
-    conflicts.some((conflict) => conflict.conflictType === "inventory") ||
-    manualReview.some(
-      (item) => item.type === "synced_sale_inventory_review",
-    ) ||
-    explanationReferences.some(
-      (reference) => reference.type === "synced_sale_inventory_review",
-    );
-  const terminalReviewEvidenceTypes = new Set([
-    "cloud_conflict",
-    "cloud_held",
-    "cloud_rejected",
-    "local_review",
-    "unsafe_cloud_conflict",
-  ]);
-  const hasTerminalReviewEvidence =
-    conflicts.some((conflict) => conflict.conflictType !== "inventory") ||
-    manualReview.some(
-      (item) => item.type !== "synced_sale_inventory_review",
-    ) ||
-    explanationReferences.some((reference) =>
-      terminalReviewEvidenceTypes.has(reference.type),
-    );
-
-  return hasInventoryReviewEvidence && !hasTerminalReviewEvidence;
-}
-
-function shouldSuppressInventoryOperationalExplanation(
-  detail: TerminalHealthDetail,
-) {
-  const blockingDomain = detail.operationalExplanation?.blockingDomain;
-  return (
-    (blockingDomain === "manual_review" || blockingDomain === "sync_review") &&
-    hasOnlyInventoryReviewEvidence(detail)
   );
 }
 
@@ -3299,8 +3256,7 @@ export function POSTerminalDetailViewContent({
                 detail={detail}
                 onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
                 operationalExplanation={
-                  detail.operationalExplanation &&
-                    !shouldSuppressInventoryOperationalExplanation(detail)
+                  hasAuthoritativeTerminalOperationalExplanation(detail)
                     ? buildTerminalOperationalExplanationPresentation(detail)
                     : undefined
                 }

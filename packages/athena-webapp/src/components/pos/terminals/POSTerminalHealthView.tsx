@@ -44,7 +44,6 @@ import {
   formatTerminalTimestamp,
   getReviewEvidenceCount,
   getStaffAuthorityLabel,
-  getPrimaryTerminalAttentionReason,
 } from "./terminalHealthPresentation";
 import type {
   TerminalHealthSummary,
@@ -429,6 +428,11 @@ export function POSTerminalHealthViewContent({
       }
       return left.originalIndex - right.originalIndex;
     });
+  // Badges come from the server operational lane; this count does not. The
+  // roster tiles are still classification-driven, and local-runtime review work
+  // surfaces as a "Needs review" classification while the server routes it to
+  // the needs_terminal_action lane. Dropping the classification disjunct here
+  // would leave such a terminal counted by no tile at all.
   const reviewCount = healthRows.filter(
     (row) =>
       row.classification.label === "Needs review" ||
@@ -510,14 +514,11 @@ export function POSTerminalHealthViewContent({
                 <section className="space-y-layout-sm">
                   {healthRows.map(
                     ({
-                      classification,
                       isCurrentBrowserTerminal,
                       operationalExplanation,
                       summary,
                     }) => {
                       const runtimeStatus = summary.runtimeStatus;
-                      const primaryReason =
-                        getPrimaryTerminalAttentionReason(summary);
                       const offlineReadiness =
                         buildTerminalOfflineReadiness(summary);
                       const recovery =
@@ -532,11 +533,6 @@ export function POSTerminalHealthViewContent({
                         summary.syncEvidence.acceptedThroughSequence == null
                           ? "No accepted sequence"
                           : `Accepted through ${summary.syncEvidence.acceptedThroughSequence}`;
-                      const operationalNote =
-                        classification.label === "Healthy"
-                          ? null
-                          : (primaryReason?.summary ??
-                            classification.description);
                       return (
                         <article
                           className={cn(
@@ -589,16 +585,10 @@ export function POSTerminalHealthViewContent({
                               </div>
                             </div>
                             <Badge
-                              className={
-                                summary.operationalExplanation
-                                  ? operationalExplanation.toneClassName
-                                  : classification.toneClassName
-                              }
+                              className={operationalExplanation.toneClassName}
                               variant="outline"
                             >
-                              {summary.operationalExplanation
-                                ? operationalExplanation.label
-                                : classification.label}
+                              {operationalExplanation.label}
                             </Badge>
                           </div>
 
@@ -607,42 +597,24 @@ export function POSTerminalHealthViewContent({
                               <p className="text-xs font-medium uppercase text-muted-foreground">
                                 Sales readiness
                               </p>
-                              {summary.operationalExplanation ? (
-                                <>
-                                  <p className="mt-1 text-base font-medium text-foreground">
-                                    {operationalExplanation.headline}
-                                  </p>
-                                  <p className="mt-layout-2xs text-sm text-muted-foreground">
-                                    {operationalExplanation.detail}
-                                  </p>
-                                  <p className="mt-layout-sm text-sm text-foreground">
-                                    {operationalExplanation.saleImpactLabel}
-                                  </p>
-                                  {operationalExplanation.supportAction !==
-                                    "none" ? (
-                                    <p className="mt-layout-sm text-sm text-foreground">
-                                      <span className="font-medium">
-                                        Next step:
-                                      </span>{" "}
-                                      {operationalExplanation.nextStep}
-                                    </p>
-                                  ) : null}
-                                </>
-                              ) : (
-                                <>
-                                  <p className="mt-1 text-base font-medium text-foreground">
-                                    {recovery.readiness.label}
-                                  </p>
-                                  <p className="mt-layout-2xs text-sm text-muted-foreground">
-                                    {recovery.readiness.description}
-                                  </p>
-                                  {operationalNote ? (
-                                    <p className="mt-layout-sm text-sm text-foreground">
-                                      {operationalNote}
-                                    </p>
-                                  ) : null}
-                                </>
-                              )}
+                              <p className="mt-1 text-base font-medium text-foreground">
+                                {operationalExplanation.headline}
+                              </p>
+                              <p className="mt-layout-2xs text-sm text-muted-foreground">
+                                {operationalExplanation.detail}
+                              </p>
+                              <p className="mt-layout-sm text-sm text-foreground">
+                                {operationalExplanation.saleImpactLabel}
+                              </p>
+                              {operationalExplanation.supportAction !==
+                              "none" ? (
+                                <p className="mt-layout-sm text-sm text-foreground">
+                                  <span className="font-medium">
+                                    Next step:
+                                  </span>{" "}
+                                  {operationalExplanation.nextStep}
+                                </p>
+                              ) : null}
                             </div>
 
                             <dl className="grid gap-x-layout-lg gap-y-layout-sm sm:grid-cols-2">

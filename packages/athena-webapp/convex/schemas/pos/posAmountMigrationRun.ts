@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 
 /**
- * U10: durable, verifiable completion marker for the POS cedis→pesewas migration.
+ * Durable, verifiable completion marker for the POS cedis→pesewas migration.
  * One record per migrated table records how many rows were converted/skipped and
  * whether the table has been fully migrated. This is the "migration ran to
  * completion" state the schema constraint-flip cutover is gated on — the schema

@@ -9,7 +9,7 @@ import {
   Scissors,
 } from "lucide-react";
 import { CartItem } from "./types";
-import { currencyFormatter } from "~/convex/utils";
+import { currencyFormatter } from "~/shared/currencyFormatter";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { capitalizeWords, cn } from "~/src/lib/utils";
 import { Id } from "~/convex/_generated/dataModel";

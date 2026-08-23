@@ -10,7 +10,7 @@ import type { Id } from "~/convex/_generated/dataModel";
 import { api } from "~/convex/_generated/api";
 import { presentCommandToast } from "@/lib/errors/presentCommandToast";
 import { runCommand } from "@/lib/errors/runCommand";
-import { toDisplayAmount } from "~/convex/lib/currency";
+import { toDisplayAmount } from "~/shared/currency";
 import { parseDisplayAmountInput } from "@/lib/pos/displayAmounts";
 import type { CommandResult } from "~/shared/commandResult";
 import type { FunctionReference } from "convex/server";

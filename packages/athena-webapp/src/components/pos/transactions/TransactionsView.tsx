@@ -20,7 +20,8 @@ import {
 import { Button } from "../../ui/button";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
-import { currencyFormatter, capitalizeWords } from "~/convex/utils";
+import { currencyFormatter } from "~/shared/currencyFormatter";
+import { capitalizeWords } from "~/shared/textCase";
 import {
   transactionColumns,
   CompletedTransactionRow,

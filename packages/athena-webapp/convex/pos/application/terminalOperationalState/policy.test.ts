@@ -1228,6 +1228,46 @@ describe("terminal operational state policy", () => {
       "local_review",
     );
   });
+
+  it("always explains operational state, including when no runtime evidence exists", () => {
+    const publicLanes = new Set([
+      "able_to_transact_now",
+      "drawer_open",
+      "healthy_idle",
+      "needs_cloud_repair",
+      "needs_manual_review",
+      "needs_terminal_action",
+      "sale_ready_with_review_backlog",
+      "stale_runtime",
+      "unknown",
+    ]);
+
+    const withoutRuntime = buildTerminalOperationalState(
+      baseInput({
+        runtimeStatus: null,
+        runtimeAgeMs: null,
+        runtimeFresh: false,
+      }),
+    );
+
+    expect(withoutRuntime.operationalExplanation.lane).toBe("unknown");
+    expect(withoutRuntime.operationalExplanation.headline).toBeTruthy();
+    expect(withoutRuntime.operationalExplanation.nextStep).toBeTruthy();
+
+    for (const input of [
+      baseInput(),
+      baseInput({ runtimeFresh: false, runtimeAgeMs: 90 * 60_000 }),
+      baseInput({ terminalStatus: "revoked" }),
+      baseInput({ runtimeStatus: null, runtimeAgeMs: null, runtimeFresh: false }),
+    ]) {
+      const explanation =
+        buildTerminalOperationalState(input).operationalExplanation;
+      expect(publicLanes.has(explanation.lane)).toBe(true);
+      expect(explanation.detail).toBeTruthy();
+      expect(explanation.headline).toBeTruthy();
+      expect(explanation.nextStep).toBeTruthy();
+    }
+  });
 });
 
 function baseInput(

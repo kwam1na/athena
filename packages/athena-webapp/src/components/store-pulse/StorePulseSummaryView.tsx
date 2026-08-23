@@ -14,7 +14,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { toDisplayAmount } from "~/convex/lib/currency";
+import { toDisplayAmount } from "~/shared/currency";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { FinancialValue } from "../common/FinancialValue";
 import { ListPagination } from "../common/ListPagination";

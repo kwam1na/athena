@@ -1,5 +1,5 @@
-import { Product, ProductSku } from "@athena/webapp";
-import { sortHomepageRankedItems } from "@athena/webapp/shared/homepageRanking";
+import { Product, ProductSku } from "@athena/contracts";
+import { sortHomepageRankedItems } from "@athena/contracts/homepageRanking";
 import type {
   HomepageSnapshotHighlightedItemV1,
   HomepageSnapshotSkuV1,

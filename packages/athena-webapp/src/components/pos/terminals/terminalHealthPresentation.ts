@@ -74,6 +74,24 @@ export type TerminalAppUpdatePresentation = {
   toneClassName: string;
 };
 
+/**
+ * Where a rendered operational explanation came from.
+ *
+ * - `server_aggregate`: the authoritative `TerminalOperationalState` explanation.
+ * - `inventory_scoped`: the server explanation is owned by inventory review,
+ *   which is independent business work and never terminal attention. Both the
+ *   roster and the detail view apply this scoping filter so they agree.
+ * - `missing_aggregate`: compatibility only. The Convex terminal health queries
+ *   always return an explanation (including an explicit `unknown` lane), so this
+ *   can only be reached by a client reading a response that predates that
+ *   contract. It renders a non-authoritative message and never reconstructs
+ *   operational blockers.
+ */
+export type TerminalOperationalExplanationSource =
+  | "inventory_scoped"
+  | "missing_aggregate"
+  | "server_aggregate";
+
 export type TerminalOperationalExplanationPresentation = {
   detail: string;
   evidenceReferences: Array<
@@ -91,6 +109,7 @@ export type TerminalOperationalExplanationPresentation = {
   saleImpactLabel: string;
   secondaryActions: TerminalOperationalExplanation["secondaryActions"];
   severity: TerminalOperationalExplanationSeverity;
+  source: TerminalOperationalExplanationSource;
   summaryMeta: TerminalOperationalExplanation["summaryMeta"];
   supportAction: TerminalOperationalExplanationSupportAction;
   supportActionLabel: string;
@@ -113,6 +132,14 @@ type TerminalHealthClassificationInput = {
   syncEvidence: Partial<TerminalSyncEvidence>;
   terminal: Pick<TerminalRecord, "status"> & Partial<TerminalRecord>;
 };
+
+const TERMINAL_REVIEW_EVIDENCE_TYPES = new Set([
+  "cloud_conflict",
+  "cloud_held",
+  "cloud_rejected",
+  "local_review",
+  "unsafe_cloud_conflict",
+]);
 
 const STALE_CHECK_IN_MS = 30 * 60_000;
 const MANUAL_REVIEW_EVENT_PATTERN =
@@ -266,15 +293,118 @@ export function getPrimaryTerminalAttentionReason(
   return getTerminalAttentionReasons(summary)[0] ?? null;
 }
 
+/**
+ * Renders the server's terminal operational state.
+ *
+ * The Convex terminal health queries own this policy. This function normalizes
+ * and labels what the server returned; it never recomputes lanes, owners, or
+ * blockers from runtime status, sync evidence, or recovery ledgers.
+ */
 export function buildTerminalOperationalExplanationPresentation(
   summary: TerminalHealthClassificationInput,
 ): TerminalOperationalExplanationPresentation {
   const serverExplanation = summary.operationalExplanation;
-  if (serverExplanation) {
-    return normalizeServerOperationalExplanation(serverExplanation);
+  if (!serverExplanation) {
+    return buildMissingAggregateOperationalExplanation();
   }
 
-  return buildLegacyOperationalExplanation(summary);
+  if (shouldScopeOperationalExplanationToInventory(summary)) {
+    return buildInventoryScopedOperationalExplanation();
+  }
+
+  return normalizeServerOperationalExplanation(serverExplanation);
+}
+
+/**
+ * True when the server aggregate is present and owns terminal health for this
+ * terminal. Roster and detail surfaces share this predicate so their operational
+ * labels and recovery actions cannot drift apart.
+ */
+export function hasAuthoritativeTerminalOperationalExplanation(
+  summary: TerminalHealthClassificationInput,
+) {
+  return (
+    Boolean(summary.operationalExplanation) &&
+    !shouldScopeOperationalExplanationToInventory(summary)
+  );
+}
+
+/**
+ * Inventory review is independent business work tracked in Operations. It must
+ * never present as terminal attention, so a server explanation whose only
+ * evidence is inventory review is scoped out of terminal health. This is a
+ * scoping filter over server-provided evidence, not a re-derivation of state.
+ */
+export function shouldScopeOperationalExplanationToInventory(
+  summary: TerminalHealthClassificationInput,
+) {
+  const blockingDomain = summary.operationalExplanation?.blockingDomain;
+  return (
+    (blockingDomain === "manual_review" || blockingDomain === "sync_review") &&
+    hasOnlyInventoryReviewEvidence(summary)
+  );
+}
+
+export function hasOnlyInventoryReviewEvidence(
+  summary: TerminalHealthClassificationInput,
+) {
+  const recoveryPreview = summary.recoveryPreview ?? summary.recovery;
+  const conflicts = summary.syncEvidence.unresolvedConflicts ?? [];
+  const manualReview = recoveryPreview?.manualReview ?? [];
+  const explanationReferences =
+    summary.operationalExplanation?.evidenceReferences ?? [];
+  const hasInventoryReviewEvidence =
+    conflicts.some((conflict) => conflict.conflictType === "inventory") ||
+    manualReview.some((item) => item.type === "synced_sale_inventory_review") ||
+    explanationReferences.some(
+      (reference) => reference.type === "synced_sale_inventory_review",
+    );
+  const hasTerminalReviewEvidence =
+    conflicts.some((conflict) => conflict.conflictType !== "inventory") ||
+    manualReview.some((item) => item.type !== "synced_sale_inventory_review") ||
+    explanationReferences.some((reference) =>
+      TERMINAL_REVIEW_EVIDENCE_TYPES.has(reference.type),
+    );
+
+  return hasInventoryReviewEvidence && !hasTerminalReviewEvidence;
+}
+
+function buildInventoryScopedOperationalExplanation(): TerminalOperationalExplanationPresentation {
+  return {
+    ...buildStaticOperationalExplanation({
+      detail: "Inventory review is tracked in Operations.",
+      lane: "healthy_idle",
+      nextStep: "No action is needed for terminal health.",
+      primaryOwner: "none",
+      saleImpact: "unknown",
+      severity: "info",
+      supportAction: "none",
+    }),
+    source: "inventory_scoped",
+  };
+}
+
+/**
+ * Compatibility state for a terminal health response with no operational
+ * explanation. The current Convex contract always returns one, so this is a
+ * temporary read-boundary guard. It states plainly that Athena cannot speak for
+ * the terminal rather than guessing a lane from raw evidence.
+ */
+function buildMissingAggregateOperationalExplanation(): TerminalOperationalExplanationPresentation {
+  return {
+    ...buildStaticOperationalExplanation({
+      detail: "Athena has not received a health summary for this terminal.",
+      lane: "unknown",
+      nextStep: "Refresh terminal health or wait for the next check-in.",
+      primaryOwner: "none",
+      saleImpact: "unknown",
+      severity: "warning",
+      supportAction: "none",
+    }),
+    headline: "Health status unavailable",
+    label: "Health unavailable",
+    source: "missing_aggregate",
+  };
 }
 
 function normalizeServerOperationalExplanation(
@@ -313,148 +443,12 @@ function normalizeServerOperationalExplanation(
       explanation.secondaryActions,
     ),
     severity,
+    source: "server_aggregate",
     summaryMeta: normalizeOperationalSummaryMeta(explanation.summaryMeta),
     supportAction,
     supportActionLabel: getSupportActionLabel(supportAction),
     toneClassName: getOperationalSeverityToneClassName(severity),
   };
-}
-
-function buildLegacyOperationalExplanation(
-  summary: TerminalHealthClassificationInput,
-): TerminalOperationalExplanationPresentation {
-  const recovery = buildTerminalRecoveryPresentation(summary);
-  const runtimeStatus = summary.runtimeStatus;
-  const runtimeSync = runtimeStatus?.sync;
-  const reviewCount =
-    (runtimeSync?.reviewEventCount ?? 0) +
-    getReviewEvidenceCount(summary.syncEvidence);
-  const isSaleReady =
-    recovery.readiness.status === "able_to_transact_now" ||
-    (runtimeStatus?.staffAuthority?.status === "ready" &&
-      runtimeStatus.localStore?.available !== false &&
-      Boolean(runtimeStatus.activeRegisterSession));
-
-  if (reviewCount > 0 && isSaleReady) {
-    return {
-      detail: "Sales can continue.",
-      evidenceReferences: [
-        {
-          count: reviewCount,
-          label: "Review backlog",
-          source: "sync_evidence",
-          summary: "Review backlog",
-          type: "review_backlog",
-        },
-      ],
-      headline: "Review needed",
-      label: "Review needed",
-      lane: "sale_ready_with_review_backlog",
-      nextStep:
-        "Review the open work or cash-control backlog. Do not block new sales from this terminal.",
-      ownerLabel: "Operations",
-      primaryOwner: "operations",
-      saleImpact: "can_transact_now",
-      saleImpactLabel: "Sales can continue",
-      secondaryActions: [],
-      severity: "warning",
-      summaryMeta: {
-        hasSecondarySafeRepair: false,
-        reviewBacklogCount: reviewCount,
-        targetResolutionIncomplete: false,
-      },
-      supportAction: "review_open_work",
-      supportActionLabel: "Review open work",
-      toneClassName: getOperationalSeverityToneClassName("warning"),
-    };
-  }
-
-  if (recovery.groups.manualReview.length > 0) {
-    return buildStaticOperationalExplanation({
-      detail:
-        recovery.groups.manualReview[0]?.summary ??
-        "Manager or operations review is required before support repairs this terminal.",
-      lane: "needs_manual_review",
-      nextStep:
-        "Review cash-control or operations work before support repairs this terminal.",
-      primaryOwner: "cash_controls",
-      saleImpact: "unknown",
-      severity: "danger",
-      supportAction: "review_cash_controls",
-    });
-  }
-
-  if (recovery.groups.terminalRequired.length > 0) {
-    return buildStaticOperationalExplanation({
-      detail:
-        recovery.groups.terminalRequired[0]?.summary ??
-        "The checkout station needs terminal-side recovery before Athena can verify it.",
-      lane: "needs_terminal_action",
-      nextStep: "Send the safe terminal command or wait for a fresh check-in.",
-      primaryOwner: "terminal",
-      saleImpact: "unknown",
-      severity: "warning",
-      supportAction: "run_terminal_command",
-    });
-  }
-
-  if (recovery.groups.cloudRepair.length > 0) {
-    return buildStaticOperationalExplanation({
-      detail:
-        recovery.groups.cloudRepair[0]?.summary ??
-        "A safe cloud repair is available for stale terminal evidence.",
-      lane: "needs_cloud_repair",
-      nextStep: "Resolve the safe cloud repair item.",
-      primaryOwner: "support",
-      saleImpact: "unknown",
-      severity: "warning",
-      supportAction: "resolve_safe_cloud_repair",
-    });
-  }
-
-  if (
-    runtimeSync?.status === "failed" ||
-    (runtimeSync?.failedEventCount ?? 0) > 0
-  ) {
-    return buildStaticOperationalExplanation({
-      detail: "The latest terminal sync attempt failed.",
-      lane: "sync_failed",
-      nextStep: "Retry terminal sync or wait for the next check-in.",
-      primaryOwner: "terminal",
-      saleImpact: "unknown",
-      severity: "danger",
-      supportAction: "retry_terminal_sync",
-    });
-  }
-
-  const classification = classifyTerminalHealth(summary);
-  if (
-    classification.label === "No check-in" ||
-    classification.label === "Stale"
-  ) {
-    return buildStaticOperationalExplanation({
-      detail: "Athena is waiting for a current terminal check-in.",
-      lane: "stale_runtime",
-      nextStep: "Refresh terminal health or wait for the next check-in.",
-      primaryOwner: "terminal",
-      saleImpact: "unknown",
-      severity: "warning",
-      supportAction: "wait_for_check_in",
-    });
-  }
-
-  return buildStaticOperationalExplanation({
-    detail: "Current terminal evidence has no repair or review blockers.",
-    lane: "healthy",
-    nextStep: "No action is needed for terminal health.",
-    primaryOwner: "none",
-    saleImpact:
-      recovery.readiness.status === "able_to_transact_now"
-        ? "can_transact_now"
-        : "open_drawer_or_sign_in",
-    severity: "info",
-    supportAction: "none",
-  });
 }
 
 function buildStaticOperationalExplanation({
@@ -490,6 +484,7 @@ function buildStaticOperationalExplanation({
     saleImpactLabel: getSaleImpactLabel(saleImpact),
     secondaryActions: [],
     severity,
+    source: "server_aggregate",
     summaryMeta: {
       hasSecondarySafeRepair: false,
       reviewBacklogCount: 0,
@@ -540,17 +535,19 @@ function normalizeCount(value: number) {
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 }
 
-function normalizeOperationalLane(lane: TerminalOperationalExplanationLane) {
+// Tolerant of any string so an unexpected server value degrades to `unknown`
+// instead of rendering a lane the presentation layer cannot label.
+function normalizeOperationalLane(
+  lane: string,
+): TerminalOperationalExplanationLane {
   switch (lane) {
     case "able_to_transact_now":
     case "drawer_open":
     case "healthy_idle":
-    case "healthy":
     case "sale_ready_with_review_backlog":
     case "needs_manual_review":
     case "needs_terminal_action":
     case "needs_cloud_repair":
-    case "sync_failed":
     case "stale_runtime":
       return lane;
     default:
@@ -643,7 +640,6 @@ function getOperationalLaneFallback(
         nextStep: "No action is needed for terminal health.",
       };
     case "healthy_idle":
-    case "healthy":
       return {
         detail: "Current terminal evidence has no repair or review blockers.",
         headline: "No action needed",
@@ -682,13 +678,6 @@ function getOperationalLaneFallback(
         headline: "Safe cloud repair available",
         label: "Cloud repair",
         nextStep: "Resolve the safe cloud repair item.",
-      };
-    case "sync_failed":
-      return {
-        detail: "The latest terminal sync attempt failed.",
-        headline: "Sync failed",
-        label: "Sync failed",
-        nextStep: "Retry terminal sync or wait for the next check-in.",
       };
     case "stale_runtime":
       return {

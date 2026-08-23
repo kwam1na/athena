@@ -1,4 +1,4 @@
-import { SavedBagItem } from "@athena/webapp";
+import { SavedBagItem } from "@athena/contracts";
 import { HeartIcon, AlertCircleIcon } from "lucide-react";
 import { LoadingButton } from "../ui/loading-button";
 import { HeartIconFilled } from "@/assets/icons/HeartIconFilled";

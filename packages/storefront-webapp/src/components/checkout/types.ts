@@ -1,4 +1,4 @@
-import { CheckoutSession, OnlineOrder } from "@athena/webapp";
+import { CheckoutSession, OnlineOrder } from "@athena/contracts";
 
 export type Address = {
   address?: string;

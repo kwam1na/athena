@@ -1,4 +1,4 @@
-import { CheckoutSession } from "@athena/webapp";
+import { CheckoutSession } from "@athena/contracts";
 import { DeliveryDetails } from "../DeliveryDetails/DeliverySection";
 import { getOrderAmount } from "../utils";
 import { useStoreContext } from "@/contexts/StoreContext";

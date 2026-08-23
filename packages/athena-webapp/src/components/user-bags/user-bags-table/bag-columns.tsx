@@ -1,7 +1,6 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "~/src/components/base/table/data-table-column-header";
 import { Link } from "@tanstack/react-router";
-import { capitalizeWords } from "~/convex/utils";
 import { getRelativeTime } from "~/src/lib/utils";
 import { Bag, BagItem } from "~/types";
 import { User } from "lucide-react";
@@ -36,7 +35,7 @@ export const bagColumns: ColumnDef<Bag>[] = [
         >
           <div className="flex flex-col gap-4">
             <div className="flex gap-2">
-              {bag.items.slice(0, 3).map((item: any) => (
+              {bag.items.slice(0, 3).map((item: BagItem) => (
                 <div key={item._id} className="relative">
                   {item.productImage ? (
                     <img
@@ -58,7 +57,7 @@ export const bagColumns: ColumnDef<Bag>[] = [
                 </div>
               )}
             </div>
-            <p className="font-medium">{(row.original as any).total}</p>
+            <p className="font-medium">{(row.original as Bag & { total?: number }).total}</p>
           </div>
         </Link>
       );

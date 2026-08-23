@@ -40,4 +40,8 @@ export const checkoutSessionSchema = v.object({
   discount: v.union(v.record(v.string(), v.any()), v.null()),
   pickupLocation: v.union(v.string(), v.null()),
   isPODOrder: v.optional(v.boolean()),
+  // Idempotency marker for the cedis->pesewas backfill
+  // (migrations/backfillAmountsToPesewas.ts). Set in the same patch that
+  // converts the money fields; its presence means "already minor units".
+  pesewasMigratedAt: v.optional(v.number()),
 });

@@ -1,6 +1,6 @@
 import config from "@/config";
 import type { CheckoutOrderSubmission } from "@/components/checkout/schemas/webOrderSchema";
-import { CheckoutSession, ProductSku } from "@athena/webapp";
+import { CheckoutSession, ProductSku } from "@athena/contracts";
 
 const getBaseUrl = () => `${config.apiGateway.URL}/checkout`;
 

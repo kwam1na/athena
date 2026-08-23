@@ -1,4 +1,4 @@
-import { Product, ProductSku, SavedBagItem } from "@athena/webapp";
+import { Product, ProductSku, SavedBagItem } from "@athena/contracts";
 import { AlertCircleIcon, HeartIcon, ShoppingBagIcon } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";

@@ -110,7 +110,6 @@ import type * as emails_DailyManagerReportComparisonPreview from "../emails/Dail
 import type * as emails_DailyManagerReportUnbordered from "../emails/DailyManagerReportUnbordered.js";
 import type * as emails_DiscountCode from "../emails/DiscountCode.js";
 import type * as emails_DiscountReminder from "../emails/DiscountReminder.js";
-import type * as emails_ExpenseReceiptEmail from "../emails/ExpenseReceiptEmail.js";
 import type * as emails_FeedbackRequest from "../emails/FeedbackRequest.js";
 import type * as emails_NewOrderAdmin from "../emails/NewOrderAdmin.js";
 import type * as emails_OrderEmail from "../emails/OrderEmail.js";
@@ -119,7 +118,6 @@ import type * as emails_OrderEmailComplete from "../emails/OrderEmailComplete.js
 import type * as emails_OrderEmailOutForDelivery from "../emails/OrderEmailOutForDelivery.js";
 import type * as emails_OrderEmailReady from "../emails/OrderEmailReady.js";
 import type * as emails_OrderEmailReadyDelivery from "../emails/OrderEmailReadyDelivery.js";
-import type * as emails_PosReceiptEmail from "../emails/PosReceiptEmail.js";
 import type * as emails_PosTerminalHealthAlert from "../emails/PosTerminalHealthAlert.js";
 import type * as emails_RegisterCloseoutMatchReportPreview from "../emails/RegisterCloseoutMatchReportPreview.js";
 import type * as emails_RegisterCloseoutVarianceAlert from "../emails/RegisterCloseoutVarianceAlert.js";
@@ -204,6 +202,7 @@ import type * as inventory_featuredItem from "../inventory/featuredItem.js";
 import type * as inventory_helpers_expenseSessionExpiration from "../inventory/helpers/expenseSessionExpiration.js";
 import type * as inventory_helpers_expenseSessionValidation from "../inventory/helpers/expenseSessionValidation.js";
 import type * as inventory_helpers_inventoryHolds from "../inventory/helpers/inventoryHolds.js";
+import type * as inventory_helpers_productArchivePrecondition from "../inventory/helpers/productArchivePrecondition.js";
 import type * as inventory_helpers_resultTypes from "../inventory/helpers/resultTypes.js";
 import type * as inventory_helpers_sessionExpiration from "../inventory/helpers/sessionExpiration.js";
 import type * as inventory_helpers_sessionValidation from "../inventory/helpers/sessionValidation.js";
@@ -266,13 +265,13 @@ import type * as marketing_walkthroughNormalization from "../marketing/walkthrou
 import type * as marketing_walkthroughRequestNotifications from "../marketing/walkthroughRequestNotifications.js";
 import type * as marketing_walkthroughRequestRetention from "../marketing/walkthroughRequestRetention.js";
 import type * as marketing_walkthroughRequests from "../marketing/walkthroughRequests.js";
+import type * as migrations_backfillAmountsToPesewas from "../migrations/backfillAmountsToPesewas.js";
 import type * as migrations_backfillAthenaUserNormalizedEmail from "../migrations/backfillAthenaUserNormalizedEmail.js";
 import type * as migrations_backfillReportFactObservedAt from "../migrations/backfillReportFactObservedAt.js";
 import type * as migrations_backfillReportingCycleStart from "../migrations/backfillReportingCycleStart.js";
 import type * as migrations_backfillStoreCurrencyCase from "../migrations/backfillStoreCurrencyCase.js";
 import type * as migrations_backfillStoreSchedules from "../migrations/backfillStoreSchedules.js";
 import type * as migrations_backfillStoreTimezoneAuthority from "../migrations/backfillStoreTimezoneAuthority.js";
-import type * as migrations_migrateAmountsToPesewas from "../migrations/migrateAmountsToPesewas.js";
 import type * as migrations_migratePosAmountsToPesewas from "../migrations/migratePosAmountsToPesewas.js";
 import type * as mtn_client from "../mtn/client.js";
 import type * as mtn_collections from "../mtn/collections.js";
@@ -842,7 +841,6 @@ declare const fullApi: ApiFromModules<{
   "emails/DailyManagerReportUnbordered": typeof emails_DailyManagerReportUnbordered;
   "emails/DiscountCode": typeof emails_DiscountCode;
   "emails/DiscountReminder": typeof emails_DiscountReminder;
-  "emails/ExpenseReceiptEmail": typeof emails_ExpenseReceiptEmail;
   "emails/FeedbackRequest": typeof emails_FeedbackRequest;
   "emails/NewOrderAdmin": typeof emails_NewOrderAdmin;
   "emails/OrderEmail": typeof emails_OrderEmail;
@@ -851,7 +849,6 @@ declare const fullApi: ApiFromModules<{
   "emails/OrderEmailOutForDelivery": typeof emails_OrderEmailOutForDelivery;
   "emails/OrderEmailReady": typeof emails_OrderEmailReady;
   "emails/OrderEmailReadyDelivery": typeof emails_OrderEmailReadyDelivery;
-  "emails/PosReceiptEmail": typeof emails_PosReceiptEmail;
   "emails/PosTerminalHealthAlert": typeof emails_PosTerminalHealthAlert;
   "emails/RegisterCloseoutMatchReportPreview": typeof emails_RegisterCloseoutMatchReportPreview;
   "emails/RegisterCloseoutVarianceAlert": typeof emails_RegisterCloseoutVarianceAlert;
@@ -936,6 +933,7 @@ declare const fullApi: ApiFromModules<{
   "inventory/helpers/expenseSessionExpiration": typeof inventory_helpers_expenseSessionExpiration;
   "inventory/helpers/expenseSessionValidation": typeof inventory_helpers_expenseSessionValidation;
   "inventory/helpers/inventoryHolds": typeof inventory_helpers_inventoryHolds;
+  "inventory/helpers/productArchivePrecondition": typeof inventory_helpers_productArchivePrecondition;
   "inventory/helpers/resultTypes": typeof inventory_helpers_resultTypes;
   "inventory/helpers/sessionExpiration": typeof inventory_helpers_sessionExpiration;
   "inventory/helpers/sessionValidation": typeof inventory_helpers_sessionValidation;
@@ -998,13 +996,13 @@ declare const fullApi: ApiFromModules<{
   "marketing/walkthroughRequestNotifications": typeof marketing_walkthroughRequestNotifications;
   "marketing/walkthroughRequestRetention": typeof marketing_walkthroughRequestRetention;
   "marketing/walkthroughRequests": typeof marketing_walkthroughRequests;
+  "migrations/backfillAmountsToPesewas": typeof migrations_backfillAmountsToPesewas;
   "migrations/backfillAthenaUserNormalizedEmail": typeof migrations_backfillAthenaUserNormalizedEmail;
   "migrations/backfillReportFactObservedAt": typeof migrations_backfillReportFactObservedAt;
   "migrations/backfillReportingCycleStart": typeof migrations_backfillReportingCycleStart;
   "migrations/backfillStoreCurrencyCase": typeof migrations_backfillStoreCurrencyCase;
   "migrations/backfillStoreSchedules": typeof migrations_backfillStoreSchedules;
   "migrations/backfillStoreTimezoneAuthority": typeof migrations_backfillStoreTimezoneAuthority;
-  "migrations/migrateAmountsToPesewas": typeof migrations_migrateAmountsToPesewas;
   "migrations/migratePosAmountsToPesewas": typeof migrations_migratePosAmountsToPesewas;
   "mtn/client": typeof mtn_client;
   "mtn/collections": typeof mtn_collections;

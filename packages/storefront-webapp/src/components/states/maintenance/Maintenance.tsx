@@ -1,4 +1,4 @@
-import type { Store } from "@athena/webapp";
+import type { Store } from "@athena/contracts";
 import { useOptionalStoreContext } from "@/contexts/StoreContext";
 import { useCountdown } from "@/components/common/hooks";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
