@@ -201,17 +201,23 @@ export function deriveAthenaProvisionalState(
     return "withdrawn";
   }
   if (preview?.state === "superseded" || committed) return "superseded";
-  if (row && input.finalizingAt !== null && input.finalizingAt >= row.updatedAt) {
+  if (
+    row &&
+    !input.rowExpired &&
+    input.finalizingAt !== null &&
+    input.finalizingAt >= row.updatedAt
+  ) {
     return "committing";
   }
   if (
     row &&
+    !input.rowExpired &&
     input.lastRenderedOrdinal !== null &&
     row.draftOrdinal > input.lastRenderedOrdinal
   ) {
     return "reset";
   }
-  if (row?.truncated) return "paused_at_limit";
+  if (row?.truncated && !input.rowExpired) return "paused_at_limit";
   if (row && !input.rowExpired) return "streaming";
   if (input.viewPhase === "running" && !released && !row) {
     return "awaiting_first_text";

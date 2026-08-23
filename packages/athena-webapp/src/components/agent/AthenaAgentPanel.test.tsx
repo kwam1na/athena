@@ -230,11 +230,13 @@ function PanelHarness({
   presentation = storePresentation,
   layout = "docked",
   onClose = () => {},
+  scrollTop,
 }: {
   run: AthenaAgentRun;
   presentation?: typeof storePresentation;
   layout?: "docked" | "fullscreen";
   onClose?: () => void;
+  scrollTop?: number;
 }) {
   const [draft, setDraft] = useState("");
   const [width, setWidth] = useState(420);
@@ -248,6 +250,7 @@ function PanelHarness({
       presentation={presentation}
       returnLabel="Back to Daily Operations"
       run={run}
+      scrollTop={scrollTop}
       width={width}
     />
   );
@@ -1312,6 +1315,50 @@ describe("the provisional draft region", () => {
     // A terminal draft state re-anchors.
     rerender(<PanelHarness run={draftRun("stalled")} />);
     expect(scroll.scrollTop).toBe(300);
+  });
+
+  it("keeps a reading position restored on remount while the draft keeps growing", () => {
+    // The restored position is read back before the first delta lands, so the
+    // metrics have to be in place for the mount itself.
+    const heights = ["scrollHeight", "clientHeight"].map((name) => ({
+      name,
+      original: Object.getOwnPropertyDescriptor(Element.prototype, name),
+    }));
+    Object.defineProperty(Element.prototype, "scrollHeight", {
+      configurable: true,
+      get: () => 400,
+    });
+    Object.defineProperty(Element.prototype, "clientHeight", {
+      configurable: true,
+      get: () => 100,
+    });
+    try {
+      const { rerender } = render(
+        <PanelHarness run={draftRun("streaming")} scrollTop={40} />,
+      );
+      const scroll = screen.getByTestId("athena-agent-scroll");
+      expect(scroll.scrollTop).toBe(40);
+
+      rerender(
+        <PanelHarness
+          run={draftRun("streaming", {
+            provisional: {
+              text: "Two lanes are still open, and more text arrives.",
+              truncated: false,
+              draftOrdinal: 1,
+            },
+          })}
+          scrollTop={40}
+        />,
+      );
+
+      expect(scroll.scrollTop).toBe(40);
+    } finally {
+      for (const { name, original } of heights) {
+        if (original) Object.defineProperty(Element.prototype, name, original);
+        else Reflect.deleteProperty(Element.prototype, name);
+      }
+    }
   });
 
   it("keeps the draft out of storage and the URL", () => {

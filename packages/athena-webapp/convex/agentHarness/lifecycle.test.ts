@@ -140,6 +140,35 @@ function completionInput(
   };
 }
 
+/** A running turn with a binding (so the clamp has something to key on) and one provisional row. */
+async function seedStreamingTurn(ctx: MutationCtx, tenant: Tenant, key: string) {
+  const { runIdempotencyKey: _k, promptPayloadHash: _h, ...base } = buildRunInput(tenant);
+  const intent = await recordTurnIntentWithCtx(ctx, { ...base, turnIdempotencyKey: key, runtimeThreadRef: `thread:${key}`, promptPayload: { prompt: key } });
+  if (intent.outcome !== "created") throw new Error(intent.outcome);
+  for (const [step, refs] of [
+    ["runtime_thread_bound", {}],
+    ["runtime_input_saved", { runtimeInputRef: `message:${key}` }],
+    ["scheduled", { runtimeScheduleRef: `job:${key}` }],
+    ["running", {}],
+  ] as const) {
+    const result = await advanceTurnBindingWithCtx(ctx, { bindingId: intent.bindingId, step, idempotencyKey: `${key}-${step}`, now: TEST_NOW, ...refs });
+    if (result.outcome === "rejected") throw new Error(result.denial.code);
+  }
+  await upsertProvisionalNarrativeWithCtx(ctx, {
+    runId: intent.runId,
+    turnBindingId: intent.bindingId,
+    storeId: tenant.storeId,
+    organizationId: tenant.organizationId,
+    text: "Checking the day.",
+    draftOrdinal: 0,
+    truncated: false,
+    egressClass: "operational",
+    updatedAt: TEST_NOW,
+    expiresAt: TEST_NOW + 60_000,
+  });
+  return intent;
+}
+
 describe("agent run creation and context metadata", () => {
   it("creates the business run with exactly one immutable grant and ledger pinned to the current epoch", async () => {
     const t = convexTest(schema, modules);
@@ -338,35 +367,6 @@ describe("run transitions (scenarios 1-3)", () => {
 });
 
 describe("terminal clamp and the provisional narrative", () => {
-  /** A running turn with a binding (so the clamp has something to key on) and one provisional row. */
-  async function seedStreamingTurn(ctx: MutationCtx, tenant: Tenant, key: string) {
-    const { runIdempotencyKey: _k, promptPayloadHash: _h, ...base } = buildRunInput(tenant);
-    const intent = await recordTurnIntentWithCtx(ctx, { ...base, turnIdempotencyKey: key, runtimeThreadRef: `thread:${key}`, promptPayload: { prompt: key } });
-    if (intent.outcome !== "created") throw new Error(intent.outcome);
-    for (const [step, refs] of [
-      ["runtime_thread_bound", {}],
-      ["runtime_input_saved", { runtimeInputRef: `message:${key}` }],
-      ["scheduled", { runtimeScheduleRef: `job:${key}` }],
-      ["running", {}],
-    ] as const) {
-      const result = await advanceTurnBindingWithCtx(ctx, { bindingId: intent.bindingId, step, idempotencyKey: `${key}-${step}`, now: TEST_NOW, ...refs });
-      if (result.outcome === "rejected") throw new Error(result.denial.code);
-    }
-    await upsertProvisionalNarrativeWithCtx(ctx, {
-      runId: intent.runId,
-      turnBindingId: intent.bindingId,
-      storeId: tenant.storeId,
-      organizationId: tenant.organizationId,
-      text: "Checking the day.",
-      draftOrdinal: 0,
-      truncated: false,
-      egressClass: "operational",
-      updatedAt: TEST_NOW,
-      expiresAt: TEST_NOW + 60_000,
-    });
-    return intent;
-  }
-
   it("deletes the row atomically with every non-completed terminal transition, keyed on the run's binding", async () => {
     const t = convexTest(schema, modules);
     await t.run(async (ctx) => {
@@ -759,8 +759,11 @@ describe("compatibility epoch fence (scenario 10)", () => {
       const attempt = await seedExecutingAttempt(ctx, run.runId);
       const call = await admitAndSettleCall(ctx, { runId: run.runId, attemptId: attempt, key: "call-1" });
       await transitionProgramAttemptWithCtx(ctx, { attemptId: attempt, to: "result_produced", now: TEST_NOW, result: { resultHash: "program:1" } });
+      // A second old-epoch run that was mid-draft when the deploy fenced it.
+      const streaming = await seedStreamingTurn(ctx, tenant, "epoch-streaming");
+      expect(await loadProvisionalNarrativeByBindingWithCtx(ctx, streaming.bindingId)).not.toBeNull();
       expect(await getCurrentCompatibilityEpochWithCtx(ctx)).toEqual({ epoch: 0, digest: "" });
-      return { tenant, run, attempt, call };
+      return { tenant, run, attempt, call, streaming };
     });
 
     await t.run(async (ctx) => {
@@ -792,9 +795,11 @@ describe("compatibility epoch fence (scenario 10)", () => {
       expect(await beginProgramAttemptWithCtx(ctx, { runId: fresh.runId, attemptIdempotencyKey: "f1", programSource: "1", now: TEST_NOW + 6 })).toMatchObject({ outcome: "created" });
 
       // The bounded repair pass cancels old-epoch runs and leaves the new one alone.
-      expect(await repairFencedRunsWithCtx(ctx, { now: TEST_NOW + 7, limit: 10 })).toEqual({ canceled: 1, hasMore: false });
+      expect(await repairFencedRunsWithCtx(ctx, { now: TEST_NOW + 7, limit: 10 })).toEqual({ canceled: 2, hasMore: false });
       const oldRun = await ctx.db.get("intelligenceRun", seeded.run.runId);
       expect(oldRun).toMatchObject({ status: "canceled", error: { code: "compatibility_epoch_fenced" } });
+      // The fenced run's draft goes with it: the repair cancels through the clamp.
+      expect(await loadProvisionalNarrativeByBindingWithCtx(ctx, seeded.streaming.bindingId)).toBeNull();
       expect((await ctx.db.get("intelligenceRun", fresh.runId))?.status).toBe("running");
       // Audit metadata retains the old epoch and digest on the immutable grant.
       const grant = await ctx.db.get("agentRunGrant", seeded.run.grantId);

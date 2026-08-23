@@ -856,7 +856,7 @@ describe("provisional narrative exposure", () => {
     expect(withdrawn).toEqual({ state: "withdrawn", reason: "membership_revoked", released: true });
     expect(Object.keys(withdrawn).sort()).toEqual(["reason", "released", "state"]);
     // The next flush refuses and takes the row with it.
-    expect(await t.mutation(internal.agentHarness.turns.flushProvisionalNarrative, { bindingId: turn.bindingId, draftOrdinal: 0, text: "Checking the roster too." })).toMatchObject({ outcome: "refused" });
+    expect(await t.mutation(internal.agentHarness.turns.flushProvisionalNarrative, { bindingId: turn.bindingId, draftOrdinal: 0, text: "Checking the roster too." })).toMatchObject({ outcome: "refused", reason: "membership_revoked" });
     expect(await provisionalRows(t, turn.bindingId)).toEqual([]);
   });
 

@@ -38,6 +38,7 @@ import {
   useAthenaAgentRun,
   type AthenaAgentAnswer,
   type AthenaAgentHistoryEntry,
+  type AthenaAgentProvisionalState,
   type AthenaAgentRun,
   type AthenaAgentSource,
 } from "./useAthenaAgentRun";
@@ -51,7 +52,7 @@ const WIDTH_STEP = 32;
 const TOUCH_TARGET = "min-h-[44px] min-w-[44px]";
 
 /** The draft states that paint text or a line of their own. */
-const PROVISIONAL_VISIBLE_STATES = new Set([
+const PROVISIONAL_VISIBLE_STATES: ReadonlySet<AthenaAgentProvisionalState> = new Set([
   "streaming",
   "reset",
   "paused_at_limit",
@@ -60,7 +61,7 @@ const PROVISIONAL_VISIBLE_STATES = new Set([
 ]);
 
 /** Draft states that end the draft: the scroll container re-anchors on them. */
-const PROVISIONAL_SETTLED_STATES = new Set([
+const PROVISIONAL_SETTLED_STATES: ReadonlySet<AthenaAgentProvisionalState> = new Set([
   "withdrawn",
   "superseded",
   "stalled",
@@ -167,10 +168,17 @@ export function AthenaAgentPanel({
     promptRef.current?.focus();
   }, []);
 
-  // Restore the reading position when the layout swaps the panel out.
+  // Restore the reading position when the layout swaps the panel out. The
+  // restored position decides whether the draft is still being followed, or the
+  // sticky-follow effect would re-anchor to the bottom and discard it.
   useEffect(() => {
     const node = scrollRef.current;
-    if (node && scrollTop > 0) node.scrollTop = scrollTop;
+    if (node && scrollTop > 0) {
+      node.scrollTop = scrollTop;
+      followDraftRef.current =
+        node.scrollHeight - node.scrollTop - node.clientHeight <=
+        SCROLL_FOLLOW_SLACK;
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- restore once per mount.
   }, []);
 

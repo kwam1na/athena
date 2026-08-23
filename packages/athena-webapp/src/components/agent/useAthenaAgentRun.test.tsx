@@ -822,6 +822,14 @@ describe("the provisional state precedence", () => {
       expected: "disabled",
     },
     {
+      name: "disabled outranks a withdrawal both arms would claim",
+      input: {
+        preview: { state: "disabled", released: true },
+        viewPhase: "canceled",
+      },
+      expected: "disabled",
+    },
+    {
       name: "a preview withdrawal after a release withdraws",
       input: {
         preview: { state: "withdrawn", reason: "run_canceled", released: true },
@@ -858,14 +866,43 @@ describe("the provisional state precedence", () => {
       expected: "superseded",
     },
     {
-      name: "the preview's own superseded outranks a live row",
+      name: "the preview's own superseded outranks every rung below it",
       input: { preview: { state: "superseded", released: true } },
+      expected: "superseded",
+    },
+    {
+      name: "a committed turn supersedes a row that is still live",
+      input: {
+        preview: row,
+        viewPhase: "completed",
+        viewReleased: true,
+        lastRenderedOrdinal: 1,
+      },
       expected: "superseded",
     },
     {
       name: "finalizing at or after the row's updatedAt is committing",
       input: { preview: row, finalizingAt: 100, lastRenderedOrdinal: 1 },
       expected: "committing",
+    },
+    {
+      name: "committing outranks a reset the same row would also claim",
+      input: {
+        preview: streamingRow({ draftOrdinal: 2 }) as typeof row,
+        finalizingAt: 100,
+        lastRenderedOrdinal: 1,
+      },
+      expected: "committing",
+    },
+    {
+      name: "an expired row never commits",
+      input: {
+        preview: row,
+        finalizingAt: 100,
+        lastRenderedOrdinal: 1,
+        rowExpired: true,
+      },
+      expected: "stalled",
     },
     {
       name: "a resumed draft moves updatedAt past finalizing and streams again",
@@ -878,6 +915,23 @@ describe("the provisional state precedence", () => {
       expected: "reset",
     },
     {
+      name: "a reset outranks a pause the same row would also claim",
+      input: {
+        preview: streamingRow({ truncated: true, draftOrdinal: 2 }) as typeof row,
+        lastRenderedOrdinal: 1,
+      },
+      expected: "reset",
+    },
+    {
+      name: "an expired row never resets",
+      input: {
+        preview: streamingRow({ draftOrdinal: 2 }) as typeof row,
+        lastRenderedOrdinal: 1,
+        rowExpired: true,
+      },
+      expected: "stalled",
+    },
+    {
       name: "the first row a mount paints is never a reset",
       input: { preview: row, lastRenderedOrdinal: null },
       expected: "streaming",
@@ -886,6 +940,15 @@ describe("the provisional state precedence", () => {
       name: "a truncated row pauses at the limit",
       input: { preview: streamingRow({ truncated: true }) as typeof row, lastRenderedOrdinal: 1 },
       expected: "paused_at_limit",
+    },
+    {
+      name: "an expired truncated row stalls instead of pausing",
+      input: {
+        preview: streamingRow({ truncated: true }) as typeof row,
+        lastRenderedOrdinal: 1,
+        rowExpired: true,
+      },
+      expected: "stalled",
     },
     {
       name: "a running turn with no release shows milestones only",

@@ -339,6 +339,8 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ create }) => {
     expect(after.binding?.abandonedAt).toBeDefined();
     expect(after.invocations[0]).toMatchObject({ status: "failed" });
     expect(JSON.stringify(after.invocations[0])).not.toContain("sk-live-abcdefgh12345");
+    // A provider failure leaves no draft at rest.
+    expect(after.provisional).toEqual([]);
     expect(report.usage?.conservative).toBe(true);
     expect(report.usage?.streams).toBeGreaterThanOrEqual(1);
     // Terminal: a second drive does nothing.
@@ -378,11 +380,16 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ create }) => {
     const report = await driving;
     expect(report).toMatchObject({ outcome: "canceled", finalize: { runStatus: "canceled" } });
     expect(report.events).toContain("turn_completed");
+    const turnRef = (await t.run((ctx) => ctx.db.get("agentTurnBinding", seeded.bindingId)))!.runtimeTurnRef as never;
     harness.release("after-read");
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    // The released script runs on until it observes the terminal turn; the
+    // runtime's own settled seam is that boundary, not a fixed delay.
+    await harness.settle(turnRef);
     const after = await rows(t, seeded);
     expect(after.run).toMatchObject({ status: "canceled" });
     expect(after.attempts).toHaveLength(1);
+    // An operator cancel leaves no draft at rest.
+    expect(after.provisional).toEqual([]);
     // A late tool call from the released model never reaches a handler: the terminal ledger refuses it.
     const results = harness.dispatchResults(after.binding!.runtimeTurnRef as never);
     expect(results[0]).toMatchObject({ kind: "outcome", outcome: { kind: "success" } });
@@ -418,6 +425,8 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ create }) => {
     const after = await rows(t, seeded);
     expect(after.run).toMatchObject({ status: "canceled", error: { code: "canceled", diagnostic: "authority_revoked" } });
     expect(after.artifacts).toHaveLength(0);
+    // Revocation after egress leaves no draft at rest.
+    expect(after.provisional).toEqual([]);
     expect(after.binding).toMatchObject({ runtimeCleanupStatus: "succeeded", adapterKind: harness.adapter.descriptor.adapterKind });
     if (harness.adapter.descriptor.adapterKind === "athena_contract_fake") {
       expect(purged).toHaveLength(1);
@@ -763,6 +772,35 @@ describe("turn host — the provisional draft", () => {
     expect(report, JSON.stringify(report)).toMatchObject({ outcome: "completed" });
     expect(report.dispatch).toEqual(["athena.executeProgram:success", "athena.completeRun:denied", "athena.completeRun:success"]);
     expect((await rows(t, seeded)).provisional).toEqual([]);
+  });
+
+  it("clears the draft when the provider fails after the commit already landed", async () => {
+    const t = backend();
+    const harness = createAgentRuntimeContractFake({ clock: createDeterministicClock(TEST_NOW_BASE + 1_000) });
+    const seeded = await seedAdmittedTurn(t, "flush-commit-then-fail");
+    const { captured, observe } = captureProgramResult();
+    harness.scriptTurn(turnKeyFor(seeded.bindingId), [
+      { kind: "tool_call", callId: "c1", toolId: "athena.executeProgram", args: { source: PROGRAM } },
+      { kind: "narrative", deltas: ["Adding a closing thought."] },
+      { kind: "pause", gate: "before-commit" },
+      // The answer commits, then the provider dies before the turn ends: the
+      // finalize delete owns this path, not the terminal clamp.
+      { kind: "tool_call", callId: "c2", toolId: "athena.completeRun", args: completeRunArgs(captured) },
+      { kind: "fail", code: "provider_failure", message: "model unavailable" },
+    ]);
+    const host = await hostFor(t, harness, { observe });
+    const drive = host.driveTurn({ bindingId: seeded.bindingId });
+
+    await waitFor(async () => (await provisionalRow(t, seeded.bindingId))?.text === "Adding a closing thought.");
+    harness.release("before-commit");
+
+    const report = await drive;
+    expect(report, JSON.stringify(report)).toMatchObject({ outcome: "failed", code: "provider_failure" });
+    const after = await rows(t, seeded);
+    // The committed answer stands; only the draft is gone.
+    expect(after.artifacts).toHaveLength(1);
+    expect(after.provisional).toEqual([]);
+    expect(JSON.stringify(after)).not.toContain("Adding a closing thought.");
   });
 
   it("stops offering text for the rest of the turn when the flush refuses, and the turn still completes", async () => {

@@ -993,7 +993,8 @@ export function createAgentTurnEntryPoints(config: AgentTurnEntryPointConfig) {
    * order): turn ownership and live authority via `reauthorizeTurnAccess`
    * (`not_found` until ownership is established) → epoch fence → profile
    * policy → the turn's stamped egress class against the viewer's current
-   * grant (skipped before the provider row exists: nothing was released yet)
+   * grant (skipped before the provider row exists: nothing was released yet;
+   * once a release HAS happened a missing stamp withdraws rather than skips)
    * → suppressed or abandoned → run state → expiry. The verdict never reads
    * the provisional row for anything but text, so it survives the row's
    * deletion: a remount after a withdrawal shows the withdrawal, not a stall.
@@ -1016,7 +1017,14 @@ export function createAgentTurnEntryPoints(config: AgentTurnEntryPointConfig) {
     const profile = registry.profiles[grant.profileKey];
     if (!profile || profile.narrativePolicy !== "provisional_streaming") return released ? withdrawn("policy_disabled") : { state: "disabled", released };
     const stamped = await stampedTurnEgressClassWithCtx(ctx, run._id);
-    if (stamped !== null && egressClassRank(stamped) > egressClassRank(access.viewerEgressClass)) return withdrawn("egress_beyond_authority");
+    if (stamped === null) {
+      // Nothing released yet: the stamp is simply not written, and the ladder
+      // falls through to `awaiting_first_text`. Once text HAS been released a
+      // missing stamp is a class we cannot check, so it fails closed.
+      if (released) return withdrawn("egress_beyond_authority");
+    } else if (egressClassRank(stamped) > egressClassRank(access.viewerEgressClass)) {
+      return withdrawn("egress_beyond_authority");
+    }
     if (binding.releaseSuppressedAt !== undefined) return withdrawn("suppressed");
     if (binding.abandonedAt !== undefined && !isTerminalRunStatus(run.status)) return withdrawn("abandoned");
     if (run.status === "completed") return { state: "superseded", released };

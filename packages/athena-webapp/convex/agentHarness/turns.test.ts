@@ -679,6 +679,20 @@ describe("provisional narrative: flush, preview ladder, acknowledgement, and ter
     });
     expect(await flush(t, missing.bindingId, "Checking")).toMatchObject({ outcome: "refused", reason: "egress_class_missing" });
     expect(await row(t, missing.bindingId)).toBeNull();
+
+    // A stamp that goes missing AFTER text was released fails closed on the
+    // preview as well: the skip covers only turns that never released.
+    const unstamped = await t.run((ctx) => seedRecordedTurn(ctx, "egress-unstamped"));
+    const unstampedArgs = { storeId: unstamped.operator.storeId, bindingId: unstamped.bindingId };
+    await startStreamingTurn(t, unstamped);
+    expect(await flush(t, unstamped.bindingId, "Checking")).toEqual({ outcome: "stored", truncated: false });
+    await t.run(async (ctx) => {
+      const invocation = (await ctx.db.query("intelligenceProviderInvocation").withIndex("by_runId", (q) => q.eq("runId", unstamped.runId)).take(1))[0];
+      await ctx.db.delete("intelligenceProviderInvocation", invocation._id);
+    });
+    const unstampedPreview = await preview(t, unstamped.operator.userId, unstampedArgs);
+    expect(unstampedPreview).toEqual({ state: "withdrawn", reason: "egress_beyond_authority", released: true });
+    expect(Object.keys(unstampedPreview).sort()).toEqual(["reason", "released", "state"]);
   });
 
   it("reports stalled past the expiry bound, withdrawn for canceled, failed, and suppressed turns, and the exposure truth table for a post-commit suppression", async () => {
