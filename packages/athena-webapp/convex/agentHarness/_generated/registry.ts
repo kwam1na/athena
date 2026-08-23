@@ -2703,7 +2703,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       }
     }
   },
-  "compatibilityDigest": "fnv1a64:85dc961243788804",
+  "compatibilityDigest": "fnv1a64:501827e670579cf1",
   "contractVersion": 1,
   "enablement": {
     "capabilities": {
@@ -2888,6 +2888,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         ]
       },
       "lifecycle": "enabled",
+      "narrativePolicy": "provisional_streaming",
       "packages": [
         {
           "packageKey": "operations",
@@ -3039,6 +3040,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         ]
       },
       "lifecycle": "unpublished",
+      "narrativePolicy": "provisional_streaming",
       "packages": [
         {
           "packageKey": "fleet",
@@ -3099,7 +3101,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
   "protocolVersions": {
     "admissionPolicy": "u4.0",
     "harness": "athena.agent-harness.v1",
-    "runtime": "athena.agent-runtime.v1",
+    "runtime": "athena.agent-runtime.v2",
     "runtimeAdapter": {
       "adapterKind": "convex_agent",
       "adapterVersion": "convex_agent@0.7.1+ai@7.0.76+athena.1"
@@ -3696,7 +3698,7 @@ export const AGENT_GENERATED_SOURCE_KEYS: readonly string[] = [
 ];
 
 /** What a run pins; the deployment epoch fence compares it with the durable epoch digest. */
-export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:85dc961243788804";
+export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:501827e670579cf1";
 
 /** Schema identity only; unchanged when a capability is enabled or disabled. */
 export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:f19326767d8913de";

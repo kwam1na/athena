@@ -23,7 +23,7 @@ type SmokeReport = {
   projection: { kind: string; replayed?: boolean };
   cleanup: { ok: boolean; deleted?: string[] };
   usage: { tokens: { input: number; output: number }; streams: number };
-  timings: { firstProgressMs: number | null; completionMs: number; totalMs: number };
+  timings: { firstDeltaMs: number | null; firstProgressMs: number | null; completionMs: number; totalMs: number };
 };
 
 describe("convexAgentSmoke:run (local execution of the deployed smoke action)", () => {
@@ -39,7 +39,22 @@ describe("convexAgentSmoke:run (local execution of the deployed smoke action)", 
     expect(report.adapter.adapterKind).toBe("convex_agent");
     expect(report.programRuntime.kind).toBe("quickjs_wasm");
     // Usage is reported per model step once the step (including its tool execution) ends.
-    expect(report.events).toEqual(["turn_started", "tool_call_requested", "tool_call_completed", "usage", "usage", "turn_completed", "completion_projected"]);
+    expect(report.events).toEqual([
+      "turn_started",
+      "narrative_delta",
+      "tool_call_requested",
+      "tool_call_completed",
+      "usage",
+      "narrative_delta",
+      "usage",
+      "turn_completed",
+      "completion_projected",
+    ]);
+    // The deployed path streams: the mock's preamble reaches the host before
+    // the tool call it precedes.
+    expect(report.events.indexOf("narrative_delta")).toBeLessThan(report.events.indexOf("tool_call_requested"));
+    expect(report.events.filter((kind) => kind === "narrative_delta").length).toBeGreaterThanOrEqual(1);
+    expect(report.timings.firstDeltaMs).not.toBeNull();
     expect(report.turnOutcome).toMatchObject({ outcome: "completed" });
     expect(report.dispatch).toEqual(["success"]);
     expect(report.programOutcomes).toHaveLength(1);

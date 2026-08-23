@@ -158,6 +158,46 @@ export function findKernelImportViolations(files: readonly SourceFile[]): string
 }
 
 // ---------------------------------------------------------------------------
+// Leaf modules: helpers every kernel module may call without a cycle
+// ---------------------------------------------------------------------------
+
+/**
+ * The provisional-narrative helper is called from `lifecycle.ts`,
+ * `completionOutbox.ts`, `retention.ts`, and `turns.ts`. The repo has no cycle
+ * detector, so the guarantee that none of those imports can loop back is this
+ * allowlist: the helper reaches only the generated server/data-model types and
+ * `convex/values`, never a sibling kernel module (its TTL is its own literal,
+ * not `turnBindings.ts`'s step-staleness window).
+ */
+export const PROVISIONAL_NARRATIVE_LEAF = "convex/agentHarness/provisionalNarrative.ts";
+/**
+ * The turn-trace helper is called from `turns.ts` (the recording mutation) and
+ * `retention.ts` (scope removal and the standard-class expiry sweep). Same
+ * guarantee, same mechanism: it reaches only the generated types, so its
+ * 365-day retention bound is its own literal rather than an import of
+ * `shared/agentHarness/execution`.
+ */
+export const TURN_TRACE_LEAF = "convex/agentHarness/turnTrace.ts";
+/**
+ * The narrative-trail helper is called from `turns.ts` (the finalize-time write
+ * and the operator read) and `retention.ts` (scope removal and the
+ * standard-class expiry sweep). Same guarantee, same mechanism: it reaches only
+ * the generated types, so its 365-day retention bound is its own literal rather
+ * than an import of `shared/agentHarness/execution`.
+ */
+export const NARRATIVE_TRAIL_LEAF = "convex/agentHarness/narrativeTrail.ts";
+export const LEAF_ALLOWED_IMPORTS = ["convex/_generated/server", "convex/_generated/dataModel", "convex/values"] as const;
+
+export function findLeafImportViolations(file: SourceFile): string[] {
+  const violations: string[] = [];
+  for (const { specifier, resolved } of importsOf(file)) {
+    const allowed = (LEAF_ALLOWED_IMPORTS as readonly string[]).includes(resolved) || (LEAF_ALLOWED_IMPORTS as readonly string[]).includes(`${resolved}.ts`);
+    if (!allowed) violations.push(`${file.path} imports ${specifier} (${resolved})`);
+  }
+  return violations;
+}
+
+// ---------------------------------------------------------------------------
 // Runtime-native imports: only inside convex/agentHarness/agentRuntime/
 // ---------------------------------------------------------------------------
 
@@ -352,6 +392,61 @@ describe("agent harness import boundaries", () => {
         fixture("convex/agentHarness/grants.ts", 'import { isAthenaReadIntent } from "../platform/readIntentCatalog";\nimport { denial } from "../../shared/agentHarness/execution";'),
       ]),
     ).toEqual([]);
+  });
+
+  it("keeps the provisional-narrative helper a leaf: generated types and convex/values only, no sibling", () => {
+    const leaf = collectSources(HARNESS_DIR, (relative) => relative === PROVISIONAL_NARRATIVE_LEAF);
+    expect(leaf).toHaveLength(1);
+    expect(findLeafImportViolations(leaf[0])).toEqual([]);
+    expect(leaf[0].source).toMatch(/export const AGENT_PROVISIONAL_NARRATIVE_TTL_MS = 5 \* 60 \* 1000;/);
+    expect(
+      findLeafImportViolations(
+        fixture(PROVISIONAL_NARRATIVE_LEAF, 'import { AGENT_TURN_STEP_STALE_AFTER_MS } from "./turnBindings";\nimport { retentionExpiresAt } from "../../shared/agentHarness/execution";'),
+      ),
+    ).toEqual([
+      `${PROVISIONAL_NARRATIVE_LEAF} imports ./turnBindings (convex/agentHarness/turnBindings)`,
+      `${PROVISIONAL_NARRATIVE_LEAF} imports ../../shared/agentHarness/execution (shared/agentHarness/execution)`,
+    ]);
+    expect(findLeafImportViolations(fixture(PROVISIONAL_NARRATIVE_LEAF, 'import type { Doc } from "../_generated/dataModel";\nimport { v } from "convex/values";'))).toEqual([]);
+    // Every caller that must reach it does so directly, so a cycle through the helper is impossible.
+    for (const caller of ["convex/agentHarness/lifecycle.ts", "convex/agentHarness/completionOutbox.ts", "convex/agentHarness/retention.ts", "convex/agentHarness/turns.ts"]) {
+      const file = kernelFiles.find((candidate) => candidate.path === caller);
+      expect(file, caller).toBeDefined();
+      expect(importsOf(file!).some(({ resolved }) => resolved === "convex/agentHarness/provisionalNarrative"), caller).toBe(true);
+    }
+  });
+
+  it("keeps the turn-trace helper a leaf: generated types only, no sibling", () => {
+    const leaf = collectSources(HARNESS_DIR, (relative) => relative === TURN_TRACE_LEAF);
+    expect(leaf).toHaveLength(1);
+    expect(findLeafImportViolations(leaf[0])).toEqual([]);
+    expect(leaf[0].source).toMatch(/export const AGENT_TURN_TRACE_RETENTION_MS = 365 \* 24 \* 60 \* 60 \* 1000;/);
+    expect(
+      findLeafImportViolations(fixture(TURN_TRACE_LEAF, 'import { STANDARD_RETENTION_MS } from "../../shared/agentHarness/execution";')),
+    ).toEqual([`${TURN_TRACE_LEAF} imports ../../shared/agentHarness/execution (shared/agentHarness/execution)`]);
+    for (const caller of ["convex/agentHarness/retention.ts", "convex/agentHarness/turns.ts"]) {
+      const file = kernelFiles.find((candidate) => candidate.path === caller);
+      expect(file, caller).toBeDefined();
+      expect(importsOf(file!).some(({ resolved }) => resolved === "convex/agentHarness/turnTrace"), caller).toBe(true);
+    }
+  });
+
+  it("keeps the narrative-trail helper a leaf: generated types only, no sibling", () => {
+    const leaf = collectSources(HARNESS_DIR, (relative) => relative === NARRATIVE_TRAIL_LEAF);
+    expect(leaf).toHaveLength(1);
+    expect(findLeafImportViolations(leaf[0])).toEqual([]);
+    expect(leaf[0].source).toMatch(/export const AGENT_TURN_NARRATIVE_TRAIL_RETENTION_MS = 365 \* 24 \* 60 \* 60 \* 1000;/);
+    expect(
+      findLeafImportViolations(fixture(NARRATIVE_TRAIL_LEAF, 'import { STANDARD_RETENTION_MS } from "../../shared/agentHarness/execution";\nimport { egressClassRank } from "../../shared/agentHarness/values";')),
+    ).toEqual([
+      `${NARRATIVE_TRAIL_LEAF} imports ../../shared/agentHarness/execution (shared/agentHarness/execution)`,
+      `${NARRATIVE_TRAIL_LEAF} imports ../../shared/agentHarness/values (shared/agentHarness/values)`,
+    ]);
+    for (const caller of ["convex/agentHarness/retention.ts", "convex/agentHarness/turns.ts"]) {
+      const file = kernelFiles.find((candidate) => candidate.path === caller);
+      expect(file, caller).toBeDefined();
+      expect(importsOf(file!).some(({ resolved }) => resolved === "convex/agentHarness/narrativeTrail"), caller).toBe(true);
+    }
   });
 
   it("permits runtime-native imports only inside convex/agentHarness/agentRuntime/", () => {

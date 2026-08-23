@@ -154,6 +154,83 @@ Three boundaries are worth knowing before touching any of it:
   reach, and reserved command verbs are rejected at generation. Future command
   work starts from its own plan and uses proposal, fresh precondition, Athena
   approval, and admitted domain-command rails.
+- **There are two exposure rules, not one.** Release is still one reauthorized
+  transaction. Alongside it sits **"Provisional stream, recallable view"**: while
+  a turn runs, the model's narrative reaches the operator live as explicitly
+  provisional text. Its invariant is that *the narrative never enters Athena's
+  durable record, projected history, a citation, or a prompt, and never survives
+  a terminal cause.*
+
+The provisional stream is a separate exposure class with its own truthful
+markers, not an early release. The streamed prose is the assistant thinking out
+loud and is a different string from the `narrative` the model later submits to
+`completeRun`; the committed artifact replaces it rather than growing into it,
+and the operator is told so. It is never citation-bearing, never a citation
+source, never promoted to the `standard` retention class. There are exactly two granted
+exceptions to that invariant, and neither reaches history, prompts, or
+citations. The first is engineer-only and never operator-facing: the
+turn trace (`agentTurnTraceEvent`) durably records a driven turn's deltas, tool
+arguments, and tool outcomes so the agent can be refined against what the model
+actually saw, and it is never projected into history, prompts, citations, or
+any operator-admitted query. The second is the operator's own record of how an
+answer was reached: the narrative trail (`agentTurnNarrativeTrail`) keeps a
+**committed** turn's finished drafts, released and withdrawn with the answer
+itself — written only when the run reached `completed` with a committed
+release, stamped with that answer's egress class, and served by
+`getTurnNarrativeTrail` on the ladder `getTurnAnswer` walks plus the
+narrative-policy rung (a buffered profile serves no drafts, `policy_disabled`),
+so the drafts are never readable where the answer is not. A canceled, failed, or
+refused turn leaves none.
+
+Mechanically: the adapter emits `narrative_delta { draftOrdinal, text }` from
+the provider's text parts only, the turn host coalesces them in memory, and one
+single-flight host-only internal flush — the single enforcement point, checking
+profile policy, live grant reauthorization, binding state, and the turn's
+stamped egress class against the operator's current grant — writes them into
+`agentProvisionalNarrative`. That table is delete-only, has no state column,
+carries `retentionClass: "short_lived"`, and holds at most one row per turn
+binding; its helpers live in the leaf module
+[convex/agentHarness/provisionalNarrative.ts](../../convex/agentHarness/provisionalNarrative.ts),
+which imports only generated server types and owns its own 5-minute TTL literal
+so every caller can reach it without an import cycle. Five causes delete the
+row, none of them inside the commit transaction: the lifecycle clamp for every
+terminal status except `completed` (cancel, failure, kill switch, fence repair),
+release suppression on post-commit revocation, the host's turn finalization at
+the end of every driven turn, store or organization removal through the table's
+scope indexes, and the repair sweep's expiry phase for rows a dead host left
+behind.
+
+The trail is the durable half of the same surface. At finalization a committed
+turn hands its drafts to `finalizeTurnWithCtx`, which writes one insert-once
+`agentTurnNarrativeTrail` row through the leaf module
+[convex/agentHarness/narrativeTrail.ts](../../convex/agentHarness/narrativeTrail.ts)
+— standard class, its own 365-day literal, a 96 KiB total cap that shortens the
+largest drafts rather than dropping any ordinal, and the committed artifact's
+egress class rather than the turn's, so the trail can never outrank the answer.
+The host hands on only text the operator's pane was still being offered:
+narration after quiescence for the commit, and every draft of a turn the kernel
+ever refused, are dropped rather than made durable. Store and organization
+removal delete the row through its scope indexes; the standard retention sweep
+expires it; release suppression leaves it at rest and refuses the read.
+
+The browser reads it only through `previewTurnNarrative`, an operation-admitted
+reactive query that reauthorizes on every read and never writes. Its
+discriminated union has exactly one text-bearing arm — `streaming { released,
+text, truncated, draftOrdinal, updatedAt, expiresAt, ttlMs }`; `not_found` is
+bare and precedes ownership, `withdrawn { reason, released }` carries a closed
+reason (`compatibility_epoch_fenced`, `policy_disabled`,
+`egress_beyond_authority`, `suppressed`, `abandoned`, `run_canceled`,
+`run_failed`), and `disabled`, `awaiting_first_text`, `stalled`, and
+`superseded` carry only `released`. `acknowledgeProvisionalView` writes a
+first-write-wins `provisionalViewedAt` and refuses unless a release happened, so
+it can never outrank the server fact. The reusable host derives a presentation
+field, `provisionalState` — `disabled`, `withdrawn`, `superseded`, `committing`,
+`reset`, `paused_at_limit`, `streaming`, `awaiting_first_text`, `stalled`,
+`none`, first match wins in that order — deliberately separate from the closed,
+server-declared `AgentHostState`, which is untouched. Whether any of this
+happens for a surface is the profile's required `narrativePolicy`
+(`provisional_streaming | buffered`), enforced by the flush and reported by the
+preview.
 
 Profiles are default off behind one durable switch
 (`bun run agent-harness:switch`), which is also the rollback. A behavioural

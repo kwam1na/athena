@@ -364,6 +364,60 @@ export type AgentAttemptExposure = {
   readonly binding: "none" | "active" | "abandoned";
 };
 
+/** The run ended by cancellation or failure (kill switch, fence, operator stop, provider timeout): the coarse revocation basis every exposure flag shares. */
+export function terminalRevoked(run: Pick<Doc<"intelligenceRun">, "status">): boolean {
+  return run.status === "canceled" || run.status === "failed";
+}
+
+/**
+ * Turn-keyed exposure: what the operator's pane may have shown and whether
+ * authority was withdrawn afterwards. Presumed exposure is the release marker
+ * (a flushed draft cannot be recalled from a screen); confirmed receipt is
+ * the operator's own acknowledgement. Reachable for zero-attempt turns, where
+ * the attempt-keyed view has nothing to hang on.
+ */
+export type AgentTurnExposure = {
+  readonly runStatus: Doc<"intelligenceRun">["status"];
+  readonly binding: "none" | "active" | "abandoned";
+  /** Did one Athena transaction commit the answer for reauthorized query? */
+  readonly operatorReleaseCommitted: boolean;
+  readonly operatorReleaseCommittedAt?: number;
+  /** Did an authorized fetch actually happen? Only this means browser receipt. */
+  readonly operatorViewed: boolean;
+  readonly operatorViewedAt?: number;
+  /** The committed release was suppressed after the fact (authority shrank before an authorized fetch). */
+  readonly releaseSuppressed: boolean;
+  readonly releaseSuppressedAt?: number;
+  /** Provisional text was flushed to the pane at least once; it is presumed seen. */
+  readonly provisionalExposurePresumed: boolean;
+  readonly provisionalReleasedAt?: number;
+  /** The operator acknowledged painting provisional text (confirmed receipt). */
+  readonly provisionalViewed: boolean;
+  readonly provisionalViewedAt?: number;
+  /** Authority was withdrawn after provisional text was presumed seen: the run was canceled/failed, or the release was suppressed. */
+  readonly revokedAfterProvisionalExposure: boolean;
+};
+
+export function resolveTurnExposure(input: { readonly run: Doc<"intelligenceRun">; readonly binding: Doc<"agentTurnBinding"> | null }): AgentTurnExposure {
+  const binding = input.binding;
+  const provisionalExposurePresumed = binding?.provisionalReleasedAt !== undefined;
+  return {
+    runStatus: input.run.status,
+    binding: !binding ? "none" : binding.abandonedAt !== undefined ? "abandoned" : "active",
+    operatorReleaseCommitted: binding?.operatorReleaseCommittedAt !== undefined,
+    ...(binding?.operatorReleaseCommittedAt !== undefined ? { operatorReleaseCommittedAt: binding.operatorReleaseCommittedAt } : {}),
+    operatorViewed: binding?.operatorViewedAt !== undefined,
+    ...(binding?.operatorViewedAt !== undefined ? { operatorViewedAt: binding.operatorViewedAt } : {}),
+    releaseSuppressed: binding?.releaseSuppressedAt !== undefined,
+    ...(binding?.releaseSuppressedAt !== undefined ? { releaseSuppressedAt: binding.releaseSuppressedAt } : {}),
+    provisionalExposurePresumed,
+    ...(binding?.provisionalReleasedAt !== undefined ? { provisionalReleasedAt: binding.provisionalReleasedAt } : {}),
+    provisionalViewed: binding?.provisionalViewedAt !== undefined,
+    ...(binding?.provisionalViewedAt !== undefined ? { provisionalViewedAt: binding.provisionalViewedAt } : {}),
+    revokedAfterProvisionalExposure: provisionalExposurePresumed && (terminalRevoked(input.run) || binding?.releaseSuppressedAt !== undefined),
+  };
+}
+
 /** Truthful exposure state: query visibility is never conflated with browser receipt. */
 export function resolveAttemptExposure(input: {
   readonly attempt: Doc<"agentProgramAttempt">;
@@ -372,20 +426,20 @@ export function resolveAttemptExposure(input: {
 }): AgentAttemptExposure {
   const egress = input.attempt.providerEgress;
   const providerExposed = egress?.state === "committed";
-  const terminalRevoked = input.run.status === "canceled" || input.run.status === "failed";
+  const turn = resolveTurnExposure({ run: input.run, binding: input.binding });
   return {
     attemptStatus: input.attempt.status,
-    runStatus: input.run.status,
+    runStatus: turn.runStatus,
     providerExposed,
     providerEgress: egress ? egress.state : "not_reached",
     ...(egress ? { providerEgressAt: egress.at } : {}),
     ...(egress?.reason ? { providerEgressReason: egress.reason } : {}),
-    operatorReleaseCommitted: input.binding?.operatorReleaseCommittedAt !== undefined,
-    ...(input.binding?.operatorReleaseCommittedAt !== undefined ? { operatorReleaseCommittedAt: input.binding.operatorReleaseCommittedAt } : {}),
-    operatorViewed: input.binding?.operatorViewedAt !== undefined,
-    ...(input.binding?.operatorViewedAt !== undefined ? { operatorViewedAt: input.binding.operatorViewedAt } : {}),
-    revokedAfterProviderExposure: providerExposed && terminalRevoked,
-    binding: !input.binding ? "none" : input.binding.abandonedAt !== undefined ? "abandoned" : "active",
+    operatorReleaseCommitted: turn.operatorReleaseCommitted,
+    ...(turn.operatorReleaseCommittedAt !== undefined ? { operatorReleaseCommittedAt: turn.operatorReleaseCommittedAt } : {}),
+    operatorViewed: turn.operatorViewed,
+    ...(turn.operatorViewedAt !== undefined ? { operatorViewedAt: turn.operatorViewedAt } : {}),
+    revokedAfterProviderExposure: providerExposed && terminalRevoked(input.run),
+    binding: turn.binding,
   };
 }
 

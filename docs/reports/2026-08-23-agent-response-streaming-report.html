@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Agent Streaming: the provisional narrative</title>
+  </head>
+  <body>
+    <article
+      data-athena-landed-change-report="v2"
+      data-athena-report-diff-fingerprint="9739807597b208e5ef45bfb196e7993bfbdc92352a624610b74435a5a3cba08b"
+      data-athena-report-base="cedddb54994835e9030bee4405cbb10dd76556a6"
+      data-athena-report-head="d85b536ab34ce74f91e6a07b2dac00fd32932611"
+    >
+      <header data-report-section="header">
+        <h1>Agent Streaming: the provisional narrative</h1>
+        <ul data-report-pills>
+          <li>Delivery candidate</li>
+          <li>Branch codex/agent-response-streaming-plan</li>
+          <li>Epic V26-1305 · U1–U5</li>
+          <li>13-reviewer panel, four rounds, unanimous</li>
+          <li>Dev-validated in the browser and the turn log</li>
+        </ul>
+        <dl data-report-meta>
+          <dt>Tickets</dt><dd>V26-1305 (epic), V26-1290, V26-1298, V26-1299, V26-1300, V26-1301</dd>
+          <dt>Plan</dt><dd>docs/plans/2026-08-22-001-feat-agent-response-streaming-plan.md</dd>
+          <dt>Base</dt><dd>origin/main @ cedddb54 (PR #791)</dd>
+          <dt>Status</dt><dd>Delivery candidate — PR not yet opened; operator validates in-app first</dd>
+          <dt>Production deploy</dt><dd>Not applicable yet (pre-merge)</dd>
+          <dt>Root alignment</dt><dd>Pending (pre-merge)</dd>
+        </dl>
+      </header>
+
+      <section data-report-section="summary">
+        <h2>Executive summary</h2>
+        <p>Ask Athena now shows the model thinking out loud while a turn runs. The text is explicitly <strong>provisional</strong>: it lives in one delete-only table, is written only by the runtime host through a mutation that reauthorizes the operator on every write, is served only by a query that reauthorizes on every read, is replaced by the committed answer at commit, and is deleted on every terminal cause. The committed artifact minted by <code>completeRun</code> is still the only released answer; its transaction is untouched.</p>
+        <p>Five units landed on one integration branch: the runtime contract gained a <code>narrative_delta</code> event and a protocol bump (U1); the Convex Agent adapter streams text deltas instead of waiting for the whole response (U2); the kernel gained the <code>agentProvisionalNarrative</code> row, the host flush, the <code>previewTurnNarrative</code> ladder, and deletion at every exit (U3); the reusable host renders a client-derived <code>provisionalState</code> with strict focus and live-region rules (U4); the harness docs describe the new exposure rule "Provisional stream, recallable view" (U5). A production-shaped operator turn on the dev deployment showed narration <em>before</em> the first tool call (<code>narrative_delta×7</code> then <code>tool_call_requested</code>, first delta at 12.5 s, completion at 45.6 s), and no provisional row was left at rest afterwards.</p>
+      </section>
+
+      <section data-report-section="problem">
+        <h2>Problem and context</h2>
+        <p>The agent-harness foundation deliberately buffered the model narrative server-side (Key Technical Decision 12) so that release was one reauthorized transaction and revocation could land before anything was recallable. That kept the release gate strong but made the experience poor: a real provider turn showed nothing for ten-plus seconds and then the whole answer. Operators expect to watch an answer form.</p>
+        <p>The naive fix — persist deltas through the Convex Agent component and subscribe from the browser — would have turned streamed text into an early release: it would reach the durable record and the component's replay context, have no per-read authority check, and have no deletion story. The plan (24 review rounds, eight lenses) settled on treating streamed text as its own exposure class with its own table, markers, flush refusals, preview ladder, and deletion list, and amended the foundation's invariant to: <em>the narrative never enters Athena's durable record, projected history, a citation, or a prompt, and never survives a terminal cause</em>.</p>
+      </section>
+
+      <section data-report-section="mental-model">
+        <h2>Mental model</h2>
+        <p>Think of the provisional narrative as a <strong>whiteboard in a room with a guard at the door</strong>. The model writes on the whiteboard as it thinks. Only the runtime host holds the marker, and every time it writes it asks the guard (the flush's reauthorization) whether the operator is still allowed in the room. Anyone who wants to read the whiteboard has to pass the same guard again (the preview ladder). When the turn ends — by answer, cancel, failure, revocation, fence, or the host dying — the whiteboard is wiped. The answer itself is never written on the whiteboard; it is handed over separately through <code>completeRun</code>, and the whiteboard is wiped at that moment too.</p>
+        <p>Two facts survive the wipe, on the turn binding: <code>provisionalReleasedAt</code> (text was readable at some point) and <code>provisionalViewedAt</code> (the client said it painted it). Investigators derive <code>provisionalExposurePresumed</code> and <code>revokedAfterProvisionalExposure</code> from those, never from the text.</p>
+      </section>
+
+      <section data-report-section="before-after">
+        <h2>Before and after</h2>
+        <h3>Before</h3>
+        <ul>
+          <li>Adapter: <code>agent.generateText</code>; the narrative arrived whole in <code>turn_completed.narrative</code>.</li>
+          <li>Host: forwarded only server-authored milestones (<code>progress</code>) to the binding.</li>
+          <li>Browser: milestone list, then the committed answer.</li>
+        </ul>
+        <h3>After (data-flow order)</h3>
+        <ol>
+          <li>Provider <code>text-delta</code> parts → adapter coalescer (24 chars / sentence boundary / <code>text-end</code>; always flushed before a <code>tool_call_requested</code>) → <code>narrative_delta { draftOrdinal, text }</code>; <code>finish-step</code> advances the draft ordinal. Reasoning, tool-input, source and file parts are dropped by default.</li>
+          <li>Host keeps the current draft in memory and pumps one <code>flushProvisionalNarrative</code> at a time; an OCC-failed flush is dropped and the next carries the whole draft; a refused flush stops the chain for the turn. At the <code>completeRun</code> request the host sets a stop flag and drains the flush in flight so the commit transaction is never contended; on a non-success commit outcome it resumes with the next draft.</li>
+          <li>The flush refuses, in order: <code>policy_buffered</code>, any <code>reauthorizeGrantWithCtx</code> refusal, <code>turn_not_streaming</code>, <code>egress_class_missing</code>, <code>egress_beyond_authority</code>, <code>empty_text</code>; every refusal except the empty-text no-op deletes the row. On success it upserts the row, caps text at 16 KiB on a codepoint boundary, refreshes <code>expiresAt</code> from the server clock, and sets <code>provisionalReleasedAt</code> once.</li>
+          <li><code>previewTurnNarrative</code> (never writes): <code>reauthorizeTurnAccess</code> → epoch fence → profile policy → egress rank against the write-once provider-invocation row (the turn's egress class is stamped once by <code>prepareTurn</code> when the invocation row is inserted, and never rewritten; after a release, a missing stamp withdraws) → suppressed/abandoned → run state → expiry. Only the <code>streaming</code> arm carries text; <code>withdrawn</code> carries a closed reason and <code>released</code>.</li>
+          <li>Client derives <code>provisionalState</code> (<code>disabled > withdrawn > superseded > committing > reset > paused_at_limit > streaming > awaiting_first_text > stalled > none</code>), with a turn-keyed latched verdict, one <code>ttlMs</code> deadline timer, and the expiry guard on every text-bearing arm.</li>
+          <li>Panel renders the draft inside a labeled "Draft in progress. Not verified." container with its own polite live region, a <code>role="alert"</code> withdrawn notice, one focus effect with a turn-keyed claim latch, and sticky scroll-follow.</li>
+        </ol>
+      </section>
+
+      <section data-report-section="key-files">
+        <h2>Key files</h2>
+        <table>
+          <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+          <tbody>
+            <tr><td><code>packages/athena-webapp/shared/agentHarness/agentRuntime.ts</code></td><td><code>narrative_delta</code> joins the normalized event kinds; protocol <code>athena.agent-runtime.v2</code> moves the tool fingerprint and the compatibility digest (fail-closed for old adapters).</td></tr>
+            <tr><td><code>packages/athena-webapp/shared/agentHarness/profile.ts</code></td><td>Required, validated <code>narrativePolicy</code> on every profile; part of the compatibility digest.</td></tr>
+            <tr><td><code>packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgent.ts</code></td><td>Stream consumption with a default-deny part allowlist, the coalescer, draft-ordinal advance, and the narration directive in <code>DEFAULT_INSTRUCTIONS</code>.</td></tr>
+            <tr><td><code>packages/athena-webapp/convex/agentHarness/runtimeHost.ts</code></td><td>Single-flight flush chain, stop-and-drain at <code>completeRun</code>, resume on non-success, and the <code>[agentHarness:driveTurn]</code> log line that is the rollout's acceptance sensor.</td></tr>
+            <tr><td><code>packages/athena-webapp/convex/agentHarness/provisionalNarrative.ts</code></td><td>Leaf helper (upsert, delete-by-binding, expiry delete, truncation) with its own TTL literal so four kernel modules can delete without an import cycle.</td></tr>
+            <tr><td><code>packages/athena-webapp/convex/agentHarness/turns.ts</code></td><td>The flush (enforcement point), <code>previewTurnNarrative</code> (reauthorizing ladder), <code>acknowledgeProvisionalView</code>, <code>describeTurnExposure</code>, and the finalize-time delete.</td></tr>
+            <tr><td><code>packages/athena-webapp/convex/agentHarness/lifecycle.ts</code>, <code>completionOutbox.ts</code>, <code>retention.ts</code></td><td>The other four deletion sites: terminal clamp (non-<code>completed</code>), post-commit suppression, scope removal, and the counted, logged expiry sweep.</td></tr>
+            <tr><td><code>packages/athena-webapp/convex/schemas/agentHarness.ts</code></td><td>The <code>agentProvisionalNarrative</code> table (<code>short_lived</code>, four indexes, no state column) and the two binding markers.</td></tr>
+            <tr><td><code>packages/athena-webapp/src/components/agent/useAthenaAgentRun.ts</code></td><td><code>deriveAthenaProvisionalState</code> (pure, table-tested precedence), preview subscription and latching, the single <code>ttlMs</code> timer, the acknowledgement effect.</td></tr>
+            <tr><td><code>packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx</code></td><td>The provisional container, its live region, the withdrawn notice, the one focus effect with its claim latch, and sticky scroll-follow that survives a remount.</td></tr>
+            <tr><td><code>packages/athena-webapp/src/components/agent/AthenaAgentSafeText.tsx</code></td><td>Provisional rendering mode: paragraphs, lists, inline only; whole-buffer re-parse so every prefix is inert.</td></tr>
+            <tr><td><code>packages/athena-webapp/docs/agent/agent-harness-runtime.md</code></td><td>§5 documents the stream, the coalescing rule, how to read the turn log, and the fence/rollback posture for <code>narrativePolicy</code>.</td></tr>
+            <tr><td><code>packages/athena-webapp/convex/agentHarness/narrativeTrail.ts</code></td><td>The committed turn's finished drafts as a durable, operator-readable trail (<code>agentTurnNarrativeTrail</code>), released with the answer and read through the answer's own reauthorization ladder; kept when the provider fails after the commit.</td></tr>
+            <tr><td><code>packages/athena-webapp/convex/agentHarness/turnTrace.ts</code>, <code>scripts/agent-trace-export.ts</code></td><td>The engineer-only turn trace (<code>agentTurnTraceEvent</code>, <code>standard</code> — retained 365 days by operator decision, since it is the dataset the agent is refined from): every runtime event, tool argument, tool outcome and draft, exported as JSONL with <code>bun run agent-trace:export --binding &lt;id&gt;</code>; <code>AGENT_TURN_TRACE=off</code> disables it. Never reachable from a public function.</td></tr>
+            <tr><td><code>packages/athena-webapp/src/components/agent/streamReveal.ts</code></td><td>The stream reveal ported from kwamina-fyi: one brief linear catch-up per update (≤180 ms streaming, ≤120 ms settled), prefixes cut on code points and never inside a <code>[citation:…]</code> key, the word ink-wipe timing.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section data-report-section="failure-boundaries">
+        <h2>Failure boundaries</h2>
+        <ul>
+          <li><strong>Revoked owner acknowledges</strong> — <code>acknowledgeProvisionalView</code> refuses and deletes the row: a view-side revocation cleanup, not a sixth terminal cause.</li>
+          <li><strong>Cancel mid-stream</strong> — the lifecycle clamp deletes the row in the cancel transaction; the panel shows "Draft withdrawn. This request was stopped." and focus stays where the operator's Stop put it. Stop before any text shows only "Stopped." — a never-released turn never withdraws.</li>
+          <li><strong>Provider error mid-stream</strong> — arrives as a stream <code>error</code> part, terminalizes the turn as <code>failed</code> with <code>provider_failure</code>; no trailing delta; the clamp deletes.</li>
+          <li><strong>Commit succeeds, provider then fails</strong> — the committed artifact stands; <code>finalizeTurnWithCtx</code> deletes the row (the later <code>failed</code> transition does not re-clamp).</li>
+          <li><strong>Membership revoked / profile disabled / epoch advanced mid-turn</strong> — the next flush refuses and deletes; the preview withdraws immediately with a closed reason; the run is canceled moments later by the existing sweeps.</li>
+          <li><strong>Egress downgrade</strong> — the stamped turn class outranks the operator's grant: flush refused and deleted, preview <code>withdrawn / egress_beyond_authority</code>. A mere capability narrowing keeps streaming. After a release, a missing stamp also withdraws (fail-closed parity with the flush).</li>
+          <li><strong>Buffered profile</strong> — the flush refuses <code>policy_buffered</code>; the preview reports <code>disabled</code> (milestones only); a post-release policy flip reads <code>withdrawn / policy_disabled</code>.</li>
+          <li><strong>Dead host</strong> — the row ages past its 5-minute expiry: the preview reports <code>stalled</code> (no text), the client's own timer drops the text, and the repair sweep deletes it and logs the count.</li>
+          <li><strong>Over 16 KiB</strong> — the server truncates at a codepoint boundary and sets <code>truncated</code>; the panel shows the "display limit reached" line; the host keeps flushing idempotently.</li>
+          <li><strong>Panel remount mid-stream</strong> — the first painted ordinal is not a reset; a restored non-bottom scroll position is kept; an already-withdrawn turn shows its notice again but moves no focus.</li>
+          <li><strong>Commit succeeds, provider then fails (trail)</strong> — the answer stands and so does its trail: the trail is written at commit, not at the end of the drive, so the later <code>failed</code> transition leaves it in place.</li>
+          <li><strong>Operator scrolls while text arrives</strong> — a wheel, pointer, touch or navigation key withdraws the follow by intent (never by position, since a smooth scroll in flight is briefly away from the bottom); the floating "Scroll to latest" control restarts it, as does the next question. A draft that ends no longer takes the position back.</li>
+          <li><strong>Reduced motion</strong> — the reveal paints whole, no word span is wrapped, the scroll container does not glide, and the preference is read on the first render so no frame runs before it is known.</li>
+        </ul>
+      </section>
+
+      <section data-report-section="changes">
+        <h2>What changed, and what did not</h2>
+        <h3>Changed</h3>
+        <ul>
+          <li>Runtime contract: <code>narrative_delta</code>, protocol v2, required <code>narrativePolicy</code>, a <code>buffered</code> test profile, a narration directive.</li>
+          <li>Adapter: <code>streamText</code> with <code>saveStreamDeltas: false</code>; text-only deltas; ordered, coalesced, flushed before every tool call.</li>
+          <li>Kernel: one delete-only table, one leaf helper, a host-only flush, two public entry points (<code>previewTurnNarrative</code>, <code>acknowledgeProvisionalView</code>) admitted with return validators, one internal exposure query, five deletion sites, a counted sweep phase, <code>readOperatorTurn include: "preview"</code>.</li>
+          <li>Host UI: client-derived <code>provisionalState</code>, provisional container and live region, withdrawn notice, focus latch, scroll-follow, provisional renderer mode, closed-vocabulary copy, browser/server reason-set parity test, scripted Playwright scenarios.</li>
+          <li>Docs: runtime, capability-authoring, architecture, intelligence, testing guides; the foundation plan's amendment; terminology sweep.</li>
+          <li>Review round: expiry guard on every text-bearing arm; restored scroll position survives remount; preview fails closed on a released-but-unstamped turn; coverage gaps closed (fence-repair and commit-then-failure deletion proofs, precedence conflict pairs, pre-turn-ref narration parity proof).</li>
+          <li>Iterative session after the first gate (operator-directed, same branch): a per-turn session timeline of finished drafts; an engineer-only turn trace with a JSONL export for refining the agent; the committed turn's drafts persisted as a durable trail released with the answer (history opens it lazily; an empty trail says so; a commit-then-provider-failure keeps it); the kwamina-fyi stream reveal applied to the live draft and the committed answer, with the per-word ink wipe; scroll-follow with intent-based interrupt and a floating "Scroll to latest" control; the kwamina-fyi composer on Athena's primitives (one shell, round primary send button, Enter sends, four rows, no helper line); sending no longer moves focus to the status line.</li>
+        </ul>
+        <h3>Intentionally unchanged</h3>
+        <ul>
+          <li>The <code>completeRun</code> transaction, citations, grants, budgets, executor, read ports, capability conformance.</li>
+          <li>The component persistence allowlist: <code>streams</code> stays empty; no <code>@convex-dev/agent/react</code> in the browser; no TanStack-path streaming.</li>
+          <li>The kernel's <code>AgentHostState</code> union and <code>operatorViewedAt</code>.</li>
+          <li>Per operator direction, the fence → smoke → enable rollout machinery was not run for this dev deployment; the code was pushed directly and validated in the browser and the turn log. The dev deployment's durable epoch therefore still pins the previous digest (<code>deployedMatchesEpoch: false</code>); new turns pin the current epoch number and are not fenced.</li>
+        </ul>
+      </section>
+
+      <section data-report-section="validation">
+        <h2>Validation and review evidence</h2>
+        <ul>
+          <li>Per-unit sensors (each unit committed green): U1 474 harness tests + full package suite 9,936; U2 482 harness tests, ordering stable over five runs; U3 589 harness/admission tests, full suite 9,968, schema pushed to dev; U4 164 host tests + 8 Playwright scenarios + production build; U5 full suite 10,034, terminology sweep empty, <code>harness:check</code>/<code>agent-sdk:check</code> fresh.</li>
+          <li>Post-rebase (onto PR #791): typecheck clean; 741 tests across the harness, admission, shared-contract and host slices.</li>
+          <li>Dev deployment (browser as the dev operator): <code>streaming</code> → "Draft restarted" on the tool round → committed answer replaced the draft; Stop while streaming → <code>role="alert"</code> withdrawn notice; Stop before text → no notice. Turn log, verbatim: <code>[agentHarness:driveTurn] {"turnId":"sn82mjwbpz8y6fsgb1457t615h8d1qw1","runId":"gs7xxwmsanmy942he1c0r2f3fs8d07vc","outcome":"completed","events":"turn_started,narrative_delta×7,tool_call_requested,progress,tool_call_completed,usage,narrative_delta×6,tool_call_requested,progress,tool_call_completed,usage,narrative_delta×7,tool_call_requested,progress,tool_call_completed,usage,narrative_delta×37,usage,turn_completed,completion_projected","firstDeltaMs":12483,"firstProgressMs":13069,"completionMs":45554,"elapsedMs":46298}</code>. <code>agentProvisionalNarrative</code> empty at rest after completed and canceled turns.</li>
+          <li>Review: the same 13-reviewer panel (correctness, security, adversarial, testing, maintainability, project-standards, agent-native, learnings, performance, api-contract, reliability, TypeScript, frontend-races) ran four rounds — run ids <code>20260823-streaming-r1</code> … <code>r4</code>. Round 1 found two P2 in-contract defects (expiry guard; scroll restore) and coverage gaps, fixed in <code>5d413704</code> with a proving parity test in <code>3e624559</code>; round 2 found two P3 test-strength issues, fixed in <code>1b3cc5ed</code> and <code>c03f1af9</code>, and one P3 expansion note deferred to V26-1321; round 3 found one P2 test-identity nit, fixed in <code>d85b536a</code>; round 4 was unanimous with no findings. The evidence is recorded against the prepared candidate (tree <code>96447fb0</code>) by <code>harness:review-evidence</code> as obligation record <code>995029301ed7c0ef…</code>.</li>
+          <li>Iterative session sensors (each change committed green): focused suites only, per operator direction — host/agent (panel 75, safe-text, stream-reveal, hook, import boundary), <code>convex/agentHarness</code> (narrativeTrail, turnTrace, retention, security, dataGovernance, historyProjection, runtimeHost, turns), <code>tsc</code>, <code>lint:frontend:changed</code>, <code>lint:convex:changed</code>. Live on dev with a per-frame sampler: draft reveal painted 225 distinct lengths over 300 frames; the newest word's opacity climbed 0 → 1 over ~760 ms; the answer revealed, faded, held and dropped its spans with the text unchanged; the follow held at one scroll position across 800 draft frames after a wheel and tracked 45 content growths after the control was tapped; a 76-row trace export for a failed turn showed the model narrating its answer as prose instead of calling <code>completeRun</code> (<code>completion_missing</code>) — a refinement target, recorded, not fixed here.</li>
+          <li>Round 5 review: the same 13-reviewer panel ran once more on <code>git diff d85b536a..HEAD</code> against a contract addendum naming the iterative work as in-contract — run id <code>20260823-streaming-r5</code>; evidence recorded by <code>harness:review-evidence</code> against the prepared candidate (tree <code>bb7e4409</code>) as obligation record <code>675c66138ec881301d…</code>, after three rounds on this work: round 5 found 17 findings (3 P1, 12 P2, 2 P3 — the in-memory timeline fallback after commit, the trail's missing narrative-policy rung, a trace cap that could drop the turn's summary row, silent trace flush failures, two unread indexes, dead helpers, operator vocabulary, a per-frame history re-parse, two focus edge cases, and the trace retention length, which the operator adjudicated to the standard 365 days), fixed in <code>c1244c82</code>; round 6 found that the new focus interrupt also fired on the panel's own focus moves, a missing client copy for the trail's refusal, and a log line carrying an error's text, fixed in <code>cc3f6c6f</code>; round 7 was unanimous with no findings.</li>
+          <li>Merge gate: <code>bun run pr:athena</code> runs as the last step on this candidate after this report and the solution note are committed; its <code>[pr:athena]</code> summary lines and the <code>telemetry/delivery-runs/</code> record carry the run's result, and the Linear closeout comment relays them.</li>
+          <li>Production deploy: not applicable (pre-merge). Root alignment: pending (pre-merge). Linear: epic and all five tickets In Progress with delivery comments; moved to In Review when the PR opens.</li>
+        </ul>
+      </section>
+
+      <section data-report-section="guidance">
+        <h2>Next time</h2>
+        <ul>
+          <li>Read the turn log first: <code>bunx convex logs --history 200 | grep agentHarness:driveTurn</code>. If <code>narrative_delta</code> does not precede the first <code>tool_call_requested</code>, tune the narration directive before touching persistence.</li>
+          <li>Adding a terminal cause? Add its delete to the same transaction as the transition and a re-query assertion proving the row is gone. Never delete inside the commit transaction.</li>
+          <li>Adding a client arm that paints text? Put <code>!rowExpired</code> on it and add a precedence row that makes the adjacent branch independently true.</li>
+          <li>Rolling back: set the profile's <code>narrativePolicy</code> to <code>buffered</code> and run the fence (the flush then refuses server-side; released drafts read <code>withdrawn / policy_disabled</code>), or use the kill switch.</li>
+          <li>Bootstrapping a worktree for harness work: run <code>bun install</code> in the worktree if <code>@convex-dev/agent</code> tests fail with a missing <code>_generated</code> directory — it is the environment, not your change.</li>
+          <li>Refining the agent: export the trace of the turn in question (<code>bun run agent-trace:export --binding &lt;id&gt; --out trace.jsonl</code>) before changing a directive; the trace carries every tool argument and outcome and the full draft text, so the argument is about what the model actually did.</li>
+          <li>Scroll following that glides must be withdrawn by intent, never by position; a position check cancels itself mid-glide.</li>
+        </ul>
+      </section>
+
+      <section data-report-section="quiz" data-quiz-pass-threshold="8">
+        <h2>Comprehension quiz</h2>
+        <ol data-quiz>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Which of these is the only released answer after this change?</p>
+            <ol data-quiz-options>
+              <li>The last <code>narrative_delta</code> the adapter emitted.</li>
+              <li data-quiz-correct>The artifact minted by the <code>completeRun</code> transaction.</li>
+              <li>The text in the <code>agentProvisionalNarrative</code> row at commit time.</li>
+              <li>Whatever the panel last painted.</li>
+            </ol>
+            <p data-quiz-explanation>The provisional text is the model thinking out loud and is replaced, not promoted; <code>completeRun</code> remains the single reauthorized release.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Why does the host stop flushing and drain the flush in flight when it sees the <code>completeRun</code> tool request?</p>
+            <ol data-quiz-options>
+              <li>To save Convex write bandwidth.</li>
+              <li data-quiz-correct>So the commit transaction is never contended by a streaming write.</li>
+              <li>Because the preview would otherwise show the committed answer twice.</li>
+              <li>Because the adapter stops emitting deltas at that point.</li>
+            </ol>
+            <p data-quiz-explanation>The request is emitted before the tool runs and <code>emit</code> awaits the hook, so stopping there guarantees no flush lands inside the commit.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>A turn commits successfully. Which site deletes the provisional row?</p>
+            <ol data-quiz-options>
+              <li>The lifecycle clamp, inside the commit transaction.</li>
+              <li><code>suppressReleaseWithCtx</code>.</li>
+              <li data-quiz-correct><code>finalizeTurnWithCtx</code>, at the end of the driven turn, outside the commit.</li>
+              <li>The repair sweep on its next pass.</li>
+            </ol>
+            <p data-quiz-explanation>The clamp skips <code>completed</code> on purpose so the commit transaction stays untouched; finalize deletes above its <code>already_terminal</code> early return.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>The preview's egress rung compares the operator's grant against which value?</p>
+            <ol data-quiz-options>
+              <li>The <code>egressClass</code> stored on the provisional row.</li>
+              <li data-quiz-correct>The <code>requestSummary.egressClass</code> stamped once on the provider-invocation row.</li>
+              <li>The profile's declared egress ceiling.</li>
+              <li>The committed artifact's egress class.</li>
+            </ol>
+            <p data-quiz-explanation>Reading the write-once invocation row means the verdict survives the provisional row's deletion, so a remount after a downgrade still reads <code>withdrawn</code>, not <code>stalled</code>.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Which <code>previewTurnNarrative</code> arm carries the draft text?</p>
+            <ol data-quiz-options>
+              <li>Every servable arm.</li>
+              <li><code>streaming</code> and <code>committing</code>.</li>
+              <li data-quiz-correct>Only <code>streaming</code>.</li>
+              <li><code>streaming</code> and <code>withdrawn</code> (for the notice).</li>
+            </ol>
+            <p data-quiz-explanation>Every other arm is <code>{ state, released }</code> (plus a closed <code>reason</code> on <code>withdrawn</code>); the tests assert the exact key set.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>The operator presses Stop while the draft is streaming. What does the panel do with focus?</p>
+            <ol data-quiz-options>
+              <li>Moves it to the withdrawn notice.</li>
+              <li data-quiz-correct>Leaves it where the operator's <code>cancellation_requested</code> transition put it; the notice only announces.</li>
+              <li>Moves it to the composer.</li>
+              <li>Moves it twice: first to the notice, then to the status.</li>
+            </ol>
+            <p data-quiz-explanation>The operator's own move wins; the withdrawn notice has <code>role="alert"</code> so screen readers still hear it without a focus move.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What does the client's single <code>ttlMs</code> deadline timer provide that the server-side preview query does not?</p>
+            <ol data-quiz-options>
+              <li>It deletes the expired row on the server.</li>
+              <li data-quiz-correct>A wall-clock drop: when the returned <code>ttlMs</code> elapses with no new server data, the client re-derives to <code>stalled</code> and stops painting the text.</li>
+              <li>It re-authorizes the operator on the client.</li>
+              <li>It advances the draft ordinal so the next delta starts a new draft.</li>
+            </ol>
+            <p data-quiz-explanation>The preview reports <code>stalled</code> only when it re-runs; the client timer is the one clock-driven signal, which is why every text-bearing arm must carry the expiry guard.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What did the round-1 review find in <code>deriveAthenaProvisionalState</code>?</p>
+            <ol data-quiz-options>
+              <li>The precedence order was wrong.</li>
+              <li data-quiz-correct>Three text-bearing arms lacked the <code>rowExpired</code> guard, so an expired truncated or committing row never fell through to <code>stalled</code>.</li>
+              <li>The <code>withdrawn</code> arm fired before a release.</li>
+              <li>The <code>disabled</code> arm was unreachable.</li>
+            </ol>
+            <p data-quiz-explanation>The fix adds the guard to each of those arms and precedence rows for the expired combinations, so an expired row always yields to <code>stalled</code>.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>How was the narration directive accepted for the dev deployment?</p>
+            <ol data-quiz-options>
+              <li>The deployed smoke emitted at least one delta with the mock model.</li>
+              <li data-quiz-correct>A real operator turn's <code>[agentHarness:driveTurn]</code> log line showed <code>narrative_delta</code> before the first <code>tool_call_requested</code>.</li>
+              <li>The contract suite's narration case passed against both adapters.</li>
+              <li>The fence script reported <code>deployedMatchesEpoch: true</code>.</li>
+            </ol>
+            <p data-quiz-explanation>The smoke's single-tool prompt is exactly the configuration that suppresses narration, so only a production-shaped turn read from the log proves the directive works.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What is true about the dev deployment's state after this delivery?</p>
+            <ol data-quiz-options>
+              <li>The fence advanced the durable epoch to the new digest.</li>
+              <li data-quiz-correct>The new code and schema are deployed and new turns run, but the durable epoch still pins the previous digest because the fence step was skipped by operator direction.</li>
+              <li>The <code>daily_operations</code> profile was disabled for the smoke and re-enabled afterwards.</li>
+              <li>Production was deployed from the worktree.</li>
+            </ol>
+            <p data-quiz-explanation>The fence compares epoch numbers, so new turns are not fenced; <code>deployedMatchesEpoch: false</code> is informational and recorded in the handoff.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section data-report-section="subagent-evidence">
+        <h2>Subagent evidence</h2>
+        <ul>
+          <li><strong>Session-context subagent</strong> (read-only): gathered the Linear ticket scope and every delivery comment, the plan's settled decisions, the per-unit sensors, the U3 resume after a model usage limit, the mid-delivery rebase onto PR #791, the skipped fenced rollout and its replacement evidence, and the finish-line status.</li>
+          <li><strong>Delivered-diff subagent</strong> (read-only): produced the changed-file map by layer, the before/after data flow with the exact refusal reasons, preview arms, precedence, and five deletion sites, the failure-boundary list, the intentionally-unchanged list, the test inventory, generated-artifact changes, and the residual risks.</li>
+          <li><strong>Review panel</strong> (13 reviewers, two rounds): findings synthesized into the fix commit and the evidence manifest; their residual risks are carried in the Linear closeout comment.</li>
+          <li><strong>Report reviewer subagent</strong> (read-only): checked every mechanism claim against the code, plan, and docs (ladder order, precedence, deletion sites, refusal reasons, coalescing rule, log-line fields, unchanged list) and the quiz; its corrections — cite the recorded review evidence rather than bare reviewer counts, quote the turn-log line verbatim, ground the <code>ttlMs</code> question in the report body, drop reviewer attribution from a quiz explanation, and define the egress stamp and the acknowledgement-side delete before use — are applied in this version.</li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

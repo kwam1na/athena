@@ -9,8 +9,13 @@
  * completion outbox. No individual backend read is a tool. The runtime-adapter
  * dispatch ledger fingerprints every call (adapter version +
  * turn + tool + canonical args hash + call id): an exact replay returns the
- * recorded outcome; any mismatch fails without a handler. Model narrative is
- * never streamed; the only progress the browser sees are the server-authored
+ * recorded outcome; any mismatch fails without a handler. Athena buffers no
+ * model narrative: the running text is emitted in process as ordered
+ * `narrative_delta` events and held only in a short-lived provisional row that
+ * every terminal cause deletes, so a host can surface it as explicitly
+ * provisional text. It never enters the durable record, projected history, a
+ * citation, or a prompt, and the committed artifact remains the only released
+ * answer; the only other progress the browser sees are the server-authored
  * milestones these handlers report. Nothing here imports the runtime adapter
  * or a product domain.
  */

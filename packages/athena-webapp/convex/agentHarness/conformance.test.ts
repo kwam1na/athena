@@ -532,6 +532,50 @@ describe("enablement overlay and compatibility identity", () => {
     });
   });
 
+  it("moves the compatibility digest when a profile's narrative policy changes, and fences the runs pinned to the old one", async () => {
+    const streaming = build();
+    const buffered = build({
+      profiles: [defineAgentProfile({ ...SYNTHETIC_SECOND_SURFACE_PROFILE, narrativePolicy: "buffered" })],
+    });
+    expect(streaming.ok && buffered.ok).toBe(true);
+    if (!streaming.ok || !buffered.ok) return;
+    expect(SYNTHETIC_SECOND_SURFACE_PROFILE.narrativePolicy).toBe("provisional_streaming");
+    // The narrative policy is behavioral, so it rides the compatibility digest,
+    // not the registry digest (manifest semantics are unchanged).
+    expect(buffered.registry.registryDigest).toBe(streaming.registry.registryDigest);
+    expect(buffered.registry.compatibilityDigest).not.toBe(streaming.registry.compatibilityDigest);
+    const comparison = compareCompatibility(streaming.registry.compatibilityDigest, buffered.registry.compatibilityDigest);
+    expect(comparison).toMatchObject({ changed: true, requiresEpochAdvance: true });
+
+    // A run pinned to the superseded digest cannot survive the deploy fence.
+    const t = convexTest(schema, modules);
+    const runId = await t.run(async (ctx) => {
+      const tenant = await seedTenant(ctx, "narrative-policy-fence");
+      const created = await seedRun(ctx, tenant, { compatibilityDigest: streaming.registry.compatibilityDigest });
+      await markAgentRunRunningWithCtx(ctx, { runId: created.runId, now: TEST_NOW });
+      return created.runId;
+    });
+    const plan = planCompatibilityAdvance({
+      currentEpoch: await t.run((ctx) => getCurrentCompatibilityEpochWithCtx(ctx).then((epoch) => epoch.epoch)),
+      currentDigest: streaming.registry.compatibilityDigest,
+      nextDigest: buffered.registry.compatibilityDigest,
+    });
+    expect(plan.advance).toBe(true);
+    if (!plan.advance) return;
+    await t.run((ctx) =>
+      advanceCompatibilityEpochWithCtx(ctx, {
+        epoch: plan.epoch,
+        digest: plan.digest,
+        idempotencyKey: plan.idempotencyKey,
+        reason: "narrative_policy_changed",
+        now: TEST_NOW + 1,
+      }),
+    );
+    const repaired = await t.run((ctx) => repairFencedRunsWithCtx(ctx, { now: TEST_NOW + 2 }));
+    expect(repaired.canceled).toBeGreaterThanOrEqual(1);
+    expect(await t.run((ctx) => ctx.db.get("intelligenceRun", runId))).toMatchObject({ status: "canceled" });
+  });
+
   it("moves the compatibility digest for an admission policy change", () => {
     const before = build();
     const after = build({ admissionPolicyVersion: "u4.1" });

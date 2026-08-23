@@ -387,3 +387,111 @@ describe("prompt assembly labels product fields as untrusted data (scenario 11)"
     expect(prompt.text).not.toMatch(/grant projection "financials"(?![^<]*<\/retrieved_store_data>)/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Containment: the engineer-only turn trace never reaches a projection
+// ---------------------------------------------------------------------------
+
+/**
+ * The trace is the single deliberate exception to "the model's narrative never
+ * enters Athena's durable record" — so the exception has to stay where it was
+ * granted. Two exact lists, because two things could leak it: naming the table
+ * (the leaf that owns the rows, the retention module that deletes them, and
+ * the schema) and importing the leaf that reads it (the host-only recording
+ * mutation in `turns.ts`, retention, and the non-production investigation
+ * driver). A projection, a prompt assembler, a citation reader, or any
+ * operator-facing query appearing in either list is a leak, and this is where
+ * a reviewer sees it.
+ */
+const TURN_TRACE_TABLE_MODULES = [
+  "agentHarness/turnTrace.ts",
+  "agentHarness/retention.ts",
+];
+
+const TURN_TRACE_LEAF_IMPORTERS = [
+  // Writes the rows (the host-only recording mutation).
+  "agentHarness/turns.ts",
+  // Buffers and flushes them; reaches the leaf only for its bounds.
+  "agentHarness/runtimeHost.ts",
+  // Deletes them on scope removal and expiry.
+  "agentHarness/retention.ts",
+  // Reads them, for investigation only, off the ingress rail.
+  "agentHarness/evals/directHarness.ts",
+];
+
+/**
+ * The durable draft trail is the operator-readable record of a committed
+ * turn's drafts — released and withdrawn with the answer, and nothing more.
+ * Same two exact lists as the trace, for the same reason: naming the table
+ * (the leaf that owns the rows and the retention module that deletes them) and
+ * importing the leaf (the write and read in `turns.ts`, plus retention). The
+ * projection, the prompt assembler, and the citation reader must appear in
+ * neither — the committed answer stays the only checked text, and a citation
+ * must never resolve against a draft.
+ */
+const NARRATIVE_TRAIL_TABLE_MODULES = [
+  "agentHarness/narrativeTrail.ts",
+  "agentHarness/retention.ts",
+];
+
+const NARRATIVE_TRAIL_LEAF_IMPORTERS = [
+  // Writes the row at finalize and serves it on the answer's own ladder.
+  "agentHarness/turns.ts",
+  // Deletes it on scope removal and expiry.
+  "agentHarness/retention.ts",
+];
+
+describe("narrative trail containment", () => {
+  it("is named by no projection, prompt, or citation module, and never resolves a citation", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const { glob } = await import("tinyglobby");
+    const files = await glob(["**/*.ts", "**/*.tsx"], { cwd: "convex", ignore: ["**/*.test.ts", "**/*.test.tsx", "**/*.testSeams.ts", "**/*.testPorts.ts", "**/_generated/**"] });
+    expect(files.length).toBeGreaterThan(100);
+    const namesTable: string[] = [];
+    const importsLeaf: string[] = [];
+    for (const file of files) {
+      const source = await readFile(`convex/${file}`, "utf8");
+      if (/["']agentTurnNarrativeTrail["']/.test(source)) namesTable.push(file);
+      if (/from "[./]*[a-zA-Z/.]*narrativeTrail"/.test(source)) importsLeaf.push(file);
+    }
+    expect([...namesTable].sort()).toEqual([...NARRATIVE_TRAIL_TABLE_MODULES].sort());
+    expect([...importsLeaf].sort()).toEqual([...NARRATIVE_TRAIL_LEAF_IMPORTERS].sort());
+    // The table exists and is declared: the two lists above are containment, not absence.
+    expect(await readFile("convex/schema.ts", "utf8")).toContain("agentTurnNarrativeTrail: defineTable(");
+    // The projection this suite is about reaches it neither way, and the prompt
+    // the model is handed can never carry a previous turn's unverified drafts.
+    const projection = await readFile("convex/agentHarness/historyProjection.ts", "utf8");
+    expect(projection).not.toContain("agentTurnNarrativeTrail");
+    expect(projection).not.toContain("narrativeTrail");
+    // Evidence resolves against citation bindings alone: a draft is not a source.
+    const citations = await readFile("convex/agentHarness/citations.ts", "utf8");
+    expect(citations).not.toContain("agentTurnNarrativeTrail");
+    expect(citations).not.toContain("narrativeTrail");
+  });
+});
+
+describe("turn trace containment", () => {
+  it("is named by no projection, prompt, citation, or operator-facing module", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const { glob } = await import("tinyglobby");
+    const files = await glob(["**/*.ts", "**/*.tsx"], { cwd: "convex", ignore: ["**/*.test.ts", "**/*.test.tsx", "**/*.testSeams.ts", "**/*.testPorts.ts", "**/_generated/**"] });
+    expect(files.length).toBeGreaterThan(100);
+    const namesTable: string[] = [];
+    const importsLeaf: string[] = [];
+    for (const file of files) {
+      const source = await readFile(`convex/${file}`, "utf8");
+      // The table NAME as a `ctx.db` argument — a prose mention in a comment is
+      // not an access, and the schema declares the table by bare key.
+      if (/["']agentTurnTraceEvent["']/.test(source)) namesTable.push(file);
+      if (/from "[./]*[a-zA-Z/.]*turnTrace"/.test(source)) importsLeaf.push(file);
+    }
+    expect([...namesTable].sort()).toEqual([...TURN_TRACE_TABLE_MODULES].sort());
+    expect([...importsLeaf].sort()).toEqual([...TURN_TRACE_LEAF_IMPORTERS].sort());
+    // The table exists and is declared: the two lists above are containment, not absence.
+    expect(await readFile("convex/schema.ts", "utf8")).toContain("agentTurnTraceEvent: defineTable(");
+    // Named explicitly: the projection this suite is about reaches it neither way.
+    const projection = await readFile("convex/agentHarness/historyProjection.ts", "utf8");
+    expect(projection).not.toContain("agentTurnTraceEvent");
+    expect(projection).not.toContain("turnTrace");
+  });
+});

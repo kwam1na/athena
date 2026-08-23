@@ -1,11 +1,4 @@
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
@@ -17,7 +10,10 @@ import {
   AthenaAgentPanel,
   AthenaAgentSurface,
 } from "./AthenaAgentPanel";
-import { defineAthenaAgentPresentation } from "./AthenaAgentPresentationAdapter";
+import {
+  defineAthenaAgentPresentation,
+  describeProvisionalWithdrawal,
+} from "./AthenaAgentPresentationAdapter";
 import type { AthenaAgentRun } from "./useAthenaAgentRun";
 
 vi.mock("~/convex/_generated/api", () => ({
@@ -29,9 +25,12 @@ vi.mock("~/convex/_generated/api", () => ({
         resumeTurn: "resumeTurn",
         acknowledgeTurnAnswer: "acknowledgeTurnAnswer",
         inspectCitationEvidence: "inspectCitationEvidence",
+        acknowledgeProvisionalView: "acknowledgeProvisionalView",
         getTurnView: "getTurnView",
         getTurnAnswer: "getTurnAnswer",
         getThreadHistory: "getThreadHistory",
+        previewTurnNarrative: "previewTurnNarrative",
+        getTurnNarrativeTrail: "getTurnNarrativeTrail",
       },
     },
   },
@@ -124,6 +123,7 @@ type Backend = {
   history: unknown;
   view: unknown;
   answer: unknown;
+  trail: unknown;
   calls: { name: string; args: unknown }[];
   results: Record<string, unknown>;
 };
@@ -135,6 +135,7 @@ beforeEach(() => {
     history: { kind: "history", threadKey: "t", reauthorizedAt: 1, entries: [] },
     view: undefined,
     answer: undefined,
+    trail: undefined,
     calls: [],
     results: {},
   };
@@ -143,6 +144,7 @@ beforeEach(() => {
     if (name === "getThreadHistory") return backend.history;
     if (name === "getTurnView") return backend.view;
     if (name === "getTurnAnswer") return backend.answer;
+    if (name === "getTurnNarrativeTrail") return backend.trail;
     return undefined;
   }) as unknown as typeof useQuery);
   vi.mocked(useMutation).mockImplementation(((name: string) =>
@@ -178,6 +180,7 @@ function renderSurface(props: Record<string, unknown> = {}) {
 function baseRun(overrides: Partial<AthenaAgentRun> = {}): AthenaAgentRun {
   return {
     hostState: "idle",
+    storeId: STORE_ID,
     status: { headline: "Ask about this store day.", tone: "neutral" },
     context: {
       label: "Osu · 2026-08-21",
@@ -196,6 +199,10 @@ function baseRun(overrides: Partial<AthenaAgentRun> = {}): AthenaAgentRun {
     activeTurnId: null,
     answer: null,
     milestones: [],
+    provisionalState: "none",
+    provisional: null,
+    provisionalTimeline: [],
+    provisionalWithdrawal: null,
     denial: null,
     blockedSubmission: null,
     pendingContextChange: null,
@@ -222,11 +229,13 @@ function PanelHarness({
   presentation = storePresentation,
   layout = "docked",
   onClose = () => {},
+  scrollTop,
 }: {
   run: AthenaAgentRun;
   presentation?: typeof storePresentation;
   layout?: "docked" | "fullscreen";
   onClose?: () => void;
+  scrollTop?: number;
 }) {
   const [draft, setDraft] = useState("");
   const [width, setWidth] = useState(420);
@@ -240,6 +249,7 @@ function PanelHarness({
       presentation={presentation}
       returnLabel="Back to Daily Operations"
       run={run}
+      scrollTop={scrollTop}
       width={width}
     />
   );
@@ -843,7 +853,7 @@ describe("accessibility", () => {
     );
   });
 
-  it("moves focus to the status when a request starts", async () => {
+  it("keeps focus in the composer when a request starts", async () => {
     const user = userEvent.setup();
     backend.results.startTurn = {
       outcome: "started",
@@ -859,8 +869,10 @@ describe("accessibility", () => {
     });
 
     await waitFor(() =>
-      expect(screen.getByTestId("athena-agent-status")).toHaveFocus(),
+      expect(screen.getByTestId("athena-agent-status")).toHaveTextContent(/./),
     );
+    expect(screen.getByTestId("athena-agent-status")).not.toHaveFocus();
+    expect(screen.getByTestId("athena-agent-prompt")).toHaveFocus();
   });
 });
 
@@ -985,5 +997,1480 @@ describe("profile neutrality", () => {
     expect(
       within(screen.getByTestId("athena-agent-source")).getByRole("link"),
     ).toHaveAttribute("href", "/wigclub/stores");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Provisional narrative
+// ---------------------------------------------------------------------------
+
+const RUNNING_TURN = {
+  turnId: "binding-1" as Id<"agentTurnBinding">,
+  phase: "running" as const,
+  question: "What is blocking the close?",
+  questionState: "retained" as const,
+  contextLabel: "Osu · 2026-08-21",
+  createdAt: 1,
+  terminal: false,
+};
+
+function draftRun(
+  provisionalState: AthenaAgentRun["provisionalState"],
+  overrides: Partial<AthenaAgentRun> = {},
+): AthenaAgentRun {
+  const withText = ["streaming", "reset", "paused_at_limit", "committing"].includes(
+    provisionalState,
+  );
+  return baseRun({
+    hostState: "running",
+    status: { headline: "Reading sources", tone: "progress" },
+    canCancel: true,
+    canSubmit: false,
+    turn: RUNNING_TURN,
+    activeTurnId: RUNNING_TURN.turnId,
+    provisionalState,
+    provisional: withText
+      ? {
+          text: "Two lanes are still open.",
+          truncated: provisionalState === "paused_at_limit",
+          draftOrdinal: 1,
+        }
+      : null,
+    provisionalWithdrawal:
+      provisionalState === "withdrawn"
+        ? describeProvisionalWithdrawal("egress_beyond_authority")
+        : null,
+    ...overrides,
+  });
+}
+
+describe("the provisional draft region", () => {
+  it("renders a fixture for every provisional state", () => {
+    const expectations: {
+      state: AthenaAgentRun["provisionalState"];
+      container: boolean;
+      text: boolean;
+      notice: boolean;
+      live: string | null;
+    }[] = [
+      { state: "disabled", container: false, text: false, notice: false, live: null },
+      { state: "withdrawn", container: false, text: false, notice: true, live: null },
+      { state: "superseded", container: false, text: false, notice: false, live: null },
+      { state: "committing", container: true, text: true, notice: false, live: null },
+      {
+        state: "reset",
+        container: true,
+        text: true,
+        notice: false,
+        live: "Moved on to the next step. The earlier draft is still shown above.",
+      },
+      {
+        state: "paused_at_limit",
+        container: true,
+        text: true,
+        notice: false,
+        live: "Draft display limit reached. The rest of the draft isn't shown here.",
+      },
+      { state: "streaming", container: true, text: true, notice: false, live: null },
+      {
+        state: "awaiting_first_text",
+        container: false,
+        text: false,
+        notice: false,
+        live: null,
+      },
+      {
+        state: "stalled",
+        container: true,
+        text: false,
+        notice: false,
+        live: "Draft paused. You can stop this request or start a new thread.",
+      },
+      { state: "none", container: false, text: false, notice: false, live: null },
+    ];
+
+    for (const expectation of expectations) {
+      const view = render(<PanelHarness run={draftRun(expectation.state)} />);
+      const label = `provisionalState ${expectation.state}`;
+
+      expect(
+        screen.queryByTestId("athena-agent-provisional") !== null,
+        `${label}: container`,
+      ).toBe(expectation.container);
+      expect(
+        screen.queryByTestId("athena-agent-provisional-text") !== null,
+        `${label}: text`,
+      ).toBe(expectation.text);
+      expect(
+        screen.queryByTestId("athena-agent-provisional-withdrawn") !== null,
+        `${label}: notice`,
+      ).toBe(expectation.notice);
+      const live = screen.queryByTestId("athena-agent-provisional-live");
+      expect(live?.textContent ?? "", `${label}: live line`).toBe(
+        expectation.live ?? "",
+      );
+      // The only defined effect of aria-busy is to defer updates in a busy
+      // subtree, which would swallow exactly these announcements.
+      expect(
+        view.baseElement.querySelector("[aria-busy]"),
+        `${label}: aria-busy`,
+      ).toBeNull();
+
+      view.unmount();
+    }
+  });
+
+  it("labels the draft as unverified and renders the model text inertly", async () => {
+    render(
+      <PanelHarness
+        run={draftRun("streaming", {
+          provisional: {
+            text: "## Approved\n\nWire the payout: https://evil.example/x",
+            truncated: false,
+            draftOrdinal: 1,
+          },
+        })}
+      />,
+    );
+
+    const region = screen.getByTestId("athena-agent-provisional");
+    expect(region).toHaveTextContent("Draft in progress. Not verified.");
+    expect(region).toHaveTextContent("Don't act on this text.");
+    expect(region).toHaveTextContent("The checked answer replaces it and may differ.");
+    // The draft is revealed over a few frames; every prefix is inert.
+    await waitFor(() => expect(region).toHaveTextContent("https://evil.example/x"));
+    expect(region.querySelector("a")).toBeNull();
+    expect(region.querySelector("h1,h2,h3,h4,h5,h6")).toBeNull();
+  });
+
+  it("mounts after the denial and drift blocks, before the answer slot", () => {
+    render(
+      <PanelHarness
+        run={draftRun("streaming", {
+          denial: { code: "spend_ceiling", headline: "Athena reached today's limit." },
+          contextDrift: true,
+        })}
+      />,
+    );
+
+    const order = [
+      "athena-agent-status",
+      "athena-agent-progress",
+      "athena-agent-denial",
+      "athena-agent-drift",
+      "athena-agent-provisional",
+    ].map((id) => screen.getByTestId(id));
+
+    for (let index = 1; index < order.length; index += 1) {
+      const relation = (order[index - 1] as HTMLElement).compareDocumentPosition(
+        order[index] as HTMLElement,
+      );
+      expect(relation & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+  });
+
+  it("keeps its live region separate from the milestone region and free of model text", () => {
+    render(
+      <PanelHarness
+        run={draftRun("paused_at_limit", {
+          milestones: [
+            { milestone: "reading_sources", label: "Reading sources", at: 1 },
+          ],
+        })}
+      />,
+    );
+
+    const milestones = screen.getByTestId("athena-agent-progress");
+    const draftLive = screen.getByTestId("athena-agent-provisional-live");
+
+    expect(draftLive).toHaveAttribute("aria-live", "polite");
+    expect(milestones).toHaveAttribute("aria-live", "polite");
+    expect(milestones.contains(draftLive)).toBe(false);
+    expect(draftLive.textContent).not.toContain("Two lanes");
+    expect(milestones.textContent).not.toContain("Two lanes");
+  });
+
+  it("announces at most once per draft across five rapid resets and never moves focus", () => {
+    const announced: string[] = [];
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    screen.getByTestId("athena-agent-new-thread").focus();
+    const anchor = document.activeElement;
+
+    for (let ordinal = 2; ordinal <= 6; ordinal += 1) {
+      const draft = { text: `Draft ${ordinal}`, truncated: false, draftOrdinal: ordinal };
+      rerender(<PanelHarness run={draftRun("reset", { provisional: draft })} />);
+      announced.push(
+        screen.getByTestId("athena-agent-provisional-live").textContent ?? "",
+      );
+      rerender(<PanelHarness run={draftRun("streaming", { provisional: draft })} />);
+      announced.push(
+        screen.getByTestId("athena-agent-provisional-live").textContent ?? "",
+      );
+    }
+
+    // One live node per draft: the cue survives the draft it belongs to and is
+    // never repeated by the deltas that follow it.
+    expect(announced.every((line) => line === "Moved on to the next step. The earlier draft is still shown above.")).toBe(true);
+    expect(document.activeElement).toBe(anchor);
+  });
+
+  it("distinguishes a paused draft from a stalled one", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("paused_at_limit")} />);
+
+    expect(screen.getByTestId("athena-agent-provisional-text")).toHaveTextContent(
+      "Two lanes are still open.",
+    );
+    expect(screen.getByTestId("athena-agent-provisional-live")).toHaveTextContent(
+      "Draft display limit reached.",
+    );
+
+    rerender(<PanelHarness run={draftRun("stalled")} />);
+
+    expect(screen.queryByTestId("athena-agent-provisional-text")).toBeNull();
+    expect(screen.getByTestId("athena-agent-provisional-live")).toHaveTextContent(
+      "Draft paused. You can stop this request or start a new thread.",
+    );
+    expect(screen.getByTestId("athena-agent-cancel")).toBeEnabled();
+    expect(screen.getByTestId("athena-agent-new-thread")).toBeEnabled();
+  });
+
+  it("swaps the draft for the committed answer, even when they disagree", async () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("athena-agent-provisional-text")).toHaveTextContent(
+        "Two lanes are still open.",
+      ),
+    );
+
+    rerender(
+      <PanelHarness
+        run={draftRun("superseded", {
+          hostState: "completed",
+          canCancel: false,
+          provisional: null,
+          answer: {
+            outcome: "answer",
+            narrative: "Only one lane is open.",
+            egressClass: "operational",
+            committedAt: 5,
+            citations: [],
+          },
+        })}
+      />,
+    );
+
+    expect(screen.queryByTestId("athena-agent-provisional")).toBeNull();
+    // The answer lands over a few frames; what is on screen is always a prefix.
+    await waitFor(() =>
+      expect(screen.getByTestId("athena-agent-answer")).toHaveTextContent("Only one lane is open."),
+    );
+  });
+
+  it("says only what happened to the draft when it is withdrawn", () => {
+    render(<PanelHarness run={draftRun("withdrawn")} />);
+
+    const notice = screen.getByTestId("athena-agent-provisional-withdrawn");
+    expect(notice).toHaveAttribute("role", "alert");
+    expect(notice).toHaveTextContent("Draft withdrawn.");
+    expect(notice).toHaveTextContent("This draft went beyond what you can read here.");
+    expect(notice.textContent).not.toMatch(/answer/i);
+    expect(screen.queryByTestId("athena-agent-provisional-text")).toBeNull();
+  });
+
+  it("renders exactly today's host for a buffered profile", () => {
+    const buffered = render(<PanelHarness run={draftRun("disabled")} />);
+    const bufferedMarkup = screen.getByTestId("athena-agent-transcript").innerHTML;
+    buffered.unmount();
+
+    render(<PanelHarness run={draftRun("none")} />);
+
+    expect(screen.getByTestId("athena-agent-transcript").innerHTML).toBe(
+      bufferedMarkup,
+    );
+  });
+
+  const sized = (scroll: HTMLElement) => {
+    Object.defineProperty(scroll, "clientHeight", { configurable: true, value: 100 });
+    Object.defineProperty(scroll, "scrollHeight", { configurable: true, value: 400 });
+  };
+  const latest = () => screen.getByTestId("athena-agent-latest");
+
+  it("follows the growing draft until the operator scrolls the transcript themselves", async () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    const scroll = screen.getByTestId("athena-agent-scroll");
+    sized(scroll);
+
+    rerender(
+      <PanelHarness
+        run={draftRun("streaming", {
+          provisional: { text: "More and more text", truncated: false, draftOrdinal: 1 },
+        })}
+      />,
+    );
+    await waitFor(() => expect(scroll.scrollTop).toBe(300));
+    // At the latest: the floating control stays out of the way and out of the tab order.
+    expect(latest()).toHaveAttribute("data-visible", "false");
+    expect(latest()).toHaveAttribute("aria-hidden", "true");
+    expect(latest()).toHaveAttribute("tabindex", "-1");
+
+    // The operator scrolls up: following stops, and the control appears.
+    fireEvent.wheel(scroll);
+    scroll.scrollTop = 40;
+    fireEvent.scroll(scroll);
+    expect(latest()).toHaveAttribute("data-visible", "true");
+    expect(latest()).toHaveAttribute("aria-hidden", "false");
+    rerender(
+      <PanelHarness
+        run={draftRun("streaming", {
+          provisional: { text: "Even more text", truncated: false, draftOrdinal: 1 },
+        })}
+      />,
+    );
+    // A replaced draft paints at once; the follow stays off while scrolled up.
+    await waitFor(() =>
+      expect(screen.getByTestId("athena-agent-provisional-text")).toHaveTextContent("Even more text"),
+    );
+    expect(scroll.scrollTop).toBe(40);
+
+    // A draft that ends does not take the reading position back either.
+    rerender(<PanelHarness run={draftRun("stalled")} />);
+    expect(scroll.scrollTop).toBe(40);
+
+    // The control brings the operator back and the follow resumes.
+    fireEvent.click(latest());
+    expect(scroll.scrollTop).toBe(300);
+    fireEvent.scroll(scroll);
+    expect(latest()).toHaveAttribute("data-visible", "false");
+    rerender(
+      <PanelHarness
+        run={draftRun("streaming", {
+          provisional: { text: "A later draft", truncated: false, draftOrdinal: 2 },
+        })}
+      />,
+    );
+    scroll.scrollTop = 200;
+    rerender(
+      <PanelHarness
+        run={draftRun("streaming", {
+          provisional: { text: "A later draft, longer", truncated: false, draftOrdinal: 2 },
+        })}
+      />,
+    );
+    await waitFor(() => expect(scroll.scrollTop).toBe(300));
+  });
+
+  it("hands focus to the composer when the latest control hides while it is focused", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    const scroll = screen.getByTestId("athena-agent-scroll");
+    sized(scroll);
+    rerender(
+      <PanelHarness
+        run={draftRun("streaming", {
+          provisional: { text: "More and more text", truncated: false, draftOrdinal: 1 },
+        })}
+      />,
+    );
+    fireEvent.wheel(scroll);
+    scroll.scrollTop = 40;
+    fireEvent.scroll(scroll);
+    expect(latest()).toHaveAttribute("data-visible", "true");
+    latest().focus();
+    expect(latest()).toHaveFocus();
+
+    // The operator scrolls back to the bottom themselves: the control hides,
+    // and focus must not stay on an aria-hidden, untabbable element.
+    scroll.scrollTop = 300;
+    fireEvent.scroll(scroll);
+    expect(latest()).toHaveAttribute("data-visible", "false");
+    expect(latest()).toHaveAttribute("aria-hidden", "true");
+    expect(latest()).not.toHaveFocus();
+    expect(screen.getByTestId("athena-agent-prompt")).toHaveFocus();
+  });
+
+  it("keeps following through the panel's own focus moves", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    const scroll = screen.getByTestId("athena-agent-scroll");
+    sized(scroll);
+    // Stop: the status line takes focus, inside the transcript.
+    rerender(
+      <PanelHarness
+        run={draftRun("streaming", {
+          hostState: "cancellation_requested",
+          status: { headline: "Stopping…", tone: "progress" },
+        })}
+      />,
+    );
+    expect(screen.getByTestId("athena-agent-status")).toHaveFocus();
+    scroll.scrollTop = 120;
+    rerender(
+      <PanelHarness
+        run={draftRun("streaming", {
+          hostState: "cancellation_requested",
+          status: { headline: "Stopping…", tone: "progress" },
+          provisional: { text: "A last flush lands", truncated: false, draftOrdinal: 1 },
+        })}
+      />,
+    );
+    // Still following: the panel moved focus, not the operator.
+    expect(scroll.scrollTop).toBe(300);
+  });
+
+  it("keeps following through the commit, when the answer heading takes focus and the answer reveals", async () => {
+    const { rerender } = render(
+      <PanelHarness run={draftRun("streaming", { provisional: { text: "Checking the lanes.", truncated: false, draftOrdinal: 1 } })} />,
+    );
+    const scroll = screen.getByTestId("athena-agent-scroll");
+    sized(scroll);
+    await waitFor(() => expect(scroll.scrollTop).toBe(300));
+    const answered = draftRun("superseded", {
+      hostState: "completed",
+      status: { headline: "Answer ready", tone: "neutral" },
+      canCancel: false,
+      canSubmit: true,
+      answer: {
+        outcome: "answer",
+        narrative: "Two lanes are open, and one card payment landed. ".repeat(6),
+        egressClass: "operational",
+        limitedEvidence: false,
+        committedAt: 5,
+        citations: [],
+      },
+    });
+    rerender(<PanelHarness run={answered} />);
+    expect(screen.getByTestId("athena-agent-answer-heading")).toHaveFocus();
+    // The answer keeps arriving below the heading the panel focused; the follow holds.
+    scroll.scrollTop = 150;
+    rerender(<PanelHarness run={{ ...answered, milestones: answered.milestones }} />);
+    await waitFor(() => expect(scroll.scrollTop).toBe(300));
+    expect(latest()).toHaveAttribute("data-visible", "false");
+  });
+
+  it("is handed back when keyboard focus travels into the transcript", () => {
+    const { rerender } = render(
+      <PanelHarness
+        run={draftRun("streaming", {
+          history: [
+            {
+              turnId: "binding-0",
+              createdAt: 1,
+              state: "answered",
+              question: "Earlier question",
+              questionState: "retained",
+              answer: { outcome: "answer", narrative: "Earlier answer.", egressClass: "operational", committedAt: 2, citations: [] },
+            },
+          ],
+        })}
+      />,
+    );
+    const scroll = screen.getByTestId("athena-agent-scroll");
+    sized(scroll);
+    const inside = scroll.querySelector("summary") as HTMLElement | null;
+    expect(inside).not.toBeNull();
+    scroll.scrollTop = 120;
+    fireEvent.scroll(scroll);
+    fireEvent.focus(inside!);
+    rerender(
+      <PanelHarness
+        run={draftRun("streaming", {
+          provisional: { text: "Text keeps arriving", truncated: false, draftOrdinal: 1 },
+        })}
+      />,
+    );
+    // Reading there by keyboard: the follow leaves the position alone.
+    expect(scroll.scrollTop).toBe(120);
+  });
+
+  it("is handed back by a pointer, a touch, or a navigation key, never by the smooth scroll itself", () => {
+    for (const interrupt of [
+      (scroll: HTMLElement) => fireEvent.pointerDown(scroll),
+      (scroll: HTMLElement) => fireEvent.touchMove(scroll),
+      (scroll: HTMLElement) => fireEvent.keyDown(scroll, { key: "PageUp" }),
+    ]) {
+      const { rerender, unmount } = render(<PanelHarness run={draftRun("streaming")} />);
+      const scroll = screen.getByTestId("athena-agent-scroll");
+      sized(scroll);
+      // A smooth scroll in flight is away from the bottom: that alone changes nothing.
+      scroll.scrollTop = 200;
+      fireEvent.scroll(scroll);
+      rerender(
+        <PanelHarness
+          run={draftRun("streaming", {
+            provisional: { text: "Still following", truncated: false, draftOrdinal: 1 },
+          })}
+        />,
+      );
+      expect(scroll.scrollTop).toBe(300);
+      expect(latest()).toHaveAttribute("data-visible", "false");
+
+      interrupt(scroll);
+      scroll.scrollTop = 200;
+      fireEvent.scroll(scroll);
+      rerender(
+        <PanelHarness
+          run={draftRun("streaming", {
+            provisional: { text: "Still following, no longer", truncated: false, draftOrdinal: 1 },
+          })}
+        />,
+      );
+      expect(scroll.scrollTop).toBe(200);
+      expect(latest()).toHaveAttribute("data-visible", "true");
+      unmount();
+    }
+  });
+
+  it("follows the answer as it lands and a new question restarts the follow", async () => {
+    const submit = vi.fn(async () => {});
+    const { rerender } = render(<PanelHarness run={draftRun("streaming", { submit })} />);
+    const scroll = screen.getByTestId("athena-agent-scroll");
+    sized(scroll);
+    fireEvent.wheel(scroll);
+    scroll.scrollTop = 40;
+    fireEvent.scroll(scroll);
+
+    rerender(
+      <PanelHarness
+        run={draftRun("superseded", {
+          submit,
+          hostState: "completed",
+          status: { headline: "Answer ready", tone: "neutral" },
+          canCancel: false,
+          canSubmit: true,
+          answer: {
+            outcome: "answer",
+            narrative: "Two lanes are open.",
+            egressClass: "operational",
+            limitedEvidence: false,
+            committedAt: 5,
+            citations: [],
+          },
+        })}
+      />,
+    );
+    // The operator had scrolled away: the answer does not take the position back.
+    expect(scroll.scrollTop).toBe(40);
+
+    fireEvent.change(screen.getByTestId("athena-agent-prompt"), { target: { value: "And card?" } });
+    fireEvent.submit(screen.getByTestId("athena-agent-composer"));
+    await waitFor(() => expect(submit).toHaveBeenCalledWith("And card?"));
+    expect(scroll.scrollTop).toBe(300);
+
+    // Following again: the next answer is kept in view as it reveals.
+    scroll.scrollTop = 120;
+    rerender(
+      <PanelHarness
+        run={draftRun("superseded", {
+          submit,
+          hostState: "completed",
+          status: { headline: "Answer ready", tone: "neutral" },
+          canCancel: false,
+          canSubmit: true,
+          answer: {
+            outcome: "answer",
+            narrative: "Two lanes are open, and one card payment landed.",
+            egressClass: "operational",
+            limitedEvidence: false,
+            committedAt: 9,
+            citations: [],
+          },
+        })}
+      />,
+    );
+    expect(scroll.scrollTop).toBe(300);
+  });
+
+  it("glides between positions, except under reduced motion", () => {
+    const { unmount } = render(<PanelHarness run={draftRun("streaming")} />);
+    expect(screen.getByTestId("athena-agent-scroll")).toHaveClass("scroll-smooth");
+    unmount();
+
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes("prefers-reduced-motion"),
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    render(<PanelHarness run={draftRun("streaming")} />);
+    expect(screen.getByTestId("athena-agent-scroll")).not.toHaveClass("scroll-smooth");
+  });
+
+  it("keeps a reading position restored on remount while the draft keeps growing", () => {
+    // The restored position is read back before the first delta lands, so the
+    // metrics have to be in place for the mount itself.
+    const heights = ["scrollHeight", "clientHeight"].map((name) => ({
+      name,
+      original: Object.getOwnPropertyDescriptor(Element.prototype, name),
+    }));
+    Object.defineProperty(Element.prototype, "scrollHeight", {
+      configurable: true,
+      get: () => 400,
+    });
+    Object.defineProperty(Element.prototype, "clientHeight", {
+      configurable: true,
+      get: () => 100,
+    });
+    try {
+      const { rerender } = render(
+        <PanelHarness run={draftRun("streaming")} scrollTop={40} />,
+      );
+      const scroll = screen.getByTestId("athena-agent-scroll");
+      expect(scroll.scrollTop).toBe(40);
+
+      rerender(
+        <PanelHarness
+          run={draftRun("streaming", {
+            provisional: {
+              text: "Two lanes are still open, and more text arrives.",
+              truncated: false,
+              draftOrdinal: 1,
+            },
+          })}
+          scrollTop={40}
+        />,
+      );
+
+      expect(scroll.scrollTop).toBe(40);
+    } finally {
+      for (const { name, original } of heights) {
+        if (original) Object.defineProperty(Element.prototype, name, original);
+        else Reflect.deleteProperty(Element.prototype, name);
+      }
+    }
+  });
+
+  it("keeps the draft out of storage and the URL", () => {
+    const before = window.location.href;
+    render(<PanelHarness run={draftRun("streaming")} />);
+
+    const writes = vi.mocked(window.sessionStorage.setItem).mock.calls;
+    for (const [, value] of writes) {
+      expect(value).not.toContain("Two lanes");
+    }
+    expect(window.location.href).toBe(before);
+  });
+
+  it("drops draft animation under reduced motion while keeping the cue", () => {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes("prefers-reduced-motion"),
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    render(<PanelHarness run={draftRun("reset")} />);
+
+    const panel = screen.getByTestId("athena-agent-panel");
+    expect(panel).toHaveAttribute("data-motion", "reduced");
+    expect(
+      screen.getByTestId("athena-agent-provisional").className,
+    ).not.toMatch(/animate-/);
+    expect(screen.getByTestId("athena-agent-provisional-live")).toHaveTextContent(
+      "Moved on to the next step.",
+    );
+  });
+});
+
+describe("focus while a draft is withdrawn", () => {
+  /** Focus lands somewhere neutral, as it does after a submission. */
+  function anchorFocusOutsideComposer() {
+    const status = screen.getByTestId("athena-agent-status");
+    status.focus();
+    return status;
+  }
+
+  it("moves focus to the notice once for a mid-run withdrawal", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    anchorFocusOutsideComposer();
+
+    rerender(<PanelHarness run={draftRun("withdrawn")} />);
+    expect(screen.getByTestId("athena-agent-provisional-withdrawn")).toHaveFocus();
+
+    // A later render of the same level-based state does not steal focus again.
+    screen.getByTestId("athena-agent-new-thread").focus();
+    rerender(<PanelHarness run={draftRun("withdrawn")} />);
+    expect(screen.getByTestId("athena-agent-new-thread")).toHaveFocus();
+  });
+
+  it("leaves the composer alone when the operator is typing a follow-up", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    const prompt = screen.getByTestId("athena-agent-prompt");
+    prompt.focus();
+
+    rerender(<PanelHarness run={draftRun("withdrawn")} />);
+
+    expect(prompt).toHaveFocus();
+    // The notice still announces without holding focus.
+    expect(screen.getByTestId("athena-agent-provisional-withdrawn")).toHaveAttribute(
+      "role",
+      "alert",
+    );
+  });
+
+  it("lets the existing terminal move win when both land together", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    anchorFocusOutsideComposer();
+    screen.getByTestId("athena-agent-new-thread").focus();
+
+    rerender(
+      <PanelHarness
+        run={draftRun("withdrawn", {
+          hostState: "terminal_denied",
+          status: { headline: "This answer is no longer available to you.", tone: "warning" },
+          canCancel: false,
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("athena-agent-status")).toHaveFocus();
+  });
+
+  it("keeps the operator's Stop focus when the withdrawal lands a render later", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    screen.getByTestId("athena-agent-new-thread").focus();
+
+    rerender(
+      <PanelHarness
+        run={draftRun("streaming", {
+          hostState: "cancellation_requested",
+          status: { headline: "Stopping…", tone: "progress" },
+        })}
+      />,
+    );
+    expect(screen.getByTestId("athena-agent-status")).toHaveFocus();
+
+    screen.getByTestId("athena-agent-new-thread").focus();
+    rerender(
+      <PanelHarness
+        run={draftRun("withdrawn", {
+          hostState: "cancellation_requested",
+          status: { headline: "Stopping…", tone: "progress" },
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("athena-agent-new-thread")).toHaveFocus();
+  });
+
+  it("moves focus once when the run terminates moments after the withdrawal", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    anchorFocusOutsideComposer();
+
+    rerender(<PanelHarness run={draftRun("withdrawn")} />);
+    expect(screen.getByTestId("athena-agent-provisional-withdrawn")).toHaveFocus();
+
+    rerender(
+      <PanelHarness
+        run={draftRun("withdrawn", {
+          hostState: "terminal_denied",
+          status: { headline: "Stopped.", tone: "neutral" },
+          canCancel: false,
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("athena-agent-provisional-withdrawn")).toHaveFocus();
+  });
+
+  it("still moves to the answer heading, and then to a later denial, after a withdrawal", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    anchorFocusOutsideComposer();
+
+    rerender(<PanelHarness run={draftRun("withdrawn")} />);
+    expect(screen.getByTestId("athena-agent-provisional-withdrawn")).toHaveFocus();
+
+    rerender(
+      <PanelHarness
+        run={draftRun("superseded", {
+          hostState: "completed",
+          canCancel: false,
+          provisionalWithdrawal: null,
+          answer: {
+            outcome: "answer",
+            narrative: "The checked answer.",
+            egressClass: "operational",
+            committedAt: 5,
+            citations: [],
+          },
+        })}
+      />,
+    );
+    expect(screen.getByTestId("athena-agent-answer-heading")).toHaveFocus();
+
+    rerender(
+      <PanelHarness
+        run={draftRun("none", {
+          hostState: "terminal_denied",
+          status: { headline: "This answer is no longer available to you.", tone: "warning" },
+          canCancel: false,
+          provisionalWithdrawal: null,
+        })}
+      />,
+    );
+    expect(screen.getByTestId("athena-agent-status")).toHaveFocus();
+  });
+
+  it("still moves focus when the operator stops a withdrawn turn", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    anchorFocusOutsideComposer();
+
+    rerender(<PanelHarness run={draftRun("withdrawn")} />);
+    screen.getByTestId("athena-agent-new-thread").focus();
+
+    rerender(
+      <PanelHarness
+        run={draftRun("withdrawn", {
+          hostState: "cancellation_requested",
+          status: { headline: "Stopping…", tone: "progress" },
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("athena-agent-status")).toHaveFocus();
+  });
+
+  it("moves no focus when a panel mounts into an already-withdrawn running turn", () => {
+    render(<PanelHarness run={draftRun("withdrawn")} />);
+
+    // The mount focuses the composer, as it always has; the notice does not
+    // take a focus move it never observed happening.
+    expect(screen.getByTestId("athena-agent-prompt")).toHaveFocus();
+    expect(screen.getByTestId("athena-agent-provisional-withdrawn")).toBeInTheDocument();
+  });
+
+  it("moves no focus to the status for the next turn after a withdrawn one", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    anchorFocusOutsideComposer();
+
+    rerender(<PanelHarness run={draftRun("withdrawn")} />);
+    expect(screen.getByTestId("athena-agent-provisional-withdrawn")).toHaveFocus();
+
+    screen.getByTestId("athena-agent-new-thread").focus();
+    rerender(
+      <PanelHarness
+        run={draftRun("none", {
+          hostState: "submitting",
+          status: { headline: "Starting your request…", tone: "progress" },
+          provisionalWithdrawal: null,
+          activeTurnId: "binding-2" as Id<"agentTurnBinding">,
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("athena-agent-status")).not.toHaveFocus();
+    expect(screen.getByTestId("athena-agent-new-thread")).toHaveFocus();
+  });
+
+  it("shares one focus move with the terminal denial when the view drops after a release", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    screen.getByTestId("athena-agent-new-thread").focus();
+
+    rerender(
+      <PanelHarness
+        run={draftRun("withdrawn", {
+          hostState: "terminal_denied",
+          status: {
+            headline: "This conversation is no longer available to you.",
+            tone: "warning",
+          },
+          canCancel: false,
+          provisionalWithdrawal: describeProvisionalWithdrawal("membership_revoked"),
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("athena-agent-status")).toHaveFocus();
+    expect(screen.getByTestId("athena-agent-provisional-withdrawn")).toHaveTextContent(
+      "This draft is no longer available to you.",
+    );
+  });
+
+  it("never moves focus for streaming, reset, pause, or stall", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    const anchor = screen.getByTestId("athena-agent-new-thread");
+    anchor.focus();
+
+    for (const state of ["reset", "paused_at_limit", "streaming", "stalled"] as const) {
+      rerender(<PanelHarness run={draftRun(state)} />);
+      expect(document.activeElement, `provisionalState ${state}`).toBe(anchor);
+    }
+  });
+});
+
+describe("the draft is profile-neutral", () => {
+  it("streams a second profile through the same components", async () => {
+    render(
+      <PanelHarness
+        presentation={organizationPresentation as unknown as typeof storePresentation}
+        run={draftRun("streaming", {
+          context: {
+            label: "Wigclub · all stores",
+            entries: [
+              { key: "organizationRef", label: "Organization", value: "Wigclub" },
+            ],
+            changedKeys: [],
+            changedSnapshotKeys: [],
+          },
+          starterIntents: organizationPresentation.starterIntents,
+          provisional: {
+            text: "Three stores need attention",
+            truncated: false,
+            draftOrdinal: 1,
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("athena-agent-provisional")).toHaveTextContent(
+      "Draft in progress. Not verified.",
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("athena-agent-provisional-text")).toHaveTextContent(
+        "Three stores need attention",
+      ),
+    );
+  });
+
+  it("shows milestones only, and moves no focus, for a buffered profile", () => {
+    const { rerender } = render(
+      <PanelHarness
+        run={draftRun("disabled", {
+          milestones: [
+            { milestone: "reading_sources", label: "Reading sources", at: 1 },
+          ],
+        })}
+      />,
+    );
+    const anchor = screen.getByTestId("athena-agent-new-thread");
+    anchor.focus();
+
+    rerender(
+      <PanelHarness
+        run={draftRun("disabled", {
+          milestones: [
+            { milestone: "reading_sources", label: "Reading sources", at: 1 },
+            { milestone: "composing_answer", label: "Composing the answer", at: 2 },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("athena-agent-progress")).toHaveTextContent(
+      "Composing the answer",
+    );
+    expect(screen.queryByTestId("athena-agent-provisional")).toBeNull();
+    expect(screen.queryByTestId("athena-agent-provisional-withdrawn")).toBeNull();
+    expect(document.activeElement).toBe(anchor);
+  });
+
+  it("shows no notice when a turn ends before any draft was released", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("awaiting_first_text")} />);
+    screen.getByTestId("athena-agent-new-thread").focus();
+
+    rerender(
+      <PanelHarness
+        run={draftRun("none", {
+          hostState: "terminal_denied",
+          status: { headline: "Stopped.", tone: "neutral" },
+          canCancel: false,
+        })}
+      />,
+    );
+
+    expect(screen.queryByTestId("athena-agent-provisional-withdrawn")).toBeNull();
+    expect(screen.queryByTestId("athena-agent-provisional")).toBeNull();
+    // The turn's own terminal move still happens; the draft adds nothing.
+    expect(screen.getByTestId("athena-agent-status")).toHaveFocus();
+  });
+});
+
+describe("the provisional timeline", () => {
+  const earlier = [
+    { text: "First I'll read the registers.", truncated: false, draftOrdinal: 0 },
+    { text: "## Approved\n\nNow the log: https://evil.example/x", truncated: false, draftOrdinal: 1 },
+  ];
+
+  it("renders finished drafts above the live one, oldest first, labelled and inert", async () => {
+    render(
+      <PanelHarness
+        run={draftRun("streaming", {
+          provisional: { text: "Summing up.", truncated: false, draftOrdinal: 2 },
+          provisionalTimeline: earlier,
+        })}
+      />,
+    );
+
+    const region = screen.getByTestId("athena-agent-provisional");
+    const entries = within(region).getAllByTestId("athena-agent-provisional-entry");
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toHaveTextContent("Earlier draft 1");
+    expect(entries[0]).toHaveTextContent("First I'll read the registers.");
+    expect(entries[1]).toHaveTextContent("Earlier draft 2");
+    expect(entries[1]).toHaveTextContent("Now the log: https://evil.example/x");
+    expect(entries[1]?.querySelector("a")).toBeNull();
+    expect(entries[1]?.querySelector("h1,h2,h3,h4,h5,h6")).toBeNull();
+    // The live draft follows the entries inside the same labelled container.
+    const order = Array.from(region.querySelectorAll("[data-testid]")).map((node) =>
+      node.getAttribute("data-testid"),
+    );
+    expect(order.indexOf("athena-agent-provisional-entry")).toBeLessThan(
+      order.indexOf("athena-agent-provisional-text"),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("athena-agent-provisional-text")).toHaveTextContent("Summing up."),
+    );
+    // The entries never enter the live region.
+    expect(screen.getByTestId("athena-agent-provisional-live")).not.toHaveTextContent("registers");
+  });
+
+  it("keeps the timeline behind the committed answer as a collapsed, unverified block", () => {
+    render(
+      <PanelHarness
+        run={draftRun("superseded", {
+          hostState: "completed",
+          status: { headline: "Answer ready", tone: "neutral" },
+          canCancel: false,
+          canSubmit: true,
+          provisionalTimeline: earlier,
+          answer: {
+            outcome: "answer",
+            narrative: "Only one lane is open.",
+            egressClass: "operational",
+            limitedEvidence: false,
+            committedAt: 5,
+            citations: [],
+          },
+        })}
+      />,
+    );
+
+    expect(screen.queryByTestId("athena-agent-provisional")).toBeNull();
+    const timeline = screen.getByTestId("athena-agent-provisional-timeline");
+    expect(timeline.tagName).toBe("DETAILS");
+    expect(timeline).not.toHaveAttribute("open");
+    expect(timeline).toHaveTextContent("How Athena got here");
+    expect(timeline).toHaveTextContent("Not verified");
+    expect(within(timeline).getAllByTestId("athena-agent-provisional-entry")).toHaveLength(2);
+    expect(timeline.querySelector("a")).toBeNull();
+    // The answer stays first; the timeline sits after it.
+    const transcript = screen.getByTestId("athena-agent-transcript");
+    const order = Array.from(transcript.querySelectorAll("[data-testid]")).map((node) =>
+      node.getAttribute("data-testid"),
+    );
+    expect(order.indexOf("athena-agent-answer")).toBeLessThan(
+      order.indexOf("athena-agent-provisional-timeline"),
+    );
+  });
+
+  it("shows no timeline for a withdrawn, stalled, or disabled draft", () => {
+    for (const state of ["withdrawn", "stalled", "disabled"] as const) {
+      const view = render(
+        <PanelHarness run={draftRun(state, { provisionalTimeline: earlier })} />,
+      );
+      expect(screen.queryByTestId("athena-agent-provisional-entry")).toBeNull();
+      expect(screen.queryByTestId("athena-agent-provisional-timeline")).toBeNull();
+      view.unmount();
+    }
+  });
+});
+
+describe("an earlier turn's draft trail", () => {
+  const answered = {
+    turnId: "binding-earlier" as AthenaAgentRun["history"][number]["turnId"],
+    createdAt: 10,
+    state: "answered",
+    question: "What is blocking the close?",
+    questionState: "retained" as const,
+    answer: {
+      outcome: "answer" as const,
+      narrative: "The automation log is behind.",
+      egressClass: "operational",
+      committedAt: 200,
+      citations: [],
+    },
+  };
+
+  it("offers the collapsed block only for a history entry whose answer is committed", () => {
+    const withoutAnswer = { ...answered, turnId: "binding-failed" as typeof answered.turnId, answer: undefined, failureHeadline: "Stopped." };
+    render(<PanelHarness run={baseRun({ history: [answered, withoutAnswer] })} />);
+
+    const entries = screen.getAllByTestId("athena-agent-history-entry");
+    expect(entries).toHaveLength(2);
+    expect(within(entries[0]).getByTestId("athena-agent-history-trail")).toBeTruthy();
+    expect(within(entries[1]).queryByTestId("athena-agent-history-trail")).toBeNull();
+  });
+
+  it("reads the trail only once opened, and renders the fetched drafts inertly", async () => {
+    const user = userEvent.setup();
+    backend.trail = {
+      kind: "trail",
+      committedAt: 200,
+      entries: [
+        { draftOrdinal: 0, text: "Checking the registers.", truncated: false },
+        { draftOrdinal: 1, text: "<script>window.__athenaExecuted = true;</script> Now the log.", truncated: false },
+      ],
+    };
+    render(<PanelHarness run={baseRun({ history: [answered] })} />);
+
+    const block = screen.getByTestId("athena-agent-history-trail");
+    // Closed: nothing is fetched and nothing is rendered.
+    expect(within(block).queryAllByTestId("athena-agent-provisional-entry")).toHaveLength(0);
+    expect(screen.queryByText("Checking the registers.")).toBeNull();
+
+    await user.click(within(block).getByText("How Athena got here"));
+
+    await waitFor(() => expect(within(block).queryAllByTestId("athena-agent-provisional-entry")).toHaveLength(2));
+    const drafts = within(block).getAllByTestId("athena-agent-provisional-entry");
+    expect(within(drafts[0]).getByText("Earlier draft 1")).toBeTruthy();
+    expect(within(drafts[1]).getByText("Earlier draft 2")).toBeTruthy();
+    expect(drafts[0].textContent).toContain("Checking the registers.");
+    // The model's text is rendered inertly: no script, no link, no control.
+    expect(block.querySelector("script")).toBeNull();
+    expect(block.querySelector("a")).toBeNull();
+    expect(block.querySelector("button")).toBeNull();
+    expect((window as unknown as { __athenaExecuted?: boolean }).__athenaExecuted).toBeUndefined();
+  });
+
+  it("says so when a committed turn kept no drafts", async () => {
+    const user = userEvent.setup();
+    backend.trail = { kind: "trail", committedAt: 200, entries: [] };
+    render(<PanelHarness run={baseRun({ history: [answered] })} />);
+
+    const block = screen.getByTestId("athena-agent-history-trail");
+    await user.click(within(block).getByText("How Athena got here"));
+
+    await waitFor(() => expect(within(block).getByText("No drafts were kept for this question.")).toBeTruthy());
+    expect(within(block).queryAllByTestId("athena-agent-provisional-entry")).toHaveLength(0);
+  });
+
+  it("shows the closed-vocabulary line when the server refuses an earlier turn's trail", async () => {
+    const user = userEvent.setup();
+    backend.trail = { kind: "unavailable", reason: "membership_revoked" };
+    render(<PanelHarness run={baseRun({ history: [answered] })} />);
+
+    const block = screen.getByTestId("athena-agent-history-trail");
+    await user.click(within(block).getByText("How Athena got here"));
+
+    await waitFor(() => expect(within(block).getByText("This answer is no longer available to you.")).toBeTruthy());
+    expect(within(block).queryAllByTestId("athena-agent-provisional-entry")).toHaveLength(0);
+  });
+});
+
+describe("composer", () => {
+  const prompt = () => screen.getByTestId("athena-agent-prompt") as HTMLTextAreaElement;
+  const send = () => screen.getByTestId("athena-agent-submit");
+
+  it("sends on Enter, keeps Shift+Enter as a newline, and stays disabled while empty", async () => {
+    const submit = vi.fn(async () => {});
+    render(<PanelHarness run={baseRun({ submit })} />);
+    expect(send()).toBeDisabled();
+    expect(send()).toHaveAccessibleName("Ask");
+
+    fireEvent.keyDown(prompt(), { key: "Enter" });
+    expect(submit).not.toHaveBeenCalled();
+
+    fireEvent.change(prompt(), { target: { value: "Which lanes are open?" } });
+    expect(send()).toBeEnabled();
+    const shiftEnter = fireEvent.keyDown(prompt(), { key: "Enter", shiftKey: true });
+    // Not prevented: the browser inserts the newline.
+    expect(shiftEnter).toBe(true);
+    expect(submit).not.toHaveBeenCalled();
+
+    const enter = fireEvent.keyDown(prompt(), { key: "Enter" });
+    expect(enter).toBe(false);
+    await waitFor(() => expect(submit).toHaveBeenCalledWith("Which lanes are open?"));
+    await waitFor(() => expect(prompt()).toHaveValue(""));
+  });
+
+  it("does not send mid-composition or while a follow-up is blocked", () => {
+    const submit = vi.fn(async () => {});
+    const { rerender } = render(<PanelHarness run={baseRun({ submit })} />);
+    fireEvent.change(prompt(), { target: { value: "どの" } });
+    const composing = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, isComposing: true } as KeyboardEventInit);
+    prompt().dispatchEvent(composing);
+    expect(submit).not.toHaveBeenCalled();
+
+    rerender(<PanelHarness run={baseRun({ submit, canFollowUp: false })} />);
+    expect(send()).toBeDisabled();
+    fireEvent.keyDown(prompt(), { key: "Enter" });
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("asks for a follow-up once the thread has an answer", () => {
+    const { rerender } = render(<PanelHarness run={baseRun()} />);
+    expect(prompt()).toHaveAttribute("placeholder", "Ask about this context");
+    rerender(
+      <PanelHarness
+        run={baseRun({
+          answer: {
+            outcome: "answer",
+            narrative: "Two lanes are open.",
+            egressClass: "operational",
+            limitedEvidence: false,
+            committedAt: 5,
+            citations: [],
+          },
+        })}
+      />,
+    );
+    expect(prompt()).toHaveAttribute("placeholder", "Ask a follow-up…");
+  });
+});
+
+describe("stream reveal of the live draft", () => {
+  const long = (chars: number) => "Checking the registers one by one, lane by lane. ".repeat(Math.ceil(chars / 50)).slice(0, chars);
+  const fakeFrames = () =>
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "requestAnimationFrame", "cancelAnimationFrame", "performance", "Date"] });
+  const paintedText = () => screen.getByTestId("athena-agent-provisional-text").textContent ?? "";
+  const wipedWords = () =>
+    screen.getByTestId("athena-agent-provisional-text").querySelectorAll(".athena-agent-wipe-word");
+  const frames = (count: number) => {
+    for (let frame = 0; frame < count; frame += 1) {
+      act(() => {
+        vi.advanceTimersByTime(16);
+      });
+    }
+  };
+
+  it("reveals a streaming draft from nothing, then each flush's tail over a brief linear catch-up", () => {
+    fakeFrames();
+    try {
+      const first = long(40);
+      const { rerender } = render(
+        <PanelHarness run={draftRun("streaming", { provisional: { text: first, truncated: false, draftOrdinal: 1 } })} />,
+      );
+      // A draft that is streaming is seen to start.
+      expect(paintedText().length).toBeLessThan(first.length);
+      frames(15);
+      expect(paintedText()).toBe(first);
+
+      const grown = long(400);
+      rerender(<PanelHarness run={draftRun("streaming", { provisional: { text: grown, truncated: false, draftOrdinal: 1 } })} />);
+      const lengths: number[] = [paintedText().length];
+      expect(lengths[0]).toBeGreaterThanOrEqual(first.length);
+      expect(lengths[0]).toBeLessThan(grown.length);
+      for (let frame = 0; frame < 14; frame += 1) {
+        frames(1);
+        lengths.push(paintedText().length);
+      }
+      for (let index = 1; index < lengths.length; index += 1) {
+        expect(lengths[index]).toBeGreaterThanOrEqual(lengths[index - 1]!);
+      }
+      expect(new Set(lengths).size).toBeGreaterThan(3);
+      // 360 pending characters cap at the 180 ms streaming catch-up.
+      expect(paintedText()).toBe(grown);
+      expect(screen.getByTestId("athena-agent-provisional-text")).toHaveAttribute("data-reveal", "settled");
+      // Words keep arriving with the ink wipe for as long as the draft streams.
+      expect(wipedWords().length).toBeGreaterThan(0);
+      frames(60);
+      expect(wipedWords().length).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the ink wipe for one fade after the draft stops, then drops the word spans without moving a word", () => {
+    fakeFrames();
+    try {
+      const { rerender } = render(
+        <PanelHarness run={draftRun("streaming", { provisional: { text: long(40), truncated: false, draftOrdinal: 1 } })} />,
+      );
+      frames(15);
+      rerender(<PanelHarness run={draftRun("committing", { provisional: { text: long(120), truncated: false, draftOrdinal: 1 } })} />);
+      frames(9);
+      expect(paintedText()).toBe(long(120));
+      // Settled, but the last words are still fading in (760 ms).
+      expect(wipedWords().length).toBeGreaterThan(0);
+      frames(40);
+      expect(wipedWords().length).toBeGreaterThan(0);
+      frames(12);
+      expect(wipedWords()).toHaveLength(0);
+      expect(paintedText()).toBe(long(120));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("restarts from the visible prefix, never from the start, when the next flush lands mid-reveal", () => {
+    fakeFrames();
+    try {
+      const { rerender } = render(
+        <PanelHarness run={draftRun("streaming", { provisional: { text: long(40), truncated: false, draftOrdinal: 1 } })} />,
+      );
+      frames(15);
+      rerender(<PanelHarness run={draftRun("streaming", { provisional: { text: long(300), truncated: false, draftOrdinal: 1 } })} />);
+      frames(4);
+      const midway = paintedText().length;
+      expect(midway).toBeGreaterThan(40);
+      expect(midway).toBeLessThan(300);
+      rerender(<PanelHarness run={draftRun("streaming", { provisional: { text: long(600), truncated: false, draftOrdinal: 1 } })} />);
+      expect(paintedText().length).toBeGreaterThanOrEqual(midway);
+      expect(screen.getByTestId("athena-agent-provisional-text")).toHaveAttribute("data-reveal", "revealing");
+      frames(15);
+      expect(paintedText()).toBe(long(600));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("starts a new draft from nothing and settles a committing draft briskly", () => {
+    fakeFrames();
+    try {
+      const { rerender } = render(
+        <PanelHarness run={draftRun("streaming", { provisional: { text: long(40), truncated: false, draftOrdinal: 1 } })} />,
+      );
+      frames(15);
+      rerender(<PanelHarness run={draftRun("reset", { provisional: { text: long(90), truncated: false, draftOrdinal: 2 } })} />);
+      expect(paintedText().length).toBeLessThan(90);
+      frames(15);
+      expect(paintedText()).toBe(long(90));
+      // The model stopped narrating: the tail settles at the faster pace (≤ 120 ms).
+      rerender(<PanelHarness run={draftRun("committing", { provisional: { text: long(500), truncated: false, draftOrdinal: 2 } })} />);
+      frames(9);
+      expect(paintedText()).toBe(long(500));
+      expect(screen.getByTestId("athena-agent-provisional-text")).toHaveAttribute("data-reveal", "settled");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows everything at once under reduced motion", () => {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes("prefers-reduced-motion"),
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    fakeFrames();
+    try {
+      const { rerender } = render(
+        <PanelHarness run={draftRun("streaming", { provisional: { text: long(40), truncated: false, draftOrdinal: 1 } })} />,
+      );
+      expect(paintedText()).toBe(long(40));
+      expect(wipedWords()).toHaveLength(0);
+      rerender(<PanelHarness run={draftRun("streaming", { provisional: { text: long(400), truncated: false, draftOrdinal: 1 } })} />);
+      expect(paintedText()).toBe(long(400));
+      expect(wipedWords()).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("stream reveal of the committed answer", () => {
+  const fakeFrames = () =>
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "requestAnimationFrame", "cancelAnimationFrame", "performance", "Date"] });
+  const answerText = "Open lanes: two [citation:v1.1.1.abc] and the automation log is behind. ".repeat(8);
+  const answered = (overrides: Partial<AthenaAgentRun> = {}) =>
+    draftRun("superseded", {
+      hostState: "completed",
+      status: { headline: "Answer ready", tone: "neutral" },
+      canCancel: false,
+      canSubmit: true,
+      answer: {
+        outcome: "answer",
+        narrative: answerText,
+        egressClass: "operational",
+        limitedEvidence: false,
+        committedAt: 5,
+        citations: [],
+      },
+      ...overrides,
+    });
+  const paintedAnswer = () => screen.getByTestId("athena-agent-answer-text").textContent ?? "";
+  const wipedWords = () =>
+    screen.getByTestId("athena-agent-answer-text").querySelectorAll(".athena-agent-wipe-word");
+  const frames = (count: number) => {
+    for (let frame = 0; frame < count; frame += 1) {
+      act(() => {
+        vi.advanceTimersByTime(16);
+      });
+    }
+  };
+
+  it("reveals an answer that lands while the turn is on screen, never splitting a citation key", () => {
+    fakeFrames();
+    try {
+      const { rerender } = render(
+        <PanelHarness run={draftRun("streaming", { provisional: { text: "Checking the lanes.", truncated: false, draftOrdinal: 1 } })} />,
+      );
+      frames(15);
+      rerender(<PanelHarness run={answered()} />);
+      const lengths: number[] = [paintedAnswer().length];
+      expect(lengths[0]).toBeLessThan(answerText.length);
+      for (let frame = 0; frame < 10; frame += 1) {
+        frames(1);
+        const painted = paintedAnswer();
+        lengths.push(painted.length);
+        expect((painted.match(/\[/g) ?? []).length).toBe((painted.match(/\]/g) ?? []).length);
+        // Every word on screen arrives with the ink wipe.
+        expect(wipedWords().length).toBeGreaterThan(0);
+      }
+      for (let index = 1; index < lengths.length; index += 1) {
+        expect(lengths[index]).toBeGreaterThanOrEqual(lengths[index - 1]!);
+      }
+      expect(new Set(lengths).size).toBeGreaterThan(3);
+      // A settled answer lands within 120 ms, rendered exactly as a mount would render it.
+      expect(screen.getByTestId("athena-agent-answer-text")).toHaveAttribute("data-reveal", "settled");
+      const settled = paintedAnswer();
+      // The wrapping stays for one fade so the last words land, then goes.
+      expect(wipedWords().length).toBeGreaterThan(0);
+      frames(50);
+      expect(wipedWords()).toHaveLength(0);
+      expect(paintedAnswer()).toBe(settled);
+      cleanup();
+      render(<PanelHarness run={answered()} />);
+      expect(paintedAnswer()).toBe(settled);
+      expect(lengths[0]).toBeLessThan(settled.length);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("paints an answer it mounts onto in full — a reload never replays it", () => {
+    fakeFrames();
+    try {
+      render(<PanelHarness run={answered()} />);
+      expect(paintedAnswer()).toBe(answerText);
+      expect(screen.getByTestId("athena-agent-answer-text")).toHaveAttribute("data-reveal", "settled");
+      expect(wipedWords()).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("paints a live answer in full under reduced motion", () => {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes("prefers-reduced-motion"),
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    fakeFrames();
+    try {
+      const { rerender } = render(
+        <PanelHarness run={draftRun("streaming", { provisional: { text: "Checking the lanes.", truncated: false, draftOrdinal: 1 } })} />,
+      );
+      rerender(<PanelHarness run={answered()} />);
+      expect(paintedAnswer()).toBe(answerText);
+      expect(wipedWords()).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

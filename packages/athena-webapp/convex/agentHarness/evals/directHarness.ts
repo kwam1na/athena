@@ -61,6 +61,7 @@ import {
 } from "../readPorts";
 import { buildAgentCapabilityRegistry, evaluateEnablement, type AgentEnablementOverlay } from "../registry";
 import { agentTurnEntryPoints } from "../turns";
+import { pageTurnTraceByBindingWithCtx } from "../turnTrace";
 import { listAutomationEvidenceHandler } from "../../automation/agentCapabilities/evidencePorts";
 import { readRegisterSessionsHandler } from "../../cashControls/agentCapabilities/registersPorts";
 import { listActivityHandler } from "../../operations/agentCapabilities/activityPorts";
@@ -534,6 +535,23 @@ export const readOperatorTurn = internalQuery({
       storeId: target.storeId,
       bindingId: args.bindingId,
     });
+    if (args.include === "preview") {
+      // The rollout's provisional-streaming check, on the admitted path: the
+      // same ladder the browser reads, under the driver's resolved operator.
+      const preview = await agentTurnEntryPoints.previewTurnNarrative(admitted, {
+        storeId: target.storeId,
+        bindingId: args.bindingId,
+      });
+      return { view, preview };
+    }
+    if (args.include === "trail") {
+      // The committed turn's drafts on the same admitted path as the answer.
+      const trail = await agentTurnEntryPoints.getTurnNarrativeTrail(admitted, {
+        storeId: target.storeId,
+        bindingId: args.bindingId,
+      });
+      return { view, trail };
+    }
     if (args.include !== "answer") return view;
     const answer = await agentTurnEntryPoints.getTurnAnswer(admitted, {
       storeId: target.storeId,
@@ -630,6 +648,66 @@ export const describeRunDiagnostics = internalQuery({
     };
   },
 });
+
+/**
+ * The engineer's "what did the model see" read: one driven turn's trace, in
+ * order, page by page.
+ *
+ * This is the only read path onto `agentTurnTraceEvent`, and it lives here —
+ * in the non-production driver module — on purpose: the trace holds the
+ * model's narrative deltas and the exact arguments of every tool call, which
+ * no operator surface may ever render. It is an internal query, so it is
+ * reachable from `bunx convex run` and the export script and from nothing on
+ * the ingress rail.
+ *
+ * Pass `bindingId` for one turn, or `runId` for the run's turn (one turn owns
+ * one run). `cursor` continues a listing; `isDone` says when it is exhausted.
+ */
+export const listTurnTrace = internalQuery({
+  args: {
+    bindingId: v.optional(v.id("agentTurnBinding")),
+    runId: v.optional(v.id("intelligenceRun")),
+    cursor: v.optional(v.union(v.string(), v.null())),
+    limit: v.optional(v.number()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const limit = Math.min(TURN_TRACE_PAGE_MAX, Math.max(1, args.limit ?? TURN_TRACE_PAGE_DEFAULT));
+    if ((args.bindingId === undefined) === (args.runId === undefined)) {
+      return { kind: "invalid_args", message: "Pass exactly one of bindingId or runId." };
+    }
+    const bindingId = args.bindingId ?? (await resolveTraceBinding(ctx, args.runId!));
+    if (!bindingId) return { kind: "not_found", missing: "turn binding" };
+    const page = await pageTurnTraceByBindingWithCtx(ctx, bindingId, { cursor: args.cursor ?? null, numItems: limit });
+    return {
+      kind: "trace",
+      bindingId,
+      isDone: page.isDone,
+      cursor: page.continueCursor,
+      events: page.page.map((row) => ({
+        source: row.source,
+        sequence: row.sequence,
+        at: row.at,
+        kind: row.kind,
+        truncated: row.truncated,
+        replayPayloadId: row.replayPayloadId,
+        payload: row.payload,
+      })),
+    };
+  },
+});
+
+const TURN_TRACE_PAGE_DEFAULT = 200;
+const TURN_TRACE_PAGE_MAX = 1_000;
+
+/** One turn owns one run, so the run's binding is the trace's binding. */
+async function resolveTraceBinding(ctx: QueryCtx, runId: Id<"intelligenceRun">): Promise<Id<"agentTurnBinding"> | null> {
+  const binding = await ctx.db
+    .query("agentTurnBinding")
+    .withIndex("by_runId", (q) => q.eq("runId", runId))
+    .first();
+  return binding?._id ?? null;
+}
 
 export const cancelOperatorTurn = internalMutation({
   args: { ...driverArgs, bindingId: v.id("agentTurnBinding") },

@@ -8,10 +8,24 @@
  * unsafe protocols, encoded URLs, and payloads split across chunks all end up
  * as visible characters. Interactive destinations exist only for server-minted
  * citations, which the panel renders outside this component.
+ *
+ * Wipe mode wraps each word in a bare, class-only span so a word that has just
+ * arrived can fade in (the ink wipe). The span carries nothing but a class,
+ * and the words are keyed by position, so a word that is already on screen
+ * keeps its element — and stays still — as the text grows past it.
+ *
+ * Provisional mode narrows the vocabulary further. A draft is a partial buffer
+ * the model is still writing, so anything that could read as Athena's own
+ * structure — a rule, a heading, a quotation, a fenced block — is flattened to
+ * a paragraph before it renders. The whole buffer is re-parsed on every render,
+ * so a payload that is only dangerous once it is complete is inert at every
+ * prefix as well.
  */
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
+
+import { describeAthenaShortenedNotice } from "./AthenaAgentPresentationAdapter";
 
 const DEFAULT_MAX_CHARACTERS = 24_000;
 const MAX_BLOCKS = 400;
@@ -95,10 +109,13 @@ const UNORDERED_ITEM_PATTERN = /^\s{0,3}[-*+]\s+(.*)$/;
 const ORDERED_ITEM_PATTERN = /^\s{0,3}\d{1,3}[.)]\s+(.*)$/;
 const RULE_PATTERN = /^\s{0,3}([-*_])\1{2,}\s*$/;
 
+export type AthenaAgentSafeTextMode = "answer" | "provisional";
+
 /** Parse untrusted text into the closed block vocabulary this module renders. */
 function parseInertBlocks(
   text: string,
   maxCharacters = DEFAULT_MAX_CHARACTERS,
+  mode: AthenaAgentSafeTextMode = "answer",
 ): readonly InertBlock[] {
   const normalized = text.replace(/\r\n?/g, "\n");
   const bounded = normalized.slice(0, maxCharacters);
@@ -188,44 +205,82 @@ function parseInertBlocks(
   flushParagraph();
 
   if (truncated || index < lines.length) {
-    blocks.push({
-      kind: "notice",
-      text: "This answer was shortened for display.",
-    });
+    blocks.push({ kind: "notice", text: describeAthenaShortenedNotice(mode) });
   }
-  return blocks;
+  return mode === "provisional" ? flattenForDraft(blocks) : blocks;
 }
 
-function renderSpans(spans: readonly InertSpan[]): ReactNode {
+/**
+ * The provisional vocabulary: paragraphs, lists, inline spans, and the
+ * renderer's own notice. A rule is dropped, a heading and a quotation become
+ * paragraphs, and a fenced block becomes one plain-text paragraph — its body is
+ * never re-parsed, so nothing inside it can become a span either.
+ */
+function flattenForDraft(blocks: readonly InertBlock[]): readonly InertBlock[] {
+  return blocks.flatMap<InertBlock>((block) => {
+    if (block.kind === "rule") return [];
+    if (block.kind === "heading" || block.kind === "quote") {
+      return [{ kind: "paragraph", spans: block.spans }];
+    }
+    if (block.kind === "code") {
+      return [{ kind: "paragraph", spans: [{ kind: "text", text: block.text }] }];
+    }
+    return [block];
+  });
+}
+
+/** The class the ink wipe animates; see `.athena-agent-wipe-word` in index.css. */
+export const WIPE_WORD_CLASS = "athena-agent-wipe-word";
+
+/**
+ * Split a run of text into words that each arrive with the ink wipe. The
+ * whitespace between them stays a plain string, so prose still wraps and a
+ * pre-wrapped paragraph keeps its line breaks; the keys are positional, so a
+ * word already on screen keeps its element as the text grows by prefix.
+ */
+function wipeWords(text: string, keyPrefix: string): ReactNode {
+  return text.split(/(\s+)/).map((part, index) =>
+    part.length === 0 || /^\s+$/.test(part) ? (
+      part
+    ) : (
+      <span className={WIPE_WORD_CLASS} key={`${keyPrefix}-w${index}`}>
+        {part}
+      </span>
+    ),
+  );
+}
+
+function renderSpans(spans: readonly InertSpan[], wipe: boolean): ReactNode {
   return spans.map((span, spanIndex) => {
     const key = `${span.kind}-${spanIndex}`;
+    const words = wipe ? wipeWords(span.text, key) : span.text;
     if (span.kind === "code") {
       return (
         <code
           className="rounded-sm bg-muted px-1 py-0.5 font-mono text-[0.85em]"
           key={key}
         >
-          {span.text}
+          {words}
         </code>
       );
     }
     if (span.kind === "strong") {
       return (
         <strong className="font-semibold text-foreground" key={key}>
-          {span.text}
+          {words}
         </strong>
       );
     }
     if (span.kind === "emphasis") {
       return (
         <em className="italic" key={key}>
-          {span.text}
+          {words}
         </em>
       );
     }
-    // A plain string child: no element, no attribute, nothing to hang a
-    // handler on.
-    return span.text;
+    // A plain string child (or, while wiping, class-only spans around one): no
+    // attribute, nothing to hang a handler on.
+    return words;
   });
 }
 
@@ -239,6 +294,10 @@ export type AthenaAgentSafeTextProps = {
   readonly text: string;
   readonly className?: string;
   readonly maxCharacters?: number;
+  /** `provisional` renders a draft the model is still writing. */
+  readonly mode?: AthenaAgentSafeTextMode;
+  /** Words arrive with the ink wipe while the text is still being revealed. */
+  readonly wipe?: boolean;
 };
 
 /** Render untrusted narrative. Emits text nodes only — never a link or an asset. */
@@ -246,8 +305,12 @@ export function AthenaAgentSafeText({
   text,
   className,
   maxCharacters,
+  mode = "answer",
+  wipe = false,
 }: AthenaAgentSafeTextProps) {
-  const blocks = parseInertBlocks(text, maxCharacters);
+  // Parsed from the whole buffer on every render: a draft grows by prefix, and
+  // a memoized parse would let a payload complete itself between frames.
+  const blocks = parseInertBlocks(text, maxCharacters, mode);
 
   return (
     <div className={cn("space-y-layout-sm text-sm leading-6 text-foreground", className)}>
@@ -257,7 +320,7 @@ export function AthenaAgentSafeText({
           const Tag = headingTag(block.level);
           return (
             <Tag className="text-sm font-semibold text-foreground" key={key}>
-              {renderSpans(block.spans)}
+              {renderSpans(block.spans, wipe)}
             </Tag>
           );
         }
@@ -272,7 +335,7 @@ export function AthenaAgentSafeText({
               key={key}
             >
               {block.items.map((item, itemIndex) => (
-                <li key={`item-${itemIndex}`}>{renderSpans(item)}</li>
+                <li key={`item-${itemIndex}`}>{renderSpans(item, wipe)}</li>
               ))}
             </ListTag>
           );
@@ -283,7 +346,7 @@ export function AthenaAgentSafeText({
               className="border-l-2 border-border pl-3 text-muted-foreground"
               key={key}
             >
-              <p className="whitespace-pre-wrap">{renderSpans(block.spans)}</p>
+              <p className="whitespace-pre-wrap">{renderSpans(block.spans, wipe)}</p>
             </blockquote>
           );
         }
@@ -309,7 +372,7 @@ export function AthenaAgentSafeText({
         }
         return (
           <p className="whitespace-pre-wrap" key={key}>
-            {renderSpans(block.spans)}
+            {renderSpans(block.spans, wipe)}
           </p>
         );
       })}

@@ -1,13 +1,21 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ATHENA_AGENT_PROVISIONAL_WITHDRAWAL_REASONS,
   ATHENA_AGENT_THREAD_KEY_PATTERN,
   composeAthenaThreadKey,
   describeAthenaContext,
   describeAthenaDenial,
   describeAthenaFailure,
   describeAthenaMilestone,
+  describeAthenaProvisionalCue,
+  describeAthenaProvisionalEntry,
+  describeAthenaProvisionalTimeline,
+  describeAthenaProvisionalTimelineEmpty,
+  describeAthenaProvisionalNotice,
+  describeAthenaShortenedNotice,
   describeAthenaUnavailable,
+  describeProvisionalWithdrawal,
   resolveAthenaSourceLink,
   snapshotAthenaContext,
   defineAthenaAgentPresentation,
@@ -272,5 +280,93 @@ describe("Athena agent operator copy", () => {
     );
     expect(describeAthenaMilestone("finalizing")).toBe("Finishing up");
     expect(describeAthenaMilestone("model said hello")).toBeNull();
+  });
+});
+
+describe("provisional draft copy", () => {
+  it("says the draft is unverified, must not be acted on, and will be replaced", () => {
+    const notice = describeAthenaProvisionalNotice();
+
+    expect(notice.headline).toBe("Draft in progress. Not verified.");
+    expect(notice.detail).toContain("thinking out loud");
+    expect(notice.detail).toMatch(/don't act on/i);
+    expect(notice.detail).toMatch(/replaces it/i);
+    expect(notice.detail).toMatch(/may differ/i);
+  });
+
+  it("gives the reset, limit, and pause cues their own polite lines", () => {
+    expect(describeAthenaProvisionalCue("reset")).toBe(
+      "Moved on to the next step. The earlier draft is still shown above.",
+    );
+    expect(describeAthenaProvisionalCue("paused_at_limit")).toBe(
+      "Draft display limit reached. The rest of the draft isn't shown here.",
+    );
+    // A stalled draft can be the operator's last signal, so the line names the
+    // controls the panel keeps enabled.
+    expect(describeAthenaProvisionalCue("stalled")).toBe(
+      "Draft paused. You can stop this request or start a new thread.",
+    );
+  });
+
+  it("shortens a runaway draft with its own notice, not the answer's", () => {
+    expect(describeAthenaShortenedNotice("answer")).toBe(
+      "This answer was shortened for display.",
+    );
+    expect(describeAthenaShortenedNotice("provisional")).toBe(
+      "This draft was shortened for display.",
+    );
+  });
+
+  it("covers every withdrawal reason the preview mints and says nothing about the answer", () => {
+    for (const reason of ATHENA_AGENT_PROVISIONAL_WITHDRAWAL_REASONS) {
+      const withdrawal = describeProvisionalWithdrawal(reason);
+
+      expect(withdrawal.reason).toBe(reason);
+      expect(withdrawal.headline).toBe("Draft withdrawn.");
+      expect(withdrawal.detail?.length ?? 0).toBeGreaterThan(0);
+      expect(JSON.stringify(withdrawal)).not.toMatch(/answer/i);
+      expect(withdrawal.detail).not.toMatch(/_/);
+    }
+
+    expect(describeProvisionalWithdrawal("compatibility_epoch_fenced").detail).toBe(
+      "Athena was updated while this draft was being written.",
+    );
+    expect(describeProvisionalWithdrawal("policy_disabled").detail).toBe(
+      "Live drafts are turned off for this store.",
+    );
+    expect(describeProvisionalWithdrawal("egress_beyond_authority").detail).toBe(
+      "This draft went beyond what you can read here.",
+    );
+    expect(describeProvisionalWithdrawal("run_canceled").detail).toBe(
+      "This request was stopped.",
+    );
+  });
+
+  it("falls back through the authority classes and then to a bare default", () => {
+    // `TurnAccess.reason` is an open string: an authority refusal that the
+    // preview passes through still gets calm, draft-only copy.
+    expect(describeProvisionalWithdrawal("membership_revoked").detail).toBe(
+      "This draft is no longer available to you.",
+    );
+    expect(describeProvisionalWithdrawal("profile_disabled").detail).toBe(
+      "Ask Athena isn't available for this store right now.",
+    );
+
+    const unknown = describeProvisionalWithdrawal("some_new_backend_reason");
+    expect(unknown.headline).toBe("Draft withdrawn.");
+    expect(unknown.detail).toBeUndefined();
+    expect(JSON.stringify(unknown)).not.toContain("some_new_backend_reason".toUpperCase());
+  });
+});
+
+describe("the provisional timeline copy", () => {
+  it("labels finished drafts by position and the collapsed timeline as unverified", () => {
+    expect(describeAthenaProvisionalEntry(0)).toBe("Earlier draft 1");
+    expect(describeAthenaProvisionalEntry(2)).toBe("Earlier draft 3");
+    expect(describeAthenaProvisionalTimeline()).toEqual({
+      summary: "How Athena got here",
+      detail: "Athena's drafts along the way. Not verified — the answer above is the only checked text.",
+    });
+    expect(describeAthenaProvisionalTimelineEmpty()).toBe("No drafts were kept for this question.");
   });
 });

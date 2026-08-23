@@ -233,6 +233,16 @@ export const agentTurnBindingSchema = v.object({
   /** Release suppressed after commit because authority shrank before an authorized fetch. */
   releaseSuppressedAt: v.optional(v.number()),
   releaseSuppressedReason: v.optional(v.string()),
+  /**
+   * Provisional-narrative exposure markers. `provisionalReleasedAt` is set once,
+   * by the first stored flush: from then on the draft is presumed to have
+   * reached the operator's pane (it cannot be recalled from a screen). The
+   * viewed pair is the operator's own first-paint acknowledgement — confirmed
+   * receipt, first write wins — paired like `operatorViewedAt`.
+   */
+  provisionalReleasedAt: v.optional(v.number()),
+  provisionalViewedAt: v.optional(v.number()),
+  provisionalViewedByActorRef: v.optional(v.string()),
   /** Completion outbox bookkeeping: projection retries after `athena_committed`. */
   outboxAttempts: v.optional(v.number()),
   outboxNextAttemptAt: v.optional(v.number()),
@@ -462,6 +472,89 @@ export const agentScratchDescriptorSchema = v.object({
   expiresAt: v.number(),
   createdAt: v.number(),
   updatedAt: v.number(),
+});
+
+/**
+ * Provisional narrative: the model's thinking-out-loud for ONE live turn,
+ * servable only while the run is `running` and still admitted. Delete-only —
+ * every terminal cause (clamp, suppression, finalize, scope removal, expiry)
+ * removes the row; nothing here is ever retained, projected, cited, or audited.
+ * No state column: the run, the binding, and `expiresAt` say everything.
+ */
+export const agentProvisionalNarrativeSchema = v.object({
+  runId: v.id("intelligenceRun"),
+  turnBindingId: v.id("agentTurnBinding"),
+  storeId: v.id("store"),
+  organizationId: v.id("organization"),
+  text: v.string(),
+  draftOrdinal: v.number(),
+  truncated: v.boolean(),
+  egressClass: v.string(),
+  retentionClass: v.literal("short_lived"),
+  updatedAt: v.number(),
+  expiresAt: v.number(),
+});
+
+/**
+ * Engineer-only turn trace: one row per runtime or host event of one driven
+ * turn, in the order the host saw it, with the exact payload — the model's
+ * narrative deltas, each tool call's arguments, and the outcome the model
+ * received — so a turn can be replayed offline while the agent is being
+ * refined (prompts, tool response shapes, retry behaviour).
+ *
+ * It is the single deliberate exception to "the model's narrative never enters
+ * Athena's durable record". It is never projected into thread history, a
+ * prompt, a citation, or any operator-admitted query; only internal
+ * investigation functions read it. Standard (365-day) class, per-row payload
+ * cap, and one environment switch (`AGENT_TURN_TRACE`) that turns capture off.
+ */
+export const agentTurnTraceEventSchema = v.object({
+  runId: v.id("intelligenceRun"),
+  turnBindingId: v.id("agentTurnBinding"),
+  storeId: v.id("store"),
+  organizationId: v.id("organization"),
+  /** `adapter` rows carry the runtime envelope's sequence; `host` rows the host's own counter. */
+  source: v.union(v.literal("adapter"), v.literal("host")),
+  sequence: v.number(),
+  at: v.number(),
+  /** The runtime event kind, or a host kind: `tool_dispatch`, `provisional_flush`, `trace_capped`, `turn_report`. */
+  kind: v.string(),
+  payload: v.any(),
+  truncated: v.boolean(),
+  /** The full call output / program result, when one was already stored for replay. */
+  replayPayloadId: v.optional(v.id("agentReplayPayload")),
+  retentionClass: v.literal("standard"),
+  expiresAt: v.number(),
+  createdAt: v.number(),
+});
+
+/**
+ * Durable narrative trail: the finished drafts of ONE committed turn, in the
+ * order the model wrote them, kept so the operator can still read how Athena
+ * got to the answer — after a reload, and from an earlier turn in the thread.
+ *
+ * It is released and withdrawn WITH the answer: same ownership, same live
+ * authority, same suppression, and the committed artifact's own egress class,
+ * so the trail can never outrank the answer it accompanies. It is written once,
+ * only for a run that reached `completed` with a committed release, and never
+ * for a canceled, failed, or refused turn. Nothing projects it into thread
+ * history, a prompt, or a citation — the committed answer stays the only
+ * checked text and the engineer-only turn trace stays the full record.
+ */
+export const agentTurnNarrativeTrailSchema = v.object({
+  runId: v.id("intelligenceRun"),
+  turnBindingId: v.id("agentTurnBinding"),
+  storeId: v.id("store"),
+  organizationId: v.id("organization"),
+  /** One entry per draft ordinal, ascending; `truncated` marks a draft cut to fit. */
+  entries: v.array(v.object({ draftOrdinal: v.number(), text: v.string(), truncated: v.boolean() })),
+  byteLength: v.number(),
+  /** Copied from the committed answer's payload, so the read gate is the answer's gate. */
+  egressClass: v.string(),
+  retentionClass: v.literal("standard"),
+  expiresAt: v.number(),
+  committedAt: v.number(),
+  createdAt: v.number(),
 });
 
 export const agentEvidenceAccessAuditSchema = v.object({

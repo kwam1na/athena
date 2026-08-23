@@ -280,6 +280,7 @@ export const SYNTHETIC_SECOND_SURFACE_PROFILE = defineAgentProfile({
     providers: [{ providerId: "athena_contract_fake", modelId: "fake-1", region: "local", maxClass: "sensitive" }],
   },
   runtimeAdapterKind: "athena_contract_fake",
+  narrativePolicy: "provisional_streaming",
   presentation: SYNTHETIC_SECOND_SURFACE_PRESENTATION,
   evaluation: {
     scenarios: [

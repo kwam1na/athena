@@ -5,7 +5,7 @@
  *
  * Adapter-specific test support (may name native types); not a test file.
  */
-import type { LanguageModelV4, LanguageModelV4Content, LanguageModelV4Usage } from "@ai-sdk/provider";
+import type { LanguageModelV4, LanguageModelV4StreamPart, LanguageModelV4Usage } from "@ai-sdk/provider";
 import type { AgentComponent } from "@convex-dev/agent";
 import { MockLanguageModelV4 } from "ai/test";
 import { convexTest, type TestConvex } from "convex-test";
@@ -86,6 +86,30 @@ class ScriptedModelError extends Error {
 
 type NativeFailure = { readonly message: string; readonly statusCode?: number };
 
+/** Turn an ordered part list into the `ReadableStream` a provider's `doStream` returns. */
+function streamOf(parts: readonly LanguageModelV4StreamPart[]): ReadableStream<LanguageModelV4StreamPart> {
+  return new ReadableStream<LanguageModelV4StreamPart>({
+    start(controller) {
+      for (const part of parts) controller.enqueue(part);
+      controller.close();
+    },
+  });
+}
+
+/**
+ * One provider text block per scripted delta: the block end is a hard flush
+ * boundary for the adapter's coalescer, so the scripted deltas map one to one
+ * onto `narrative_delta` events no matter how the coalescer is tuned. Streams
+ * built from `scriptRawStream` exercise the coalescer itself.
+ */
+function textBlock(id: string, text: string): LanguageModelV4StreamPart[] {
+  return [
+    { type: "text-start", id },
+    { type: "text-delta", id, delta: text },
+    { type: "text-end", id },
+  ];
+}
+
 export type ConvexAgentContractHarness = AgentRuntimeContractHarness & {
   readonly adapter: ConvexAgentRuntimeAdapter;
   readonly t: TestConvex<typeof schema>;
@@ -94,8 +118,16 @@ export type ConvexAgentContractHarness = AgentRuntimeContractHarness & {
   /** Make the scripted `fail` step throw a provider-shaped error instead of an Athena-coded one. */
   readonly failWithNativeError: (turnKey: string, failure: NativeFailure) => void;
   readonly resolvedModels: () => readonly AgentModelSelection[];
+  /**
+   * Queue verbatim provider stream parts for the next model call(s) on this
+   * turn, bypassing the step script. The harness only prepends `stream-start`;
+   * the caller owns every content and control part (including `finish`), so
+   * part-level scenarios — reasoning and tool-input noise, token-sized text
+   * chunks, a mid-stream `error` part, an empty stream — stay explicit.
+   */
+  readonly scriptRawStream: (turnKey: string, parts: readonly LanguageModelV4StreamPart[]) => void;
   /** Every model call the scripted models received, for provider-request inspection. */
-  readonly modelCalls: (turnKey: string) => readonly MockLanguageModelV4["doGenerateCalls"][number][];
+  readonly modelCalls: (turnKey: string) => readonly MockLanguageModelV4["doStreamCalls"][number][];
   /** A fresh adapter over the same backend, as a new action invocation would construct. */
   readonly reopen: () => { readonly adapter: ConvexAgentRuntimeAdapter };
 };
@@ -115,6 +147,7 @@ export function createConvexAgentContractHarness(options: ConvexAgentContractHar
   const cursors = new Map<string, number>();
   const usageQueues = new Map<string, NativeUsageInput[]>();
   const nativeFailures = new Map<string, NativeFailure>();
+  const rawStreams = new Map<string, LanguageModelV4StreamPart[][]>();
   const idempotencyKeys = new Map<string, Map<string, string>>();
   const models = new Map<string, MockLanguageModelV4>();
   const resolved: AgentModelSelection[] = [];
@@ -138,7 +171,7 @@ export function createConvexAgentContractHarness(options: ConvexAgentContractHar
     idempotencyKeys.set(turnKey, map);
   };
 
-  const toolCallPart = async (call: { callId: string; toolId: string; args: AgentRuntimeScriptArgs }): Promise<LanguageModelV4Content> => ({
+  const toolCallPart = async (call: { callId: string; toolId: string; args: AgentRuntimeScriptArgs }): Promise<LanguageModelV4StreamPart> => ({
     type: "tool-call",
     toolCallId: call.callId,
     toolName: toNativeToolName(call.toolId),
@@ -153,10 +186,15 @@ export function createConvexAgentContractHarness(options: ConvexAgentContractHar
     const model = new MockLanguageModelV4({
       provider: "athena-scripted",
       modelId: `scripted:${turnKey}`,
-      doGenerate: async () => {
+      doStream: async () => {
+        const queuedRaw = rawStreams.get(turnKey)?.shift();
+        if (queuedRaw) return { stream: streamOf([{ type: "stream-start", warnings: [] }, ...queuedRaw]) };
         const steps = scripts.get(turnKey) ?? [];
         const turnRef = turnRefsByKey.get(turnKey);
         const usage = nativeUsage(usageQueues.get(turnKey)?.shift());
+        const parts: LanguageModelV4StreamPart[] = [{ type: "stream-start", warnings: [] }];
+        let narrated = false;
+        let blocks = 0;
         while (true) {
           const index = cursors.get(turnKey) ?? 0;
           const step = steps[index];
@@ -184,17 +222,28 @@ export function createConvexAgentContractHarness(options: ConvexAgentContractHar
                 });
               }
               break;
+            case "narrative":
+              for (const text of step.deltas) parts.push(...textBlock(`${turnKey}:text:${blocks++}`, text));
+              narrated = true;
+              break;
             case "pause":
               await waitGate(step.gate);
               break;
             case "tool_call":
               rememberKey(turnKey, step.callId, step.idempotencyKey);
-              return { content: [await toolCallPart(step)], finishReason: { unified: "tool-calls", raw: "tool_calls" }, usage, warnings: [] };
+              parts.push(await toolCallPart(step), { type: "finish", usage, finishReason: { unified: "tool-calls", raw: "tool_calls" } });
+              return { stream: streamOf(parts) };
             case "tool_calls_parallel":
               for (const call of step.calls) rememberKey(turnKey, call.callId, call.idempotencyKey);
-              return { content: await Promise.all(step.calls.map(toolCallPart)), finishReason: { unified: "tool-calls", raw: "tool_calls" }, usage, warnings: [] };
+              parts.push(...(await Promise.all(step.calls.map(toolCallPart))), { type: "finish", usage, finishReason: { unified: "tool-calls", raw: "tool_calls" } });
+              return { stream: streamOf(parts) };
             case "complete":
-              return { content: [{ type: "text", text: step.narrative }], finishReason: { unified: "stop", raw: "stop" }, usage, warnings: [] };
+              // A model call that narrated has already produced its text; the
+              // narration *is* the model's final prose. `complete.narrative`
+              // supplies the text only for scripts that never narrate.
+              if (!narrated) parts.push(...textBlock(`${turnKey}:text:${blocks++}`, step.narrative));
+              parts.push({ type: "finish", usage, finishReason: { unified: "stop", raw: "stop" } });
+              return { stream: streamOf(parts) };
             case "fail": {
               const native = nativeFailures.get(turnKey);
               if (native) {
@@ -229,6 +278,7 @@ export function createConvexAgentContractHarness(options: ConvexAgentContractHar
   return {
     adapter,
     t,
+    supportsNarrativeStreaming: true,
     scriptTurn: (turnKey, steps) => {
       scripts.set(turnKey, steps);
       cursors.set(turnKey, 0);
@@ -242,8 +292,13 @@ export function createConvexAgentContractHarness(options: ConvexAgentContractHar
     dispatchResults: (turnRef) => adapter.inspect.dispatchResults(turnRef),
     modelUsage: (turnKey, usages) => usageQueues.set(turnKey, [...usages]),
     failWithNativeError: (turnKey, failure) => nativeFailures.set(turnKey, failure),
+    scriptRawStream: (turnKey, parts) => {
+      const queue = rawStreams.get(turnKey) ?? [];
+      queue.push([...parts]);
+      rawStreams.set(turnKey, queue);
+    },
     resolvedModels: () => [...resolved],
-    modelCalls: (turnKey) => [...(models.get(turnKey)?.doGenerateCalls ?? [])],
+    modelCalls: (turnKey) => [...(models.get(turnKey)?.doStreamCalls ?? [])],
     reopen: () => ({ adapter: buildAdapter() }),
   };
 }

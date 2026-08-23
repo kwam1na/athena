@@ -170,10 +170,13 @@ import {
   agentEvidenceAccessAuditSchema,
   agentProgramAttemptSchema,
   agentPromptPayloadSchema,
+  agentProvisionalNarrativeSchema,
   agentReplayPayloadSchema,
   agentRunGrantSchema,
   agentScratchDescriptorSchema,
   agentTurnBindingSchema,
+  agentTurnNarrativeTrailSchema,
+  agentTurnTraceEventSchema,
 } from "./schemas/agentHarness";
 import {
   remoteAssistClientSchema,
@@ -712,6 +715,31 @@ const schema = defineSchema({
     .index("by_retentionClass_expiresAt", ["retentionClass", "expiresAt"])
     .index("by_storeId", ["storeId"])
     .index("by_organizationId", ["organizationId"]),
+  agentProvisionalNarrative: defineTable(agentProvisionalNarrativeSchema)
+    .index("by_turnBindingId", ["turnBindingId"])
+    .index("by_expiresAt", ["expiresAt"])
+    .index("by_storeId", ["storeId"])
+    .index("by_organizationId", ["organizationId"]),
+  /**
+   * The operator-readable trail of a committed turn's finished drafts.
+   * Released and withdrawn with the answer; never projected into history,
+   * prompts, or citations.
+   */
+  agentTurnNarrativeTrail: defineTable(agentTurnNarrativeTrailSchema)
+    .index("by_turnBindingId", ["turnBindingId"])
+    .index("by_storeId", ["storeId"])
+    .index("by_organizationId", ["organizationId"])
+    .index("by_expiresAt", ["expiresAt"]),
+  /**
+   * Engineer-only turn trace. Never projected into history, prompts,
+   * citations, or any operator-admitted query; read only by internal
+   * investigation functions and the `agent-trace:export` script.
+   */
+  agentTurnTraceEvent: defineTable(agentTurnTraceEventSchema)
+    .index("by_turnBindingId_sequence", ["turnBindingId", "sequence"])
+    .index("by_storeId", ["storeId"])
+    .index("by_organizationId", ["organizationId"])
+    .index("by_expiresAt", ["expiresAt"]),
   agentEvidenceAccessAudit: defineTable(agentEvidenceAccessAuditSchema)
     .index("by_runId_accessedAt", ["runId", "accessedAt"])
     .index("by_storeId_accessedAt", ["storeId", "accessedAt"])

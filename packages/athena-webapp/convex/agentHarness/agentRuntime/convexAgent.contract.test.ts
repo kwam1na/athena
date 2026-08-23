@@ -11,6 +11,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
+import type { LanguageModelV4Usage } from "@ai-sdk/provider";
+
 import {
   createAgentToolDispatchLedger,
   createUsageReconciler,
@@ -19,7 +21,7 @@ import {
   type AgentToolDefinition,
   type AgentToolRegistration,
 } from "../../../shared/agentHarness/agentRuntime";
-import { runAgentRuntimeAdapterContractSuite } from "../../../shared/agentHarness/agentRuntime.contractSuite";
+import { flush, runAgentRuntimeAdapterContractSuite } from "../../../shared/agentHarness/agentRuntime.contractSuite";
 import { opaqueRef } from "../../../shared/agentHarness/values";
 import { AGENT_COMPONENT, createConvexAgentContractHarness, runtimeCtxFor } from "./convexAgent.contractHarness";
 import { createConvexAgentCleanupHook } from "./convexAgentCleanup";
@@ -62,6 +64,44 @@ function kernelFor(adapterVersion: string) {
     dispatchTool: (request) => ledger.dispatch(request),
   };
   return { events, usage, ledger, hooks };
+}
+
+/** Provider-shaped usage for a hand-built stream's `finish` part. */
+function streamUsage(inputTokens: number, outputTokens: number): LanguageModelV4Usage {
+  return {
+    inputTokens: { total: inputTokens, noCache: inputTokens, cacheRead: undefined, cacheWrite: undefined },
+    outputTokens: { total: outputTokens, text: outputTokens, reasoning: undefined },
+  };
+}
+
+/** Open a turn on its own thread; streaming scenarios only vary the model stream. */
+async function openStreamTurn(
+  harness: ReturnType<typeof createConvexAgentContractHarness>,
+  hooks: AgentRuntimeTurnHooks,
+  turnKey: string,
+) {
+  const thread = await harness.adapter.ensureThread({
+    threadKey: `${turnKey}|thread`,
+    contextBindingRef: opaqueRef("context_binding", "ctx"),
+    correlation: { operatorRef: "athenaUser:o", profileId: "p" },
+  });
+  const input = await harness.adapter.saveInput({
+    threadRef: thread.threadRef,
+    turnKey,
+    prompt: { text: "hi", egressClass: "operational", promptHash: "sha256:h", untrustedDataLabel: "retrieved_store_data" },
+    history: { messages: [], projectionDigest: "sha256:empty", reauthorizedAt: 1 },
+  });
+  return harness.adapter.startTurn(
+    {
+      threadRef: thread.threadRef,
+      inputRef: input.inputRef,
+      turnKey,
+      tools: [echoTool],
+      model: { providerId: "fixture", modelId: "fixture-1", region: "eu" },
+      limits: { maxToolCalls: 4, maxElapsedMs: 10_000 },
+    },
+    hooks,
+  );
 }
 
 describe("Convex Agent adapter specifics", () => {
@@ -346,6 +386,128 @@ describe("Convex Agent adapter specifics", () => {
     // Idempotent: running the hook again over deleted refs still succeeds.
     expect(await hook({ runQuery, runMutation }, { runtimeThreadRef: thread.threadRef })).toEqual({ ok: true });
     expect(await harness.reopen().adapter.resumeTurn({ turnRef }, kernel.hooks)).toEqual({ resumed: false, state: "unknown" });
+  });
+
+  it("streams only text parts, coalesced, and never reasoning, tool input, sources, or raw provider frames", async () => {
+    const harness = createConvexAgentContractHarness();
+    const kernel = kernelFor(harness.adapter.descriptor.adapterVersion);
+    harness.scriptRawStream("turn-parts", [
+      { type: "reasoning-start", id: "r1" },
+      { type: "reasoning-delta", id: "r1", delta: "SECRET-REASONING-TRACE" },
+      { type: "reasoning-end", id: "r1" },
+      { type: "text-start", id: "t1" },
+      // Token-sized chunks: the coalescer joins them, gaplessly and without duplication.
+      { type: "text-delta", id: "t1", delta: "Check" },
+      { type: "text-delta", id: "t1", delta: "ing the" },
+      { type: "text-delta", id: "t1", delta: " open registers" },
+      { type: "text-delta", id: "t1", delta: " now." },
+      { type: "text-end", id: "t1" },
+      { type: "source", sourceType: "url", id: "s1", url: "https://example.invalid/SECRET-SOURCE" },
+      { type: "tool-input-start", id: "call-parts", toolName: toNativeToolName("athena.test.echo") },
+      { type: "tool-input-delta", id: "call-parts", delta: '{"value":"SECRET-TOOL-INPUT"}' },
+      { type: "tool-input-end", id: "call-parts" },
+      { type: "tool-call", toolCallId: "call-parts", toolName: toNativeToolName("athena.test.echo"), input: '{"value":"hi"}' },
+      { type: "raw", rawValue: { hidden: "SECRET-RAW-FRAME" } },
+      { type: "finish", usage: streamUsage(10, 4), finishReason: { unified: "tool-calls", raw: "tool_calls" } },
+    ]);
+    harness.scriptRawStream("turn-parts", [
+      { type: "text-start", id: "t2" },
+      { type: "text-delta", id: "t2", delta: "Two registers are open." },
+      { type: "text-end", id: "t2" },
+      { type: "finish", usage: streamUsage(20, 6), finishReason: { unified: "stop", raw: "stop" } },
+    ]);
+    const { turnRef } = await openStreamTurn(harness, kernel.hooks, "turn-parts");
+    await harness.settle(turnRef);
+
+    const deltas = kernel.events.filter((event) => event.kind === "narrative_delta");
+    // Four provider chunks became two deltas: one when the buffer reached the
+    // coalescing size, one at the end of the text block. Gapless and unduplicated.
+    expect(deltas.map((event) => (event.kind === "narrative_delta" ? event.text : ""))).toEqual([
+      "Checking the open registers",
+      " now.",
+      "Two registers are open.",
+    ]);
+    const draft0 = deltas.filter((event) => event.kind === "narrative_delta" && event.draftOrdinal === 0);
+    expect(draft0.map((event) => (event.kind === "narrative_delta" ? event.text : "")).join("")).toBe("Checking the open registers now.");
+    expect(deltas.map((event) => (event.kind === "narrative_delta" ? event.draftOrdinal : -1))).toEqual([0, 0, 1]);
+    const serialized = JSON.stringify(kernel.events);
+    expect(serialized).not.toContain("SECRET-REASONING-TRACE");
+    expect(serialized).not.toContain("SECRET-TOOL-INPUT");
+    expect(serialized).not.toContain("SECRET-SOURCE");
+    expect(serialized).not.toContain("SECRET-RAW-FRAME");
+    expect(kernel.events.at(-1)).toMatchObject({ kind: "turn_completed", outcome: "completed", narrative: "Two registers are open." });
+  });
+
+  it("fails the turn on a mid-stream provider error part and emits no delta after it", async () => {
+    const harness = createConvexAgentContractHarness();
+    const kernel = kernelFor(harness.adapter.descriptor.adapterVersion);
+    harness.scriptRawStream("turn-stream-error", [
+      { type: "text-start", id: "t1" },
+      { type: "text-delta", id: "t1", delta: "Reading the register list." },
+      { type: "text-end", id: "t1" },
+      { type: "error", error: Object.assign(new Error("upstream exploded: sk-live-999"), { name: "APICallError", statusCode: 502 }) },
+      { type: "text-start", id: "t2" },
+      { type: "text-delta", id: "t2", delta: "TRAILING-TEXT-AFTER-THE-ERROR" },
+      { type: "text-end", id: "t2" },
+      { type: "finish", usage: streamUsage(10, 2), finishReason: { unified: "error", raw: "error" } },
+    ]);
+    const { turnRef } = await openStreamTurn(harness, kernel.hooks, "turn-stream-error");
+    await harness.settle(turnRef);
+
+    expect(kernel.events.map((event) => event.kind)).toEqual(["turn_started", "narrative_delta", "turn_completed"]);
+    expect(kernel.events.at(-1)).toMatchObject({ kind: "turn_completed", outcome: "failed", error: { code: "provider_failure" } });
+    const serialized = JSON.stringify(kernel.events);
+    expect(serialized).not.toContain("TRAILING-TEXT-AFTER-THE-ERROR");
+    expect(serialized).not.toContain("sk-live-999");
+    await flush();
+    expect(kernel.events.map((event) => event.kind)).toEqual(["turn_started", "narrative_delta", "turn_completed"]);
+  });
+
+  it("completes a turn whose stream carries no text with an empty narrative and unchanged per-step usage", async () => {
+    const harness = createConvexAgentContractHarness();
+    const kernel = kernelFor(harness.adapter.descriptor.adapterVersion);
+    harness.scriptRawStream("turn-silent", [
+      { type: "finish", usage: streamUsage(11, 3), finishReason: { unified: "stop", raw: "stop" } },
+    ]);
+    const { turnRef } = await openStreamTurn(harness, kernel.hooks, "turn-silent");
+    await harness.settle(turnRef);
+
+    expect(kernel.events.filter((event) => event.kind === "narrative_delta")).toEqual([]);
+    expect(kernel.events.at(-1)).toMatchObject({ kind: "turn_completed", outcome: "completed", narrative: "" });
+    const settlement = kernel.usage.settleAll("terminal_total");
+    expect(settlement.tokens).toEqual({ input: 11, output: 3, cachedInput: 0, reasoning: 0 });
+  });
+
+  it("emits no delta after an operator cancel lands mid-stream", async () => {
+    const harness = createConvexAgentContractHarness();
+    const kernel = kernelFor(harness.adapter.descriptor.adapterVersion);
+    harness.scriptTurn("turn-cancel-stream", [
+      { kind: "narrative", deltas: ["Looking at the open registers now."] },
+      { kind: "tool_call", callId: "c-cancel", toolId: "athena.test.echo", args: { value: "hi" } },
+      // The second model call blocks, so the cancel lands with the first
+      // draft already delivered and the turn still running.
+      { kind: "pause", gate: "cancel-gate" },
+      { kind: "complete", narrative: "UNREACHABLE-NARRATIVE" },
+    ]);
+    const { turnRef } = await openStreamTurn(harness, kernel.hooks, "turn-cancel-stream");
+    for (let attempt = 0; attempt < 100 && !kernel.events.some((event) => event.kind === "tool_call_completed"); attempt += 1) {
+      await flush();
+    }
+    expect(await harness.adapter.cancelTurn({ turnRef, reason: "operator_cancel" })).toEqual({ accepted: true });
+    await harness.settle(turnRef);
+    harness.release("cancel-gate");
+    await flush();
+    await flush();
+
+    expect(kernel.events.map((event) => event.kind)).toEqual([
+      "turn_started",
+      "narrative_delta",
+      "tool_call_requested",
+      "tool_call_completed",
+      "turn_completed",
+    ]);
+    expect(kernel.events.at(-1)).toMatchObject({ kind: "turn_completed", outcome: "canceled", reason: "operator_cancel" });
+    expect(JSON.stringify(kernel.events)).not.toContain("UNREACHABLE-NARRATIVE");
   });
 
   it("keeps the mutation-side modules free of runtime-native value imports", () => {

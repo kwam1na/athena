@@ -427,6 +427,46 @@ export async function acknowledgeOperatorViewWithCtx(
   return { acknowledged: true, operatorViewedAt: input.now };
 }
 
+/**
+ * Record that provisional text was released to the operator's pane. Written
+ * exactly once, by the first stored flush; every later flush leaves the
+ * binding untouched so reactive turn-view subscribers see one update from
+ * streaming, not one per delta.
+ */
+export async function markProvisionalReleaseWithCtx(
+  ctx: MutationCtx,
+  input: { bindingId: Id<"agentTurnBinding">; now: number },
+): Promise<{ outcome: "released" | "already_released"; provisionalReleasedAt: number } | { outcome: "refused"; reason: "binding_not_found" | "binding_abandoned" }> {
+  const binding = await ctx.db.get("agentTurnBinding", input.bindingId);
+  if (!binding) return { outcome: "refused", reason: "binding_not_found" };
+  if (binding.abandonedAt !== undefined) return { outcome: "refused", reason: "binding_abandoned" };
+  if (binding.provisionalReleasedAt !== undefined) return { outcome: "already_released", provisionalReleasedAt: binding.provisionalReleasedAt };
+  await ctx.db.patch("agentTurnBinding", binding._id, { provisionalReleasedAt: input.now, updatedAt: input.now });
+  return { outcome: "released", provisionalReleasedAt: input.now };
+}
+
+/**
+ * The operator's first paint of provisional text: confirmed receipt, first
+ * write wins, refused until something was released (mirroring how the
+ * committed-answer view refuses without a committed release).
+ */
+export async function acknowledgeProvisionalViewWithCtx(
+  ctx: MutationCtx,
+  input: { bindingId: Id<"agentTurnBinding">; viewerActorRef: string; now: number },
+): Promise<{ acknowledged: true; provisionalViewedAt: number } | { acknowledged: false; reason: "binding_not_found" | "binding_abandoned" | "not_released" }> {
+  const binding = await ctx.db.get("agentTurnBinding", input.bindingId);
+  if (!binding) return { acknowledged: false, reason: "binding_not_found" };
+  if (binding.abandonedAt !== undefined) return { acknowledged: false, reason: "binding_abandoned" };
+  if (binding.provisionalReleasedAt === undefined) return { acknowledged: false, reason: "not_released" };
+  if (binding.provisionalViewedAt !== undefined) return { acknowledged: true, provisionalViewedAt: binding.provisionalViewedAt };
+  await ctx.db.patch("agentTurnBinding", binding._id, {
+    provisionalViewedAt: input.now,
+    provisionalViewedByActorRef: input.viewerActorRef,
+    updatedAt: input.now,
+  });
+  return { acknowledged: true, provisionalViewedAt: input.now };
+}
+
 export async function listTurnBindingsForThread(
   ctx: ReadCtx,
   runtimeThreadRef: string,

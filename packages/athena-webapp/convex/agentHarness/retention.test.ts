@@ -25,6 +25,11 @@ import {
   transitionProgramAttemptWithCtx,
 } from "./lifecycle";
 import {
+  AGENT_PROVISIONAL_NARRATIVE_TTL_MS,
+  loadProvisionalNarrativeByBindingWithCtx,
+  upsertProvisionalNarrativeWithCtx,
+} from "./provisionalNarrative";
+import {
   AGENT_RUNTIME_CLEANUP_BACKOFF_MS,
   deleteAgentHarnessContentForStoreWithCtx,
   readCitationEvidenceWithCtx,
@@ -35,7 +40,17 @@ import {
   sweepExpiredAgentContentWithCtx,
   type AgentRuntimeCleanupDescriptor,
 } from "./retention";
+import {
+  AGENT_TURN_NARRATIVE_TRAIL_RETENTION_MS,
+  loadTurnNarrativeTrailByBindingWithCtx,
+  writeTurnNarrativeTrailWithCtx,
+} from "./narrativeTrail";
 import { TEST_NOW, buildRunInput, seedTenant } from "./testSupport";
+import {
+  AGENT_TURN_TRACE_RETENTION_MS,
+  appendTurnTraceEventsWithCtx,
+  listTurnTraceByBindingWithCtx,
+} from "./turnTrace";
 import { advanceTurnBindingWithCtx, recordTurnIntentWithCtx } from "./turnBindings";
 
 // Cuts the module cycle `platform/operationAdmission` -> `sharedDemo/...`,
@@ -138,9 +153,68 @@ async function seedCompletedTurn(
   return { ...intent, attemptId: begun.attemptId, callId: admitted.callId, artifactId: completed.artifactId, citationBindingId: completed.citationBindingIds[0] };
 }
 
+/** A live provisional draft for one turn, as a running host would have written. */
+async function seedProvisionalDraft(ctx: MutationCtx, tenant: Tenant, turn: { runId: Id<"intelligenceRun">; bindingId: Id<"agentTurnBinding"> }, expiresAt = TEST_NOW + AGENT_PROVISIONAL_NARRATIVE_TTL_MS) {
+  await upsertProvisionalNarrativeWithCtx(ctx, {
+    runId: turn.runId,
+    turnBindingId: turn.bindingId,
+    storeId: tenant.storeId,
+    organizationId: tenant.organizationId,
+    text: "Checking which shifts are open.",
+    draftOrdinal: 0,
+    truncated: false,
+    egressClass: "operational",
+    updatedAt: TEST_NOW,
+    expiresAt,
+  });
+}
+
+async function seedTurnTrace(
+  ctx: MutationCtx,
+  tenant: Tenant,
+  turn: { runId: Id<"intelligenceRun">; bindingId: Id<"agentTurnBinding"> },
+  rows: readonly { sequence: number; expiresAt: number }[],
+) {
+  await appendTurnTraceEventsWithCtx(
+    ctx,
+    rows.map((row) => ({
+      runId: turn.runId,
+      turnBindingId: turn.bindingId,
+      storeId: tenant.storeId,
+      organizationId: tenant.organizationId,
+      source: "adapter" as const,
+      sequence: row.sequence,
+      at: TEST_NOW,
+      kind: "narrative_delta",
+      payload: { text: "Checking which shifts are open." },
+      truncated: false,
+      expiresAt: row.expiresAt,
+      createdAt: TEST_NOW,
+    })),
+  );
+}
+
+async function seedNarrativeTrail(
+  ctx: MutationCtx,
+  tenant: Tenant,
+  turn: { runId: Id<"intelligenceRun">; bindingId: Id<"agentTurnBinding"> },
+  now = TEST_NOW,
+) {
+  await writeTurnNarrativeTrailWithCtx(ctx, {
+    runId: turn.runId,
+    turnBindingId: turn.bindingId,
+    storeId: tenant.storeId,
+    organizationId: tenant.organizationId,
+    entries: [{ draftOrdinal: 0, text: "Checking which shifts are open.", truncated: false }],
+    egressClass: "operational",
+    committedAt: now,
+    now,
+  });
+}
+
 async function contentCounts(ctx: QueryCtx, storeId: Id<"store">) {
   const take = 50;
-  const [prompts, replays, scratch, claims, calls, retainedCitations, retainedGrants] = await Promise.all([
+  const [prompts, replays, scratch, claims, calls, retainedCitations, retainedGrants, provisional, trace, trails] = await Promise.all([
     ctx.db.query("agentPromptPayload").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(take),
     ctx.db.query("agentReplayPayload").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(take),
     ctx.db.query("agentScratchDescriptor").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(take),
@@ -148,6 +222,9 @@ async function contentCounts(ctx: QueryCtx, storeId: Id<"store">) {
     ctx.db.query("agentCapabilityCall").withIndex("by_storeId_capabilityId_createdAt", (q) => q.eq("storeId", storeId)).take(take),
     ctx.db.query("agentCitationBinding").withIndex("by_storeId_evidenceLifecycle", (q) => q.eq("storeId", storeId).eq("evidenceLifecycle", "retained")).take(take),
     ctx.db.query("agentRunGrant").withIndex("by_storeId_lifecycle", (q) => q.eq("storeId", storeId).eq("lifecycle", "retained")).take(take),
+    ctx.db.query("agentProvisionalNarrative").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(take),
+    ctx.db.query("agentTurnTraceEvent").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(take),
+    ctx.db.query("agentTurnNarrativeTrail").withIndex("by_storeId", (q) => q.eq("storeId", storeId)).take(take),
   ]);
   return {
     prompts: prompts.length,
@@ -157,6 +234,9 @@ async function contentCounts(ctx: QueryCtx, storeId: Id<"store">) {
     calls: calls.length,
     retainedCitations: retainedCitations.length,
     retainedGrants: retainedGrants.length,
+    provisional: provisional.length,
+    trace: trace.length,
+    trails: trails.length,
   };
 }
 
@@ -249,6 +329,18 @@ describe("prompt/content expiry (scenario 8)", () => {
       const removedTurn = await seedCompletedTurn(ctx, removed, "r1", { withClaimSupport: true });
       const activeTurn = await seedCompletedTurn(ctx, removed, "r2", { complete: false });
       const retainedTurn = await seedCompletedTurn(ctx, retained, "k1", { withClaimSupport: true });
+      // A draft the operator's pane may still be showing in each store: scope
+      // removal must take the removed store's with the rest of its content.
+      await seedProvisionalDraft(ctx, removed, activeTurn);
+      await seedProvisionalDraft(ctx, retained, retainedTurn);
+      // The engineer's trace of each store's turn: content, and the removal
+      // must take the removed store's long before its 365-day bound.
+      await seedTurnTrace(ctx, removed, activeTurn, [{ sequence: 0, expiresAt: TEST_NOW + AGENT_TURN_TRACE_RETENTION_MS }]);
+      await seedTurnTrace(ctx, retained, retainedTurn, [{ sequence: 0, expiresAt: TEST_NOW + AGENT_TURN_TRACE_RETENTION_MS }]);
+      // The operator-readable trail of each store's committed turn: content
+      // too, removed through the scope index rather than left to its bound.
+      await seedNarrativeTrail(ctx, removed, removedTurn);
+      await seedNarrativeTrail(ctx, retained, retainedTurn);
       const grantBefore = await ctx.db.query("agentRunGrant").withIndex("by_runId", (q) => q.eq("runId", removedTurn.runId)).unique();
       return { removed, retained, removedTurn, activeTurn, retainedTurn, grantBefore: grantBefore! };
     });
@@ -258,8 +350,8 @@ describe("prompt/content expiry (scenario 8)", () => {
 
     await t.run(async (ctx) => {
       expect(await ctx.db.get("store", seeded.removed.storeId)).toBeNull();
-      expect(await contentCounts(ctx, seeded.removed.storeId)).toEqual({ prompts: 0, replays: 0, scratch: 0, claims: 0, calls: 0, retainedCitations: 0, retainedGrants: 0 });
-      expect(await contentCounts(ctx, seeded.retained.storeId)).toMatchObject({ prompts: 1, replays: 3, scratch: 1, claims: 1, retainedCitations: 1, retainedGrants: 1 });
+      expect(await contentCounts(ctx, seeded.removed.storeId)).toEqual({ prompts: 0, replays: 0, scratch: 0, claims: 0, calls: 0, retainedCitations: 0, retainedGrants: 0, provisional: 0, trace: 0, trails: 0 });
+      expect(await contentCounts(ctx, seeded.retained.storeId)).toMatchObject({ prompts: 1, replays: 3, scratch: 1, claims: 1, retainedCitations: 1, retainedGrants: 1, provisional: 1, trace: 1, trails: 1 });
       const grant = await ctx.db.query("agentRunGrant").withIndex("by_runId", (q) => q.eq("runId", seeded.removedTurn.runId)).unique();
       // Audit metadata survives: only the lifecycle markers changed.
       expect(grant).toMatchObject({
@@ -292,9 +384,19 @@ describe("prompt/content expiry (scenario 8)", () => {
       const removed = await seedTenant(ctx, "org-removed");
       const sibling = await ctx.db.insert("store", { createdByUserId: removed.userId, currency: "GHS", name: "sibling", organizationId: removed.organizationId, slug: "sibling" });
       const other = await seedTenant(ctx, "org-other");
-      await seedCompletedTurn(ctx, removed, "o1");
-      await seedCompletedTurn(ctx, { ...removed, storeId: sibling }, "o2");
-      await seedCompletedTurn(ctx, other, "x1");
+      const removedTurn = await seedCompletedTurn(ctx, removed, "o1");
+      const siblingTurn = await seedCompletedTurn(ctx, { ...removed, storeId: sibling }, "o2");
+      const otherTurn = await seedCompletedTurn(ctx, other, "x1");
+      await seedProvisionalDraft(ctx, removed, removedTurn);
+      await seedProvisionalDraft(ctx, { ...removed, storeId: sibling }, siblingTurn);
+      await seedProvisionalDraft(ctx, other, otherTurn);
+      const trace = [{ sequence: 0, expiresAt: TEST_NOW + AGENT_TURN_TRACE_RETENTION_MS }];
+      await seedTurnTrace(ctx, removed, removedTurn, trace);
+      await seedTurnTrace(ctx, { ...removed, storeId: sibling }, siblingTurn, trace);
+      await seedTurnTrace(ctx, other, otherTurn, trace);
+      await seedNarrativeTrail(ctx, removed, removedTurn);
+      await seedNarrativeTrail(ctx, { ...removed, storeId: sibling }, siblingTurn);
+      await seedNarrativeTrail(ctx, other, otherTurn);
       return { removed, sibling, other };
     });
 
@@ -310,9 +412,9 @@ describe("prompt/content expiry (scenario 8)", () => {
       expect(await ctx.db.get("organization", seeded.removed.organizationId)).toBeNull();
       // The call ledger is deleted directly through its organization index,
       // for every store of the organization, and nowhere else.
-      expect(await contentCounts(ctx, seeded.removed.storeId)).toEqual({ prompts: 0, replays: 0, scratch: 0, claims: 0, calls: 0, retainedCitations: 0, retainedGrants: 0 });
-      expect(await contentCounts(ctx, seeded.sibling)).toEqual({ prompts: 0, replays: 0, scratch: 0, claims: 0, calls: 0, retainedCitations: 0, retainedGrants: 0 });
-      expect(await contentCounts(ctx, seeded.other.storeId)).toMatchObject({ prompts: 1, calls: 1, retainedCitations: 1, retainedGrants: 1 });
+      expect(await contentCounts(ctx, seeded.removed.storeId)).toEqual({ prompts: 0, replays: 0, scratch: 0, claims: 0, calls: 0, retainedCitations: 0, retainedGrants: 0, provisional: 0, trace: 0, trails: 0 });
+      expect(await contentCounts(ctx, seeded.sibling)).toEqual({ prompts: 0, replays: 0, scratch: 0, claims: 0, calls: 0, retainedCitations: 0, retainedGrants: 0, provisional: 0, trace: 0, trails: 0 });
+      expect(await contentCounts(ctx, seeded.other.storeId)).toMatchObject({ prompts: 1, calls: 1, retainedCitations: 1, retainedGrants: 1, provisional: 1, trace: 1 });
       const orphaned = await ctx.db.query("agentRunGrant").withIndex("by_organizationId_lifecycle", (q) => q.eq("organizationId", seeded.removed.organizationId).eq("lifecycle", "retained")).take(5);
       expect(orphaned).toHaveLength(0);
     });
@@ -418,6 +520,111 @@ describe("bounded retention batches and adapter cleanup retries (scenario 9)", (
       const due = TEST_NOW + SHORT_LIVED_RETENTION_MS + AGENT_RUNTIME_CLEANUP_BACKOFF_MS[0];
       expect(await sweepExpiredAgentContentWithCtx(ctx, { now: due, limit: 10 })).toMatchObject({ runtimeCleanupSucceeded: 1 });
       expect(await ctx.db.get("agentTurnBinding", seeded.bindingId)).toMatchObject({ runtimeCleanupStatus: "succeeded" });
+    });
+  });
+});
+
+describe("repair sweep: provisional drafts a dead host left behind", () => {
+  it("deletes only rows past their exposure bound, counts them, logs the count once, and asks for another pass when the batch is full", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const tenant = await seedTenant(ctx, "sweep-expiry");
+      const dead = await seedCompletedTurn(ctx, tenant, "d1", { complete: false });
+      const alsoDead = await seedCompletedTurn(ctx, tenant, "d2", { complete: false });
+      const live = await seedCompletedTurn(ctx, tenant, "d3", { complete: false });
+      // Two hosts stopped flushing long enough for the bound to pass; one is still alive.
+      await seedProvisionalDraft(ctx, tenant, dead, TEST_NOW - 1);
+      await seedProvisionalDraft(ctx, tenant, alsoDead, TEST_NOW - 1);
+      await seedProvisionalDraft(ctx, tenant, live, TEST_NOW + AGENT_PROVISIONAL_NARRATIVE_TTL_MS);
+      return { tenant, dead, alsoDead, live };
+    });
+
+    const logged: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((line: unknown) => {
+      logged.push(String(line));
+    });
+    let passes: { expiredProvisionalNarratives: number; hasMore: boolean }[];
+    try {
+      // A full batch reports `hasMore` (the sweep schedules its own continuation);
+      // the pass that finds nothing left reports the bound is clear.
+      passes = [
+        await t.mutation(internal.agentHarness.retention.repairSweep, { now: TEST_NOW, limit: 1 }),
+        await t.mutation(internal.agentHarness.retention.repairSweep, { now: TEST_NOW, limit: 1 }),
+        await t.mutation(internal.agentHarness.retention.repairSweep, { now: TEST_NOW, limit: 10 }),
+      ];
+    } finally {
+      spy.mockRestore();
+    }
+    expect(passes.map((pass) => pass.expiredProvisionalNarratives)).toEqual([1, 1, 0]);
+    expect(passes[2].hasMore).toBe(false);
+
+    await t.run(async (ctx) => {
+      // Both dead drafts are gone; the live one is untouched.
+      expect(await loadProvisionalNarrativeByBindingWithCtx(ctx, seeded.dead.bindingId)).toBeNull();
+      expect(await loadProvisionalNarrativeByBindingWithCtx(ctx, seeded.alsoDead.bindingId)).toBeNull();
+      expect(await loadProvisionalNarrativeByBindingWithCtx(ctx, seeded.live.bindingId)).not.toBeNull();
+    });
+    // The sweep's return value is discarded by the cron, so the count is logged: the dead-host signal.
+    // A pass that deletes nothing logs nothing.
+    const expiryLines = logged.filter((line) => line.includes("[agentHarness:repairSweep]"));
+    expect(expiryLines).toHaveLength(2);
+    expect(JSON.parse(expiryLines[0].replace("[agentHarness:repairSweep] ", ""))).toMatchObject({ expiredProvisionalNarratives: 1, hasMore: true });
+  });
+});
+
+describe("turn trace expiry", () => {
+  it("expires the engineer-only trace with the standard class and leaves a live turn's rows alone", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const tenant = await seedTenant(ctx, "trace-expiry");
+      const old = await seedCompletedTurn(ctx, tenant, "old", { complete: false });
+      const recent = await seedCompletedTurn(ctx, tenant, "recent", { complete: false });
+      await seedTurnTrace(ctx, tenant, old, [
+        { sequence: 0, expiresAt: TEST_NOW + AGENT_TURN_TRACE_RETENTION_MS },
+        { sequence: 1, expiresAt: TEST_NOW + AGENT_TURN_TRACE_RETENTION_MS },
+      ]);
+      await seedTurnTrace(ctx, tenant, recent, [{ sequence: 0, expiresAt: TEST_NOW + AGENT_TURN_TRACE_RETENTION_MS + 1_000 }]);
+      return { tenant, old, recent };
+    });
+
+    await t.run(async (ctx) => {
+      // A standard-class row is not short-lived: the 30-day pass leaves it.
+      expect(await sweepExpiredAgentContentWithCtx(ctx, { now: TEST_NOW + SHORT_LIVED_RETENTION_MS, limit: 10 })).toMatchObject({ deletedTurnTraceEvents: 0 });
+      expect((await contentCounts(ctx, seeded.tenant.storeId)).trace).toBe(3);
+
+      // The batch limit bounds the phase and asks for another pass.
+      expect(await sweepExpiredAgentContentWithCtx(ctx, { now: TEST_NOW + STANDARD_RETENTION_MS, limit: 1 })).toMatchObject({ deletedTurnTraceEvents: 1, hasMore: true });
+      expect(await sweepExpiredAgentContentWithCtx(ctx, { now: TEST_NOW + STANDARD_RETENTION_MS, limit: 10 })).toMatchObject({ deletedTurnTraceEvents: 1, hasMore: false });
+
+      expect(await listTurnTraceByBindingWithCtx(ctx, seeded.old.bindingId, 10)).toEqual([]);
+      expect(await listTurnTraceByBindingWithCtx(ctx, seeded.recent.bindingId, 10)).toHaveLength(1);
+    });
+  });
+});
+
+describe("narrative trail expiry", () => {
+  it("expires the committed turn's draft trail with the standard class and leaves a newer turn's alone", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const tenant = await seedTenant(ctx, "trail-expiry");
+      const old = await seedCompletedTurn(ctx, tenant, "old");
+      const recent = await seedCompletedTurn(ctx, tenant, "recent");
+      await seedNarrativeTrail(ctx, tenant, old);
+      await seedNarrativeTrail(ctx, tenant, recent, TEST_NOW + 1_000);
+      return { tenant, old, recent };
+    });
+
+    await t.run(async (ctx) => {
+      // Standard class, not short-lived: the 30-day pass leaves both rows.
+      expect(await sweepExpiredAgentContentWithCtx(ctx, { now: TEST_NOW + SHORT_LIVED_RETENTION_MS, limit: 10 })).toMatchObject({ deletedNarrativeTrails: 0 });
+      expect((await contentCounts(ctx, seeded.tenant.storeId)).trails).toBe(2);
+
+      expect(await sweepExpiredAgentContentWithCtx(ctx, { now: TEST_NOW + AGENT_TURN_NARRATIVE_TRAIL_RETENTION_MS, limit: 10 })).toMatchObject({ deletedNarrativeTrails: 1, hasMore: false });
+      expect(await loadTurnNarrativeTrailByBindingWithCtx(ctx, seeded.old.bindingId)).toBeNull();
+      expect(await loadTurnNarrativeTrailByBindingWithCtx(ctx, seeded.recent.bindingId)).not.toBeNull();
+
+      expect(await sweepExpiredAgentContentWithCtx(ctx, { now: TEST_NOW + 1_000 + AGENT_TURN_NARRATIVE_TRAIL_RETENTION_MS, limit: 10 })).toMatchObject({ deletedNarrativeTrails: 1 });
+      expect((await contentCounts(ctx, seeded.tenant.storeId)).trails).toBe(0);
     });
   });
 });

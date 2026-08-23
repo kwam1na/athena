@@ -54,6 +54,7 @@ import {
   type BudgetVector,
   type CompatibilityEpochFence,
 } from "../../shared/agentHarness/execution";
+import { deleteProvisionalNarrativeByBindingWithCtx } from "./provisionalNarrative";
 
 export const AGENT_COMPATIBILITY_EPOCH_SCOPE = "global";
 export const AGENT_ATTEMPT_LEASE_MS = 60_000;
@@ -468,7 +469,10 @@ export async function failAgentRunWithCtx(
  * Clamp every non-terminal child of a run that just became terminal. Calls
  * and attempts are canceled; outstanding reservations settle conservatively
  * (the reservation is charged, never refunded); the turn binding is
- * abandoned unless completion already committed it.
+ * abandoned unless completion already committed it; and the provisional
+ * narrative — servable only while the run is live — is deleted atomically
+ * with every terminal transition except `completed`, whose commit
+ * transaction ends here and whose row `finalizeTurn` removes instead.
  */
 async function clampRunChildrenWithCtx(
   ctx: MutationCtx,
@@ -499,6 +503,12 @@ async function clampRunChildrenWithCtx(
         abandonReason: input.abandonReason,
         updatedAt: input.now,
       });
+    }
+    // Outside the binding-state guard on purpose: cancel, failure, the kill
+    // switch, and fence repair must leave no draft at rest whatever state
+    // the binding reached (an already-abandoned binding included).
+    if (input.terminalStatus !== "completed") {
+      await deleteProvisionalNarrativeByBindingWithCtx(ctx, run.turnBindingId);
     }
   }
 }

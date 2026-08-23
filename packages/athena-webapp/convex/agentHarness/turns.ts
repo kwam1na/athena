@@ -33,6 +33,7 @@ import { isBindingStepAtOrBeyond, isTerminalRunStatus, type AgentTurnBindingStep
 import { AGENT_THREAD_KEY_PATTERN } from "../../shared/agentHarness/profile";
 import { egressClassRank, opaqueRef, type AgentEgressClass } from "../../shared/agentHarness/values";
 import {
+  acknowledgeProvisionalViewOperationDefinition,
   acknowledgeTurnAnswerOperationDefinition,
   cancelTurnOperationDefinition,
   inspectCitationEvidenceOperationDefinition,
@@ -42,15 +43,18 @@ import {
 import {
   getThreadHistoryReadDefinition,
   getTurnAnswerReadDefinition,
+  getTurnNarrativeTrailReadDefinition,
   getTurnViewReadDefinition,
+  previewTurnNarrativeReadDefinition,
 } from "../operationAdmission/domains/agentHarness_readDefinitions";
 import type { DelegatedOperator, OperationActor } from "../operationAdmission/types";
 import { admitPublicMutation, admitPublicQuery, agentDelegatedAdmission } from "../platform/operationAdmission";
 import { buildConvexAgentInvocationSummary } from "../intelligence/providers/convexAgent";
 import { agentCompletionOutbox, type CompletionOutbox } from "./completionOutbox";
 import type { DelegatedAdmission } from "./delegatedAdmission";
-import { describeProviderSelectionForEvidence, redactProviderSecrets, resolveTurnEgressClass, selectProviderForEgress, type AgentProviderEvidence } from "./egressPolicy";
+import { describeProviderSelectionForEvidence, normalizeEgressClass, redactProviderSecrets, resolveTurnEgressClass, selectProviderForEgress, type AgentProviderEvidence } from "./egressPolicy";
 import type { AgentCitationEvidenceForViewer } from "./citations";
+import { resolveTurnExposure, type AgentTurnExposure } from "./evidence";
 import { agentExecutorSeams } from "./executorSeams";
 import {
   assembleTurnPrompt,
@@ -63,11 +67,40 @@ import {
 } from "./historyProjection";
 import { cancelAgentRunWithCtx, failAgentRunWithCtx, checkRunEpochFenceWithCtx } from "./lifecycle";
 import { AGENT_PROGRAM_RUNTIME_CEILINGS } from "./programRuntime/types";
+import {
+  loadTurnNarrativeTrailByBindingWithCtx,
+  writeTurnNarrativeTrailWithCtx,
+  type AgentTurnNarrativeTrailEntry,
+} from "./narrativeTrail";
+import {
+  AGENT_PROVISIONAL_NARRATIVE_TTL_MS,
+  deleteProvisionalNarrativeByBindingWithCtx,
+  fitProvisionalNarrative,
+  loadProvisionalNarrativeByBindingWithCtx,
+  upsertProvisionalNarrativeWithCtx,
+} from "./provisionalNarrative";
 import { requestRuntimeCleanupWithCtx } from "./retention";
+import {
+  AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN,
+  AGENT_TURN_TRACE_RETENTION_MS,
+  appendTurnTraceEventsWithCtx,
+  fitTracePayload,
+  isAgentTurnTraceEnabled,
+  type AgentTurnTraceEventInput,
+  type AgentTurnTraceSource,
+} from "./turnTrace";
 import { encodeDelegatedActorRef } from "./grants";
 import { admitTurnStartWithCtx, settleTurnSpendOnceWithCtx, turnProviderCostReservation, validateOperatorPrompt } from "./runAdmission";
-import { acknowledgeOperatorViewWithCtx, advanceTurnBindingWithCtx, recordTurnIntentWithCtx, resolveTurnWithCtx, resumeTurnBindingWithCtx } from "./turnBindings";
-import type { AgentDescribeGrantOutcome } from "./tools";
+import {
+  acknowledgeOperatorViewWithCtx,
+  acknowledgeProvisionalViewWithCtx,
+  advanceTurnBindingWithCtx,
+  markProvisionalReleaseWithCtx,
+  recordTurnIntentWithCtx,
+  resolveTurnWithCtx,
+  resumeTurnBindingWithCtx,
+} from "./turnBindings";
+import { AGENT_TOOL_NARRATIVE_MAX_BYTES, type AgentDescribeGrantOutcome } from "./tools";
 
 type ReadCtx = QueryCtx | MutationCtx;
 
@@ -172,6 +205,11 @@ export type AgentTurnSeamConfig = {
   readonly outbox: CompletionOutbox;
   /** Credential presence per provider id (names only). Production reads the environment. */
   readonly isProviderConfigured?: (providerId: string) => boolean;
+  /**
+   * The mutation's own clock for server facts the host must not set (the
+   * provisional row's exposure bound). Production is `Date.now`; tests pin it.
+   */
+  readonly clock?: () => number;
 };
 
 export type AgentTurnPlan = {
@@ -212,6 +250,32 @@ export type AgentTurnUsageSettlement = {
 
 export type AgentFinalizeTurnOutcome = { readonly outcome: "completed" | "failed" | "canceled" | "already_terminal"; readonly runStatus: Doc<"intelligenceRun">["status"] | null };
 
+/** What one host flush of the turn trace wrote, and whether the deployment captures at all. */
+export type AgentRecordTurnTraceOutcome = { readonly recorded: number; readonly enabled: boolean };
+
+/** The one tool whose outcome has a durable replay body to point the trace at. */
+const AGENT_PROGRAM_TOOL_ID = "athena.executeProgram";
+/** Replay rows scanned per trace batch to find the run's newest program result. */
+const AGENT_TURN_TRACE_REPLAY_LOOKUP_BOUND = 50;
+
+/**
+ * What one host flush of the coalesced draft did. `refused` carries the closed
+ * reason for diagnostics; the host only needs to know the chain was dropped.
+ */
+export type AgentProvisionalFlushOutcome =
+  | { readonly outcome: "stored"; readonly truncated: boolean }
+  | { readonly outcome: "refused"; readonly reason: string; readonly truncated: false };
+
+/** The egress class the turn was stamped with when the provider row was written; `null` before that row exists. */
+async function stampedTurnEgressClassWithCtx(ctx: ReadCtx, runId: Id<"intelligenceRun">): Promise<AgentEgressClass | null> {
+  const invocations = await ctx.db.query("intelligenceProviderInvocation").withIndex("by_runId", (q) => q.eq("runId", runId)).take(1);
+  const invocation = invocations[0];
+  if (!invocation) return null;
+  // `requestSummary` is an open record: anything outside the closed vocabulary
+  // must read as the most sensitive class, never rank below `operational`.
+  return normalizeEgressClass((invocation.requestSummary as Record<string, unknown>).egressClass);
+}
+
 function defaultProviderConfigured(providerId: string): boolean {
   if (providerId === "openai") return typeof process.env.OPENAI_API_KEY === "string" && process.env.OPENAI_API_KEY.length > 0;
   return false;
@@ -221,6 +285,7 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
   const { admission, outbox } = config;
   const registry = admission.registry;
   const isProviderConfigured = config.isProviderConfigured ?? defaultProviderConfigured;
+  const serverClock = config.clock ?? (() => Date.now());
 
   async function loadTurn(ctx: ReadCtx, bindingId: Id<"agentTurnBinding">) {
     const binding = await ctx.db.get("agentTurnBinding", bindingId);
@@ -425,6 +490,13 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
       outcome: "completed" | "failed" | "canceled";
       error?: { code: string; message: string; retryable: boolean };
       usage?: AgentTurnUsageSettlement;
+      /**
+       * The turn's finished drafts, ascending by ordinal. Kept only for a run
+       * that reached `completed` with a committed release. The host passes it
+       * on every outcome — a turn that committed and then failed on the
+       * provider keeps its trail — and the guard below refuses the rest.
+       */
+      trail?: readonly { draftOrdinal: number; text: string; truncated?: boolean }[];
       purgeRuntime?: boolean;
       now: number;
     },
@@ -432,6 +504,11 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
     const loaded = await loadTurn(ctx, input.bindingId);
     if (!loaded) return { outcome: "already_terminal", runStatus: null };
     const { binding, run } = loaded;
+    // Every driven turn ends here, whatever ended it: a successful commit (the
+    // clamp skips `completed`) and a commit followed by a provider failure (the
+    // later `failed` transition never re-clamps) both leave the provisional
+    // draft to this transaction. Above the already-terminal path on purpose.
+    await deleteProvisionalNarrativeByBindingWithCtx(ctx, binding._id);
     let outcome: AgentFinalizeTurnOutcome["outcome"] = "already_terminal";
     if (!isTerminalRunStatus(run.status)) {
       if (input.outcome === "completed") {
@@ -452,6 +529,33 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
       outcome = "completed";
     }
     const refreshed = await ctx.db.get("intelligenceRun", run._id);
+
+    // The drafts outlive the turn only when the ANSWER did: a completed run
+    // with a committed release. Everything else — canceled, failed, refused,
+    // or a turn whose commit never landed — keeps the provisional deletion
+    // above as the only outcome. The trail is stamped with the committed
+    // artifact's own egress class, the value `getTurnAnswer` gates on, so a
+    // reader who may not have the answer can never have the drafts either.
+    if (input.trail && input.trail.length > 0 && refreshed?.status === "completed" && binding.operatorReleaseCommittedAt !== undefined) {
+      const artifact = refreshed.artifactId ? await ctx.db.get("intelligenceArtifact", refreshed.artifactId) : null;
+      const payload = artifact ? parseAnswerPayload(artifact.payload) : null;
+      if (payload) {
+        const entries: AgentTurnNarrativeTrailEntry[] = input.trail
+          .filter((draft) => draft.text.trim().length > 0)
+          .map((draft) => ({ draftOrdinal: draft.draftOrdinal, text: draft.text, truncated: draft.truncated === true }))
+          .sort((left, right) => left.draftOrdinal - right.draftOrdinal);
+        await writeTurnNarrativeTrailWithCtx(ctx, {
+          runId: run._id,
+          turnBindingId: binding._id,
+          storeId: binding.storeId,
+          organizationId: binding.organizationId,
+          entries,
+          egressClass: payload.egressClass,
+          committedAt: binding.operatorReleaseCommittedAt,
+          now: input.now,
+        });
+      }
+    }
 
     // Usage settles exactly once: the provider invocation row records it.
     const usage = input.usage ?? { tokens: { input: 0, output: 0, cachedInput: 0, reasoning: 0 }, streams: 0, conservative: true, settledBy: [], lateEventCount: 0, costUnits: 0 };
@@ -482,7 +586,147 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
     return { outcome, runStatus: refreshed?.status ?? null };
   }
 
+  // ----- flushProvisionalNarrative (mutation; host-only) ------------------------
+
+  /**
+   * Persist the host's coalesced draft for the operator's pane: the one
+   * enforcement point for provisional exposure. Fail closed in this order —
+   * profile policy (from the digest-pinned registry profile), live grant
+   * reauthorization (run `running`, enablement, epoch fence, membership),
+   * binding state (not abandoned, suppressed, or committed), and the turn's
+   * stamped egress class against the operator's CURRENT grant. Any refusal
+   * deletes the row in the same transaction; a whitespace-only draft writes
+   * nothing. The exposure bound is the server's clock, not the host's; the
+   * host's `now` is only the row's `updatedAt`. The binding's release marker
+   * is written once and never again.
+   */
+  async function flushProvisionalNarrativeWithCtx(
+    ctx: MutationCtx,
+    input: { bindingId: Id<"agentTurnBinding">; draftOrdinal: number; text: string; now: number },
+  ): Promise<AgentProvisionalFlushOutcome> {
+    const refuse = async (reason: string): Promise<AgentProvisionalFlushOutcome> => {
+      await deleteProvisionalNarrativeByBindingWithCtx(ctx, input.bindingId);
+      return { outcome: "refused", reason, truncated: false };
+    };
+    const loaded = await loadTurn(ctx, input.bindingId);
+    if (!loaded) return refuse("not_found");
+    const { binding, run, grant } = loaded;
+    const profile = registry.profiles[grant.profileKey];
+    if (!profile || profile.narrativePolicy !== "provisional_streaming") return refuse("policy_buffered");
+    const verdict = await admission.reauthorizeGrantWithCtx(ctx, { runId: run._id, purpose: "release", now: input.now });
+    if (verdict.kind === "refused") return refuse(verdict.reason);
+    const streamingStep = binding.step === "running" || binding.step === "completion_prepared";
+    if (binding.abandonedAt !== undefined || binding.releaseSuppressedAt !== undefined || binding.operatorReleaseCommittedAt !== undefined || !streamingStep) {
+      return refuse("turn_not_streaming");
+    }
+    const stamped = await stampedTurnEgressClassWithCtx(ctx, run._id);
+    if (stamped === null) return refuse("egress_class_missing");
+    if (egressClassRank(stamped) > egressClassRank(verdict.runtimeGrant.egressClass)) return refuse("egress_beyond_authority");
+    if (input.text.trim().length === 0) return { outcome: "refused", reason: "empty_text", truncated: false };
+
+    const fitted = fitProvisionalNarrative(input.text, AGENT_TOOL_NARRATIVE_MAX_BYTES);
+    await upsertProvisionalNarrativeWithCtx(ctx, {
+      runId: run._id,
+      turnBindingId: binding._id,
+      storeId: binding.storeId,
+      organizationId: binding.organizationId,
+      text: fitted.text,
+      draftOrdinal: input.draftOrdinal,
+      truncated: fitted.truncated,
+      egressClass: stamped,
+      updatedAt: input.now,
+      expiresAt: serverClock() + AGENT_PROVISIONAL_NARRATIVE_TTL_MS,
+    });
+    if (binding.provisionalReleasedAt === undefined) {
+      const released = await markProvisionalReleaseWithCtx(ctx, { bindingId: binding._id, now: input.now });
+      if (released.outcome === "refused") return refuse(released.reason);
+    }
+    return { outcome: "stored", truncated: fitted.truncated };
+  }
+
+  // ----- recordTurnTrace (mutation; host-only) --------------------------------
+
+  /**
+   * Persist one batch of the host's turn trace: the engineer-only record of
+   * everything the model and the harness exchanged on a driven turn — every
+   * runtime event in order, the narrative deltas, each tool call's exact
+   * arguments, and the outcome the model received.
+   *
+   * It is a capture, not an exposure: no operator surface reads the table, and
+   * this mutation is never admitted as public ingress. It fails soft on
+   * purpose — a missing binding, a disabled switch, or an over-cap payload
+   * records less rather than failing the turn — because losing a turn to a
+   * diagnostic write would be the worse outcome.
+   *
+   * The two things it does NOT delegate to the host: the switch (the
+   * deployment's environment is authoritative, not the host's) and the per-row
+   * payload cap (every payload is re-fitted here, whatever the host claimed).
+   */
+  async function recordTurnTraceWithCtx(
+    ctx: MutationCtx,
+    input: {
+      bindingId: Id<"agentTurnBinding">;
+      events: readonly { source: AgentTurnTraceSource; sequence: number; at: number; kind: string; payload: unknown }[];
+      now?: number;
+    },
+  ): Promise<AgentRecordTurnTraceOutcome> {
+    const enabled = isAgentTurnTraceEnabled();
+    if (!enabled) return { recorded: 0, enabled: false };
+    const binding = await ctx.db.get("agentTurnBinding", input.bindingId);
+    if (!binding) return { recorded: 0, enabled: true };
+    const createdAt = input.now ?? serverClock();
+
+    // The program result is looked up once per batch. The host flushes at every
+    // tool_call_completed, so the newest `program_result` of the run at this
+    // moment is the one the settling call just produced.
+    let programResultId: Id<"agentReplayPayload"> | undefined | null = null;
+    const linkProgramResult = async (): Promise<Id<"agentReplayPayload"> | undefined> => {
+      if (programResultId !== null) return programResultId;
+      const replays = await ctx.db
+        .query("agentReplayPayload")
+        .withIndex("by_runId", (q) => q.eq("runId", binding.runId))
+        .take(AGENT_TURN_TRACE_REPLAY_LOOKUP_BOUND);
+      const latest = replays
+        .filter((replay) => replay.subjectKind === "program_result")
+        .sort((left, right) => right.createdAt - left.createdAt)[0];
+      programResultId = latest?._id;
+      return programResultId;
+    };
+
+    const rows: AgentTurnTraceEventInput[] = [];
+    for (const event of input.events.slice(0, AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN)) {
+      const fitted = fitTracePayload(event.payload);
+      const toolId = (fitted.payload as { toolId?: unknown } | null)?.toolId;
+      const linkable = (event.kind === "tool_call_completed" || event.kind === "tool_dispatch") && toolId === AGENT_PROGRAM_TOOL_ID;
+      const replayPayloadId = linkable ? await linkProgramResult() : undefined;
+      rows.push({
+        runId: binding.runId,
+        turnBindingId: binding._id,
+        storeId: binding.storeId,
+        organizationId: binding.organizationId,
+        source: event.source,
+        sequence: event.sequence,
+        at: event.at,
+        kind: event.kind,
+        payload: fitted.payload,
+        truncated: fitted.truncated,
+        ...(replayPayloadId ? { replayPayloadId } : {}),
+        expiresAt: createdAt + AGENT_TURN_TRACE_RETENTION_MS,
+        createdAt,
+      });
+    }
+    const recorded = await appendTurnTraceEventsWithCtx(ctx, rows);
+    return { recorded, enabled: true };
+  }
+
   const milestoneValidator = v.union(...AGENT_PROGRESS_MILESTONES.map((milestone) => v.literal(milestone)));
+  const traceEventValidator = v.object({
+    source: v.union(v.literal("adapter"), v.literal("host")),
+    sequence: v.number(),
+    at: v.number(),
+    kind: v.string(),
+    payload: v.any(),
+  });
 
   const functions = {
     describeGrant: internalQuery({
@@ -524,10 +768,19 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
             costUnits: v.number(),
           }),
         ),
+        trail: v.optional(v.array(v.object({ draftOrdinal: v.number(), text: v.string(), truncated: v.optional(v.boolean()) }))),
         purgeRuntime: v.optional(v.boolean()),
         now: v.optional(v.number()),
       },
       handler: async (ctx, args) => finalizeTurnWithCtx(ctx, { ...args, now: args.now ?? Date.now() }),
+    }),
+    flushProvisionalNarrative: internalMutation({
+      args: { bindingId: v.id("agentTurnBinding"), draftOrdinal: v.number(), text: v.string(), now: v.optional(v.number()) },
+      handler: async (ctx, args) => flushProvisionalNarrativeWithCtx(ctx, { ...args, now: args.now ?? Date.now() }),
+    }),
+    recordTurnTrace: internalMutation({
+      args: { bindingId: v.id("agentTurnBinding"), events: v.array(traceEventValidator), now: v.optional(v.number()) },
+      handler: async (ctx, args) => recordTurnTraceWithCtx(ctx, args),
     }),
   };
 
@@ -540,6 +793,8 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
     recordTurnProgressWithCtx,
     peekTurnStateWithCtx,
     finalizeTurnWithCtx,
+    flushProvisionalNarrativeWithCtx,
+    recordTurnTraceWithCtx,
     outbox,
     functions,
   };
@@ -560,6 +815,28 @@ export const recordRuntimeTurnRef = agentTurnSeams.functions.recordRuntimeTurnRe
 export const recordTurnProgress = agentTurnSeams.functions.recordTurnProgress;
 export const peekTurnState = agentTurnSeams.functions.peekTurnState;
 export const finalizeTurn = agentTurnSeams.functions.finalizeTurn;
+/** Host-only: the single-flight provisional flush. Never admitted as public ingress. */
+export const flushProvisionalNarrative = agentTurnSeams.functions.flushProvisionalNarrative;
+/** Host-only: the engineer's turn trace. Never admitted as public ingress, never read by an operator surface. */
+export const recordTurnTrace = agentTurnSeams.functions.recordTurnTrace;
+
+// ---------------------------------------------------------------------------
+// Turn-keyed exposure (investigation; reachable for zero-attempt turns)
+// ---------------------------------------------------------------------------
+
+export async function describeTurnExposureWithCtx(ctx: ReadCtx, bindingId: Id<"agentTurnBinding">): Promise<AgentTurnExposure | null> {
+  const binding = await ctx.db.get("agentTurnBinding", bindingId);
+  if (!binding) return null;
+  const run = await ctx.db.get("intelligenceRun", binding.runId);
+  if (!run) return null;
+  return resolveTurnExposure({ run, binding });
+}
+
+/** `internal.agentHarness.turns.describeTurnExposure` — mirrors `describeAttemptExposure` for the whole turn. */
+export const describeTurnExposure = internalQuery({
+  args: { bindingId: v.id("agentTurnBinding") },
+  handler: async (ctx, args) => describeTurnExposureWithCtx(ctx, args.bindingId),
+});
 
 // ---------------------------------------------------------------------------
 // Entry points (operation-admitted; the reusable operator agent host consumes these)
@@ -589,6 +866,48 @@ const unavailable = (reason: string) => ({ kind: "unavailable" as const, reason 
 type TurnAccess =
   | { kind: "ok"; binding: Doc<"agentTurnBinding">; run: Doc<"intelligenceRun">; grant: Doc<"agentRunGrant">; viewer: DelegatedOperator; viewerEgressClass: AgentEgressClass }
   | { kind: "unavailable"; reason: string };
+
+/** Refusals raised before the turn is known to be the caller's own: these never carry turn facts and never write. */
+const PRE_OWNERSHIP_REASONS: ReadonlySet<string> = new Set(["not_found", "not_your_turn", "operator_unauthorized"]);
+
+/**
+ * Withdrawal reasons the preview ladder mints itself. Authority refusals from
+ * `reauthorizeTurnAccess` (`membership_revoked`, `profile_disabled`, …) pass
+ * through as-is, so the host's copy keeps a default arm.
+ */
+export const AGENT_PROVISIONAL_WITHDRAWAL_REASONS = ["compatibility_epoch_fenced", "policy_disabled", "egress_beyond_authority", "suppressed", "abandoned", "run_canceled", "run_failed"] as const;
+
+/**
+ * The preview union. Only `streaming` carries text; `withdrawn` carries the
+ * closed reason and nothing else; `not_found` is the bare pre-ownership arm.
+ * `released` (the binding's `provisionalReleasedAt` presence) rides on every
+ * post-ownership state so the host has a source even when the turn view has
+ * gone `unavailable`.
+ */
+export type AgentTurnNarrativePreview =
+  | { readonly state: "not_found" }
+  | { readonly state: "withdrawn"; readonly reason: string; readonly released: boolean }
+  | { readonly state: "disabled" | "awaiting_first_text" | "stalled" | "superseded"; readonly released: boolean }
+  | {
+      readonly state: "streaming";
+      readonly released: true;
+      readonly text: string;
+      readonly truncated: boolean;
+      readonly draftOrdinal: number;
+      readonly updatedAt: number;
+      readonly expiresAt: number;
+      readonly ttlMs: number;
+    };
+
+/**
+ * The trail union. `unavailable` carries the answer surface's closed reason
+ * vocabulary plus `policy_disabled`, the one reason the trail mints on its
+ * own; `trail` carries the committed drafts and nothing else —
+ * no run id, no ordinal the refused reader could infer a turn's shape from.
+ */
+export type AgentTurnNarrativeTrailView =
+  | { readonly kind: "unavailable"; readonly reason: string }
+  | { readonly kind: "trail"; readonly committedAt: number; readonly entries: { draftOrdinal: number; text: string; truncated: boolean }[] };
 
 function phaseOf(status: Doc<"intelligenceRun">["status"]): "queued" | "running" | "completed" | "failed" | "canceled" {
   switch (status) {
@@ -769,6 +1088,7 @@ export function createAgentTurnEntryPoints(config: AgentTurnEntryPointConfig) {
       phase: phaseOf(run.status),
       step: binding.step,
       milestones: (binding.progress ?? []).map((entry) => ({ milestone: entry.milestone, at: entry.at })),
+      ...(binding.provisionalReleasedAt !== undefined ? { provisionalReleasedAt: binding.provisionalReleasedAt } : {}),
       ...(prompt.question !== undefined ? { question: prompt.question } : {}),
       ...(prompt.context ? { context: prompt.context } : {}),
       promptState: prompt.state,
@@ -790,6 +1110,42 @@ export function createAgentTurnEntryPoints(config: AgentTurnEntryPointConfig) {
     const access = await reauthorizeTurnAccess(ctx, ctx.operationAdmission.actor, args.storeId, args.bindingId, now());
     if (access.kind === "unavailable") return unavailable(access.reason);
     return loadAuthorizedAnswer(ctx, access);
+  }
+
+  /**
+   * The committed turn's draft trail: how Athena got to this answer, kept for
+   * the operator after the pane's live draft is gone.
+   *
+   * The ladder is the ANSWER's plus one rung — `reauthorizeTurnAccess`
+   * (`not_found` until ownership is established), then the narrative policy
+   * (`policy_disabled`: the answer is readable, the drafts are not a thing this
+   * profile serves), then suppression, then the commit, then the stored class
+   * against the viewer's current grant — so there is no state in which the
+   * drafts are readable and the answer is not.
+   * `not_ready` is the same reason the answer mints for a turn that has not
+   * committed. Never writes; a committed turn that narrated nothing serves an
+   * honest empty trail rather than a refusal.
+   */
+  async function getTurnNarrativeTrail(ctx: AdmittedQueryCtx, args: TurnArgs): Promise<AgentTurnNarrativeTrailView> {
+    const access = await reauthorizeTurnAccess(ctx, ctx.operationAdmission.actor, args.storeId, args.bindingId, now());
+    if (access.kind === "unavailable") return unavailable(access.reason);
+    const { binding, run, grant } = access;
+    // The same policy rung the flush and the preview apply: a profile that
+    // buffers its narrative serves no drafts, including ones written before
+    // the policy changed. No epoch fence — the answer has none either, and a
+    // committed turn has nothing left that a fence could stop.
+    const profile = registry.profiles[grant.profileKey];
+    if (!profile || profile.narrativePolicy !== "provisional_streaming") return unavailable("policy_disabled");
+    if (binding.releaseSuppressedAt !== undefined) return unavailable("suppressed");
+    if (run.status !== "completed" || binding.operatorReleaseCommittedAt === undefined) return unavailable("not_ready");
+    const trail = await loadTurnNarrativeTrailByBindingWithCtx(ctx, binding._id);
+    if (!trail) return { kind: "trail", committedAt: binding.operatorReleaseCommittedAt, entries: [] };
+    if (egressClassRank(normalizeEgressClass(trail.egressClass)) > egressClassRank(access.viewerEgressClass)) return unavailable("egress_beyond_authority");
+    return {
+      kind: "trail",
+      committedAt: trail.committedAt,
+      entries: trail.entries.map((row) => ({ draftOrdinal: row.draftOrdinal, text: row.text, truncated: row.truncated })),
+    };
   }
 
   /**
@@ -823,6 +1179,89 @@ export function createAgentTurnEntryPoints(config: AgentTurnEntryPointConfig) {
     const acknowledged = await acknowledgeOperatorViewWithCtx(ctx, { bindingId: access.binding._id, viewerActorRef: access.grant.initiatingActorRef, now: at });
     if (!acknowledged.acknowledged || acknowledged.operatorViewedAt === undefined) return unavailable("not_ready");
     return { kind: "acknowledged" as const, operatorViewedAt: acknowledged.operatorViewedAt, answer: { ...answer, viewedAt: acknowledged.operatorViewedAt } };
+  }
+
+  /**
+   * The provisional-narrative preview. Never writes. Ladder (fail closed, in
+   * order): turn ownership and live authority via `reauthorizeTurnAccess`
+   * (`not_found` until ownership is established) → epoch fence → profile
+   * policy → the turn's stamped egress class against the viewer's current
+   * grant (skipped before the provider row exists: nothing was released yet;
+   * once a release HAS happened a missing stamp withdraws rather than skips)
+   * → suppressed or abandoned → run state → expiry. The verdict never reads
+   * the provisional row for anything but text, so it survives the row's
+   * deletion: a remount after a withdrawal shows the withdrawal, not a stall.
+   */
+  async function previewTurnNarrative(ctx: AdmittedQueryCtx, args: TurnArgs): Promise<AgentTurnNarrativePreview> {
+    const at = now();
+    const access = await reauthorizeTurnAccess(ctx, ctx.operationAdmission.actor, args.storeId, args.bindingId, at);
+    if (access.kind === "unavailable") {
+      if (PRE_OWNERSHIP_REASONS.has(access.reason)) return { state: "not_found" };
+      // The refusal arm carries only a reason: re-read the binding the ladder
+      // already loaded so the host learns whether anything was ever on screen.
+      const binding = await ctx.db.get("agentTurnBinding", args.bindingId);
+      return { state: "withdrawn", reason: access.reason, released: binding?.provisionalReleasedAt !== undefined };
+    }
+    const { binding, run, grant } = access;
+    const released = binding.provisionalReleasedAt !== undefined;
+    const withdrawn = (reason: string): AgentTurnNarrativePreview => ({ state: "withdrawn", reason, released });
+    const fence = await checkRunEpochFenceWithCtx(ctx, run);
+    if (fence.fenced) return withdrawn("compatibility_epoch_fenced");
+    const profile = registry.profiles[grant.profileKey];
+    if (!profile || profile.narrativePolicy !== "provisional_streaming") return released ? withdrawn("policy_disabled") : { state: "disabled", released };
+    const stamped = await stampedTurnEgressClassWithCtx(ctx, run._id);
+    if (stamped === null) {
+      // Nothing released yet: the stamp is simply not written, and the ladder
+      // falls through to `awaiting_first_text`. Once text HAS been released a
+      // missing stamp is a class we cannot check, so it fails closed.
+      if (released) return withdrawn("egress_beyond_authority");
+    } else if (egressClassRank(stamped) > egressClassRank(access.viewerEgressClass)) {
+      return withdrawn("egress_beyond_authority");
+    }
+    if (binding.releaseSuppressedAt !== undefined) return withdrawn("suppressed");
+    if (binding.abandonedAt !== undefined && !isTerminalRunStatus(run.status)) return withdrawn("abandoned");
+    if (run.status === "completed") return { state: "superseded", released };
+    if (isTerminalRunStatus(run.status)) return withdrawn(run.status === "canceled" ? "run_canceled" : "run_failed");
+    if (!released) return { state: "awaiting_first_text", released };
+    const row = await loadProvisionalNarrativeByBindingWithCtx(ctx, binding._id);
+    if (!row || row.expiresAt <= at) return { state: "stalled", released };
+    return {
+      state: "streaming",
+      released: true,
+      text: row.text,
+      truncated: row.truncated,
+      draftOrdinal: row.draftOrdinal,
+      updatedAt: row.updatedAt,
+      expiresAt: row.expiresAt,
+      ttlMs: Math.max(0, row.expiresAt - at),
+    };
+  }
+
+  /**
+   * First paint of provisional text (confirmed receipt; first write wins).
+   * Full turn reauthorization, owner only, refused unless a release happened.
+   * A refusal on the caller's OWN turn — lost authority, or a stamped class
+   * beyond the operator's current grant — deletes whatever is at rest, exactly
+   * as the answer surface suppresses; pre-ownership refusals write nothing.
+   */
+  async function acknowledgeProvisionalView(ctx: AdmittedMutationCtx, args: TurnArgs) {
+    const at = now();
+    const viewer = operatorFromActor(ctx.operationAdmission.actor);
+    const binding = await ctx.db.get("agentTurnBinding", args.bindingId);
+    if (!viewer || !binding || binding.storeId !== args.storeId) return unavailable("not_found");
+    const access = await reauthorizeTurnAccess(ctx, ctx.operationAdmission.actor, args.storeId, args.bindingId, at);
+    if (access.kind === "unavailable") {
+      if (!PRE_OWNERSHIP_REASONS.has(access.reason)) await deleteProvisionalNarrativeByBindingWithCtx(ctx, binding._id);
+      return unavailable(access.reason);
+    }
+    const stamped = await stampedTurnEgressClassWithCtx(ctx, access.run._id);
+    if (stamped !== null && egressClassRank(stamped) > egressClassRank(access.viewerEgressClass)) {
+      await deleteProvisionalNarrativeByBindingWithCtx(ctx, binding._id);
+      return unavailable("egress_beyond_authority");
+    }
+    const acknowledged = await acknowledgeProvisionalViewWithCtx(ctx, { bindingId: access.binding._id, viewerActorRef: access.grant.initiatingActorRef, now: at });
+    if (!acknowledged.acknowledged) return unavailable(acknowledged.reason);
+    return { kind: "acknowledged" as const, provisionalViewedAt: acknowledged.provisionalViewedAt };
   }
 
   async function cancelTurn(ctx: AdmittedMutationCtx, args: TurnArgs) {
@@ -886,7 +1325,7 @@ export function createAgentTurnEntryPoints(config: AgentTurnEntryPointConfig) {
     return config.readCitationEvidence(ctx, { runId: access.run._id, citationRef: args.citationRef, viewer: access.viewer, purpose: "operator_evidence_panel", now: at });
   }
 
-  return { startTurn, getTurnView, getTurnAnswer, acknowledgeTurnAnswer, cancelTurn, resumeTurn, getThreadHistory, inspectCitationEvidence };
+  return { startTurn, getTurnView, getTurnAnswer, getTurnNarrativeTrail, acknowledgeTurnAnswer, previewTurnNarrative, acknowledgeProvisionalView, cancelTurn, resumeTurn, getThreadHistory, inspectCitationEvidence };
 }
 
 export type AgentTurnEntryPoints = ReturnType<typeof createAgentTurnEntryPoints>;
@@ -930,6 +1369,7 @@ const turnViewResult = v.union(
     phase: v.union(v.literal("queued"), v.literal("running"), v.literal("completed"), v.literal("failed"), v.literal("canceled")),
     step: v.string(),
     milestones: v.array(v.object({ milestone: v.string(), at: v.number() })),
+    provisionalReleasedAt: v.optional(v.number()),
     question: v.optional(v.string()),
     context: v.optional(v.record(v.string(), v.string())),
     promptState: v.union(v.literal("retained"), v.literal("expired"), v.literal("deleted")),
@@ -962,9 +1402,42 @@ const answerResult = v.union(
   v.object({ kind: v.literal("unavailable"), reason: v.string() }),
 );
 
+const narrativeTrailResult = v.union(
+  v.object({
+    kind: v.literal("trail"),
+    committedAt: v.number(),
+    entries: v.array(v.object({ draftOrdinal: v.number(), text: v.string(), truncated: v.boolean() })),
+  }),
+  v.object({ kind: v.literal("unavailable"), reason: v.string() }),
+);
+
 const acknowledgeResult = v.union(
   v.object({ kind: v.literal("acknowledged"), operatorViewedAt: v.number(), answer: answerResult }),
   v.object({ kind: v.literal("suppressed"), reason: v.string() }),
+  v.object({ kind: v.literal("unavailable"), reason: v.string() }),
+);
+
+const narrativePreviewResult = v.union(
+  v.object({ state: v.literal("not_found") }),
+  v.object({ state: v.literal("withdrawn"), reason: v.string(), released: v.boolean() }),
+  v.object({ state: v.literal("disabled"), released: v.boolean() }),
+  v.object({ state: v.literal("awaiting_first_text"), released: v.boolean() }),
+  v.object({ state: v.literal("stalled"), released: v.boolean() }),
+  v.object({ state: v.literal("superseded"), released: v.boolean() }),
+  v.object({
+    state: v.literal("streaming"),
+    released: v.literal(true),
+    text: v.string(),
+    truncated: v.boolean(),
+    draftOrdinal: v.number(),
+    updatedAt: v.number(),
+    expiresAt: v.number(),
+    ttlMs: v.number(),
+  }),
+);
+
+const acknowledgeProvisionalResult = v.union(
+  v.object({ kind: v.literal("acknowledged"), provisionalViewedAt: v.number() }),
   v.object({ kind: v.literal("unavailable"), reason: v.string() }),
 );
 
@@ -1066,10 +1539,28 @@ export const getTurnAnswer = query({
   handler: admitPublicQuery(getTurnAnswerReadDefinition, async (ctx, args: TurnArgs) => agentTurnEntryPoints.getTurnAnswer(ctx, args)),
 });
 
+export const getTurnNarrativeTrail = query({
+  args: { storeId: v.id("store"), bindingId: v.id("agentTurnBinding") },
+  returns: narrativeTrailResult,
+  handler: admitPublicQuery(getTurnNarrativeTrailReadDefinition, async (ctx, args: TurnArgs) => agentTurnEntryPoints.getTurnNarrativeTrail(ctx, args)),
+});
+
 export const acknowledgeTurnAnswer = mutation({
   args: { storeId: v.id("store"), bindingId: v.id("agentTurnBinding") },
   returns: acknowledgeResult,
   handler: admitPublicMutation(acknowledgeTurnAnswerOperationDefinition, async (ctx, args: TurnArgs) => agentTurnEntryPoints.acknowledgeTurnAnswer(ctx, args)),
+});
+
+export const previewTurnNarrative = query({
+  args: { storeId: v.id("store"), bindingId: v.id("agentTurnBinding") },
+  returns: narrativePreviewResult,
+  handler: admitPublicQuery(previewTurnNarrativeReadDefinition, async (ctx, args: TurnArgs) => agentTurnEntryPoints.previewTurnNarrative(ctx, args)),
+});
+
+export const acknowledgeProvisionalView = mutation({
+  args: { storeId: v.id("store"), bindingId: v.id("agentTurnBinding") },
+  returns: acknowledgeProvisionalResult,
+  handler: admitPublicMutation(acknowledgeProvisionalViewOperationDefinition, async (ctx, args: TurnArgs) => agentTurnEntryPoints.acknowledgeProvisionalView(ctx, args)),
 });
 
 export const cancelTurn = mutation({

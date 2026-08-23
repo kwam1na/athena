@@ -47,6 +47,7 @@ import {
   type ProjectedShape,
 } from "./manifest";
 import {
+  AGENT_NARRATIVE_POLICIES,
   assertProfileSelection,
   defineAgentProfile,
   definePresentationAdapter,
@@ -808,6 +809,7 @@ const profile = defineAgentProfile({
     providers: [{ providerId: "fixture", modelId: "fixture-1", region: "eu", maxClass: "sensitive" }],
   },
   runtimeAdapterKind: "fake_runtime",
+  narrativePolicy: "provisional_streaming",
   presentation,
   evaluation: {
     scenarios: [
@@ -887,6 +889,25 @@ describe("profile contract", () => {
     expect(() =>
       defineAgentProfile({ ...profile, scope: { kind: "region" } } as unknown as typeof profile),
     ).toThrow(AgentVersionedExtensionError);
+  });
+
+  it("requires a declared narrative policy and rejects an unknown one", () => {
+    expect(AGENT_NARRATIVE_POLICIES).toEqual(["provisional_streaming", "buffered"]);
+    expect(profile.narrativePolicy).toBe("provisional_streaming");
+    for (const policy of AGENT_NARRATIVE_POLICIES) {
+      expect(validateProfileDefinition({ ...profile, narrativePolicy: policy })).toMatchObject({ ok: true });
+    }
+
+    const withoutPolicy: Record<string, unknown> = { ...profile };
+    delete withoutPolicy.narrativePolicy;
+    const missing = validateProfileDefinition(withoutPolicy as unknown as typeof profile);
+    expect(issueCodes(missing)).toContain("versioned_extension_required");
+    expect(missing.ok === false && missing.issues.map((issue) => issue.path)).toContain("narrativePolicy");
+    expect(() => defineAgentProfile(withoutPolicy as unknown as typeof profile)).toThrow(AgentVersionedExtensionError);
+
+    const unknown = { ...profile, narrativePolicy: "always_streaming" } as unknown as typeof profile;
+    expect(issueCodes(validateProfileDefinition(unknown))).toContain("versioned_extension_required");
+    expect(() => defineAgentProfile(unknown)).toThrow(AgentVersionedExtensionError);
   });
 });
 

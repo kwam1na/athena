@@ -155,6 +155,8 @@ describe("agent host import boundary", () => {
       "src/components/agent/AthenaAgentPresentationAdapter.ts",
       "src/components/agent/AthenaAgentSafeText.test.tsx",
       "src/components/agent/AthenaAgentSafeText.tsx",
+      "src/components/agent/streamReveal.test.ts",
+      "src/components/agent/streamReveal.ts",
       "src/components/agent/useAthenaAgentRun.test.tsx",
       "src/components/agent/useAthenaAgentRun.ts",
     ]);

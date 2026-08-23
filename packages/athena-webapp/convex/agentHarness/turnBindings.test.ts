@@ -22,8 +22,10 @@ import {
   AGENT_TURN_BINDING_ABANDON_AFTER_MS,
   AGENT_TURN_STEP_STALE_AFTER_MS,
   acknowledgeOperatorViewWithCtx,
+  acknowledgeProvisionalViewWithCtx,
   advanceTurnBindingWithCtx,
   listTurnBindingsForThread,
+  markProvisionalReleaseWithCtx,
   recordTurnIntentWithCtx,
   resolveTurnWithCtx,
   resumeTurnBindingWithCtx,
@@ -266,6 +268,47 @@ describe("turn bindings: thread cardinality and terminal runs (scenario 7)", () 
       expect(await recordTurnIntentWithCtx(ctx, intentInput(seeded.tenant))).toMatchObject({ outcome: "resumed", runStatus: "failed", abandoned: true });
       const bindings = await listTurnBindingsForThread(ctx, "thread:alpha");
       expect(bindings).toHaveLength(1);
+    });
+  });
+});
+
+describe("provisional markers: release once, view acknowledged once", () => {
+  it("records the release exactly once and refuses a view acknowledgement until then; the first acknowledgement wins", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const tenant = await seedTenant(ctx, "provisional-markers");
+      const intent = bound(await recordTurnIntentWithCtx(ctx, intentInput(tenant)));
+      await driveToRunning(ctx, intent.bindingId);
+      const viewer = "athenaUser:operator-1";
+
+      // Nothing released yet: acknowledging is refused and writes nothing.
+      expect(await acknowledgeProvisionalViewWithCtx(ctx, { bindingId: intent.bindingId, viewerActorRef: viewer, now: TEST_NOW + 1 })).toEqual({ acknowledged: false, reason: "not_released" });
+      let binding = await ctx.db.get("agentTurnBinding", intent.bindingId);
+      expect(binding?.provisionalReleasedAt).toBeUndefined();
+      expect(binding?.provisionalViewedAt).toBeUndefined();
+      const updatedBefore = binding!.updatedAt;
+
+      // The first flush releases; later flushes never touch the binding again
+      // (reactive `getTurnView` subscribers see exactly one update from streaming).
+      expect(await markProvisionalReleaseWithCtx(ctx, { bindingId: intent.bindingId, now: TEST_NOW + 2 })).toEqual({ outcome: "released", provisionalReleasedAt: TEST_NOW + 2 });
+      expect(await markProvisionalReleaseWithCtx(ctx, { bindingId: intent.bindingId, now: TEST_NOW + 3 })).toEqual({ outcome: "already_released", provisionalReleasedAt: TEST_NOW + 2 });
+      binding = await ctx.db.get("agentTurnBinding", intent.bindingId);
+      expect(binding).toMatchObject({ provisionalReleasedAt: TEST_NOW + 2, updatedAt: TEST_NOW + 2 });
+      expect(binding!.updatedAt).not.toBe(updatedBefore);
+
+      expect(await acknowledgeProvisionalViewWithCtx(ctx, { bindingId: intent.bindingId, viewerActorRef: viewer, now: TEST_NOW + 4 })).toEqual({ acknowledged: true, provisionalViewedAt: TEST_NOW + 4 });
+      expect(await acknowledgeProvisionalViewWithCtx(ctx, { bindingId: intent.bindingId, viewerActorRef: "athenaUser:someone-else", now: TEST_NOW + 5 })).toEqual({ acknowledged: true, provisionalViewedAt: TEST_NOW + 4 });
+      binding = await ctx.db.get("agentTurnBinding", intent.bindingId);
+      expect(binding).toMatchObject({ provisionalViewedAt: TEST_NOW + 4, provisionalViewedByActorRef: viewer });
+
+      // The committed-answer marker is untouched by the provisional one.
+      expect(binding?.operatorViewedAt).toBeUndefined();
+      expect(await acknowledgeOperatorViewWithCtx(ctx, { bindingId: intent.bindingId, viewerActorRef: viewer, now: TEST_NOW + 6 })).toEqual({ acknowledged: false });
+
+      // An abandoned binding can neither release nor be acknowledged.
+      await ctx.db.patch("agentTurnBinding", intent.bindingId, { abandonedAt: TEST_NOW + 7, abandonReason: "run_canceled" });
+      expect(await markProvisionalReleaseWithCtx(ctx, { bindingId: intent.bindingId, now: TEST_NOW + 8 })).toEqual({ outcome: "refused", reason: "binding_abandoned" });
+      expect(await acknowledgeProvisionalViewWithCtx(ctx, { bindingId: intent.bindingId, viewerActorRef: viewer, now: TEST_NOW + 9 })).toEqual({ acknowledged: false, reason: "binding_abandoned" });
     });
   });
 });

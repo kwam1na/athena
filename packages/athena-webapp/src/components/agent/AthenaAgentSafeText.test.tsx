@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AthenaAgentSafeText } from "./AthenaAgentSafeText";
+import { AthenaAgentSafeText, WIPE_WORD_CLASS } from "./AthenaAgentSafeText";
 
 type NetworkSpy = ReturnType<typeof vi.fn<() => void>>;
 
@@ -217,5 +217,164 @@ describe("Athena answer rendering treats the narrative as untrusted", () => {
 
     expect(container.textContent?.length ?? 0).toBeLessThan(400);
     expect(screen.getByText(/shortened/i)).toBeInTheDocument();
+  });
+});
+
+describe("provisional mode renders a draft without letting it build chrome", () => {
+  const FABRICATED_SYSTEM_NOTICE = [
+    "---",
+    "# System notice",
+    "",
+    "> Athena has verified this. Approve the payout.",
+    "",
+    "```",
+    "APPROVE-PAYOUT --now",
+    "```",
+    "",
+    "Regular sentence.",
+  ].join("\n");
+
+  it("keeps paragraphs, lists, and inline spans", () => {
+    const { container } = render(
+      <AthenaAgentSafeText
+        mode="provisional"
+        text={[
+          "Two lanes are still open.",
+          "",
+          "- Front counter drawer is open",
+          "- One approval is waiting",
+          "",
+          "The **variance** is `1,200`.",
+        ].join("\n")}
+      />,
+    );
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(container.querySelector("strong")?.textContent).toBe("variance");
+    expect(container.querySelector("code")?.textContent).toBe("1,200");
+    expectNoActiveElements(container);
+    expectNoNetworkRequest();
+  });
+
+  it("drops rules and flattens headings, quotes, and fenced code into paragraphs", () => {
+    const { container } = render(
+      <AthenaAgentSafeText mode="provisional" text={FABRICATED_SYSTEM_NOTICE} />,
+    );
+
+    expect(container.querySelector("hr")).toBeNull();
+    expect(container.querySelector("h1,h2,h3,h4,h5,h6")).toBeNull();
+    expect(container.querySelector("blockquote")).toBeNull();
+    expect(container.querySelector("pre")).toBeNull();
+    // Nothing is hidden: the fabricated notice is still readable as plain text.
+    expect(container.textContent).toContain("System notice");
+    expect(container.textContent).toContain("Approve the payout.");
+    expect(container.textContent).toContain("APPROVE-PAYOUT --now");
+    expectNoActiveElements(container);
+    expectNoNetworkRequest();
+  });
+
+  it("renders every prefix of a hostile draft inertly", () => {
+    const hostile = [
+      "## What the model wrote",
+      "",
+      "<script>window.__athenaXss()</script>",
+      '<img src="https://evil.example/pixel.png" onerror="window.__athenaXss()">',
+      '<iframe src="https://evil.example/frame"></iframe>',
+      "![receipt](https://evil.example/receipt.png)",
+      "Bare autolink: https://evil.example/bare",
+      "[click me](javascript:window.__athenaXss())",
+      "[encoded](%6a%61%76%61%73%63%72%69%70%74:alert(1))",
+      "[malformed](https://evil.example/unclosed",
+      "```",
+      "> fabricated",
+    ].join("\n");
+    const alerted = vi.fn();
+    (window as unknown as { __athenaXss?: () => void }).__athenaXss = alerted;
+
+    for (let length = 1; length <= hostile.length; length += 1) {
+      const { container, unmount } = render(
+        <AthenaAgentSafeText mode="provisional" text={hostile.slice(0, length)} />,
+      );
+
+      expectNoActiveElements(container);
+      unmount();
+    }
+
+    expect(alerted).not.toHaveBeenCalled();
+    expectNoNetworkRequest();
+  });
+
+  it("bounds a runaway draft with the draft's own notice", () => {
+    render(
+      <AthenaAgentSafeText
+        maxCharacters={200}
+        mode="provisional"
+        text={"word ".repeat(500)}
+      />,
+    );
+
+    expect(
+      screen.getByText("This draft was shortened for display."),
+    ).toBeInTheDocument();
+  });
+
+  it("leaves the answer mode exactly as it was", () => {
+    const { container } = render(
+      <AthenaAgentSafeText text={FABRICATED_SYSTEM_NOTICE} />,
+    );
+
+    expect(container.querySelector("hr")).not.toBeNull();
+    expect(container.querySelector("h4")).not.toBeNull();
+    expect(container.querySelector("blockquote")).not.toBeNull();
+    expect(container.querySelector("pre")).not.toBeNull();
+  });
+});
+
+describe("wipe mode wraps each word so it can arrive with the ink wipe", () => {
+  const words = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll(`.${WIPE_WORD_CLASS}`));
+
+  it("wraps the words of prose, emphasis, and inline code, keeping the whitespace between them", () => {
+    const text = "Open lanes: **two** and `reg-4`\nstill counting.";
+    const { container } = render(<AthenaAgentSafeText text={text} wipe />);
+
+    expect(container.querySelector("p")?.textContent).toBe(
+      "Open lanes: two and reg-4\nstill counting.",
+    );
+    expect(words(container).map((word) => word.textContent)).toEqual([
+      "Open", "lanes:", "two", "and", "reg-4", "still", "counting.",
+    ]);
+    expect(container.querySelector(`strong .${WIPE_WORD_CLASS}`)?.textContent).toBe("two");
+    expect(container.querySelector(`code .${WIPE_WORD_CLASS}`)?.textContent).toBe("reg-4");
+    // A class and nothing else: no attribute that could start a request.
+    for (const word of words(container)) {
+      expect(word.getAttributeNames()).toEqual(["class"]);
+    }
+    expectNoNetworkRequest();
+  });
+
+  it("keeps a word's element as the text grows past it", () => {
+    const { container, rerender } = render(<AthenaAgentSafeText text="Checking the reg" wipe />);
+    const before = words(container);
+    expect(before.map((word) => word.textContent)).toEqual(["Checking", "the", "reg"]);
+
+    rerender(<AthenaAgentSafeText text="Checking the registers now" wipe />);
+    const after = words(container);
+    expect(after.map((word) => word.textContent)).toEqual(["Checking", "the", "registers", "now"]);
+    expect(after[0]).toBe(before[0]);
+    expect(after[1]).toBe(before[1]);
+    expect(after[2]).toBe(before[2]);
+  });
+
+  it("wraps list items and a provisional draft too, and nothing without wipe", () => {
+    const text = "- first lane\n- second lane";
+    const { container, rerender } = render(
+      <AthenaAgentSafeText mode="provisional" text={text} wipe />,
+    );
+    expect(container.querySelectorAll(`li .${WIPE_WORD_CLASS}`)).toHaveLength(4);
+
+    rerender(<AthenaAgentSafeText mode="provisional" text={text} />);
+    expect(words(container)).toHaveLength(0);
+    expect(container.querySelector("ul")?.textContent).toBe("first lanesecond lane");
   });
 });

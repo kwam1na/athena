@@ -37,6 +37,7 @@ import type * as agentHarness_historyProjection from "../agentHarness/historyPro
 import type * as agentHarness_lifecycle from "../agentHarness/lifecycle.js";
 import type * as agentHarness_manifestRegistrations from "../agentHarness/manifestRegistrations.js";
 import type * as agentHarness_modelRegistry from "../agentHarness/modelRegistry.js";
+import type * as agentHarness_narrativeTrail from "../agentHarness/narrativeTrail.js";
 import type * as agentHarness_profiles_dailyOperations from "../agentHarness/profiles/dailyOperations.js";
 import type * as agentHarness_profiles_dailyOperationsConformance from "../agentHarness/profiles/dailyOperationsConformance.js";
 import type * as agentHarness_profiles_dailyOperationsUiCoverage from "../agentHarness/profiles/dailyOperationsUiCoverage.js";
@@ -47,6 +48,7 @@ import type * as agentHarness_programRuntime_outputCeiling from "../agentHarness
 import type * as agentHarness_programRuntime_programValidation from "../agentHarness/programRuntime/programValidation.js";
 import type * as agentHarness_programRuntime_quickJsRuntime from "../agentHarness/programRuntime/quickJsRuntime.js";
 import type * as agentHarness_programRuntime_types from "../agentHarness/programRuntime/types.js";
+import type * as agentHarness_provisionalNarrative from "../agentHarness/provisionalNarrative.js";
 import type * as agentHarness_readPorts from "../agentHarness/readPorts.js";
 import type * as agentHarness_registry from "../agentHarness/registry.js";
 import type * as agentHarness_retention from "../agentHarness/retention.js";
@@ -56,6 +58,7 @@ import type * as agentHarness_runtimeRetention from "../agentHarness/runtimeRete
 import type * as agentHarness_testSupport from "../agentHarness/testSupport.js";
 import type * as agentHarness_tools from "../agentHarness/tools.js";
 import type * as agentHarness_turnBindings from "../agentHarness/turnBindings.js";
+import type * as agentHarness_turnTrace from "../agentHarness/turnTrace.js";
 import type * as agentHarness_turns from "../agentHarness/turns.js";
 import type * as app from "../app.js";
 import type * as auth from "../auth.js";
@@ -769,6 +772,7 @@ declare const fullApi: ApiFromModules<{
   "agentHarness/lifecycle": typeof agentHarness_lifecycle;
   "agentHarness/manifestRegistrations": typeof agentHarness_manifestRegistrations;
   "agentHarness/modelRegistry": typeof agentHarness_modelRegistry;
+  "agentHarness/narrativeTrail": typeof agentHarness_narrativeTrail;
   "agentHarness/profiles/dailyOperations": typeof agentHarness_profiles_dailyOperations;
   "agentHarness/profiles/dailyOperationsConformance": typeof agentHarness_profiles_dailyOperationsConformance;
   "agentHarness/profiles/dailyOperationsUiCoverage": typeof agentHarness_profiles_dailyOperationsUiCoverage;
@@ -779,6 +783,7 @@ declare const fullApi: ApiFromModules<{
   "agentHarness/programRuntime/programValidation": typeof agentHarness_programRuntime_programValidation;
   "agentHarness/programRuntime/quickJsRuntime": typeof agentHarness_programRuntime_quickJsRuntime;
   "agentHarness/programRuntime/types": typeof agentHarness_programRuntime_types;
+  "agentHarness/provisionalNarrative": typeof agentHarness_provisionalNarrative;
   "agentHarness/readPorts": typeof agentHarness_readPorts;
   "agentHarness/registry": typeof agentHarness_registry;
   "agentHarness/retention": typeof agentHarness_retention;
@@ -788,6 +793,7 @@ declare const fullApi: ApiFromModules<{
   "agentHarness/testSupport": typeof agentHarness_testSupport;
   "agentHarness/tools": typeof agentHarness_tools;
   "agentHarness/turnBindings": typeof agentHarness_turnBindings;
+  "agentHarness/turnTrace": typeof agentHarness_turnTrace;
   "agentHarness/turns": typeof agentHarness_turns;
   app: typeof app;
   auth: typeof auth;

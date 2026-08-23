@@ -54,9 +54,10 @@ import { historyEgressClass } from "./historyProjection";
 import { getProductionProgramExecutor, type AgentExecuteProgramResult, type AgentExecutorCtx } from "./executor";
 // eslint-disable-next-line @convex-dev/import-wrong-runtime -- this module is "use node" too; the rule only inspects the imported file
 import { createAthenaModelResolver, rateCardFor } from "./modelRegistry";
-import { createAthenaToolRegistrations, AGENT_AUTHORITY_REVOCATION_REASONS, type AgentToolSeamRefs } from "./tools";
+import { createAthenaToolRegistrations, completeRunTool, AGENT_AUTHORITY_REVOCATION_REASONS, type AgentToolSeamRefs } from "./tools";
 import type { AdvanceTurnBindingResult } from "./turnBindings";
-import type { AgentFinalizeTurnOutcome, AgentTurnPreparation, AgentTurnUsageSettlement } from "./turns";
+import type { AgentFinalizeTurnOutcome, AgentProvisionalFlushOutcome, AgentRecordTurnTraceOutcome, AgentTurnPreparation, AgentTurnUsageSettlement } from "./turns";
+import { AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN, type AgentTurnTraceSource } from "./turnTrace";
 
 // ---------------------------------------------------------------------------
 // Dependencies (production or test-bound)
@@ -78,6 +79,8 @@ export type AgentTurnHostFinalizeRequest = {
   outcome: "completed" | "failed" | "canceled";
   error?: { code: string; message: string; retryable: boolean };
   usage?: AgentTurnUsageSettlement;
+  /** The turn's finished drafts, ascending. Sent only when the answer committed. */
+  trail?: { draftOrdinal: number; text: string; truncated?: boolean }[];
   purgeRuntime?: boolean;
   now?: number;
 };
@@ -99,6 +102,28 @@ export type AgentTurnHostRefs = AgentToolSeamRefs & {
   readonly recordTurnProgress: FunctionReference<"mutation", "internal", { bindingId: Id<"agentTurnBinding">; milestone: AgentProgressMilestone; now?: number }, null>;
   readonly peekTurnState: FunctionReference<"query", "internal", { bindingId: Id<"agentTurnBinding"> }, PeekState>;
   readonly finalizeTurn: FunctionReference<"mutation", "internal", AgentTurnHostFinalizeRequest, AgentFinalizeTurnOutcome>;
+  /**
+   * Host-only: overwrite the operator's provisional draft. Never public
+   * ingress — it authorizes the grant's pinned operator, not its caller — and
+   * every policy, authority, and egress decision lives behind it.
+   */
+  readonly flushProvisionalNarrative: FunctionReference<
+    "mutation",
+    "internal",
+    { bindingId: Id<"agentTurnBinding">; draftOrdinal: number; text: string; now?: number },
+    AgentProvisionalFlushOutcome
+  >;
+  /**
+   * Host-only: the engineer's turn trace. Never public ingress and never read
+   * by an operator surface — it holds the deltas, the tool arguments, and the
+   * outcomes so a turn can be replayed offline while the agent is refined.
+   */
+  readonly recordTurnTrace: FunctionReference<
+    "mutation",
+    "internal",
+    { bindingId: Id<"agentTurnBinding">; events: readonly AgentTurnTraceRow[]; now?: number },
+    AgentRecordTurnTraceOutcome
+  >;
   readonly advanceTurnBinding: FunctionReference<
     "mutation",
     "internal",
@@ -111,6 +136,18 @@ export type AgentTurnHostRefs = AgentToolSeamRefs & {
   readonly suppressRelease: FunctionReference<"mutation", "internal", { bindingId: Id<"agentTurnBinding">; reason: string; now?: number }, AgentSuppressReleaseOutcome>;
   readonly listOutboxDue: FunctionReference<"query", "internal", { now?: number; limit?: number }, Id<"agentTurnBinding">[]>;
 };
+
+/** One buffered trace row as the host hands it to the recording mutation. */
+export type AgentTurnTraceRow = {
+  readonly source: AgentTurnTraceSource;
+  readonly sequence: number;
+  readonly at: number;
+  readonly kind: string;
+  readonly payload: unknown;
+};
+
+/** Rows per recording mutation: a narrated turn buffers hundreds between tool calls. */
+export const AGENT_TURN_TRACE_FLUSH_BATCH = 200;
 
 export type AgentTurnHostDeps = {
   readonly ctx: AgentExecutorCtx;
@@ -140,8 +177,30 @@ export type AgentTurnHostReport = {
   readonly usage?: AgentTurnUsageSettlement;
   readonly projection?: AgentProjectionResult;
   readonly finalize?: AgentFinalizeTurnOutcome;
-  readonly timings: { readonly totalMs: number; readonly firstProgressMs: number | null; readonly completionMs: number | null };
+  readonly timings: {
+    readonly totalMs: number;
+    readonly firstDeltaMs: number | null;
+    readonly firstProgressMs: number | null;
+    readonly completionMs: number | null;
+  };
+  /** What the engineer-only trace captured, and whether the deployment captures at all. */
+  readonly trace?: { readonly enabled: boolean; readonly recorded: number; readonly capped: boolean };
 };
+
+/**
+ * `["a","b","b","b"]` becomes `"a,b×3"`. A narrated turn emits hundreds of
+ * deltas; run-length collapsing keeps the operator log line one readable line
+ * while preserving the order the kinds arrived in.
+ */
+export function collapseEventKinds(kinds: readonly AgentRuntimeEvent["kind"][]): string {
+  const runs: { kind: string; count: number }[] = [];
+  for (const kind of kinds) {
+    const last = runs.at(-1);
+    if (last && last.kind === kind) last.count += 1;
+    else runs.push({ kind, count: 1 });
+  }
+  return runs.map((run) => (run.count === 1 ? run.kind : `${run.kind}×${run.count}`)).join(",");
+}
 
 type PeekState =
   | { found: false }
@@ -201,15 +260,149 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
     const { bindingId } = input;
     const events: AgentRuntimeEvent["kind"][] = [];
     const dispatch: string[] = [];
-    const timings = { firstProgressMs: null as number | null, completionMs: null as number | null };
-    const report = (outcome: AgentTurnHostReport["outcome"], extra: Partial<AgentTurnHostReport> = {}): AgentTurnHostReport => ({
-      bindingId,
-      outcome,
-      events,
-      dispatch,
-      timings: { totalMs: now() - startedAt, ...timings },
-      ...extra,
-    });
+    const timings = { firstDeltaMs: null as number | null, firstProgressMs: null as number | null, completionMs: null as number | null };
+    let runId: Id<"intelligenceRun"> | undefined;
+
+    /** Settle without rethrowing, the same shape the milestone queue uses. */
+    const settleQuietly = (work: Promise<unknown> | null): Promise<void> => (work ? work.then(() => undefined, () => undefined) : Promise.resolve());
+
+    // ----- turn trace: engineer-only capture, batched flush ------------------
+    //
+    // Everything the model and the harness exchanged, in order, so a turn can
+    // be replayed offline while the agent is being refined: the runtime
+    // events, the narrative deltas, each tool call's exact arguments and the
+    // outcome the model read back, the flush outcomes for the operator's
+    // draft, and the turn's own report.
+    //
+    // It is a diagnostic, so it is subordinate to the turn in every way. Rows
+    // are buffered in memory and written in batches — never inside the commit
+    // transaction — at each tool call and once before finalize, so a crash
+    // after finalize cannot lose the turn's record. Every write goes through
+    // the settle-never-rethrow wrapper: a failed trace write must never fail
+    // the turn. Past the per-turn bound the host stops buffering and records
+    // one `trace_capped` row instead, so a runaway turn cannot write forever.
+    const trace = {
+      buffer: [] as AgentTurnTraceRow[],
+      /** The host's own monotone counter, kept at or past the last adapter sequence so one sort replays the turn. */
+      hostSequence: 0,
+      pushed: 0,
+      recorded: 0,
+      capped: false,
+      /** Assume on: the deployment answers on the first flush, and `off` stops the buffering too. */
+      enabled: true,
+      inFlight: null as Promise<void> | null,
+    };
+
+    function pushTrace(row: AgentTurnTraceRow): void {
+      if (!trace.enabled) return;
+      if (row.sequence > trace.hostSequence) trace.hostSequence = row.sequence;
+      // The turn's own summary row is never capped: it is the one row an
+      // engineer reads first, and it is the last one pushed.
+      if (trace.pushed >= AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN && row.kind !== "turn_report") {
+        if (trace.capped) return;
+        trace.capped = true;
+        trace.buffer.push({ source: "host", sequence: (trace.hostSequence += 1), at: now(), kind: "trace_capped", payload: { limit: AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN, droppedFrom: row.kind } });
+        return;
+      }
+      trace.pushed += 1;
+      trace.buffer.push(row);
+    }
+
+    const pushHostTrace = (kind: string, payload: unknown) => pushTrace({ source: "host", sequence: (trace.hostSequence += 1), at: now(), kind, payload });
+
+    async function flushTrace(): Promise<void> {
+      while (trace.enabled && trace.buffer.length > 0) {
+        const batch = trace.buffer.splice(0, AGENT_TURN_TRACE_FLUSH_BATCH);
+        const written = await runMutation(refs.recordTurnTrace, { bindingId, events: batch, now: now() });
+        trace.recorded += written.recorded;
+        if (!written.enabled) {
+          // The deployment does not capture: stop buffering for the rest of the turn.
+          trace.enabled = false;
+          trace.buffer.length = 0;
+        }
+      }
+    }
+
+    /**
+     * A trace write that fails is dropped, never rethrown — the diagnostic
+     * must not change the turn's outcome — but it is logged, so a deployment
+     * that rejects every batch is visible rather than merely thin.
+     */
+    const flushTraceQuietly = async (): Promise<void> => {
+      const pending = trace.buffer.length;
+      try {
+        await flushTrace();
+      } catch (error) {
+        // The class only: a validation error's message can quote the batch.
+        console.log(`[agentHarness:turnTrace] ${JSON.stringify({ turnId: bindingId, trace: "flush_failed", dropped: pending - trace.buffer.length, error: error instanceof Error ? error.name : "unknown" })}`);
+      }
+    };
+
+    /** Single-flight, fire-and-forget: newer rows coalesce behind the write in flight. */
+    function pumpTrace(): void {
+      if (trace.inFlight || trace.buffer.length === 0) return;
+      trace.inFlight = flushTraceQuietly().then(() => {
+        trace.inFlight = null;
+      });
+    }
+
+    /** Drain everything buffered. Awaited before finalize, and never rethrows. */
+    const drainTrace = async (): Promise<void> => {
+      await settleQuietly(trace.inFlight);
+      await flushTraceQuietly();
+    };
+
+    /**
+     * The turn's own row: the same payload as the operator log line, plus the
+     * dispatch outcomes. Written BEFORE finalize, so a crash between the two
+     * loses the finalize, not the record of what the model did.
+     */
+    const traceTurnReport = async (outcome: AgentTurnHostReport["outcome"], code?: string): Promise<void> => {
+      pushHostTrace("turn_report", {
+        turnId: bindingId,
+        runId,
+        outcome,
+        code,
+        events: collapseEventKinds(events),
+        dispatch: [...dispatch],
+        firstDeltaMs: timings.firstDeltaMs,
+        firstProgressMs: timings.firstProgressMs,
+        completionMs: timings.completionMs,
+        elapsedMs: now() - startedAt,
+      });
+      await drainTrace();
+    };
+
+    const report = (outcome: AgentTurnHostReport["outcome"], extra: Partial<AgentTurnHostReport> = {}): AgentTurnHostReport => {
+      const built: AgentTurnHostReport = {
+        bindingId,
+        outcome,
+        events,
+        dispatch,
+        timings: { totalMs: now() - startedAt, ...timings },
+        trace: { enabled: trace.enabled, recorded: trace.recorded, capped: trace.capped },
+        ...extra,
+      };
+      // One line per driven turn. `driveTurn` is a scheduled action whose
+      // return value the scheduler discards, so this is the only read path for
+      // what the turn did — ordered event kinds, time to the first narrative
+      // delta, and completion latency — through `bunx convex logs`. Opaque
+      // refs and kinds only: no prompt text and no narrative text.
+      console.log(
+        `[agentHarness:driveTurn] ${JSON.stringify({
+          turnId: bindingId,
+          runId,
+          outcome: built.outcome,
+          code: built.code,
+          events: collapseEventKinds(events),
+          firstDeltaMs: built.timings.firstDeltaMs,
+          firstProgressMs: built.timings.firstProgressMs,
+          completionMs: built.timings.completionMs,
+          elapsedMs: built.timings.totalMs,
+        })}`,
+      );
+      return built;
+    };
 
     // Every exit before the runtime turn starts still finalizes: the turn's
     // provider-spend reservation is released by finalize, not by the provider
@@ -223,15 +416,22 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
       });
     const refused = async (code: string | undefined) => {
       const resolved = code ?? "turn_binding_stalled";
+      // The trace lands before finalize on every exit, this one included: a
+      // turn that never started is exactly the turn an engineer asks about.
+      await traceTurnReport("refused", resolved);
       return report("refused", { code: resolved, finalize: await finalizeUnstarted("failed", resolved) });
     };
 
     const prepared = await runMutation(refs.prepareTurn, { bindingId, now: now() });
     if (prepared.kind === "not_found") return report("not_found");
     // The run is already terminal; finalize is a no-op for it and settles the reservation.
-    if (prepared.kind === "terminal") return report("terminal", { code: prepared.runStatus, finalize: await finalizeUnstarted("canceled", prepared.runStatus) });
+    if (prepared.kind === "terminal") {
+      await traceTurnReport("terminal", prepared.runStatus);
+      return report("terminal", { code: prepared.runStatus, finalize: await finalizeUnstarted("canceled", prepared.runStatus) });
+    }
     if (prepared.kind === "refused") return refused(prepared.code);
     const { plan } = prepared;
+    runId = plan.runId;
 
     // Thread and input: resume-safe rungs recording opaque refs only.
     const thread = await adapter.ensureThread({ threadKey: plan.adapter.threadKey, contextBindingRef: plan.adapter.contextBindingRef as never, correlation: plan.adapter.correlation });
@@ -274,17 +474,171 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
       settle = resolve;
     });
 
+    // ----- provisional narrative: in-memory coalescer, single-flight flush ---
+    //
+    // Deltas arrive at token rate; the row must not. The draft is accumulated
+    // here and written whole, one flush at a time, with newer text coalesced
+    // behind the one in flight — so the row is always an overwrite, a new
+    // draft replaces the previous one, and a dropped flush loses nothing (the
+    // next carries the full text). Nothing here decides whether the operator
+    // may see the draft: `flushProvisionalNarrative` is the enforcement point,
+    // and its `refused` verdict is the host's signal to stop offering text.
+    const provisional = {
+      draftOrdinal: -1,
+      draftText: "",
+      /**
+       * Every draft this turn finished, by ordinal, holding the ordinal's full
+       * coalesced text. The live row is overwritten per draft and deleted at
+       * finalize; this is what a COMMITTED turn hands to finalize so the
+       * operator can still read how the answer was reached after a reload.
+       */
+      drafts: new Map<number, { text: string; truncated: boolean }>(),
+      /** The newest whole draft not yet handed to a flush. */
+      pending: null as { draftOrdinal: number; text: string } | null,
+      inFlight: null as Promise<void> | null,
+      /** Set at the completeRun request so the commit transaction is never contended. */
+      stopped: false,
+      /** The kernel withdrew the draft; it deleted the row, so stop writing for this turn. */
+      refused: false,
+    };
+
+
+    function pumpProvisional(): void {
+      if (provisional.inFlight || provisional.stopped || provisional.refused) return;
+      const next = provisional.pending;
+      if (!next) return;
+      provisional.pending = null;
+      provisional.inFlight = (async () => {
+        try {
+          const flushed = await runMutation(refs.flushProvisionalNarrative, { bindingId, draftOrdinal: next.draftOrdinal, text: next.text, now: now() });
+          if (flushed.outcome === "refused") provisional.refused = true;
+          else {
+            // The kernel's verdict on this draft's size, carried onto the
+            // remembered draft so the durable trail reports the truncation the
+            // pane already showed. The TEXT comes from the delta stream, not
+            // from here: a draft's last slice can end without a flush.
+            const remembered = provisional.drafts.get(next.draftOrdinal);
+            if (remembered && flushed.truncated) remembered.truncated = true;
+          }
+          // The outcome only: the deltas already carry the text, and a second
+          // copy per flush would be the same draft written over and over.
+          pushHostTrace("provisional_flush", {
+            draftOrdinal: next.draftOrdinal,
+            outcome: flushed.outcome,
+            reason: flushed.outcome === "refused" ? flushed.reason : undefined,
+            truncated: flushed.truncated,
+          });
+        } catch {
+          // OCC against a concurrent turn writer, or a transport failure: this
+          // flush is dropped and the next one carries the whole draft again.
+          pushHostTrace("provisional_flush", { draftOrdinal: next.draftOrdinal, outcome: "dropped" });
+        } finally {
+          provisional.inFlight = null;
+        }
+        pumpProvisional();
+      })();
+    }
+
+    /**
+     * The full envelope of one runtime event, kind-specific fields included.
+     * `tool_call_completed` is enriched with the LEDGER's outcome object — the
+     * kernel result, denial, or violation the model actually read back — which
+     * the normalized event carries only as a kind.
+     */
+    const traceEventPayload = (event: AgentRuntimeEvent): Record<string, unknown> => {
+      const base: Record<string, unknown> = { kind: event.kind, sequence: event.sequence, turnRef: event.turnRef, at: event.at, sinceStartMs: now() - startedAt };
+      switch (event.kind) {
+        case "progress":
+          return { ...base, milestone: event.milestone };
+        case "narrative_delta":
+          return { ...base, draftOrdinal: event.draftOrdinal, text: event.text };
+        case "tool_call_requested":
+          return { ...base, callId: event.callId, toolId: event.toolId, ...(requestedArgs.get(event.callId) ?? {}) };
+        case "tool_call_completed": {
+          const entry = ledger.entries().find((candidate) => candidate.callId === event.callId);
+          return {
+            ...base,
+            callId: event.callId,
+            toolId: event.toolId,
+            outcomeKind: event.outcomeKind,
+            idempotencyKey: entry?.idempotencyKey,
+            argsHash: entry?.argsHash,
+            resultHash: entry?.resultHash,
+            outcome: entry?.outcome,
+            lateOutcome: entry?.lateOutcome,
+          };
+        }
+        case "usage":
+          return { ...base, usage: event.usage };
+        case "turn_completed":
+          return { ...base, outcome: event.outcome, narrative: event.narrative, error: event.error, reason: event.reason };
+        case "completion_projected":
+          return { ...base, projectionRef: event.projectionRef };
+        case "cleanup_completed":
+          return { ...base, deleted: event.deleted };
+        default:
+          return base;
+      }
+    };
+
+    /** Arguments seen at dispatch, so the request row can carry them on a replay. */
+    const requestedArgs = new Map<string, { idempotencyKey: string; args: unknown }>();
+
     const hooks: AgentRuntimeTurnHooks = {
       onEvent: async (event) => {
         events.push(event.kind);
+        pushTrace({ source: "adapter", sequence: event.sequence, at: event.at, kind: event.kind, payload: traceEventPayload(event) });
         if (event.kind === "turn_started" || event.kind === "turn_resumed") ledger.beginTurn(event.turnRef);
+        if (event.kind === "narrative_delta" && timings.firstDeltaMs === null) timings.firstDeltaMs = now() - startedAt;
+        if (event.kind === "narrative_delta") {
+          if (event.draftOrdinal !== provisional.draftOrdinal) {
+            provisional.draftOrdinal = event.draftOrdinal;
+            provisional.draftText = "";
+          }
+          provisional.draftText += event.text;
+          // Remember the ordinal's text as it grows, so the draft a committed
+          // turn hands to finalize is the whole draft — including a last slice
+          // the tool boundary left unflushed. Only text the pane was still
+          // being offered is remembered: once the host has quiesced for the
+          // commit, or the kernel has withdrawn the draft, whatever the model
+          // keeps narrating was never the operator's to read and must not
+          // become a durable record of the turn either.
+          if (!provisional.stopped && !provisional.refused && provisional.draftText.trim().length > 0) {
+            const remembered = provisional.drafts.get(provisional.draftOrdinal);
+            if (remembered) remembered.text = provisional.draftText;
+            else provisional.drafts.set(provisional.draftOrdinal, { text: provisional.draftText, truncated: false });
+          }
+          // Whitespace alone is not a draft: it would only be refused.
+          if (provisional.draftText.trim().length > 0) {
+            provisional.pending = { draftOrdinal: provisional.draftOrdinal, text: provisional.draftText };
+            pumpProvisional();
+          }
+        }
         if (event.kind === "progress" && timings.firstProgressMs === null) timings.firstProgressMs = now() - startedAt;
         if (event.kind === "tool_call_requested" && timings.firstProgressMs === null) timings.firstProgressMs = now() - startedAt;
+        if (event.kind === "tool_call_requested" && event.toolId === completeRunTool.toolId) {
+          // Quiescence: the request is emitted before the tool runs and `emit`
+          // awaits this hook, so stopping here and draining the one flight in
+          // progress guarantees the commit transaction is never contended by
+          // streaming. The drain must never reject the awaited `emit`.
+          provisional.stopped = true;
+          await settleQuietly(provisional.inFlight);
+        }
+        if (event.kind === "tool_call_completed" && event.toolId === completeRunTool.toolId && event.outcomeKind !== "success") {
+          // Denied, retryably failed, or rejected as a protocol violation: the
+          // turn continues, so the pane must not freeze. The next draft ordinal
+          // arrives with the model's next step and overwrites the row.
+          provisional.stopped = false;
+          pumpProvisional();
+        }
         if (event.kind === "usage") usage.record(event.usage);
         if (event.kind === "tool_call_completed") {
           const last = ledger.entries().find((entry) => entry.callId === event.callId);
           dispatch.push(last?.outcome ? `${event.toolId}:${last.outcome.kind}` : `${event.toolId}:${event.outcomeKind}`);
           if (last) deps.observeDispatch?.(last);
+          // A batch per tool call: the buffer never grows past one tool step,
+          // and the write is outside the commit transaction by construction.
+          pumpTrace();
           // Authority revoked under the run: stop the provider loop now; the run is terminalized below.
           if (tools.state.authorityRevocations().length > 0 && turnRef) void adapter.cancelTurn({ turnRef, reason: "authority_revoked" });
         }
@@ -295,7 +649,29 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
           settle();
         }
       },
-      dispatchTool: (request) => ledger.dispatch(request),
+      dispatchTool: async (request) => {
+        // The normalized `tool_call_requested` event carries no arguments —
+        // they exist only here, on the way into the ledger — so this is the
+        // one place the trace can record what the model actually asked for.
+        requestedArgs.set(request.callId, { idempotencyKey: request.idempotencyKey, args: request.rawArgs });
+        const requestedAt = now();
+        const result = await ledger.dispatch(request);
+        const entry = ledger.entries().find((candidate) => candidate.callId === request.callId);
+        pushHostTrace("tool_dispatch", {
+          callId: request.callId,
+          toolId: request.toolId,
+          idempotencyKey: request.idempotencyKey,
+          args: request.rawArgs,
+          resultKind: result.kind,
+          outcome: result.kind === "outcome" ? result.outcome : undefined,
+          violation: result.kind === "protocol_violation" ? { code: result.code, message: result.message } : undefined,
+          replayed: result.kind === "outcome" ? result.replayed : undefined,
+          argsHash: entry?.argsHash,
+          resultHash: entry?.resultHash,
+          elapsedMs: now() - requestedAt,
+        });
+        return result;
+      },
     };
 
     try {
@@ -306,6 +682,7 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
       turnRef = started.turnRef;
     } catch (error) {
       const code = typeof (error as { athenaCode?: unknown }).athenaCode === "string" ? (error as { athenaCode: string }).athenaCode : "runtime_adapter_error";
+      await traceTurnReport("failed", code);
       const finalize = await runMutation(refs.finalizeTurn, {
         bindingId,
         outcome: "failed",
@@ -334,6 +711,9 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
     stopPolling = true;
     await poll.catch(() => undefined);
     await Promise.allSettled(milestoneQueue);
+    // Nothing may still be writing the draft when finalize deletes it.
+    provisional.stopped = true;
+    await settleQuietly(provisional.inFlight);
 
     const outcome = completed?.outcome ?? "failed";
     const reason: AgentUsageSettlementReason = outcome === "completed" ? "terminal_total" : outcome === "canceled" ? "cancel" : "missing_final";
@@ -345,31 +725,51 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
 
     let finalize: AgentFinalizeTurnOutcome;
     let projection: AgentTurnHostReport["projection"];
+    // Only a turn whose answer committed hands its drafts on: the trail is
+    // released and withdrawn with the answer, so a turn without one has
+    // nothing the operator is entitled to keep reading. The drafts ride with
+    // the commit, not with the host's outcome — a provider that dies after
+    // the answer landed still leaves the answer, and so its trail. A turn the
+    // kernel ever refused hands on nothing at all: that draft was withdrawn
+    // from the pane, and a durable copy would put it back. Finalize itself
+    // writes the trail only for a completed, committed run.
+    const trail =
+      committed && !provisional.refused
+        ? [...provisional.drafts.entries()]
+            .sort((left, right) => left[0] - right[0])
+            .map(([draftOrdinal, draft]) => ({ draftOrdinal, text: draft.text, truncated: draft.truncated }))
+        : [];
+    const trailArg = trail.length > 0 ? { trail } : {};
     if (outcome === "completed" && committed) {
-      finalize = await runMutation(refs.finalizeTurn, { bindingId, outcome: "completed", usage: settlement, now: now() });
+      await traceTurnReport("completed");
+      finalize = await runMutation(refs.finalizeTurn, { bindingId, outcome: "completed", usage: settlement, ...trailArg, now: now() });
       projection = await projectCommitted(bindingId);
       return report("completed", { usage: settlement, finalize, projection });
     }
     if (revoked.length > 0) {
+      await traceTurnReport("canceled", "authority_revoked");
       finalize = await runMutation(refs.finalizeTurn, {
         bindingId,
         outcome: "canceled",
         error: { code: "authority_revoked", message: `Authority changed during the turn: ${revoked[0]}.`, retryable: false },
         usage: settlement,
         purgeRuntime: exposed,
+        ...trailArg,
         now: now(),
       });
       return report("canceled", { code: "authority_revoked", usage: settlement, finalize });
     }
     if (outcome === "canceled") {
-      finalize = await runMutation(refs.finalizeTurn, { bindingId, outcome: "canceled", error: { code: completed?.reason ?? "canceled", message: "The turn was stopped.", retryable: false }, usage: settlement, now: now() });
+      await traceTurnReport("canceled", completed?.reason);
+      finalize = await runMutation(refs.finalizeTurn, { bindingId, outcome: "canceled", error: { code: completed?.reason ?? "canceled", message: "The turn was stopped.", retryable: false }, usage: settlement, ...trailArg, now: now() });
       return report("canceled", { code: completed?.reason, usage: settlement, finalize });
     }
     const error =
       outcome === "completed"
         ? { code: "completion_missing", message: "The turn ended without athena.completeRun.", retryable: true }
         : { code: completed?.error?.code ?? "provider_failure", message: completed?.error?.message ?? "The turn failed.", retryable: completed?.error?.code === "turn_elapsed_ceiling" || completed?.error?.code === "provider_failure" };
-    finalize = await runMutation(refs.finalizeTurn, { bindingId, outcome: "failed", error, usage: settlement, now: now() });
+    await traceTurnReport("failed", error.code);
+    finalize = await runMutation(refs.finalizeTurn, { bindingId, outcome: "failed", error, usage: settlement, ...trailArg, now: now() });
     return report("failed", { code: error.code, usage: settlement, finalize });
   }
 
@@ -422,6 +822,8 @@ const PRODUCTION_REFS: AgentTurnHostRefs = {
   recordTurnProgress: internal.agentHarness.turns.recordTurnProgress,
   peekTurnState: internal.agentHarness.turns.peekTurnState,
   finalizeTurn: internal.agentHarness.turns.finalizeTurn,
+  flushProvisionalNarrative: internal.agentHarness.turns.flushProvisionalNarrative,
+  recordTurnTrace: internal.agentHarness.turns.recordTurnTrace,
   advanceTurnBinding: internal.agentHarness.turnBindings.advanceTurnBinding,
   loadProjection: internal.agentHarness.completionOutbox.loadProjection,
   recordProjection: internal.agentHarness.completionOutbox.recordProjection,
