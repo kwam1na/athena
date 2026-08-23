@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import { testId } from "../lib/testIds";
 import { resolveWeeklyPeriod } from "./weeklyPeriods";
 
 const schedule = (overrides = {}) => ({
-  _id: "schedule-1",
+  _id: testId("storeSchedule", "schedule-1"),
   effectiveFrom: Date.parse("2026-01-01T00:00:00.000Z"),
   reportingCycleStartsOn: 1,
   weeklyClosedDays: [0],

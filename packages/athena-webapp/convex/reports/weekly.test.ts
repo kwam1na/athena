@@ -7,6 +7,7 @@ import schema from "../schema";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import type { ReportWeekLineage } from "../../shared/reportsContract";
+import { testId } from "../lib/testIds";
 import { stableStringHash } from "./fingerprint";
 import { resolveWeeklyPeriod } from "./weeklyPeriods";
 
@@ -119,7 +120,7 @@ function period() {
     referenceAt: NOW,
     schedules: [
       {
-        _id: "schedule-1",
+        _id: testId("storeSchedule", "schedule-1"),
         dateExceptions: [],
         effectiveFrom: Date.parse("2026-01-01T00:00:00.000Z"),
         reportingCycleStartsOn: 1,
