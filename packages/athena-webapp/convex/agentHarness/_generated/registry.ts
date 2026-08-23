@@ -2703,7 +2703,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       }
     }
   },
-  "compatibilityDigest": "fnv1a64:501827e670579cf1",
+  "compatibilityDigest": "fnv1a64:d57f15b714dcff64",
   "contractVersion": 1,
   "enablement": {
     "capabilities": {
@@ -2836,7 +2836,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "providers": [
           {
             "maxClass": "sensitive",
-            "modelId": "gpt-5-nano",
+            "modelId": "gpt-5-mini",
             "providerId": "openai",
             "region": "us"
           }
@@ -3698,7 +3698,7 @@ export const AGENT_GENERATED_SOURCE_KEYS: readonly string[] = [
 ];
 
 /** What a run pins; the deployment epoch fence compares it with the durable epoch digest. */
-export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:501827e670579cf1";
+export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:d57f15b714dcff64";
 
 /** Schema identity only; unchanged when a capability is enabled or disabled. */
 export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:f19326767d8913de";

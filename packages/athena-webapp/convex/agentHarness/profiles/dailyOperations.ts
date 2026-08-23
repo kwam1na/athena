@@ -222,7 +222,10 @@ export const DAILY_OPERATIONS_PROFILE = defineAgentProfile({
     // (financials, cash, manager review, policy detail, cost overlay) is
     // classified `sensitive`, and nothing reaches `restricted`.
     maxClass: "sensitive",
-    providers: [{ providerId: "openai", modelId: "gpt-5-nano", region: "us", maxClass: "sensitive" }],
+    // gpt-5-mini adopted 2026-08-24 after the CLI regression phases: same
+    // 20/20 commit rate as nano with half the output tokens and ~40% faster
+    // first delta; nano remains the fallback default in the adapter smoke.
+    providers: [{ providerId: "openai", modelId: "gpt-5-mini", region: "us", maxClass: "sensitive" }],
   },
   runtimeAdapterKind: "convex_agent",
   narrativePolicy: "provisional_streaming",

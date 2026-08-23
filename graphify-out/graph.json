@@ -11399,7 +11399,7 @@
       "relation": "method",
       "source": "convexagent_convexagentadaptererror",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgent.ts",
-      "source_location": "L193",
+      "source_location": "L195",
       "target": "convexagent_convexagentadaptererror_constructor",
       "weight": 1
     },
@@ -42575,7 +42575,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_agentruntime_convexagent_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgent.ts",
-      "source_location": "L205",
+      "source_location": "L207",
       "target": "convexagent_classifyturnerror",
       "weight": 1
     },
@@ -42587,7 +42587,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_agentruntime_convexagent_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgent.ts",
-      "source_location": "L191",
+      "source_location": "L193",
       "target": "convexagent_convexagentadaptererror",
       "weight": 1
     },
@@ -42599,7 +42599,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_agentruntime_convexagent_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgent.ts",
-      "source_location": "L303",
+      "source_location": "L305",
       "target": "convexagent_createconvexagentruntimeadapter",
       "weight": 1
     },
@@ -42611,7 +42611,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_agentruntime_convexagent_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgent.ts",
-      "source_location": "L152",
+      "source_location": "L154",
       "target": "convexagent_fromnativetoolname",
       "weight": 1
     },
@@ -42623,7 +42623,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_agentruntime_convexagent_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgent.ts",
-      "source_location": "L184",
+      "source_location": "L186",
       "target": "convexagent_hasanyusage",
       "weight": 1
     },
@@ -42635,7 +42635,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_agentruntime_convexagent_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgent.ts",
-      "source_location": "L200",
+      "source_location": "L202",
       "target": "convexagent_isaborterror",
       "weight": 1
     },
@@ -42647,7 +42647,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_agentruntime_convexagent_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgent.ts",
-      "source_location": "L166",
+      "source_location": "L168",
       "target": "convexagent_normalizenativeusage",
       "weight": 1
     },
@@ -42671,7 +42671,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_agentruntime_convexagent_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgent.ts",
-      "source_location": "L145",
+      "source_location": "L147",
       "target": "convexagent_tonativetoolname",
       "weight": 1
     },
@@ -270943,7 +270943,7 @@
       "label": "classifyTurnError()",
       "norm_label": "classifyturnerror()",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgent.ts",
-      "source_location": "L205"
+      "source_location": "L207"
     },
     {
       "community": 262,
@@ -270952,7 +270952,7 @@
       "label": "ConvexAgentAdapterError",
       "norm_label": "convexagentadaptererror",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgent.ts",
-      "source_location": "L191"
+      "source_location": "L193"
     },
     {
       "community": 262,
@@ -270961,7 +270961,7 @@
       "label": ".constructor()",
       "norm_label": ".constructor()",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgent.ts",
-      "source_location": "L193"
+      "source_location": "L195"
     },
     {
       "community": 262,
@@ -270970,7 +270970,7 @@
       "label": "createConvexAgentRuntimeAdapter()",
       "norm_label": "createconvexagentruntimeadapter()",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgent.ts",
-      "source_location": "L303"
+      "source_location": "L305"
     },
     {
       "community": 262,
@@ -270979,7 +270979,7 @@
       "label": "fromNativeToolName()",
       "norm_label": "fromnativetoolname()",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgent.ts",
-      "source_location": "L152"
+      "source_location": "L154"
     },
     {
       "community": 262,
@@ -270988,7 +270988,7 @@
       "label": "hasAnyUsage()",
       "norm_label": "hasanyusage()",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgent.ts",
-      "source_location": "L184"
+      "source_location": "L186"
     },
     {
       "community": 262,
@@ -270997,7 +270997,7 @@
       "label": "isAbortError()",
       "norm_label": "isaborterror()",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgent.ts",
-      "source_location": "L200"
+      "source_location": "L202"
     },
     {
       "community": 262,
@@ -271006,7 +271006,7 @@
       "label": "normalizeNativeUsage()",
       "norm_label": "normalizenativeusage()",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgent.ts",
-      "source_location": "L166"
+      "source_location": "L168"
     },
     {
       "community": 262,
@@ -271024,7 +271024,7 @@
       "label": "toNativeToolName()",
       "norm_label": "tonativetoolname()",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgent.ts",
-      "source_location": "L145"
+      "source_location": "L147"
     },
     {
       "community": 262,
