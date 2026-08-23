@@ -546,7 +546,7 @@ export function describeAthenaProvisionalNotice(): AthenaAgentProvisionalNotice 
 export type AthenaAgentProvisionalCue = "reset" | "paused_at_limit" | "stalled";
 
 const PROVISIONAL_CUE_COPY: Record<AthenaAgentProvisionalCue, string> = {
-  reset: "Moved on to the next step. The earlier draft stays in the timeline.",
+  reset: "Moved on to the next step. The earlier draft is still shown above.",
   paused_at_limit:
     "Draft display limit reached. The rest of the draft isn't shown here.",
   // A stalled draft can be an operator's last signal — a dead host leaves the
@@ -569,15 +569,15 @@ export type AthenaAgentProvisionalTimelineCopy = {
   readonly detail: string;
 };
 
+/** A committed turn that kept no drafts (it narrated nothing, or predates the trail). */
+export function describeAthenaProvisionalTimelineEmpty(): string {
+  return "No drafts were kept for this question.";
+}
+
 /**
  * The collapsed timeline behind a committed answer. It names what the drafts
  * are and, like the live container, says they are not the checked text.
  */
-/** A committed turn that kept no drafts (it narrated nothing, or predates the trail). */
-export function describeAthenaProvisionalTimelineEmpty(): string {
-  return "No drafts were kept for this turn.";
-}
-
 export function describeAthenaProvisionalTimeline(): AthenaAgentProvisionalTimelineCopy {
   return {
     summary: "How Athena got here",

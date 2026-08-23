@@ -544,6 +544,14 @@ export const readOperatorTurn = internalQuery({
       });
       return { view, preview };
     }
+    if (args.include === "trail") {
+      // The committed turn's drafts on the same admitted path as the answer.
+      const trail = await agentTurnEntryPoints.getTurnNarrativeTrail(admitted, {
+        storeId: target.storeId,
+        bindingId: args.bindingId,
+      });
+      return { view, trail };
+    }
     if (args.include !== "answer") return view;
     const answer = await agentTurnEntryPoints.getTurnAnswer(admitted, {
       storeId: target.storeId,

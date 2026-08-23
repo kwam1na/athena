@@ -1,8 +1,8 @@
 /// <reference types="vite/client" />
 /**
  * The turn-trace leaf: append-only rows for one driven turn, a server-enforced
- * per-row payload cap cut at a codepoint boundary, a delete by binding, and an
- * expiry delete the standard-class sweep drives.
+ * per-row payload cap cut at a codepoint boundary, and an expiry delete the
+ * standard-class sweep drives.
  *
  * The helper has no authority of its own — the recording mutation decides
  * whether a row may exist and stamps the scope; this module only writes,
@@ -21,7 +21,6 @@ import {
   AGENT_TURN_TRACE_RETENTION_MS,
   appendTurnTraceEventsWithCtx,
   deleteExpiredTurnTraceWithCtx,
-  deleteTurnTraceByBindingWithCtx,
   fitTracePayload,
   isAgentTurnTraceEnabled,
   listTurnTraceByBindingWithCtx,
@@ -155,9 +154,7 @@ describe("turn trace leaf", () => {
       [2, "tool_call_requested"],
     ]);
 
-    expect(await t.run((ctx) => deleteTurnTraceByBindingWithCtx(ctx, seeded.bindingId))).toEqual({ deleted: 3, hasMore: false });
-    expect(await t.run((ctx) => listTurnTraceByBindingWithCtx(ctx, seeded.bindingId, 10))).toEqual([]);
-    // Another turn's trace is untouched.
+    // Another turn's trace is its own.
     expect(await t.run((ctx) => listTurnTraceByBindingWithCtx(ctx, other.bindingId, 10))).toHaveLength(1);
   });
 

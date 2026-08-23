@@ -492,8 +492,9 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
       usage?: AgentTurnUsageSettlement;
       /**
        * The turn's finished drafts, ascending by ordinal. Kept only for a run
-       * that reached `completed` with a committed release; the host passes it
-       * on no other outcome, and the guard below refuses it anyway.
+       * that reached `completed` with a committed release. The host passes it
+       * on every outcome — a turn that committed and then failed on the
+       * provider keeps its trail — and the guard below refuses the rest.
        */
       trail?: readonly { draftOrdinal: number; text: string; truncated?: boolean }[];
       purgeRuntime?: boolean;
@@ -1125,7 +1126,13 @@ export function createAgentTurnEntryPoints(config: AgentTurnEntryPointConfig) {
   async function getTurnNarrativeTrail(ctx: AdmittedQueryCtx, args: TurnArgs): Promise<AgentTurnNarrativeTrailView> {
     const access = await reauthorizeTurnAccess(ctx, ctx.operationAdmission.actor, args.storeId, args.bindingId, now());
     if (access.kind === "unavailable") return unavailable(access.reason);
-    const { binding, run } = access;
+    const { binding, run, grant } = access;
+    // The same policy rung the flush and the preview apply: a profile that
+    // buffers its narrative serves no drafts, including ones written before
+    // the policy changed. No epoch fence — the answer has none either, and a
+    // committed turn has nothing left that a fence could stop.
+    const profile = registry.profiles[grant.profileKey];
+    if (!profile || profile.narrativePolicy !== "provisional_streaming") return unavailable("policy_disabled");
     if (binding.releaseSuppressedAt !== undefined) return unavailable("suppressed");
     if (run.status !== "completed" || binding.operatorReleaseCommittedAt === undefined) return unavailable("not_ready");
     const trail = await loadTurnNarrativeTrailByBindingWithCtx(ctx, binding._id);

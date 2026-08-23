@@ -942,6 +942,17 @@ describe("narrative trail: written at commit, released and withdrawn with the an
     expect({ isPublic: getTurnNarrativeTrail.isPublic, isQuery: getTurnNarrativeTrail.isQuery }).toEqual({ isPublic: true, isQuery: true });
   });
 
+  it("refuses the trail on a buffered profile, written or not, with the reason the preview uses", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run((ctx) => seedRecordedTurn(ctx, "trail-buffered", { profileId: TEST_BUFFERED_PROFILE_ID }));
+    const args = { storeId: seeded.operator.storeId, bindingId: seeded.bindingId };
+    await startStreamingTurn(t, seeded);
+    await commitAnswer(t, seeded);
+    await finalizeCompleted(t, seeded.bindingId);
+    // The answer itself is readable; the drafts are not a thing this profile serves.
+    expect(await readTrail(t, seeded.operator.userId, args)).toEqual({ kind: "unavailable", reason: "policy_disabled" });
+  });
+
   it("writes nothing for a canceled or a failed turn, and nothing when the turn narrated nothing", async () => {
     const t = convexTest(schema, modules);
     const canceled = await t.run((ctx) => seedRecordedTurn(ctx, "trail-cancel"));

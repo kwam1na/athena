@@ -10,6 +10,7 @@
  * inert text pipeline.
  */
 import {
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -304,6 +305,7 @@ export function AthenaAgentPanel({
   const focusClaimedTurnRef = useRef<AthenaAgentRun["activeTurnId"]>(null);
   const followRef = useRef(true);
   const mountedScrollRef = useRef(false);
+  const latestRef = useRef<HTMLButtonElement>(null);
   const [latestVisible, setLatestVisible] = useState(false);
   const [activeCitation, setActiveCitation] = useState<string | null>(null);
   const [draftCue, setDraftCue] = useState<{
@@ -402,6 +404,11 @@ export function AthenaAgentPanel({
   const syncLatest = useCallback(() => {
     const node = scrollRef.current;
     const visible = node !== null && !followRef.current && awayFromLatest(node);
+    // A control that hides while it holds focus hands focus to the composer,
+    // never leaving it on something aria-hidden and out of the tab order.
+    if (!visible && latestRef.current !== null && document.activeElement === latestRef.current) {
+      promptRef.current?.focus();
+    }
     setLatestVisible((current) => (current === visible ? current : visible));
   }, []);
 
@@ -671,6 +678,9 @@ export function AthenaAgentPanel({
       <div
         className={cn("min-h-0 flex-1 overflow-y-auto", reducedMotion ? null : "scroll-smooth")}
         data-testid="athena-agent-scroll"
+        // Keyboard travel into the transcript (a citation, a trail summary)
+        // is the operator reading there; the follow must not pull it away.
+        onFocusCapture={interruptFollowing}
         onKeyDown={(event) => {
           if (SCROLL_INTERRUPT_KEYS.has(event.key)) interruptFollowing();
         }}
@@ -983,6 +993,7 @@ export function AthenaAgentPanel({
         data-testid="athena-agent-latest"
         data-visible={latestVisible ? "true" : "false"}
         onClick={scrollToLatest}
+        ref={latestRef}
         tabIndex={latestVisible ? 0 : -1}
         type="button"
       >
@@ -1242,7 +1253,8 @@ function HistoryNarrativeTrail({
   );
 }
 
-function HistoryEntry({
+// Memoised: past answers must not re-parse on every frame of a live reveal.
+const HistoryEntry = memo(function HistoryEntry({
   entry,
   storeId,
 }: {
@@ -1285,7 +1297,7 @@ function HistoryEntry({
       ) : null}
     </div>
   );
-}
+});
 
 function SourceDrawer({
   source,

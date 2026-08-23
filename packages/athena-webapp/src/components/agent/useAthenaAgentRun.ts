@@ -232,7 +232,6 @@ export function deriveAthenaProvisionalState(
   return "none";
 }
 
-/** The states that paint draft text. Everything else clears it. */
 /**
  * The states in which finished drafts stay on screen beside or behind the live
  * one. Stalled and withdrawn drafts show none: the server expired or deleted
@@ -247,6 +246,7 @@ export const PROVISIONAL_TIMELINE_STATES: ReadonlySet<AthenaAgentProvisionalStat
 ]);
 const EMPTY_TIMELINE: readonly AthenaAgentProvisionalDraft[] = [];
 
+/** The states that paint draft text. Everything else clears it. */
 const PROVISIONAL_TEXT_STATES: ReadonlySet<AthenaAgentProvisionalState> = new Set([
   "streaming",
   "paused_at_limit",
@@ -848,9 +848,11 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
     if (!PROVISIONAL_TIMELINE_STATES.has(provisionalState)) return EMPTY_TIMELINE;
     // Once the turn commits, the server's record is the timeline: it holds
     // every draft, including those a mount that arrived late never painted,
-    // and it is what survives a reload. The in-memory list is the source only
+    // it is what survives a reload, and it is read on the answer's own gate —
+    // so a refused, suppressed, or empty trail paints nothing, never the drafts
+    // this session happened to see. The in-memory list is the source only
     // while the turn is still running and nothing durable exists yet.
-    if (provisionalState === "superseded" && serverTrailEntries.length > 0) return serverTrailEntries;
+    if (provisionalState === "superseded") return serverTrailEntries;
     if (!draftTimeline || draftTimeline.turnId !== turnId) return EMPTY_TIMELINE;
     const live = provisional?.draftOrdinal ?? null;
     return live === null

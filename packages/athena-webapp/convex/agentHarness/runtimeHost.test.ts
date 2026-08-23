@@ -25,7 +25,7 @@ import { cancelAgentRunWithCtx, getBudgetLedgerForRun, listProgramAttemptsForRun
 import { createQuickJsProgramRuntime } from "./programRuntime/quickJsRuntime";
 import { loadTurnNarrativeTrailByBindingWithCtx } from "./narrativeTrail";
 import { loadProvisionalNarrativeByBindingWithCtx } from "./provisionalNarrative";
-import { AGENT_TURN_TRACE_EVENT_PAYLOAD_MAX_BYTES, listTurnTraceByBindingWithCtx } from "./turnTrace";
+import { AGENT_TURN_TRACE_EVENT_PAYLOAD_MAX_BYTES, AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN, listTurnTraceByBindingWithCtx } from "./turnTrace";
 import { reserveTurnSpendWithCtx, settleTurnSpendWithCtx, spendWindowKey, turnProviderCostReservation } from "./runAdmission";
 import type { AgentProgramRuntime } from "./programRuntime/types";
 import { registerAgentRuntimeCleanupHook, resetAgentRuntimeCleanupHooksForTests, type AgentRuntimeCleanupDescriptor } from "./retention";
@@ -1093,6 +1093,71 @@ describe("turn host — the provisional draft", () => {
     const after = await rows(t, seeded);
     expect(after.provisional).toEqual([]);
     expect(after.binding?.provisionalReleasedAt).toBeUndefined();
+    // Every flush was refused, so the host hands finalize nothing to keep.
+    expect(await trailRow(t, seeded.bindingId)).toBeNull();
+  });
+
+  it("caps the trace per turn with one marker row, and still records the turn's own summary row last", async () => {
+    const t = backend();
+    const harness = createAgentRuntimeContractFake({ clock: createDeterministicClock(TEST_NOW_BASE + 1_000) });
+    const seeded = await seedAdmittedTurn(t, "trace-cap");
+    const { captured, observe } = captureProgramResult();
+    // More deltas than the cap, then a normal finish.
+    const deltas = Array.from({ length: AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN + 50 }, (_, index) => (index % 7 === 6 ? " " : "x"));
+    harness.scriptTurn(turnKeyFor(seeded.bindingId), [
+      { kind: "narrative", deltas },
+      { kind: "tool_call", callId: "c1", toolId: "athena.executeProgram", args: { source: PROGRAM } },
+      { kind: "tool_call", callId: "c2", toolId: "athena.completeRun", args: completeRunArgs(captured) },
+      { kind: "complete", narrative: "MODEL-NARRATIVE-NEVER-STORED" },
+    ]);
+    const host = await hostFor(t, harness, { observe });
+    const report = await host.driveTurn({ bindingId: seeded.bindingId });
+    expect(report, JSON.stringify(report)).toMatchObject({ outcome: "completed" });
+    expect(report.trace).toMatchObject({ enabled: true, capped: true });
+
+    // Past the default reader's bound: read the whole turn.
+    const traced = await t.run((ctx) => listTurnTraceByBindingWithCtx(ctx, seeded.bindingId, AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN + 10));
+    expect(traced.filter((row) => row.kind === "trace_capped")).toHaveLength(1);
+    expect(traced.at(-1)?.kind).toBe("turn_report");
+    expect(traced.length).toBeLessThanOrEqual(AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN + 2);
+  });
+
+  it("logs a failed trace write and drops it, and the turn's outcome is untouched", async () => {
+    const t = backend();
+    const harness = createAgentRuntimeContractFake({ clock: createDeterministicClock(TEST_NOW_BASE + 1_000) });
+    const seeded = await seedAdmittedTurn(t, "trace-fails");
+    const { captured, observe } = captureProgramResult();
+    harness.scriptTurn(turnKeyFor(seeded.bindingId), [
+      { kind: "narrative", deltas: ["Checking which shifts", " are open."] },
+      { kind: "tool_call", callId: "c1", toolId: "athena.executeProgram", args: { source: PROGRAM } },
+      { kind: "tool_call", callId: "c2", toolId: "athena.completeRun", args: completeRunArgs(captured) },
+      { kind: "complete", narrative: "MODEL-NARRATIVE-NEVER-STORED" },
+    ]);
+    const logged: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((line: unknown) => {
+      logged.push(String(line));
+    });
+    try {
+      const host = await hostFor(t, harness, {
+        observe,
+        delayMutation: (name) => {
+          if (name.includes("recordTurnTrace")) throw new Error("trace store rejected the batch");
+        },
+      });
+      const report = await host.driveTurn({ bindingId: seeded.bindingId });
+      expect(report, JSON.stringify(report)).toMatchObject({ outcome: "completed" });
+      expect(report.trace).toMatchObject({ enabled: true, recorded: 0 });
+    } finally {
+      log.mockRestore();
+    }
+    expect(await traceRows(t, seeded.bindingId)).toEqual([]);
+    const failures = logged.filter((line) => line.startsWith("[agentHarness:turnTrace]"));
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0]).toContain("\"trace\":\"flush_failed\"");
+    expect(failures[0]).toContain("trace store rejected the batch");
+    // The answer committed regardless.
+    const after = await rows(t, seeded);
+    expect(after.run).toMatchObject({ status: "completed" });
   });
 });
 

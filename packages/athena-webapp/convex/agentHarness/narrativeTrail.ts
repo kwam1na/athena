@@ -3,7 +3,7 @@
  *
  * Authority boundary: this module has none. It owns the row helpers for the
  * `agentTurnNarrativeTrail` table — write once per binding, load by binding,
- * delete by binding, delete by expiry, fit one turn's drafts under the total
+ * delete by expiry, fit one turn's drafts under the total
  * cap — and nothing else. `turns.ts` is the enforcement point: it decides that
  * a turn committed, stamps the answer's egress class, and applies the read
  * ladder; `retention.ts` calls the delete helpers from its own transactions.
@@ -39,8 +39,6 @@ export const AGENT_TURN_NARRATIVE_TRAIL_MAX_BYTES = 96 * 1024;
 
 const DEFAULT_EXPIRY_LIMIT = 100;
 const MAX_EXPIRY_LIMIT = 200;
-/** A binding holds at most one row; a small bound makes any duplicate visible and deletable. */
-const ROWS_PER_BINDING_BOUND = 4;
 
 export type AgentTurnNarrativeTrailEntry = {
   readonly draftOrdinal: number;
@@ -170,16 +168,6 @@ export async function writeTurnNarrativeTrailWithCtx(
     createdAt: input.now,
   });
   return { outcome: "inserted", id };
-}
-
-/** Delete every row of one binding (at most one exists); returns the count. Idempotent. */
-export async function deleteTurnNarrativeTrailByBindingWithCtx(ctx: MutationCtx, bindingId: Id<"agentTurnBinding">): Promise<number> {
-  const rows = await ctx.db
-    .query("agentTurnNarrativeTrail")
-    .withIndex("by_turnBindingId", (q) => q.eq("turnBindingId", bindingId))
-    .take(ROWS_PER_BINDING_BOUND);
-  for (const row of rows) await ctx.db.delete("agentTurnNarrativeTrail", row._id);
-  return rows.length;
 }
 
 /**

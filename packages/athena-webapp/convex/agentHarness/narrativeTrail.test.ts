@@ -16,7 +16,6 @@ import {
   AGENT_TURN_NARRATIVE_TRAIL_MAX_BYTES,
   AGENT_TURN_NARRATIVE_TRAIL_RETENTION_MS,
   deleteExpiredTurnNarrativeTrailWithCtx,
-  deleteTurnNarrativeTrailByBindingWithCtx,
   fitNarrativeTrail,
   loadTurnNarrativeTrailByBindingWithCtx,
   writeTurnNarrativeTrailWithCtx,
@@ -188,21 +187,19 @@ describe("narrative trail leaf", () => {
     expect(stored!.entries.some((entry) => entry.truncated)).toBe(true);
   });
 
-  it("deletes by binding and by expiry, in bounded passes", async () => {
+  it("deletes by expiry, in bounded passes", async () => {
     const t = convexTest(schema, modules);
     const one = await t.run((ctx) => seedBinding(ctx, "trail-delete-one"));
     const two = await t.run((ctx) => seedBinding(ctx, "trail-delete-two"));
     await t.run((ctx) => writeTurnNarrativeTrailWithCtx(ctx, trailInput(one)));
     await t.run((ctx) => writeTurnNarrativeTrailWithCtx(ctx, trailInput(two, { now: TEST_NOW + 10_000 })));
 
-    expect(await t.run((ctx) => deleteTurnNarrativeTrailByBindingWithCtx(ctx, one.bindingId))).toBe(1);
+    // Not yet expired: the sweep leaves both alone.
+    expect(await t.run((ctx) => deleteExpiredTurnNarrativeTrailWithCtx(ctx, { now: TEST_NOW + AGENT_TURN_NARRATIVE_TRAIL_RETENTION_MS - 1, limit: 10 }))).toEqual({ deleted: 0, hasMore: false });
+    // The older row expires first; a bound of one reports more to do.
+    expect(await t.run((ctx) => deleteExpiredTurnNarrativeTrailWithCtx(ctx, { now: TEST_NOW + 10_000 + AGENT_TURN_NARRATIVE_TRAIL_RETENTION_MS, limit: 1 }))).toEqual({ deleted: 1, hasMore: true });
     expect(await t.run((ctx) => loadTurnNarrativeTrailByBindingWithCtx(ctx, one.bindingId))).toBeNull();
-    // Idempotent: a second delete of the same binding removes nothing.
-    expect(await t.run((ctx) => deleteTurnNarrativeTrailByBindingWithCtx(ctx, one.bindingId))).toBe(0);
     expect(await t.run((ctx) => loadTurnNarrativeTrailByBindingWithCtx(ctx, two.bindingId))).not.toBeNull();
-
-    // Not yet expired: the sweep leaves it alone.
-    expect(await t.run((ctx) => deleteExpiredTurnNarrativeTrailWithCtx(ctx, { now: TEST_NOW + AGENT_TURN_NARRATIVE_TRAIL_RETENTION_MS, limit: 10 }))).toEqual({ deleted: 0, hasMore: false });
     expect(await t.run((ctx) => deleteExpiredTurnNarrativeTrailWithCtx(ctx, { now: TEST_NOW + 10_000 + AGENT_TURN_NARRATIVE_TRAIL_RETENTION_MS, limit: 10 }))).toEqual({ deleted: 1, hasMore: false });
     expect(await t.run((ctx) => loadTurnNarrativeTrailByBindingWithCtx(ctx, two.bindingId))).toBeNull();
   });

@@ -1253,7 +1253,7 @@ describe("streaming the provisional narrative", () => {
 });
 
 describe("the provisional timeline", () => {
-  it("keeps each finished draft in order as the ordinal advances, then folds the last one in at commit", async () => {
+  it("keeps each finished draft in order as the ordinal advances, then the server's record takes over at commit", async () => {
     backend.view = baseView({ provisionalReleasedAt: 90 });
     backend.preview = streamingRow({ draftOrdinal: 0, text: "Checking the registers." });
     const { result, rerender } = mountRun({ activeTurnId: BINDING_ID });
@@ -1295,6 +1295,16 @@ describe("the provisional timeline", () => {
       citations: [],
     };
     backend.results.acknowledgeTurnAnswer = { kind: "acknowledged", operatorViewedAt: 210 };
+    // The durable trail, read on the answer's gate, carries the last draft too.
+    backend.trail = {
+      kind: "trail",
+      committedAt: 200,
+      entries: [
+        { draftOrdinal: 0, text: "Checking the registers.", truncated: false },
+        { draftOrdinal: 1, text: "Now the automation log.", truncated: false },
+        { draftOrdinal: 2, text: "Summing up.", truncated: false },
+      ],
+    };
     rerender();
 
     await waitFor(() => expect(result.current.provisionalState).toBe("superseded"));
@@ -1410,6 +1420,29 @@ describe("the durable narrative trail", () => {
     );
     // Read under the same condition the answer is: same store, same binding.
     expect(callsNamed("query:getTurnNarrativeTrail")[0]?.args).toMatchObject({ storeId: STORE_ID, bindingId: BINDING_ID });
+  });
+
+  it("drops the drafts this session painted when the server refuses the trail after the commit", async () => {
+    backend.view = baseView({ provisionalReleasedAt: 90 });
+    backend.preview = streamingRow({ draftOrdinal: 0, text: "Checking the registers." });
+    const { result, rerender } = mountRun({ activeTurnId: BINDING_ID });
+    await waitFor(() => expect(result.current.provisionalState).toBe("streaming"));
+    // A second draft finishes the first one into the in-memory timeline.
+    backend.preview = streamingRow({ draftOrdinal: 1, text: "Now the automation log." });
+    rerender();
+    await waitFor(() => expect(result.current.provisionalTimeline.map((draft) => draft.draftOrdinal)).toEqual([0]));
+
+    backend.view = committedView();
+    backend.preview = { state: "superseded", released: true };
+    backend.answer = committedAnswer;
+    backend.results.acknowledgeTurnAnswer = { kind: "acknowledged", operatorViewedAt: 210 };
+    backend.trail = { kind: "unavailable", reason: "policy_disabled" };
+    rerender();
+
+    await waitFor(() => expect(result.current.provisionalState).toBe("superseded"));
+    // Only the server's ladder-gated record paints after a commit: a refusal paints nothing.
+    await waitFor(() => expect(callsNamed("query:getTurnNarrativeTrail").length).toBeGreaterThan(0));
+    expect(result.current.provisionalTimeline).toEqual([]);
   });
 
   it("survives a remount, where the in-memory timeline cannot", async () => {

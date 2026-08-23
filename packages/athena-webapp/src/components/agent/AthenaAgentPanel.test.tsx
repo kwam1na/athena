@@ -1062,7 +1062,7 @@ describe("the provisional draft region", () => {
         container: true,
         text: true,
         notice: false,
-        live: "Moved on to the next step. The earlier draft stays in the timeline.",
+        live: "Moved on to the next step. The earlier draft is still shown above.",
       },
       {
         state: "paused_at_limit",
@@ -1210,7 +1210,7 @@ describe("the provisional draft region", () => {
 
     // One live node per draft: the cue survives the draft it belongs to and is
     // never repeated by the deltas that follow it.
-    expect(announced.every((line) => line === "Moved on to the next step. The earlier draft stays in the timeline.")).toBe(true);
+    expect(announced.every((line) => line === "Moved on to the next step. The earlier draft is still shown above.")).toBe(true);
     expect(document.activeElement).toBe(anchor);
   });
 
@@ -1358,6 +1358,69 @@ describe("the provisional draft region", () => {
       />,
     );
     await waitFor(() => expect(scroll.scrollTop).toBe(300));
+  });
+
+  it("hands focus to the composer when the latest control hides while it is focused", () => {
+    const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
+    const scroll = screen.getByTestId("athena-agent-scroll");
+    sized(scroll);
+    rerender(
+      <PanelHarness
+        run={draftRun("streaming", {
+          provisional: { text: "More and more text", truncated: false, draftOrdinal: 1 },
+        })}
+      />,
+    );
+    fireEvent.wheel(scroll);
+    scroll.scrollTop = 40;
+    fireEvent.scroll(scroll);
+    expect(latest()).toHaveAttribute("data-visible", "true");
+    latest().focus();
+    expect(latest()).toHaveFocus();
+
+    // The operator scrolls back to the bottom themselves: the control hides,
+    // and focus must not stay on an aria-hidden, untabbable element.
+    scroll.scrollTop = 300;
+    fireEvent.scroll(scroll);
+    expect(latest()).toHaveAttribute("data-visible", "false");
+    expect(latest()).toHaveAttribute("aria-hidden", "true");
+    expect(latest()).not.toHaveFocus();
+    expect(screen.getByTestId("athena-agent-prompt")).toHaveFocus();
+  });
+
+  it("is handed back when keyboard focus travels into the transcript", () => {
+    const { rerender } = render(
+      <PanelHarness
+        run={draftRun("streaming", {
+          history: [
+            {
+              turnId: "binding-0",
+              createdAt: 1,
+              state: "answered",
+              question: "Earlier question",
+              questionState: "retained",
+              answer: { outcome: "answer", narrative: "Earlier answer.", egressClass: "operational", committedAt: 2, citations: [] },
+            },
+          ],
+        })}
+      />,
+    );
+    const scroll = screen.getByTestId("athena-agent-scroll");
+    sized(scroll);
+    const inside = scroll.querySelector("summary, button, [tabindex]") as HTMLElement | null;
+    expect(inside).not.toBeNull();
+    scroll.scrollTop = 120;
+    fireEvent.scroll(scroll);
+    fireEvent.focus(inside!);
+    rerender(
+      <PanelHarness
+        run={draftRun("streaming", {
+          provisional: { text: "Text keeps arriving", truncated: false, draftOrdinal: 1 },
+        })}
+      />,
+    );
+    // Reading there by keyboard: the follow leaves the position alone.
+    expect(scroll.scrollTop).toBe(120);
   });
 
   it("is handed back by a pointer, a touch, or a navigation key, never by the smooth scroll itself", () => {
@@ -2025,7 +2088,7 @@ describe("an earlier turn's draft trail", () => {
     const block = screen.getByTestId("athena-agent-history-trail");
     await user.click(within(block).getByText("How Athena got here"));
 
-    await waitFor(() => expect(within(block).getByText("No drafts were kept for this turn.")).toBeTruthy());
+    await waitFor(() => expect(within(block).getByText("No drafts were kept for this question.")).toBeTruthy());
     expect(within(block).queryAllByTestId("athena-agent-provisional-entry")).toHaveLength(0);
   });
 

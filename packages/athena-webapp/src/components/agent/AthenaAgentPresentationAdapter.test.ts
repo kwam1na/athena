@@ -296,7 +296,7 @@ describe("provisional draft copy", () => {
 
   it("gives the reset, limit, and pause cues their own polite lines", () => {
     expect(describeAthenaProvisionalCue("reset")).toBe(
-      "Moved on to the next step. The earlier draft stays in the timeline.",
+      "Moved on to the next step. The earlier draft is still shown above.",
     );
     expect(describeAthenaProvisionalCue("paused_at_limit")).toBe(
       "Draft display limit reached. The rest of the draft isn't shown here.",
@@ -367,6 +367,6 @@ describe("the provisional timeline copy", () => {
       summary: "How Athena got here",
       detail: "Athena's drafts along the way. Not verified — the answer above is the only checked text.",
     });
-    expect(describeAthenaProvisionalTimelineEmpty()).toBe("No drafts were kept for this turn.");
+    expect(describeAthenaProvisionalTimelineEmpty()).toBe("No drafts were kept for this question.");
   });
 });

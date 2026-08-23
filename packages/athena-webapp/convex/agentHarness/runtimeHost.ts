@@ -296,7 +296,9 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
     function pushTrace(row: AgentTurnTraceRow): void {
       if (!trace.enabled) return;
       if (row.sequence > trace.hostSequence) trace.hostSequence = row.sequence;
-      if (trace.pushed >= AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN) {
+      // The turn's own summary row is never capped: it is the one row an
+      // engineer reads first, and it is the last one pushed.
+      if (trace.pushed >= AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN && row.kind !== "turn_report") {
         if (trace.capped) return;
         trace.capped = true;
         trace.buffer.push({ source: "host", sequence: (trace.hostSequence += 1), at: now(), kind: "trace_capped", payload: { limit: AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN, droppedFrom: row.kind } });
@@ -321,10 +323,24 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
       }
     }
 
+    /**
+     * A trace write that fails is dropped, never rethrown — the diagnostic
+     * must not change the turn's outcome — but it is logged, so a deployment
+     * that rejects every batch is visible rather than merely thin.
+     */
+    const flushTraceQuietly = async (): Promise<void> => {
+      const pending = trace.buffer.length;
+      try {
+        await flushTrace();
+      } catch (error) {
+        console.log(`[agentHarness:turnTrace] ${JSON.stringify({ turnId: bindingId, trace: "flush_failed", dropped: pending - trace.buffer.length, message: error instanceof Error ? error.message : String(error) })}`);
+      }
+    };
+
     /** Single-flight, fire-and-forget: newer rows coalesce behind the write in flight. */
     function pumpTrace(): void {
       if (trace.inFlight || trace.buffer.length === 0) return;
-      trace.inFlight = settleQuietly(flushTrace()).then(() => {
+      trace.inFlight = flushTraceQuietly().then(() => {
         trace.inFlight = null;
       });
     }
@@ -332,7 +348,7 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
     /** Drain everything buffered. Awaited before finalize, and never rethrows. */
     const drainTrace = async (): Promise<void> => {
       await settleQuietly(trace.inFlight);
-      await settleQuietly(flushTrace());
+      await flushTraceQuietly();
     };
 
     /**

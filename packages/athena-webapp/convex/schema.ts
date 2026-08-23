@@ -727,7 +727,6 @@ const schema = defineSchema({
    */
   agentTurnNarrativeTrail: defineTable(agentTurnNarrativeTrailSchema)
     .index("by_turnBindingId", ["turnBindingId"])
-    .index("by_runId", ["runId"])
     .index("by_storeId", ["storeId"])
     .index("by_organizationId", ["organizationId"])
     .index("by_expiresAt", ["expiresAt"]),
@@ -738,7 +737,6 @@ const schema = defineSchema({
    */
   agentTurnTraceEvent: defineTable(agentTurnTraceEventSchema)
     .index("by_turnBindingId_sequence", ["turnBindingId", "sequence"])
-    .index("by_runId", ["runId"])
     .index("by_storeId", ["storeId"])
     .index("by_organizationId", ["organizationId"])
     .index("by_expiresAt", ["expiresAt"]),

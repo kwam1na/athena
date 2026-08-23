@@ -2,7 +2,7 @@
  * Turn-trace rows (kernel leaf; V8-safe).
  *
  * Authority boundary: this module has none. It owns the row helpers for the
- * `agentTurnTraceEvent` table — append, list by binding, delete by binding,
+ * `agentTurnTraceEvent` table — append, list by binding,
  * delete by expiry, fit one payload under the per-row cap — plus the capture
  * switch. The recording mutation in `turns.ts` is the enforcement point (it
  * reads the switch, stamps the scope from the binding, and re-fits every
@@ -41,8 +41,6 @@ export const AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN = 4_000;
 
 const DEFAULT_EXPIRY_LIMIT = 100;
 const MAX_EXPIRY_LIMIT = 200;
-/** Rows deleted per binding per pass; a full batch asks the caller for another. */
-const ROWS_PER_BINDING_BATCH = 200;
 
 export type AgentTurnTraceSource = "adapter" | "host";
 
@@ -208,21 +206,6 @@ export async function pageTurnTraceByBindingWithCtx(
     .query("agentTurnTraceEvent")
     .withIndex("by_turnBindingId_sequence", (q) => q.eq("turnBindingId", bindingId))
     .paginate({ numItems: options.numItems, cursor: options.cursor });
-}
-
-/** Delete one binding's rows in bounded passes; idempotent. */
-export async function deleteTurnTraceByBindingWithCtx(
-  ctx: MutationCtx,
-  bindingId: Id<"agentTurnBinding">,
-  limit: number = ROWS_PER_BINDING_BATCH,
-): Promise<{ deleted: number; hasMore: boolean }> {
-  const bounded = Math.min(MAX_EXPIRY_LIMIT * 5, Math.max(1, limit));
-  const rows = await ctx.db
-    .query("agentTurnTraceEvent")
-    .withIndex("by_turnBindingId_sequence", (q) => q.eq("turnBindingId", bindingId))
-    .take(bounded);
-  for (const row of rows) await ctx.db.delete("agentTurnTraceEvent", row._id);
-  return { deleted: rows.length, hasMore: rows.length === bounded };
 }
 
 /**
