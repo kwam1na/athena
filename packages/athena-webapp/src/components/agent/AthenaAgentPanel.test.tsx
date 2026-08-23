@@ -1,11 +1,4 @@
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
@@ -1125,7 +1118,7 @@ describe("the provisional draft region", () => {
     }
   });
 
-  it("labels the draft as unverified and renders the model text inertly", () => {
+  it("labels the draft as unverified and renders the model text inertly", async () => {
     render(
       <PanelHarness
         run={draftRun("streaming", {
@@ -1142,9 +1135,10 @@ describe("the provisional draft region", () => {
     expect(region).toHaveTextContent("Draft in progress. Not verified.");
     expect(region).toHaveTextContent("Don't act on this text.");
     expect(region).toHaveTextContent("The checked answer replaces it and may differ.");
+    // The draft is revealed over a few frames; every prefix is inert.
+    await waitFor(() => expect(region).toHaveTextContent("https://evil.example/x"));
     expect(region.querySelector("a")).toBeNull();
     expect(region.querySelector("h1,h2,h3,h4,h5,h6")).toBeNull();
-    expect(region).toHaveTextContent("https://evil.example/x");
   });
 
   it("mounts after the denial and drift blocks, before the answer slot", () => {
@@ -1238,11 +1232,13 @@ describe("the provisional draft region", () => {
     expect(screen.getByTestId("athena-agent-new-thread")).toBeEnabled();
   });
 
-  it("swaps the draft for the committed answer, even when they disagree", () => {
+  it("swaps the draft for the committed answer, even when they disagree", async () => {
     const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
 
-    expect(screen.getByTestId("athena-agent-provisional-text")).toHaveTextContent(
-      "Two lanes are still open.",
+    await waitFor(() =>
+      expect(screen.getByTestId("athena-agent-provisional-text")).toHaveTextContent(
+        "Two lanes are still open.",
+      ),
     );
 
     rerender(
@@ -1263,8 +1259,9 @@ describe("the provisional draft region", () => {
     );
 
     expect(screen.queryByTestId("athena-agent-provisional")).toBeNull();
-    expect(screen.getByTestId("athena-agent-answer")).toHaveTextContent(
-      "Only one lane is open.",
+    // The answer lands over a few frames; what is on screen is always a prefix.
+    await waitFor(() =>
+      expect(screen.getByTestId("athena-agent-answer")).toHaveTextContent("Only one lane is open."),
     );
   });
 
@@ -1291,7 +1288,7 @@ describe("the provisional draft region", () => {
     );
   });
 
-  it("follows the growing draft only while the operator is at the bottom", () => {
+  it("follows the growing draft only while the operator is at the bottom", async () => {
     const { rerender } = render(<PanelHarness run={draftRun("streaming")} />);
     const scroll = screen.getByTestId("athena-agent-scroll");
     Object.defineProperty(scroll, "clientHeight", { configurable: true, value: 100 });
@@ -1304,7 +1301,7 @@ describe("the provisional draft region", () => {
         })}
       />,
     );
-    expect(scroll.scrollTop).toBe(300);
+    await waitFor(() => expect(scroll.scrollTop).toBe(300));
 
     // The operator scrolls up: following stops.
     scroll.scrollTop = 40;
@@ -1315,6 +1312,10 @@ describe("the provisional draft region", () => {
           provisional: { text: "Even more text", truncated: false, draftOrdinal: 1 },
         })}
       />,
+    );
+    // A replaced draft paints at once; the follow stays off while scrolled up.
+    await waitFor(() =>
+      expect(screen.getByTestId("athena-agent-provisional-text")).toHaveTextContent("Even more text"),
     );
     expect(scroll.scrollTop).toBe(40);
 
@@ -1629,7 +1630,7 @@ describe("focus while a draft is withdrawn", () => {
 });
 
 describe("the draft is profile-neutral", () => {
-  it("streams a second profile through the same components", () => {
+  it("streams a second profile through the same components", async () => {
     render(
       <PanelHarness
         presentation={organizationPresentation as unknown as typeof storePresentation}
@@ -1655,8 +1656,10 @@ describe("the draft is profile-neutral", () => {
     expect(screen.getByTestId("athena-agent-provisional")).toHaveTextContent(
       "Draft in progress. Not verified.",
     );
-    expect(screen.getByTestId("athena-agent-provisional-text")).toHaveTextContent(
-      "Three stores need attention",
+    await waitFor(() =>
+      expect(screen.getByTestId("athena-agent-provisional-text")).toHaveTextContent(
+        "Three stores need attention",
+      ),
     );
   });
 
@@ -1719,7 +1722,7 @@ describe("the provisional timeline", () => {
     { text: "## Approved\n\nNow the log: https://evil.example/x", truncated: false, draftOrdinal: 1 },
   ];
 
-  it("renders finished drafts above the live one, oldest first, labelled and inert", () => {
+  it("renders finished drafts above the live one, oldest first, labelled and inert", async () => {
     render(
       <PanelHarness
         run={draftRun("streaming", {
@@ -1745,7 +1748,9 @@ describe("the provisional timeline", () => {
     expect(order.indexOf("athena-agent-provisional-entry")).toBeLessThan(
       order.indexOf("athena-agent-provisional-text"),
     );
-    expect(screen.getByTestId("athena-agent-provisional-text")).toHaveTextContent("Summing up.");
+    await waitFor(() =>
+      expect(screen.getByTestId("athena-agent-provisional-text")).toHaveTextContent("Summing up."),
+    );
     // The entries never enter the live region.
     expect(screen.getByTestId("athena-agent-provisional-live")).not.toHaveTextContent("registers");
   });
@@ -1880,5 +1885,215 @@ describe("an earlier turn's draft trail", () => {
 
     await waitFor(() => expect(within(block).getByText("This answer is no longer available to you.")).toBeTruthy());
     expect(within(block).queryAllByTestId("athena-agent-provisional-entry")).toHaveLength(0);
+  });
+});
+
+describe("stream reveal of the live draft", () => {
+  const long = (chars: number) => "Checking the registers one by one, lane by lane. ".repeat(Math.ceil(chars / 50)).slice(0, chars);
+  const fakeFrames = () =>
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "requestAnimationFrame", "cancelAnimationFrame", "performance", "Date"] });
+  const paintedText = () => screen.getByTestId("athena-agent-provisional-text").textContent ?? "";
+  const frames = (count: number) => {
+    for (let frame = 0; frame < count; frame += 1) {
+      act(() => {
+        vi.advanceTimersByTime(16);
+      });
+    }
+  };
+
+  it("reveals a streaming draft from nothing, then each flush's tail over a brief linear catch-up", () => {
+    fakeFrames();
+    try {
+      const first = long(40);
+      const { rerender } = render(
+        <PanelHarness run={draftRun("streaming", { provisional: { text: first, truncated: false, draftOrdinal: 1 } })} />,
+      );
+      // A draft that is streaming is seen to start.
+      expect(paintedText().length).toBeLessThan(first.length);
+      frames(15);
+      expect(paintedText()).toBe(first);
+
+      const grown = long(400);
+      rerender(<PanelHarness run={draftRun("streaming", { provisional: { text: grown, truncated: false, draftOrdinal: 1 } })} />);
+      const lengths: number[] = [paintedText().length];
+      expect(lengths[0]).toBeGreaterThanOrEqual(first.length);
+      expect(lengths[0]).toBeLessThan(grown.length);
+      for (let frame = 0; frame < 14; frame += 1) {
+        frames(1);
+        lengths.push(paintedText().length);
+      }
+      for (let index = 1; index < lengths.length; index += 1) {
+        expect(lengths[index]).toBeGreaterThanOrEqual(lengths[index - 1]!);
+      }
+      expect(new Set(lengths).size).toBeGreaterThan(3);
+      // 360 pending characters cap at the 180 ms streaming catch-up.
+      expect(paintedText()).toBe(grown);
+      expect(screen.getByTestId("athena-agent-provisional-text")).toHaveAttribute("data-reveal", "settled");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("restarts from the visible prefix, never from the start, when the next flush lands mid-reveal", () => {
+    fakeFrames();
+    try {
+      const { rerender } = render(
+        <PanelHarness run={draftRun("streaming", { provisional: { text: long(40), truncated: false, draftOrdinal: 1 } })} />,
+      );
+      frames(15);
+      rerender(<PanelHarness run={draftRun("streaming", { provisional: { text: long(300), truncated: false, draftOrdinal: 1 } })} />);
+      frames(4);
+      const midway = paintedText().length;
+      expect(midway).toBeGreaterThan(40);
+      expect(midway).toBeLessThan(300);
+      rerender(<PanelHarness run={draftRun("streaming", { provisional: { text: long(600), truncated: false, draftOrdinal: 1 } })} />);
+      expect(paintedText().length).toBeGreaterThanOrEqual(midway);
+      expect(screen.getByTestId("athena-agent-provisional-text")).toHaveAttribute("data-reveal", "revealing");
+      frames(15);
+      expect(paintedText()).toBe(long(600));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("starts a new draft from nothing and settles a committing draft briskly", () => {
+    fakeFrames();
+    try {
+      const { rerender } = render(
+        <PanelHarness run={draftRun("streaming", { provisional: { text: long(40), truncated: false, draftOrdinal: 1 } })} />,
+      );
+      frames(15);
+      rerender(<PanelHarness run={draftRun("reset", { provisional: { text: long(90), truncated: false, draftOrdinal: 2 } })} />);
+      expect(paintedText().length).toBeLessThan(90);
+      frames(15);
+      expect(paintedText()).toBe(long(90));
+      // The model stopped narrating: the tail settles at the faster pace (≤ 120 ms).
+      rerender(<PanelHarness run={draftRun("committing", { provisional: { text: long(500), truncated: false, draftOrdinal: 2 } })} />);
+      frames(9);
+      expect(paintedText()).toBe(long(500));
+      expect(screen.getByTestId("athena-agent-provisional-text")).toHaveAttribute("data-reveal", "settled");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows everything at once under reduced motion", () => {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes("prefers-reduced-motion"),
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    fakeFrames();
+    try {
+      const { rerender } = render(
+        <PanelHarness run={draftRun("streaming", { provisional: { text: long(40), truncated: false, draftOrdinal: 1 } })} />,
+      );
+      expect(paintedText()).toBe(long(40));
+      rerender(<PanelHarness run={draftRun("streaming", { provisional: { text: long(400), truncated: false, draftOrdinal: 1 } })} />);
+      expect(paintedText()).toBe(long(400));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("stream reveal of the committed answer", () => {
+  const fakeFrames = () =>
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "requestAnimationFrame", "cancelAnimationFrame", "performance", "Date"] });
+  const answerText = "Open lanes: two [citation:v1.1.1.abc] and the automation log is behind. ".repeat(8);
+  const answered = (overrides: Partial<AthenaAgentRun> = {}) =>
+    draftRun("superseded", {
+      hostState: "completed",
+      status: { headline: "Answer ready", tone: "neutral" },
+      canCancel: false,
+      canSubmit: true,
+      answer: {
+        outcome: "answer",
+        narrative: answerText,
+        egressClass: "operational",
+        limitedEvidence: false,
+        committedAt: 5,
+        citations: [],
+      },
+      ...overrides,
+    });
+  const paintedAnswer = () => screen.getByTestId("athena-agent-answer-text").textContent ?? "";
+  const frames = (count: number) => {
+    for (let frame = 0; frame < count; frame += 1) {
+      act(() => {
+        vi.advanceTimersByTime(16);
+      });
+    }
+  };
+
+  it("reveals an answer that lands while the turn is on screen, never splitting a citation key", () => {
+    fakeFrames();
+    try {
+      const { rerender } = render(
+        <PanelHarness run={draftRun("streaming", { provisional: { text: "Checking the lanes.", truncated: false, draftOrdinal: 1 } })} />,
+      );
+      frames(15);
+      rerender(<PanelHarness run={answered()} />);
+      const lengths: number[] = [paintedAnswer().length];
+      expect(lengths[0]).toBeLessThan(answerText.length);
+      for (let frame = 0; frame < 10; frame += 1) {
+        frames(1);
+        const painted = paintedAnswer();
+        lengths.push(painted.length);
+        expect((painted.match(/\[/g) ?? []).length).toBe((painted.match(/\]/g) ?? []).length);
+      }
+      for (let index = 1; index < lengths.length; index += 1) {
+        expect(lengths[index]).toBeGreaterThanOrEqual(lengths[index - 1]!);
+      }
+      expect(new Set(lengths).size).toBeGreaterThan(3);
+      // A settled answer lands within 120 ms, rendered exactly as a mount would render it.
+      expect(screen.getByTestId("athena-agent-answer-text")).toHaveAttribute("data-reveal", "settled");
+      const settled = paintedAnswer();
+      cleanup();
+      render(<PanelHarness run={answered()} />);
+      expect(paintedAnswer()).toBe(settled);
+      expect(lengths[0]).toBeLessThan(settled.length);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("paints an answer it mounts onto in full — a reload never replays it", () => {
+    fakeFrames();
+    try {
+      render(<PanelHarness run={answered()} />);
+      expect(paintedAnswer()).toBe(answerText);
+      expect(screen.getByTestId("athena-agent-answer-text")).toHaveAttribute("data-reveal", "settled");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("paints a live answer in full under reduced motion", () => {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes("prefers-reduced-motion"),
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    fakeFrames();
+    try {
+      const { rerender } = render(
+        <PanelHarness run={draftRun("streaming", { provisional: { text: "Checking the lanes.", truncated: false, draftOrdinal: 1 } })} />,
+      );
+      rerender(<PanelHarness run={answered()} />);
+      expect(paintedAnswer()).toBe(answerText);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -490,6 +490,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/agent/AthenaAgentPresentationAdapter.test.ts`](../../src/components/agent/AthenaAgentPresentationAdapter.test.ts)
 - [`src/components/agent/AthenaAgentSafeText.test.tsx`](../../src/components/agent/AthenaAgentSafeText.test.tsx)
 - [`src/components/agent/importBoundary.test.ts`](../../src/components/agent/importBoundary.test.ts)
+- [`src/components/agent/streamReveal.test.ts`](../../src/components/agent/streamReveal.test.ts)
 - [`src/components/agent/useAthenaAgentRun.test.tsx`](../../src/components/agent/useAthenaAgentRun.test.tsx)
 - [`src/components/analytics/AnalyticsView.test.tsx`](../../src/components/analytics/AnalyticsView.test.tsx)
 - [`src/components/analytics/StoreInsights.test.tsx`](../../src/components/analytics/StoreInsights.test.tsx)

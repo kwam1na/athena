@@ -23,6 +23,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import type { Id } from "~/convex/_generated/dataModel";
 
 import { AthenaAgentSafeText } from "./AthenaAgentSafeText";
+import { characterCount, revealDuration, revealedProse } from "./streamReveal";
 import {
   composeAthenaThreadKey,
   describeAthenaProvisionalCue,
@@ -80,6 +81,93 @@ function anchorToBottom(node: HTMLDivElement) {
 }
 
 export type AthenaAgentLayout = "docked" | "fullscreen";
+
+/**
+ * Stream reveal for model prose, after the chat panel in kwamina-fyi: the
+ * painted text is a prefix of the buffer, and every update runs one brief
+ * linear reveal from the prefix already on screen to the new length, so a
+ * flush extends the reveal from where it is and the text never sits far
+ * behind the buffer. A key change is a new text (a new draft, a new turn):
+ * while streaming it starts from nothing and is seen to arrive; a finished
+ * text the panel mounts onto is painted whole. Reduced motion, and a text
+ * that is not an extension of what is visible, paint at once.
+ */
+function useStreamingText(input: {
+  text: string | null;
+  key: string | null;
+  /** Pace: a streaming text catches up within 180 ms, a settled one within 120 ms. */
+  isStreaming: boolean;
+  /** A new key is seen to arrive from nothing instead of painting whole. */
+  arrives: boolean;
+  animate: boolean;
+}): { text: string | null; settled: boolean } {
+  const { text, key, isStreaming, arrives, animate } = input;
+  const visibleRef = useRef<{ key: string; text: string } | null>(null);
+  const frameRef = useRef<number | null>(null);
+  const [visible, setVisible] = useState<{ key: string; text: string } | null>(null);
+
+  useEffect(() => {
+    const stop = () => {
+      if (frameRef.current !== null && typeof cancelAnimationFrame === "function") {
+        cancelAnimationFrame(frameRef.current);
+      }
+      frameRef.current = null;
+    };
+    stop();
+    if (text === null || key === null) {
+      visibleRef.current = null;
+      setVisible((current) => (current === null ? current : null));
+      return;
+    }
+    const paint = (next: string) => {
+      visibleRef.current = { key, text: next };
+      setVisible((current) => (current && current.key === key && current.text === next ? current : { key, text: next }));
+    };
+    const current = visibleRef.current && visibleRef.current.key === key ? visibleRef.current.text : null;
+    // A new key that arrives live starts from nothing; a new key the panel
+    // mounts onto (an answer after a reload, a turn read back) is painted whole.
+    const from = current ?? (arrives && animate ? "" : text);
+    const revealImmediately = !animate || !text.startsWith(from);
+    if (revealImmediately) {
+      paint(text);
+      return;
+    }
+    const visibleLength = characterCount(from);
+    const targetLength = characterCount(text);
+    const pending = targetLength - visibleLength;
+    if (pending <= 0) {
+      paint(text);
+      return;
+    }
+    if (typeof requestAnimationFrame !== "function") {
+      paint(text);
+      return;
+    }
+    paint(revealedProse(text, visibleLength));
+    const duration = revealDuration(pending, isStreaming);
+    const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
+    const startedAt = now();
+    const tick = () => {
+      frameRef.current = null;
+      const elapsed = now() - startedAt;
+      const progress = Math.min(1, elapsed / duration);
+      const count = visibleLength + pending * progress;
+      if (progress >= 1) {
+        paint(text);
+        return;
+      }
+      paint(revealedProse(text, count));
+      frameRef.current = requestAnimationFrame(tick);
+    };
+    frameRef.current = requestAnimationFrame(tick);
+    return stop;
+  }, [text, key, isStreaming, arrives, animate]);
+
+  if (text === null || key === null) return { text: null, settled: true };
+  const shown = visible && visible.key === key ? visible.text : null;
+  if (shown === null) return { text: arrives && animate ? "" : text, settled: !(arrives && animate) };
+  return { text: shown, settled: shown === text };
+}
 
 function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(false);
@@ -190,6 +278,34 @@ export function AthenaAgentPanel({
   const provisionalState = run.provisionalState;
   const draftOrdinal = run.provisional?.draftOrdinal ?? null;
   const draftText = run.provisional?.text ?? null;
+  // The live draft is revealed flush by flush; a new draft is seen to start,
+  // and a draft that stopped growing (committing, paused) settles briskly.
+  const draftReveal = useStreamingText({
+    text: draftText,
+    key: draftOrdinal === null || !run.activeTurnId ? null : `${run.activeTurnId}:${draftOrdinal}`,
+    isStreaming: provisionalState === "streaming" || provisionalState === "reset",
+    arrives: provisionalState === "streaming" || provisionalState === "reset",
+    animate: !reducedMotion,
+  });
+  // The committed answer is seen to land only when it arrives while the panel
+  // is already showing this turn run; a panel that mounts onto an answer, or
+  // a turn read back from history, paints it whole.
+  const answerKey = run.answer && run.activeTurnId ? `${run.activeTurnId}:${run.answer.committedAt}` : null;
+  const answerArrivalRef = useRef<{ key: string; live: boolean } | null>(null);
+  const runningTurnRef = useRef<string | null>(null);
+  if (answerKey !== null && answerArrivalRef.current?.key !== answerKey) {
+    answerArrivalRef.current = { key: answerKey, live: runningTurnRef.current === run.activeTurnId };
+  }
+  if (run.activeTurnId && run.hostState === "running") runningTurnRef.current = run.activeTurnId;
+  const answerReveal = useStreamingText({
+    text: run.answer?.narrative ?? null,
+    key: answerKey,
+    // An answer that lands live arrives from nothing at the settled pace; one
+    // the panel mounts onto is already settled and paints whole.
+    isStreaming: false,
+    arrives: answerArrivalRef.current?.live === true,
+    animate: !reducedMotion && answerArrivalRef.current?.live === true,
+  });
 
   /**
    * One coalesced line per draft, from the closed vocabulary — never a token of
@@ -228,12 +344,13 @@ export function AthenaAgentPanel({
 
   // Sticky follow: the single scroll container tracks the growing draft only
   // while the operator is already at the bottom.
+  const paintedDraft = draftReveal.text;
   useEffect(() => {
-    if (draftText === null) return;
+    if (paintedDraft === null) return;
     const node = scrollRef.current;
     if (!node || !followDraftRef.current) return;
     anchorToBottom(node);
-  }, [draftText]);
+  }, [paintedDraft]);
 
   // A draft that ends re-anchors, so the operator is not left mid-buffer.
   useEffect(() => {
@@ -639,11 +756,14 @@ export function AthenaAgentPanel({
                       {provisionalNotice.detail}
                     </p>
                   </div>
-                  <div data-testid="athena-agent-provisional-text">
+                  <div
+                    data-reveal={draftReveal.settled ? "settled" : "revealing"}
+                    data-testid="athena-agent-provisional-text"
+                  >
                     <AthenaAgentSafeText
                       className="text-muted-foreground"
                       mode="provisional"
-                      text={run.provisional.text}
+                      text={draftReveal.text ?? run.provisional.text}
                     />
                   </div>
                 </>
@@ -688,7 +808,12 @@ export function AthenaAgentPanel({
                   {run.answer.title}
                 </p>
               ) : null}
-              <AthenaAgentSafeText text={run.answer.narrative} />
+              <div
+                data-reveal={answerReveal.settled ? "settled" : "revealing"}
+                data-testid="athena-agent-answer-text"
+              >
+                <AthenaAgentSafeText text={answerReveal.text ?? run.answer.narrative} />
+              </div>
               {run.answer.citations.length > 0 ? (
                 <div
                   className="space-y-layout-xs"
