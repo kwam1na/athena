@@ -680,6 +680,16 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
         hooks,
       );
       turnRef = started.turnRef;
+      if (plan.catalogEmbedded === true) {
+        // The removed discover round used to give the panel its first beat
+        // within a second or two; with the catalog embedded the first tool
+        // call sits behind the model's opening reasoning, so the host authors
+        // the same truthful first milestone itself. Gated to embedded-catalog
+        // turns: when discover is offered, its handler still owns this beat.
+        if (timings.firstProgressMs === null) timings.firstProgressMs = now() - startedAt;
+        milestoneQueue.push(runMutation(refs.recordTurnProgress, { bindingId, milestone: "checking_sources", now: now() }).catch(() => undefined));
+        await adapter.reportProgress?.(turnRef, "checking_sources");
+      }
     } catch (error) {
       const code = typeof (error as { athenaCode?: unknown }).athenaCode === "string" ? (error as { athenaCode: string }).athenaCode : "runtime_adapter_error";
       await traceTurnReport("failed", code);

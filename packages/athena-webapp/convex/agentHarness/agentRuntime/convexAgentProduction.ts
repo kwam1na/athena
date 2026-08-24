@@ -26,9 +26,19 @@ export type { ConvexAgentModelResolver, ConvexAgentRuntimeAdapter, ConvexAgentRu
  */
 export const CONVEX_AGENT_REASONING_EFFORT_ENV = "ATHENA_AGENT_REASONING_EFFORT" as const;
 
+/**
+ * Default reasoning effort for the production adapter. Measured 2026-08-24 on
+ * the 20-question regression set with gpt-5-mini and the disclosure
+ * scaffolding (embedded catalog, enum signatures, ref snapping): low effort
+ * committed 20/20 with zero denials, first-delta p50 4.1 s (vs ~16 s at the
+ * default), total elapsed p50 14.8 s (vs ~39 s), and 4x fewer reasoning
+ * tokens. The env var still overrides (e.g. "medium") for experiments.
+ */
+const CONVEX_AGENT_DEFAULT_REASONING_EFFORT = "low" as const;
+
 function experimentProviderOptions(): Record<string, Record<string, unknown>> | undefined {
-  const effort = process.env[CONVEX_AGENT_REASONING_EFFORT_ENV];
-  return effort && effort.length > 0 ? { openai: { reasoningEffort: effort } } : undefined;
+  const effort = process.env[CONVEX_AGENT_REASONING_EFFORT_ENV] ?? CONVEX_AGENT_DEFAULT_REASONING_EFFORT;
+  return effort.length > 0 ? { openai: { reasoningEffort: effort } } : undefined;
 }
 
 export function createProductionConvexAgentRuntimeAdapter(input: {
