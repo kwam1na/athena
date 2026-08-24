@@ -383,10 +383,16 @@ export const TEST_AUTHORITY_PORTS = {
   shared_demo: createSharedDemoDelegatedAuthorityPort({ environment: TEST_DEMO_ENVIRONMENT }),
 };
 
+/** The curated program behind the test profile's `open_shifts` starter intent. */
+export const TEST_STARTER_INTENT_PROGRAM = `const shifts = await athena.ops.shifts.list({ status: "open" });
+return { outcome: shifts.kind, openShifts: shifts.kind === "result" ? shifts.envelope.data : null };`;
+
 export const TEST_GRANT_CONFIG: DelegatedGrantConfig = {
   registry: TEST_REGISTRY,
   authorityPorts: TEST_AUTHORITY_PORTS,
   resolveEnablement: async () => TEST_ENABLEMENT.current(),
+  starterIntentProgramFor: (profileId, starterIntentId) =>
+    profileId === TEST_PROFILE_ID && starterIntentId === "open_shifts" ? TEST_STARTER_INTENT_PROGRAM : undefined,
   now: () => TEST_CLOCK.now,
 };
 

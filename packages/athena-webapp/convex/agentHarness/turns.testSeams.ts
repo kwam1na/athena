@@ -97,6 +97,8 @@ export async function seedRecordedTurn(
     operator?: Awaited<ReturnType<typeof seedDelegatedOperator>>;
     /** Defaults to the shared test profile every host and turn test pins. */
     profileId?: string;
+    /** Stored on the prompt payload: the turn opts into curated pre-execution. */
+    starterIntentId?: string;
   } = {},
 ) {
   const now = options.now ?? TEST_NOW_BASE;
@@ -113,7 +115,7 @@ export async function seedRecordedTurn(
     ...prepared.runInput,
     turnIdempotencyKey: options.key ?? `turn-${slug}`,
     threadKey: options.threadKey ?? `thread-${slug}`,
-    promptPayload: { question: options.question ?? "Which shifts are open?", context: { operatingDate: "2026-08-21" } },
+    promptPayload: { question: options.question ?? "Which shifts are open?", context: { operatingDate: "2026-08-21" }, ...(options.starterIntentId ? { starterIntentId: options.starterIntentId } : {}) },
     now,
   });
   if (intent.outcome !== "created") throw new Error(intent.outcome);

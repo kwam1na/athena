@@ -45,6 +45,7 @@ import { createSharedDemoDelegatedAuthorityPort } from "../../sharedDemo/delegat
 import { defineAgentProfile } from "../../../shared/agentHarness/profile";
 import { defineAgentReadPort, type AgentReadPortIndex } from "../../../shared/agentHarness/readPort";
 import { AGENT_GENERATED_REGISTRY } from "../_generated/registry";
+import { AGENT_STARTER_INTENT_PROGRAMS } from "../profiles/starterIntentPrograms";
 import { createDelegatedAdmission } from "../delegatedAdmission";
 import { createAgentExecutorSeams, type AgentExecutorSeamRefs } from "../executorSeams";
 import { resolveDurableEnablementWithCtx } from "../deploymentState";
@@ -180,6 +181,7 @@ export const DIRECT_HARNESS_ADMISSION = createDelegatedAdmission({
     normal_user: createNormalUserDelegatedAuthorityPort(),
     shared_demo: createSharedDemoDelegatedAuthorityPort(),
   },
+  starterIntentProgramFor: (profileId, starterIntentId) => AGENT_STARTER_INTENT_PROGRAMS[profileId]?.[starterIntentId],
   resolveEnablement: async (ctx) => {
     const live = await resolveDurableEnablementWithCtx(ctx, PUBLISHED_BASELINE);
     return {
@@ -500,6 +502,7 @@ export const startOperatorTurn = internalMutation({
     turnIdempotencyKey: v.string(),
     prompt: v.string(),
     context: v.optional(v.record(v.string(), v.string())),
+    starterIntentId: v.optional(v.string()),
   },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -515,6 +518,7 @@ export const startOperatorTurn = internalMutation({
         turnIdempotencyKey: args.turnIdempotencyKey,
         prompt: args.prompt,
         context: args.context,
+        ...(args.starterIntentId !== undefined ? { starterIntentId: args.starterIntentId } : {}),
       },
     );
   },

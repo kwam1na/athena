@@ -1,3 +1,4 @@
+import { opaqueRef } from "../../shared/agentHarness/values";
 "use node";
 /**
  * Runtime host (kernel; Node runtime): drives ONE operator turn through the
@@ -36,6 +37,7 @@ import {
   type AgentUsageRateCard,
   type AgentUsageSettlementReason,
   type RuntimeTurnRef,
+  type AgentPreExecutedExchange,
 } from "../../shared/agentHarness/agentRuntime";
 import { isBindingStepAtOrBeyond, type AgentTurnBindingStep } from "../../shared/agentHarness/execution";
 import type { AgentProgressMilestone } from "../../shared/agentHarness/agentRuntime";
@@ -482,12 +484,91 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
     toneFindingsAtReport = () => tools.state.toneFindings();
     const ledger = createAgentToolDispatchLedger({ adapterVersion: adapter.descriptor.adapterVersion, tools: tools.registrations });
     const usage = createUsageReconciler();
+
     let turnRef: RuntimeTurnRef | undefined;
     let completed: Extract<AgentRuntimeEvent, { kind: "turn_completed" }> | undefined;
     let settle!: () => void;
     const settled = new Promise<void>((resolve) => {
       settle = resolve;
     });
+
+    // ----- curated pre-execution (starter-intent turns) ---------------------
+    //
+    // The registered executeProgram handler runs the curated source through
+    // the production executor under the run's own grant — attempt 1, real
+    // charges, the egress checkpoint at finishAttempt exactly as a dispatched
+    // call. The outcome seeds the adapter transcript as a synthetic exchange;
+    // every failure downgrades to today's free-form flow with a trace, and an
+    // authority signal cancels the turn before any provider invocation.
+    let preExecutedExchange: AgentPreExecutedExchange | undefined;
+    if (plan.preExecution) {
+      if ("skip" in plan.preExecution) {
+        pushHostTrace("starter_intent_preexec_skipped", { starterIntentId: plan.preExecution.starterIntentId, outcome: plan.preExecution.skip });
+      } else {
+        if (timings.firstProgressMs === null) timings.firstProgressMs = now() - startedAt;
+        milestoneQueue.push(runMutation(refs.recordTurnProgress, { bindingId, milestone: "reading_ahead", now: now() }).catch(() => undefined));
+        const registration = tools.registrations.find((candidate) => candidate.definition.toolId === "athena.executeProgram");
+        let preexecFailure: string | undefined;
+        let outcome: Awaited<ReturnType<NonNullable<typeof registration>["handler"]>> | undefined;
+        try {
+          outcome = registration
+            ? await registration.handler({ source: plan.preExecution.source } as never, {
+                turnRef: opaqueRef("runtime_turn", `preexec-${bindingId}`),
+                callId: `preexec-${bindingId}`,
+                idempotencyKey: `preexec:${bindingId}`,
+                signal: new AbortController().signal,
+              })
+            : undefined;
+        } catch (error) {
+          outcome = undefined;
+          preexecFailure = error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300);
+        }
+        if (outcome && outcome.kind === "success") {
+          preExecutedExchange = {
+            toolId: "athena.executeProgram",
+            exchangeKey: "1",
+            args: { source: plan.preExecution.source },
+            result: outcome.result as never,
+          };
+          const seededResult = outcome.result as { attemptRef?: string; citations?: readonly { ref: string }[] };
+          pushHostTrace("starter_intent_preexec", {
+            starterIntentId: plan.preExecution.starterIntentId,
+            outcome: "seeded",
+            attemptRef: seededResult.attemptRef,
+            citations: (seededResult.citations ?? []).slice(0, 8).map((citation) => citation.ref),
+          });
+        } else {
+          const code =
+            outcome === undefined
+              ? "handler_failed"
+              : outcome.kind === "denied"
+                ? outcome.denial.code
+                : outcome.kind === "failure"
+                  ? outcome.error.code
+                  : outcome.kind;
+          pushHostTrace("starter_intent_preexec_skipped", { starterIntentId: plan.preExecution.starterIntentId, outcome: code, ...(preexecFailure ? { failure: preexecFailure } : {}) });
+        }
+        // The pre-exec record must survive a host crash before the provider
+        // turn: flush it durably now (also what lets an investigator see the
+        // seeding immediately).
+        await flushTrace();
+        const revokedEarly = tools.state.authorityRevocations();
+        if (revokedEarly.length > 0) {
+          // Authority signal, not an executor failure: cancel exactly as a
+          // mid-turn revocation does; no provider invocation follows.
+          await traceTurnReport("canceled", "authority_revoked");
+          const settlementEarly = settlementOf(usage.settleAll("cancel"), plan.model, deps.rateCardFor);
+          const finalizeEarly = await runMutation(refs.finalizeTurn, {
+            bindingId,
+            outcome: "canceled",
+            error: { code: "authority_revoked", message: `Authority changed during the turn: ${revokedEarly[0]}.`, retryable: false },
+            usage: settlementEarly,
+            now: now(),
+          });
+          return report("canceled", { code: "authority_revoked", usage: settlementEarly, finalize: finalizeEarly });
+        }
+      }
+    }
 
     // ----- provisional narrative: in-memory coalescer, single-flight flush ---
     //
@@ -691,7 +772,7 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
 
     try {
       const started = await adapter.startTurn(
-        { threadRef: thread.threadRef, inputRef: inputSaved.inputRef, turnKey: plan.adapter.turnKey, tools: modelVisibleToolDefinitions(tools.registrations, plan.catalogEmbedded === true), model: plan.model, limits: plan.limits },
+        { threadRef: thread.threadRef, inputRef: inputSaved.inputRef, turnKey: plan.adapter.turnKey, tools: modelVisibleToolDefinitions(tools.registrations, plan.catalogEmbedded === true), model: plan.model, limits: plan.limits, ...(preExecutedExchange ? { preExecutedExchange } : {}) },
         hooks,
       );
       turnRef = started.turnRef;
