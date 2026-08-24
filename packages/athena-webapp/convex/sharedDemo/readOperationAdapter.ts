@@ -3,7 +3,11 @@ import type {
   OperationReadAdapter,
 } from "../operationAdmission/types";
 import { resolveOperationScope } from "../operationAdmission/scopes";
-import { getSharedDemoActorWithCtx, isSharedDemoActorError } from "./actor";
+import {
+  getSharedDemoActorWithCtx,
+  isSharedDemoActorError,
+  sharedDemoActorDenialError,
+} from "./actor";
 import { denySharedDemoAction, isSharedDemoReadIntentAllowed } from "./policy";
 
 /**
@@ -23,8 +27,18 @@ export function createSharedDemoReadOperationAdapter(): OperationReadAdapter {
         actor = await getSharedDemoActorWithCtx(ctx);
       } catch (error) {
         if (isSharedDemoActorError(error)) {
+          // Reads keep denying an expired session, including the ones a
+          // public caller could make. The denial IS the signal: it is how the
+          // client learns the session ended and renews itself. Letting a read
+          // like `app:getCurrentUser` fall through to `public` instead answers
+          // it successfully, the app sees a half-identified visitor rather
+          // than an expired demo, and the visitor is quietly redirected to a
+          // sign-in form they have no credentials for.
+          //
+          // Recovery is a WRITE — minting a fresh ticket — and that is where
+          // the reachability exception lives (`operationAdapter.ts`).
           return {
-            error,
+            error: sharedDemoActorDenialError(error),
             kind: "denied",
             reason: error.reason,
             recognized: true,

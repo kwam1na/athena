@@ -39,6 +39,17 @@ describe("SharedDemoRuntime architecture", () => {
     expect(source).not.toContain("store.markEventsNeedsReview");
   });
 
+  it("clears the renewal attempt cap once a live demo context renders", () => {
+    // The 2-attempt cap would otherwise be a one-way door: a visitor renewed
+    // twice keeps that count for the life of the tab, and a genuine expiry
+    // hours later skips automatic renewal and drops them on the manual
+    // screen. Nothing else in the app clears it, and the behaviour is
+    // observable only by clicking through two expiries in one tab — so the
+    // call site is pinned here rather than left to manual discovery.
+    expect(source).toContain("clearSharedDemoRenewalAttempts");
+    expect(source).toContain("if (context) clearSharedDemoRenewalAttempts();");
+  });
+
   it("provisions browser terminals with heartbeat disabled", () => {
     expect(source).toContain("heartbeatEnabled: false");
     expect(source).not.toContain("heartbeatEnabled: true");

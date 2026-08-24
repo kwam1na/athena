@@ -212,6 +212,15 @@ not migration questions:
 - `expenses.view` — not demo-granted, though `/pos/expense` is a demo route.
 - `storefront.reviews.view` and `storefront.analytics.view` — not demo-granted.
 
+**Update 2026-08-24:** two of these were not product questions after all.
+`expenses.view` and `storefront.reviews.view` backed demo surfaces that had
+been rendering before the migration and threw on load afterwards, so they are
+now granted as regression repairs rather than widenings — along with
+`service_ops.view` and `store.configuration.view`, whose narrowings this list
+never captured. `pos.session.manage` and `storefront.analytics.view` remain
+open product questions. See
+[[architecture-patterns/athena-demo-reachable-reads-need-their-own-sensor-2026-08-24]].
+
 The retired `reports.read` write capability is a different case and was not a
 narrowing: it existed only so the demo could READ Reports, which is what a read
 intent is for. Its successor is `reports.view` in

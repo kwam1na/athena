@@ -1,5 +1,10 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { ConvexError } from "convex/values";
 
+import {
+  SHARED_DEMO_SESSION_EXPIRED_CODE,
+  SHARED_DEMO_SESSION_EXPIRED_MESSAGE,
+} from "../../shared/sharedDemoActionError";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { internalQuery } from "../_generated/server";
@@ -33,6 +38,29 @@ export function isSharedDemoActorError(
   error: unknown,
 ): error is SharedDemoActorError {
   return error instanceof SharedDemoActorError;
+}
+
+/**
+ * The error an adapter hands the rail for a recognized principal failure.
+ *
+ * `session_expired` becomes a `ConvexError` carrying its code as data, because
+ * the client acts on it: it takes a fresh admission and retries, with no user
+ * involvement. A plain `Error` cannot carry that instruction — Convex scrubs
+ * its message outside dev — so the recovery would work on a developer's
+ * machine and quietly stop working in production.
+ *
+ * `demo_disabled` stays a plain error. Nothing the client does can turn the
+ * demo back on in an environment that has it switched off, so there is no
+ * instruction to carry.
+ */
+export function sharedDemoActorDenialError(
+  error: SharedDemoActorError,
+): Error {
+  if (error.reason !== "session_expired") return error;
+  return new ConvexError({
+    code: SHARED_DEMO_SESSION_EXPIRED_CODE,
+    message: SHARED_DEMO_SESSION_EXPIRED_MESSAGE,
+  });
 }
 
 export async function getSharedDemoActorWithCtx(
@@ -71,7 +99,7 @@ export async function getSharedDemoActorWithCtx(
   if (principal.admissionExpiresAt <= (options.now ?? Date.now())) {
     throw new SharedDemoActorError(
       "session_expired",
-      "The demo session has expired. Open the demo again.",
+      SHARED_DEMO_SESSION_EXPIRED_MESSAGE,
     );
   }
 
@@ -87,7 +115,7 @@ export async function getSharedDemoActorWithCtx(
 export async function requireSharedDemoActorWithCtx(ctx: AuthCtx) {
   const actor = await getSharedDemoActorWithCtx(ctx);
   if (!actor)
-    throw new Error("The demo session has expired. Open the demo again.");
+    throw new Error(SHARED_DEMO_SESSION_EXPIRED_MESSAGE);
   return actor;
 }
 

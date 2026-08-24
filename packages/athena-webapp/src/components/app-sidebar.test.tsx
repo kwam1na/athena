@@ -259,6 +259,33 @@ describe("AppSidebar capability gates", () => {
     expect(screen.queryByRole("button", { name: /storefront/i })).toBeNull();
   });
 
+  it("does not query the review moderation count in the shared demo", () => {
+    mocks.usePermissions.mockReturnValue(fullAdminPermissions);
+    mocks.useSharedDemoContext.mockReturnValue({ kind: "shared_demo" });
+
+    render(<AppSidebar />);
+
+    expect(mocks.useQuery).toHaveBeenCalledWith(
+      api.storeFront.reviews.getUnapprovedReviewsCount,
+      "skip",
+    );
+  });
+
+  // The mirrored direction. Asserting only the skip lets a mis-edit that drops
+  // the storeId term, or inverts the demo test, silently remove the pending
+  // badge for every real admin while the test above still passes.
+  it("still queries the review moderation count outside the shared demo", () => {
+    mocks.usePermissions.mockReturnValue(fullAdminPermissions);
+    mocks.useSharedDemoContext.mockReturnValue(null);
+
+    render(<AppSidebar />);
+
+    expect(mocks.useQuery).toHaveBeenCalledWith(
+      api.storeFront.reviews.getUnapprovedReviewsCount,
+      { storeId: "store-1" },
+    );
+  });
+
   it("hides Homepage from the shared demo menu", () => {
     mocks.usePermissions.mockReturnValue(fullAdminPermissions);
     mocks.useSharedDemoContext.mockReturnValue({ kind: "shared_demo" });

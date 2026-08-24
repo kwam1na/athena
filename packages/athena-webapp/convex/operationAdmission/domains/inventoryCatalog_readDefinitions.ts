@@ -335,19 +335,30 @@ export const getSkusReservedInPosSessionReadDefinition = stockReservationRead(
 // inventory/storeSchedule
 // ---------------------------------------------------------------------------
 
-function storeScheduleRead(functionName: string) {
+function storeScheduleRead(
+  functionName: string,
+  sharedDemo: "admit" | "deny" = "deny",
+) {
   return defineIntentRead({
     functionName: `inventory/storeSchedule:${functionName}`,
     intent: "store.configuration.view",
     operationId: `inventory.storeSchedule.${functionName}.read`,
     scope: { kind: "store" as const, storeIdArg: "storeId" },
+    sharedDemo,
   });
 }
 
 export const getStoreDayContextReadDefinition =
   storeScheduleRead("getStoreDayContext");
+/**
+ * Demo-admitted: the POS hub (`/pos`) and POS settings both read the schedule
+ * summary on load, and every "Make a sale" entry point in the demo routes
+ * through the hub. Its siblings stay denied — the schedule ADMIN views they
+ * back (`/configuration`) are hidden from the demo sidebar.
+ */
 export const getStoreScheduleSummaryReadDefinition = storeScheduleRead(
   "getStoreScheduleSummary",
+  "admit",
 );
 export const listStoreScheduleVersionsReadDefinition = storeScheduleRead(
   "listStoreScheduleVersions",

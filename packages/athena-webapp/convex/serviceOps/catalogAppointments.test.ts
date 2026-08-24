@@ -919,14 +919,46 @@ describe("service catalog and appointment helpers", () => {
       }
     }
   });
+
+  it("admits shared-demo readers on the services views inside their store, and denies them outside it", async () => {
+    for (const demoStoreId of ["store-1", "store-2"]) {
+      for (const [fn, args] of serviceOpsReadIngressCases()) {
+        vi.mocked(
+          sharedDemoActor.getSharedDemoActorWithCtx,
+        ).mockResolvedValue({
+          authUserId: "auth-demo" as Id<"users">,
+          athenaUserId: "demo-owner" as Id<"athenaUser">,
+          kind: "shared_demo",
+          organizationId: "org-1" as Id<"organization">,
+          storeId: demoStoreId as Id<"store">,
+        });
+        const ctx = createAppointmentMutationCtx();
+        const invoke = () =>
+          getHandler(fn)(
+            { ...ctx, auth: { getUserIdentity: vi.fn() } },
+            args as never,
+          );
+
+        if (demoStoreId === "store-1") {
+          // The demo's own store: these back the Services group the demo
+          // sidebar links to, so a denial here is the surface going dark.
+          await expect(invoke()).resolves.not.toThrow();
+        } else {
+          // Granting the intent does not unpin the store clamp.
+          await expect(invoke()).rejects.toThrow(
+            "This action isn't allowed in the demo.",
+          );
+        }
+      }
+    }
+  });
 });
 
 /**
- * Every serviceOps ingress whose handler-local demo gate the definition now
- * expresses, plus the two `service_ops.view` reads that were never gated at
- * all. `appointments.manage`, `service.catalog.manage` and `service_ops.view`
- * are all outside the demo grant sets, so the expected decision is the same
- * denial for each.
+ * Every serviceOps WRITE whose handler-local demo gate the definition now
+ * expresses. `appointments.manage` and `service.catalog.manage` are outside
+ * the demo capability grant set, so the expected decision is the same denial
+ * for each, in and out of the demo's own store.
  */
 function serviceOpsIngressCases(): Array<[unknown, Record<string, unknown>]> {
   return [
@@ -961,6 +993,21 @@ function serviceOpsIngressCases(): Array<[unknown, Record<string, unknown>]> {
     ],
     [updateServiceCatalogItem, { name: "Renamed", serviceCatalogId: "catalog-1" }],
     [archiveServiceCatalogItem, { serviceCatalogId: "catalog-1" }],
+  ];
+}
+
+/**
+ * The two `service_ops.view` reads, split out from the denial list above.
+ *
+ * They used to sit alongside the writes because `service_ops.view` was outside
+ * the demo grant set. The demo sidebar carries a Services group whose four
+ * views these back, and they were rendering before these reads moved onto the
+ * rails — so they are now demo-admitted INSIDE the demo store, while the
+ * writes beside them (`appointments.manage`, `service.catalog.manage`) stay
+ * denied. Store scope still applies, which is the second case below.
+ */
+function serviceOpsReadIngressCases(): Array<[unknown, Record<string, unknown>]> {
+  return [
     [listAppointments, { storeId: "store-1" }],
     [listServiceCatalogItems, { storeId: "store-1" }],
   ];

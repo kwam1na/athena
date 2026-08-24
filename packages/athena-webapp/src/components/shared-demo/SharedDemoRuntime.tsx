@@ -21,6 +21,7 @@ import {
 } from "@/lib/pos/infrastructure/local/posLocalStorageRuntime";
 import type { Id } from "~/convex/_generated/dataModel";
 import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
+import { clearSharedDemoRenewalAttempts } from "@/lib/errors/sharedDemoSessionExpired";
 import {
   getSharedDemoRestoreEpochStorageKey,
   getSharedDemoTerminalName,
@@ -97,6 +98,15 @@ export function SharedDemoRuntime({
   showControls?: boolean;
 }) {
   const context = useSharedDemoContext();
+
+  // A live demo session is the proof that renewal worked. Clearing the counter
+  // here is what keeps the cap from being a one-way door: a visitor who is
+  // renewed once now, and expires again hours later, still gets an automatic
+  // reconnect rather than being sent to the manual button forever.
+  useEffect(() => {
+    if (context) clearSharedDemoRenewalAttempts();
+  }, [context]);
+
   const registerTerminal = useMutation(
     api.inventory.posTerminal.registerTerminal,
   );

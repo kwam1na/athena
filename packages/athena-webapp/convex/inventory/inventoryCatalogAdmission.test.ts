@@ -59,6 +59,7 @@ import * as products from "./products";
 import * as productSku from "./productSku";
 import * as promoCode from "./promoCode";
 import * as skuSearch from "./skuSearch";
+import * as stockValidation from "./stockValidation";
 import * as storeSchedule from "./storeSchedule";
 import * as subcategories from "./subcategories";
 import { admitOperationWithCtx } from "../platform/operationAdmission";
@@ -553,8 +554,13 @@ describe("catalog read admission", () => {
       storeId: "demo-store",
     } as never);
 
+    // `stockValidation` carries `inventory.stock.view`, which is outside the
+    // demo grant set. It replaced `storeSchedule.getStoreScheduleSummary` here
+    // when `store.configuration.view` was granted to restore the demo's POS
+    // hub — that read is now admitted, so it no longer demonstrates an
+    // ungranted intent.
     await expect(
-      getHandler(storeSchedule.getStoreScheduleSummary)(ctx, {
+      getHandler(stockValidation.getSkusReservedInPosSession)(ctx, {
         storeId: "demo-store",
       }),
     ).rejects.toThrow(DEMO_DENIAL);
