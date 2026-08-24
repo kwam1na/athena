@@ -306,4 +306,20 @@ describe("athena.completeRun ref resolution by content-hash tail", () => {
     expect(denied.denial.message).toContain("attempt_v1.1.aaaabbbbccccdddd0000111122223333");
     expect(denied.denial.message).toContain("citation:v1.1.1.99998888777766665555444433332220");
   });
+
+  it("snaps a tail with one appended or dropped character to the unique minted handle", async () => {
+    const tools = hashedTools();
+    await tools.executeProgram();
+    const outcome = await tools.completeRun({
+      outcome: "answer",
+      narrative: "One line.",
+      // One char appended to the attempt hash; one dropped from the citation's.
+      citedAttemptRefs: ["attempt_v1.1.aaaabbbbccccdddd0000111122223333e"],
+      citations: [{ ref: "citation:v1.1.1.9999888877776666555544443333222", claim: "positions read" }],
+    });
+    expect(outcome.kind).toBe("success");
+    const call = tools.completions[0] as unknown as { citedAttemptRefs: string[]; citations: { ref: string; claim?: string }[] };
+    expect(call.citedAttemptRefs).toEqual(["attempt_v1.1.aaaabbbbccccdddd0000111122223333"]);
+    expect(call.citations).toEqual([{ ref: "citation:v1.1.1.99998888777766665555444433332220", claim: "positions read" }]);
+  });
 });

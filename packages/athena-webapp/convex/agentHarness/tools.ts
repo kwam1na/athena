@@ -474,25 +474,27 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
       const knownAttemptRefs = attempts.map((attempt) => attempt.attemptRef);
       const knownCitationRefs = attempts.flatMap((attempt) => attempt.citations.map((citation) => citation.citation));
       const hashTail = (ref: string) => /([0-9a-f]{24,})$/.exec(ref)?.[1];
-      const byTail = (refs: readonly string[]) => {
-        const map = new Map<string, string | null>();
-        for (const ref of refs) {
-          const tail = hashTail(ref);
-          if (!tail) continue;
-          map.set(tail, map.has(tail) ? null : ref);
-        }
-        return map;
+      const tailsOf = (refs: readonly string[]) => refs.map((ref) => ({ ref, tail: hashTail(ref) })).filter((entry): entry is { ref: string; tail: string } => entry.tail !== undefined);
+      // Exact tail first; then unique containment either way, because models
+      // also add or drop a character while transcribing (a 33-hex tail whose
+      // first 32 characters are the minted hash names exactly one handle).
+      const resolveByTail = (tail: string, entries: readonly { ref: string; tail: string }[]) => {
+        const exact = entries.filter((entry) => entry.tail === tail);
+        if (exact.length === 1) return exact[0].ref;
+        if (exact.length > 1) return undefined;
+        const near = entries.filter((entry) => entry.tail.includes(tail) || tail.includes(entry.tail));
+        return near.length === 1 ? near[0].ref : undefined;
       };
-      const attemptByTail = byTail(knownAttemptRefs);
-      const citationByTail = byTail(knownCitationRefs);
+      const attemptTails = tailsOf(knownAttemptRefs);
+      const citationTails = tailsOf(knownCitationRefs);
       const knownAttempts = new Set(knownAttemptRefs);
       const knownCitations = new Set(knownCitationRefs);
       const resolvedAttemptRefs: string[] = [];
       const resolvedCitations: { ref: string; claim?: string; claimShape?: string }[] = [];
       const resolveRef = (ref: string, claim?: { claim?: string; claimShape?: string }) => {
         const tail = hashTail(ref);
-        const asAttempt = knownAttempts.has(ref) ? ref : tail ? (attemptByTail.get(tail) ?? undefined) : undefined;
-        const asCitation = knownCitations.has(ref) ? ref : tail ? (citationByTail.get(tail) ?? undefined) : undefined;
+        const asAttempt = knownAttempts.has(ref) ? ref : tail ? resolveByTail(tail, attemptTails) : undefined;
+        const asCitation = knownCitations.has(ref) ? ref : tail ? resolveByTail(tail, citationTails) : undefined;
         if (asCitation) resolvedCitations.push({ ref: asCitation, ...(claim ?? {}) });
         else if (asAttempt) resolvedAttemptRefs.push(asAttempt);
         else if (ref.startsWith("citation:")) resolvedCitations.push({ ref, ...(claim ?? {}) });
