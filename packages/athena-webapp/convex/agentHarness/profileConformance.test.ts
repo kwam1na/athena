@@ -313,3 +313,70 @@ describe("synthetic second surface conformance", () => {
     expect(codes(registry)).toContain("read_intent_unknown");
   });
 });
+
+describe("starter-intent program conformance", () => {
+  async function fullTierFacade(profileId: string, packages: readonly string[]) {
+    const { AGENT_GENERATED_REGISTRY } = await import("./_generated/registry");
+    const { projectRunFacadeShape } = await import("./discovery");
+    const { toRuntimeGrant } = await import("./registry");
+    const projection = projectGrant(AGENT_GENERATED_REGISTRY, {
+      profileId,
+      grantedPackages: [...packages],
+      grantedReadIntents: ATHENA_READ_INTENT_CATALOG.map((intent) => intent.id),
+      authorityTier: "full_admin",
+    });
+    expect(projection.kind).toBe("projected");
+    if (projection.kind !== "projected") throw new Error("projection failed");
+    const shape = projectRunFacadeShape(toRuntimeGrant(projection));
+    return Object.entries(shape.packages).flatMap(([pkg, entry]) =>
+      Object.entries(entry.resources).map(([resource, resourceShape]) => ({
+        package: pkg,
+        resource,
+        verbs: resourceShape.verbs,
+        fields: resourceShape.fields,
+      })),
+    );
+  }
+
+  it("every registered program names a declared intent, renders closed, and validates against the full-tier facade", async () => {
+    const { AGENT_STARTER_INTENT_PROGRAMS } = await import("./profiles/starterIntentPrograms");
+    const { validateProgramSource } = await import("./programRuntime/programValidation");
+    const { renderStarterIntentProgram, STARTER_INTENT_SAMPLE_CONTEXT } = await import(
+      "../../shared/agentHarness/starterIntentProgram"
+    );
+    const { DAILY_OPERATIONS_PROFILE } = await import("./profiles/dailyOperations");
+    const profiles: Record<string, typeof DAILY_OPERATIONS_PROFILE> = {
+      daily_operations: DAILY_OPERATIONS_PROFILE,
+    };
+    expect(Object.keys(AGENT_STARTER_INTENT_PROGRAMS).length).toBeGreaterThan(0);
+    for (const [profileId, programs] of Object.entries(AGENT_STARTER_INTENT_PROGRAMS)) {
+      const profile = profiles[profileId];
+      expect(profile, `unknown profile ${profileId} in the starter-program registry`).toBeDefined();
+      const declared = new Set(profile.presentation.starterIntents.map((intent) => intent.id));
+      const snapshotKeys = profile.presentation.contextBinding.snapshotKeys ?? [];
+      const facade = await fullTierFacade(profileId, profile.packages.map((selection) => selection.packageKey));
+      expect(Object.keys(programs).length).toBeGreaterThan(0);
+      for (const [starterIntentId, template] of Object.entries(programs)) {
+        expect(declared.has(starterIntentId), `${profileId}:${starterIntentId} is not a declared starter intent`).toBe(
+          true,
+        );
+        const rendered = renderStarterIntentProgram(template, STARTER_INTENT_SAMPLE_CONTEXT, snapshotKeys);
+        expect(rendered.ok, `${starterIntentId} render: ${JSON.stringify(rendered)}`).toBe(true);
+        if (!rendered.ok) continue;
+        const validated = validateProgramSource(rendered.source, { facade });
+        expect(validated.ok, `${starterIntentId} validation: ${JSON.stringify(validated)}`).toBe(true);
+      }
+    }
+  });
+
+  it("the full-tier facade rejects a program reading an ungranted namespace", async () => {
+    const { validateProgramSource } = await import("./programRuntime/programValidation");
+    const { DAILY_OPERATIONS_PROFILE } = await import("./profiles/dailyOperations");
+    const facade = await fullTierFacade(
+      "daily_operations",
+      DAILY_OPERATIONS_PROFILE.packages.map((selection) => selection.packageKey),
+    );
+    const foreign = validateProgramSource("return await athena.fleet.stores.list({});", { facade });
+    expect(foreign.ok).toBe(false);
+  });
+});
