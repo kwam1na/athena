@@ -485,6 +485,8 @@ const TURN_TRACE_LEAF_IMPORTERS = [
   "agentHarness/retention.ts",
   // Reads them, for investigation only, off the ingress rail.
   "agentHarness/evals/directHarness.ts",
+  // Bounded recency scan for the engineer-only scorecard aggregation.
+  "agentHarness/scorecardQuery.ts",
 ];
 
 /**

@@ -17,6 +17,10 @@ const SAMPLE = {
   callDenialsByCode: { invalid_arguments: 1 },
   attempts: { result_produced: 40, rejected: 2 },
   budget: { calls: { p50: 2, p90: 14, max: 30, limit: 48 } },
+  profiles: {
+    daily_operations: { turns: 38, outcomes: { completed: 37, failed: 1 }, turnsWithRetry: 3 },
+    fleet_overview: { turns: 2, outcomes: { completed: 1, failed: 1 }, turnsWithRetry: 0 },
+  },
 };
 
 describe("parseScorecardArgs", () => {
@@ -48,6 +52,8 @@ describe("formatScorecard", () => {
     expect(text).toContain("40% partial"); // 4/10
     expect(text).toContain("rejected: 2");
     expect(text).toContain("calls p90 14/48");
+    expect(text).toContain("daily_operations");
+    expect(text).toContain("fleet_overview");
   });
 
   it("degrades to a plain empty note when the window has no turns", () => {
@@ -60,13 +66,14 @@ describe("formatScorecard", () => {
       callDenialsByCode: {},
       attempts: {},
       budget: {},
+      profiles: {},
     });
     expect(text).toContain("no turns");
   });
 });
 
 describe("wiring", () => {
-  it("targets the directHarness scorecard query", () => {
-    expect(SCORECARD_FUNCTION).toBe("agentHarness/evals/directHarness:describeHarnessScorecard");
+  it("targets the profile-neutral scorecard query", () => {
+    expect(SCORECARD_FUNCTION).toBe("agentHarness/scorecardQuery:describeHarnessScorecard");
   });
 });

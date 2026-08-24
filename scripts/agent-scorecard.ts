@@ -4,7 +4,7 @@
  *   bun scripts/agent-scorecard.ts [--turns 100] [--json]
  *
  * Runs the bounded internal aggregation
- * (`agentHarness/evals/directHarness:describeHarnessScorecard`) on the
+ * (`agentHarness/scorecardQuery:describeHarnessScorecard`) on the
  * deployment `bunx convex run` is credentialed for, and prints the rates the
  * harness is tuned by: turn outcomes, completion latency, completeRun retry
  * and denial codes, per-capability partial/denial rates, program-attempt
@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 
 import { runConvex, WEBAPP_DIR } from "./agent-harness-fence";
 
-export const SCORECARD_FUNCTION = "agentHarness/evals/directHarness:describeHarnessScorecard";
+export const SCORECARD_FUNCTION = "agentHarness/scorecardQuery:describeHarnessScorecard";
 
 export type ScorecardOptions = { readonly turns: number; readonly json: boolean };
 
@@ -48,6 +48,7 @@ type ScorecardShape = {
   readonly callDenialsByCode: Readonly<Record<string, number>>;
   readonly attempts: Readonly<Record<string, number>>;
   readonly budget: Readonly<Record<string, { readonly p50: number; readonly p90: number; readonly max: number; readonly limit?: number }>>;
+  readonly profiles: Readonly<Record<string, { readonly turns: number; readonly outcomes: Readonly<Record<string, number>>; readonly turnsWithRetry: number }>>;
 };
 
 const seconds = (ms?: number) => (ms === undefined ? "?" : `${(ms / 1000).toFixed(1)}s`);
@@ -64,6 +65,9 @@ export function formatScorecard(scorecard: ScorecardShape): string {
   const lines: string[] = [];
   lines.push(`Harness scorecard — ${scorecard.window.turns} turns (${scorecard.window.from ?? "?"} → ${scorecard.window.to ?? "?"})`);
   lines.push(`  outcomes    ${counts(scorecard.outcomes)}`);
+  for (const [profileKey, row] of Object.entries(scorecard.profiles).sort(([, left], [, right]) => right.turns - left.turns)) {
+    lines.push(`    ${profileKey}  ${row.turns} turns — ${counts(row.outcomes)}${row.turnsWithRetry ? `, ${row.turnsWithRetry} with retries` : ""}`);
+  }
   lines.push(
     `  completion  p50 ${seconds(scorecard.latencyMs.completion.p50)}, p90 ${seconds(scorecard.latencyMs.completion.p90)}, max ${seconds(scorecard.latencyMs.completion.max)}` +
       ` | first delta p50 ${seconds(scorecard.latencyMs.firstDelta.p50)}`,

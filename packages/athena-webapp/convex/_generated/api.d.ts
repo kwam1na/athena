@@ -55,6 +55,8 @@ import type * as agentHarness_retention from "../agentHarness/retention.js";
 import type * as agentHarness_runAdmission from "../agentHarness/runAdmission.js";
 import type * as agentHarness_runtimeHost from "../agentHarness/runtimeHost.js";
 import type * as agentHarness_runtimeRetention from "../agentHarness/runtimeRetention.js";
+import type * as agentHarness_scorecard from "../agentHarness/scorecard.js";
+import type * as agentHarness_scorecardQuery from "../agentHarness/scorecardQuery.js";
 import type * as agentHarness_testSupport from "../agentHarness/testSupport.js";
 import type * as agentHarness_tools from "../agentHarness/tools.js";
 import type * as agentHarness_turnBindings from "../agentHarness/turnBindings.js";
@@ -790,6 +792,8 @@ declare const fullApi: ApiFromModules<{
   "agentHarness/runAdmission": typeof agentHarness_runAdmission;
   "agentHarness/runtimeHost": typeof agentHarness_runtimeHost;
   "agentHarness/runtimeRetention": typeof agentHarness_runtimeRetention;
+  "agentHarness/scorecard": typeof agentHarness_scorecard;
+  "agentHarness/scorecardQuery": typeof agentHarness_scorecardQuery;
   "agentHarness/testSupport": typeof agentHarness_testSupport;
   "agentHarness/tools": typeof agentHarness_tools;
   "agentHarness/turnBindings": typeof agentHarness_turnBindings;

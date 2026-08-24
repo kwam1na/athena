@@ -44,6 +44,8 @@ export type HarnessScorecard = {
   readonly callDenialsByCode: Readonly<Record<string, number>>;
   readonly attempts: Readonly<Record<string, number>>;
   readonly budget: Readonly<Record<string, { readonly p50: number; readonly p90: number; readonly max: number; readonly limit?: number }>>;
+  /** Per-profile segmentation: the scorecard serves every surface, not one. */
+  readonly profiles: Readonly<Record<string, { readonly turns: number; readonly outcomes: Readonly<Record<string, number>>; readonly turnsWithRetry: number }>>;
 };
 
 /**
@@ -65,13 +67,18 @@ function percentile(sorted: readonly number[], fraction: number): number | undef
   return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))];
 }
 
+export type ScorecardGrantProfile = { readonly runId: string; readonly profileKey: string };
+
 export function aggregateHarnessScorecard(input: {
   readonly traceEvents: readonly ScorecardTraceEvent[];
   readonly calls: readonly ScorecardCallRow[];
   readonly attempts: readonly ScorecardAttemptRow[];
   readonly ledgers: readonly ScorecardLedgerRow[];
+  /** runId → profile map from the recent grants; turns of unmapped runs report as "unknown". */
+  readonly grantProfiles?: readonly ScorecardGrantProfile[];
 }): HarnessScorecard {
   const outcomes: Record<string, number> = {};
+  const outcomeByRun = new Map<string, string>();
   const completions: number[] = [];
   const firstDeltas: number[] = [];
   const denialsByCode: Record<string, number> = {};
@@ -87,6 +94,7 @@ export function aggregateHarnessScorecard(input: {
       turns += 1;
       const outcome = typeof payload.outcome === "string" ? payload.outcome : "unknown";
       outcomes[outcome] = (outcomes[outcome] ?? 0) + 1;
+      outcomeByRun.set(event.runId, outcome);
       if (typeof payload.completionMs === "number") completions.push(payload.completionMs);
       if (typeof payload.firstDeltaMs === "number") firstDeltas.push(payload.firstDeltaMs);
     }
@@ -128,6 +136,16 @@ export function aggregateHarnessScorecard(input: {
     };
   }
 
+  const profileByRun = new Map((input.grantProfiles ?? []).map((grant) => [grant.runId, grant.profileKey]));
+  const profiles: Record<string, { turns: number; outcomes: Record<string, number>; turnsWithRetry: number }> = {};
+  for (const [runId, outcome] of outcomeByRun) {
+    const profileKey = profileByRun.get(runId) ?? "unknown";
+    const row = (profiles[profileKey] ??= { turns: 0, outcomes: {}, turnsWithRetry: 0 });
+    row.turns += 1;
+    row.outcomes[outcome] = (row.outcomes[outcome] ?? 0) + 1;
+    if ((completeRunsByRun.get(runId) ?? 0) > 1) row.turnsWithRetry += 1;
+  }
+
   return {
     window: {
       from: oldest === undefined ? undefined : new Date(oldest).toISOString(),
@@ -147,5 +165,6 @@ export function aggregateHarnessScorecard(input: {
     callDenialsByCode,
     attempts,
     budget,
+    profiles,
   };
 }

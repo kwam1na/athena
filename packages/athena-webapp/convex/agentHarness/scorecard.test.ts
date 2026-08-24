@@ -95,4 +95,28 @@ describe("aggregateHarnessScorecard", () => {
     expect(scorecard.budget.calls).toEqual({ p50: 30, p90: 30, max: 30, limit: 48 });
     expect(scorecard.budget.rows.max).toBe(40);
   });
+
+  it("segments turns and retries per profile from the grant map, naming unmapped runs honestly", () => {
+    const scorecard = aggregateHarnessScorecard({
+      traceEvents: [
+        turnReport("r1", "completed", 10_000, 3_000),
+        turnReport("r2", "completed", 12_000, 3_000),
+        turnReport("r3", "failed", 30_000, 7_000),
+        completeRun("r1", "tone"),
+        completeRun("r1"),
+      ],
+      calls: [],
+      attempts: [],
+      ledgers: [],
+      grantProfiles: [
+        { runId: "r1", profileKey: "daily_operations" },
+        { runId: "r2", profileKey: "fleet_overview" },
+      ],
+    });
+    expect(scorecard.profiles).toEqual({
+      daily_operations: { turns: 1, outcomes: { completed: 1 }, turnsWithRetry: 1 },
+      fleet_overview: { turns: 1, outcomes: { completed: 1 }, turnsWithRetry: 0 },
+      unknown: { turns: 1, outcomes: { failed: 1 }, turnsWithRetry: 0 },
+    });
+  });
 });

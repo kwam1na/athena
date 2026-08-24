@@ -329,12 +329,26 @@ function parseJson(stdout: string): Record<string, unknown> | null {
   }
 }
 
+const CALL_RETRIES = 2;
+const CALL_RETRY_DELAY_MS = 4_000;
+
 async function callFunction(cwd: string, name: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const result = await runConvex(["bunx", "convex", "run", name, JSON.stringify(args)], cwd);
-  if (result.exitCode !== 0) throw new Error(`${name} failed: ${result.stderr || result.stdout}`);
-  const parsed = parseJson(result.stdout);
-  if (!parsed) throw new Error(`${name} returned no readable JSON.`);
-  return parsed;
+  let lastError = "";
+  for (let attempt = 0; attempt <= CALL_RETRIES; attempt += 1) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, CALL_RETRY_DELAY_MS));
+    const result = await runConvex(["bunx", "convex", "run", name, JSON.stringify(args)], cwd);
+    if (result.exitCode === 0) {
+      const parsed = parseJson(result.stdout);
+      if (parsed) return parsed;
+      lastError = `${name} returned no readable JSON.`;
+      continue;
+    }
+    lastError = `${name} failed: ${result.stderr || result.stdout}`;
+    // Transient deployment hiccups (post-deploy warmup) surface as
+    // InternalServerError; anything argument-shaped will fail identically on
+    // retry and the final throw carries it.
+  }
+  throw new Error(lastError);
 }
 
 async function assertDigest(cwd: string, moment: string): Promise<void> {
