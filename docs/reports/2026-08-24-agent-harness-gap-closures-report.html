@@ -7,7 +7,7 @@
   <body>
     <article
       data-athena-landed-change-report="v2"
-      data-athena-report-diff-fingerprint="39ff6fcdbfd38a03a1ff7b367d002340819ea0a5addbb518706cd7f4b1b87f4a"
+      data-athena-report-diff-fingerprint="c0debfe9d9e23c8429ebae5a3efd9bc9b1aaafaab848f0fe94469aff9325e297"
     >
       <header data-report-section="header">
         <h1>Agent Harness Gap Closures: Measured Latency and Product-Tone Enforcement</h1>
@@ -180,6 +180,7 @@
           <li><strong>Focused suites:</strong> productLexicon (19), tools (17+), historyProjection (13), turns, runtimeHost parity, convexAgent contract, fieldAdvisories — 145+ tests green; <code>tsc --noEmit</code> clean.</li>
           <li><strong>Offline replays:</strong> the tone sensor was replayed over 40 recorded answers before arming (34/40 true-positive findings, one FP found and fixed); normalization was replayed over the final phase's narratives before shipping (12 refs → 0; jargon 3.5 → 0.4/1k).</li>
           <li><strong>Deployment status:</strong> dev runs the branch tip and was validated live; production deploy is intentionally out of scope for this delivery (operator decision: skip prod deploy).</li>
+          <li><strong>Review loop:</strong> nine-reviewer evidence recorded for the gate's review obligation — a six-lens panel over the full branch, two scoped round-2 reviewers over the fixes, and an execution-probing round-3 verifier; four iterations, 55 findings adjudicated (every actionable one fixed with covering tests across three fix commits, the rest explicitly advisory, none deferred).</li>
           <li><strong>Gate:</strong> <code>bun run pr:athena</code> run status is recorded in the delivery-run ledger and telemetry accompanying this PR.</li>
         </ul>
       </section>
