@@ -172,7 +172,7 @@ export const REGISTER_SESSIONS_MANIFEST = defineCapabilityManifest({
   binding: {
     readIntents: ["cash_controls.view"],
     portKey: REGISTER_SESSIONS_PORT_KEY,
-    implementationVersion: "1",
+    implementationVersion: "2",
   },
 });
 
@@ -210,7 +210,7 @@ export const CASH_READ_PORTS: AgentReadPortIndex = {
       verbs: ["list", "get"],
       scopeKind: "store",
       readIntents: REGISTER_SESSIONS_MANIFEST.binding.readIntents,
-      implementationVersion: "1",
+      implementationVersion: "2",
       declaredCost: AGENT_PAGE_COST,
       handler: {
         kind: "internal_query",

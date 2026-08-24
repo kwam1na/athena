@@ -29,8 +29,10 @@ import { REGISTER_SESSIONS_PORT_KEY } from "./registers";
 const SESSION_STATUSES = ["open", "active", "closing", "closeout_rejected", "closed"] as const;
 type SessionStatus = (typeof SESSION_STATUSES)[number];
 
-/** Per-status read ceiling. One more than a page so exhaustion is detectable. */
+/** Per-index-read ceiling. One more than a page so exhaustion is detectable. */
 const STATUS_READ_LIMIT = 101;
+/** Rows examined to detect undated closed history worth disclosing. */
+const UNDATED_CLOSED_PROBE_LIMIT = 3;
 const REF_KIND = "register_session";
 
 const STATUS_ORDER: Record<SessionStatus, number> = {
@@ -44,29 +46,76 @@ const STATUS_ORDER: Record<SessionStatus, number> = {
 type SessionRow = Doc<"registerSession">;
 type CashCtx = Pick<QueryCtx, "db">;
 
-function registerSessionQuery(ctx: CashCtx, storeId: Id<"store">, status: SessionStatus): Promise<SessionRow[]> {
-  return ctx.db
-    .query("registerSession")
-    .withIndex("by_storeId_status", (q) => q.eq("storeId", storeId).eq("status", status))
-    .order("desc")
-    .take(STATUS_READ_LIMIT);
-}
-
-async function readSessions(ctx: CashCtx, args: { storeId: Id<"store">; statuses: readonly SessionStatus[] }) {
-  const pages = await Promise.all(args.statuses.map((status) => registerSessionQuery(ctx, args.storeId, status)));
-  return {
-    rows: pages.flat(),
-    truncated: pages.some((page) => page.length >= STATUS_READ_LIMIT),
-  };
-}
-
-function touchesOperatingDate(session: SessionRow, operatingDate: string, window: { endAt: number }): boolean {
-  if (session.openedOperatingDate !== undefined) {
-    if (session.openedOperatingDate === operatingDate) return true;
-  } else if (session.openedAt < window.endAt) {
-    return true;
+/**
+ * Date-keyed read (replaces the old per-status history scan, which read the
+ * newest 101 rows of every status partition and then filtered — on a store
+ * with real history the requested date fell off the scan window, every read
+ * answered "partial: status_read_ceiling_reached", and two identical
+ * questions could see different subsets. Reading by the date indexes is exact
+ * and bounded by the day's own size, not the store's lifetime.)
+ *
+ * A date's sessions are: sessions OPENED on the date (per requested status),
+ * plus sessions CLOSED OUT on the date, plus undated legacy sessions that are
+ * still not closed (an old drawer that predates operating-date stamping still
+ * matters today). Undated CLOSED history is not attributable to any date, so
+ * it is disclosed with a warning instead of being served on every date the
+ * way the old scan did.
+ */
+async function readSessionsForDate(
+  ctx: CashCtx,
+  args: {
+    storeId: Id<"store">;
+    statuses: readonly SessionStatus[];
+    operatingDate: string;
+    windowEndAt: number;
+  },
+) {
+  const openedOn = (status: SessionStatus, openedOperatingDate: string | undefined) =>
+    ctx.db
+      .query("registerSession")
+      .withIndex("by_storeId_status_openedOperatingDate", (q) =>
+        q.eq("storeId", args.storeId).eq("status", status).eq("openedOperatingDate", openedOperatingDate),
+      )
+      .take(STATUS_READ_LIMIT);
+  const reads = await Promise.all([
+    ...args.statuses.map((status) => openedOn(status, args.operatingDate)),
+    ...args.statuses.filter((status) => status !== "closed").map((status) => openedOn(status, undefined)),
+    ctx.db
+      .query("registerSession")
+      .withIndex("by_storeId_closeoutOperatingDate", (q) =>
+        q.eq("storeId", args.storeId).eq("closeoutOperatingDate", args.operatingDate),
+      )
+      .take(STATUS_READ_LIMIT),
+  ]);
+  const statusSet = new Set(args.statuses);
+  const rows: SessionRow[] = [];
+  const seen = new Set<string>();
+  for (const row of reads.flat()) {
+    if (seen.has(String(row._id))) continue;
+    if (!statusSet.has(row.status)) continue; // closeout-index rows outside the requested partition
+    // An undated legacy drawer is served on any date at or after its opening,
+    // matching what the old scan showed for it; never on a date before it.
+    if (row.openedOperatingDate === undefined && row.closeoutOperatingDate === undefined && row.openedAt >= args.windowEndAt) {
+      continue;
+    }
+    seen.add(String(row._id));
+    rows.push(row);
   }
-  return session.closeoutOperatingDate === operatingDate;
+  const undatedClosedProbe = statusSet.has("closed")
+    ? (
+        await ctx.db
+          .query("registerSession")
+          .withIndex("by_storeId_status_openedOperatingDate", (q) =>
+            q.eq("storeId", args.storeId).eq("status", "closed").eq("openedOperatingDate", undefined),
+          )
+          .take(UNDATED_CLOSED_PROBE_LIMIT)
+      ).some((row) => row.closeoutOperatingDate === undefined)
+    : false;
+  return {
+    rows,
+    truncated: reads.some((page) => page.length >= STATUS_READ_LIMIT),
+    undatedClosedHistory: undatedClosedProbe,
+  };
 }
 
 function closeoutVersionOf(session: SessionRow): string {
@@ -186,13 +235,11 @@ export const readRegisterSessionsHandler: AgentReadPortHandler = async (ctx, inp
   }
   const requestedStatus = input.args.status as SessionStatus | undefined;
   const statuses = requestedStatus ? [requestedStatus] : SESSION_STATUSES;
-  const read = await readSessions(ctx, { storeId, statuses });
-  const matching = read.rows
-    .filter((session) => touchesOperatingDate(session, operatingDate, window))
-    .sort(
-      (left, right) =>
-        STATUS_ORDER[left.status] - STATUS_ORDER[right.status] || right.openedAt - left.openedAt,
-    );
+  const read = await readSessionsForDate(ctx, { storeId, statuses, operatingDate, windowEndAt: window.endAt });
+  const matching = read.rows.sort(
+    (left, right) =>
+      STATUS_ORDER[left.status] - STATUS_ORDER[right.status] || right.openedAt - left.openedAt,
+  );
   const page = pageOf(matching, input.pageIndex * input.pageSize, input.pageSize);
   const terminalLabels = await terminalLabelsFor(ctx, page.items);
   const warnings: AgentWarning[] = [];
@@ -200,6 +247,14 @@ export const readRegisterSessionsHandler: AgentReadPortHandler = async (ctx, inp
     warnings.push({
       code: "operating_window_fallback",
       message: "No store schedule governed this date, so the calendar day was used for the window.",
+      sourceKey: "partitions",
+    });
+  }
+  if (read.undatedClosedHistory) {
+    warnings.push({
+      code: "undated_closed_history_not_listed",
+      message:
+        "This store has closed sessions from before operating-date stamping; they belong to no specific date and are not listed here.",
       sourceKey: "partitions",
     });
   }

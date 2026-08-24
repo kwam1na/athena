@@ -1208,7 +1208,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     },
     "cap_dailyops_register_sessions": {
       "binding": {
-        "implementationVersion": "1",
+        "implementationVersion": "2",
         "portKey": "cash.registerSessions",
         "readIntents": [
           "cash_controls.view"
@@ -2703,7 +2703,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       }
     }
   },
-  "compatibilityDigest": "fnv1a64:7786ad3f876ae060",
+  "compatibilityDigest": "fnv1a64:11d07403b4139cd6",
   "contractVersion": 1,
   "enablement": {
     "capabilities": {
@@ -2765,8 +2765,8 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       "sourceDigest": "sha256:c282f3e177297161300e403f27dcc02862cdf9c8ac89b21fcbbbc1ed6547fe55"
     },
     "cash.registerSessions": {
-      "implementationVersion": "1",
-      "sourceDigest": "sha256:71d58c34adc814d582561a6a70c63771679052eb677e9990ea7d9e35059dffa6"
+      "implementationVersion": "2",
+      "sourceDigest": "sha256:be63b9d2f6c49d1a7a20b633c582f5d49a3465980dd80b8557c6ba646e202b83"
     },
     "directory.teams": {
       "implementationVersion": "2",
@@ -3157,7 +3157,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "functionPath": "cashControls/agentCapabilities/registersPorts:readRegisterSessions",
         "kind": "internal_query"
       },
-      "implementationVersion": "1",
+      "implementationVersion": "2",
       "portKey": "cash.registerSessions",
       "projections": [
         "cashFinancials"
@@ -3547,7 +3547,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       ]
     }
   },
-  "registryDigest": "fnv1a64:ebc340bd5a4d6003",
+  "registryDigest": "fnv1a64:f14333bb7b4db2fa",
   "sdkView": {
     "contractVersion": 1,
     "packages": {
@@ -3698,7 +3698,7 @@ export const AGENT_GENERATED_SOURCE_KEYS: readonly string[] = [
 ];
 
 /** What a run pins; the deployment epoch fence compares it with the durable epoch digest. */
-export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:7786ad3f876ae060";
+export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:11d07403b4139cd6";
 
 /** Schema identity only; unchanged when a capability is enabled or disabled. */
-export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:ebc340bd5a4d6003";
+export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:f14333bb7b4db2fa";
