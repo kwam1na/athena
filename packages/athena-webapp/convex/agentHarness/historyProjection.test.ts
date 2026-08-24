@@ -415,6 +415,10 @@ describe("prompt assembly labels product fields as untrusted data (scenario 11)"
     });
     expect(prompt.text).toContain('list({ operatingDate, state: "pending" })');
     expect(prompt.text).toContain("athena.describe details one");
+    // Breadth: a broad question must be answered from every area it names,
+    // not the two or three reads the model happens to start with (measured
+    // under-reading: a six-area readiness question answered from three).
+    expect(prompt.text).toContain("read each granted area the question touches");
 
     expect(prompt.text).not.toContain("athena.discover");
     // Policy, not data: the catalog sits before the first fence and inside none.

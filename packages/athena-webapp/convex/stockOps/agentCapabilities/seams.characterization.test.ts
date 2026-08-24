@@ -75,7 +75,7 @@ describe("stock seams (characterization)", () => {
 });
 
 describe("inventory.replenishment read ceiling", () => {
-  it("bounds the catalogue scan and reports the page as truncated when the ceiling is reached", async () => {
+  it("covers a catalog-scale store whole; the page, not the ceiling, bounds the answer", async () => {
     const t = convexTest(schema, modules);
     const fixture = await t.run(async (ctx) => {
       const seeded = await seedDailyOperationsStore(ctx, { slug: "replenishment-ceiling" });
@@ -113,9 +113,12 @@ describe("inventory.replenishment read ceiling", () => {
 
     expect(output.kind).toBe("data");
     if (output.kind !== "data") throw new Error("unreachable");
+    // Sized 2026-08-24: the ceiling now covers a catalog-scale store (the
+    // reference store holds ~1,300 SKUs), so a 250-SKU catalogue derives in
+    // full and only pagination bounds what one call returns.
     expect(output.sources.find((source) => source.sourceKey === "recommendations")).toMatchObject({
-      status: "truncated",
-      reason: "sku_ceiling_reached",
+      status: "partial",
+      reason: "more_pages_available",
     });
     // The page stays at the manifest's bound even though the catalogue is larger.
     expect((output.data as unknown[]).length).toBe(100);

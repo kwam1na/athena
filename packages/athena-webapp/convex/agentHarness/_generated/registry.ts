@@ -1007,7 +1007,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     },
     "cap_dailyops_inventory_positions": {
       "binding": {
-        "implementationVersion": "3",
+        "implementationVersion": "4",
         "portKey": "inventory.positions",
         "readIntents": [
           "inventory.stock.view"
@@ -1029,11 +1029,11 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       "contractVersion": 1,
       "cost": {
         "worstCasePerCall": {
-          "bytes": 196608,
+          "bytes": 262144,
           "calls": 1,
-          "costUnits": 3,
-          "elapsedMs": 2500,
-          "rows": 100
+          "costUnits": 4,
+          "elapsedMs": 3000,
+          "rows": 200
         }
       },
       "egressClass": "operational",
@@ -1094,8 +1094,8 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "list": {
           "bounds": {
             "kind": "collection",
-            "maxItemsPerPage": 100,
-            "maxPagesPerRun": 3
+            "maxItemsPerPage": 200,
+            "maxPagesPerRun": 8
           },
           "filters": {
             "category": {
@@ -1486,7 +1486,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     },
     "cap_dailyops_replenishment": {
       "binding": {
-        "implementationVersion": "3",
+        "implementationVersion": "4",
         "portKey": "inventory.replenishment",
         "readIntents": [
           "procurement.view",
@@ -2703,7 +2703,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       }
     }
   },
-  "compatibilityDigest": "fnv1a64:574874feb9ada2f3",
+  "compatibilityDigest": "fnv1a64:a1e33d72ff44cf9b",
   "contractVersion": 1,
   "enablement": {
     "capabilities": {
@@ -2781,12 +2781,12 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       "sourceDigest": "sha256:34307738e9d37077b15e0c3f2e49b5473d3e9a117b7e496e780ae2eb83098919"
     },
     "inventory.positions": {
-      "implementationVersion": "3",
-      "sourceDigest": "sha256:6844e2877d540cd5f6b7640de4d170a7cd6afa8029d7c403704fe9c21013d77a"
+      "implementationVersion": "4",
+      "sourceDigest": "sha256:b93a1bc26e241330032b90d35f7d75aa74e8e6ca61e3bf35a3d26a7bb38b2179"
     },
     "inventory.replenishment": {
-      "implementationVersion": "3",
-      "sourceDigest": "sha256:6844e2877d540cd5f6b7640de4d170a7cd6afa8029d7c403704fe9c21013d77a"
+      "implementationVersion": "4",
+      "sourceDigest": "sha256:b93a1bc26e241330032b90d35f7d75aa74e8e6ca61e3bf35a3d26a7bb38b2179"
     },
     "operations.activity": {
       "implementationVersion": "1",
@@ -3278,17 +3278,17 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       ],
       "contractVersion": 1,
       "declaredCost": {
-        "bytes": 196608,
+        "bytes": 262144,
         "calls": 1,
-        "costUnits": 3,
-        "elapsedMs": 2500,
-        "rows": 100
+        "costUnits": 4,
+        "elapsedMs": 3000,
+        "rows": 200
       },
       "handler": {
         "functionPath": "stockOps/agentCapabilities/inventoryPorts:readPositions",
         "kind": "internal_query"
       },
-      "implementationVersion": "3",
+      "implementationVersion": "4",
       "portKey": "inventory.positions",
       "projections": [
         "costOverlay"
@@ -3320,7 +3320,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "functionPath": "stockOps/agentCapabilities/inventoryPorts:listReplenishment",
         "kind": "internal_query"
       },
-      "implementationVersion": "3",
+      "implementationVersion": "4",
       "portKey": "inventory.replenishment",
       "projections": [
         "supplierCommercial"
@@ -3557,7 +3557,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       ]
     }
   },
-  "registryDigest": "fnv1a64:f14333bb7b4db2fa",
+  "registryDigest": "fnv1a64:6d51d524a2c7f439",
   "sdkView": {
     "contractVersion": 1,
     "packages": {
@@ -3708,7 +3708,7 @@ export const AGENT_GENERATED_SOURCE_KEYS: readonly string[] = [
 ];
 
 /** What a run pins; the deployment epoch fence compares it with the durable epoch digest. */
-export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:574874feb9ada2f3";
+export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:a1e33d72ff44cf9b";
 
 /** Schema identity only; unchanged when a capability is enabled or disabled. */
-export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:f14333bb7b4db2fa";
+export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:6d51d524a2c7f439";

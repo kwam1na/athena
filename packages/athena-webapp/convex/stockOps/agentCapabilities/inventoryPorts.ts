@@ -40,7 +40,12 @@ const LOW_STOCK_THRESHOLD = 5;
  * the read is bounded at the source to keep one call within the page cost the
  * manifest declares. Hitting the ceiling is disclosed, never silently dropped.
  */
-export const REPLENISHMENT_SKU_CEILING = 200;
+// Sized 2026-08-24 from the observed catalog scale (~1,300 SKUs on the
+// reference store): at 200 the derivation never SAW most of the catalog, so a
+// "what needs ordering" answer could silently miss items — 100% of observed
+// replenishment reads answered sku_ceiling_reached. The ceiling still guards
+// stores beyond this size, with the same disclosed truncation.
+export const REPLENISHMENT_SKU_CEILING = 1_500;
 /**
  * The same read also walks the store's purchase-order history and each order's
  * line items, so both scans carry their own ceiling; either one hitting it
