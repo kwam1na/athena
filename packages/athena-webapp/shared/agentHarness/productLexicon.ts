@@ -33,6 +33,8 @@ export type AgentProductLexicon = {
   readonly enumLabels: { readonly [raw: string]: string };
   /** Backend field name → operator wording (`registerSession` → "drawer"). */
   readonly fieldLabels: { readonly [raw: string]: string };
+  /** Capability path → operator phrase (`reports.daySales` → "the daily sales report"). */
+  readonly namespaceLabels?: { readonly [namespace: string]: string };
 };
 
 /** App-wide labels drawn from the product's own UI copy. */
@@ -61,6 +63,7 @@ export function mergeLexicons(base: AgentProductLexicon, overlay: AgentProductLe
   return {
     enumLabels: { ...base.enumLabels, ...overlay.enumLabels },
     fieldLabels: { ...base.fieldLabels, ...overlay.fieldLabels },
+    namespaceLabels: { ...base.namespaceLabels, ...overlay.namespaceLabels },
   };
 }
 
@@ -193,6 +196,69 @@ export function stripSourcesFooter(narrative: string): string {
   const lines = section.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
   if (lines.length === 0 || !lines.every((line) => REF_TOKEN.test(line))) return narrative;
   return narrative.slice(0, header.index).trimEnd();
+}
+
+// ---------------------------------------------------------------------------
+// Narrative normalization (the operatorMessages.ts idea, applied to the answer)
+// ---------------------------------------------------------------------------
+
+export type AgentNormalizeNarrativeOptions = {
+  readonly evidence: Pick<AgentNarrativeEvidence, "fieldNames" | "enumLiterals" | "moneyAmounts">;
+  readonly namespaces: readonly string[];
+  readonly lexicon: AgentProductLexicon;
+  readonly question: string;
+};
+
+/**
+ * Deterministically rewrite internal tokens in a committed narrative to their
+ * operator wording — the same mechanism `operatorMessages.ts` applies to
+ * backend errors, extended to the agent's answer. Evidence-bound by
+ * construction: only tokens the run itself served the model (harvested field
+ * names, enum spellings, minor-unit amounts) and the grant's namespaces are
+ * ever rewritten; free prose is untouchable, and tokens the operator used in
+ * the question are theirs.
+ */
+export function normalizeNarrative(narrative: string, options: AgentNormalizeNarrativeOptions): string {
+  const question = options.question.toLowerCase();
+  const asked = (token: string) => question.includes(token.toLowerCase());
+  let text = narrative;
+  const rewriteWord = (token: string, replacement: string) => {
+    text = text.replace(new RegExp("\\b" + escapeRegExp(token) + "\\b", "g"), replacement);
+  };
+  // Rewrite what the run served the model AND what the lexicon itself names:
+  // lexicon keys are curated-internal by construction, so a catalog-known
+  // token the model used without reading it is still safely rewritable.
+  for (const namespace of new Set([...options.namespaces, ...Object.keys(options.lexicon.namespaceLabels ?? {})])) {
+    if (asked(namespace) || !text.includes(namespace)) continue;
+    const label = options.lexicon.namespaceLabels?.[namespace] ?? humanizeToken(namespace.split(".")[1] ?? namespace);
+    // Absorb a trailing verb mention ("reports.daySales.get") into the phrase.
+    text = text.replace(new RegExp(`${escapeRegExp(namespace)}(?:\\.(?:get|list))?`, "g"), label);
+  }
+  for (const name of new Set([...options.evidence.fieldNames, ...Object.keys(options.lexicon.fieldLabels)])) {
+    if (!INTERNAL_NAME_PATTERN.test(name) || asked(name)) continue;
+    // Structure-preserving only: "lifecycleStage" -> "lifecycle stage" keeps
+    // the token's part of speech, so the sentence still parses. Free-form
+    // labels ("where the day stands") would garble grammar mid-sentence —
+    // they belong in disclosure and denial fixes, where the model can
+    // restructure the sentence around them.
+    rewriteWord(name, humanizeToken(name));
+  }
+  for (const literal of new Set([...options.evidence.enumLiterals, ...Object.keys(options.lexicon.enumLabels)])) {
+    if (asked(literal)) continue;
+    rewriteWord(literal, humanizeToken(literal));
+  }
+  const grouping = new Intl.NumberFormat("en-US");
+  for (const money of options.evidence.moneyAmounts) {
+    if (Math.abs(money.amount) < 10_000) continue; // below GH₵100, plain integers collide with counts
+    const display = formatMinorMoney(money.amount, money.currency);
+    for (const spelling of [grouping.format(money.amount), String(money.amount)]) {
+      text = text.replace(
+        new RegExp("(?:\\b(?:" + escapeRegExp(money.currency) + "|GHC)\\s*|GH\u20b5\\s*)?(?<![\\d,])" + escapeRegExp(spelling) + "(?!\\d)", "g"),
+        display,
+      );
+    }
+  }
+  return text;
 }
 
 // ---------------------------------------------------------------------------

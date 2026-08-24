@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   annotateMoneyDisplays,
+  normalizeNarrative,
   stripSourcesFooter,
   APP_PRODUCT_LEXICON,
   collectNarrativeEvidence,
@@ -206,6 +207,80 @@ describe("stripSourcesFooter", () => {
 
   it("leaves a narrative without a footer untouched", () => {
     expect(stripSourcesFooter("Sales are GH₵14,149.")).toBe("Sales are GH₵14,149.");
+  });
+});
+
+describe("normalizeNarrative", () => {
+  const lexicon = {
+    enumLabels: { close_blocked: "close blocked" },
+    fieldLabels: { lifecycleStage: "where the day stands", registerBlockerCount: "registers blocking the close" },
+    namespaceLabels: { "reports.daySales": "the daily sales report", "inventory.positions": "the live stock list" },
+  };
+  const evidence = {
+    fieldNames: ["lifecycleStage", "registerBlockerCount", "decisionReason"],
+    enumLiterals: ["close_blocked", "operating_window_fallback"],
+    moneyAmounts: [{ amount: 1_414_900, currency: "GHS" }],
+  };
+
+  it("rewrites harvested internal tokens to their operator wording", () => {
+    const out = normalizeNarrative(
+      "The lifecycleStage is close_blocked; registerBlockerCount is 1 per reports.daySales.",
+      { evidence, namespaces: ["reports.daySales"], lexicon, question: "" },
+    );
+    expect(out).toBe("The lifecycle stage is close blocked; register blocker count is 1 per the daily sales report.");
+  });
+
+  it("humanizes harvested tokens without lexicon entries", () => {
+    const out = normalizeNarrative(
+      "The decisionReason was operating_window_fallback.",
+      { evidence, namespaces: [], lexicon, question: "" },
+    );
+    expect(out).toBe("The decision reason was operating window fallback.");
+  });
+
+  it("rewrites raw minor-unit amounts to the display value, absorbing a currency-code prefix", () => {
+    const out = normalizeNarrative(
+      "Revenue is GHS 1,414,900 so far.",
+      { evidence, namespaces: [], lexicon, question: "" },
+    );
+    expect(out).toBe("Revenue is GH₵14,149 so far.");
+    const bare = normalizeNarrative(
+      "Revenue reached 1,414,900 today.",
+      { evidence, namespaces: [], lexicon, question: "" },
+    );
+    expect(bare).toBe("Revenue reached GH₵14,149 today.");
+  });
+
+  it("leaves tokens the operator asked with untouched", () => {
+    const out = normalizeNarrative(
+      "The lifecycleStage is close blocked.",
+      { evidence, namespaces: [], lexicon, question: "what is the lifecycleStage?" },
+    );
+    expect(out).toBe("The lifecycleStage is close blocked.");
+  });
+
+  it("rewrites lexicon-known tokens even when absent from the run's evidence", () => {
+    const out = normalizeNarrative(
+      "The registerBlockerCount comes from reports.daySales.",
+      { evidence: { fieldNames: [], enumLiterals: [], moneyAmounts: [] }, namespaces: [], lexicon, question: "" },
+    );
+    expect(out).toBe("The register blocker count comes from the daily sales report.");
+  });
+
+  it("never rewrites tokens that were not in the run's evidence", () => {
+    const out = normalizeNarrative(
+      "The iPhone case and snake_oil are unrelated words.",
+      { evidence, namespaces: [], lexicon, question: "" },
+    );
+    expect(out).toBe("The iPhone case and snake_oil are unrelated words.");
+  });
+
+  it("does not touch correctly displayed money", () => {
+    const out = normalizeNarrative(
+      "Revenue is GH₵14,149 so far.",
+      { evidence, namespaces: [], lexicon, question: "" },
+    );
+    expect(out).toBe("Revenue is GH₵14,149 so far.");
   });
 });
 

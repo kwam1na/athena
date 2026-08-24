@@ -20,6 +20,22 @@ export const DAILY_OPERATIONS_TONE_LEXICON: AgentProductLexicon = {
     daily_close: "daily close",
     operations_queue: "operations queue",
     in_stock: "in stock",
+    auto_complete: "completed automatically",
+    auto_start: "started automatically",
+  },
+  namespaceLabels: {
+    "reports.daySales": "the daily sales report",
+    "reports.weekPerformance": "the weekly performance report",
+    "reports.storePulse": "the store pulse report",
+    "operations.storeDay": "the store day record",
+    "operations.attention": "the attention list",
+    "operations.approvals": "approvals",
+    "operations.work": "open work",
+    "cash.registerSessions": "the register drawers",
+    "inventory.positions": "the live stock list",
+    "automation.dailyOperations": "the daily operations automation",
+    "inventory.replenishment": "replenishment recommendations",
+    "operations.activity": "the activity feed",
   },
   fieldLabels: {
     registerSession: "drawer",
@@ -36,6 +52,8 @@ export const DAILY_OPERATIONS_TONE_LEXICON: AgentProductLexicon = {
     grossRevenue: "revenue",
     transactionCount: "number of sales",
     unitsSold: "units sold",
+    stockValue: "stock value",
+    unitCost: "unit cost",
   },
 };
 

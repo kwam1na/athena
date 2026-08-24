@@ -389,7 +389,7 @@ describe("athena.completeRun tone sensor and money display annotation", () => {
     expect(outcome.result.output.grossRevenue.value.display).toBe("GH₵14,149");
   });
 
-  it("warn mode records findings on the turn state and still commits", async () => {
+  it("normalizes internal tokens out of the committed narrative and commits clean", async () => {
     const tools = toneTools();
     await tools.executeProgram();
     const outcome = await tools.completeRun({
@@ -399,28 +399,32 @@ describe("athena.completeRun tone sensor and money display annotation", () => {
     });
     expect(outcome.kind).toBe("success");
     expect(tools.completions).toHaveLength(1);
-    const codes = tools.state.toneFindings().map((finding) => finding.code);
-    expect(codes).toContain("raw_minor_amount");
-    expect(codes).toContain("internal_field_name");
-    expect(codes).toContain("raw_enum_literal");
+    const committed = tools.completions[0].artifact.payload.narrative as string;
+    expect(committed).toContain("GH₵14,149");
+    expect(committed).not.toContain("1,414,900");
+    expect(committed).not.toContain("lifecycleStage");
+    expect(committed).not.toContain("close_blocked");
+    expect(tools.state.toneFindings()).toEqual([]);
   });
 
-  it("enforce mode denies once with the named fixes, then lets a retry through", async () => {
+  it("enforce mode denies a stub once with the named fix, then lets a retry through", async () => {
+    // Vocabulary is normalized deterministically, so only what normalization
+    // cannot fix — a stub standing in for the answer — still earns the denial.
     const tools = toneTools({ tonePolicy: "enforce" });
     await tools.executeProgram();
     const denied = await tools.completeRun({
       outcome: "answer",
-      narrative: "Revenue is GHS 1,414,900 and lifecycleStage is close_blocked.",
+      narrative: "Summary comparing this week to last for Wigclub.",
       ...CITED,
     });
     expect(denied.kind).toBe("denied");
     expect((denied as { denial: { code: string; message: string } }).denial.code).toBe("tone");
-    expect((denied as { denial: { message: string } }).denial.message).toContain("GH₵14,149");
+    expect((denied as { denial: { message: string } }).denial.message).toContain("full answer");
     expect(tools.completions).toHaveLength(0);
     // The bound is one corrective denial: the retry commits even if still imperfect.
     const retried = await tools.completeRun({
       outcome: "answer",
-      narrative: "Revenue is GHS 1,414,900 so far today.",
+      narrative: "Summary comparing this week to last for Wigclub.",
       ...CITED,
     });
     expect(retried.kind).toBe("success");

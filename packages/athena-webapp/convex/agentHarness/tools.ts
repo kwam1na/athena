@@ -35,6 +35,7 @@ import {
   annotateMoneyDisplays,
   APP_PRODUCT_LEXICON,
   collectNarrativeEvidence,
+  normalizeNarrative,
   senseTone,
   stripSourcesFooter,
   type AgentMoneyAmount,
@@ -563,9 +564,19 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
       if (args.outcome === "answer" && (citedAttemptRefs.length === 0 || citations.length === 0)) {
         return denied("citations_required", `An answer must cite at least one attempt and one citation; use outcome no_usable_sources when nothing usable was read.${validRefsHint()}`);
       }
-      // A trailing refs-only "Sources:" footer duplicates the answer surface's
-      // own citation rendering; normalize it away before sensing or commit.
-      const narrative = stripSourcesFooter(args.narrative);
+      // Normalization before sensing or commit: strip the trailing refs-only
+      // "Sources:" footer (the surface renders citations itself), then rewrite
+      // the internal tokens this run served the model into their operator
+      // wording — deterministic and evidence-bound, the operatorMessages.ts
+      // mechanism applied to the answer.
+      const namespacesRead = [...new Set(attempts.flatMap((attempt) => attempt.citations.map((citation) => citation.namespace)))];
+      const lexicon = host.lexicon ?? APP_PRODUCT_LEXICON;
+      const narrative = normalizeNarrative(stripSourcesFooter(args.narrative), {
+        evidence: { fieldNames: [...toneEvidence.fieldNames], enumLiterals: [...toneEvidence.enumLiterals], moneyAmounts: toneEvidence.moneyAmounts },
+        namespaces: namespacesRead,
+        lexicon,
+        question: host.question ?? "",
+      });
       // Product-tone sensor: the narrative is held to the run's own evidence
       // (fields, enum spellings, minor-unit amounts it was shown, plus the
       // grant's namespaces and this turn's refs). Warn mode records findings
@@ -577,9 +588,9 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
         fieldNames: [...toneEvidence.fieldNames],
         enumLiterals: [...toneEvidence.enumLiterals],
         moneyAmounts: toneEvidence.moneyAmounts,
-        namespaces: [...new Set(attempts.flatMap((attempt) => attempt.citations.map((citation) => citation.namespace)))],
+        namespaces: namespacesRead,
         refs: [...knownAttemptRefs, ...knownCitationRefs],
-        lexicon: host.lexicon ?? APP_PRODUCT_LEXICON,
+        lexicon,
       });
       if (host.tonePolicy === "enforce" && toneFindings.length > 0 && !toneDeniedOnce) {
         toneDeniedOnce = true;
