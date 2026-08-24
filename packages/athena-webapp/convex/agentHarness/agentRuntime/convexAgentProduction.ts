@@ -21,10 +21,13 @@ import {
 export type { ConvexAgentModelResolver, ConvexAgentRuntimeAdapter, ConvexAgentRuntimeCtx };
 
 /**
- * Dev experiment knob: when set (e.g. "low"), every provider call carries
- * `providerOptions.openai.reasoningEffort`. Unset in production.
+ * Dev experiment knobs: each env var, when set, adds the matching
+ * `providerOptions.openai.*` field to every provider call. Reasoning effort
+ * carries a measured default (below); the others are inert unless set.
  */
 export const CONVEX_AGENT_REASONING_EFFORT_ENV = "ATHENA_AGENT_REASONING_EFFORT" as const;
+export const CONVEX_AGENT_TEXT_VERBOSITY_ENV = "ATHENA_AGENT_TEXT_VERBOSITY" as const;
+export const CONVEX_AGENT_SERVICE_TIER_ENV = "ATHENA_AGENT_SERVICE_TIER" as const;
 
 /**
  * Default reasoning effort for the production adapter. Measured 2026-08-24 on
@@ -38,7 +41,14 @@ const CONVEX_AGENT_DEFAULT_REASONING_EFFORT = "low" as const;
 
 function experimentProviderOptions(): Record<string, Record<string, unknown>> | undefined {
   const effort = process.env[CONVEX_AGENT_REASONING_EFFORT_ENV] ?? CONVEX_AGENT_DEFAULT_REASONING_EFFORT;
-  return effort.length > 0 ? { openai: { reasoningEffort: effort } } : undefined;
+  const verbosity = process.env[CONVEX_AGENT_TEXT_VERBOSITY_ENV];
+  const serviceTier = process.env[CONVEX_AGENT_SERVICE_TIER_ENV];
+  const openai: Record<string, unknown> = {
+    ...(effort.length > 0 ? { reasoningEffort: effort } : {}),
+    ...(verbosity && verbosity.length > 0 ? { textVerbosity: verbosity } : {}),
+    ...(serviceTier && serviceTier.length > 0 ? { serviceTier } : {}),
+  };
+  return Object.keys(openai).length > 0 ? { openai } : undefined;
 }
 
 export function createProductionConvexAgentRuntimeAdapter(input: {

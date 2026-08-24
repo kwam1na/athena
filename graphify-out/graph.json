@@ -11411,7 +11411,7 @@
       "relation": "calls",
       "source": "convexagentproduction_experimentprovideroptions",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgentProduction.ts",
-      "source_location": "L50",
+      "source_location": "L60",
       "target": "convexagentproduction_createproductionconvexagentruntimeadapter",
       "weight": 1
     },
@@ -42779,7 +42779,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_agentruntime_convexagentproduction_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgentProduction.ts",
-      "source_location": "L44",
+      "source_location": "L54",
       "target": "convexagentproduction_createproductionconvexagentruntimeadapter",
       "weight": 1
     },
@@ -42791,7 +42791,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_agentruntime_convexagentproduction_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgentProduction.ts",
-      "source_location": "L39",
+      "source_location": "L42",
       "target": "convexagentproduction_experimentprovideroptions",
       "weight": 1
     },
@@ -215848,7 +215848,7 @@
       "label": "createProductionConvexAgentRuntimeAdapter()",
       "norm_label": "createproductionconvexagentruntimeadapter()",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgentProduction.ts",
-      "source_location": "L44"
+      "source_location": "L54"
     },
     {
       "community": 1031,
@@ -215857,7 +215857,7 @@
       "label": "experimentProviderOptions()",
       "norm_label": "experimentprovideroptions()",
       "source_file": "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgentProduction.ts",
-      "source_location": "L39"
+      "source_location": "L42"
     },
     {
       "community": 1031,
