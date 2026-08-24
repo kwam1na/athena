@@ -47,6 +47,7 @@ import { defineAgentReadPort, type AgentReadPortIndex } from "../../../shared/ag
 import { AGENT_GENERATED_REGISTRY } from "../_generated/registry";
 import { createDelegatedAdmission } from "../delegatedAdmission";
 import { createAgentExecutorSeams, type AgentExecutorSeamRefs } from "../executorSeams";
+import { aggregateHarnessScorecard, scorecardTraceTake } from "./scorecard";
 import { resolveDurableEnablementWithCtx } from "../deploymentState";
 import { cancelAgentRunWithCtx, markAgentRunRunningWithCtx } from "../lifecycle";
 import {
@@ -61,7 +62,7 @@ import {
 } from "../readPorts";
 import { buildAgentCapabilityRegistry, evaluateEnablement, type AgentEnablementOverlay } from "../registry";
 import { agentTurnEntryPoints } from "../turns";
-import { pageTurnTraceByBindingWithCtx } from "../turnTrace";
+import { pageTurnTraceByBindingWithCtx, takeRecentTurnTraceEventsWithCtx } from "../turnTrace";
 import { listAutomationEvidenceHandler } from "../../automation/agentCapabilities/evidencePorts";
 import { readRegisterSessionsHandler } from "../../cashControls/agentCapabilities/registersPorts";
 import { listActivityHandler } from "../../operations/agentCapabilities/activityPorts";
@@ -720,5 +721,32 @@ export const cancelOperatorTurn = internalMutation({
       { ...ctx, operationAdmission: { actor: { kind: "normal_user", athenaUserId: target.athenaUserId } } } as never,
       { storeId: target.storeId, bindingId: args.bindingId },
     );
+  },
+});
+
+
+/**
+ * The harness scorecard: is the agent getting better? Bounded reads over the
+ * engineer-only tables, aggregated by the pure `scorecard.ts` arithmetic —
+ * tone-retry rate, outcomes, latency percentiles, capability partial/denial
+ * rates, attempt rejections, and budget utilization over the recent window.
+ *
+ * Internal and run by hand (`bun run agent-harness:scorecard`), never a cron:
+ * the reads are bounded but they are still whole-table recency scans.
+ */
+export const describeHarnessScorecard = internalQuery({
+  args: { turns: v.optional(v.number()) },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const traceEvents = await takeRecentTurnTraceEventsWithCtx(ctx, scorecardTraceTake(args.turns));
+    const calls = await ctx.db.query("agentCapabilityCall").order("desc").take(1_000);
+    const attempts = await ctx.db.query("agentProgramAttempt").order("desc").take(400);
+    const ledgers = await ctx.db.query("agentBudgetLedger").order("desc").take(200);
+    return aggregateHarnessScorecard({
+      traceEvents: traceEvents.map((event) => ({ runId: String(event.runId), kind: event.kind, at: event.at, payload: event.payload })),
+      calls: calls.map((call) => ({ capabilityId: call.capabilityId, status: call.status, delegation: call.delegation as never })),
+      attempts: attempts.map((attempt) => ({ status: attempt.status })),
+      ledgers: ledgers.map((ledger) => ({ charged: ledger.charged as never, limits: ledger.limits as never })),
+    });
   },
 });

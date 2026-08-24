@@ -24,6 +24,7 @@ import {
   fitTracePayload,
   isAgentTurnTraceEnabled,
   listTurnTraceByBindingWithCtx,
+  takeRecentTurnTraceEventsWithCtx,
 } from "./turnTrace";
 import { recordTurnIntentWithCtx } from "./turnBindings";
 
@@ -156,6 +157,24 @@ describe("turn trace leaf", () => {
 
     // Another turn's trace is its own.
     expect(await t.run((ctx) => listTurnTraceByBindingWithCtx(ctx, other.bindingId, 10))).toHaveLength(1);
+  });
+
+  it("serves a bounded newest-first recency scan across bindings for the scorecard", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run((ctx) => seedBinding(ctx, "trace-recent-a"));
+    const other = await t.run((ctx) => seedBinding(ctx, "trace-recent-b"));
+    await t.run((ctx) =>
+      appendTurnTraceEventsWithCtx(ctx, [
+        rowInput(seeded, { sequence: 0, kind: "turn_started", payload: {} }),
+        rowInput(other, { sequence: 0, kind: "turn_started", payload: {} }),
+        rowInput(other, { sequence: 1, kind: "turn_report", payload: { outcome: "completed" } }),
+      ]),
+    );
+    const recent = await t.run((ctx) => takeRecentTurnTraceEventsWithCtx(ctx, 2));
+    expect(recent).toHaveLength(2);
+    const all = await t.run((ctx) => takeRecentTurnTraceEventsWithCtx(ctx, 10));
+    expect(all).toHaveLength(3);
+    expect(all.map((row) => row.kind)).toContain("turn_report");
   });
 
   it("expiry delete is bounded, counts what it removed, and leaves live rows alone", async () => {

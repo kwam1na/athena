@@ -13,6 +13,8 @@
     "agent-sdk:check": "cd ../.. && bun scripts/agent-sdk-check.ts",
     "agent-harness:fence": "cd ../.. && bun scripts/agent-harness-fence.ts",
     "agent-harness:switch": "cd ../.. && bun scripts/agent-harness-switch.ts",
+    "agent-harness:scorecard": "cd ../.. && bun scripts/agent-scorecard.ts",
+    "agent-eval:drive": "cd ../.. && bun scripts/agent-eval-drive.ts",
     "lint": "bash ./scripts/convex-lint-changed.sh",
     "lint:frontend:changed": "bash ./scripts/frontend-lint-changed.sh",
     "lint:convex": "eslint convex && python3 scripts/convexPaginationAntiPatternCheck.py .",

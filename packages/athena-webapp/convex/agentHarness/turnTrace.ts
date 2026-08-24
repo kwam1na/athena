@@ -214,6 +214,19 @@ export async function pageTurnTraceByBindingWithCtx(
     .paginate({ numItems: options.numItems, cursor: options.cursor });
 }
 
+/** Ceiling for the scorecard's recency scan; the aggregate wants a window, not history. */
+export const TURN_TRACE_RECENT_SCAN_MAX = 4_000;
+
+/**
+ * The newest rows across every binding, for the engineer-only scorecard
+ * aggregation. A recency scan, not a per-turn read: the caller gets whatever
+ * the newest `take` rows are, whole-turn boundaries not guaranteed.
+ */
+export async function takeRecentTurnTraceEventsWithCtx(ctx: ReadCtx, take: number): Promise<Doc<"agentTurnTraceEvent">[]> {
+  const bounded = Math.min(TURN_TRACE_RECENT_SCAN_MAX, Math.max(1, Math.trunc(take)));
+  return ctx.db.query("agentTurnTraceEvent").order("desc").take(bounded);
+}
+
 /**
  * Pure delete over the expiry index: the standard-class sweep's phase for the
  * trace. Bounded; `hasMore` asks the caller to schedule another pass.
