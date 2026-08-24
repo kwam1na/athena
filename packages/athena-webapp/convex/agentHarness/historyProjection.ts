@@ -16,6 +16,7 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { AgentProjectedHistory, AgentProjectedMessage, AgentProjectedPrompt } from "../../shared/agentHarness/agentRuntime";
+import type { AgentProductLexicon } from "../../shared/agentHarness/productLexicon";
 import { computeSha256Digest } from "../../shared/agentHarness/digest";
 import { isTerminalRunStatus } from "../../shared/agentHarness/execution";
 import { egressClassRank, isPlainObject, type AgentEgressClass } from "../../shared/agentHarness/values";
@@ -359,6 +360,8 @@ export type AgentTurnPromptInput = {
   readonly capabilities?: readonly AgentCapabilitySummary[];
   readonly question: string;
   readonly egressClass: AgentEgressClass;
+  /** Merged product lexicon: catalog fields render operator labels next to names. */
+  readonly lexicon?: AgentProductLexicon;
 };
 
 /**
@@ -381,7 +384,12 @@ export function assembleTurnPrompt(input: AgentTurnPromptInput): AgentProjectedP
     // Kernel-authored, so never fenced: the catalog is policy, not retrieved data.
     lines.push("Capabilities this run may read (filters and public fields are complete as listed):");
     for (const capability of input.capabilities) {
-      lines.push(`- ${capability.namespace} — ${capability.purpose} Calls: ${capability.calls.join("; ")}. Fields: ${capability.resultFields.join(", ")}.`);
+      const fieldWithLabel = (field: string) => {
+        const bare = field.endsWith("[]") ? field.slice(0, -2) : field;
+        const label = input.lexicon?.fieldLabels[bare];
+        return label ? `${field} (say: ${label})` : field;
+      };
+      lines.push(`- ${capability.namespace} — ${capability.purpose} Calls: ${capability.calls.join("; ")}. Fields: ${capability.resultFields.map(fieldWithLabel).join(", ")}.`);
     }
     lines.push("");
   }

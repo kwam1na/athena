@@ -101,6 +101,7 @@ import {
   resumeTurnBindingWithCtx,
 } from "./turnBindings";
 import { AGENT_TOOL_NARRATIVE_MAX_BYTES, type AgentDescribeGrantOutcome } from "./tools";
+import { profileLexicon } from "./profiles/lexicons";
 import { discoverCapabilities, type AgentCapabilitySchemaIndex } from "./discovery";
 
 type ReadCtx = QueryCtx | MutationCtx;
@@ -374,7 +375,7 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
     // rung (the run is not `running` yet), and a silent fallback on it once
     // shipped an empty catalog.
     const capabilities = discoverCapabilities(authority.runtimeGrant, { schemas: config.schemas });
-    const prompt = assembleTurnPrompt({ profileId: grant.profileKey, intent: profile.promptPolicy.intent, untrustedDataLabel: profile.promptPolicy.untrustedDataLabel, context, question, capabilities, egressClass: "operational" });
+    const prompt = assembleTurnPrompt({ profileId: grant.profileKey, intent: profile.promptPolicy.intent, untrustedDataLabel: profile.promptPolicy.untrustedDataLabel, context, question, capabilities, egressClass: "operational", lexicon: profileLexicon(grant.profileKey) });
     const provider = describeProviderSelectionForEvidence(selected, egressClass);
 
     const existingInvocation = await ctx.db.query("intelligenceProviderInvocation").withIndex("by_runId", (q) => q.eq("runId", run._id)).take(1);

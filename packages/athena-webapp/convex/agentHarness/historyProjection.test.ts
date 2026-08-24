@@ -415,8 +415,7 @@ describe("prompt assembly labels product fields as untrusted data (scenario 11)"
     });
     expect(prompt.text).toContain('list({ operatingDate, state: "pending" })');
     expect(prompt.text).toContain("athena.describe details one");
-    // The embedded catalog replaces discover entirely: the tool is not offered
-    // on these turns, so the prompt must not name it.
+
     expect(prompt.text).not.toContain("athena.discover");
     // Policy, not data: the catalog sits before the first fence and inside none.
     expect(prompt.text.indexOf("operations.approvals")).toBeLessThan(prompt.text.indexOf('<retrieved_store_data field="'));
@@ -424,6 +423,36 @@ describe("prompt assembly labels product fields as untrusted data (scenario 11)"
     // Without a catalog, the original discover-first policy line stands.
     const bare = assembleTurnPrompt({ profileId: TEST_PROFILE_ID, intent: "i", untrustedDataLabel: "retrieved_store_data", context: {}, question: "q", egressClass: "operational" });
     expect(bare.text).toContain("Discover capabilities with athena.discover");
+  });
+
+
+  it("renders operator labels next to catalog field names when a lexicon is supplied", () => {
+    const prompt = assembleTurnPrompt({
+      profileId: "daily_operations",
+      intent: "Answer questions.",
+      untrustedDataLabel: "retrieved_store_data",
+      context: {},
+      question: "how are sales?",
+      capabilities: [
+        {
+          capabilityId: "reports.daySales@1",
+          namespace: "reports.daySales",
+          purpose: "Day sales summary.",
+          verbs: ["get"],
+          scopeKind: "store",
+          calls: ["get({ operatingDate })"],
+          resultFields: ["grossRevenue", "paymentGroups[]", "unitsReturned"],
+        } as never,
+      ],
+      egressClass: "operational",
+      lexicon: { enumLabels: {}, fieldLabels: { grossRevenue: "revenue", paymentGroups: "payment mix" } },
+    });
+    expect(prompt.text).toContain("grossRevenue (say: revenue)");
+    expect(prompt.text).toContain("paymentGroups[] (say: payment mix)");
+    expect(prompt.text).toContain("unitsReturned");
+    expect(prompt.text).not.toContain("unitsReturned (say:");
+    // The embedded catalog replaces discover entirely: the tool is not offered
+    // on these turns, so the prompt must not name it.
   });
 });
 
