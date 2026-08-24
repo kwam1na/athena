@@ -150,6 +150,37 @@ describe("senseTone", () => {
     expect(findings.map((finding) => finding.code)).toEqual(["ref_in_prose"]);
   });
 
+  it("flags an opaque identifier from data even when its ref kind was rewritten", () => {
+    // Observed on a driven turn: the lexicon's "register session" wording was
+    // applied INSIDE a resource ref, so the exact-match loop missed it.
+    const findings = senseTone(
+      baseInput({
+        narrative:
+          "Largest variance: resource:register session.8d5c0a4d9a7e78365b5c876b9c4525d135c0bcbf9d0781dd.171d48524313ed1ecd38efe7 on register 07.",
+      }),
+    );
+    expect(findings.map((finding) => finding.code)).toContain("ref_in_prose");
+  });
+
+  it("does not double-report a known ref, and leaves plain numbers alone", () => {
+    const ref = "citation:v1.1.0.fedcba9876543210fedcba9876543210";
+    const findings = senseTone(
+      baseInput({ narrative: `Per ${ref}, 1234567890123456 units moved on 2026-08-24.`, refs: [ref] }),
+    );
+    expect(findings.map((finding) => finding.code)).toEqual(["ref_in_prose"]);
+  });
+
+  it("waives an opaque identifier the operator asked with", () => {
+    const tail = "8d5c0a4d9a7e78365b5c876b9c4525d1";
+    const findings = senseTone(
+      baseInput({
+        narrative: `Session ${tail} closed with no variance.`,
+        question: `what happened to session ${tail}?`,
+      }),
+    );
+    expect(findings).toEqual([]);
+  });
+
   it("flags a stub narrative that reports the reads instead of answering", () => {
     for (const stub of [
       "Summary comparing this week to last, and items to watch today for Wigclub on 2026-08-23.",

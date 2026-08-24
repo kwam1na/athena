@@ -767,7 +767,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     },
     "cap_dailyops_day_sales": {
       "binding": {
-        "implementationVersion": "1",
+        "implementationVersion": "2",
         "portKey": "reports.daySales",
         "readIntents": [
           "reports.view",
@@ -1979,7 +1979,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     },
     "cap_dailyops_store_pulse": {
       "binding": {
-        "implementationVersion": "1",
+        "implementationVersion": "2",
         "portKey": "reports.storePulse",
         "readIntents": [
           "reports.view"
@@ -2199,7 +2199,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     },
     "cap_dailyops_week_performance": {
       "binding": {
-        "implementationVersion": "1",
+        "implementationVersion": "2",
         "portKey": "reports.weekPerformance",
         "readIntents": [
           "reports.view"
@@ -2703,7 +2703,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       }
     }
   },
-  "compatibilityDigest": "fnv1a64:d57f15b714dcff64",
+  "compatibilityDigest": "fnv1a64:7786ad3f876ae060",
   "contractVersion": 1,
   "enablement": {
     "capabilities": {
@@ -2805,26 +2805,26 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       "sourceDigest": "sha256:6cdb3ac336b82a3485926c95dd7f97857616e1e4c7c12d81160ee0319cfa1fd1"
     },
     "reports.daySales": {
-      "implementationVersion": "1",
-      "sourceDigest": "sha256:6019507eb5803fd8a1c21d277e82eb3c5501a202d9186a1befa068172465826d"
+      "implementationVersion": "2",
+      "sourceDigest": "sha256:df503754647cdf61310807c436110b95bc9eb073f5c879e69f409b3d97a01f88"
     },
     "reports.storePulse": {
-      "implementationVersion": "1",
-      "sourceDigest": "sha256:6019507eb5803fd8a1c21d277e82eb3c5501a202d9186a1befa068172465826d"
+      "implementationVersion": "2",
+      "sourceDigest": "sha256:df503754647cdf61310807c436110b95bc9eb073f5c879e69f409b3d97a01f88"
     },
     "reports.weekPerformance": {
-      "implementationVersion": "1",
-      "sourceDigest": "sha256:6019507eb5803fd8a1c21d277e82eb3c5501a202d9186a1befa068172465826d"
+      "implementationVersion": "2",
+      "sourceDigest": "sha256:df503754647cdf61310807c436110b95bc9eb073f5c879e69f409b3d97a01f88"
     }
   },
   "profiles": {
     "daily_operations": {
       "budgetPolicy": {
-        "maxAttempts": 3,
+        "maxAttempts": 4,
         "maxInFlightCalls": 4,
         "runLimits": {
           "bytes": 2097152,
-          "calls": 24,
+          "calls": 48,
           "costUnits": 2000,
           "elapsedMs": 60000,
           "rows": 5000
@@ -3470,7 +3470,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "functionPath": "reports/agentCapabilities/salesPorts:getDaySales",
         "kind": "internal_query"
       },
-      "implementationVersion": "1",
+      "implementationVersion": "2",
       "portKey": "reports.daySales",
       "projections": [
         "financial"
@@ -3503,7 +3503,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "functionPath": "reports/agentCapabilities/salesPorts:getStorePulse",
         "kind": "internal_query"
       },
-      "implementationVersion": "1",
+      "implementationVersion": "2",
       "portKey": "reports.storePulse",
       "projections": [
         "financial"
@@ -3533,7 +3533,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "functionPath": "reports/agentCapabilities/salesPorts:getWeekPerformance",
         "kind": "internal_query"
       },
-      "implementationVersion": "1",
+      "implementationVersion": "2",
       "portKey": "reports.weekPerformance",
       "projections": [
         "financial"
@@ -3547,7 +3547,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       ]
     }
   },
-  "registryDigest": "fnv1a64:f19326767d8913de",
+  "registryDigest": "fnv1a64:ebc340bd5a4d6003",
   "sdkView": {
     "contractVersion": 1,
     "packages": {
@@ -3698,7 +3698,7 @@ export const AGENT_GENERATED_SOURCE_KEYS: readonly string[] = [
 ];
 
 /** What a run pins; the deployment epoch fence compares it with the durable epoch digest. */
-export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:d57f15b714dcff64";
+export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:7786ad3f876ae060";
 
 /** Schema identity only; unchanged when a capability is enabled or disabled. */
-export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:f19326767d8913de";
+export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:ebc340bd5a4d6003";

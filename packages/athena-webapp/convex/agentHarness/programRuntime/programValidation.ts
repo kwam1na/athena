@@ -81,6 +81,18 @@ export const AGENT_PROGRAM_FORBIDDEN_MEMBERS = new Set([
   "random",
 ]);
 
+/**
+ * Prelude helper calls a program may make besides the granted reads. These
+ * are implemented wholly inside the sandbox prelude — no host bridge, no
+ * budget charge — and take plain arguments rather than a filters object.
+ */
+export const HELPER_SIGNATURES: Record<string, string> = {
+  "dates.shift": 'athena.dates.shift("YYYY-MM-DD", wholeDays)',
+  "dates.range": 'athena.dates.range("YYYY-MM-DD", "YYYY-MM-DD")',
+  "budget.remaining": "athena.budget.remaining()",
+};
+const HELPER_CALL_PATHS = new Set(Object.keys(HELPER_SIGNATURES));
+
 export type ValidateProgramSourceOptions = {
   readonly facade: readonly AgentProgramFacadeEntry[];
   readonly maxSourceBytes?: number;
@@ -310,10 +322,21 @@ function analyze(source: string, root: BabelNode, wrapper: BabelNode, facade: Fa
     if (!chain || (chain.root.name as string) !== "athena" || declared.has("athena")) return;
     facadeRoots.add(chain.root);
     const path = chain.segments.join(".");
+    if (HELPER_CALL_PATHS.has(path)) {
+      // Prelude helpers, not reads: they take plain arguments and cross no
+      // bridge, so the facade's single-object-argument rule does not apply.
+      if (!parent || parent.type !== "CallExpression" || key !== "callee") {
+        add("facade_misuse", node, `\`athena.${path}\` must be called: ${HELPER_SIGNATURES[path]}.`);
+      }
+      return;
+    }
     if (chain.segments.length !== 3 || !parent || parent.type !== "CallExpression" || key !== "callee") {
       // A wrong-arity path is a guessed namespace, not aliasing: name what is
       // actually granted so the correction is a lookup, not another guess.
-      const hint = chain.segments.length > 0 && chain.segments.length !== 3 ? ` Granted reads: ${grantedPaths()}.` : "";
+      const hint =
+        chain.segments.length > 0 && chain.segments.length !== 3
+          ? ` Granted reads: ${grantedPaths()}. Helpers: ${Object.values(HELPER_SIGNATURES).join(", ")}.`
+          : "";
       add("facade_misuse", node, `\`athena${path ? `.${path}` : ""}\` must be called as \`athena.<package>.<resource>.<verb>(args)\`; it cannot be aliased, assigned, passed, or partially applied.${hint}`);
       return;
     }

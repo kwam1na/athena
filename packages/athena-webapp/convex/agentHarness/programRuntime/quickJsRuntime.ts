@@ -57,10 +57,15 @@ export const AGENT_PROGRAM_RUNTIME_KIND_QUICKJS = "quickjs_wasm" as const;
 const GUEST_ERROR_PREFIX = "__athena__:";
 
 /**
- * Evaluated once per context. Receives the host call function and the facade
- * JSON; returns `{ athena, serialize }`. Written as ES2020 so QuickJS parses it.
+ * Evaluated once per context. Receives the host call function, the facade
+ * JSON, and the ceiling config JSON; returns `{ athena, serialize }`. Besides
+ * the read facade it installs `athena.dates` (pure date arithmetic),
+ * `athena.budget.remaining()`, a guest-side call budget that REFUSES (rather
+ * than crashes) reads past the ceiling, and an in-flight throttle that queues
+ * (rather than fails) calls above the concurrency ceiling. Written as ES2020
+ * so QuickJS parses it.
  */
-const PRELUDE = `(function (hostCall, facadeJson) {
+const PRELUDE = `(function (hostCall, facadeJson, configJson) {
   "use strict";
   function fail(code) { throw new Error(${JSON.stringify(GUEST_ERROR_PREFIX)} + code); }
   function serialize(value, code) {
@@ -104,6 +109,25 @@ const PRELUDE = `(function (hostCall, facadeJson) {
     return Object.freeze(o);
   }
   var entries = JSON.parse(facadeJson);
+  var config = JSON.parse(configJson);
+
+  // Guest-side budget and throttle. The budget refusal is a value, not a
+  // crash: a program that overruns the call budget keeps everything it
+  // already read and decides what to return. The throttle queues calls above
+  // the in-flight ceiling instead of failing a wide Promise.all. The host
+  // bridge keeps both hard checks as the backstop.
+  var callsUsed = 0;
+  var inFlight = 0;
+  var waiters = [];
+  function acquire() {
+    if (inFlight < config.maxInFlightCalls) { inFlight += 1; return Promise.resolve(); }
+    return new Promise(function (resolve) { waiters.push(resolve); });
+  }
+  function release() {
+    if (waiters.length > 0) waiters.shift()();
+    else inFlight -= 1;
+  }
+
   var root = {};
   for (var e = 0; e < entries.length; e += 1) {
     var entry = entries[e];
@@ -115,11 +139,80 @@ const PRELUDE = `(function (hostCall, facadeJson) {
       resource[entry.verbs[v]] = (function (p, r, verb) {
         return function (args) {
           var json = serialize(args === undefined ? {} : args, "call_args_not_serializable");
-          return hostCall(p, r, verb, json).then(function (text) { return JSON.parse(text); });
+          if (callsUsed >= config.maxCapabilityCalls) {
+            return Promise.resolve({
+              kind: "denied",
+              code: "budget_exhausted",
+              message: "This run's " + config.maxCapabilityCalls + "-capability-call budget is spent; no further reads will be served. Return your result now with what was already read.",
+              retryable: false,
+            });
+          }
+          callsUsed += 1;
+          return acquire().then(function () {
+            return hostCall(p, r, verb, json).then(
+              function (text) { release(); return JSON.parse(text); },
+              function (error) { release(); throw error; }
+            );
+          });
         };
       })(entry.package, entry.resource, entry.verbs[v]);
     }
   }
+
+  // Pure date arithmetic (days-from-civil), so a program can enumerate
+  // operating dates without the Date global the sandbox forbids.
+  function isIsoDate(value) { return typeof value === "string" && /^\\d{4}-\\d{2}-\\d{2}$/.test(value); }
+  function toDays(iso) {
+    var y = +iso.slice(0, 4), m = +iso.slice(5, 7), d = +iso.slice(8, 10);
+    y -= m <= 2 ? 1 : 0;
+    var era = Math.floor(y / 400);
+    var yoe = y - era * 400;
+    var doy = Math.floor((153 * (m + (m > 2 ? -3 : 9)) + 2) / 5) + d - 1;
+    var doe = yoe * 365 + Math.floor(yoe / 4) - Math.floor(yoe / 100) + doy;
+    return era * 146097 + doe - 719468;
+  }
+  function fromDays(z) {
+    z += 719468;
+    var era = Math.floor(z / 146097);
+    var doe = z - era * 146097;
+    var yoe = Math.floor((doe - Math.floor(doe / 1460) + Math.floor(doe / 36524) - Math.floor(doe / 146096)) / 365);
+    var y = yoe + era * 400;
+    var doy = doe - (365 * yoe + Math.floor(yoe / 4) - Math.floor(yoe / 100));
+    var mp = Math.floor((5 * doy + 2) / 153);
+    var d = doy - Math.floor((153 * mp + 2) / 5) + 1;
+    var m = mp + (mp < 10 ? 3 : -9);
+    y += m <= 2 ? 1 : 0;
+    function pad(n, w) { n = String(n); while (n.length < w) n = "0" + n; return n; }
+    return pad(y, 4) + "-" + pad(m, 2) + "-" + pad(d, 2);
+  }
+  root.dates = {
+    shift: function (iso, days) {
+      if (!isIsoDate(iso) || typeof days !== "number" || !isFinite(days) || Math.floor(days) !== days || Math.abs(days) > 3660) {
+        throw new Error('athena.dates.shift takes ("YYYY-MM-DD", wholeDays) with wholeDays within \\u00b13660.');
+      }
+      return fromDays(toDays(iso) + days);
+    },
+    range: function (startIso, endIso) {
+      if (!isIsoDate(startIso) || !isIsoDate(endIso)) {
+        throw new Error('athena.dates.range takes ("YYYY-MM-DD", "YYYY-MM-DD") and returns the inclusive ascending dates.');
+      }
+      var a = toDays(startIso), b = toDays(endIso);
+      if (b < a) return [];
+      if (b - a + 1 > 400) throw new Error("athena.dates.range covers " + (b - a + 1) + " days; the ceiling is 400.");
+      var out = [];
+      for (var i = a; i <= b; i += 1) out.push(fromDays(i));
+      return out;
+    },
+  };
+  root.budget = {
+    remaining: function () {
+      return {
+        callsRemaining: Math.max(0, config.maxCapabilityCalls - callsUsed),
+        callCeiling: config.maxCapabilityCalls,
+        maxInFlight: config.maxInFlightCalls,
+      };
+    },
+  };
   deepFreeze(root);
 
   // Remove host-reaching and nondeterministic surface that intrinsics alone cannot drop.
@@ -387,7 +480,12 @@ export async function createQuickJsProgramRuntime(): Promise<AgentProgramRuntime
     }
     const preludeFn = track(preludeResult.value);
     const facadeJson = track(context.newString(JSON.stringify(bridge.facade)));
-    const installed = context.callFunction(preludeFn, context.undefined, hostCall, facadeJson);
+    const configJson = track(
+      context.newString(
+        JSON.stringify({ maxCapabilityCalls: ceilings.maxCapabilityCalls, maxInFlightCalls: ceilings.maxInFlightCalls }),
+      ),
+    );
+    const installed = context.callFunction(preludeFn, context.undefined, hostCall, facadeJson, configJson);
     if (installed.error) {
       const error = context.dump(installed.error);
       installed.error.dispose();

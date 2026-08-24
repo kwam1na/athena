@@ -431,6 +431,23 @@ describe("athena.completeRun tone sensor and money display annotation", () => {
     expect(tools.completions).toHaveLength(1);
   });
 
+  it("a denial repeating one fix across findings states that fix once", async () => {
+    const tools = toneTools({ tonePolicy: "enforce" });
+    await tools.executeProgram();
+    // Two distinct opaque identifiers → two ref_in_prose findings sharing one
+    // fix sentence; the denial message must not repeat it.
+    const denied = await tools.completeRun({
+      outcome: "answer",
+      narrative:
+        "Variance on 8d5c0a4d9a7e78365b5c876b9c4525d1 and none on 171d48524313ed1ecd38efe7aa9e4b22; both drawers are counted.",
+      ...CITED,
+    });
+    expect(denied.kind).toBe("denied");
+    const message = (denied as { denial: { message: string } }).denial.message;
+    const fixSentence = "describe the record in operator words";
+    expect(message.split(fixSentence)).toHaveLength(2);
+  });
+
   it("a clean narrative commits in enforce mode with no findings", async () => {
     const tools = toneTools({ tonePolicy: "enforce" });
     await tools.executeProgram();

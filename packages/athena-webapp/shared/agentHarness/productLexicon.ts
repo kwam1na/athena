@@ -147,6 +147,11 @@ export type AgentNarrativeEvidence = {
 
 const INTERNAL_NAME_PATTERN = /(?:[a-z0-9][A-Z]|_)/; // camelCase joint or snake_case
 const ENUM_LITERAL_PATTERN = /^[a-z]+(?:_[a-z]+)+$/;
+/**
+ * A hex run long enough to be an opaque identifier's hash tail. The letter
+ * requirement keeps plain numbers (counts, amounts, timestamps) out.
+ */
+const OPAQUE_HEX_RUN_PATTERN = /(?=[0-9a-f]*[a-f])[0-9a-f]{16,}/g;
 
 /** Harvest, from a model-visible result, the internal tokens prose must not echo. */
 const EVIDENCE_FIELD_CAP = 200;
@@ -429,6 +434,20 @@ export function senseTone(input: AgentToneSensorInput): readonly AgentToneFindin
     if (narrative.includes(ref)) {
       findings.push({ code: "ref_in_prose", token: ref, fix: "Refs belong in citedAttemptRefs and citations, never in the narrative." });
     }
+  }
+  // Opaque identifiers from DATA (`resource:...`/`source:...` refs, or any
+  // ref the model rewrote — observed: underscores lexicon-swapped to spaces)
+  // never exact-match `input.refs`. Their hash tails still give them away: a
+  // 16+ character hex run with at least one letter is an identifier, not
+  // prose, wherever it appears.
+  for (const match of new Set(narrative.match(OPAQUE_HEX_RUN_PATTERN) ?? [])) {
+    if (asked(match)) continue;
+    if (input.refs.some((ref) => ref.includes(match))) continue; // already reported exactly above
+    findings.push({
+      code: "ref_in_prose",
+      token: match.slice(0, 24),
+      fix: "Opaque references and record ids never belong in the narrative; describe the record in operator words (its register, date, or label) instead.",
+    });
   }
   for (const namespace of input.namespaces) {
     if (asked(namespace)) continue;

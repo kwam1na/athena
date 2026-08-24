@@ -303,6 +303,19 @@ describe("Daily Operations resources", () => {
     expect(weekData.days).toHaveLength(8);
     expect(weekData.days.filter((day) => day.isPriorBoundary)).toHaveLength(1);
     expect(new Set(weekData.days.map((day) => day.authority))).toEqual(new Set(["accepted", "live"]));
+    // 2026-08-21 is a Friday: the Saturday alignment must be disclosed, and
+    // the served day after the requested date must be named as not-yet-occurred.
+    expect(week.envelope.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "week_aligned", sourceKey: "days" }),
+        expect.objectContaining({ code: "days_after_requested", sourceKey: "days" }),
+      ]),
+    );
+    const alignedWarning = (week.envelope.warnings as { code: string; message: string }[]).find(
+      (warning) => warning.code === "week_aligned",
+    );
+    expect(alignedWarning?.message).toContain(CURRENT_OPERATING_DATE);
+    expect(alignedWarning?.message).toContain("2026-08-22");
 
     const pulse = expectEnvelope(
       await read(t, run, attemptId, {

@@ -135,13 +135,19 @@ export const executeProgramTool: AgentToolDefinition<AgentExecuteProgramArgs, un
     "Guarded fields (money and similar) arrive as `{ state, value }`: read `value` only when `state === \"known\"`, and report any other state as unavailable rather than missing.\n" +
     "If the result carries `fieldDiagnostics`, the program read a field the capability does not declare — rewrite using the named fields instead of concluding the data is unreadable.\n" +
     "Arguments are ONLY the filters `athena.describe` lists for that capability: the store is fixed by the run, so a store name or id is never an argument.\n" +
-    "No imports, no `require`, no timers, no randomness, no clock.\n" +
+    "BUDGET: one run serves a fixed number of capability calls across all of its programs; `athena.budget.remaining().callsRemaining` tells you how many are left, so plan a wide question into the budget before looping. A read past the budget returns `{ kind: \"denied\", code: \"budget_exhausted\" }` as a value — keep what you already read and return it.\n" +
+    "PAGES: a `list` result's `envelope.pagination` carries `hasMore` and an opaque `cursor`; pass it back (`.list({ ...sameFilters, cursor })`) to read the next page, within the capability's small per-run page budget. A truncated or paged read is `completeness: \"partial\"` — page onward when the question needs the rest.\n" +
+    "SPEED: calls run up to 4 at a time — `Promise.all` over a batch is much faster than awaiting one by one, and excess calls queue rather than fail. Repeating an identical read inside one program costs nothing extra.\n" +
+    "DATES: there is no clock. `athena.dates.shift(\"2026-08-22\", -7)` and `athena.dates.range(startIso, endIso)` do date arithmetic; take today's operating date from the turn context.\n" +
+    "You may run several programs in one turn: read first, look at the result, then write the next program to drill into what it revealed — a follow-up program is a normal step, not a failure.\n" +
+    "No imports, no `require`, no timers, no randomness.\n" +
     "Example:\n" +
     "const day = await athena.operations.storeDay.get({ operatingDate: \"2026-08-22\" });\n" +
-    "const registers = await athena.cash.registerSessions.list({ operatingDate: \"2026-08-22\" });\n" +
+    "const week = athena.dates.range(athena.dates.shift(\"2026-08-22\", -6), \"2026-08-22\");\n" +
+    "const registers = await Promise.all(week.map((operatingDate) => athena.cash.registerSessions.list({ operatingDate })));\n" +
     "return {\n" +
     "  stage: day.kind === \"result\" ? day.envelope.data.lifecycleStage : null,\n" +
-    "  openDrawers: registers.kind === \"result\" ? registers.envelope.data.filter((s) => s.status === \"open\").length : null,\n" +
+    "  openDrawers: registers.filter((r) => r.kind === \"result\").flatMap((r) => r.envelope.data).filter((s) => s.status === \"open\").length,\n" +
     "};",
   validateInput: (raw): Validation<AgentExecuteProgramArgs> => {
     const object = objectOf(raw);
@@ -642,7 +648,10 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
       }
       if (host.tonePolicy === "enforce" && sensed.length > 0 && !toneDeniedOnce) {
         toneDeniedOnce = true;
-        const fixes = sensed.map((finding) => finding.fix).join(" ");
+        // Distinct fixes only: several findings can carry the same sentence
+        // (every ref in prose does), and a message that repeats itself reads
+        // as a glitch rather than an instruction.
+        const fixes = [...new Set(sensed.map((finding) => finding.fix))].join(" ");
         return denied("tone", `Rewrite the narrative for the operator, then call completeRun again. ${fixes}`);
       }
       await host.reportProgress?.("finalizing");

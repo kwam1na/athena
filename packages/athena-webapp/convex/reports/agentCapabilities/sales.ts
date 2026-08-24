@@ -156,7 +156,7 @@ export const DAY_SALES_MANIFEST = defineCapabilityManifest({
   binding: {
     readIntents: ["reports.view", "pos.view"],
     portKey: DAY_SALES_PORT_KEY,
-    implementationVersion: "1",
+    implementationVersion: "2",
   },
 });
 
@@ -280,7 +280,7 @@ export const WEEK_PERFORMANCE_MANIFEST = defineCapabilityManifest({
   binding: {
     readIntents: ["reports.view"],
     portKey: WEEK_PERFORMANCE_PORT_KEY,
-    implementationVersion: "1",
+    implementationVersion: "2",
   },
 });
 
@@ -389,7 +389,7 @@ export const STORE_PULSE_MANIFEST = defineCapabilityManifest({
   binding: {
     readIntents: ["reports.view"],
     portKey: STORE_PULSE_PORT_KEY,
-    implementationVersion: "1",
+    implementationVersion: "2",
   },
 });
 
@@ -409,7 +409,7 @@ export const REPORTS_READ_PORTS: AgentReadPortIndex = {
       verbs: ["get"],
       scopeKind: "store",
       readIntents: DAY_SALES_MANIFEST.binding.readIntents,
-      implementationVersion: "1",
+      implementationVersion: "2",
       declaredCost: AGENT_SNAPSHOT_COST,
       handler: { kind: "internal_query", functionPath: "reports/agentCapabilities/salesPorts:getDaySales" },
       projections: ["financial"],
@@ -422,7 +422,7 @@ export const REPORTS_READ_PORTS: AgentReadPortIndex = {
       verbs: ["get"],
       scopeKind: "store",
       readIntents: WEEK_PERFORMANCE_MANIFEST.binding.readIntents,
-      implementationVersion: "1",
+      implementationVersion: "2",
       declaredCost: AGENT_SNAPSHOT_COST,
       handler: { kind: "internal_query", functionPath: "reports/agentCapabilities/salesPorts:getWeekPerformance" },
       projections: ["financial"],
@@ -435,7 +435,7 @@ export const REPORTS_READ_PORTS: AgentReadPortIndex = {
       verbs: ["get"],
       scopeKind: "store",
       readIntents: STORE_PULSE_MANIFEST.binding.readIntents,
-      implementationVersion: "1",
+      implementationVersion: "2",
       declaredCost: AGENT_SNAPSHOT_COST,
       handler: { kind: "internal_query", functionPath: "reports/agentCapabilities/salesPorts:getStorePulse" },
       projections: ["financial"],

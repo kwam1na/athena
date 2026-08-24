@@ -246,7 +246,7 @@ return {
     expect(result.citations).toHaveLength(4);
   });
 
-  it("fails the program, not the run, when it exceeds the in-flight ceiling", async () => {
+  it("throttles a Promise.all wider than the in-flight ceiling instead of failing the program", async () => {
     const t = convexTest(schema, modules);
     const run = await t.run((ctx) => seedDelegatedRun(ctx, "inflight"));
     const executor = await makeExecutor();
@@ -255,12 +255,15 @@ return {
   athena.ops.storeDay.get({ operatingDate: "2026-08-19" }),
   athena.ops.storeDay.get({ operatingDate: "2026-08-20" }),
 ]);
-return { n: r.length };`;
-    const result = await executor.executeProgram(executorCtx(t), { runId: run.runId, attemptIdempotencyKey: "a1", source });
-    expect(result).toMatchObject({ outcome: "failed", error: { code: "program_in_flight_limit" } });
+return { n: r.filter((x) => x.kind === "result").length };`;
+    const result = expectResult(await executor.executeProgram(executorCtx(t), { runId: run.runId, attemptIdempotencyKey: "a1", source }));
+    expect(result.result.output).toEqual({ n: 3 });
+    // The ceiling still governs concurrency; excess calls queue in the sandbox.
+    expect(result.diagnostics.maxInFlight).toBeLessThanOrEqual(2);
     const rows = await t.run(async (ctx) => ({ run: await ctx.db.get("intelligenceRun", run.runId), calls: await listCapabilityCallsForRun(ctx, run.runId), ledger: await getBudgetLedgerForRun(ctx, run.runId) }));
     expect(rows.run?.status).toBe("running");
-    expect(rows.calls.every((call) => call.status === "canceled" || call.status === "succeeded")).toBe(true);
+    expect(rows.calls.every((call) => call.status === "succeeded")).toBe(true);
+    expect(rows.ledger?.charged.calls).toBe(3);
     expect(rows.ledger?.outstanding).toEqual(budgetVector({}));
   });
 });

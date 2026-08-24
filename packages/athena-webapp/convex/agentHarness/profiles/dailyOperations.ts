@@ -201,13 +201,13 @@ export const DAILY_OPERATIONS_PROFILE = defineAgentProfile({
    */
   budgetPolicy: {
     runLimits: budgetVector({
-      calls: 24,
+      calls: 48,
       rows: 5_000,
       bytes: 2_097_152,
       costUnits: 2_000,
       elapsedMs: 60_000,
     }),
-    maxAttempts: 3,
+    maxAttempts: 4,
     maxInFlightCalls: 4,
   },
   promptPolicy: {
