@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Agent Harness Gap Closures: Measured Latency and Product-Tone Enforcement</title>
+  </head>
+  <body>
+    <article
+      data-athena-landed-change-report="v2"
+      data-athena-report-diff-fingerprint="39ff6fcdbfd38a03a1ff7b367d002340819ea0a5addbb518706cd7f4b1b87f4a"
+    >
+      <header data-report-section="header">
+        <h1>Agent Harness Gap Closures: Measured Latency and Product-Tone Enforcement</h1>
+        <ul data-report-pills>
+          <li>Delivery candidate</li>
+          <li>Branch codex/agent-harness-gap-closures</li>
+          <li>18 commits, 36 files, ~1,100 source lines</li>
+          <li>25 live 20-question phases on dev</li>
+          <li>145+ focused tests green</li>
+        </ul>
+        <dl data-report-meta>
+          <dt>Status</dt><dd>Delivery candidate</dd>
+          <dt>Deployment</dt><dd>dev:jovial-wildebeest-179 (validated live)</dd>
+          <dt>Profile</dt><dd>daily_operations</dd>
+        </dl>
+      </header>
+
+      <section data-report-section="summary">
+        <h2>Executive summary</h2>
+        <p>
+          This branch turns the Daily Operations agent from a 78%-commit, 43-second, jargon-heavy
+          responder into a 100%-commit, ~13-second responder that speaks the product's language.
+          Every change was driven by a measured loop: a 20-question regression set run live against
+          the dev deployment after each change, with server-truth trace analysis deciding what
+          shipped. Two chapters: <strong>turn-loop and latency gap closures</strong> (stop at the
+          commit, forced completion, ref snapping, catalog embedding, discover-tool removal,
+          gpt-5-mini at low reasoning effort, a host-authored first progress beat) and
+          <strong>mechanical product-tone enforcement</strong> (a typed product lexicon, money
+          display annotation that fixed a 100&times; unit misread, a tone sensor with a one-denial
+          bound, and deterministic narrative normalization at commit).
+        </p>
+        <p>
+          Headline numbers, all from digest-guarded live phases (the driver asserts the deployment digest at preflight and after every turn, so a concurrent deploy aborts the phase instead of contaminating it) on the data-rich operating day:
+          commit rate 21/27 (pre-fix corpus) to 20/20 on every final phase; inner-call denials 38%
+          to 0%; whole-turn median 43.1 s to 12.8 s; committed-prose jargon 8.0 to 0.5 tokens per
+          1,000 characters; reasoning tokens roughly 12&times; lower (116k across the set at baseline, 9.5k on the final phase).
+        </p>
+      </section>
+
+      <section data-report-section="problem">
+        <h2>Problem and context</h2>
+        <p>
+          A sweep of every traced production turn found three defect classes explaining nearly all
+          loss: answers written as prose but never committed through <code>athena.completeRun</code>
+          (the model treated its narration as the answer); first reads denied because the prompt
+          handed the model a raw <code>storeRef</code> that the validator forbids in arguments; and
+          invented result fields narrated as "could not be read". Later loops surfaced more of the
+          same shape: transcribed refs rejected for a dropped prefix, an empty-run deadlock, guessed
+          namespaces and enum values, a discover-first habit costing a full round trip every turn,
+          and operator-facing prose full of backend vocabulary — including money figures inflated
+          100&times; because results carried minor units with no unit disclosure.
+        </p>
+        <p>
+          The common cause, proven repeatedly by measurement: <em>the harness knew something and did
+          not disclose it, then punished the model for not knowing it.</em>
+        </p>
+      </section>
+
+      <section data-report-section="mental-model">
+        <h2>Mental model</h2>
+        <p>
+          Think of the harness as three concentric rings around the model. The <strong>input
+          ring</strong> decides what the model is shown: the grant catalog with call signatures,
+          field names and labels, enum values, and money values that carry their product display
+          string. The <strong>protocol ring</strong> decides what a call may do: the five fixed
+          tools, budgets, citations, and denials that name the exact fix. The <strong>output
+          ring</strong> decides what the operator sees: a tone sensor, deterministic normalization
+          of internal tokens, and the committed artifact as the only released answer.
+        </p>
+        <p>
+          The branch's one-line thesis is that fixes belong as far inward as possible:
+          <strong>shaping the input beats policing the output</strong>. Instructions failed twice
+          (the discover habit and the model-authored "Sources:" footer both survived explicit
+          instructions); mechanism succeeded both times (removing the tool from the provider offer,
+          stripping the footer at commit). Enforcement without disclosure made prose measurably
+          worse; disclosure made enforcement nearly unnecessary.
+        </p>
+      </section>
+
+      <section data-report-section="before-after">
+        <h2>Before and after</h2>
+        <h3>Turn loop</h3>
+        <p>
+          Before: the model narrated an answer, sometimes never calling <code>completeRun</code>;
+          the loop ran to its step budget; first reads guessed arguments and were denied; every turn
+          began with a redundant <code>discover</code> call; reasoning ran at default effort with a
+          silent opening gap. After: the stream stops the moment the terminal tool settles; a prose
+          ending gets a forced tool-choice continuation with one corrective retry; the prompt embeds
+          the grant catalog (signatures, fields, enum values) so <code>discover</code> is no longer
+          offered to the provider; the profile pins gpt-5-mini at low reasoning effort; the host
+          authors a <code>checking_sources</code> milestone the instant the runtime turn starts.
+        </p>
+        <h3>Operator-facing prose</h3>
+        <p>
+          Before: <code>operations.storeDay: lifecycleStage = close_blocked; registerBlockerCount =
+          1</code>, "GHS 1,414,900" for GH₵14,149, refs pasted into a homemade sources footer.
+          After: money values arrive annotated (<code>display: "GH₵14,149"</code>), the catalog
+          teaches operator wording (<code>grossRevenue (say: revenue)</code>,
+          <code>close_blocked → close blocked</code>), a sensor holds the narrative to the run's own
+          evidence with at most one corrective denial, and the kernel normalizes residual internal
+          tokens at commit under two safety rules — structure-preserving substitutions only, and
+          platform-known tokens only.
+        </p>
+      </section>
+
+      <section data-report-section="key-files">
+        <h2>Key files</h2>
+        <table>
+          <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+          <tbody>
+            <tr><td><code>convex/agentHarness/agentRuntime/convexAgent.ts</code></td><td>Adapter core: terminal-tool stop condition, forced completion continuation with one corrective retry, hardened instructions.</td></tr>
+            <tr><td><code>convex/agentHarness/tools.ts</code></td><td>The five-tool kernel: ref snapping by content-hash tail, honest empty-run completion, money display annotation and evidence harvest, tone sensor with the one-denial bound, narrative normalization and footer strip at commit, model-visible tool list that drops discover when the catalog is embedded.</td></tr>
+            <tr><td><code>shared/agentHarness/productLexicon.ts</code></td><td>New: the machine-readable projection of the product tone guide — lexicon, GH₵ money formatting by the app's own convention, evidence harvest, tone sensor, structure-preserving normalization, sources-footer strip.</td></tr>
+            <tr><td><code>convex/agentHarness/turns.ts</code></td><td>prepareTurn embeds the grant catalog from the viewer-authority projection (never dispatch reauthorization), carries the operator question on the plan, widens the turn ceiling headroom.</td></tr>
+            <tr><td><code>convex/agentHarness/historyProjection.ts</code></td><td>Prompt assembly: run-scoped refs excluded, catalog rendered with call signatures, field labels and enum wording, money display contract disclosed.</td></tr>
+            <tr><td><code>convex/agentHarness/runtimeHost.ts</code></td><td>Wires question/lexicon/tone policy into the tool host, mirrors tone findings into turn_report telemetry, authors the instant first progress beat.</td></tr>
+            <tr><td><code>shared/agentHarness/manifest.ts</code></td><td>Verb signatures inline small enum values; public result field names disclosed per verb.</td></tr>
+            <tr><td><code>convex/agentHarness/programRuntime/programValidation.ts</code></td><td>Field advisories: reads of undeclared result fields ride back as diagnostics naming the declared fields; facade rejections list granted read paths.</td></tr>
+            <tr><td><code>convex/agentHarness/profiles/lexicons.ts</code></td><td>New: per-surface lexicon overlays; daily-operations floor vocabulary and namespace phrases.</td></tr>
+            <tr><td><code>convex/agentHarness/profiles/dailyOperations.ts</code></td><td>Provider allowance pins gpt-5-mini (fenced compatibility-digest change, epoch 4).</td></tr>
+            <tr><td><code>convex/agentHarness/agentRuntime/convexAgentProduction.ts</code></td><td>Low reasoning effort default; env knobs for effort, text verbosity, service tier.</td></tr>
+            <tr><td><code>convex/agentHarness/executor.ts</code> / <code>executorSeams.ts</code></td><td>Denied inner calls carry the refusal reason and detail; facade entries carry declared field names.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section data-report-section="failure-boundaries">
+        <h2>Failure and trust boundaries</h2>
+        <p>
+          Two boundaries deliberately moved, both narrow. First, the provider-visible tool list may
+          now differ from the kernel ledger: when the prompt embeds the catalog,
+          <code>athena.discover</code> is not offered to the model, but the kernel keeps all five
+          tools for dispatch ledger, replay, and fake-adapter parity. Second, the kernel now edits
+          the committed narrative — bounded to a trailing sources footer stripped only when every non-empty line in it carries a ref token (a prose-bearing footer stays verbatim; the surface renders citations itself), and structure-preserving substitution of platform-known internal
+          tokens. Free prose is never pattern-matched, the model's submitted text remains in the
+          dispatch ledger unmodified, and the provisional narrative stream is untouched.
+        </p>
+        <p>
+          What still fails and how: a stub narrative earns exactly one corrective denial naming the
+          fix, then the retry commits regardless (no loops). Unknown internal tokens (for example
+          workflow step ids) pass through and surface in <code>turn_report.tone</code> telemetry;
+          each becomes a one-line lexicon entry, so the floor ratchets rather than rots.
+        </p>
+      </section>
+
+      <section data-report-section="changes">
+        <h2>What changed, and what did not</h2>
+        <h3>Changed</h3>
+        <ul>
+          <li>Turn loop: stop at the terminal-tool settle; forced completion continuation; one corrective retry; 60 s elapsed headroom.</li>
+          <li>Disclosure: catalog in the prompt (signatures, fields with operator labels, enum values and wording, money display contract); granted read paths in facade rejections; field advisories on misread fields.</li>
+          <li>Ref handling: content-hash tail resolution with unique-containment tolerance; refusals name the valid refs verbatim; honest <code>no_usable_sources</code> with zero attempts.</li>
+          <li>Model: gpt-5-mini pinned in the profile at low reasoning effort; host-authored first milestone.</li>
+          <li>Tone: lexicon, money display annotation, tone sensor (enforce by default, one denial, <code>ATHENA_AGENT_TONE_POLICY=warn</code> downgrade), narrative normalization, sources-footer strip, per-profile overlays, tone telemetry on turn_report.</li>
+        </ul>
+        <h3>Intentionally unchanged</h3>
+        <ul>
+          <li>The kernel's fixed five-tool catalog, dispatch ledger fingerprinting, and replay semantics.</li>
+          <li>The answer surface and its renderer: provisional text is still never persisted, the committed artifact is still the only released answer, and the UI never rewrites model prose.</li>
+          <li>Citation, egress-class, and budget semantics; the completion outbox; grant authority rules.</li>
+          <li>Currency conventions: display formatting reuses the app's own <code>currencyFormatter</code> and per-value currency codes; the repo-wide minor-units convention is inherited, not reinvented.</li>
+        </ul>
+      </section>
+
+      <section data-report-section="validation">
+        <h2>Validation and review evidence</h2>
+        <ul>
+          <li><strong>Live regression phases:</strong> twenty-five 20-question phases against dev (plus two runs discarded as contaminated and one as replayed), two concurrent turns, real provider calls; final certified phases digest-guarded at preflight and every turn boundary after a concurrent main-deploy contaminated one run. Fresh idempotency keys per phase after a replay trap was found.</li>
+          <li><strong>Certified rich-day results:</strong> 20/20 committed, 0 denials, elapsed p50 16.9 s (pre-tone) and 12.8 s (final, with normalization), firstDelta p50 ~5 s, committed-prose jargon 8.0 → 0.5 per 1k chars, reasoning tokens ~12&times; below baseline.</li>
+          <li><strong>Focused suites:</strong> productLexicon (19), tools (17+), historyProjection (13), turns, runtimeHost parity, convexAgent contract, fieldAdvisories — 145+ tests green; <code>tsc --noEmit</code> clean.</li>
+          <li><strong>Offline replays:</strong> the tone sensor was replayed over 40 recorded answers before arming (34/40 true-positive findings, one FP found and fixed); normalization was replayed over the final phase's narratives before shipping (12 refs → 0; jargon 3.5 → 0.4/1k).</li>
+          <li><strong>Deployment status:</strong> dev runs the branch tip and was validated live; production deploy is intentionally out of scope for this delivery (operator decision: skip prod deploy).</li>
+          <li><strong>Gate:</strong> <code>bun run pr:athena</code> run status is recorded in the delivery-run ledger and telemetry accompanying this PR.</li>
+        </ul>
+      </section>
+
+      <section data-report-section="guidance">
+        <h2>Next time</h2>
+        <ul>
+          <li>When a model output violates a convention, first ask what the harness knew and did not disclose. Instructions are the weakest ring; measure before crediting them.</li>
+          <li>Isolate an enforcement mechanism's contribution (labels+warn vs labels+enforce) before adopting it; enforcement without disclosure measured <em>negative</em> here.</li>
+          <li>Guard live measurement phases with a deployment-digest check, use fresh idempotency keys per phase, and pin the operating date — three separate confounds corrupted one benchmark each this delivery.</li>
+          <li>Measure committed operator-visible text, not model-submitted text, once any commit-time normalization exists.</li>
+          <li>Never silently fall back on an authorization refusal: an empty catalog shipped that way once, and only prompt-content verification caught it.</li>
+        </ul>
+      </section>
+
+      <section data-report-section="quiz" data-quiz-pass-threshold="8">
+        <h2>Comprehension quiz</h2>
+        <ol data-quiz>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Why were the agent's money figures inflated 100&times; before this branch?</p>
+            <ol data-quiz-options>
+              <li>The reports pipeline double-counted refunds.</li>
+              <li data-quiz-correct>Capability results carried minor-unit amounts with no unit disclosure, so the model read pesewas as cedis.</li>
+              <li>The currency formatter used the wrong locale.</li>
+              <li>The model hallucinated totals when reads were partial.</li>
+            </ol>
+            <p data-quiz-explanation>Results served values like <code>{ amount: 1414900, currency: "GHS" }</code> with the Minor suffix stripped; the only reasonable reading was cedis. The fix annotates every money value with its product display string at the boundary.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What finally stopped the model from calling athena.discover at the start of every turn?</p>
+            <ol data-quiz-options>
+              <li>A stronger instruction telling it not to call discover.</li>
+              <li>A budget that made discover calls expensive.</li>
+              <li data-quiz-correct>Embedding the grant catalog in the prompt and removing discover from the provider-visible tool list.</li>
+              <li>Caching discover results between turns.</li>
+            </ol>
+            <p data-quiz-explanation>Instructions — including an explicit "do NOT" — changed nothing across 20/20 turns. Removing the tool from the offer while the kernel ledger keeps all five tools ended the habit deterministically.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Enforcement without vocabulary disclosure made prose worse. What is the mechanism?</p>
+            <ol data-quiz-options>
+              <li data-quiz-correct>The model was denied and told to rewrite without being shown the operator wording, so it produced longer, more defensive prose with the same tokens.</li>
+              <li>The denial consumed the token budget needed for a good answer.</li>
+              <li>The retry used a different, weaker model.</li>
+              <li>The sensor's false positives punished correct answers.</li>
+            </ol>
+            <p data-quiz-explanation>The isolation phases showed it directly: enforce-without-labels raised jargon density to 10.9/1k with a 73 s p90 tail, while labels alone cut it to 7.8 for free — the words have to be shown before compliance is possible.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Which two safety rules bound the kernel's narrative normalization?</p>
+            <ol data-quiz-options>
+              <li>Maximum edit distance and a profanity filter.</li>
+              <li data-quiz-correct>Structure-preserving substitutions only, and platform-known tokens only.</li>
+              <li>Rewrite only below a confidence threshold, and only in warn mode.</li>
+              <li>Rewrite only the first paragraph, and never inside quotes.</li>
+            </ol>
+            <p data-quiz-explanation>Humanizing a token in place ("lifecycleStage" → "lifecycle stage") keeps the sentence parsing; free-form labels would garble grammar and stay in disclosure and denial fixes. And only tokens the run served or the lexicon names are ever touched — free prose is never pattern-matched.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What does the tone sensor's enforce mode guarantee about retries?</p>
+            <ol data-quiz-options>
+              <li>It retries until the narrative is clean.</li>
+              <li data-quiz-correct>It spends exactly one corrective denial naming the fixes; the retry commits even if still imperfect.</li>
+              <li>It falls back to warn mode after three denials.</li>
+              <li>It cancels the turn if the retry still has findings.</li>
+            </ol>
+            <p data-quiz-explanation>The bound protects latency: a denial loop would hand back the branch's 2-3&times; latency win. Residual findings ride turn_report telemetry instead of blocking the answer.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Why is the committed narrative, not the model-submitted text, the right thing to measure after this branch?</p>
+            <ol data-quiz-options>
+              <li>The submitted text is truncated in traces.</li>
+              <li data-quiz-correct>Normalization runs at commit, so the operator-visible artifact deliberately differs from what the model wrote.</li>
+              <li>The submitted text includes reasoning tokens.</li>
+              <li>They are identical; either works.</li>
+            </ol>
+            <p data-quiz-explanation>The final phase measured 3.6/1k jargon in submitted text but 0.5/1k in the committed artifact — the difference is the normalization working as designed.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>How does completeRun resolve a citation ref the model transcribed imperfectly?</p>
+            <ol data-quiz-options>
+              <li>It fuzzy-matches on edit distance across all known refs.</li>
+              <li>It rejects immediately and ends the run.</li>
+              <li data-quiz-correct>It resolves by the content-hash tail — exact match first, then unique containment — against refs this run itself minted.</li>
+              <li>It asks the model to re-read the source.</li>
+            </ol>
+            <p data-quiz-explanation>Refs are opaque handles the turn handed out; the 32-hex content tail identifies the intended handle exactly, and nothing is granted that the run's reads did not already return.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>During delivery, one live benchmark phase produced numbers identical to a contaminated run. Why?</p>
+            <ol data-quiz-options>
+              <li>The dev deployment was still running the foreign code.</li>
+              <li data-quiz-correct>Reusing the phase tag reused the turn idempotency keys, so the harness returned the prior bindings instead of executing new turns.</li>
+              <li>The trace exporter cached old files.</li>
+              <li>The question set was accidentally frozen.</li>
+            </ol>
+            <p data-quiz-explanation>The deployment digest was verified correct throughout that phase, ruling out foreign code; startOperatorTurn dedupes on the idempotency key, which embeds the phase tag, so the "new" run replayed old bindings with ~10 s completions. Fresh tags per attempt are now mandatory, and the driver also aborts on any deployment-digest mismatch.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What happens to the model's own trailing "Sources:" footer, and why is that acceptable?</p>
+            <ol data-quiz-options>
+              <li>It is rewritten into operator wording.</li>
+              <li>It is left as written; citations are the model's responsibility.</li>
+              <li data-quiz-correct>A trailing footer whose every line is just refs is stripped at commit, because the answer surface renders the committed citations under "Sources" itself.</li>
+              <li>It causes a denial until removed.</li>
+            </ol>
+            <p data-quiz-explanation>The footer duplicates the UI in the wrong vocabulary, and neither disclosure nor a corrective denial stopped the habit. The strip is conservative: a footer carrying real prose, or a sources mention mid-answer, stays verbatim.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Why does the catalog embedded in the prompt come from the viewer-authority projection rather than dispatch reauthorization?</p>
+            <ol data-quiz-options>
+              <li>The projection is cheaper to compute.</li>
+              <li data-quiz-correct>Dispatch-purpose reauthorization always refuses before the run is marked running, and a silent fallback once shipped an empty catalog.</li>
+              <li>The projection includes projection-gated fields.</li>
+              <li>Dispatch reauthorization requires a network call.</li>
+            </ol>
+            <p data-quiz-explanation>The first "catalog embedded" build ate that refusal with a fallback and silently sent no catalog — the phases credited to it were actually the enum disclosure working. The fix sources the catalog from the viewer-authority projection &#8212; the grant snapshot the prepare rung already holds, and the lesson is to never silently fall back on an authorization refusal.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section data-report-section="subagent-evidence">
+        <h2>Subagent evidence</h2>
+        <ul>
+          <li><strong>Session-context subagent</strong> (general-purpose, read-only): reconstructed the ten measured loops, operator adjudications (mechanical enforcement over instructions; gpt-5-mini adoption; enforce-by-default; structure-preserving rewrites only), and the three delivery incidents (concurrent main-deploy contamination, idempotency-key phase replay, UTC date confound) from the published investigation artifact and session memory. Its timeline grounds the summary, problem, validation, and guidance sections.</li>
+          <li><strong>Delivered-diff subagent</strong>: two launch attempts both terminated on provider 529 (Overloaded) errors, so this role ran degraded — the changed-file map and boundary analysis in this report come from direct diff inspection (<code>git diff origin/main...HEAD --stat</code>, 36 files, and per-file review by the delivery session that authored every commit), with the report-reviewer subagent independently verifying claims against the diff. Per the report skill's contract, this section says so explicitly rather than omitting the failure.</li>
+          <li><strong>Report reviewer subagent</strong>: completed on the third launch attempt after two provider 529 failures, supplemented by an adversarial self-review pass. Between them they caught an understated phase count (13 → 25), a mismatched source-line figure, an ambiguous quiz question (the contamination-vs-replay distinction now cites the digest evidence), an imprecise statement of the footer-strip rule, and undefined terms. Corrections were applied before the report's final fingerprint stamp.</li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>
