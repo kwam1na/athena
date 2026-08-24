@@ -516,6 +516,53 @@ describe("Daily Operations resources", () => {
     ]);
   });
 
+  it("names the payment-mix absence truthfully: not-recorded history is not a reconciliation failure", async () => {
+    const t = convexTest(schema, modules);
+    const run = await t.run((ctx) => seedSmokeRun(ctx, { slug: "mixreasons" }));
+    await t.run(async (ctx) => {
+      const base = {
+        storeId: run.storeId,
+        currency: "GHS",
+        grossSalesMinor: 10_000,
+        netSalesMinor: 10_000,
+        refundsMinor: 0,
+        unitsSold: 1,
+        unitsReturned: 0,
+        uncostedRevenueMinor: 0,
+        grossProfitMinor: 2_000,
+        paymentsCollectedMinor: 10_000,
+        paymentsRefundedMinor: 0,
+        paymentAllocatedMinor: 10_000,
+        transactionCount: 1,
+        foldedAt: Date.parse("2026-08-11T00:00:00.000Z"),
+        foldVersion: 6,
+        factCount: 1,
+        lastFactRecordedAt: Date.parse("2026-08-10T12:00:00.000Z"),
+        flags: { mixedCurrency: false, hasUncostedRevenue: false, quarantinedFactCount: 0 },
+        status: "reconciled" as const,
+      };
+      // A day folded before mix tracking existed: no paymentMix at all.
+      await ctx.db.insert("reportDay", { ...base, operatingDate: "2026-08-10" });
+      // A day whose evidence genuinely did not reconcile.
+      await ctx.db.insert("reportDay", { ...base, operatingDate: "2026-08-09", paymentMix: { status: "unavailable" } });
+    });
+    const attemptId = await beginAttempt(t, run);
+    const mixSource = (envelope: ReturnType<typeof expectEnvelope>) =>
+      (envelope.envelope.completeness as { sources: { sourceKey: string; status: string; reason?: string }[] }).sources.find(
+        (source) => source.sourceKey === "paymentMix",
+      );
+
+    const preFeature = expectEnvelope(
+      await read(t, run, attemptId, { namespace: "reports.daySales", verb: "get", args: { operatingDate: "2026-08-10" } }),
+    );
+    expect(mixSource(preFeature)).toMatchObject({ status: "unavailable", reason: "payment_mix_not_recorded" });
+
+    const broken = expectEnvelope(
+      await read(t, run, attemptId, { namespace: "reports.daySales", verb: "get", args: { operatingDate: "2026-08-09" } }),
+    );
+    expect(mixSource(broken)).toMatchObject({ status: "unavailable", reason: "payment_mix_does_not_reconcile" });
+  });
+
   it("register sessions read is date-keyed: exact for dated rows, carries undated open drawers, discloses undated closed history", async () => {
     const t = convexTest(schema, modules);
     const run = await t.run((ctx) => seedSmokeRun(ctx, { slug: "datekeyed" }));

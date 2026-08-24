@@ -126,10 +126,20 @@ export const getDaySalesHandler: AgentReadPortHandler = async (ctx, input): Prom
       capturedAt: input.now,
     },
     {
-      // The mix is deliberately two-state: it reconciles exactly, or it is unavailable.
+      // The mix reconciles exactly or it is unavailable — but the REASON must
+      // be truthful: a day folded before mix tracking existed (no projection
+      // at all, 81 of 93 observed days on the reference store) was never
+      // measured, and telling an operator its payments "do not reconcile" is
+      // an accusation the books do not deserve. Only a stored `unavailable`
+      // projection — the derivation actually refusing — earns that reason.
       sourceKey: "paymentMix",
       status: day?.paymentMix?.status === "complete" ? "complete" : "unavailable",
-      reason: day?.paymentMix?.status === "complete" ? undefined : "payment_mix_does_not_reconcile",
+      reason:
+        day?.paymentMix?.status === "complete"
+          ? undefined
+          : day?.paymentMix?.status === "unavailable"
+            ? "payment_mix_does_not_reconcile"
+            : "payment_mix_not_recorded",
       capturedAt: input.now,
     },
   ];
