@@ -37,6 +37,10 @@ describe("rateCardFor", () => {
   it("returns the published card for a known provider/model pair", () => {
     expect(rateCardFor(openaiSelection)).toBe(AGENT_MODEL_RATE_CARDS["openai/gpt-5-nano"]);
     expect(rateCardFor(fakeSelection)).toBe(AGENT_MODEL_RATE_CARDS[`${AGENT_CONTRACT_FAKE_PROVIDER_ID}/fake-1`]);
+    // The A/B candidate carries its own card so its spend is charged truthfully.
+    expect(AGENT_MODEL_RATE_CARDS["openai/gpt-5"]).toEqual({
+      perMillion: { input: 1_250, output: 10_000, cachedInput: 125, reasoning: 10_000 },
+    });
   });
 
   it("falls back to the conservative default card for an unknown model", () => {

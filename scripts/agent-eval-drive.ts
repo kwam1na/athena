@@ -209,10 +209,12 @@ export const EVAL_SCENARIOS: readonly EvalScenario[] = [
       if (context.answer.outcome !== "answer") issues.push(hard(`expected an answer, got ${context.answer.outcome}`));
       const registerReads = context.calls.filter((call) => call.capability === "cap_dailyops_register_sessions");
       const partial = registerReads.filter((call) => call.status === "partial").length;
-      // The date-keyed read: a register list may be partial only by genuine
-      // per-date truncation, which a fixture-scale store never reaches.
+      // Soft, not hard: a status-filtered read is HONESTLY partial
+      // (single_status_partition_requested), so all-partial is a trend signal
+      // here; the date-keyed behavior is pinned deterministically in
+      // dailyOperations.ports.test.ts.
       if (registerReads.length > 0 && partial === registerReads.length) {
-        issues.push(hard("every register read was partial — the pre-date-keyed ceiling shape"));
+        issues.push(soft(`all ${registerReads.length} register reads were partial — check the reasons if this trends`));
       }
       return issues;
     },

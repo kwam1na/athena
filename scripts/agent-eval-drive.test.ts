@@ -129,7 +129,11 @@ describe("scenario checks", () => {
     expect(verdict.pass).toBe(false);
   });
 
-  it("fails the week-variance scenario when every register read is partial (pre-fix shape)", () => {
+  it("notes all-partial register reads softly: a status-filtered read is honestly partial", () => {
+    // Observed on the gpt-5 A/B: precise `status: "closed"` filters make every
+    // read partial (single_status_partition_requested) — honest, not the
+    // ceiling shape. The date-keyed behavior itself is pinned
+    // deterministically in dailyOperations.ports.test.ts.
     const verdict = evaluateScenario(
       scenario("deep_week_variance"),
       context({
@@ -139,7 +143,8 @@ describe("scenario checks", () => {
         ],
       }),
     );
-    expect(verdict.pass).toBe(false);
+    expect(verdict.pass).toBe(true);
+    expect(verdict.issues.some((issue) => issue.severity === "soft" && issue.message.includes("partial"))).toBe(true);
   });
 
   it("fails an empty-day answer that admits no absence", () => {
