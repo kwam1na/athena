@@ -223,8 +223,11 @@ export function senseTone(input: AgentToneSensorInput): readonly AgentToneFindin
   const question = input.question.toLowerCase();
   const asked = (token: string) => question.includes(token.toLowerCase());
 
+  // A complete answer may mention a read in passing; a stub IS the mention.
+  // Only a short narrative can be a stub (observed stubs run 88-168 chars).
+  const STUB_MAX_CHARS = 320;
   for (const pattern of STUB_PATTERNS) {
-    if (pattern.test(narrative)) {
+    if (narrative.length <= STUB_MAX_CHARS && pattern.test(narrative)) {
       findings.push({
         code: "stub_narrative",
         token: narrative.slice(0, 80),

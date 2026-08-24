@@ -159,6 +159,15 @@ describe("senseTone", () => {
     }
   });
 
+  it("does not call a long complete answer a stub for mentioning a read in passing", () => {
+    const narrative =
+      "Sales so far today are GH₵14,149 across 4 sales, with cash GH₵7,500, card GH₵2,900 and mobile money GH₵3,749. " +
+      "Register 06's drawer is still open with GH₵7,500 expected, and the close is blocked until it is counted. " +
+      "Stock is healthy except two items running low; the full top-items list was read and the leaders are wigs and closures. " +
+      "Nothing else needs attention right now.";
+    expect(senseTone(baseInput({ narrative }))).toEqual([]);
+  });
+
   it("does not call a short but complete answer a stub", () => {
     const findings = senseTone(baseInput({ narrative: "Register 06's drawer is the only one open." }));
     expect(findings).toEqual([]);
