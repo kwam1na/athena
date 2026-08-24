@@ -397,6 +397,7 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
   const toneEvidence = { fieldNames: new Set<string>(), enumLiterals: new Set<string>(), moneyKeys: new Set<string>(), moneyAmounts: [] as AgentMoneyAmount[], truncated: false };
   let toneFindings: readonly AgentToneFinding[] = [];
   let toneDeniedOnce = false;
+  let sourcesDeniedOnce = false;
   let completion: { committed: boolean; artifactId?: Id<"intelligenceArtifact"> } = { committed: false };
   let surface: ReturnType<typeof createRunDiscoverySurface> | undefined;
 
@@ -605,6 +606,19 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
         ` Valid citedAttemptRefs: ${knownAttemptRefs.join(", ") || "(none)"}. Valid citation refs: ${knownCitationRefs.join(", ") || "(none)"}. Copy them verbatim.`;
       if (args.outcome === "answer" && (citedAttemptRefs.length === 0 || citations.length === 0)) {
         return denied("citations_required", `An answer must cite at least one attempt and one citation; use outcome no_usable_sources when nothing usable was read.${validRefsHint()}`);
+      }
+      // The mirror gate, denied once like tone: observed after a tone denial,
+      // the model abandoned a good cited answer and resubmitted
+      // no_usable_sources with a "could not read" narrative — while this very
+      // turn held successful reads and minted citations. Push back once; a
+      // repeated submission is accepted as the model's honest judgment (a
+      // turn CAN read successfully yet find nothing usable in the data).
+      if (args.outcome === "no_usable_sources" && knownCitationRefs.length > 0 && !sourcesDeniedOnce) {
+        sourcesDeniedOnce = true;
+        return denied(
+          "sources_were_read",
+          `This turn read sources successfully and minted citations. If they answer the question, complete with outcome answer and cite them; if the question is too ambiguous to answer, complete with needs_clarification asking the operator one specific question. Use no_usable_sources only if nothing read was actually usable.${validRefsHint()}`,
+        );
       }
       // Normalization before sensing or commit: strip the trailing refs-only
       // "Sources:" footer (the surface renders citations itself), then rewrite

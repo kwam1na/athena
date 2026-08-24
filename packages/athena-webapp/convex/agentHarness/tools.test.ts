@@ -448,6 +448,24 @@ describe("athena.completeRun tone sensor and money display annotation", () => {
     expect(message.split(fixSentence)).toHaveLength(2);
   });
 
+  it("pushes back once on no_usable_sources when the turn read sources, then accepts the model's judgment", async () => {
+    const tools = toneTools();
+    await tools.executeProgram();
+    const capitulation = {
+      outcome: "no_usable_sources" as const,
+      narrative: "I could not read any store data for this run, so I cannot answer how the day went.",
+      citedAttemptRefs: [],
+      citations: [],
+    };
+    const denied = await tools.completeRun(capitulation);
+    expect(denied.kind).toBe("denied");
+    expect((denied as { denial: { code: string; message: string } }).denial.code).toBe("sources_were_read");
+    expect((denied as { denial: { message: string } }).denial.message).toContain("needs_clarification");
+    // A repeat is the model standing by its judgment: accepted.
+    const accepted = await tools.completeRun(capitulation);
+    expect(accepted.kind).toBe("success");
+  });
+
   it("needs_clarification commits without citations, carrying the question as the narrative", async () => {
     const tools = toneTools({ tonePolicy: "enforce" });
     const outcome = await tools.completeRun({
