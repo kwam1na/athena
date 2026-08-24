@@ -11,12 +11,19 @@ import { defineReadOperation } from "./_shapes";
  * Scaffolded by U1a so the composing arrays in `readDefinitions.ts` never need
  * to change again: the owning unit fills this array and edits nothing else.
  *
- * `actors.sharedDemo` follows `SHARED_DEMO_ALLOWED_READ_INTENTS` exactly
+ * `actors.sharedDemo` follows `SHARED_DEMO_ALLOWED_READ_INTENTS`
  * (`convex/sharedDemo/policy.ts`), which `readIntentGrants.test.ts` asserts in
- * both directions. Intents outside that closed set — `service_ops.view`,
- * `staff.view`, `procurement.view`, `customer_messaging.view` — are demo
- * denials here rather than additions to the grant set: widening demo read
- * reach is a deliberate policy change, not a migration side effect.
+ * the strict direction only (seed ⊇ derived: no demo-admitted read may carry
+ * an ungranted intent). A granted intent does NOT imply its definitions are
+ * admitted — that second key is set here, per definition. Intents outside that closed set — `staff.view`,
+ * `procurement.view`, `customer_messaging.view` — are demo denials here rather
+ * than additions to the grant set: widening demo read reach is a deliberate
+ * policy change, not a migration side effect.
+ *
+ * `service_ops.view` is inside the set. The demo sidebar carries a Services
+ * group, and all four of its views were readable before these reads moved onto
+ * the rails; denying them here left the group throwing on load, so the grant
+ * restores the pre-rail surface rather than widening reach.
  */
 
 /** storeId lives on the row this read names, not in the arguments. */
@@ -81,12 +88,14 @@ export const searchServiceIntakeCustomersReadDefinition = storeScopedRead({
   functionName: "operations/serviceIntake:searchCustomers",
   intent: "service_ops.view",
   operationId: "operations.serviceIntake.searchCustomers.read",
+  sharedDemo: "admit",
 });
 
 export const listAssignableStaffReadDefinition = storeScopedRead({
   functionName: "operations/serviceIntake:listAssignableStaff",
   intent: "service_ops.view",
   operationId: "operations.serviceIntake.listAssignableStaff.read",
+  sharedDemo: "admit",
 });
 
 export const getStaffCredentialUsernameAvailabilityReadDefinition =
@@ -159,18 +168,21 @@ export const listAppointmentsReadDefinition = storeScopedRead({
   functionName: "serviceOps/appointments:listAppointments",
   intent: "service_ops.view",
   operationId: "serviceOps.appointments.listAppointments.read",
+  sharedDemo: "admit",
 });
 
 export const listServiceCatalogItemsReadDefinition = storeScopedRead({
   functionName: "serviceOps/catalog:listServiceCatalogItems",
   intent: "service_ops.view",
   operationId: "serviceOps.catalog.listServiceCatalogItems.read",
+  sharedDemo: "admit",
 });
 
 export const listActiveServiceCasesReadDefinition = storeScopedRead({
   functionName: "serviceOps/serviceCases:listActiveServiceCases",
   intent: "service_ops.view",
   operationId: "serviceOps.serviceCases.listActiveServiceCases.read",
+  sharedDemo: "admit",
 });
 
 export const getServiceCaseDetailsReadDefinition = storeScopedRead({
@@ -181,6 +193,7 @@ export const getServiceCaseDetailsReadDefinition = storeScopedRead({
     kind: "store",
     resolve: resolveStoreFromRow("serviceCase", "serviceCaseId"),
   },
+  sharedDemo: "admit",
 });
 
 export const OPERATIONS_READ_DEFINITIONS: readonly OperationReadDefinition[] =

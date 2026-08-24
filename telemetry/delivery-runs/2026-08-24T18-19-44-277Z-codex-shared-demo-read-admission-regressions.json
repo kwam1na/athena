@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-24T18:19:44.277Z",
+  "branch": "codex/shared-demo-read-admission-regressions",
+  "headSha": "812c9a4e575c2fae120fbfb7627ff778908dbd41",
+  "deliverableDiffFingerprint": "305b5f3afd5ac2d247f183f84987eeaf7d2cf7f787f2b2eaf61933c010218a9e",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 9,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 1140768.5812920001
+  },
+  "reviewLoop": {
+    "providerId": "ce-code-review",
+    "runId": "v26-1322-shared-demo-reachability",
+    "finalPassId": "pass-3-final",
+    "recordedAt": "2026-08-24T18:00:39.404Z",
+    "iterationCount": 3,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 1,
+      "P2": 15,
+      "P3": 11
+    },
+    "deferredExpansionCount": 2,
+    "deferredIssueIds": [
+      "V26-1323",
+      "V26-1324"
+    ]
+  }
+}

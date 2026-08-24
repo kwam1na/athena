@@ -86,6 +86,11 @@ export const getExpenseSessionItemsReadDefinition = defineReadOperation({
   },
 });
 
+/**
+ * Demo-admitted: `/pos/expense-reports` is reachable from the demo's POS
+ * surface and reads this list on load. The expense SESSION reads above stay
+ * denied — no demo surface renders them.
+ */
 export const listExpenseTransactionsReadDefinition = defineReadOperation({
   kind: "query" as const,
   functionName: "inventory/expenseTransactions:getExpenseTransactions",
@@ -94,7 +99,7 @@ export const listExpenseTransactionsReadDefinition = defineReadOperation({
   scope: { kind: "store" as const, storeIdArg: "storeId" },
   actors: {
     normalUser: "admit" as const,
-    sharedDemo: "deny" as const,
+    sharedDemo: "admit" as const,
     public: "deny" as const,
   },
 });
@@ -116,9 +121,11 @@ export const getExpenseTransactionByIdReadDefinition = defineReadOperation({
       return transaction ? { storeId: transaction.storeId } : {};
     },
   },
+  // Demo-admitted for the same reason as the list above: one expense report's
+  // detail route is reachable straight from `/pos/expense-reports`.
   actors: {
     normalUser: "admit" as const,
-    sharedDemo: "deny" as const,
+    sharedDemo: "admit" as const,
     public: "deny" as const,
   },
 });

@@ -265,6 +265,7 @@ function reviewRead(args: {
   operationId: string;
   publicAccess?: "admit" | "deny";
   scope?: OperationReadDefinition["scope"];
+  sharedDemo?: "admit" | "deny";
 }) {
   return storeFrontRead({
     functionName: args.functionName,
@@ -272,12 +273,25 @@ function reviewRead(args: {
     operationId: args.operationId,
     publicAccess: args.publicAccess,
     scope: args.scope,
+    sharedDemo: args.sharedDemo,
   });
 }
 
+/**
+ * The review LIST is demo-admitted: the demo sidebar carries Reviews, and
+ * `reviews.manage` is already an allowed demo write capability, so moderating
+ * a review is a demo activity and the list behind it is a read the demo has
+ * always answered.
+ *
+ * The pending-COUNT stays denied. The sidebar deliberately skips that query in
+ * the shared demo (`app-sidebar.tsx`), so the demo never issues it, and a
+ * grant nothing reaches is reach nobody reviewed. The customer-facing review
+ * reads below stay denied too — the demo never renders the storefront.
+ */
 export const listStoreReviewsReadDefinition = reviewRead({
   functionName: "storeFront/reviews:getAllReviewsForStore",
   operationId: "storeFront/reviews.getAllReviewsForStore.read",
+  sharedDemo: "admit",
 });
 
 export const getUnapprovedReviewsCountReadDefinition = reviewRead({

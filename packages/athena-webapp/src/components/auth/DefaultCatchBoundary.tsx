@@ -7,6 +7,7 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import { ArrowLeft, Home, RotateCcw } from "lucide-react";
+import { useCallback, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +15,13 @@ import {
   GENERIC_UNEXPECTED_ERROR_TITLE,
 } from "~/shared/commandResult";
 import { getRecoveryHomePath } from "@/lib/navigation/appEntryRoutes";
+import { SharedDemoSessionRenewal } from "@/components/shared-demo/SharedDemoSessionRenewal";
+import { isSharedDemoUiEnabled } from "@/hooks/useSharedDemoContext";
+import {
+  canRenewSharedDemoSession,
+  isSharedDemoSessionExpiredError,
+} from "@/lib/errors/sharedDemoSessionExpired";
+import { isSharedDemoSessionExpiredData } from "~/shared/sharedDemoActionError";
 
 type DefaultCatchBoundaryProps = ErrorComponentProps & {
   reloadPage?: () => void;
@@ -35,16 +43,48 @@ export function DefaultCatchBoundary({
     select: (state) => state.location.pathname,
   });
   const recoveryHomePath = getRecoveryHomePath(pathname);
-  const isExpiredDemoSession = /(?:shared )?demo session has expired/i.test(
-    error.message,
+  const isExpiredDemoSession = isSharedDemoSessionExpiredError(error);
+  // Renewal keys on the CODE alone, never the legacy message. Renewing is an
+  // identity swap — it signs the caller into the demo owner — and the message
+  // pattern also matches the plain error thrown for any caller with no demo
+  // principal at all. On a developer machine, where Convex still forwards that
+  // message, a signed-in merchant hitting such an error would be silently
+  // moved into the demo. The message still selects the COPY below, which is
+  // all it ever did before.
+  const isCodedExpiredDemoSession = isSharedDemoSessionExpiredData(
+    (error as { data?: unknown }).data,
   );
+  const [renewalFailed, setRenewalFailed] = useState(false);
+  // Read ONCE, at mount. The renewal's own effect increments this counter, so
+  // re-reading it each render makes the decision unstable across the life of
+  // the renewal: on the last permitted attempt the answer flips mid-flight,
+  // React unmounts the spinner, and the manual screen paints over a renewal
+  // that is still succeeding behind it. `renewalFailed` stays the only thing
+  // that takes the renewal down, which is the intended exit.
+  const [canRenewDemoSession] = useState(canRenewSharedDemoSession);
+  const shouldRenewDemoSession =
+    isCodedExpiredDemoSession &&
+    isSharedDemoUiEnabled &&
+    !renewalFailed &&
+    canRenewDemoSession;
   const isRouteModuleLoadError = ROUTE_MODULE_LOAD_ERROR_PATTERN.test(
     error.message,
   );
   const actionClassName =
     "transition-transform duration-150 ease-emphasized active:scale-[0.98]";
 
+  const handleRenewalFailed = useCallback(() => setRenewalFailed(true), []);
+
   console.error(error);
+
+  if (shouldRenewDemoSession) {
+    return (
+      <SharedDemoSessionRenewal
+        onFailed={handleRenewalFailed}
+        reloadPage={reloadPage}
+      />
+    );
+  }
 
   return (
     <section

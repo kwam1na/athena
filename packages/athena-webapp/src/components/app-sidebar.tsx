@@ -266,7 +266,7 @@ export function AppSidebar({
 
   const unapprovedReviewsCount = useQuery(
     api.storeFront.reviews.getUnapprovedReviewsCount,
-    activeStore?._id ? { storeId: activeStore._id } : "skip",
+    activeStore?._id && !isSharedDemo ? { storeId: activeStore._id } : "skip",
   );
 
   const { hasFinancialDetailsAccess, hasFullAdminAccess } = usePermissions();

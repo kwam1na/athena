@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shared demo: restoring reachability after the migration</title>
+  </head>
+  <body>
+    <article
+      data-athena-landed-change-report="v2"
+      data-athena-report-diff-fingerprint="305b5f3afd5ac2d247f183f84987eeaf7d2cf7f787f2b2eaf61933c010218a9e"
+    >
+      <header data-report-section="header">
+        <h1>Shared demo: restoring reachability after the migration</h1>
+        <ul data-report-pills>
+          <li>Delivery candidate</li>
+          <li>Branch codex/shared-demo-read-admission-regressions</li>
+          <li>8 demo surfaces repaired</li>
+          <li>Expired-session deadlock cleared</li>
+          <li>Demo read reach 157 &rarr; 167</li>
+        </ul>
+        <dl data-report-meta>
+          <dt>Ticket</dt>
+          <dd>V26-1322</dd>
+          <dt>Status</dt>
+          <dd>Delivery candidate</dd>
+          <dt>Scope</dt>
+          <dd>Shared-demo read admission policy</dd>
+        </dl>
+      </header>
+
+      <section data-report-section="summary">
+        <h2>Summary</h2>
+        <p>
+          An in-app sweep of the shared demo &mdash; every surface its sidebar
+          and hub link to, plus the actions a visitor can take &mdash; found
+          eight surfaces broken after the backend operation-admission
+          migration. Each threw
+          <code>shared_demo_action_denied</code> on load and rendered the
+          router's error boundary instead of the store, including
+          <code>/pos</code>, the destination of every &ldquo;Make a sale&rdquo;
+          entry point in the demo.
+        </p>
+        <p>
+          All eight are read failures. The write rails came through the
+          migration intact: the sweep completed a POS sale end to end (synced),
+          voided it with a manager approval proof, submitted a cycle count,
+          corrected an opening float, fulfilled an online order, and sent a
+          review request &mdash; every one succeeded.
+        </p>
+        <p>
+          The fix grants four read intents and admits ten read definitions, and
+          adds a sensor for the class of failure that let this ship: neither
+          existing demo-policy test could see a demo surface losing its read.
+        </p>
+        <p>
+          A second defect surfaced separately, reproducible only on an expired
+          demo session: the "Open demo again" button the app offers did
+          nothing. Minting a demo session had come to require holding one, so
+          every route back in was closed. That is fixed, and the recovery now
+          happens automatically, with no button to press.
+        </p>
+      </section>
+
+      <section data-report-section="problem">
+        <h2>Problem</h2>
+        <p>
+          Shared-demo read admission takes <strong>two keys</strong>, both
+          checked in <code>sharedDemo/readOperationAdapter.ts</code>: the read
+          definition must say <code>actors.sharedDemo: "admit"</code>, and its
+          intent must be listed in
+          <code>SHARED_DEMO_ALLOWED_READ_INTENTS</code>. Two keys is a
+          deliberate containment property &mdash; granting an intent does not
+          silently admit every read carrying it.
+        </p>
+        <p>
+          Migration units U3, U5 and U7 moved these reads onto the rails taking
+          the <code>sharedDemo: "deny"</code> default. That is the correct
+          default. It is the wrong answer for a read the demo's own navigation
+          walks into, and every one of these was a plain, unwrapped
+          <code>query</code> before the migration &mdash; so the demo had always
+          answered it.
+        </p>
+        <p>
+          Two sensors already guard demo read policy and <strong>both stayed
+          green</strong> the whole time.
+          <code>readIntentGrants.test.ts</code> asserts seed &supe; derived;
+          <code>coverage.test.ts</code> asserts the grants agree in both
+          directions. Both describe the grants that <em>exist</em>, and a demo
+          surface going dark leaves both statements true.
+        </p>
+      </section>
+
+      <section data-report-section="mental-model">
+        <h2>Mental model</h2>
+        <p>
+          Think of demo read access as a door with two locks. The
+          <em>intent grant</em> is the building key: it says which wings of the
+          building a demo visitor may enter at all. The definition's
+          <code>actors.sharedDemo</code> flag is the room key: it says whether
+          this specific door opens.
+        </p>
+        <p>
+          The migration re-keyed every room in the building and, sensibly,
+          defaulted the new locks to closed. The existing sensors audit the
+          <em>keyring</em> &mdash; that every key matches a real door and every
+          door a real key. What nobody checked is whether the rooms the tour
+          walks through are still unlocked. A locked room the tour never enters
+          is fine; a locked room the tour walks into is the tour ending in a
+          corridor.
+        </p>
+        <p>
+          That distinction &mdash; keyring coherence versus route reachability
+          &mdash; is exactly the gap the new sensor fills.
+        </p>
+      </section>
+
+      <section data-report-section="before-after">
+        <h2>Before and after</h2>
+        <p>Before, on <code>main</code>, for a demo visitor:</p>
+        <ul>
+          <li>
+            Clicking &ldquo;Make a sale&rdquo; on the demo hub &rarr;
+            <code>/pos</code> &rarr; error boundary. The register itself
+            (<code>/pos/register</code>) worked, so the demo was reachable only
+            by knowing the deeper URL.
+          </li>
+          <li>
+            All four <code>/services/*</code> sidebar entries &rarr; error
+            boundary.
+          </li>
+          <li>
+            <code>/reviews/new</code> (the sidebar's Reviews target) &rarr;
+            error boundary, while <code>/reviews/published</code> rendered.
+          </li>
+          <li>
+            <code>/pos/expense-reports</code> and <code>/pos/settings</code>
+            &rarr; error boundary.
+          </li>
+          <li>
+            The sidebar's pending-review badge threw on <em>every</em> demo
+            page.
+          </li>
+        </ul>
+        <p>After: each of those surfaces resolves its reads and renders.</p>
+        <p>
+          What did <em>not</em> change: the surfaces that intentionally show a
+          &ldquo;demo boundary&rdquo; screen rather than an error &mdash;
+          <code>/products/archived</code> and the inventory cost-overlay step
+          &mdash; still show it. Those are designed copy, not breakage, and the
+          sweep distinguished the two by whether the page rendered a boundary
+          card or the router's error component.
+        </p>
+      </section>
+
+      <section data-report-section="expired-session-deadlock">
+        <h2>The expired-session deadlock</h2>
+        <p>
+          A demo admission lasts three hours. Past that, the app correctly
+          detected the expiry and showed "Your demo session ended" with an
+          <strong>Open demo again</strong> button &mdash; and the button
+          returned to the same screen, every time.
+        </p>
+        <p>
+          <code>sharedDemo/admission:issueSharedDemoTicket</code> is the
+          operation that MINTS a demo session, and its own definition says
+          <code>public: "admit"</code> &mdash; an anonymous visitor may call it,
+          which is how anyone enters the demo at all. But the shared-demo
+          adapter resolves the caller's principal first, and for an expired
+          principal it raised a terminal denial, so the chain never reached the
+          public adapter. You needed a live admission to obtain an admission.
+          The visitor's only escape was clearing site data.
+        </p>
+        <p>Three changes clear it:</p>
+        <ul>
+          <li>
+            <strong>The recovery write gets through.</strong> An expired session
+            is not a demo actor, so for operations <code>public</code> already
+            allows the adapter now falls through instead of denying. It cannot
+            escalate: a demo auth identity is stored with a name and no email,
+            and the normal-user adapter resolves its Athena user by email, so it
+            finds nothing and falls through too. Only <code>public</code> picks
+            these up, which grants strictly less than the demo already did.
+          </li>
+          <li>
+            <strong>Reads keep denying.</strong> Deliberately, and found the
+            hard way: letting the identity probe fall through to
+            <code>public</code> answers it successfully, so the app sees a
+            half-identified visitor instead of an expired demo and redirects to
+            a sign-in form they have no credentials for. The read denial is the
+            signal the client renews on.
+          </li>
+          <li>
+            <strong>The signal became structured.</strong> Expiry now travels as
+            a <code>ConvexError</code> carrying
+            <code>shared_demo_session_expired</code>. It previously travelled as
+            a plain <code>Error</code> message, and Convex scrubs those outside
+            dev &mdash; so the client's message test matched on a developer's
+            machine and would have matched nothing in production.
+          </li>
+        </ul>
+        <p>
+          Renewal is then automatic: take a ticket, sign in over the dead
+          session, reload. It does not sign out first, which the demo entry
+          route does &mdash; signing out leaves the app with no identity, the
+          router redirects to sign-in, and the renewal is unmounted mid-flight.
+          A capped counter stops a renewal that keeps landing back on the same
+          failure, and past the cap the manual button returns as the fallback.
+        </p>
+      </section>
+
+      <section data-report-section="key-files">
+        <h2>Key files</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Change</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>convex/sharedDemo/policy.ts</code></td>
+              <td>
+                Grants four read intents &mdash; <code>expenses.view</code>,
+                <code>service_ops.view</code>,
+                <code>store.configuration.view</code>,
+                <code>storefront.reviews.view</code> &mdash; each with its
+                justifying surface recorded inline.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >convex/operationAdmission/domains/operations_readDefinitions.ts</code
+                >
+              </td>
+              <td>
+                Admits the six <code>service_ops.view</code> reads behind the
+                Services group; module docstring updated, since it previously
+                named that intent as a deliberate demo denial.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >convex/operationAdmission/domains/inventoryCatalog_readDefinitions.ts</code
+                >
+              </td>
+              <td>
+                Admits <code>getStoreScheduleSummary</code> for the POS hub and
+                POS settings; its schedule-admin siblings stay denied.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >convex/operationAdmission/domains/inventoryIdentity_readDefinitions.ts</code
+                >
+              </td>
+              <td>
+                Admits the two expense-transaction reads; the expense-session
+                reads stay denied, as no demo surface renders them.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >convex/operationAdmission/domains/storefrontOperator_readDefinitions.ts</code
+                >
+              </td>
+              <td>
+                Admits the review list. The pending-count read stays denied and
+                is handled client-side instead.
+              </td>
+            </tr>
+            <tr>
+              <td><code>src/components/app-sidebar.tsx</code></td>
+              <td>
+                Skips the pending-review count query in the shared demo, so the
+                demo never issues that read.
+              </td>
+            </tr>
+            <tr>
+              <td><code>convex/sharedDemo/actor.ts</code></td>
+              <td>
+                Turns an expired session into a <code>ConvexError</code> the
+                client can act on; a disabled demo stays a plain error, because
+                nothing the client does can switch the demo back on.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>convex/sharedDemo/operationAdapter.ts</code>,
+                <code>readOperationAdapter.ts</code>
+              </td>
+              <td>
+                Expired sessions reach public-admitted WRITES (the ticket mint);
+                reads keep denying so the client still learns the session ended.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>src/components/shared-demo/SharedDemoSessionRenewal.tsx</code>
+              </td>
+              <td>
+                Takes a fresh admission and reloads, with no visitor action.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>convex/sharedDemo/demoSurfaceReads.test.ts</code>
+              </td>
+              <td>
+                New sensor: names each demo-reachable surface beside the reads
+                its view issues, and asserts both admission keys for every one.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section data-report-section="changes">
+        <h2>What changed</h2>
+        <p>
+          Ten read definitions flip to
+          <code>sharedDemo: "admit"</code>, and the four intents behind them
+          join the grant set. Both edits are required &mdash; either alone still
+          denies.
+        </p>
+        <p>
+          The admitted set deliberately includes reads reached one click
+          <em>past</em> the surface that failed on load:
+          <code>getExpenseTransactionById</code>,
+          <code>getServiceCaseDetails</code>, and
+          <code>searchCustomers</code>. The sweep could only see the first read
+          each page issued; fixing only those would have produced pages that
+          render and then break on their next interaction.
+        </p>
+        <p>
+          Two mechanisms are in play, and the report is explicit about when each
+          applies, because using the wrong one is how this recurs:
+        </p>
+        <ul>
+          <li>
+            <strong>Admit the read</strong> when the demo genuinely renders the
+            surface.
+          </li>
+          <li>
+            <strong>Skip the query client-side and leave the read denied</strong>
+            when the demo does not need what it returns. This is the sidebar
+            badge: a shared demo has no reason to display a moderation backlog,
+            so the query is skipped and the definition stays denied.
+          </li>
+        </ul>
+        <p>
+          Doing both to the same read is the case to avoid &mdash; an admitted
+          grant no caller reaches is reach nobody reviewed.
+        </p>
+        <p>
+          What intentionally did not change: demo write capabilities, the
+          effect-gateway simulation policy, and every read whose intent is
+          outside the grant set. Demo read reach moves from 157 to 167 admitted
+          definitions and no further; the delta was diffed definition by
+          definition rather than assumed.
+        </p>
+      </section>
+
+      <section data-report-section="validation">
+        <h2>Validation</h2>
+        <p>Green in the worktree:</p>
+        <ul>
+          <li>
+            <code>convex/sharedDemo</code> and
+            <code>convex/operationAdmission</code> suites &mdash; 323 tests,
+            including <code>readIntentGrants</code>, <code>coverage</code>
+            (both-direction grant agreement) and <code>readBoundary</code>.
+          </li>
+          <li>
+            <code>bun scripts/convex-operation-admission-check.ts</code> &mdash;
+            every ingress admitted, zero findings.
+          </li>
+          <li>
+            <code>typecheck</code>, <code>audit:convex</code>,
+            <code>lint:convex:changed</code>.
+          </li>
+          <li>
+            <code>src/components/app-sidebar.test.tsx</code>, covering the
+            shared-demo skip.
+          </li>
+        </ul>
+        <p>
+          The new sensor was <strong>mutation-tested</strong> rather than merely
+          run: reverting one definition to <code>deny</code> made it fail with
+          <code
+            >serviceOps/appointments:listAppointments: expected 'deny' to be
+            'admit'</code
+          >, and it passed again once restored. A sensor that has never been
+          seen to fail is not yet evidence.
+        </p>
+        <p>
+          <strong>In-app, post-fix.</strong> The full 42-route sweep was re-run
+          against the live demo with the fix deployed to the dev backend:
+          <strong>42/42 clean</strong> &mdash; no denials, no error boundaries,
+          no page errors. All eight previously broken surfaces render real
+          content, and nothing that worked before regressed. The POS hub shows
+          its store-time header again, which is the exact read that was denied.
+        </p>
+        <p>
+          <strong>The deadlock, reproduced and re-verified.</strong> A demo
+          admission lasts three hours, so a temporary internal mutation was
+          deployed to expire principals on demand, the broken CTA was observed
+          first-hand, and the tool was removed from the deployment afterwards.
+          With the fix in place, expiring a live session and navigating to a
+          demo page renews silently and lands on the requested page &mdash;
+          confirmed on Cash controls, Daily Operations and Reports. A principal
+          count taken across one renewal (321 &rarr; 322) proves a fresh
+          admission was actually minted rather than the expiry failing to apply.
+        </p>
+        <p>
+          One write was re-driven after the deploy (a cycle count, applied) to
+          confirm the write rails were undisturbed by the policy change.
+        </p>
+      </section>
+
+      <section data-report-section="guidance">
+        <h2>Guidance</h2>
+        <p>
+          When you move a Convex read onto the admission rails, the question is
+          not only &ldquo;what is the safe default?&rdquo; but &ldquo;does any
+          shipped surface walk into this?&rdquo; For the shared demo the answer
+          is enumerable: the demo sidebar and hub name every surface a visitor
+          can reach.
+        </p>
+        <p>
+          If you add a surface to the demo sidebar, add its reads to
+          <code>demoSurfaceReads.test.ts</code>. That list is intentionally
+          hand-maintained &mdash; deriving it by walking the React tree for
+          <code>useQuery</code> calls would go stale in exactly the silence the
+          sensor exists to break.
+        </p>
+        <p>
+          More generally: a default-deny policy with a closed grant set needs a
+          sensor pointed at reachability, not only at internal coherence.
+          Coherence sensors stay green while the product goes dark.
+        </p>
+        <p>
+          Worth repeating as method: this was found by driving the app, not by
+          reading the diff. The migration's own test suite was green throughout.
+          A sweep that clicks every surface the product advertises catches a
+          class of regression that no amount of internal-consistency checking
+          will.
+        </p>
+      </section>
+
+      <section data-report-section="quiz" data-quiz-pass-threshold="4">
+        <h2>Comprehension quiz</h2>
+        <ol data-quiz>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why did the existing demo-policy tests stay green while eight demo
+              surfaces were broken?
+            </p>
+            <ol data-quiz-options>
+              <li>They were skipped in CI.</li>
+              <li data-quiz-correct>
+                They audit whether the grants that exist agree with each other,
+                and a surface losing its read leaves that agreement intact.
+              </li>
+              <li>
+                They only run against the storefront package, not the operator
+                app.
+              </li>
+              <li>
+                They assert reachability but were pointed at the wrong store id.
+              </li>
+            </ol>
+            <p data-quiz-explanation>
+              Both sensors describe the grant set's internal coherence.
+              Removing a demo-admitted read keeps the remaining grants perfectly
+              coherent, so nothing fails &mdash; the missing question was
+              whether the demo's own navigation still resolves.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              What are the two keys shared-demo read admission requires?
+            </p>
+            <ol data-quiz-options>
+              <li>
+                A valid demo principal and an unexpired admission window.
+              </li>
+              <li>
+                The store scope matching and the organization scope matching.
+              </li>
+              <li data-quiz-correct>
+                The definition's <code>actors.sharedDemo</code> being
+                <code>admit</code>, and its intent being in
+                <code>SHARED_DEMO_ALLOWED_READ_INTENTS</code>.
+              </li>
+              <li>
+                A granted write capability and a matching read intent.
+              </li>
+            </ol>
+            <p data-quiz-explanation>
+              Both are checked in the read adapter. Requiring both is what stops
+              an intent grant from silently admitting every read that happens to
+              carry that intent &mdash; and it is why fixing only one of them
+              still leaves the read denied.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why were <code>getServiceCaseDetails</code> and
+              <code>searchCustomers</code> admitted, when neither was the read
+              that failed on page load?
+            </p>
+            <ol data-quiz-options>
+              <li>
+                They share a definition object with the reads that did fail.
+              </li>
+              <li data-quiz-correct>
+                They are reached one click deeper, so admitting only the
+                load-time reads would give pages that render and then break on
+                their next interaction.
+              </li>
+              <li>
+                Admitting an intent automatically admits every read that carries
+                it.
+              </li>
+              <li>
+                They are required for the coverage test to pass.
+              </li>
+            </ol>
+            <p data-quiz-explanation>
+              A browser sweep only observes the first read a page issues. The
+              admitted set was chosen by tracing which reads each demo view's
+              component tree actually calls, not by fixing the observed error
+              alone.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              The sidebar's pending-review count is skipped client-side
+              <em>and</em> its read definition stays denied. Why not admit it
+              too, for safety?
+            </p>
+            <ol data-quiz-options>
+              <li>
+                Admitting it would break the both-direction coverage check.
+              </li>
+              <li>
+                The count query is too expensive to run in a shared demo.
+              </li>
+              <li data-quiz-correct>
+                A grant no caller reaches is read reach nobody reviewed, and it
+                would make the reachability sensor assert something the product
+                does not do.
+              </li>
+              <li>
+                Denied reads render faster because the adapter short-circuits.
+              </li>
+            </ol>
+            <p data-quiz-explanation>
+              The two mechanisms answer different questions. Once the demo
+              deliberately stops issuing a read, the honest state is denied and
+              unlisted &mdash; otherwise the grant set and the sensor both
+              overstate what the demo does.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              What did the sweep establish about the migration's effect on
+              writes?
+            </p>
+            <ol data-quiz-options>
+              <li>
+                Writes were broken in the same way and fixed by the same grants.
+              </li>
+              <li data-quiz-correct>
+                They were unaffected &mdash; a POS sale, an approval-gated void,
+                a cycle count, a float correction, an order fulfilment and a
+                customer message all completed.
+              </li>
+              <li>
+                Writes could not be tested because the POS hub was broken.
+              </li>
+              <li>
+                Only writes that avoid manager approval still worked.
+              </li>
+            </ol>
+            <p data-quiz-explanation>
+              The damage was confined to reads. Notably the approval path was
+              exercised in full: the void consumed a manager approval proof and
+              recorded both a payment reversal and an inventory movement.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why did the "Open demo again" button fail to do anything?
+            </p>
+            <ol data-quiz-options>
+              <li>The link pointed at a route that no longer existed.</li>
+              <li data-quiz-correct>
+                The operation that mints a demo session was itself denied to an
+                expired session, so obtaining an admission required already
+                holding one.
+              </li>
+              <li>
+                The button was disabled whenever the demo store was restoring.
+              </li>
+              <li>
+                Clicking it signed the visitor out without signing them back in.
+              </li>
+            </ol>
+            <p data-quiz-explanation>
+              The ticket mint declares <code>public: "admit"</code>, but the
+              shared-demo adapter resolved the caller's expired principal first
+              and denied terminally, so the chain never reached the public
+              adapter. Every route back in was closed, including the manual one.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              An expired session now falls through to <code>public</code> on
+              writes but is still denied on reads. Why the asymmetry?
+            </p>
+            <ol data-quiz-options>
+              <li>
+                Reads are cheaper to deny, so the rail short-circuits them.
+              </li>
+              <li>
+                Public read definitions do not carry an actor list.
+              </li>
+              <li data-quiz-correct>
+                The read denial is how the client learns the session ended;
+                answering the identity probe successfully instead makes the app
+                treat the visitor as half-identified and redirect them to a
+                sign-in form.
+              </li>
+              <li>
+                Writes are re-validated inside the handler, so falling through
+                is safe only there.
+              </li>
+            </ol>
+            <p data-quiz-explanation>
+              Recovery is a write, so that is where reachability matters. Reads
+              carry the signal, and it was letting reads fall through that
+              produced the silent redirect to <code>/login</code> during
+              development of this fix.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why is the demo-surface read list hand-maintained rather than
+              derived from the code?
+            </p>
+            <ol data-quiz-options>
+              <li>
+                Convex definitions cannot be introspected at test time.
+              </li>
+              <li>
+                Deriving it would be too slow to run in CI.
+              </li>
+              <li data-quiz-correct>
+                A derivation walking the React tree for
+                <code>useQuery</code> calls would go stale in exactly the
+                silence the sensor exists to break.
+              </li>
+              <li>
+                The list is generated, and editing it by hand is a temporary
+                workaround.
+              </li>
+            </ol>
+            <p data-quiz-explanation>
+              A sensor that derives both sides of its own comparison can agree
+              with itself while the product is broken &mdash; the same failure
+              mode as the coherence tests it supplements. Writing the expected
+              reach by hand is what makes it an independent claim.
+            </p>
+          </li>
+        </ol>
+      </section>
+
+      <section data-report-section="subagent-evidence">
+        <h2>Subagent evidence</h2>
+        <p>
+          No subagents were used on this delivery; it was carried out in a
+          single session at the user's direction.
+        </p>
+        <p>The evidence this change rests on instead:</p>
+        <ul>
+          <li>
+            A scripted Playwright sweep driving the live demo over 42 routes
+            plus discovered detail routes, capturing console errors, page
+            errors, failed requests and rendered text per surface. This produced
+            the eight failures and separated them from intentional demo-boundary
+            screens.
+          </li>
+          <li>
+            Manual in-browser driving of six write flows end to end, with
+            screenshots at each confirmation step.
+          </li>
+          <li>
+            A definition-level diff of demo read reach before and after
+            (157 &rarr; 167), enumerated per definition rather than counted.
+          </li>
+          <li>
+            Git archaeology against <code>50bf2711^</code> confirming every
+            failing read was an unwrapped <code>query</code> before the
+            migration &mdash; establishing regression rather than intended
+            tightening.
+          </li>
+          <li>
+            A mutation test of the new sensor, confirming it fails when a
+            definition is re-denied.
+          </li>
+          <li>
+            A temporary internal mutation, deployed to the dev backend to expire
+            demo principals on demand and removed afterwards, so the
+            three-hour expiry path could be reproduced and then re-verified
+            rather than reasoned about.
+          </li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

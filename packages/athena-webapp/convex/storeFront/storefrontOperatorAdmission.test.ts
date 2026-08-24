@@ -473,12 +473,30 @@ describe("read admission", () => {
     ).rejects.toThrow(DEMO_DENIAL);
   });
 
-  it("denies a shared-demo reader on the ungranted storefront.reviews.view intent", async () => {
+  it("admits a shared-demo reader on the review list inside its store", async () => {
     mocks.getSharedDemoActorWithCtx.mockResolvedValue(DEMO_ACTOR as never);
     const ctx = ctxForStore("demo-store");
 
+    // `storefront.reviews.view` used to be ungranted, and this asserted the
+    // denial. The demo sidebar carries Reviews and `reviews.manage` is an
+    // allowed demo write, so the list behind it was rendering before these
+    // reads moved onto the rails; the grant restores that surface.
     await expect(
       getHandler(reviews.getAllReviewsForStore)(ctx, {
+        storeId: "demo-store",
+      }),
+    ).resolves.toEqual([]);
+  });
+
+  it("still denies a shared-demo reader the pending-review count", async () => {
+    mocks.getSharedDemoActorWithCtx.mockResolvedValue(DEMO_ACTOR as never);
+    const ctx = ctxForStore("demo-store");
+
+    // The deliberate other half of that grant: the sidebar skips this query
+    // in the demo, so nothing reaches it and its definition stays denied. A
+    // grant no caller reaches is read reach nobody reviewed.
+    await expect(
+      getHandler(reviews.getUnapprovedReviewsCount)(ctx, {
         storeId: "demo-store",
       }),
     ).rejects.toThrow(DEMO_DENIAL);

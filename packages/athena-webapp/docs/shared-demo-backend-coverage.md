@@ -87,8 +87,17 @@ there is no longer a category of ingress that sits outside the rail. Admission
 never belongs in `convex/lib/athenaUserAuth.ts`: declare it on the operation
 definition and let the shared-demo adapter apply policy. The demo read grants
 themselves were not widened by the migration — `SHARED_DEMO_ALLOWED_READ_INTENTS`
-is the same closed set, and `readIntentGrants.test.ts` plus the reverse-direction
+was the same closed set, and `readIntentGrants.test.ts` plus the reverse-direction
 assertion in `policy.test.ts` fence it from both sides.
+
+That set has since gained four intents, and the reason matters: not new demo
+reach, but reach the migration removed by accident. `expenses.view`,
+`service_ops.view`, `store.configuration.view` and `storefront.reviews.view`
+back eight surfaces the demo sidebar links to — the POS hub, POS settings,
+expense reports, Reviews, and all four Services views — every one of which was
+an unwrapped query the demo answered before the rails, and every one of which
+threw on load afterwards. See
+`docs/solutions/architecture-patterns/athena-demo-reachable-reads-need-their-own-sensor-2026-08-24.md`.
 
 ## Athena capability families
 

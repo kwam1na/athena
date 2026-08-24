@@ -1,13 +1,37 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DefaultCatchBoundary } from "./DefaultCatchBoundary";
+import { SHARED_DEMO_SESSION_EXPIRED_CODE } from "~/shared/sharedDemoActionError";
+import {
+  clearSharedDemoRenewalAttempts,
+  countSharedDemoRenewalAttempts,
+  MAX_SHARED_DEMO_RENEWAL_ATTEMPTS,
+  recordSharedDemoRenewalAttempt,
+} from "@/lib/errors/sharedDemoSessionExpired";
+
+function expiredDemoError() {
+  return Object.assign(
+    new Error("[CONVEX Q(app:getCurrentUser)] Server Error"),
+    { data: { code: SHARED_DEMO_SESSION_EXPIRED_CODE } },
+  );
+}
 
 const mocked = vi.hoisted(() => ({
   invalidate: vi.fn(),
+  issueTicket: vi.fn(),
+  signIn: vi.fn(),
   useMatch: vi.fn(),
   useRouterState: vi.fn(),
+}));
+
+vi.mock("@convex-dev/auth/react", () => ({
+  useAuthActions: () => ({ signIn: mocked.signIn, signOut: vi.fn() }),
+}));
+
+vi.mock("convex/react", () => ({
+  useAction: () => mocked.issueTicket,
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -44,6 +68,12 @@ describe("DefaultCatchBoundary", () => {
     );
     window.history.back = vi.fn();
     vi.spyOn(console, "error").mockImplementation(() => {});
+    mocked.issueTicket.mockReset();
+    mocked.signIn.mockReset();
+    // Module-level counter state in sharedDemoSessionExpired.ts: without this,
+    // a test that renews leaks its attempt into whatever runs next and routes
+    // it down the capped branch for reasons it never asserts.
+    clearSharedDemoRenewalAttempts();
   });
 
   afterEach(() => {
@@ -132,38 +162,94 @@ describe("DefaultCatchBoundary", () => {
     expect(mocked.invalidate).not.toHaveBeenCalled();
   });
 
-  it.each([
-    "The demo session has expired. Open the demo again.",
-    "The shared demo session has expired. Open the demo again.",
-  ])("offers seamless demo re-entry for an expired demo session", (message) => {
+  it("renews an expired demo session without asking for a click", async () => {
+    mocked.issueTicket.mockResolvedValue({ ticket: "ticket-1" });
+    mocked.signIn.mockResolvedValue(undefined);
+    const reloadPage = vi.fn();
     mocked.useRouterState.mockImplementation(
       ({ select }: { select: (state: unknown) => unknown }) =>
-        select({
-          location: {
-            pathname: "/demo/store/central/pos",
-          },
-        }),
+        select({ location: { pathname: "/demo/store/central/pos" } }),
     );
 
     render(
       <DefaultCatchBoundary
-        error={new Error(`[CONVEX Q(inventory/pos:getTodaySummary)] ${message}`)}
+        error={expiredDemoError()}
+        reloadPage={reloadPage}
         reset={vi.fn()}
       />,
     );
 
+    // A session ending is not a decision the visitor made, and the only route
+    // back is the one they already took — so renewal starts on its own rather
+    // than waiting behind a button. The manual link is still rendered beside
+    // the spinner as the escape from a request that never settles, but nothing
+    // requires the visitor to touch it.
+    expect(
+      screen.getByRole("heading", { name: "Starting a fresh demo session" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Try again" }),
+    ).not.toBeInTheDocument();
+
+    await waitFor(() => expect(mocked.signIn).toHaveBeenCalledWith(
+      "shared-demo",
+      { ticket: "ticket-1" },
+    ));
+    await waitFor(() => expect(reloadPage).toHaveBeenCalledTimes(1));
+
+    // The cap is only real if rendering the renewal is what counts against it.
+    // Asserted here rather than by calling the recorder directly, so dropping
+    // the call in the component fails a test instead of silently uncapping.
+    expect(countSharedDemoRenewalAttempts()).toBe(1);
+  });
+
+  it("hands back the manual route when renewal itself fails", async () => {
+    mocked.issueTicket.mockRejectedValue(new Error("no ticket"));
+    mocked.useRouterState.mockImplementation(
+      ({ select }: { select: (state: unknown) => unknown }) =>
+        select({ location: { pathname: "/demo/store/central/pos" } }),
+    );
+
+    render(
+      <DefaultCatchBoundary error={expiredDemoError()} reset={vi.fn()} />,
+    );
+
+    // Without this the visitor sits on the spinner forever: renewal is the
+    // only thing running, and it has already given up.
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Your demo session ended" }),
+      ).toBeInTheDocument(),
+    );
+    expect(
+      screen.getByRole("link", { name: "Open demo again" }),
+    ).toHaveAttribute("href", "/demo");
+  });
+
+  it("falls back to the manual route once renewal has been tried enough", () => {
+    for (let i = 0; i < MAX_SHARED_DEMO_RENEWAL_ATTEMPTS; i += 1) {
+      recordSharedDemoRenewalAttempt();
+    }
+    mocked.useRouterState.mockImplementation(
+      ({ select }: { select: (state: unknown) => unknown }) =>
+        select({ location: { pathname: "/demo/store/central/pos" } }),
+    );
+
+    render(
+      <DefaultCatchBoundary error={expiredDemoError()} reset={vi.fn()} />,
+    );
+
+    // Renewal that keeps landing back here must stop and hand over, rather
+    // than reload forever behind a spinner.
     expect(
       screen.getByRole("heading", { name: "Your demo session ended" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Open the demo again to start a fresh session and continue exploring Athena.",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open demo again" })).toHaveAttribute(
-      "href",
-      "/demo",
-    );
+      screen.getByRole("link", { name: "Open demo again" }),
+    ).toHaveAttribute("href", "/demo");
+    // "Try again" calls router.invalidate() against queries that are certain
+    // to fail again; offering it here bounces the visitor on a dead button
+    // instead of the one route that works.
     expect(
       screen.queryByRole("button", { name: "Try again" }),
     ).not.toBeInTheDocument();

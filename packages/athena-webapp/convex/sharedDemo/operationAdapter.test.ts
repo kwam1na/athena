@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { defineOperation } from "../operationAdmission/definitions";
+import { issueSharedDemoTicketOperationDefinition } from "../operationAdmission/domains/platform_definitions";
 import { createSharedDemoOperationAdapter } from "./operationAdapter";
 
 vi.mock("@convex-dev/auth/server", () => ({
@@ -17,6 +18,31 @@ const admittedDefinition = defineOperation({
   readiness: { kind: "store_write" },
   effects: { mode: "none" },
   actors: { normalUser: "admit", sharedDemo: "admit", public: "deny" },
+});
+
+// Public-admitted, but NOT the demo's lifecycle: a store-scoped POS write the
+// demo already holds. The expiry exception must not reach it — the public
+// adapter applies neither the demo store clamp nor the restore fence.
+const publicAdmittedStoreWriteDefinition = defineOperation({
+  kind: "mutation" as const,
+  operationId: "demo.pos.terminalProof",
+  capability: "pos.terminal.manage",
+  scope: { kind: "store", storeIdArg: "storeId" },
+  readiness: { kind: "store_write" },
+  effects: { mode: "none" },
+  actors: { normalUser: "admit", sharedDemo: "admit", public: "admit" },
+});
+
+// Shaped like `sharedDemo/admission:issueSharedDemoTicket`: the demo's own
+// lifecycle write, which an anonymous visitor may also perform.
+const publicAdmittedDefinition = defineOperation({
+  kind: "action" as const,
+  operationId: "demo.lifecycle.ticket",
+  capability: "demo.lifecycle",
+  scope: { kind: "none" },
+  readiness: { kind: "none" },
+  effects: { mode: "none" },
+  actors: { normalUser: "admit", sharedDemo: "admit", public: "admit" },
 });
 
 const organizationScopedDefinition = defineOperation({
@@ -286,6 +312,78 @@ describe("shared demo operation adapter", () => {
       // Typed reason, not message text: an expired session is its own denial.
       reason: "session_expired",
     });
+  });
+
+  it("lets an expired session reach a write the public may also make", async () => {
+    vi.mocked(getAuthUserId).mockResolvedValue("auth-user" as never);
+    const ctx = demoCtx({
+      principal: {
+        admissionExpiresAt: Date.now() - 1,
+        athenaUserId: "athena-user",
+        authUserId: "auth-user",
+        organizationId: "org-1",
+        storeId: "store-1",
+      },
+    });
+
+    // This is the ticket mint that STARTS a demo session. Denying it to an
+    // expired principal is a deadlock — taking a fresh admission would require
+    // already holding a live one — and it is what leaves a visitor whose demo
+    // expired unable to get back in, by any route including the manual one.
+    //
+    // Falling through cannot re-admit them as a normal user: a demo auth
+    // identity is stored with a name and no email, and the normal-user adapter
+    // resolves its Athena user by email. Only `public` can pick this up, which
+    // grants strictly less than the demo already did.
+    await expect(
+      createSharedDemoOperationAdapter().resolve(
+        ctx as never,
+        {},
+        publicAdmittedDefinition,
+      ),
+    ).resolves.toEqual({ kind: "not_applicable" });
+  });
+
+  it("keeps an expired session out of public writes that are not demo lifecycle", async () => {
+    vi.mocked(getAuthUserId).mockResolvedValue("auth-user" as never);
+    const ctx = demoCtx({
+      principal: {
+        admissionExpiresAt: Date.now() - 1,
+        athenaUserId: "athena-user",
+        authUserId: "auth-user",
+        organizationId: "org-1",
+        storeId: "store-1",
+      },
+    });
+
+    // Keying the exception on `public: "admit"` alone would release these:
+    // a stale demo POS tab would keep writing terminal status into the demo
+    // store as an anonymous caller, with the store clamp and the restore
+    // fence both skipped — neither of which the public adapter applies.
+    await expect(
+      createSharedDemoOperationAdapter().resolve(
+        ctx as never,
+        { storeId: "store-1" },
+        publicAdmittedStoreWriteDefinition,
+      ),
+    ).resolves.toMatchObject({
+      kind: "denied",
+      recognized: true,
+      reason: "session_expired",
+    });
+  });
+
+  it("pins the real ticket mint as the operation the exception depends on", () => {
+    // The renewal path is only reachable because the REAL definition admits
+    // the public actor and carries the demo lifecycle capability. The test
+    // above uses a lookalike, so without this the whole recovery could be
+    // switched off by an actor-policy edit with every unit test still green.
+    expect(issueSharedDemoTicketOperationDefinition.actors.public).toBe(
+      "admit",
+    );
+    expect(issueSharedDemoTicketOperationDefinition.capability).toBe(
+      "demo.lifecycle",
+    );
   });
 
   it("denies stale restore epochs before invoking the domain handler", async () => {

@@ -1,4 +1,8 @@
 import { v } from "convex/values";
+import {
+  isSharedDemoSessionExpiredData,
+  SHARED_DEMO_SESSION_EXPIRED_MESSAGE,
+} from "../../shared/sharedDemoActionError";
 import { query } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import { getAuthenticatedAthenaUserWithCtx } from "../lib/athenaUserAuth";
@@ -10,10 +14,22 @@ import { admitPublicQuery } from "../platform/operationAdmission";
 import type { OperationQueryCtx } from "../operationAdmission/types";
 
 export function isExpiredSharedDemoSessionError(error: unknown) {
+  // Typed first. The rail now hands an expired session back as a
+  // `ConvexError` carrying its code, and `ConvexError` sets `message` to the
+  // JSON of that data — so the message comparison below stopped matching the
+  // shape this guard exists for. The literal stays only for the plain-Error
+  // throw sites in `sharedDemo/actor.ts`.
+  if (
+    error &&
+    typeof error === "object" &&
+    "data" in error &&
+    isSharedDemoSessionExpiredData((error as { data: unknown }).data)
+  ) {
+    return true;
+  }
   return (
     error instanceof Error &&
-    error.message ===
-      "The demo session has expired. Open the demo again."
+    error.message === SHARED_DEMO_SESSION_EXPIRED_MESSAGE
   );
 }
 

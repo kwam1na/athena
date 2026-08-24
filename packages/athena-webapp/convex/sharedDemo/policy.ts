@@ -80,6 +80,11 @@ export const SHARED_DEMO_ALLOWED_READ_INTENTS = [
   // (`sharedDemo/public:getContext`, `:getRegisterBootstrap`) on every demo
   // page; without this grant the demo cannot render at all.
   "demo.context.view",
+  // The demo sidebar links POS → Expense reports
+  // (`/pos/expense-reports`, and one report's detail). Both read expense
+  // transactions; before the read rails they were unwrapped queries the demo
+  // answered, so the grant restores that surface rather than widening reach.
+  "expenses.view",
   // The webapp's identity probe (`app:getCurrentUser`,
   // `inventory/athenaUser:getAuthenticatedUser`) runs unconditionally on every
   // page; the retired `reports.read` auth bridge answered it for the demo
@@ -95,7 +100,31 @@ export const SHARED_DEMO_ALLOWED_READ_INTENTS = [
   // the grant now lives where reads are granted; deleting `reports.read`
   // narrows nothing and widens nothing.
   "reports.view",
+  // The demo sidebar carries a Services group — Service Intake, Appointments,
+  // Active Cases, Catalog Management. Every one of those four views reads the
+  // service catalog, assignable staff, and customer search; cases also read
+  // one case's detail. They were unwrapped queries before the read rails.
+  "service_ops.view",
   "stock_adjustments.view",
+  // The POS hub (`/pos`) and POS settings read the store's schedule summary to
+  // decide what the operating day looks like. It was an unwrapped query
+  // before the read rails, and without it the demo's headline surface — the
+  // one every "Make a sale" entry point routes through — cannot render.
+  //
+  // Second consumer, easy to miss: this list is also intersected with
+  // role-derived intents by `delegatedAuthority.ts` to build a demo agent
+  // run's held read intents, with no per-definition key. Granting this intent
+  // therefore also makes `cap_synthetic_fleet_stores` projectable into a demo
+  // agent run once its `organization_overview` profile is published — a
+  // deployment toggle, not a code guard. Worth seeing before publishing it.
+  "store.configuration.view",
+  // The demo sidebar carries Reviews, and `reviews.manage` is already an
+  // allowed demo WRITE capability: moderating a review is a demo activity, so
+  // the review LIST behind it is a read the demo has always answered. The
+  // sidebar's pending-count badge is deliberately NOT justification here:
+  // `app-sidebar.tsx` skips that query in the demo and its definition stays
+  // denied, because a grant nothing reaches is reach nobody reviewed.
+  "storefront.reviews.view",
 ] as const satisfies readonly AthenaReadIntent[];
 
 const SHARED_DEMO_ALLOWED_READ_INTENT_SET = new Set<string>(
@@ -107,7 +136,7 @@ export function isSharedDemoReadIntentAllowed(intent: string) {
 }
 
 export const SHARED_DEMO_POLICY = { defaultDecision: "denied" } as const;
-const SHARED_DEMO_LIFECYCLE_CAPABILITY = "demo.lifecycle";
+export const SHARED_DEMO_LIFECYCLE_CAPABILITY = "demo.lifecycle";
 
 function isSharedDemoOperationCapabilityAllowed(
   capability: SharedDemoCapability,
