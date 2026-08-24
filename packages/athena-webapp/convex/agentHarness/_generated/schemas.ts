@@ -2643,7 +2643,7 @@ export const AGENT_GENERATED_CAPABILITY_SCHEMAS: AgentCapabilitySchemaIndex = {
     },
     "cap_dailyops_approvals": {
       "calls": [
-        "list({ operatingDate, state })"
+        "list({ operatingDate, state: \"pending\" })"
       ],
       "capabilityId": "cap_dailyops_approvals",
       "namespace": "operations.approvals",
@@ -2665,7 +2665,7 @@ export const AGENT_GENERATED_CAPABILITY_SCHEMAS: AgentCapabilitySchemaIndex = {
     },
     "cap_dailyops_attention": {
       "calls": [
-        "list({ operatingDate, status? })"
+        "list({ operatingDate, status?: \"blocking\"|\"review\"|\"informational\" })"
       ],
       "capabilityId": "cap_dailyops_attention",
       "namespace": "operations.attention",
@@ -2688,7 +2688,7 @@ export const AGENT_GENERATED_CAPABILITY_SCHEMAS: AgentCapabilitySchemaIndex = {
     },
     "cap_dailyops_automation": {
       "calls": [
-        "list({ operatingDate, action? })"
+        "list({ operatingDate, action?: \"opening.auto_start\"|\"eod.prepare\"|\"eod.auto_complete\" })"
       ],
       "capabilityId": "cap_dailyops_automation",
       "namespace": "automation.dailyOperations",
@@ -2738,7 +2738,7 @@ export const AGENT_GENERATED_CAPABILITY_SCHEMAS: AgentCapabilitySchemaIndex = {
     "cap_dailyops_inventory_positions": {
       "calls": [
         "get({ skuRef })",
-        "list({ category?, stockState? })"
+        "list({ category?, stockState?: \"in_stock\"|\"low\"|\"out\" })"
       ],
       "capabilityId": "cap_dailyops_inventory_positions",
       "namespace": "inventory.positions",
@@ -2852,7 +2852,7 @@ export const AGENT_GENERATED_CAPABILITY_SCHEMAS: AgentCapabilitySchemaIndex = {
     },
     "cap_dailyops_store_pulse": {
       "calls": [
-        "get({ operatingDate, window })"
+        "get({ operatingDate, window: \"today\"|\"week\" })"
       ],
       "capabilityId": "cap_dailyops_store_pulse",
       "namespace": "reports.storePulse",
@@ -2893,7 +2893,7 @@ export const AGENT_GENERATED_CAPABILITY_SCHEMAS: AgentCapabilitySchemaIndex = {
     },
     "cap_synthetic_directory_teams": {
       "calls": [
-        "list({ role? })"
+        "list({ role?: \"managers\"|\"cashiers\"|\"support\" })"
       ],
       "capabilityId": "cap_synthetic_directory_teams",
       "namespace": "directory.teams",
@@ -2927,7 +2927,7 @@ export const AGENT_GENERATED_CAPABILITY_SCHEMAS: AgentCapabilitySchemaIndex = {
     },
     "cap_synthetic_fleet_stores": {
       "calls": [
-        "list({ region?, health? })"
+        "list({ region?, health?: \"healthy\"|\"degraded\"|\"offline\" })"
       ],
       "capabilityId": "cap_synthetic_fleet_stores",
       "namespace": "fleet.stores",
@@ -2949,4 +2949,4 @@ export const AGENT_GENERATED_CAPABILITY_SCHEMAS: AgentCapabilitySchemaIndex = {
 
 
 /** Identity of the model-visible schema set; changes whenever a declaration changes. */
-export const AGENT_GENERATED_SCHEMAS_DIGEST = "fnv1a64:e1305fdd60c6c36d";
+export const AGENT_GENERATED_SCHEMAS_DIGEST = "fnv1a64:332e881bbea556c0";

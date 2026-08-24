@@ -389,7 +389,8 @@ export function validateAgentReadRequestArgs(
     }
     if (value === undefined) continue;
     if (!filterValueValid(schema, value)) {
-      add("filter_value_invalid", name, `"${name}" does not match its declared kind.`);
+      const expectation = schema.kind === "enum" ? `must be one of: ${schema.values.join(", ")}` : `must be a ${schema.kind} value`;
+      add("filter_value_invalid", name, `"${name}" ${expectation}.`);
     }
   }
   for (const [name, schema] of Object.entries(filters)) {

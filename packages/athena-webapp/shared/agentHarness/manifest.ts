@@ -881,7 +881,15 @@ export type AgentCapabilitySummary = {
 };
 
 function verbSignature(verb: AgentReadVerb, filters: AgentFilterRecord): string {
-  const names = Object.entries(filters).map(([name, schema]) => (schema.required ? name : `${name}?`));
+  const names = Object.entries(filters).map(([name, schema]) => {
+    const label = schema.required ? name : `${name}?`;
+    // Small enums are disclosed inline: a filter whose legal values are never
+    // shown is answered with a guess, and the guess costs a denied round trip.
+    if (schema.kind === "enum" && schema.values.length <= 4) {
+      return `${label}: ${schema.values.map((value) => `"${value}"`).join("|")}`;
+    }
+    return label;
+  });
   return names.length === 0 ? `${verb}({})` : `${verb}({ ${names.join(", ")} })`;
 }
 

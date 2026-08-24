@@ -38459,7 +38459,7 @@
       "relation": "calls",
       "source": "manifest_projectfields",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L947",
+      "source_location": "L955",
       "target": "manifest_projectmanifestforgrant",
       "weight": 1
     },
@@ -38471,7 +38471,7 @@
       "relation": "calls",
       "source": "manifest_namespacepath",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L897",
+      "source_location": "L905",
       "target": "manifest_summarizecapability",
       "weight": 1
     },
@@ -38483,7 +38483,7 @@
       "relation": "calls",
       "source": "manifest_publicresultfieldnames",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L902",
+      "source_location": "L910",
       "target": "manifest_summarizecapability",
       "weight": 1
     },
@@ -38495,7 +38495,7 @@
       "relation": "calls",
       "source": "manifest_supportedverbs",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L899",
+      "source_location": "L907",
       "target": "manifest_summarizecapability",
       "weight": 1
     },
@@ -47303,7 +47303,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_readports_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/readPorts.ts",
-      "source_location": "L427",
+      "source_location": "L428",
       "target": "readports_computereadresulthash",
       "weight": 1
     },
@@ -47315,7 +47315,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_readports_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/readPorts.ts",
-      "source_location": "L421",
+      "source_location": "L422",
       "target": "readports_contractviolation",
       "weight": 1
     },
@@ -47327,7 +47327,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_readports_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/readPorts.ts",
-      "source_location": "L585",
+      "source_location": "L586",
       "target": "readports_createagentreadportquerydefiner",
       "weight": 1
     },
@@ -47387,7 +47387,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_readports_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/readPorts.ts",
-      "source_location": "L447",
+      "source_location": "L448",
       "target": "readports_finishagentreadenvelope",
       "weight": 1
     },
@@ -47423,7 +47423,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_readports_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/readPorts.ts",
-      "source_location": "L572",
+      "source_location": "L573",
       "target": "readports_invalidinvocation",
       "weight": 1
     },
@@ -47447,7 +47447,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_readports_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/readPorts.ts",
-      "source_location": "L568",
+      "source_location": "L569",
       "target": "readports_refusedresponse",
       "weight": 1
     },
@@ -107423,7 +107423,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_manifest_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L991",
+      "source_location": "L999",
       "target": "manifest_manifestegressclass",
       "weight": 1
     },
@@ -107447,7 +107447,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_manifest_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L962",
+      "source_location": "L970",
       "target": "manifest_omitungrantedfields",
       "weight": 1
     },
@@ -107459,7 +107459,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_manifest_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L913",
+      "source_location": "L921",
       "target": "manifest_projectfields",
       "weight": 1
     },
@@ -107471,7 +107471,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_manifest_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L936",
+      "source_location": "L944",
       "target": "manifest_projectmanifestforgrant",
       "weight": 1
     },
@@ -107483,7 +107483,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_manifest_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L888",
+      "source_location": "L896",
       "target": "manifest_publicresultfieldnames",
       "weight": 1
     },
@@ -107495,7 +107495,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_manifest_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L894",
+      "source_location": "L902",
       "target": "manifest_summarizecapability",
       "weight": 1
     },
@@ -169571,7 +169571,7 @@
       "relation": "calls",
       "source": "readports_computereadresulthash",
       "source_file": "packages/athena-webapp/convex/agentHarness/readPorts.ts",
-      "source_location": "L546",
+      "source_location": "L547",
       "target": "readports_finishagentreadenvelope",
       "weight": 1
     },
@@ -169583,7 +169583,7 @@
       "relation": "calls",
       "source": "readports_contractviolation",
       "source_file": "packages/athena-webapp/convex/agentHarness/readPorts.ts",
-      "source_location": "L460",
+      "source_location": "L461",
       "target": "readports_finishagentreadenvelope",
       "weight": 1
     },
@@ -169595,7 +169595,7 @@
       "relation": "calls",
       "source": "readports_mintagentcursor",
       "source_file": "packages/athena-webapp/convex/agentHarness/readPorts.ts",
-      "source_location": "L532",
+      "source_location": "L533",
       "target": "readports_finishagentreadenvelope",
       "weight": 1
     },
@@ -169607,7 +169607,7 @@
       "relation": "calls",
       "source": "readports_refusedresponse",
       "source_file": "packages/athena-webapp/convex/agentHarness/readPorts.ts",
-      "source_location": "L573",
+      "source_location": "L574",
       "target": "readports_invalidinvocation",
       "weight": 1
     },
@@ -214576,7 +214576,7 @@
       "label": "manifestEgressClass()",
       "norm_label": "manifestegressclass()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L991"
+      "source_location": "L999"
     },
     {
       "community": 101,
@@ -214594,7 +214594,7 @@
       "label": "omitUngrantedFields()",
       "norm_label": "omitungrantedfields()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L962"
+      "source_location": "L970"
     },
     {
       "community": 101,
@@ -214603,7 +214603,7 @@
       "label": "projectFields()",
       "norm_label": "projectfields()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L913"
+      "source_location": "L921"
     },
     {
       "community": 101,
@@ -214612,7 +214612,7 @@
       "label": "projectManifestForGrant()",
       "norm_label": "projectmanifestforgrant()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L936"
+      "source_location": "L944"
     },
     {
       "community": 101,
@@ -214621,7 +214621,7 @@
       "label": "publicResultFieldNames()",
       "norm_label": "publicresultfieldnames()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L888"
+      "source_location": "L896"
     },
     {
       "community": 101,
@@ -214630,7 +214630,7 @@
       "label": "summarizeCapability()",
       "norm_label": "summarizecapability()",
       "source_file": "packages/athena-webapp/shared/agentHarness/manifest.ts",
-      "source_location": "L894"
+      "source_location": "L902"
     },
     {
       "community": 101,
@@ -217942,7 +217942,7 @@
       "label": "computeReadResultHash()",
       "norm_label": "computereadresulthash()",
       "source_file": "packages/athena-webapp/convex/agentHarness/readPorts.ts",
-      "source_location": "L427"
+      "source_location": "L428"
     },
     {
       "community": 108,
@@ -217951,7 +217951,7 @@
       "label": "contractViolation()",
       "norm_label": "contractviolation()",
       "source_file": "packages/athena-webapp/convex/agentHarness/readPorts.ts",
-      "source_location": "L421"
+      "source_location": "L422"
     },
     {
       "community": 108,
@@ -217960,7 +217960,7 @@
       "label": "createAgentReadPortQueryDefiner()",
       "norm_label": "createagentreadportquerydefiner()",
       "source_file": "packages/athena-webapp/convex/agentHarness/readPorts.ts",
-      "source_location": "L585"
+      "source_location": "L586"
     },
     {
       "community": 108,
@@ -218005,7 +218005,7 @@
       "label": "finishAgentReadEnvelope()",
       "norm_label": "finishagentreadenvelope()",
       "source_file": "packages/athena-webapp/convex/agentHarness/readPorts.ts",
-      "source_location": "L447"
+      "source_location": "L448"
     },
     {
       "community": 108,
@@ -218032,7 +218032,7 @@
       "label": "invalidInvocation()",
       "norm_label": "invalidinvocation()",
       "source_file": "packages/athena-webapp/convex/agentHarness/readPorts.ts",
-      "source_location": "L572"
+      "source_location": "L573"
     },
     {
       "community": 108,
@@ -218050,7 +218050,7 @@
       "label": "refusedResponse()",
       "norm_label": "refusedresponse()",
       "source_file": "packages/athena-webapp/convex/agentHarness/readPorts.ts",
-      "source_location": "L568"
+      "source_location": "L569"
     },
     {
       "community": 108,
