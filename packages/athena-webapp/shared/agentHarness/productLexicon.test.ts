@@ -188,6 +188,12 @@ describe("stripSourcesFooter", () => {
     );
   });
 
+  it("strips a footer whose header carries a parenthetical", () => {
+    const narrative =
+      "Register 06's drawer is open.\n\nSources (reads used): the daily sales report (citation:v1.2.2.71d1f49fd468a77f3587803401921e2f), the register drawers (citation:v1.2.3.76b77b713cb472436037e48554f9164f)";
+    expect(stripSourcesFooter(narrative)).toBe("Register 06's drawer is open.");
+  });
+
   it("handles the singular Source: form and inline one-liners", () => {
     const narrative = "Cash sales today are GH₵7,500.\n\nSource: citation:v1.1.1.57010118cc3bd568cb90d8de85444906";
     expect(stripSourcesFooter(narrative)).toBe("Cash sales today are GH₵7,500.");

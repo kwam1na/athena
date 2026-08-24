@@ -46715,7 +46715,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_profiles_lexicons_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/profiles/lexicons.ts",
-      "source_location": "L64",
+      "source_location": "L68",
       "target": "lexicons_profilelexicon",
       "weight": 1
     },
@@ -231739,7 +231739,7 @@
       "label": "profileLexicon()",
       "norm_label": "profilelexicon()",
       "source_file": "packages/athena-webapp/convex/agentHarness/profiles/lexicons.ts",
-      "source_location": "L64"
+      "source_location": "L68"
     },
     {
       "community": 1353,

@@ -175,7 +175,7 @@ export function collectNarrativeEvidence(value: unknown): AgentNarrativeEvidence
 // Sources footer normalization
 // ---------------------------------------------------------------------------
 
-const FOOTER_HEADER = /\n+[ \t]*(?:sources?|citations?|refs?)[ \t]*:/gi;
+const FOOTER_HEADER = /\n+[ \t]*(?:sources?|citations?|refs?)(?:[ \t]*\([^)\n]{0,40}\))?[ \t]*:/gi;
 const REF_TOKEN = /attempt_v\d|citation:v\d/;
 
 /**

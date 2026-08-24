@@ -22,6 +22,9 @@ export const DAILY_OPERATIONS_TONE_LEXICON: AgentProductLexicon = {
     in_stock: "in stock",
     auto_complete: "completed automatically",
     auto_start: "started automatically",
+    "eod.auto_complete": "the automatic end-of-day close step",
+    "eod.prepare": "the end-of-day preparation step",
+    "opening.auto_start": "the automatic day-opening step",
   },
   namespaceLabels: {
     "reports.daySales": "the daily sales report",
@@ -44,6 +47,7 @@ export const DAILY_OPERATIONS_TONE_LEXICON: AgentProductLexicon = {
     attentionCount: "items needing attention",
     openWorkItemCount: "open work items",
     lifecycleStage: "where the day stands",
+    storeDay: "store day",
     stockState: "stock level",
     skuCode: "SKU",
     displayName: "item",
