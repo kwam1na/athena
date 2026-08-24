@@ -315,7 +315,7 @@ export type AthenaAgentRun = {
   readonly canFollowUp: boolean;
   readonly canStartNewThread: boolean;
   readonly canInspectSources: boolean;
-  readonly submit: (prompt: string) => Promise<void>;
+  readonly submit: (prompt: string, options?: { readonly starterIntentId?: string }) => Promise<void>;
   readonly cancel: () => Promise<void>;
   readonly startNewThread: () => void;
   readonly confirmContextChange: () => void;
@@ -1137,7 +1137,7 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
     pendingContextChange === null;
 
   const submit = useCallback(
-    async (prompt: string) => {
+    async (prompt: string, options: { readonly starterIntentId?: string } = {}) => {
       const trimmed = prompt.trim();
       setBlockedSubmission(null);
       if (trimmed.length === 0) {
@@ -1178,6 +1178,10 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
             turnIdempotencyKey: createTurnKey(),
             prompt: trimmed,
             context: snapshotAthenaContext(presentation, context),
+            // A tap passes the intent id explicitly; typed questions stay
+            // free-form. The server substitutes the pinned intent's canonical
+            // prompt for the id, so the two can never disagree.
+            ...(options.starterIntentId ? { starterIntentId: options.starterIntentId } : {}),
           }),
         ),
       );

@@ -237,6 +237,32 @@ describe("submitting one turn", () => {
     expect(result.current.blockedSubmission?.reason).toBe("turn_active");
   });
 
+  it("sends the starter intent id a tap passes explicitly (starter-intents plan U3)", async () => {
+    backend.results.startTurn = { outcome: "started", bindingId: BINDING_ID, runId: "run-1", threadKey: "thread" };
+    const { result } = mountRun();
+    const intent = result.current.starterIntents[0]!;
+
+    await act(async () => {
+      await result.current.submit(intent.prompt, { starterIntentId: intent.id });
+    });
+    const start = callsNamed("startTurn");
+    expect(start).toHaveLength(1);
+    expect(start[0]?.args).toMatchObject({ prompt: intent.prompt, starterIntentId: intent.id });
+  });
+
+  it("sends no intent id for a typed submission (free-form turns are untouched)", async () => {
+    backend.results.startTurn = { outcome: "started", bindingId: BINDING_ID, runId: "run-1", threadKey: "thread" };
+    const { result } = mountRun();
+    const intent = result.current.starterIntents[0]!;
+
+    await act(async () => {
+      await result.current.submit(intent.prompt);
+    });
+    const start = callsNamed("startTurn");
+    expect(start).toHaveLength(1);
+    expect((start[0]?.args as { starterIntentId?: string }).starterIntentId).toBeUndefined();
+  });
+
   it("reports queued work without claiming model progress", async () => {
     backend.results.startTurn = {
       outcome: "started",

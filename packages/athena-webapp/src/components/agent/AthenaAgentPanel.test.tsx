@@ -2189,6 +2189,15 @@ describe("composer", () => {
     await waitFor(() => expect(prompt()).toHaveValue(""));
   });
 
+  it("a starter-intent tap sends immediately with its id (starter-intents plan U3)", async () => {
+    const submit = vi.fn(async () => {});
+    render(<PanelHarness run={baseRun({ submit })} />);
+    fireEvent.click(screen.getByRole("button", { name: "What is holding up the close?" }));
+    await waitFor(() =>
+      expect(submit).toHaveBeenCalledWith("What is blocking the end-of-day close?", { starterIntentId: "close_readiness" }),
+    );
+  });
+
   it("does not send mid-composition or while a follow-up is blocked", () => {
     const submit = vi.fn(async () => {});
     const { rerender } = render(<PanelHarness run={baseRun({ submit })} />);

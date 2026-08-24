@@ -579,7 +579,7 @@ export function AthenaAgentPanel({
 
   const canSend = run.canSubmit && run.canFollowUp && draft.trim().length > 0;
   const submit = useCallback(
-    async (prompt: string) => {
+    async (prompt: string, options: { readonly starterIntentId?: string } = {}) => {
       // A new question takes precedence over the prior reading position.
       followRef.current = true;
       const node = scrollRef.current;
@@ -587,7 +587,9 @@ export function AthenaAgentPanel({
       // Focus stays in the composer: a send from the button would otherwise
       // leave it on a control that disables as the draft clears.
       promptRef.current?.focus();
-      await run.submit(prompt);
+      // The options arg rides only on taps so typed sends keep their arity
+      // (free-form turns byte-identical, panel included).
+      await (options.starterIntentId ? run.submit(prompt, options) : run.submit(prompt));
       onDraftChange("");
     },
     [onDraftChange, run],
@@ -753,7 +755,9 @@ export function AthenaAgentPanel({
           ) : (
             <StarterIntents
               intents={run.starterIntents}
-              onChoose={(prompt) => onDraftChange(prompt)}
+              // A tap sends immediately: the curated question needs no editing,
+              // and the id opts the turn into its pre-executed read.
+              onChoose={(intent) => void submit(intent.prompt, { starterIntentId: intent.id })}
             />
           )}
 
@@ -1179,7 +1183,7 @@ function StarterIntents({
   onChoose,
 }: {
   intents: AthenaAgentPresentation["starterIntents"];
-  onChoose: (prompt: string) => void;
+  onChoose: (intent: AthenaAgentPresentation["starterIntents"][number]) => void;
 }) {
   if (intents.length === 0) return null;
   return (
@@ -1192,7 +1196,7 @@ function StarterIntents({
           <li key={intent.id}>
             <Button
               className={cn(TOUCH_TARGET, "w-full justify-start text-left")}
-              onClick={() => onChoose(intent.prompt)}
+              onClick={() => onChoose(intent)}
               type="button"
               variant="utility"
             >
