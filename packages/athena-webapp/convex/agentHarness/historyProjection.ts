@@ -391,6 +391,13 @@ export function assembleTurnPrompt(input: AgentTurnPromptInput): AgentProjectedP
       };
       lines.push(`- ${capability.namespace} — ${capability.purpose} Calls: ${capability.calls.join("; ")}. Fields: ${capability.resultFields.map(fieldWithLabel).join(", ")}.`);
     }
+    const enumLabels = Object.entries(input.lexicon?.enumLabels ?? {});
+    if (enumLabels.length > 0) {
+      // Wording, disclosed: the model parrots the vocabulary it is shown, so
+      // showing the operator's word for each internal value is what keeps the
+      // value out of the answer.
+      lines.push(`Say these in the operator's words: ${enumLabels.map(([raw, label]) => `${raw} → ${label}`).join("; ")}.`);
+    }
     lines.push("");
   }
   // Run-scoped identifiers (`storeRef`, ...) bind authority server-side but are

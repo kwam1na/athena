@@ -875,7 +875,11 @@ async function productionHost(ctx: HostActionCtx, bindingId?: Id<"agentTurnBindi
     executeProgram: (input) => executor.executeProgram(executorCtx, input),
     // Tone sensor rollout knob: warn (telemetry only) until the corpus replay
     // proves the false-positive rate, then enforce.
-    tonePolicy: process.env.ATHENA_AGENT_TONE_POLICY === "enforce" ? "enforce" : "warn",
+    // Measured 2026-08-24 on the 20-question set (rich day): labels+enforce
+    // cut jargon density to 5.5 per 1k chars against 7.8 for labels alone and
+    // 8.0 before this work, for ~4 s p50 and one extra invocation. Enforce is
+    // the default; ATHENA_AGENT_TONE_POLICY=warn downgrades it to telemetry.
+    tonePolicy: process.env.ATHENA_AGENT_TONE_POLICY === "warn" ? "warn" : "enforce",
   });
 }
 

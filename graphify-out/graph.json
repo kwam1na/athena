@@ -31799,7 +31799,7 @@
       "relation": "calls",
       "source": "historyprojection_fenceuntrusteddata",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L402",
+      "source_location": "L409",
       "target": "historyprojection_assembleturnprompt",
       "weight": 1
     },
@@ -31811,7 +31811,7 @@
       "relation": "calls",
       "source": "historyprojection_neutralizefence",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L404",
+      "source_location": "L411",
       "target": "historyprojection_assembleturnprompt",
       "weight": 1
     },
