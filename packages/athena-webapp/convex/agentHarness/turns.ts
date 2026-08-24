@@ -101,7 +101,7 @@ import {
   resumeTurnBindingWithCtx,
 } from "./turnBindings";
 import { AGENT_TOOL_NARRATIVE_MAX_BYTES, type AgentDescribeGrantOutcome } from "./tools";
-import { profileLexicon } from "./profiles/lexicons";
+import { profileLexicon } from "../../shared/agentHarness/productLexicon";
 import { discoverCapabilities, type AgentCapabilitySchemaIndex } from "./discovery";
 
 type ReadCtx = QueryCtx | MutationCtx;

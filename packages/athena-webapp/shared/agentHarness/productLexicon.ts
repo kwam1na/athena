@@ -488,3 +488,65 @@ export function senseTone(input: AgentToneSensorInput): readonly AgentToneFindin
   }
   return findings;
 }
+
+// ---------------------------------------------------------------------------
+// Per-surface overlays (kernel-safe: pure data, string-keyed by profile id)
+// ---------------------------------------------------------------------------
+
+/** Daily Operations speaks the operations floor's language (docs/product-copy-tone.md). */
+export const DAILY_OPERATIONS_TONE_LEXICON: AgentProductLexicon = {
+  enumLabels: {
+    close_blocked: "close blocked",
+    daily_close: "daily close",
+    operations_queue: "operations queue",
+    in_stock: "in stock",
+    auto_complete: "completed automatically",
+    auto_start: "started automatically",
+    "eod.auto_complete": "the automatic end-of-day close step",
+    "eod.prepare": "the end-of-day preparation step",
+    "opening.auto_start": "the automatic day-opening step",
+  },
+  namespaceLabels: {
+    "reports.daySales": "the daily sales report",
+    "reports.weekPerformance": "the weekly performance report",
+    "reports.storePulse": "the store pulse report",
+    "operations.storeDay": "the store day record",
+    "operations.attention": "the attention list",
+    "operations.approvals": "approvals",
+    "operations.work": "open work",
+    "cash.registerSessions": "the register drawers",
+    "inventory.positions": "the live stock list",
+    "automation.dailyOperations": "the daily operations automation",
+    "inventory.replenishment": "replenishment recommendations",
+    "operations.activity": "the activity feed",
+  },
+  fieldLabels: {
+    registerSession: "drawer",
+    registerSessions: "drawers",
+    registerBlockerCount: "registers blocking the close",
+    attentionCount: "items needing attention",
+    openWorkItemCount: "open work items",
+    lifecycleStage: "where the day stands",
+    storeDay: "store day",
+    stockState: "stock level",
+    skuCode: "SKU",
+    displayName: "item",
+    observedAt: "as of",
+    operatingDate: "store day",
+    grossRevenue: "revenue",
+    transactionCount: "number of sales",
+    unitsSold: "units sold",
+    stockValue: "stock value",
+    unitCost: "unit cost",
+  },
+};
+
+const SURFACE_LEXICON_OVERLAYS: { readonly [profileId: string]: AgentProductLexicon } = {
+  daily_operations: DAILY_OPERATIONS_TONE_LEXICON,
+};
+
+/** The merged lexicon for a profile; an unknown profile gets the app lexicon unchanged. */
+export function profileLexicon(profileId: string): AgentProductLexicon {
+  const overlay = SURFACE_LEXICON_OVERLAYS[profileId];
+  return overlay ? mergeLexicons(APP_PRODUCT_LEXICON, overlay) : APP_PRODUCT_LEXICON;
+}

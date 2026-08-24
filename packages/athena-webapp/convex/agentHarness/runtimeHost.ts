@@ -55,7 +55,7 @@ import { getProductionProgramExecutor, type AgentExecuteProgramResult, type Agen
 // eslint-disable-next-line @convex-dev/import-wrong-runtime -- this module is "use node" too; the rule only inspects the imported file
 import { createAthenaModelResolver, rateCardFor } from "./modelRegistry";
 import { createAthenaToolRegistrations, completeRunTool, modelVisibleToolDefinitions, AGENT_AUTHORITY_REVOCATION_REASONS, type AgentToolSeamRefs } from "./tools";
-import { profileLexicon } from "./profiles/lexicons";
+import { profileLexicon } from "../../shared/agentHarness/productLexicon";
 import type { AgentToneFinding } from "../../shared/agentHarness/productLexicon";
 import type { AdvanceTurnBindingResult } from "./turnBindings";
 import type { AgentFinalizeTurnOutcome, AgentProvisionalFlushOutcome, AgentRecordTurnTraceOutcome, AgentTurnPreparation, AgentTurnUsageSettlement } from "./turns";
