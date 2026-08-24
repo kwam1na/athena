@@ -1396,7 +1396,7 @@ const turnViewResult = v.union(
     promptState: v.union(v.literal("retained"), v.literal("expired"), v.literal("deleted")),
     answer: v.object({
       available: v.boolean(),
-      outcome: v.optional(v.union(v.literal("answer"), v.literal("no_usable_sources"))),
+      outcome: v.optional(v.union(v.literal("answer"), v.literal("no_usable_sources"), v.literal("needs_clarification"))),
       suppressed: v.boolean(),
       viewedAt: v.optional(v.number()),
     }),
@@ -1409,7 +1409,7 @@ const turnViewResult = v.union(
 const answerResult = v.union(
   v.object({
     kind: v.literal("answer"),
-    outcome: v.union(v.literal("answer"), v.literal("no_usable_sources")),
+    outcome: v.union(v.literal("answer"), v.literal("no_usable_sources"), v.literal("needs_clarification")),
     title: v.optional(v.string()),
     summary: v.optional(v.string()),
     narrative: v.string(),
@@ -1488,7 +1488,7 @@ const historyEntry = v.object({
   context: v.optional(v.record(v.string(), v.string())),
   answer: v.optional(
     v.object({
-      outcome: v.union(v.literal("answer"), v.literal("no_usable_sources")),
+      outcome: v.union(v.literal("answer"), v.literal("no_usable_sources"), v.literal("needs_clarification")),
       title: v.optional(v.string()),
       summary: v.optional(v.string()),
       narrative: v.string(),

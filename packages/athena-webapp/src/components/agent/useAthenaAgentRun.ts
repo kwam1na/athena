@@ -59,7 +59,7 @@ export type AthenaAgentCitation = {
 };
 
 export type AthenaAgentAnswer = {
-  readonly outcome: "answer" | "no_usable_sources";
+  readonly outcome: "answer" | "no_usable_sources" | "needs_clarification";
   readonly title?: string;
   readonly summary?: string;
   readonly narrative: string;
@@ -345,7 +345,7 @@ type TurnView = {
   promptState: "retained" | "expired" | "deleted";
   answer: {
     available: boolean;
-    outcome?: "answer" | "no_usable_sources";
+    outcome?: "answer" | "no_usable_sources" | "needs_clarification";
     suppressed: boolean;
     viewedAt?: number;
   };

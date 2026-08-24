@@ -47,6 +47,7 @@ export const APP_PRODUCT_LEXICON: AgentProductLexicon = {
     daily_close: "daily close",
     operations_queue: "operations queue",
     no_usable_sources: "no usable sources",
+    needs_clarification: "needs clarification",
   },
   fieldLabels: {
     registerSession: "drawer",

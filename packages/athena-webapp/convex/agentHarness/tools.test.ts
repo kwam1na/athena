@@ -448,6 +448,19 @@ describe("athena.completeRun tone sensor and money display annotation", () => {
     expect(message.split(fixSentence)).toHaveLength(2);
   });
 
+  it("needs_clarification commits without citations, carrying the question as the narrative", async () => {
+    const tools = toneTools({ tonePolicy: "enforce" });
+    const outcome = await tools.completeRun({
+      outcome: "needs_clarification",
+      narrative: "Which Wednesday do you mean — 2026-08-19 or 2026-08-26? Sales differ between them.",
+      citedAttemptRefs: [],
+      citations: [],
+    });
+    expect(outcome.kind).toBe("success");
+    expect(tools.completions).toHaveLength(1);
+    expect(tools.completions[0]).toMatchObject({ artifact: { payload: { outcome: "needs_clarification" } } });
+  });
+
   it("a clean narrative commits in enforce mode with no findings", async () => {
     const tools = toneTools({ tonePolicy: "enforce" });
     await tools.executeProgram();

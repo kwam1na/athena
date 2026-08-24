@@ -175,13 +175,13 @@ export const scratchTool: AgentToolDefinition<AgentScratchArgs, unknown> = {
 export const completeRunTool: AgentToolDefinition<AgentCompleteRunArgs, unknown> = {
   toolId: "athena.completeRun",
   description:
-    "Finish the run exactly once with the final answer. Arguments: { outcome?: \"answer\" | \"no_usable_sources\", narrative: string, title?: string, citedAttemptRefs: string[] (attemptRef values from executeProgram results the answer relies on), citations: [{ ref: string (citation refs from those results), claim?: string }], confidence?: 0..1, limitedEvidence?: boolean }. The narrative is the complete answer a store operator reads — plain operator language, never field names, namespaces, enum spellings, or refs; title is only a short label and never the answer. The answer surface already lists your citations under \"Sources\", so never write a sources or refs section into the narrative. Money values in results carry a display string — quote display, never amount. An answer needs at least one cited attempt and citation; use no_usable_sources when nothing usable was read. Submit by CALLING this tool — arguments written out as prose are not a submission. Say a value was unavailable only when its read returned kind !== \"result\" or its state was not \"known\".",
+    "Finish the run exactly once with the final answer. Arguments: { outcome?: \"answer\" | \"no_usable_sources\" | \"needs_clarification\", narrative: string, title?: string, citedAttemptRefs: string[] (attemptRef values from executeProgram results the answer relies on), citations: [{ ref: string (citation refs from those results), claim?: string }], confidence?: 0..1, limitedEvidence?: boolean }. The narrative is the complete answer a store operator reads — plain operator language, never field names, namespaces, enum spellings, or refs; title is only a short label and never the answer. The answer surface already lists your citations under \"Sources\", so never write a sources or refs section into the narrative. Money values in results carry a display string — quote display, never amount. An answer needs at least one cited attempt and citation; use no_usable_sources when nothing usable was read, and needs_clarification — with the narrative asking the operator one specific question — when the question is too ambiguous to answer without guessing (neither requires citations). Submit by CALLING this tool — arguments written out as prose are not a submission. Say a value was unavailable only when its read returned kind !== \"result\" or its state was not \"known\".",
   validateInput: (raw): Validation<AgentCompleteRunArgs> => {
     const object = objectOf(raw);
     if (!object) return { ok: false, issues: [{ path: "$", message: "completeRun takes an object" }] };
     const issues: Issue[] = [];
     const outcome = object.outcome === undefined ? "answer" : object.outcome;
-    if (outcome !== "answer" && outcome !== "no_usable_sources") issues.push({ path: "outcome", message: "outcome must be answer or no_usable_sources" });
+    if (outcome !== "answer" && outcome !== "no_usable_sources" && outcome !== "needs_clarification") issues.push({ path: "outcome", message: "outcome must be answer, no_usable_sources, or needs_clarification" });
     const narrative = object.narrative;
     if (typeof narrative !== "string" || narrative.trim().length === 0) issues.push({ path: "narrative", message: "narrative must be a non-empty string" });
     else if (measureJsonByteLength(narrative) - 2 > AGENT_TOOL_NARRATIVE_MAX_BYTES) issues.push({ path: "narrative", message: `narrative exceeds ${AGENT_TOOL_NARRATIVE_MAX_BYTES} bytes` });
@@ -535,11 +535,12 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
     definition: completeRunTool,
     handler: async (args) => {
       if (completion.committed) return denied("already_completed", "The run already has its answer.");
-      // `no_usable_sources` is precisely for the run whose every read failed:
-      // it must stay reachable with zero successful attempts, or a turn that
-      // spent its attempt budget on rejected programs can never end honestly.
-      if (attempts.length === 0 && args.outcome !== "no_usable_sources") {
-        return denied("no_attempts", "Read at least one source with athena.executeProgram before completing, or complete with outcome no_usable_sources.");
+      // `no_usable_sources` is precisely for the run whose every read failed,
+      // and `needs_clarification` for the question too ambiguous to read for
+      // at all: both must stay reachable with zero successful attempts, or a
+      // turn that cannot honestly read anything can never end honestly.
+      if (attempts.length === 0 && args.outcome !== "no_usable_sources" && args.outcome !== "needs_clarification") {
+        return denied("no_attempts", "Read at least one source with athena.executeProgram before completing, or complete with outcome no_usable_sources (nothing usable was readable) or needs_clarification (the question needs the operator's answer first).");
       }
       // Refs are opaque handles this turn itself handed out, and models
       // transcribe them imperfectly (dropped prefixes, dropped version
