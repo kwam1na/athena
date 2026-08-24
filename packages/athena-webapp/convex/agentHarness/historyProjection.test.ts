@@ -26,6 +26,7 @@ import {
 } from "./historyProjection";
 import { markAgentRunRunningWithCtx, transitionAgentRunWithCtx } from "./lifecycle";
 import { recordTurnIntentWithCtx } from "./turnBindings";
+import type { AgentCapabilitySummary } from "../../shared/agentHarness/manifest";
 
 const modules = Object.fromEntries(
   Object.entries(import.meta.glob("../**/*.ts")).map(([path, loader]) => [
@@ -389,6 +390,37 @@ describe("prompt assembly labels product fields as untrusted data (scenario 11)"
     const again = assembleTurnPrompt({ profileId: TEST_PROFILE_ID, intent: "Answer bounded read-only questions about the store's operating day.", untrustedDataLabel: "retrieved_store_data", context: { storeName: adversarial, operatingDate: "2026-08-21", storeRef: "m1773nc3djfy0qg7m0wp4v1bn9786n2y" }, question: "What needs attention today?", egressClass: "operational" });
     expect(again).toEqual(prompt);
     expect(prompt.text).not.toMatch(/grant projection "financials"(?![^<]*<\/retrieved_store_data>)/);
+  });
+
+  it("renders the granted catalog as unfenced policy ahead of the fenced context", () => {
+    const catalog: AgentCapabilitySummary[] = [
+      {
+        capabilityId: "cap_fixture_approvals",
+        namespace: "operations.approvals",
+        purpose: "Approval requests still awaiting a decision.",
+        verbs: ["list"],
+        scopeKind: "store",
+        calls: ['list({ operatingDate, state: "pending" })'],
+        resultFields: ["requestRef", "state"],
+      },
+    ];
+    const prompt = assembleTurnPrompt({
+      profileId: TEST_PROFILE_ID,
+      intent: "Answer bounded read-only questions about the store's operating day.",
+      untrustedDataLabel: "retrieved_store_data",
+      context: { operatingDate: "2026-08-21" },
+      question: "What needs attention today?",
+      capabilities: catalog,
+      egressClass: "operational",
+    });
+    expect(prompt.text).toContain('list({ operatingDate, state: "pending" })');
+    expect(prompt.text).toContain("athena.discover only re-lists");
+    // Policy, not data: the catalog sits before the first fence and inside none.
+    expect(prompt.text.indexOf("operations.approvals")).toBeLessThan(prompt.text.indexOf('<retrieved_store_data field="'));
+    expect(prompt.text).not.toContain('<retrieved_store_data field="capabilities"');
+    // Without a catalog, the original discover-first policy line stands.
+    const bare = assembleTurnPrompt({ profileId: TEST_PROFILE_ID, intent: "i", untrustedDataLabel: "retrieved_store_data", context: {}, question: "q", egressClass: "operational" });
+    expect(bare.text).toContain("Discover capabilities with athena.discover");
   });
 });
 

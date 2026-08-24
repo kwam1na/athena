@@ -31799,7 +31799,7 @@
       "relation": "calls",
       "source": "historyprojection_fenceuntrusteddata",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L380",
+      "source_location": "L393",
       "target": "historyprojection_assembleturnprompt",
       "weight": 1
     },
@@ -31811,7 +31811,7 @@
       "relation": "calls",
       "source": "historyprojection_neutralizefence",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L382",
+      "source_location": "L395",
       "target": "historyprojection_assembleturnprompt",
       "weight": 1
     },
@@ -31823,7 +31823,7 @@
       "relation": "calls",
       "source": "historyprojection_neutralizefence",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L348",
+      "source_location": "L349",
       "target": "historyprojection_fenceuntrusteddata",
       "weight": 1
     },
@@ -31835,7 +31835,7 @@
       "relation": "calls",
       "source": "historyprojection_contextof",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L244",
+      "source_location": "L245",
       "target": "historyprojection_projectthreadhistorywithctx",
       "weight": 1
     },
@@ -31847,7 +31847,7 @@
       "relation": "calls",
       "source": "historyprojection_parseanswerpayload",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L264",
+      "source_location": "L265",
       "target": "historyprojection_projectthreadhistorywithctx",
       "weight": 1
     },
@@ -31859,7 +31859,7 @@
       "relation": "calls",
       "source": "historyprojection_resolveviewerauthoritywithctx",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L199",
+      "source_location": "L200",
       "target": "historyprojection_projectthreadhistorywithctx",
       "weight": 1
     },
@@ -31871,7 +31871,7 @@
       "relation": "calls",
       "source": "historyprojection_test_viewerof",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.test.ts",
-      "source_location": "L168",
+      "source_location": "L169",
       "target": "historyprojection_test_input",
       "weight": 1
     },
@@ -45419,7 +45419,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_historyprojection_test_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.test.ts",
-      "source_location": "L228",
+      "source_location": "L229",
       "target": "historyprojection_test_input",
       "weight": 1
     },
@@ -45431,7 +45431,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_historyprojection_test_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.test.ts",
-      "source_location": "L282",
+      "source_location": "L283",
       "target": "historyprojection_test_read",
       "weight": 1
     },
@@ -45443,7 +45443,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_historyprojection_test_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.test.ts",
-      "source_location": "L41",
+      "source_location": "L42",
       "target": "historyprojection_test_seedturn",
       "weight": 1
     },
@@ -45455,7 +45455,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_historyprojection_test_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.test.ts",
-      "source_location": "L104",
+      "source_location": "L105",
       "target": "historyprojection_test_viewerof",
       "weight": 1
     },
@@ -45467,7 +45467,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_historyprojection_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L365",
+      "source_location": "L368",
       "target": "historyprojection_assembleturnprompt",
       "weight": 1
     },
@@ -45479,7 +45479,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_historyprojection_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L49",
+      "source_location": "L50",
       "target": "historyprojection_buildanswerartifactpayload",
       "weight": 1
     },
@@ -45491,7 +45491,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_historyprojection_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L171",
+      "source_location": "L172",
       "target": "historyprojection_contextof",
       "weight": 1
     },
@@ -45503,7 +45503,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_historyprojection_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L346",
+      "source_location": "L347",
       "target": "historyprojection_fenceuntrusteddata",
       "weight": 1
     },
@@ -45515,7 +45515,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_historyprojection_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L328",
+      "source_location": "L329",
       "target": "historyprojection_historyegressclass",
       "weight": 1
     },
@@ -45527,7 +45527,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_historyprojection_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L340",
+      "source_location": "L341",
       "target": "historyprojection_neutralizefence",
       "weight": 1
     },
@@ -45539,7 +45539,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_historyprojection_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L65",
+      "source_location": "L66",
       "target": "historyprojection_parseanswerpayload",
       "weight": 1
     },
@@ -45551,7 +45551,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_historyprojection_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L185",
+      "source_location": "L186",
       "target": "historyprojection_projectthreadhistorywithctx",
       "weight": 1
     },
@@ -45563,7 +45563,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_historyprojection_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L100",
+      "source_location": "L101",
       "target": "historyprojection_resolveviewerauthoritywithctx",
       "weight": 1
     },
@@ -45575,7 +45575,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_historyprojection_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L307",
+      "source_location": "L308",
       "target": "historyprojection_tomodelhistory",
       "weight": 1
     },
@@ -49223,7 +49223,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L118",
+      "source_location": "L119",
       "target": "turns_athenathreadkeyfor",
       "weight": 1
     },
@@ -49235,7 +49235,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L126",
+      "source_location": "L127",
       "target": "turns_contextbindingreffor",
       "weight": 1
     },
@@ -49247,7 +49247,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L950",
+      "source_location": "L959",
       "target": "turns_createagentturnentrypoints",
       "weight": 1
     },
@@ -49259,7 +49259,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L284",
+      "source_location": "L287",
       "target": "turns_createagentturnseams",
       "weight": 1
     },
@@ -49271,7 +49271,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L279",
+      "source_location": "L282",
       "target": "turns_defaultproviderconfigured",
       "weight": 1
     },
@@ -49283,7 +49283,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L863",
+      "source_location": "L872",
       "target": "turns_deniedresult",
       "weight": 1
     },
@@ -49295,7 +49295,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L166",
+      "source_location": "L167",
       "target": "turns_describeturnerrorforoperator",
       "weight": 1
     },
@@ -49307,7 +49307,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L827",
+      "source_location": "L836",
       "target": "turns_describeturnexposurewithctx",
       "weight": 1
     },
@@ -49319,7 +49319,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L131",
+      "source_location": "L132",
       "target": "turns_operatorcorrelationref",
       "weight": 1
     },
@@ -49331,7 +49331,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L137",
+      "source_location": "L138",
       "target": "turns_operatorfromactor",
       "weight": 1
     },
@@ -49343,7 +49343,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L912",
+      "source_location": "L921",
       "target": "turns_phaseof",
       "weight": 1
     },
@@ -49355,7 +49355,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L922",
+      "source_location": "L931",
       "target": "turns_promptstateof",
       "weight": 1
     },
@@ -49367,7 +49367,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L270",
+      "source_location": "L273",
       "target": "turns_stampedturnegressclasswithctx",
       "weight": 1
     },
@@ -49379,7 +49379,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L934",
+      "source_location": "L943",
       "target": "turns_tohistoryentryview",
       "weight": 1
     },
@@ -49391,7 +49391,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L122",
+      "source_location": "L123",
       "target": "turns_turnkeyfor",
       "weight": 1
     },
@@ -49403,7 +49403,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L864",
+      "source_location": "L873",
       "target": "turns_unavailable",
       "weight": 1
     },
@@ -49415,7 +49415,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_turns_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L148",
+      "source_location": "L149",
       "target": "turns_validatecontextvalues",
       "weight": 1
     },
@@ -228229,7 +228229,7 @@
       "label": "athenaThreadKeyFor()",
       "norm_label": "athenathreadkeyfor()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L118"
+      "source_location": "L119"
     },
     {
       "community": 129,
@@ -228238,7 +228238,7 @@
       "label": "contextBindingRefFor()",
       "norm_label": "contextbindingreffor()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L126"
+      "source_location": "L127"
     },
     {
       "community": 129,
@@ -228247,7 +228247,7 @@
       "label": "createAgentTurnEntryPoints()",
       "norm_label": "createagentturnentrypoints()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L950"
+      "source_location": "L959"
     },
     {
       "community": 129,
@@ -228256,7 +228256,7 @@
       "label": "createAgentTurnSeams()",
       "norm_label": "createagentturnseams()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L284"
+      "source_location": "L287"
     },
     {
       "community": 129,
@@ -228265,7 +228265,7 @@
       "label": "defaultProviderConfigured()",
       "norm_label": "defaultproviderconfigured()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L279"
+      "source_location": "L282"
     },
     {
       "community": 129,
@@ -228274,7 +228274,7 @@
       "label": "deniedResult()",
       "norm_label": "deniedresult()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L863"
+      "source_location": "L872"
     },
     {
       "community": 129,
@@ -228283,7 +228283,7 @@
       "label": "describeTurnErrorForOperator()",
       "norm_label": "describeturnerrorforoperator()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L166"
+      "source_location": "L167"
     },
     {
       "community": 129,
@@ -228292,7 +228292,7 @@
       "label": "describeTurnExposureWithCtx()",
       "norm_label": "describeturnexposurewithctx()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L827"
+      "source_location": "L836"
     },
     {
       "community": 129,
@@ -228301,7 +228301,7 @@
       "label": "operatorCorrelationRef()",
       "norm_label": "operatorcorrelationref()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L131"
+      "source_location": "L132"
     },
     {
       "community": 129,
@@ -228310,7 +228310,7 @@
       "label": "operatorFromActor()",
       "norm_label": "operatorfromactor()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L137"
+      "source_location": "L138"
     },
     {
       "community": 129,
@@ -228319,7 +228319,7 @@
       "label": "phaseOf()",
       "norm_label": "phaseof()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L912"
+      "source_location": "L921"
     },
     {
       "community": 129,
@@ -228328,7 +228328,7 @@
       "label": "promptStateOf()",
       "norm_label": "promptstateof()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L922"
+      "source_location": "L931"
     },
     {
       "community": 129,
@@ -228337,7 +228337,7 @@
       "label": "stampedTurnEgressClassWithCtx()",
       "norm_label": "stampedturnegressclasswithctx()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L270"
+      "source_location": "L273"
     },
     {
       "community": 129,
@@ -228346,7 +228346,7 @@
       "label": "toHistoryEntryView()",
       "norm_label": "tohistoryentryview()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L934"
+      "source_location": "L943"
     },
     {
       "community": 129,
@@ -228355,7 +228355,7 @@
       "label": "turnKeyFor()",
       "norm_label": "turnkeyfor()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L122"
+      "source_location": "L123"
     },
     {
       "community": 129,
@@ -228364,7 +228364,7 @@
       "label": "unavailable()",
       "norm_label": "unavailable()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L864"
+      "source_location": "L873"
     },
     {
       "community": 129,
@@ -228373,7 +228373,7 @@
       "label": "validateContextValues()",
       "norm_label": "validatecontextvalues()",
       "source_file": "packages/athena-webapp/convex/agentHarness/turns.ts",
-      "source_location": "L148"
+      "source_location": "L149"
     },
     {
       "community": 1290,
@@ -271699,7 +271699,7 @@
       "label": "assembleTurnPrompt()",
       "norm_label": "assembleturnprompt()",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L365"
+      "source_location": "L368"
     },
     {
       "community": 266,
@@ -271708,7 +271708,7 @@
       "label": "buildAnswerArtifactPayload()",
       "norm_label": "buildanswerartifactpayload()",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L49"
+      "source_location": "L50"
     },
     {
       "community": 266,
@@ -271717,7 +271717,7 @@
       "label": "contextOf()",
       "norm_label": "contextof()",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L171"
+      "source_location": "L172"
     },
     {
       "community": 266,
@@ -271726,7 +271726,7 @@
       "label": "fenceUntrustedData()",
       "norm_label": "fenceuntrusteddata()",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L346"
+      "source_location": "L347"
     },
     {
       "community": 266,
@@ -271735,7 +271735,7 @@
       "label": "historyEgressClass()",
       "norm_label": "historyegressclass()",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L328"
+      "source_location": "L329"
     },
     {
       "community": 266,
@@ -271744,7 +271744,7 @@
       "label": "neutralizeFence()",
       "norm_label": "neutralizefence()",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L340"
+      "source_location": "L341"
     },
     {
       "community": 266,
@@ -271753,7 +271753,7 @@
       "label": "parseAnswerPayload()",
       "norm_label": "parseanswerpayload()",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L65"
+      "source_location": "L66"
     },
     {
       "community": 266,
@@ -271762,7 +271762,7 @@
       "label": "projectThreadHistoryWithCtx()",
       "norm_label": "projectthreadhistorywithctx()",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L185"
+      "source_location": "L186"
     },
     {
       "community": 266,
@@ -271771,7 +271771,7 @@
       "label": "resolveViewerAuthorityWithCtx()",
       "norm_label": "resolveviewerauthoritywithctx()",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L100"
+      "source_location": "L101"
     },
     {
       "community": 266,
@@ -271780,7 +271780,7 @@
       "label": "toModelHistory()",
       "norm_label": "tomodelhistory()",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L307"
+      "source_location": "L308"
     },
     {
       "community": 266,
@@ -318022,7 +318022,7 @@
       "label": "input()",
       "norm_label": "input()",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.test.ts",
-      "source_location": "L168"
+      "source_location": "L169"
     },
     {
       "community": 670,
@@ -318031,7 +318031,7 @@
       "label": "read()",
       "norm_label": "read()",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.test.ts",
-      "source_location": "L282"
+      "source_location": "L283"
     },
     {
       "community": 670,
@@ -318040,7 +318040,7 @@
       "label": "seedTurn()",
       "norm_label": "seedturn()",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.test.ts",
-      "source_location": "L41"
+      "source_location": "L42"
     },
     {
       "community": 670,
@@ -318049,7 +318049,7 @@
       "label": "viewerOf()",
       "norm_label": "viewerof()",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.test.ts",
-      "source_location": "L104"
+      "source_location": "L105"
     },
     {
       "community": 670,

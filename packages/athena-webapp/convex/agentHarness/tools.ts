@@ -343,10 +343,12 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
       if (AGENT_AUTHORITY_REVOCATION_REASONS.has(verdict.reason)) revocations.push(verdict.reason);
       return verdict;
     }
-    // Re-create on every call so a shrunk grant shrinks the surface; disclosure state carries over.
-    const disclosed = surface?.disclosedNamespaces() ?? [];
+    // Re-create on every call so a shrunk grant shrinks the surface. The turn
+    // prompt already carries the grant's catalog, so the granted namespaces
+    // are pre-disclosed: describe never demands a redundant discover round
+    // trip, and athena.discover remains a re-list.
     const next = createRunDiscoverySurface(verdict.grant, { schemas: host.schemas });
-    if (disclosed.length > 0) await next.discover();
+    await next.discover();
     surface = next;
     return { kind: "surface", surface: next };
   };

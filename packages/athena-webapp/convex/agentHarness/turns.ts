@@ -101,6 +101,7 @@ import {
   resumeTurnBindingWithCtx,
 } from "./turnBindings";
 import { AGENT_TOOL_NARRATIVE_MAX_BYTES, type AgentDescribeGrantOutcome } from "./tools";
+import { discoverCapabilities, type AgentCapabilitySchemaIndex } from "./discovery";
 
 type ReadCtx = QueryCtx | MutationCtx;
 
@@ -210,6 +211,8 @@ export type AgentTurnSeamConfig = {
    * provisional row's exposure bound). Production is `Date.now`; tests pin it.
    */
   readonly clock?: () => number;
+  /** Model-projectable capability schemas for the prompt catalog (tests bind fixtures; production defaults to the generated index). */
+  readonly schemas?: AgentCapabilitySchemaIndex;
 };
 
 export type AgentTurnPlan = {
@@ -356,7 +359,13 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
     const selected = selectProviderForEgress(profile.egressPolicy, egressClass, { isConfigured: isProviderConfigured });
     if (selected.kind !== "selected") return refuse("no_compatible_provider", "No allowlisted provider covers this turn's egress class.", false);
 
-    const prompt = assembleTurnPrompt({ profileId: grant.profileKey, intent: profile.promptPolicy.intent, untrustedDataLabel: profile.promptPolicy.untrustedDataLabel, context, question, egressClass: "operational" });
+    // The catalog is deterministic per grant, so it rides in the prompt: every
+    // measured turn spent its first provider step on a discover whose answer
+    // the kernel already knew. A refusal here is not fatal — the turn fails at
+    // grant time on the same authority — so the catalog simply stays empty.
+    const reauthorized = await admission.reauthorizeGrantWithCtx(ctx, { runId: run._id, purpose: "dispatch", now: input.now });
+    const capabilities = reauthorized.kind === "authorized" ? discoverCapabilities(reauthorized.runtimeGrant, { schemas: config.schemas }) : [];
+    const prompt = assembleTurnPrompt({ profileId: grant.profileKey, intent: profile.promptPolicy.intent, untrustedDataLabel: profile.promptPolicy.untrustedDataLabel, context, question, capabilities, egressClass: "operational" });
     const provider = describeProviderSelectionForEvidence(selected, egressClass);
 
     const existingInvocation = await ctx.db.query("intelligenceProviderInvocation").withIndex("by_runId", (q) => q.eq("runId", run._id)).take(1);
