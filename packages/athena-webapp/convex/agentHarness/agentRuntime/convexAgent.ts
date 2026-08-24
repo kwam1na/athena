@@ -123,7 +123,7 @@ const DEFAULT_INSTRUCTIONS =
   "Before your first tool call, say in one or two short sentences what you are about to do, and narrate just as briefly between tool rounds. " +
   "Keep that narration plain prose: never state a result you have not read yet, and never treat it as your answer — it is provisional, and the answer is the one you submit through athena.completeRun. " +
   "Submit by CALLING the athena.completeRun tool. Writing its arguments as prose submits nothing: a turn that ends without the tool call discards everything you wrote. " +
-  "Use namespaces exactly as athena.discover lists them, and copy attempt and citation refs verbatim from tool results — never paraphrase or invent them. " +
+  "Use namespaces exactly as the capability catalog lists them, and copy attempt and citation refs verbatim from tool results — never paraphrase or invent them. " +
   "Program attempts are scarce: a rejection names the exact fix, so apply it rather than rephrasing the same read.";
 
 /**
@@ -569,13 +569,17 @@ export function createConvexAgentRuntimeAdapter(options: ConvexAgentRuntimeAdapt
             // refs, missing citations) gets exactly one corrective retry with
             // the refusal in context. A success stops the loop immediately.
             stopWhen: [stepCountIs(2), () => turn.terminalToolSettled],
+            ...(limits.maxOutputTokens !== undefined ? { maxOutputTokens: limits.maxOutputTokens } : {}),
             abortSignal: turn.abort.signal,
             repairToolCall: repairToolCall(turn),
           },
           { storageOptions: { saveMessages: "none" }, contextOptions: { recentMessages: 0 }, saveStreamDeltas: false },
         );
+        // Attach the handler before consuming: a raise-mode stream error must
+        // not leave forced.text as an unhandled rejection.
+        const forcedText = Promise.resolve(forced.text).catch(() => "");
         await consumeNarrativeStream(turn, forced.fullStream, "raise");
-        const continued = await forced.text;
+        const continued = await forcedText;
         return continued.trim().length > 0 ? `${draft}\n${continued}`.trim() : draft;
       } catch (error) {
         if (isAbortError(error) || turn.abort.signal.aborted) throw error;

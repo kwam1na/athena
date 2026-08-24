@@ -39,7 +39,7 @@ export const CONVEX_AGENT_SERVICE_TIER_ENV = "ATHENA_AGENT_SERVICE_TIER" as cons
  */
 const CONVEX_AGENT_DEFAULT_REASONING_EFFORT = "low" as const;
 
-function experimentProviderOptions(): Record<string, Record<string, unknown>> | undefined {
+export function experimentProviderOptions(): Record<string, Record<string, unknown>> | undefined {
   const effort = process.env[CONVEX_AGENT_REASONING_EFFORT_ENV] ?? CONVEX_AGENT_DEFAULT_REASONING_EFFORT;
   const verbosity = process.env[CONVEX_AGENT_TEXT_VERBOSITY_ENV];
   const serviceTier = process.env[CONVEX_AGENT_SERVICE_TIER_ENV];

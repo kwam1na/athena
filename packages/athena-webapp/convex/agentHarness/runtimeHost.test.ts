@@ -1124,7 +1124,9 @@ describe("turn host — the provisional draft", () => {
     const traced = await t.run((ctx) => listTurnTraceByBindingWithCtx(ctx, seeded.bindingId, AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN + 10));
     expect(traced.filter((row) => row.kind === "trace_capped")).toHaveLength(1);
     expect(traced.at(-1)?.kind).toBe("turn_report");
-    expect(traced.length).toBeLessThanOrEqual(AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN + 2);
+    // +3: the cap marker, the summary row, and the terminal tool_dispatch row
+    // (the durable record of the model-submitted answer) are all exempt.
+    expect(traced.length).toBeLessThanOrEqual(AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN + 3);
   });
 
   it("logs a failed trace write and drops it, and the turn's outcome is untouched", async () => {

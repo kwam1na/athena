@@ -302,7 +302,10 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
       if (row.sequence > trace.hostSequence) trace.hostSequence = row.sequence;
       // The turn's own summary row is never capped: it is the one row an
       // engineer reads first, and it is the last one pushed.
-      if (trace.pushed >= AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN && row.kind !== "turn_report") {
+      // The terminal tool's dispatch row is the durable record of the
+      // model-submitted answer; like turn_report, it is never capped.
+      const terminalDispatch = row.kind === "tool_dispatch" && (row.payload as { toolId?: string } | undefined)?.toolId === completeRunTool.toolId;
+      if (trace.pushed >= AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN && row.kind !== "turn_report" && !terminalDispatch) {
         if (trace.capped) return;
         trace.capped = true;
         trace.buffer.push({ source: "host", sequence: (trace.hostSequence += 1), at: now(), kind: "trace_capped", payload: { limit: AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN, droppedFrom: row.kind } });
@@ -698,7 +701,12 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
         // turns: when discover is offered, its handler still owns this beat.
         if (timings.firstProgressMs === null) timings.firstProgressMs = now() - startedAt;
         milestoneQueue.push(runMutation(refs.recordTurnProgress, { bindingId, milestone: "checking_sources", now: now() }).catch(() => undefined));
-        await adapter.reportProgress?.(turnRef, "checking_sources");
+        try {
+          await adapter.reportProgress?.(turnRef, "checking_sources");
+        } catch {
+          // Progress is best-effort; the turn is already running, and a throw
+          // here must not trip the could-not-start finalization below.
+        }
       }
     } catch (error) {
       const code = typeof (error as { athenaCode?: unknown }).athenaCode === "string" ? (error as { athenaCode: string }).athenaCode : "runtime_adapter_error";

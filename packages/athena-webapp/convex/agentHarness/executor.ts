@@ -177,7 +177,10 @@ export function createProgramExecutor(config: AgentProgramExecutorConfig) {
     // Advisory only: reads of undeclared result fields ride back on a successful
     // result so a `null` from a guessed field name reads as a misread, not as
     // missing data. Never blocks execution and never enters replay identity.
-    const fieldAdvisories = validation.ok ? collectProgramFieldAdvisories(input.source, facade) : [];
+    // Computed lazily: only a completed attempt attaches advisories, so the
+    // second parse never runs for rejected, failed, or withheld attempts.
+    let advisories: readonly AgentProgramFieldAdvisory[] | undefined;
+    const fieldAdvisoriesLazy = () => (advisories ??= validation.ok ? collectProgramFieldAdvisories(input.source, facade) : []);
     const begun = (await ctx.runMutation(config.seams.beginAttempt, {
       runId: input.runId,
       attemptIdempotencyKey: input.attemptIdempotencyKey,
@@ -316,15 +319,15 @@ export function createProgramExecutor(config: AgentProgramExecutorConfig) {
     }
     if (outcome.status === "completed") {
       const finished = await finish(ctx, attemptId, { status: "completed", output: outcome.output, diagnostics });
-      return withDiagnostics(finished, diagnostics, calls, fieldAdvisories);
+      return withDiagnostics(finished, diagnostics, calls, finished.outcome === "result" ? fieldAdvisoriesLazy() : []);
     }
     if (outcome.status === "canceled") {
       const finished = await finish(ctx, attemptId, { status: "canceled", reason: "aborted", diagnostics });
-      return withDiagnostics(finished, diagnostics, calls, fieldAdvisories);
+      return withDiagnostics(finished, diagnostics, calls, finished.outcome === "result" ? fieldAdvisoriesLazy() : []);
     }
     const failure = normalizeProgramFailure(outcome);
     const finished = await finish(ctx, attemptId, { status: "failed", code: failure.code, message: failure.message, diagnostics });
-    return withDiagnostics(finished, diagnostics, calls, fieldAdvisories);
+    return withDiagnostics(finished, diagnostics, calls, finished.outcome === "result" ? fieldAdvisoriesLazy() : []);
   }
 
   async function finish(ctx: AgentExecutorCtx, attemptId: Id<"agentProgramAttempt">, end: AgentAttemptEnd): Promise<AgentFinishAttemptOutcome> {

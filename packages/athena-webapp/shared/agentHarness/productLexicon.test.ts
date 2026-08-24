@@ -290,6 +290,69 @@ describe("normalizeNarrative", () => {
   });
 });
 
+describe("review-round regressions", () => {
+  const lexicon = {
+    enumLabels: { "eod.auto_complete": "the automatic end-of-day close step" },
+    fieldLabels: {},
+    namespaceLabels: { "inventory.positions": "the live stock list", "inventory.positionsHistory": "the stock history" },
+  };
+  const noEvidence = { fieldNames: [], enumLiterals: [], moneyAmounts: [] };
+
+  it("never rewrites a correct display when two amounts differ by 100x", () => {
+    const evidence = { ...noEvidence, moneyAmounts: [
+      { amount: 1_414_900, currency: "GHS" },
+      { amount: 14_149, currency: "GHS" },
+    ] };
+    const out = normalizeNarrative("Revenue is GH₵14,149 and the fee was 14,149.", { evidence, namespaces: [], lexicon, question: "" });
+    expect(out).toBe("Revenue is GH₵14,149 and the fee was GH₵141.49.");
+    // idempotent on the corrected text
+    expect(normalizeNarrative(out, { evidence, namespaces: [], lexicon, question: "" })).toBe(out);
+    const findings = senseTone({ narrative: "Revenue is GH₵14,149 so far.", question: "", fieldNames: [], enumLiterals: [], moneyAmounts: evidence.moneyAmounts, namespaces: [], refs: [], lexicon: APP_PRODUCT_LEXICON });
+    expect(findings).toEqual([]);
+  });
+
+  it("never rewrites the head of a larger grouped number", () => {
+    const evidence = { ...noEvidence, moneyAmounts: [{ amount: 1_414_900, currency: "GHS" }] };
+    const text = "The population figure 1,414,900,000 is unrelated.";
+    expect(normalizeNarrative(text, { evidence, namespaces: [], lexicon, question: "" })).toBe(text);
+    const findings = senseTone({ narrative: text, question: "", fieldNames: [], enumLiterals: [], moneyAmounts: evidence.moneyAmounts, namespaces: [], refs: [], lexicon: APP_PRODUCT_LEXICON });
+    expect(findings).toEqual([]);
+  });
+
+  it("keeps walking a flat row that merely contains amount and currency keys", () => {
+    const evidence = collectNarrativeEvidence({ method: "mobile_money", amount: 750_000, currency: "GHS", providerFeeMinor: 1200 });
+    expect(evidence.enumLiterals).toContain("mobile_money");
+    expect(evidence.fieldNames).toContain("providerFeeMinor");
+    expect(evidence.moneyAmounts).toEqual([]);
+    const annotated = annotateMoneyDisplays({ method: "mobile_money", amount: 750_000, currency: "GHS", providerFeeMinor: 1200 }) as Record<string, unknown>;
+    expect(annotated.display).toBeUndefined();
+  });
+
+  it("keeps a footer line that carries prose facts alongside a ref", () => {
+    const narrative = "Register 06's drawer is open.\n\nSources:\n- attempt_v1.1.0123456789abcdef0123456789abcdef: drawer over by GH₵12 at close";
+    expect(stripSourcesFooter(narrative)).toBe(narrative);
+  });
+
+  it("strips stacked refs-only footers to a fixpoint", () => {
+    const narrative =
+      "Sales are GH₵14,149.\n\nSources:\n- citation:v1.1.1.0123456789abcdef0123456789abcdef\n\nRefs:\n- attempt_v1.1.fedcba9876543210fedcba9876543210";
+    expect(stripSourcesFooter(narrative)).toBe("Sales are GH₵14,149.");
+  });
+
+  it("leaves dotted lexicon keys alone instead of half-humanizing them", () => {
+    const out = normalizeNarrative("The eod.auto_complete step ran.", { evidence: noEvidence, namespaces: [], lexicon, question: "" });
+    expect(out).toBe("The eod.auto_complete step ran.");
+  });
+
+  it("does not rewrite a namespace inside a longer namespace and capitalizes at sentence start", () => {
+    const out = normalizeNarrative(
+      "inventory.positionsHistory holds the trend. inventory.positions was read.",
+      { evidence: noEvidence, namespaces: ["inventory.positions", "inventory.positionsHistory"], lexicon, question: "" },
+    );
+    expect(out).toBe("The stock history holds the trend. The live stock list was read.");
+  });
+});
+
 describe("mergeLexicons", () => {
   it("overlay enum labels win over the app lexicon", () => {
     const merged = mergeLexicons(APP_PRODUCT_LEXICON, {

@@ -443,6 +443,38 @@ describe("athena.completeRun tone sensor and money display annotation", () => {
     expect(tools.state.toneFindings()).toEqual([]);
   });
 
+  it("warn mode records findings on the turn state and still commits", async () => {
+    const tools = toneTools(); // no tonePolicy: warn is the default
+    await tools.executeProgram();
+    const outcome = await tools.completeRun({
+      outcome: "answer",
+      narrative: "Summary comparing this week to last for Wigclub.",
+      ...CITED,
+    });
+    expect(outcome.kind).toBe("success");
+    expect(tools.completions).toHaveLength(1);
+    expect(tools.state.toneFindings().map((finding) => finding.code)).toContain("stub_narrative");
+  });
+
+  it("accumulated findings survive a clean corrective retry for telemetry", async () => {
+    const tools = toneTools({ tonePolicy: "enforce" });
+    await tools.executeProgram();
+    const denied = await tools.completeRun({
+      outcome: "answer",
+      narrative: "Summary comparing this week to last for Wigclub.",
+      ...CITED,
+    });
+    expect(denied.kind).toBe("denied");
+    const retried = await tools.completeRun({
+      outcome: "answer",
+      narrative: "Sales so far today are GH₵14,149 across 4 sales, and the close is blocked until Register 06's drawer is counted.",
+      ...CITED,
+    });
+    expect(retried.kind).toBe("success");
+    // The denial's findings are not erased by the clean retry.
+    expect(tools.state.toneFindings().map((finding) => finding.code)).toContain("stub_narrative");
+  });
+
   it("waives tokens the operator asked with", async () => {
     const tools = toneTools({ tonePolicy: "enforce", question: "what is the lifecycleStage right now?" });
     await tools.executeProgram();

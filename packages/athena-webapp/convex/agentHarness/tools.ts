@@ -209,7 +209,10 @@ export const completeRunTool: AgentToolDefinition<AgentCompleteRunArgs, unknown>
     }
     for (const citation of citations as Record<string, unknown>[]) {
       const ref = citation.ref as string;
-      if (ref.startsWith("attempt_")) {
+      // A claim-less attempt-prefixed ref is an unambiguous misfile; one that
+      // carries a claim keeps its text and lets the handler's tail resolution
+      // route it, so model-authored claim text is never silently dropped.
+      if (ref.startsWith("attempt_") && typeof citation.claim !== "string" && typeof citation.claimShape !== "string") {
         attemptRefs.push(ref);
         continue;
       }
@@ -226,7 +229,7 @@ export const completeRunTool: AgentToolDefinition<AgentCompleteRunArgs, unknown>
         narrative: (narrative as string).trim(),
         ...(typeof object.title === "string" ? { title: object.title.trim() } : {}),
         citedAttemptRefs: [...new Set(attemptRefs)],
-        citations: [...new Map(citationEntries.map((entry) => [entry.ref, entry])).values()],
+        citations: citationEntries.filter((entry, index) => citationEntries.findIndex((other) => other.ref === entry.ref) === index),
         ...(typeof object.confidence === "number" ? { confidence: object.confidence } : {}),
         ...(typeof object.limitedEvidence === "boolean" ? { limitedEvidence: object.limitedEvidence } : {}),
       },
@@ -537,7 +540,8 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
         const exact = entries.filter((entry) => entry.tail === tail);
         if (exact.length === 1) return exact[0].ref;
         if (exact.length > 1) return undefined;
-        const near = entries.filter((entry) => entry.tail.includes(tail) || tail.includes(entry.tail));
+        // One transcribed character, as documented — not arbitrary containment.
+        const near = entries.filter((entry) => (entry.tail.includes(tail) || tail.includes(entry.tail)) && Math.abs(entry.tail.length - tail.length) === 1);
         return near.length === 1 ? near[0].ref : undefined;
       };
       const attemptTails = tailsOf(knownAttemptRefs);
@@ -547,9 +551,19 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
       const resolvedAttemptRefs: string[] = [];
       const resolvedCitations: { ref: string; claim?: string; claimShape?: string }[] = [];
       const resolveRef = (ref: string, claim?: { claim?: string; claimShape?: string }) => {
+        // An exact membership hit in either bucket beats any tail resolution
+        // in the other: a verbatim ref is never re-routed by a coincidence.
+        if (knownCitations.has(ref)) {
+          resolvedCitations.push({ ref, ...(claim ?? {}) });
+          return;
+        }
+        if (knownAttempts.has(ref)) {
+          resolvedAttemptRefs.push(ref);
+          return;
+        }
         const tail = hashTail(ref);
-        const asAttempt = knownAttempts.has(ref) ? ref : tail ? resolveByTail(tail, attemptTails) : undefined;
-        const asCitation = knownCitations.has(ref) ? ref : tail ? resolveByTail(tail, citationTails) : undefined;
+        const asAttempt = tail ? resolveByTail(tail, attemptTails) : undefined;
+        const asCitation = tail ? resolveByTail(tail, citationTails) : undefined;
         if (asCitation) resolvedCitations.push({ ref: asCitation, ...(claim ?? {}) });
         else if (asAttempt) resolvedAttemptRefs.push(asAttempt);
         else if (ref.startsWith("citation:")) resolvedCitations.push({ ref, ...(claim ?? {}) });
@@ -558,7 +572,7 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
       for (const ref of args.citedAttemptRefs) resolveRef(ref);
       for (const citation of args.citations) resolveRef(citation.ref, { ...(citation.claim !== undefined ? { claim: citation.claim } : {}), ...(citation.claimShape !== undefined ? { claimShape: citation.claimShape } : {}) });
       const citedAttemptRefs = [...new Set(resolvedAttemptRefs)];
-      const citations = [...new Map(resolvedCitations.map((entry) => [entry.ref, entry])).values()];
+      const citations = resolvedCitations.filter((entry, index) => resolvedCitations.findIndex((other) => other.ref === entry.ref) === index);
       const validRefsHint = () =>
         ` Valid citedAttemptRefs: ${knownAttemptRefs.join(", ") || "(none)"}. Valid citation refs: ${knownCitationRefs.join(", ") || "(none)"}. Copy them verbatim.`;
       if (args.outcome === "answer" && (citedAttemptRefs.length === 0 || citations.length === 0)) {
@@ -571,18 +585,21 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
       // mechanism applied to the answer.
       const namespacesRead = [...new Set(attempts.flatMap((attempt) => attempt.citations.map((citation) => citation.namespace)))];
       const lexicon = host.lexicon ?? APP_PRODUCT_LEXICON;
-      const narrative = normalizeNarrative(stripSourcesFooter(args.narrative), {
+      const normalizeOptions = {
         evidence: { fieldNames: [...toneEvidence.fieldNames], enumLiterals: [...toneEvidence.enumLiterals], moneyAmounts: toneEvidence.moneyAmounts },
         namespaces: namespacesRead,
         lexicon,
         question: host.question ?? "",
-      });
+      };
+      const narrative = normalizeNarrative(stripSourcesFooter(args.narrative), normalizeOptions);
+      // The title reaches the operator too: same rewrite, same evidence.
+      const title = args.title === undefined ? undefined : normalizeNarrative(args.title, normalizeOptions);
       // Product-tone sensor: the narrative is held to the run's own evidence
       // (fields, enum spellings, minor-unit amounts it was shown, plus the
       // grant's namespaces and this turn's refs). Warn mode records findings
       // for telemetry; enforce mode spends at most ONE corrective denial —
       // the fix is named, and the retry commits regardless.
-      toneFindings = senseTone({
+      const sensed = senseTone({
         narrative,
         question: host.question ?? "",
         fieldNames: [...toneEvidence.fieldNames],
@@ -592,9 +609,14 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
         refs: [...knownAttemptRefs, ...knownCitationRefs],
         lexicon,
       });
-      if (host.tonePolicy === "enforce" && toneFindings.length > 0 && !toneDeniedOnce) {
+      // Accumulate across invocations so a denial's findings survive the clean
+      // retry into turn_report telemetry.
+      for (const finding of sensed) {
+        if (!toneFindings.some((existing) => existing.code === finding.code && existing.token === finding.token)) toneFindings = [...toneFindings, finding];
+      }
+      if (host.tonePolicy === "enforce" && sensed.length > 0 && !toneDeniedOnce) {
         toneDeniedOnce = true;
-        const fixes = toneFindings.map((finding) => finding.fix).join(" ");
+        const fixes = sensed.map((finding) => finding.fix).join(" ");
         return denied("tone", `Rewrite the narrative for the operator, then call completeRun again. ${fixes}`);
       }
       await host.reportProgress?.("finalizing");
@@ -617,7 +639,7 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
         citedAttemptRefs: [...citedAttemptRefs],
         citations: citations.map((citation) => ({ ...citation })),
         artifact: {
-          ...(args.title ? { title: args.title } : {}),
+          ...(title ? { title } : {}),
           summary: narrative.slice(0, 280),
           payload: buildAnswerArtifactPayload({
             outcome: args.outcome,

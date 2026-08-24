@@ -85,12 +85,18 @@ export type AgentMoneyAmount = { readonly amount: number; readonly currency: str
 /** The manifest's `money` field kind serializes as `{ amount, currency }` in minor units. */
 export function isMoneyValue(value: unknown): value is AgentMoneyAmount {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  const candidate = value as { amount?: unknown; currency?: unknown };
+  const record = value as { amount?: unknown; currency?: unknown; display?: unknown };
+  // Exactly the manifest money serialization ({amount, currency}, plus our own
+  // display annotation) — a flat result row that merely CONTAINS amount and
+  // currency keys is data whose siblings must still be walked and harvested.
+  const keys = Object.keys(record);
+  if (keys.length > 3 || !keys.every((key) => key === "amount" || key === "currency" || key === "display")) return false;
   return (
-    typeof candidate.amount === "number" &&
-    Number.isInteger(candidate.amount) &&
-    typeof candidate.currency === "string" &&
-    /^[A-Za-z]{3}$/.test(candidate.currency)
+    typeof record.amount === "number" &&
+    Number.isInteger(record.amount) &&
+    typeof record.currency === "string" &&
+    /^[A-Za-z]{3}$/.test(record.currency) &&
+    (record.display === undefined || typeof record.display === "string")
   );
 }
 
@@ -141,6 +147,10 @@ const INTERNAL_NAME_PATTERN = /(?:[a-z0-9][A-Z]|_)/; // camelCase joint or snake
 const ENUM_LITERAL_PATTERN = /^[a-z]+(?:_[a-z]+)+$/;
 
 /** Harvest, from a model-visible result, the internal tokens prose must not echo. */
+const EVIDENCE_FIELD_CAP = 200;
+const EVIDENCE_ENUM_CAP = 200;
+const EVIDENCE_MONEY_CAP = 64;
+
 export function collectNarrativeEvidence(value: unknown): AgentNarrativeEvidence {
   const fieldNames = new Set<string>();
   const enumLiterals = new Set<string>();
@@ -155,15 +165,15 @@ export function collectNarrativeEvidence(value: unknown): AgentNarrativeEvidence
     const record = node as { readonly [key: string]: unknown };
     if (isMoneyValue(record)) {
       const key = `${record.amount}:${record.currency.toUpperCase()}`;
-      if (!moneyKeys.has(key)) {
+      if (!moneyKeys.has(key) && moneyAmounts.length < EVIDENCE_MONEY_CAP) {
         moneyKeys.add(key);
         moneyAmounts.push({ amount: record.amount, currency: record.currency.toUpperCase() });
       }
       return;
     }
     for (const [key, entry] of Object.entries(record)) {
-      if (INTERNAL_NAME_PATTERN.test(key)) fieldNames.add(key);
-      if (typeof entry === "string" && ENUM_LITERAL_PATTERN.test(entry)) enumLiterals.add(entry);
+      if (INTERNAL_NAME_PATTERN.test(key) && fieldNames.size < EVIDENCE_FIELD_CAP) fieldNames.add(key);
+      if (typeof entry === "string" && ENUM_LITERAL_PATTERN.test(entry) && enumLiterals.size < EVIDENCE_ENUM_CAP) enumLiterals.add(entry);
       walk(entry, depth + 1);
     }
   };
@@ -187,15 +197,38 @@ const REF_TOKEN = /attempt_v\d|citation:v\d/;
  * non-empty line in it carries a ref token; a footer holding real prose, or a
  * sources mention mid-answer, is left exactly as written.
  */
-export function stripSourcesFooter(narrative: string): string {
+const REF_TOKEN_ALL = /attempt_v\d[^\s,;)]*|citation:v\d[^\s,;)]*/g;
+
+/** A footer line is refs-only when, with refs and list punctuation removed, no figures and only a short label remain. */
+function isRefsOnlyLine(line: string): boolean {
+  if (!REF_TOKEN.test(line)) return false;
+  const remainder = line.replace(REF_TOKEN_ALL, " ").replace(/[-*\u2022.,;:()\[\]|/]/g, " ").replace(/\s+/g, " ").trim();
+  if (/[\d\u20b5]/.test(remainder) || /\bGH\b/.test(remainder)) return false;
+  return remainder.length <= 60;
+}
+
+function stripSourcesFooterOnce(narrative: string): string {
   let header: RegExpExecArray | null = null;
   FOOTER_HEADER.lastIndex = 0;
   for (let match = FOOTER_HEADER.exec(narrative); match; match = FOOTER_HEADER.exec(narrative)) header = match;
+  // A header only reachable via newline deliberately never matches position 0:
+  // a narrative that IS a sources footer must not be stripped to nothing.
   if (!header) return narrative;
   const section = narrative.slice(header.index + header[0].length);
   const lines = section.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
-  if (lines.length === 0 || !lines.every((line) => REF_TOKEN.test(line))) return narrative;
+  if (lines.length === 0 || !lines.every(isRefsOnlyLine)) return narrative;
   return narrative.slice(0, header.index).trimEnd();
+}
+
+export function stripSourcesFooter(narrative: string): string {
+  // Fixpoint: stacked footers ("Sources:" then "Refs:") strip one per pass.
+  let current = narrative;
+  for (let pass = 0; pass < 4; pass++) {
+    const next = stripSourcesFooterOnce(current);
+    if (next === current) return current;
+    current = next;
+  }
+  return current;
 }
 
 // ---------------------------------------------------------------------------
@@ -228,11 +261,25 @@ export function normalizeNarrative(narrative: string, options: AgentNormalizeNar
   // Rewrite what the run served the model AND what the lexicon itself names:
   // lexicon keys are curated-internal by construction, so a catalog-known
   // token the model used without reading it is still safely rewritable.
-  for (const namespace of new Set([...options.namespaces, ...Object.keys(options.lexicon.namespaceLabels ?? {})])) {
+  const namespaceTokens = [...new Set([...options.namespaces, ...Object.keys(options.lexicon.namespaceLabels ?? {})])]
+    .sort((left, right) => right.length - left.length); // longest first: a namespace must not rewrite the head of a longer one
+  for (const namespace of namespaceTokens) {
     if (asked(namespace) || !text.includes(namespace)) continue;
-    const label = options.lexicon.namespaceLabels?.[namespace] ?? humanizeToken(namespace.split(".")[1] ?? namespace);
-    // Absorb a trailing verb mention ("reports.daySales.get") into the phrase.
-    text = text.replace(new RegExp(`${escapeRegExp(namespace)}(?:\\.(?:get|list))?`, "g"), label);
+    const namespaceLabels = options.lexicon.namespaceLabels ?? {};
+    const label = Object.hasOwn(namespaceLabels, namespace)
+      ? namespaceLabels[namespace]
+      : humanizeToken(namespace.split(".")[1] ?? namespace);
+    // Absorb a trailing verb mention; the boundary guards forbid rewriting
+    // inside a longer token ("inventory.positionsHistory") or a dotted path,
+    // and a substitution landing at a sentence start keeps the capital.
+    text = text.replace(
+      new RegExp(escapeRegExp(namespace) + "(?:\\.(?:get|list))?(?!\\w)(?!\\.\\w)", "g"),
+      (match: string, offset: number, whole: string) => {
+        const before = whole.slice(0, offset);
+        const sentenceStart = offset === 0 || /[.!?]\s+$|\n\s*$/.test(before);
+        return sentenceStart ? label.charAt(0).toUpperCase() + label.slice(1) : label;
+      },
+    );
   }
   for (const name of new Set([...options.evidence.fieldNames, ...Object.keys(options.lexicon.fieldLabels)])) {
     if (!INTERNAL_NAME_PATTERN.test(name) || asked(name)) continue;
@@ -245,17 +292,26 @@ export function normalizeNarrative(narrative: string, options: AgentNormalizeNar
   }
   for (const literal of new Set([...options.evidence.enumLiterals, ...Object.keys(options.lexicon.enumLabels)])) {
     if (asked(literal)) continue;
+    // Dotted keys (workflow step ids) would half-humanize ("eod.auto complete");
+    // their curated labels stay in disclosure and fix text only.
+    if (literal.includes(".")) continue;
     rewriteWord(literal, humanizeToken(literal));
   }
   const grouping = new Intl.NumberFormat("en-US");
+  // Every harvested amount's correct display: a matched span that already IS
+  // one of these must never be rewritten (two amounts related by 100x would
+  // otherwise corrupt the correct figure).
+  const knownDisplays = new Set(options.evidence.moneyAmounts.map((money) => formatMinorMoney(money.amount, money.currency)));
   for (const money of options.evidence.moneyAmounts) {
-    if (Math.abs(money.amount) < 10_000) continue; // below GH₵100, plain integers collide with counts
+    if (Math.abs(money.amount) < 10_000) continue; // below GH\u20b5100, plain integers collide with counts
     const display = formatMinorMoney(money.amount, money.currency);
     for (const spelling of [grouping.format(money.amount), String(money.amount)]) {
-      text = text.replace(
-        new RegExp("(?:\\b(?:" + escapeRegExp(money.currency) + "|GHC)\\s*|GH\u20b5\\s*)?(?<![\\d,])" + escapeRegExp(spelling) + "(?!\\d)", "g"),
-        display,
+      if (!text.includes(spelling)) continue;
+      const pattern = new RegExp(
+        "(?:\\b(?:" + escapeRegExp(money.currency) + "|GHC)\\s*|GH\u20b5\\s*)?(?<![\\d,])" + escapeRegExp(spelling) + "(?!\\d|,\\d)",
+        "g",
       );
+      text = text.replace(pattern, (match) => (knownDisplays.has(match.trim()) ? match : display));
     }
   }
   return text;
@@ -343,24 +399,35 @@ export function senseTone(input: AgentToneSensorInput): readonly AgentToneFindin
   for (const name of new Set(input.fieldNames)) {
     if (!INTERNAL_NAME_PATTERN.test(name) || asked(name)) continue;
     if (wordPresent(narrative, name)) {
-      const label = input.lexicon.fieldLabels[name] ?? humanizeToken(name);
+      const label = Object.hasOwn(input.lexicon.fieldLabels, name) ? input.lexicon.fieldLabels[name] : humanizeToken(name);
       findings.push({ code: "internal_field_name", token: name, fix: `Write "${label}" in plain words, not the field name "${name}".` });
     }
   }
   for (const literal of new Set(input.enumLiterals)) {
     if (asked(literal)) continue;
     if (wordPresent(narrative, literal)) {
-      const label = input.lexicon.enumLabels[literal] ?? humanizeToken(literal);
+      const label = Object.hasOwn(input.lexicon.enumLabels, literal) ? input.lexicon.enumLabels[literal] : humanizeToken(literal);
       findings.push({ code: "raw_enum_literal", token: literal, fix: `Write "${label}", not the internal value "${literal}".` });
     }
   }
   const grouping = new Intl.NumberFormat("en-US");
+  const knownDisplays = new Set(input.moneyAmounts.map((money) => formatMinorMoney(money.amount, money.currency)));
   for (const money of input.moneyAmounts) {
-    if (Math.abs(money.amount) < 10_000) continue; // below GH₵100 plain integers collide with counts
+    if (Math.abs(money.amount) < 10_000) continue; // below GH\u20b5100 plain integers collide with counts
     const display = formatMinorMoney(money.amount, money.currency);
     if (narrative.includes(display)) continue;
     const spellings = [grouping.format(money.amount), String(money.amount)];
-    const echoed = spellings.find((spelling) => new RegExp(`(?<![\\d,])${escapeRegExp(spelling)}(?!\\d)`).test(narrative));
+    let echoed: string | undefined;
+    for (const spelling of spellings) {
+      if (!narrative.includes(spelling)) continue;
+      const match = new RegExp(
+        "(?:\\b(?:" + escapeRegExp(money.currency) + "|GHC)\\s*|GH\u20b5\\s*)?(?<![\\d,])" + escapeRegExp(spelling) + "(?!\\d|,\\d)",
+      ).exec(narrative);
+      if (match && !knownDisplays.has(match[0].trim())) {
+        echoed = spelling;
+        break;
+      }
+    }
     if (echoed) {
       findings.push({
         code: "raw_minor_amount",

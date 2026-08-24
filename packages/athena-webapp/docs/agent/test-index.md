@@ -20,6 +20,7 @@ This index enumerates the current automated test files and ties them back to the
 
 - [`convex/agentHarness/agentRuntime/convexAgent.contract.test.ts`](../../convex/agentHarness/agentRuntime/convexAgent.contract.test.ts)
 - [`convex/agentHarness/agentRuntime/convexAgentPersistence.test.ts`](../../convex/agentHarness/agentRuntime/convexAgentPersistence.test.ts)
+- [`convex/agentHarness/agentRuntime/convexAgentProduction.test.ts`](../../convex/agentHarness/agentRuntime/convexAgentProduction.test.ts)
 - [`convex/agentHarness/agentRuntime/convexAgentSmoke.test.ts`](../../convex/agentHarness/agentRuntime/convexAgentSmoke.test.ts)
 - [`convex/agentHarness/agentRuntime/models.test.ts`](../../convex/agentHarness/agentRuntime/models.test.ts)
 - [`convex/agentHarness/budgets.test.ts`](../../convex/agentHarness/budgets.test.ts)
@@ -457,6 +458,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`shared/agentHarness/contracts.test.ts`](../../shared/agentHarness/contracts.test.ts)
 - [`shared/agentHarness/digest.test.ts`](../../shared/agentHarness/digest.test.ts)
 - [`shared/agentHarness/execution.test.ts`](../../shared/agentHarness/execution.test.ts)
+- [`shared/agentHarness/manifest.signature.test.ts`](../../shared/agentHarness/manifest.signature.test.ts)
 - [`shared/agentHarness/productLexicon.test.ts`](../../shared/agentHarness/productLexicon.test.ts)
 - [`shared/commandResult.test.ts`](../../shared/commandResult.test.ts)
 - [`shared/currencyFormatter.test.ts`](../../shared/currencyFormatter.test.ts)
