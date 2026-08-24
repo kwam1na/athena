@@ -14,7 +14,7 @@ applies_when:
   - "An enforcement denial or retry loop is being considered to police model output"
   - "Money or unit-bearing values cross a model boundary without their display convention"
 tags: [agent-harness, product-tone, disclosure, enforcement, lexicon, prompt-engineering]
-delivery_diff_fingerprint: c0debfe9d9e23c8429ebae5a3efd9bc9b1aaafaab848f0fe94469aff9325e297
+delivery_diff_fingerprint: ddb040b10416fb55ad93b562991947bc1dbbae2d90e6c8ad9b834c8b8393380c
 ---
 
 # Shape the Input Before Policing the Output — Mechanical Tone Enforcement for Agent Prose
