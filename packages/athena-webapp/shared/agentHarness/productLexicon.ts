@@ -344,7 +344,7 @@ export function normalizeNarrative(narrative: string, options: AgentNormalizeNar
       // The lookbehind also refuses any currency symbol, so the pipeline's own
       // inserted display is never re-matched bare in a later pass.
       const pattern = new RegExp(
-        "(?:\\b(?:" + escapeRegExp(money.currency) + "|GHC)\\s*|GH\u20b5\\s*)?(?<![\\d,.\\p{Sc}])" + escapeRegExp(spelling) + "(?!\\d|,\\d|\\.\\d)",
+        "(?:\\b(?:" + escapeRegExp(money.currency) + "|GHC)\\s*|GH\u20b5\\s*|(?<![\\d,.\\p{Sc}]))(?<![\\d,])" + escapeRegExp(spelling) + "(?!\\d|,\\d|\\.\\d)",
         "gu",
       );
       text = text.replace(pattern, (match) => {
@@ -466,7 +466,7 @@ export function senseTone(input: AgentToneSensorInput): readonly AgentToneFindin
     for (const spelling of spellings) {
       if (!narrative.includes(spelling)) continue;
       const matcher = new RegExp(
-        "(?:\\b(?:" + escapeRegExp(money.currency) + "|GHC)\\s*|GH\u20b5\\s*)?(?<![\\d,.\\p{Sc}])" + escapeRegExp(spelling) + "(?!\\d|,\\d|\\.\\d)",
+        "(?:\\b(?:" + escapeRegExp(money.currency) + "|GHC)\\s*|GH\u20b5\\s*|(?<![\\d,.\\p{Sc}]))(?<![\\d,])" + escapeRegExp(spelling) + "(?!\\d|,\\d|\\.\\d)",
         "gu",
       );
       for (const match of narrative.matchAll(matcher)) {

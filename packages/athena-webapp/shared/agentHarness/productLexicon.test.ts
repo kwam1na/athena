@@ -381,6 +381,15 @@ describe("round-2 regressions", () => {
     expect(normalizeNarrative(once, { evidence: usd, namespaces: [], lexicon, question: "" })).toBe(once);
   });
 
+  it("still rewrites and senses a glyph-prefixed raw minor echo (no space)", () => {
+    const evidence = { fieldNames: [], enumLiterals: [], moneyAmounts: [{ amount: 1_414_900, currency: "GHS" }] };
+    for (const text of ["GH₵1414900 total", "GH₵1,414,900 total"]) {
+      expect(normalizeNarrative(text, { evidence, namespaces: [], lexicon, question: "" })).toBe("GH₵14,149 total");
+    }
+    const findings = senseTone({ narrative: "GH₵1,414,900 total", question: "", fieldNames: [], enumLiterals: [], moneyAmounts: evidence.moneyAmounts, namespaces: [], refs: [], lexicon });
+    expect(findings.map((finding) => finding.code)).toEqual(["raw_minor_amount"]);
+  });
+
   it("never rewrites the head of a decimal number", () => {
     const text = "The reading 14,149.50 units.";
     expect(normalizeNarrative(text, { evidence: pair, namespaces: [], lexicon, question: "" })).toBe(text);
