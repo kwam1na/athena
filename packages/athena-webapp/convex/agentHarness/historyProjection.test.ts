@@ -414,7 +414,10 @@ describe("prompt assembly labels product fields as untrusted data (scenario 11)"
       egressClass: "operational",
     });
     expect(prompt.text).toContain('list({ operatingDate, state: "pending" })');
-    expect(prompt.text).toContain("athena.discover only re-lists");
+    expect(prompt.text).toContain("athena.describe details one");
+    // The embedded catalog replaces discover entirely: the tool is not offered
+    // on these turns, so the prompt must not name it.
+    expect(prompt.text).not.toContain("athena.discover");
     // Policy, not data: the catalog sits before the first fence and inside none.
     expect(prompt.text.indexOf("operations.approvals")).toBeLessThan(prompt.text.indexOf('<retrieved_store_data field="'));
     expect(prompt.text).not.toContain('<retrieved_store_data field="capabilities"');

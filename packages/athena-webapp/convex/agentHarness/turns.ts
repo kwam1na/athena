@@ -113,7 +113,10 @@ export const AGENT_CONTEXT_MAX_KEYS = 8;
 export const AGENT_CONTEXT_VALUE_MAX_BYTES = 256;
 export const AGENT_TURN_PROGRESS_CAP = 24;
 /** Turn elapsed headroom above the program ceiling so a running program is never raced by the turn timer. */
-export const AGENT_TURN_ELAPSED_HEADROOM_MS = 30_000;
+// 60 s, not 30: with the catalog in the prompt the model runs fewer, longer
+// provider steps, and a final answer step legitimately mid-generation was
+// dying at the 90 s ceiling. The ceiling is a hang backstop, not a pace-setter.
+export const AGENT_TURN_ELAPSED_HEADROOM_MS = 60_000;
 
 /** The runtime adapter's thread key: profile + store + operator + client thread key. Hashed by the adapter. */
 export function athenaThreadKeyFor(input: { profileId: string; storeId: Id<"store">; actorRef: string; threadKey: string }): string {
@@ -233,6 +236,8 @@ export type AgentTurnPlan = {
   readonly egressClass: AgentEgressClass;
   readonly provider: AgentProviderEvidence;
   readonly limits: AgentTurnLimits;
+  /** The prompt carries the grant catalog, so the provider list may omit athena.discover. */
+  readonly catalogEmbedded: boolean;
   readonly recorded: { readonly runtimeThreadRef?: string; readonly runtimeInputRef?: string; readonly runtimeScheduleRef?: string; readonly runtimeTurnRef?: string };
 };
 
@@ -361,10 +366,12 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
 
     // The catalog is deterministic per grant, so it rides in the prompt: every
     // measured turn spent its first provider step on a discover whose answer
-    // the kernel already knew. A refusal here is not fatal — the turn fails at
-    // grant time on the same authority — so the catalog simply stays empty.
-    const reauthorized = await admission.reauthorizeGrantWithCtx(ctx, { runId: run._id, purpose: "dispatch", now: input.now });
-    const capabilities = reauthorized.kind === "authorized" ? discoverCapabilities(reauthorized.runtimeGrant, { schemas: config.schemas }) : [];
+    // the kernel already knew. The viewer-authority resolution above already
+    // projected the grant under live enablement, so its runtime grant is the
+    // catalog's source — dispatch-purpose reauthorization is unusable at this
+    // rung (the run is not `running` yet), and a silent fallback on it once
+    // shipped an empty catalog.
+    const capabilities = discoverCapabilities(authority.runtimeGrant, { schemas: config.schemas });
     const prompt = assembleTurnPrompt({ profileId: grant.profileKey, intent: profile.promptPolicy.intent, untrustedDataLabel: profile.promptPolicy.untrustedDataLabel, context, question, capabilities, egressClass: "operational" });
     const provider = describeProviderSelectionForEvidence(selected, egressClass);
 
@@ -418,6 +425,7 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
         egressClass,
         provider,
         limits: { maxToolCalls: grant.budgetPolicy.maxAttempts * 2 + 4, maxElapsedMs: elapsed },
+        catalogEmbedded: capabilities.length > 0,
         recorded: {
           runtimeThreadRef: binding.runtimeThreadRef,
           runtimeInputRef: binding.runtimeInputRef,

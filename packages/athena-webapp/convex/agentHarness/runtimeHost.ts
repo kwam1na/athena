@@ -54,7 +54,7 @@ import { historyEgressClass } from "./historyProjection";
 import { getProductionProgramExecutor, type AgentExecuteProgramResult, type AgentExecutorCtx } from "./executor";
 // eslint-disable-next-line @convex-dev/import-wrong-runtime -- this module is "use node" too; the rule only inspects the imported file
 import { createAthenaModelResolver, rateCardFor } from "./modelRegistry";
-import { createAthenaToolRegistrations, completeRunTool, AGENT_AUTHORITY_REVOCATION_REASONS, type AgentToolSeamRefs } from "./tools";
+import { createAthenaToolRegistrations, completeRunTool, modelVisibleToolDefinitions, AGENT_AUTHORITY_REVOCATION_REASONS, type AgentToolSeamRefs } from "./tools";
 import type { AdvanceTurnBindingResult } from "./turnBindings";
 import type { AgentFinalizeTurnOutcome, AgentProvisionalFlushOutcome, AgentRecordTurnTraceOutcome, AgentTurnPreparation, AgentTurnUsageSettlement } from "./turns";
 import { AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN, type AgentTurnTraceSource } from "./turnTrace";
@@ -676,7 +676,7 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
 
     try {
       const started = await adapter.startTurn(
-        { threadRef: thread.threadRef, inputRef: inputSaved.inputRef, turnKey: plan.adapter.turnKey, tools: tools.registrations.map((registration) => registration.definition), model: plan.model, limits: plan.limits },
+        { threadRef: thread.threadRef, inputRef: inputSaved.inputRef, turnKey: plan.adapter.turnKey, tools: modelVisibleToolDefinitions(tools.registrations, plan.catalogEmbedded === true), model: plan.model, limits: plan.limits },
         hooks,
       );
       turnRef = started.turnRef;

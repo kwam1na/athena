@@ -23,7 +23,7 @@ import {
   seedDelegatedOperator,
 } from "./delegatedAdmission.testPorts";
 import { TEST_EXECUTOR_SEAMS, beginExecutingAttempt, bridgeCall } from "./executor.testSeams";
-import { buildAnswerArtifactPayload } from "./historyProjection";
+import { buildAnswerArtifactPayload, resolveViewerAuthorityWithCtx } from "./historyProjection";
 import { advanceCompatibilityEpochWithCtx, cancelAgentRunWithCtx, failAgentRunWithCtx, getCurrentCompatibilityEpochWithCtx, markAgentRunRunningWithCtx } from "./lifecycle";
 import { AGENT_TURN_NARRATIVE_TRAIL_RETENTION_MS, loadTurnNarrativeTrailByBindingWithCtx } from "./narrativeTrail";
 import { AGENT_PROVISIONAL_NARRATIVE_TTL_MS, loadProvisionalNarrativeByBindingWithCtx, upsertProvisionalNarrativeWithCtx } from "./provisionalNarrative";
@@ -1013,5 +1013,28 @@ describe("narrative trail: written at commit, released and withdrawn with the an
     await t.run((ctx) => ctx.db.patch("organizationMember", downgraded.operator.membershipId!, { role: "pos_only", operationalRoles: [] }));
     expect(await readTrail(t, downgraded.operator.userId, downgradedArgs)).toEqual({ kind: "unavailable", reason: "egress_beyond_authority" });
     expect(await t.run((ctx) => entry.getTurnAnswer(admitted(ctx, downgraded.operator.userId), downgradedArgs))).toEqual({ kind: "unavailable", reason: "egress_beyond_authority" });
+  });
+});
+
+describe("viewer authority carries the projected runtime grant", () => {
+  it("prepareTurn's catalog source is the live projection, not dispatch reauthorization", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run((ctx) => seedRecordedTurn(ctx, "catalog-source"));
+    const authority = await t.run((ctx) =>
+      resolveViewerAuthorityWithCtx(ctx, TEST_ADMISSION.config, {
+        viewer: { kind: "normal_user", athenaUserId: seeded.operator.userId },
+        storeId: seeded.operator.storeId,
+        organizationId: seeded.operator.organizationId,
+        profileId: TEST_PROFILE_ID,
+        now: TEST_NOW_BASE + 1,
+      }),
+    );
+    expect(authority.kind).toBe("authorized");
+    if (authority.kind !== "authorized") return;
+    // The runtime grant is projected under live enablement at prepare time —
+    // the run is not `running` yet at that rung, so dispatch reauthorization
+    // (which a silent fallback once leaned on) can never serve the catalog.
+    expect(authority.runtimeGrant.capabilityIds.length).toBeGreaterThan(0);
+    expect(authority.runtimeGrant.profileId).toBe(TEST_PROFILE_ID);
   });
 });

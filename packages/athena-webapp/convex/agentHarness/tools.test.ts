@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import type { AgentToolHandlerContext } from "../../shared/agentHarness/agentRuntime";
 import { opaqueRef, type AgentEgressClass } from "../../shared/agentHarness/values";
-import { completeRunTool, createAthenaToolRegistrations, type AgentToolHostContext } from "./tools";
+import { ATHENA_TOOL_DEFINITIONS, completeRunTool, createAthenaToolRegistrations, modelVisibleToolDefinitions, type AgentToolHostContext } from "./tools";
 
 type CompleteRunCall = { artifact: { payload: Record<string, unknown> } };
 
@@ -321,5 +321,19 @@ describe("athena.completeRun ref resolution by content-hash tail", () => {
     const call = tools.completions[0] as unknown as { citedAttemptRefs: string[]; citations: { ref: string; claim?: string }[] };
     expect(call.citedAttemptRefs).toEqual(["attempt_v1.1.aaaabbbbccccdddd0000111122223333"]);
     expect(call.citations).toEqual([{ ref: "citation:v1.1.1.99998888777766665555444433332220", claim: "positions read" }]);
+  });
+});
+
+describe("model-visible tool definitions", () => {
+  it("omits athena.discover exactly when the turn prompt embeds the catalog", () => {
+    const registrations = ATHENA_TOOL_DEFINITIONS.map((definition) => ({
+      definition,
+      handler: async () => ({ kind: "success", result: null }) as const,
+    }));
+    const withCatalog = modelVisibleToolDefinitions(registrations as never, true).map((definition) => definition.toolId);
+    const withoutCatalog = modelVisibleToolDefinitions(registrations as never, false).map((definition) => definition.toolId);
+    expect(withCatalog).toEqual(["athena.describe", "athena.executeProgram", "athena.scratch", "athena.completeRun"]);
+    expect(withoutCatalog).toContain("athena.discover");
+    expect(withoutCatalog).toHaveLength(5);
   });
 });

@@ -103,7 +103,7 @@ export const discoverTool: AgentToolDefinition<AgentDiscoverArgs, unknown> = {
 
 export const describeTool: AgentToolDefinition<AgentDescribeArgs, unknown> = {
   toolId: "athena.describe",
-  description: "Describe one discovered capability: arguments, result fields, freshness, completeness, and citation rules. Arguments: { namespace: \"package.resource\" } from a prior discover.",
+  description: "Describe one discovered capability: arguments, result fields, freshness, completeness, and citation rules. Arguments: { namespace: \"package.resource\" } from the capability catalog.",
   validateInput: (raw): Validation<AgentDescribeArgs> => {
     const object = objectOf(raw);
     const namespace = object?.namespace;
@@ -234,6 +234,22 @@ export function assertFixedToolCatalog(definitions: readonly AgentToolDefinition
   }
 }
 assertFixedToolCatalog();
+
+/**
+ * The definitions the PROVIDER is offered for one turn. The kernel catalog
+ * stays fixed — the dispatch ledger, replay, and fake-adapter flows keep all
+ * five tools — but the model-visible list drops athena.discover when the turn
+ * prompt already embeds the grant catalog: measured on the deployment, the
+ * model calls discover first on every turn it is offered, whatever the
+ * prompt says, and the answer is deterministic per grant.
+ */
+export function modelVisibleToolDefinitions(
+  registrations: readonly AgentAnyToolRegistration[],
+  catalogEmbedded: boolean,
+): readonly AgentToolDefinition[] {
+  const definitions = registrations.map((registration) => registration.definition);
+  return catalogEmbedded ? definitions.filter((definition) => definition.toolId !== discoverTool.toolId) : definitions;
+}
 
 /** Digest of a completion request: the private `completion_prepared` reference. */
 export function completionRequestRef(args: AgentCompleteRunArgs): string {
