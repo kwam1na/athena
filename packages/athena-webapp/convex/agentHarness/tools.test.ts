@@ -431,22 +431,27 @@ describe("athena.completeRun tone sensor and money display annotation", () => {
     expect(tools.completions).toHaveLength(1);
   });
 
-  it("a denial repeating one fix across findings states that fix once", async () => {
+  it("scrubs refs from the narrative and commits first-pass instead of denying", async () => {
     const tools = toneTools({ tonePolicy: "enforce" });
     await tools.executeProgram();
-    // Two distinct opaque identifiers → two ref_in_prose findings sharing one
-    // fix sentence; the denial message must not repeat it.
-    const denied = await tools.completeRun({
+    const outcome = await tools.completeRun({
       outcome: "answer",
       narrative:
-        "Variance on 8d5c0a4d9a7e78365b5c876b9c4525d1 and none on 171d48524313ed1ecd38efe7aa9e4b22; both drawers are counted.",
+        "Largest variance was resource:register session.8d5c0a4d9a7e78365b5c876b9c4525d135c0bcbf9d0781dd.171d48524313ed1ecd38efe7 on register 07; all other drawers are counted.",
       ...CITED,
     });
-    expect(denied.kind).toBe("denied");
-    const message = (denied as { denial: { message: string } }).denial.message;
-    const fixSentence = "describe the record in operator words";
-    expect(message.split(fixSentence)).toHaveLength(2);
+    expect(outcome.kind).toBe("success");
+    expect(tools.completions).toHaveLength(1);
+    // The committed record still carries refs where they BELONG (citations);
+    // the narrative the operator reads carries none.
+    const narrative = (tools.completions[0] as { artifact: { payload: { narrative: string } } }).artifact.payload.narrative;
+    expect(narrative).not.toMatch(/[0-9a-f]{16,}/);
+    expect(narrative).toContain("the cited record");
+    expect(narrative).toContain("register 07");
   });
+  // (The former duplicate-fix denial case is gone by construction: the ref
+  // findings that shared one fix sentence are scrubbed by normalization
+  // before the sensor runs; the denial assembly still dedupes as a backstop.)
 
   it("pushes back once on no_usable_sources when the turn read sources, then accepts the model's judgment", async () => {
     const tools = toneTools();

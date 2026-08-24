@@ -267,6 +267,72 @@ describe("normalizeNarrative", () => {
     expect(out).toBe("The lifecycle stage is close blocked; register blocker count is 1 per the daily sales report.");
   });
 
+  it("scrubs the run's own refs from prose instead of leaving them for a denial", () => {
+    const ref = "citation:v1.1.0.fedcba9876543210fedcba9876543210";
+    const out = normalizeNarrative(`Per ${ref}, sales are up on register 07.`, {
+      evidence,
+      namespaces: [],
+      lexicon,
+      question: "",
+      refs: [ref],
+    });
+    expect(out).toBe("Per the cited record, sales are up on register 07.");
+  });
+
+  it("scrubs ref-shaped identifiers from data, including the lexicon-mangled two-fragment form", () => {
+    const intact = normalizeNarrative(
+      "Session resource:register_session.8d5c0a4e832f3a3b4246c768c8596289.70561fce8f11265186d8b89f closed clean.",
+      { evidence, namespaces: [], lexicon, question: "" },
+    );
+    expect(intact).toBe("Session the cited record closed clean.");
+    // Observed on a driven turn: "register_session" rewritten to "register
+    // session" INSIDE the ref, splitting it into two prose fragments.
+    const mangled = normalizeNarrative(
+      "Largest variance: resource:register session.8d5c0a4d9a7e78365b5c876b9c4525d1.171d48524313ed1ecd38efe7 on register 07.",
+      { evidence, namespaces: [], lexicon, question: "" },
+    );
+    expect(mangled).toBe("Largest variance: the cited record on register 07.");
+  });
+
+  it("scrubs bare hex-tailed tokens but preserves an identifier the operator asked with", () => {
+    const scrubbed = normalizeNarrative("Drawer 8d5c0a4d9a7e78365b5c876b9c4525d1 is still open.", {
+      evidence,
+      namespaces: [],
+      lexicon,
+      question: "",
+    });
+    expect(scrubbed).toBe("Drawer the cited record is still open.");
+    const asked = normalizeNarrative("Drawer 8d5c0a4d9a7e78365b5c876b9c4525d1 is still open.", {
+      evidence,
+      namespaces: [],
+      lexicon,
+      question: "what happened to 8d5c0a4d9a7e78365b5c876b9c4525d1?",
+    });
+    expect(asked).toBe("Drawer 8d5c0a4d9a7e78365b5c876b9c4525d1 is still open.");
+  });
+
+  it("leaves nothing for the ref sensor after scrubbing", () => {
+    const ref = "attempt_v1.1.d26722690726d41ac79be9f0b6690cd0";
+    const out = normalizeNarrative(`Based on ${ref} and resource:closeout.aa11bb22cc33dd44ee55ff6677889900.deadbeefdeadbeefdeadbeef, all clear.`, {
+      evidence,
+      namespaces: [],
+      lexicon,
+      question: "",
+      refs: [ref],
+    });
+    const findings = senseTone({
+      narrative: out,
+      question: "",
+      fieldNames: [],
+      enumLiterals: [],
+      moneyAmounts: [],
+      namespaces: [],
+      refs: [ref],
+      lexicon,
+    });
+    expect(findings.filter((finding) => finding.code === "ref_in_prose")).toEqual([]);
+  });
+
   it("humanizes harvested tokens without lexicon entries", () => {
     const out = normalizeNarrative(
       "The decisionReason was operating_window_fallback.",

@@ -632,6 +632,9 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
         namespaces: namespacesRead,
         lexicon,
         question: host.question ?? "",
+        // Scrubbed, not denied: this run's own refs plus anything ref-shaped
+        // from data; the answer surface renders citations itself.
+        refs: [...knownAttemptRefs, ...knownCitationRefs],
       };
       const narrative = normalizeNarrative(stripSourcesFooter(args.narrative), normalizeOptions);
       // The title reaches the operator too: same rewrite, same evidence.

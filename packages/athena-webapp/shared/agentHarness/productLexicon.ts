@@ -153,6 +153,8 @@ const ENUM_LITERAL_PATTERN = /^[a-z]+(?:_[a-z]+)+$/;
  * requirement keeps plain numbers (counts, amounts, timestamps) out.
  */
 const OPAQUE_HEX_RUN_PATTERN = /(?=[0-9a-f]*[a-f])[0-9a-f]{16,}/g;
+/** The same shape without /g: `.test` on a global regex is stateful. */
+const OPAQUE_HEX_RUN_TEST = /(?=[0-9a-f]*[a-f])[0-9a-f]{16,}/;
 
 /** Harvest, from a model-visible result, the internal tokens prose must not echo. */
 const EVIDENCE_FIELD_CAP = 200;
@@ -274,7 +276,43 @@ export type AgentNormalizeNarrativeOptions = {
   readonly namespaces: readonly string[];
   readonly lexicon: AgentProductLexicon;
   readonly question: string;
+  /** The refs this run handed out; scrubbed from prose exactly, on top of the shape-based scrub. */
+  readonly refs?: readonly string[];
 };
+
+const OPAQUE_SCRUB_REPLACEMENT = "the cited record";
+/** A ref-shaped data identifier: kind prefix plus a dotted opaque tail. */
+const REF_CLUSTER_PATTERN = /\b(?:resource|source|citation|attempt)[:_.][A-Za-z0-9_.:-]*/g;
+
+/**
+ * Replace opaque identifiers with operator wording. This is what retires the
+ * `ref_in_prose` denial for the common cases: the answer surface renders the
+ * committed citations itself, so an identifier in prose carries nothing the
+ * operator can use — and a corrective denial costs a full provider round. The
+ * sensor stays armed behind this as the backstop.
+ */
+function scrubOpaqueIdentifiers(narrative: string, options: { readonly refs: readonly string[]; readonly asked: (token: string) => boolean }): string {
+  let text = narrative;
+  for (const ref of options.refs) {
+    if (options.asked(ref)) continue;
+    text = text.split(ref).join(OPAQUE_SCRUB_REPLACEMENT);
+  }
+  text = text.replace(REF_CLUSTER_PATTERN, (match) => (options.asked(match) ? match : OPAQUE_SCRUB_REPLACEMENT));
+  // Any remaining token carrying a hash tail (a mangled ref's second
+  // fragment, a bare id) is an identifier wherever it appears. Trailing
+  // sentence punctuation survives the replacement.
+  text = text.replace(/\S+/g, (token) => {
+    if (!OPAQUE_HEX_RUN_TEST.test(token) || options.asked(token)) return token;
+    const trailing = token.match(/[.,;:!?)\]]+$/) ?? null;
+    return OPAQUE_SCRUB_REPLACEMENT + (trailing ? trailing[0] : "");
+  });
+  // A mangled ref scrubs as two adjacent fragments; say it once.
+  text = text.replace(
+    new RegExp(`${OPAQUE_SCRUB_REPLACEMENT}(?:[\\s]+${OPAQUE_SCRUB_REPLACEMENT})+`, "g"),
+    OPAQUE_SCRUB_REPLACEMENT,
+  );
+  return text;
+}
 
 /**
  * Deterministically rewrite internal tokens in a committed narrative to their
@@ -288,7 +326,7 @@ export type AgentNormalizeNarrativeOptions = {
 export function normalizeNarrative(narrative: string, options: AgentNormalizeNarrativeOptions): string {
   const question = options.question.toLowerCase();
   const asked = (token: string) => question.includes(token.toLowerCase());
-  let text = narrative;
+  let text = scrubOpaqueIdentifiers(narrative, { refs: options.refs ?? [], asked });
   const rewriteWord = (token: string, replacement: string) => {
     text = text.replace(new RegExp("\\b" + escapeRegExp(token) + "\\b", "g"), replacement);
   };
