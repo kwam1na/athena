@@ -303,9 +303,13 @@ describe("review-round regressions", () => {
       { amount: 1_414_900, currency: "GHS" },
       { amount: 14_149, currency: "GHS" },
     ] };
+    // A bare "14,149" here is AMBIGUOUS: the larger amount's correct major
+    // figure and the smaller amount's raw minor echo share a spelling. The
+    // adjudicated rule is conservative: never rewrite an ambiguous span —
+    // corrupting a correct figure is strictly worse than letting a raw echo
+    // through. The unambiguous corruption cases are covered below.
     const out = normalizeNarrative("Revenue is GH₵14,149 and the fee was 14,149.", { evidence, namespaces: [], lexicon, question: "" });
-    expect(out).toBe("Revenue is GH₵14,149 and the fee was GH₵141.49.");
-    // idempotent on the corrected text
+    expect(out).toBe("Revenue is GH₵14,149 and the fee was 14,149.");
     expect(normalizeNarrative(out, { evidence, namespaces: [], lexicon, question: "" })).toBe(out);
     const findings = senseTone({ narrative: "Revenue is GH₵14,149 so far.", question: "", fieldNames: [], enumLiterals: [], moneyAmounts: evidence.moneyAmounts, namespaces: [], refs: [], lexicon: APP_PRODUCT_LEXICON });
     expect(findings).toEqual([]);
@@ -323,7 +327,7 @@ describe("review-round regressions", () => {
     const evidence = collectNarrativeEvidence({ method: "mobile_money", amount: 750_000, currency: "GHS", providerFeeMinor: 1200 });
     expect(evidence.enumLiterals).toContain("mobile_money");
     expect(evidence.fieldNames).toContain("providerFeeMinor");
-    expect(evidence.moneyAmounts).toEqual([]);
+    expect(evidence.moneyAmounts).toEqual([{ amount: 750_000, currency: "GHS" }]); // harvested for policing, though never annotated
     const annotated = annotateMoneyDisplays({ method: "mobile_money", amount: 750_000, currency: "GHS", providerFeeMinor: 1200 }) as Record<string, unknown>;
     expect(annotated.display).toBeUndefined();
   });
@@ -350,6 +354,65 @@ describe("review-round regressions", () => {
       { evidence: noEvidence, namespaces: ["inventory.positions", "inventory.positionsHistory"], lexicon, question: "" },
     );
     expect(out).toBe("The stock history holds the trend. The live stock list was read.");
+  });
+});
+
+describe("round-2 regressions", () => {
+  const lexicon = APP_PRODUCT_LEXICON;
+  const pair = { fieldNames: [], enumLiterals: [], moneyAmounts: [
+    { amount: 1_414_900, currency: "GHS" },
+    { amount: 14_149, currency: "GHS" },
+  ] };
+
+  it("never corrupts a correct figure in any spelling (space, ISO code, bare)", () => {
+    for (const text of ["Revenue is GH₵ 14,149 so far.", "Revenue is GHS 14,149 so far.", "Revenue reached 14,149 cedis."]) {
+      expect(normalizeNarrative(text, { evidence: pair, namespaces: [], lexicon, question: "" })).toBe(text);
+      expect(senseTone({ narrative: text, question: "", fieldNames: [], enumLiterals: [], moneyAmounts: pair.moneyAmounts, namespaces: [], refs: [], lexicon })).toEqual([]);
+    }
+  });
+
+  it("is idempotent for non-GHS currencies (the inserted display is never re-matched bare)", () => {
+    const usd = { fieldNames: [], enumLiterals: [], moneyAmounts: [
+      { amount: 1_414_900, currency: "USD" },
+      { amount: 14_149, currency: "USD" },
+    ] };
+    const once = normalizeNarrative("Total was 1414900 exactly.", { evidence: usd, namespaces: [], lexicon, question: "" });
+    expect(once).toBe("Total was $14,149 exactly.");
+    expect(normalizeNarrative(once, { evidence: usd, namespaces: [], lexicon, question: "" })).toBe(once);
+  });
+
+  it("never rewrites the head of a decimal number", () => {
+    const text = "The reading 14,149.50 units.";
+    expect(normalizeNarrative(text, { evidence: pair, namespaces: [], lexicon, question: "" })).toBe(text);
+  });
+
+  it("keeps a footer line whose label is a factual clause, even digit-free", () => {
+    const narrative = "Answer here.\n\nSources:\n- attempt_v1.1.0123456789abcdef0123456789abcdef: drawer left open overnight, manager paged";
+    expect(stripSourcesFooter(narrative)).toBe(narrative);
+  });
+
+  it("never strips a footer-only narrative with a leading newline to empty", () => {
+    const narrative = "\nSources:\n- attempt_v1.1.0123456789abcdef0123456789abcdef";
+    expect(stripSourcesFooter(narrative)).toBe(narrative);
+  });
+
+  it("does not capitalize a namespace label after an abbreviation", () => {
+    const out = normalizeNarrative("Check stock, e.g. inventory.positions, before close.", {
+      evidence: { fieldNames: [], enumLiterals: [], moneyAmounts: [] },
+      namespaces: ["inventory.positions"],
+      lexicon: { enumLabels: {}, fieldLabels: {}, namespaceLabels: { "inventory.positions": "the live stock list" } },
+      question: "",
+    });
+    expect(out).toBe("Check stock, e.g. the live stock list, before close.");
+  });
+
+  it("reports truncation when a harvest cap is hit", () => {
+    const wide: Record<string, unknown> = {};
+    for (let index = 0; index < 260; index++) wide[`fieldName${index}A`] = index;
+    const evidence = collectNarrativeEvidence(wide);
+    expect(evidence.fieldNames.length).toBe(200);
+    expect(evidence.truncated).toBe(true);
+    expect(collectNarrativeEvidence({ plainField: 1 }).truncated).toBe(false);
   });
 });
 

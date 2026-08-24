@@ -403,9 +403,9 @@ export function assembleTurnPrompt(input: AgentTurnPromptInput): AgentProjectedP
   // Run-scoped identifiers (`storeRef`, ...) bind authority server-side but are
   // withheld from the model: programs may not carry raw identifiers, so a
   // prompt that hands one over invites exactly the argument the kernel denies.
-  // Run-scoped identifiers are withheld both by naming convention AND by value
-  // shape, so an opaque id riding under a differently-named key never reaches
-  // the model as denied-argument bait.
+  // Run-scoped identifiers are withheld by naming convention AND by value
+  // shape. The shape check covers Convex-style ids (24+ lowercase
+  // alphanumerics); UUID or mixed-case ids rely on the naming convention.
   const OPAQUE_ID_VALUE = /^[a-z0-9]{24,}$/;
   const keys = Object.keys(input.context)
     .filter((key) => !key.endsWith("Ref"))

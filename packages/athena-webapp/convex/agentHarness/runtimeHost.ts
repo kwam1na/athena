@@ -302,9 +302,11 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
       if (row.sequence > trace.hostSequence) trace.hostSequence = row.sequence;
       // The turn's own summary row is never capped: it is the one row an
       // engineer reads first, and it is the last one pushed.
-      // The terminal tool's dispatch row is the durable record of the
-      // model-submitted answer; like turn_report, it is never capped.
-      const terminalDispatch = row.kind === "tool_dispatch" && (row.payload as { toolId?: string } | undefined)?.toolId === completeRunTool.toolId;
+      // The COMMITTED terminal dispatch row is the durable record of the
+      // model-submitted answer; like turn_report, it is never capped. Denied
+      // submissions stay cappable so the exemption is exactly one row.
+      const terminalPayload = row.payload as { toolId?: string; outcome?: { kind?: string } } | undefined;
+      const terminalDispatch = row.kind === "tool_dispatch" && terminalPayload?.toolId === completeRunTool.toolId && terminalPayload?.outcome?.kind === "success";
       if (trace.pushed >= AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN && row.kind !== "turn_report" && !terminalDispatch) {
         if (trace.capped) return;
         trace.capped = true;

@@ -141,6 +141,8 @@ export type AgentNarrativeEvidence = {
   readonly fieldNames: readonly string[];
   readonly enumLiterals: readonly string[];
   readonly moneyAmounts: readonly AgentMoneyAmount[];
+  /** True when a harvest cap was hit: tone policing is degraded for this result. */
+  readonly truncated: boolean;
 };
 
 const INTERNAL_NAME_PATTERN = /(?:[a-z0-9][A-Z]|_)/; // camelCase joint or snake_case
@@ -156,6 +158,17 @@ export function collectNarrativeEvidence(value: unknown): AgentNarrativeEvidence
   const enumLiterals = new Set<string>();
   const moneyKeys = new Set<string>();
   const moneyAmounts: AgentMoneyAmount[] = [];
+  let truncated = false;
+  const harvestMoney = (amount: number, currency: string) => {
+    const moneyKey = `${amount}:${currency.toUpperCase()}`;
+    if (moneyKeys.has(moneyKey)) return;
+    if (moneyAmounts.length >= EVIDENCE_MONEY_CAP) {
+      truncated = true;
+      return;
+    }
+    moneyKeys.add(moneyKey);
+    moneyAmounts.push({ amount, currency: currency.toUpperCase() });
+  };
   const walk = (node: unknown, depth: number): void => {
     if (depth > WALK_DEPTH_MAX || typeof node !== "object" || node === null) return;
     if (Array.isArray(node)) {
@@ -164,21 +177,30 @@ export function collectNarrativeEvidence(value: unknown): AgentNarrativeEvidence
     }
     const record = node as { readonly [key: string]: unknown };
     if (isMoneyValue(record)) {
-      const key = `${record.amount}:${record.currency.toUpperCase()}`;
-      if (!moneyKeys.has(key) && moneyAmounts.length < EVIDENCE_MONEY_CAP) {
-        moneyKeys.add(key);
-        moneyAmounts.push({ amount: record.amount, currency: record.currency.toUpperCase() });
-      }
+      harvestMoney(record.amount, record.currency);
       return;
     }
+    // A flat row carrying amount+currency beside other keys is not annotated
+    // (mutating it is the risk) but its amount IS harvested, so a raw echo of
+    // it stays visible to the rewrite and the sensor.
+    const loose = record as { amount?: unknown; currency?: unknown };
+    if (typeof loose.amount === "number" && Number.isInteger(loose.amount) && typeof loose.currency === "string" && /^[A-Za-z]{3}$/.test(loose.currency)) {
+      harvestMoney(loose.amount, loose.currency);
+    }
     for (const [key, entry] of Object.entries(record)) {
-      if (INTERNAL_NAME_PATTERN.test(key) && fieldNames.size < EVIDENCE_FIELD_CAP) fieldNames.add(key);
-      if (typeof entry === "string" && ENUM_LITERAL_PATTERN.test(entry) && enumLiterals.size < EVIDENCE_ENUM_CAP) enumLiterals.add(entry);
+      if (INTERNAL_NAME_PATTERN.test(key)) {
+        if (fieldNames.size < EVIDENCE_FIELD_CAP) fieldNames.add(key);
+        else if (!fieldNames.has(key)) truncated = true;
+      }
+      if (typeof entry === "string" && ENUM_LITERAL_PATTERN.test(entry)) {
+        if (enumLiterals.size < EVIDENCE_ENUM_CAP) enumLiterals.add(entry);
+        else if (!enumLiterals.has(entry)) truncated = true;
+      }
       walk(entry, depth + 1);
     }
   };
   walk(value, 0);
-  return { fieldNames: [...fieldNames], enumLiterals: [...enumLiterals], moneyAmounts };
+  return { fieldNames: [...fieldNames], enumLiterals: [...enumLiterals], moneyAmounts, truncated };
 }
 
 // ---------------------------------------------------------------------------
@@ -186,7 +208,6 @@ export function collectNarrativeEvidence(value: unknown): AgentNarrativeEvidence
 // ---------------------------------------------------------------------------
 
 const FOOTER_HEADER = /\n+[ \t]*(?:sources?|citations?|refs?)(?:[ \t]*\([^)\n]{0,40}\))?[ \t]*:/gi;
-const REF_TOKEN = /attempt_v\d|citation:v\d/;
 
 /**
  * Strip a model-authored trailing "Sources:" footer. The answer surface
@@ -201,10 +222,14 @@ const REF_TOKEN_ALL = /attempt_v\d[^\s,;)]*|citation:v\d[^\s,;)]*/g;
 
 /** A footer line is refs-only when, with refs and list punctuation removed, no figures and only a short label remain. */
 function isRefsOnlyLine(line: string): boolean {
-  if (!REF_TOKEN.test(line)) return false;
-  const remainder = line.replace(REF_TOKEN_ALL, " ").replace(/[-*\u2022.,;:()\[\]|/]/g, " ").replace(/\s+/g, " ").trim();
+  const refs = line.match(REF_TOKEN_ALL) ?? [];
+  if (refs.length === 0) return false;
+  const remainder = line.replace(REF_TOKEN_ALL, " ").replace(/[-*\u2022.,;:()[\]|/]/g, " ").replace(/\s+/g, " ").trim();
   if (/[\d\u20b5]/.test(remainder) || /\bGH\b/.test(remainder)) return false;
-  return remainder.length <= 60;
+  // Per-ref label budget: "the daily sales report (ref)" is a label; "drawer
+  // left open overnight, manager paged (ref)" is a fact and must be kept.
+  const words = remainder.length === 0 ? 0 : remainder.split(" ").length;
+  return words <= refs.length * 4 && remainder.length <= refs.length * 40;
 }
 
 function stripSourcesFooterOnce(narrative: string): string {
@@ -217,7 +242,10 @@ function stripSourcesFooterOnce(narrative: string): string {
   const section = narrative.slice(header.index + header[0].length);
   const lines = section.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
   if (lines.length === 0 || !lines.every(isRefsOnlyLine)) return narrative;
-  return narrative.slice(0, header.index).trimEnd();
+  const stripped = narrative.slice(0, header.index).trimEnd();
+  // Never strip a narrative to nothing (a leading-newline footer-only text
+  // would otherwise commit as an empty answer).
+  return stripped.length > 0 ? stripped : narrative;
 }
 
 export function stripSourcesFooter(narrative: string): string {
@@ -276,7 +304,8 @@ export function normalizeNarrative(narrative: string, options: AgentNormalizeNar
       new RegExp(escapeRegExp(namespace) + "(?:\\.(?:get|list))?(?!\\w)(?!\\.\\w)", "g"),
       (match: string, offset: number, whole: string) => {
         const before = whole.slice(0, offset);
-        const sentenceStart = offset === 0 || /[.!?]\s+$|\n\s*$/.test(before);
+        const sentenceStart =
+          offset === 0 || ((/[.!?]\s+$|\n\s*$/.test(before)) && !/(?:\be\.g\.|\bi\.e\.|\bvs\.|\betc\.)\s+$/i.test(before));
         return sentenceStart ? label.charAt(0).toUpperCase() + label.slice(1) : label;
       },
     );
@@ -298,20 +327,30 @@ export function normalizeNarrative(narrative: string, options: AgentNormalizeNar
     rewriteWord(literal, humanizeToken(literal));
   }
   const grouping = new Intl.NumberFormat("en-US");
-  // Every harvested amount's correct display: a matched span that already IS
-  // one of these must never be rewritten (two amounts related by 100x would
-  // otherwise corrupt the correct figure).
-  const knownDisplays = new Set(options.evidence.moneyAmounts.map((money) => formatMinorMoney(money.amount, money.currency)));
+  const decimalGrouping = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // The correct major-unit rendering of every harvested amount: a matched span
+  // whose NUMERIC content equals one of these is a correct figure in any
+  // spelling ("GH\u20b514,149", "GHS 14,149", "$14,149") and is never rewritten.
+  const knownMajorDigits = new Set<string>();
+  for (const money of options.evidence.moneyAmounts) {
+    const units = money.amount / 100;
+    knownMajorDigits.add(Math.abs(money.amount) % 100 !== 0 ? decimalGrouping.format(units) : grouping.format(units));
+  }
   for (const money of options.evidence.moneyAmounts) {
     if (Math.abs(money.amount) < 10_000) continue; // below GH\u20b5100, plain integers collide with counts
     const display = formatMinorMoney(money.amount, money.currency);
     for (const spelling of [grouping.format(money.amount), String(money.amount)]) {
       if (!text.includes(spelling)) continue;
+      // The lookbehind also refuses any currency symbol, so the pipeline's own
+      // inserted display is never re-matched bare in a later pass.
       const pattern = new RegExp(
-        "(?:\\b(?:" + escapeRegExp(money.currency) + "|GHC)\\s*|GH\u20b5\\s*)?(?<![\\d,])" + escapeRegExp(spelling) + "(?!\\d|,\\d)",
-        "g",
+        "(?:\\b(?:" + escapeRegExp(money.currency) + "|GHC)\\s*|GH\u20b5\\s*)?(?<![\\d,.\\p{Sc}])" + escapeRegExp(spelling) + "(?!\\d|,\\d|\\.\\d)",
+        "gu",
       );
-      text = text.replace(pattern, (match) => (knownDisplays.has(match.trim()) ? match : display));
+      text = text.replace(pattern, (match) => {
+        const digits = match.replace(/^[^0-9-]+/, "");
+        return knownMajorDigits.has(digits) ? match : display;
+      });
     }
   }
   return text;
@@ -322,6 +361,7 @@ export function normalizeNarrative(narrative: string, options: AgentNormalizeNar
 // ---------------------------------------------------------------------------
 
 export type AgentToneFindingCode =
+  | "evidence_truncated"
   | "stub_narrative"
   | "ref_in_prose"
   | "namespace_path"
@@ -411,7 +451,12 @@ export function senseTone(input: AgentToneSensorInput): readonly AgentToneFindin
     }
   }
   const grouping = new Intl.NumberFormat("en-US");
-  const knownDisplays = new Set(input.moneyAmounts.map((money) => formatMinorMoney(money.amount, money.currency)));
+  const decimalGrouping = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const knownMajorDigits = new Set<string>();
+  for (const money of input.moneyAmounts) {
+    const units = money.amount / 100;
+    knownMajorDigits.add(Math.abs(money.amount) % 100 !== 0 ? decimalGrouping.format(units) : grouping.format(units));
+  }
   for (const money of input.moneyAmounts) {
     if (Math.abs(money.amount) < 10_000) continue; // below GH\u20b5100 plain integers collide with counts
     const display = formatMinorMoney(money.amount, money.currency);
@@ -420,13 +465,18 @@ export function senseTone(input: AgentToneSensorInput): readonly AgentToneFindin
     let echoed: string | undefined;
     for (const spelling of spellings) {
       if (!narrative.includes(spelling)) continue;
-      const match = new RegExp(
-        "(?:\\b(?:" + escapeRegExp(money.currency) + "|GHC)\\s*|GH\u20b5\\s*)?(?<![\\d,])" + escapeRegExp(spelling) + "(?!\\d|,\\d)",
-      ).exec(narrative);
-      if (match && !knownDisplays.has(match[0].trim())) {
-        echoed = spelling;
-        break;
+      const matcher = new RegExp(
+        "(?:\\b(?:" + escapeRegExp(money.currency) + "|GHC)\\s*|GH\u20b5\\s*)?(?<![\\d,.\\p{Sc}])" + escapeRegExp(spelling) + "(?!\\d|,\\d|\\.\\d)",
+        "gu",
+      );
+      for (const match of narrative.matchAll(matcher)) {
+        const digits = match[0].replace(/^[^0-9-]+/, "");
+        if (!knownMajorDigits.has(digits)) {
+          echoed = spelling;
+          break;
+        }
       }
+      if (echoed) break;
     }
     if (echoed) {
       findings.push({

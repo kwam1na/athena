@@ -210,8 +210,10 @@ export const completeRunTool: AgentToolDefinition<AgentCompleteRunArgs, unknown>
     for (const citation of citations as Record<string, unknown>[]) {
       const ref = citation.ref as string;
       // A claim-less attempt-prefixed ref is an unambiguous misfile; one that
-      // carries a claim keeps its text and lets the handler's tail resolution
-      // route it, so model-authored claim text is never silently dropped.
+      // carries a claim stays in citations so tail resolution can route it.
+      // The claim survives only when the ref lands in the citation bucket —
+      // a ref resolving to an attempt sheds it by design (attempts have no
+      // claim slot).
       if (ref.startsWith("attempt_") && typeof citation.claim !== "string" && typeof citation.claimShape !== "string") {
         attemptRefs.push(ref);
         continue;
@@ -229,7 +231,17 @@ export const completeRunTool: AgentToolDefinition<AgentCompleteRunArgs, unknown>
         narrative: (narrative as string).trim(),
         ...(typeof object.title === "string" ? { title: object.title.trim() } : {}),
         citedAttemptRefs: [...new Set(attemptRefs)],
-        citations: citationEntries.filter((entry, index) => citationEntries.findIndex((other) => other.ref === entry.ref) === index),
+        citations: citationEntries.reduce<{ ref: string; claim?: string; claimShape?: string }[]>((deduped, entry) => {
+          const existing = deduped.find((other) => other.ref === entry.ref);
+          if (!existing) deduped.push({ ...entry });
+          else {
+            // Merge, never drop: a later duplicate may carry the claim the
+            // first (claimless, cross-listed) occurrence lacked.
+            if (existing.claim === undefined && entry.claim !== undefined) existing.claim = entry.claim;
+            if (existing.claimShape === undefined && entry.claimShape !== undefined) existing.claimShape = entry.claimShape;
+          }
+          return deduped;
+        }, []),
         ...(typeof object.confidence === "number" ? { confidence: object.confidence } : {}),
         ...(typeof object.limitedEvidence === "boolean" ? { limitedEvidence: object.limitedEvidence } : {}),
       },
@@ -376,7 +388,7 @@ function failure(code: string, message: string, retryable = false): AgentToolHan
 export function createAthenaToolRegistrations(host: AgentToolHostContext): { registrations: AgentAnyToolRegistration[]; state: AgentToolTurnState } {
   const attempts: { attemptRef: string; egressClass: AgentEgressClass; completeness: "complete" | "partial"; providerExposed: boolean; citations: { citation: string; namespace: string }[] }[] = [];
   const revocations: string[] = [];
-  const toneEvidence = { fieldNames: new Set<string>(), enumLiterals: new Set<string>(), moneyKeys: new Set<string>(), moneyAmounts: [] as AgentMoneyAmount[] };
+  const toneEvidence = { fieldNames: new Set<string>(), enumLiterals: new Set<string>(), moneyKeys: new Set<string>(), moneyAmounts: [] as AgentMoneyAmount[], truncated: false };
   let toneFindings: readonly AgentToneFinding[] = [];
   let toneDeniedOnce = false;
   let completion: { committed: boolean; artifactId?: Id<"intelligenceArtifact"> } = { committed: false };
@@ -445,6 +457,7 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
           // them, and the raw internal tokens the model was shown are
           // harvested so the tone sensor can hold the narrative to them.
           const harvested = collectNarrativeEvidence(result.result.output);
+          if (harvested.truncated) toneEvidence.truncated = true;
           for (const name of harvested.fieldNames) toneEvidence.fieldNames.add(name);
           for (const literal of harvested.enumLiterals) toneEvidence.enumLiterals.add(literal);
           for (const money of harvested.moneyAmounts) {
@@ -572,7 +585,15 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
       for (const ref of args.citedAttemptRefs) resolveRef(ref);
       for (const citation of args.citations) resolveRef(citation.ref, { ...(citation.claim !== undefined ? { claim: citation.claim } : {}), ...(citation.claimShape !== undefined ? { claimShape: citation.claimShape } : {}) });
       const citedAttemptRefs = [...new Set(resolvedAttemptRefs)];
-      const citations = resolvedCitations.filter((entry, index) => resolvedCitations.findIndex((other) => other.ref === entry.ref) === index);
+      const citations = resolvedCitations.reduce<{ ref: string; claim?: string; claimShape?: string }[]>((deduped, entry) => {
+        const existing = deduped.find((other) => other.ref === entry.ref);
+        if (!existing) deduped.push({ ...entry });
+        else {
+          if (existing.claim === undefined && entry.claim !== undefined) existing.claim = entry.claim;
+          if (existing.claimShape === undefined && entry.claimShape !== undefined) existing.claimShape = entry.claimShape;
+        }
+        return deduped;
+      }, []);
       const validRefsHint = () =>
         ` Valid citedAttemptRefs: ${knownAttemptRefs.join(", ") || "(none)"}. Valid citation refs: ${knownCitationRefs.join(", ") || "(none)"}. Copy them verbatim.`;
       if (args.outcome === "answer" && (citedAttemptRefs.length === 0 || citations.length === 0)) {
@@ -613,6 +634,11 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
       // retry into turn_report telemetry.
       for (const finding of sensed) {
         if (!toneFindings.some((existing) => existing.code === finding.code && existing.token === finding.token)) toneFindings = [...toneFindings, finding];
+      }
+      if (toneEvidence.truncated && !toneFindings.some((existing) => existing.code === "evidence_truncated")) {
+        // Telemetry only, never a denial: a capped harvest means tone
+        // policing was degraded for this turn, and silence would read clean.
+        toneFindings = [...toneFindings, { code: "evidence_truncated", token: "harvest_caps", fix: "Evidence harvest hit its cap; tone policing may be incomplete for this turn." }];
       }
       if (host.tonePolicy === "enforce" && sensed.length > 0 && !toneDeniedOnce) {
         toneDeniedOnce = true;

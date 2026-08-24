@@ -475,6 +475,24 @@ describe("athena.completeRun tone sensor and money display annotation", () => {
     expect(tools.state.toneFindings().map((finding) => finding.code)).toContain("stub_narrative");
   });
 
+  it("a claim survives when its ref is cross-listed in both buckets", async () => {
+    const tools = toneTools();
+    await tools.executeProgram();
+    await tools.completeRun({
+      outcome: "answer",
+      narrative: "Sales so far today are GH₵14,149 across 4 sales.",
+      citedAttemptRefs: [
+        "attempt_v1.1.0123456789abcdef0123456789abcdef",
+        "citation:v1.1.0.fedcba9876543210fedcba9876543210",
+      ],
+      citations: [{ ref: "citation:v1.1.0.fedcba9876543210fedcba9876543210", claim: "sales figure" }],
+    });
+    const committed = tools.completions[0];
+    const citations = (committed as unknown as { citations: { ref: string; claim?: string }[] }).citations;
+    expect(citations).toHaveLength(1);
+    expect(citations[0].claim).toBe("sales figure");
+  });
+
   it("waives tokens the operator asked with", async () => {
     const tools = toneTools({ tonePolicy: "enforce", question: "what is the lifecycleStage right now?" });
     await tools.executeProgram();

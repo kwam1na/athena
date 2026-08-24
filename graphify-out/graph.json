@@ -48371,7 +48371,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_runtimehost_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.ts",
-      "source_location": "L865",
+      "source_location": "L867",
       "target": "runtimehost_productionhost",
       "weight": 1
     },
@@ -48383,7 +48383,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_runtimehost_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.ts",
-      "source_location": "L820",
+      "source_location": "L822",
       "target": "runtimehost_settlementof",
       "weight": 1
     },
@@ -48731,7 +48731,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_tools_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L244",
+      "source_location": "L256",
       "target": "tools_assertfixedtoolcatalog",
       "weight": 1
     },
@@ -48743,7 +48743,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_tools_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L269",
+      "source_location": "L281",
       "target": "tools_completionrequestref",
       "weight": 1
     },
@@ -48755,7 +48755,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_tools_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L376",
+      "source_location": "L388",
       "target": "tools_createathenatoolregistrations",
       "weight": 1
     },
@@ -48767,7 +48767,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_tools_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L363",
+      "source_location": "L375",
       "target": "tools_denied",
       "weight": 1
     },
@@ -48779,7 +48779,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_tools_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L367",
+      "source_location": "L379",
       "target": "tools_failure",
       "weight": 1
     },
@@ -48803,7 +48803,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_tools_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L260",
+      "source_location": "L272",
       "target": "tools_modelvisibletooldefinitions",
       "weight": 1
     },
@@ -107651,7 +107651,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_productlexicon_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L154",
+      "source_location": "L156",
       "target": "productlexicon_collectnarrativeevidence",
       "weight": 1
     },
@@ -107663,7 +107663,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_productlexicon_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L349",
+      "source_location": "L389",
       "target": "productlexicon_escaperegexp",
       "weight": 1
     },
@@ -107711,7 +107711,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_productlexicon_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L203",
+      "source_location": "L224",
       "target": "productlexicon_isrefsonlyline",
       "weight": 1
     },
@@ -107735,7 +107735,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_productlexicon_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L254",
+      "source_location": "L282",
       "target": "productlexicon_normalizenarrative",
       "weight": 1
     },
@@ -107747,7 +107747,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_productlexicon_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L369",
+      "source_location": "L409",
       "target": "productlexicon_sensetone",
       "weight": 1
     },
@@ -107759,7 +107759,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_productlexicon_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L223",
+      "source_location": "L251",
       "target": "productlexicon_stripsourcesfooter",
       "weight": 1
     },
@@ -107771,7 +107771,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_productlexicon_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L210",
+      "source_location": "L235",
       "target": "productlexicon_stripsourcesfooteronce",
       "weight": 1
     },
@@ -107783,7 +107783,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_productlexicon_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L353",
+      "source_location": "L393",
       "target": "productlexicon_wordpresent",
       "weight": 1
     },
@@ -166091,7 +166091,7 @@
       "relation": "calls",
       "source": "productlexicon_normalizenarrative",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L276",
+      "source_location": "L304",
       "target": "productlexicon_escaperegexp",
       "weight": 1
     },
@@ -166103,7 +166103,7 @@
       "relation": "calls",
       "source": "productlexicon_formatminormoney",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L307",
+      "source_location": "L341",
       "target": "productlexicon_normalizenarrative",
       "weight": 1
     },
@@ -166115,7 +166115,7 @@
       "relation": "calls",
       "source": "productlexicon_humanizetoken",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L271",
+      "source_location": "L299",
       "target": "productlexicon_normalizenarrative",
       "weight": 1
     },
@@ -166127,7 +166127,7 @@
       "relation": "calls",
       "source": "productlexicon_escaperegexp",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L424",
+      "source_location": "L469",
       "target": "productlexicon_sensetone",
       "weight": 1
     },
@@ -166139,7 +166139,7 @@
       "relation": "calls",
       "source": "productlexicon_formatminormoney",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L417",
+      "source_location": "L462",
       "target": "productlexicon_sensetone",
       "weight": 1
     },
@@ -166151,7 +166151,7 @@
       "relation": "calls",
       "source": "productlexicon_humanizetoken",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L402",
+      "source_location": "L442",
       "target": "productlexicon_sensetone",
       "weight": 1
     },
@@ -166163,7 +166163,7 @@
       "relation": "calls",
       "source": "productlexicon_wordpresent",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L401",
+      "source_location": "L441",
       "target": "productlexicon_sensetone",
       "weight": 1
     },
@@ -166175,7 +166175,7 @@
       "relation": "calls",
       "source": "productlexicon_stripsourcesfooteronce",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L227",
+      "source_location": "L255",
       "target": "productlexicon_stripsourcesfooter",
       "weight": 1
     },
@@ -166187,7 +166187,7 @@
       "relation": "calls",
       "source": "productlexicon_escaperegexp",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L354",
+      "source_location": "L394",
       "target": "productlexicon_wordpresent",
       "weight": 1
     },
@@ -176855,7 +176855,7 @@
       "relation": "calls",
       "source": "runtimehost_createturnhost",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.ts",
-      "source_location": "L879",
+      "source_location": "L881",
       "target": "runtimehost_productionhost",
       "weight": 1
     },
@@ -257266,7 +257266,7 @@
       "label": "collectNarrativeEvidence()",
       "norm_label": "collectnarrativeevidence()",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L154"
+      "source_location": "L156"
     },
     {
       "community": 204,
@@ -257275,7 +257275,7 @@
       "label": "escapeRegExp()",
       "norm_label": "escaperegexp()",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L349"
+      "source_location": "L389"
     },
     {
       "community": 204,
@@ -257311,7 +257311,7 @@
       "label": "isRefsOnlyLine()",
       "norm_label": "isrefsonlyline()",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L203"
+      "source_location": "L224"
     },
     {
       "community": 204,
@@ -257329,7 +257329,7 @@
       "label": "normalizeNarrative()",
       "norm_label": "normalizenarrative()",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L254"
+      "source_location": "L282"
     },
     {
       "community": 204,
@@ -257338,7 +257338,7 @@
       "label": "senseTone()",
       "norm_label": "sensetone()",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L369"
+      "source_location": "L409"
     },
     {
       "community": 204,
@@ -257347,7 +257347,7 @@
       "label": "stripSourcesFooter()",
       "norm_label": "stripsourcesfooter()",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L223"
+      "source_location": "L251"
     },
     {
       "community": 204,
@@ -257356,7 +257356,7 @@
       "label": "stripSourcesFooterOnce()",
       "norm_label": "stripsourcesfooteronce()",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L210"
+      "source_location": "L235"
     },
     {
       "community": 204,
@@ -257365,7 +257365,7 @@
       "label": "wordPresent()",
       "norm_label": "wordpresent()",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L353"
+      "source_location": "L393"
     },
     {
       "community": 2040,
@@ -286669,7 +286669,7 @@
       "label": "assertFixedToolCatalog()",
       "norm_label": "assertfixedtoolcatalog()",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L244"
+      "source_location": "L256"
     },
     {
       "community": 340,
@@ -286678,7 +286678,7 @@
       "label": "completionRequestRef()",
       "norm_label": "completionrequestref()",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L269"
+      "source_location": "L281"
     },
     {
       "community": 340,
@@ -286687,7 +286687,7 @@
       "label": "createAthenaToolRegistrations()",
       "norm_label": "createathenatoolregistrations()",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L376"
+      "source_location": "L388"
     },
     {
       "community": 340,
@@ -286696,7 +286696,7 @@
       "label": "denied()",
       "norm_label": "denied()",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L363"
+      "source_location": "L375"
     },
     {
       "community": 340,
@@ -286705,7 +286705,7 @@
       "label": "failure()",
       "norm_label": "failure()",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L367"
+      "source_location": "L379"
     },
     {
       "community": 340,
@@ -286723,7 +286723,7 @@
       "label": "modelVisibleToolDefinitions()",
       "norm_label": "modelvisibletooldefinitions()",
       "source_file": "packages/athena-webapp/convex/agentHarness/tools.ts",
-      "source_location": "L260"
+      "source_location": "L272"
     },
     {
       "community": 340,
@@ -307909,7 +307909,7 @@
       "label": "productionHost()",
       "norm_label": "productionhost()",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.ts",
-      "source_location": "L865"
+      "source_location": "L867"
     },
     {
       "community": 543,
@@ -307918,7 +307918,7 @@
       "label": "settlementOf()",
       "norm_label": "settlementof()",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.ts",
-      "source_location": "L820"
+      "source_location": "L822"
     },
     {
       "community": 543,
