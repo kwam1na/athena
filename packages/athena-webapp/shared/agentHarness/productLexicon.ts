@@ -169,6 +169,33 @@ export function collectNarrativeEvidence(value: unknown): AgentNarrativeEvidence
 }
 
 // ---------------------------------------------------------------------------
+// Sources footer normalization
+// ---------------------------------------------------------------------------
+
+const FOOTER_HEADER = /\n+[ \t]*(?:sources?|citations?|refs?)[ \t]*:/gi;
+const REF_TOKEN = /attempt_v\d|citation:v\d/;
+
+/**
+ * Strip a model-authored trailing "Sources:" footer. The answer surface
+ * already renders the committed citations under "Sources", so a footer whose
+ * lines are nothing but refs duplicates the UI in the wrong vocabulary — and
+ * neither disclosure nor a corrective denial stopped the habit. Conservative
+ * by construction: only a TRAILING section is considered, and only when every
+ * non-empty line in it carries a ref token; a footer holding real prose, or a
+ * sources mention mid-answer, is left exactly as written.
+ */
+export function stripSourcesFooter(narrative: string): string {
+  let header: RegExpExecArray | null = null;
+  FOOTER_HEADER.lastIndex = 0;
+  for (let match = FOOTER_HEADER.exec(narrative); match; match = FOOTER_HEADER.exec(narrative)) header = match;
+  if (!header) return narrative;
+  const section = narrative.slice(header.index + header[0].length);
+  const lines = section.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
+  if (lines.length === 0 || !lines.every((line) => REF_TOKEN.test(line))) return narrative;
+  return narrative.slice(0, header.index).trimEnd();
+}
+
+// ---------------------------------------------------------------------------
 // Tone sensor
 // ---------------------------------------------------------------------------
 

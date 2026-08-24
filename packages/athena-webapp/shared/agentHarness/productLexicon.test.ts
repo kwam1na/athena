@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   annotateMoneyDisplays,
+  stripSourcesFooter,
   APP_PRODUCT_LEXICON,
   collectNarrativeEvidence,
   formatMinorMoney,
@@ -171,6 +172,40 @@ describe("senseTone", () => {
   it("does not call a short but complete answer a stub", () => {
     const findings = senseTone(baseInput({ narrative: "Register 06's drawer is the only one open." }));
     expect(findings).toEqual([]);
+  });
+});
+
+describe("stripSourcesFooter", () => {
+  it("removes a trailing sources footer whose lines are only refs and namespaces", () => {
+    const narrative =
+      "Register 06's drawer is still open with GH₵7,500 expected; the close is blocked until it is counted.\n\n" +
+      "Sources:\n" +
+      "- operations.storeDay get: citation:v1.1.1.185e44efd461484e67e3abb69f7c1c95\n" +
+      "- cash.registerSessions list (partial): attempt_v1.1.3ec16115ab27d4eef7d3a4c9f43f4dd2";
+    expect(stripSourcesFooter(narrative)).toBe(
+      "Register 06's drawer is still open with GH₵7,500 expected; the close is blocked until it is counted.",
+    );
+  });
+
+  it("handles the singular Source: form and inline one-liners", () => {
+    const narrative = "Cash sales today are GH₵7,500.\n\nSource: citation:v1.1.1.57010118cc3bd568cb90d8de85444906";
+    expect(stripSourcesFooter(narrative)).toBe("Cash sales today are GH₵7,500.");
+  });
+
+  it("leaves a sources section carrying real prose alone", () => {
+    const narrative =
+      "Sales are GH₵14,149.\n\nSources:\n- The daily sales report, which also shows four sales and twenty units.";
+    expect(stripSourcesFooter(narrative)).toBe(narrative);
+  });
+
+  it("never strips from the middle of an answer", () => {
+    const narrative =
+      "Sources: citation:v1.1.1.185e44efd461484e67e3abb69f7c1c95\n\nSales are GH₵14,149 and the close is blocked.";
+    expect(stripSourcesFooter(narrative)).toBe(narrative);
+  });
+
+  it("leaves a narrative without a footer untouched", () => {
+    expect(stripSourcesFooter("Sales are GH₵14,149.")).toBe("Sales are GH₵14,149.");
   });
 });
 

@@ -36,6 +36,7 @@ import {
   APP_PRODUCT_LEXICON,
   collectNarrativeEvidence,
   senseTone,
+  stripSourcesFooter,
   type AgentMoneyAmount,
   type AgentProductLexicon,
   type AgentToneFinding,
@@ -562,13 +563,16 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
       if (args.outcome === "answer" && (citedAttemptRefs.length === 0 || citations.length === 0)) {
         return denied("citations_required", `An answer must cite at least one attempt and one citation; use outcome no_usable_sources when nothing usable was read.${validRefsHint()}`);
       }
+      // A trailing refs-only "Sources:" footer duplicates the answer surface's
+      // own citation rendering; normalize it away before sensing or commit.
+      const narrative = stripSourcesFooter(args.narrative);
       // Product-tone sensor: the narrative is held to the run's own evidence
       // (fields, enum spellings, minor-unit amounts it was shown, plus the
       // grant's namespaces and this turn's refs). Warn mode records findings
       // for telemetry; enforce mode spends at most ONE corrective denial —
       // the fix is named, and the retry commits regardless.
       toneFindings = senseTone({
-        narrative: args.narrative,
+        narrative,
         question: host.question ?? "",
         fieldNames: [...toneEvidence.fieldNames],
         enumLiterals: [...toneEvidence.enumLiterals],
@@ -603,10 +607,10 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
         citations: citations.map((citation) => ({ ...citation })),
         artifact: {
           ...(args.title ? { title: args.title } : {}),
-          summary: args.narrative.slice(0, 280),
+          summary: narrative.slice(0, 280),
           payload: buildAnswerArtifactPayload({
             outcome: args.outcome,
-            narrative: args.narrative,
+            narrative,
             egressClass,
             citations: citations.map((citation) => ({ ref: citation.ref, ...(namespaceOf.has(citation.ref) ? { namespace: namespaceOf.get(citation.ref) } : {}) })),
             ...(args.outcome === "no_usable_sources" ? { sourcesTried: [...new Set(attempts.flatMap((attempt) => attempt.citations.map((citation) => citation.namespace)))] } : {}),
