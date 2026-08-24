@@ -17,7 +17,6 @@ import { ConvexAgentAdapterError, type ConvexAgentLanguageModel } from "./convex
 export const CONVEX_AGENT_DEFAULT_PROVIDER_ID = "openai" as const;
 export const CONVEX_AGENT_DEFAULT_MODEL_ID = "gpt-5-nano" as const;
 export const CONVEX_AGENT_PROVIDER_API_KEY_ENV = "OPENAI_API_KEY" as const;
-
 export type ResolveDefaultLanguageModelOptions = {
   readonly apiKey?: string;
 };
@@ -33,5 +32,10 @@ export function resolveDefaultLanguageModel(
   if (!apiKey) {
     throw new ConvexAgentAdapterError("provider_credentials_missing", `${CONVEX_AGENT_PROVIDER_API_KEY_ENV} is not configured.`);
   }
+  // The dev model-override env knob was removed (review finding: it swapped
+  // the billed model AFTER egress provider selection recorded evidence from
+  // the pinned selection — an instruction-guarded bypass in a codebase whose
+  // adjudicated principle is mechanical enforcement). Experiments override
+  // the model by editing the profile allowance through the fence instead.
   return createOpenAI({ apiKey })(selection.modelId);
 }

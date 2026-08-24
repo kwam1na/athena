@@ -31,6 +31,17 @@ import {
   type AgentToolRegistration,
 } from "../../shared/agentHarness/agentRuntime";
 import { AGENT_FIXED_TOOL_IDS } from "../../shared/agentHarness/bridge";
+import {
+  annotateMoneyDisplays,
+  APP_PRODUCT_LEXICON,
+  collectNarrativeEvidence,
+  normalizeNarrative,
+  senseTone,
+  stripSourcesFooter,
+  type AgentMoneyAmount,
+  type AgentProductLexicon,
+  type AgentToneFinding,
+} from "../../shared/agentHarness/productLexicon";
 import { computeSha256Digest } from "../../shared/agentHarness/digest";
 import { measureJsonByteLength } from "../../shared/agentHarness/execution";
 import type { JsonValue } from "../../shared/agentHarness/manifest";
@@ -103,7 +114,7 @@ export const discoverTool: AgentToolDefinition<AgentDiscoverArgs, unknown> = {
 
 export const describeTool: AgentToolDefinition<AgentDescribeArgs, unknown> = {
   toolId: "athena.describe",
-  description: "Describe one discovered capability: arguments, result fields, freshness, completeness, and citation rules. Arguments: { namespace: \"package.resource\" } from a prior discover.",
+  description: "Describe one discovered capability: arguments, result fields, freshness, completeness, and citation rules. Arguments: { namespace: \"package.resource\" } from the capability catalog.",
   validateInput: (raw): Validation<AgentDescribeArgs> => {
     const object = objectOf(raw);
     const namespace = object?.namespace;
@@ -121,6 +132,8 @@ export const executeProgramTool: AgentToolDefinition<AgentExecuteProgramArgs, un
     "The source is a program BODY, not a module: top-level `await` is allowed, and it must end with exactly one top-level `return` of one JSON value.\n" +
     "Read only through the full path `athena.<package>.<resource>.get({...})` or `.list({...})` — never destructure or alias `athena`, and never reference a package name on its own.\n" +
     "Every read returns `{ kind, envelope }`; check `kind === \"result\"` before reading `envelope.data`, and report the other kinds honestly instead of guessing.\n" +
+    "Guarded fields (money and similar) arrive as `{ state, value }`: read `value` only when `state === \"known\"`, and report any other state as unavailable rather than missing.\n" +
+    "If the result carries `fieldDiagnostics`, the program read a field the capability does not declare — rewrite using the named fields instead of concluding the data is unreadable.\n" +
     "Arguments are ONLY the filters `athena.describe` lists for that capability: the store is fixed by the run, so a store name or id is never an argument.\n" +
     "No imports, no `require`, no timers, no randomness, no clock.\n" +
     "Example:\n" +
@@ -156,7 +169,7 @@ export const scratchTool: AgentToolDefinition<AgentScratchArgs, unknown> = {
 export const completeRunTool: AgentToolDefinition<AgentCompleteRunArgs, unknown> = {
   toolId: "athena.completeRun",
   description:
-    "Finish the run exactly once with the final answer. Arguments: { outcome?: \"answer\" | \"no_usable_sources\", narrative: string, title?: string, citedAttemptRefs: string[] (attemptRef values from executeProgram results the answer relies on), citations: [{ ref: string (citation refs from those results), claim?: string }], confidence?: 0..1, limitedEvidence?: boolean }. An answer needs at least one cited attempt and citation; use no_usable_sources when nothing usable was read.",
+    "Finish the run exactly once with the final answer. Arguments: { outcome?: \"answer\" | \"no_usable_sources\", narrative: string, title?: string, citedAttemptRefs: string[] (attemptRef values from executeProgram results the answer relies on), citations: [{ ref: string (citation refs from those results), claim?: string }], confidence?: 0..1, limitedEvidence?: boolean }. The narrative is the complete answer a store operator reads — plain operator language, never field names, namespaces, enum spellings, or refs; title is only a short label and never the answer. The answer surface already lists your citations under \"Sources\", so never write a sources or refs section into the narrative. Money values in results carry a display string — quote display, never amount. An answer needs at least one cited attempt and citation; use no_usable_sources when nothing usable was read. Submit by CALLING this tool — arguments written out as prose are not a submission. Say a value was unavailable only when its read returned kind !== \"result\" or its state was not \"known\".",
   validateInput: (raw): Validation<AgentCompleteRunArgs> => {
     const object = objectOf(raw);
     if (!object) return { ok: false, issues: [{ path: "$", message: "completeRun takes an object" }] };
@@ -183,18 +196,52 @@ export const completeRunTool: AgentToolDefinition<AgentCompleteRunArgs, unknown>
     if (object.confidence !== undefined && (typeof object.confidence !== "number" || !(object.confidence >= 0 && object.confidence <= 1))) issues.push({ path: "confidence", message: "confidence must be between 0 and 1" });
     if (object.limitedEvidence !== undefined && typeof object.limitedEvidence !== "boolean") issues.push({ path: "limitedEvidence", message: "limitedEvidence must be a boolean" });
     if (issues.length > 0) return { ok: false, issues };
+    // Canonicalize the two ref buckets by prefix: models file attempt refs
+    // under `citations` and citation refs under `citedAttemptRefs`, and the
+    // kernel rightly rejects the whole submission for one misfiled ref.
+    // Re-bucketing reconstructs the unambiguous intent; a forged ref still
+    // dies in the kernel's resolvers.
+    const attemptRefs: string[] = [];
+    const citationEntries: { ref: string; claim?: string; claimShape?: string }[] = [];
+    for (const ref of citedAttemptRefs as string[]) {
+      if (ref.startsWith("citation:")) citationEntries.push({ ref });
+      else attemptRefs.push(ref);
+    }
+    for (const citation of citations as Record<string, unknown>[]) {
+      const ref = citation.ref as string;
+      // A claim-less attempt-prefixed ref is an unambiguous misfile; one that
+      // carries a claim stays in citations so tail resolution can route it.
+      // The claim survives only when the ref lands in the citation bucket —
+      // a ref resolving to an attempt sheds it by design (attempts have no
+      // claim slot).
+      if (ref.startsWith("attempt_") && typeof citation.claim !== "string" && typeof citation.claimShape !== "string") {
+        attemptRefs.push(ref);
+        continue;
+      }
+      citationEntries.push({
+        ref,
+        ...(typeof citation.claim === "string" ? { claim: citation.claim } : {}),
+        ...(typeof citation.claimShape === "string" ? { claimShape: citation.claimShape } : {}),
+      });
+    }
     return {
       ok: true,
       args: {
         outcome: outcome as AgentAnswerOutcome,
         narrative: (narrative as string).trim(),
         ...(typeof object.title === "string" ? { title: object.title.trim() } : {}),
-        citedAttemptRefs: [...new Set(citedAttemptRefs as string[])],
-        citations: (citations as Record<string, unknown>[]).map((citation) => ({
-          ref: citation.ref as string,
-          ...(typeof citation.claim === "string" ? { claim: citation.claim } : {}),
-          ...(typeof citation.claimShape === "string" ? { claimShape: citation.claimShape } : {}),
-        })),
+        citedAttemptRefs: [...new Set(attemptRefs)],
+        citations: citationEntries.reduce<{ ref: string; claim?: string; claimShape?: string }[]>((deduped, entry) => {
+          const existing = deduped.find((other) => other.ref === entry.ref);
+          if (!existing) deduped.push({ ...entry });
+          else {
+            // Merge, never drop: a later duplicate may carry the claim the
+            // first (claimless, cross-listed) occurrence lacked.
+            if (existing.claim === undefined && entry.claim !== undefined) existing.claim = entry.claim;
+            if (existing.claimShape === undefined && entry.claimShape !== undefined) existing.claimShape = entry.claimShape;
+          }
+          return deduped;
+        }, []),
         ...(typeof object.confidence === "number" ? { confidence: object.confidence } : {}),
         ...(typeof object.limitedEvidence === "boolean" ? { limitedEvidence: object.limitedEvidence } : {}),
       },
@@ -213,6 +260,22 @@ export function assertFixedToolCatalog(definitions: readonly AgentToolDefinition
   }
 }
 assertFixedToolCatalog();
+
+/**
+ * The definitions the PROVIDER is offered for one turn. The kernel catalog
+ * stays fixed — the dispatch ledger, replay, and fake-adapter flows keep all
+ * five tools — but the model-visible list drops athena.discover when the turn
+ * prompt already embeds the grant catalog: measured on the deployment, the
+ * model calls discover first on every turn it is offered, whatever the
+ * prompt says, and the answer is deterministic per grant.
+ */
+export function modelVisibleToolDefinitions(
+  registrations: readonly AgentAnyToolRegistration[],
+  catalogEmbedded: boolean,
+): readonly AgentToolDefinition[] {
+  const definitions = registrations.map((registration) => registration.definition);
+  return catalogEmbedded ? definitions.filter((definition) => definition.toolId !== discoverTool.toolId) : definitions;
+}
 
 /** Digest of a completion request: the private `completion_prepared` reference. */
 export function completionRequestRef(args: AgentCompleteRunArgs): string {
@@ -269,6 +332,16 @@ export type AgentToolHostContext = {
   readonly egressFloor: AgentEgressClass;
   /** Discovery schemas (tests bind the test package; production defaults to the generated index). */
   readonly schemas?: AgentCapabilitySchemaIndex;
+  /** The operator's question, verbatim: tokens it contains are never tone findings. */
+  readonly question?: string;
+  /** Merged product lexicon (app-wide + the profile's surface overlay). */
+  readonly lexicon?: AgentProductLexicon;
+  /**
+   * Tone sensor policy. "warn" (default) records findings on the turn state
+   * for telemetry; "enforce" denies the first completeRun whose narrative
+   * carries findings — one corrective denial, never a loop.
+   */
+  readonly tonePolicy?: "warn" | "enforce";
 };
 
 /** What the turn host learns from the handlers as the turn progresses. */
@@ -276,6 +349,8 @@ export type AgentToolTurnState = {
   readonly attempts: () => readonly { attemptRef: string; egressClass: AgentEgressClass; completeness: "complete" | "partial"; providerExposed: boolean; citations: readonly { citation: string; namespace: string }[] }[];
   readonly completion: () => { committed: boolean; artifactId?: Id<"intelligenceArtifact"> };
   readonly authorityRevocations: () => readonly string[];
+  /** Product-tone findings from the last sensed completeRun narrative. */
+  readonly toneFindings: () => readonly AgentToneFinding[];
 };
 
 /** Refusal reasons that mean the operator's authority changed under the run (not a budget or argument problem). */
@@ -313,6 +388,9 @@ function failure(code: string, message: string, retryable = false): AgentToolHan
 export function createAthenaToolRegistrations(host: AgentToolHostContext): { registrations: AgentAnyToolRegistration[]; state: AgentToolTurnState } {
   const attempts: { attemptRef: string; egressClass: AgentEgressClass; completeness: "complete" | "partial"; providerExposed: boolean; citations: { citation: string; namespace: string }[] }[] = [];
   const revocations: string[] = [];
+  const toneEvidence = { fieldNames: new Set<string>(), enumLiterals: new Set<string>(), moneyKeys: new Set<string>(), moneyAmounts: [] as AgentMoneyAmount[], truncated: false };
+  let toneFindings: readonly AgentToneFinding[] = [];
+  let toneDeniedOnce = false;
   let completion: { committed: boolean; artifactId?: Id<"intelligenceArtifact"> } = { committed: false };
   let surface: ReturnType<typeof createRunDiscoverySurface> | undefined;
 
@@ -322,10 +400,12 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
       if (AGENT_AUTHORITY_REVOCATION_REASONS.has(verdict.reason)) revocations.push(verdict.reason);
       return verdict;
     }
-    // Re-create on every call so a shrunk grant shrinks the surface; disclosure state carries over.
-    const disclosed = surface?.disclosedNamespaces() ?? [];
+    // Re-create on every call so a shrunk grant shrinks the surface. The turn
+    // prompt already carries the grant's catalog, so the granted namespaces
+    // are pre-disclosed: describe never demands a redundant discover round
+    // trip, and athena.discover remains a re-list.
     const next = createRunDiscoverySurface(verdict.grant, { schemas: host.schemas });
-    if (disclosed.length > 0) await next.discover();
+    await next.discover();
     surface = next;
     return { kind: "surface", surface: next };
   };
@@ -373,11 +453,25 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
             providerExposed: true,
             citations: result.citations.map((candidate) => ({ citation: candidate.citation, namespace: candidate.namespace })),
           });
+          // Money values gain product display strings before the model sees
+          // them, and the raw internal tokens the model was shown are
+          // harvested so the tone sensor can hold the narrative to them.
+          const harvested = collectNarrativeEvidence(result.result.output);
+          if (harvested.truncated) toneEvidence.truncated = true;
+          for (const name of harvested.fieldNames) toneEvidence.fieldNames.add(name);
+          for (const literal of harvested.enumLiterals) toneEvidence.enumLiterals.add(literal);
+          for (const money of harvested.moneyAmounts) {
+            const moneyKey = `${money.amount}:${money.currency}`;
+            if (!toneEvidence.moneyKeys.has(moneyKey)) {
+              toneEvidence.moneyKeys.add(moneyKey);
+              toneEvidence.moneyAmounts.push(money);
+            }
+          }
           return {
             kind: "success",
             result: {
               attemptRef: result.attemptRef,
-              output: result.result.output,
+              output: annotateMoneyDisplays(result.result.output),
               completeness: result.result.completeness,
               freshness: result.result.freshness,
               citations: result.citations.map((candidate) => ({
@@ -394,6 +488,9 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
                 ...(call.reason ? { reason: call.reason } : {}),
                 ...(call.detail ? { detail: call.detail } : {}),
               })),
+              ...(result.fieldAdvisories && result.fieldAdvisories.length > 0
+                ? { fieldDiagnostics: result.fieldAdvisories.map((advisory) => advisory.message) }
+                : {}),
             },
           };
         }
@@ -432,15 +529,127 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
     definition: completeRunTool,
     handler: async (args) => {
       if (completion.committed) return denied("already_completed", "The run already has its answer.");
-      if (attempts.length === 0) return denied("no_attempts", "Read at least one source with athena.executeProgram before completing.");
-      if (args.outcome === "answer" && (args.citedAttemptRefs.length === 0 || args.citations.length === 0)) {
-        return denied("citations_required", "An answer must cite at least one attempt and one citation; use outcome no_usable_sources when nothing usable was read.");
+      // `no_usable_sources` is precisely for the run whose every read failed:
+      // it must stay reachable with zero successful attempts, or a turn that
+      // spent its attempt budget on rejected programs can never end honestly.
+      if (attempts.length === 0 && args.outcome !== "no_usable_sources") {
+        return denied("no_attempts", "Read at least one source with athena.executeProgram before completing, or complete with outcome no_usable_sources.");
+      }
+      // Refs are opaque handles this turn itself handed out, and models
+      // transcribe them imperfectly (dropped prefixes, dropped version
+      // segments, attempt/citation hybrids). The content-hash tail identifies
+      // the intended handle exactly, so resolve each passed ref to the unique
+      // known ref sharing its tail — including across buckets — and leave
+      // anything unresolvable for the kernel to reject. Nothing is granted
+      // that this run's reads did not already return.
+      const knownAttemptRefs = attempts.map((attempt) => attempt.attemptRef);
+      const knownCitationRefs = attempts.flatMap((attempt) => attempt.citations.map((citation) => citation.citation));
+      const hashTail = (ref: string) => /([0-9a-f]{24,})$/.exec(ref)?.[1];
+      const tailsOf = (refs: readonly string[]) => refs.map((ref) => ({ ref, tail: hashTail(ref) })).filter((entry): entry is { ref: string; tail: string } => entry.tail !== undefined);
+      // Exact tail first; then unique containment either way, because models
+      // also add or drop a character while transcribing (a 33-hex tail whose
+      // first 32 characters are the minted hash names exactly one handle).
+      const resolveByTail = (tail: string, entries: readonly { ref: string; tail: string }[]) => {
+        const exact = entries.filter((entry) => entry.tail === tail);
+        if (exact.length === 1) return exact[0].ref;
+        if (exact.length > 1) return undefined;
+        // One transcribed character, as documented — not arbitrary containment.
+        const near = entries.filter((entry) => (entry.tail.includes(tail) || tail.includes(entry.tail)) && Math.abs(entry.tail.length - tail.length) === 1);
+        return near.length === 1 ? near[0].ref : undefined;
+      };
+      const attemptTails = tailsOf(knownAttemptRefs);
+      const citationTails = tailsOf(knownCitationRefs);
+      const knownAttempts = new Set(knownAttemptRefs);
+      const knownCitations = new Set(knownCitationRefs);
+      const resolvedAttemptRefs: string[] = [];
+      const resolvedCitations: { ref: string; claim?: string; claimShape?: string }[] = [];
+      const resolveRef = (ref: string, claim?: { claim?: string; claimShape?: string }) => {
+        // An exact membership hit in either bucket beats any tail resolution
+        // in the other: a verbatim ref is never re-routed by a coincidence.
+        if (knownCitations.has(ref)) {
+          resolvedCitations.push({ ref, ...(claim ?? {}) });
+          return;
+        }
+        if (knownAttempts.has(ref)) {
+          resolvedAttemptRefs.push(ref);
+          return;
+        }
+        const tail = hashTail(ref);
+        const asAttempt = tail ? resolveByTail(tail, attemptTails) : undefined;
+        const asCitation = tail ? resolveByTail(tail, citationTails) : undefined;
+        if (asCitation) resolvedCitations.push({ ref: asCitation, ...(claim ?? {}) });
+        else if (asAttempt) resolvedAttemptRefs.push(asAttempt);
+        else if (ref.startsWith("citation:")) resolvedCitations.push({ ref, ...(claim ?? {}) });
+        else resolvedAttemptRefs.push(ref);
+      };
+      for (const ref of args.citedAttemptRefs) resolveRef(ref);
+      for (const citation of args.citations) resolveRef(citation.ref, { ...(citation.claim !== undefined ? { claim: citation.claim } : {}), ...(citation.claimShape !== undefined ? { claimShape: citation.claimShape } : {}) });
+      const citedAttemptRefs = [...new Set(resolvedAttemptRefs)];
+      const citations = resolvedCitations.reduce<{ ref: string; claim?: string; claimShape?: string }[]>((deduped, entry) => {
+        const existing = deduped.find((other) => other.ref === entry.ref);
+        if (!existing) deduped.push({ ...entry });
+        else {
+          if (existing.claim === undefined && entry.claim !== undefined) existing.claim = entry.claim;
+          if (existing.claimShape === undefined && entry.claimShape !== undefined) existing.claimShape = entry.claimShape;
+        }
+        return deduped;
+      }, []);
+      const validRefsHint = () =>
+        ` Valid citedAttemptRefs: ${knownAttemptRefs.join(", ") || "(none)"}. Valid citation refs: ${knownCitationRefs.join(", ") || "(none)"}. Copy them verbatim.`;
+      if (args.outcome === "answer" && (citedAttemptRefs.length === 0 || citations.length === 0)) {
+        return denied("citations_required", `An answer must cite at least one attempt and one citation; use outcome no_usable_sources when nothing usable was read.${validRefsHint()}`);
+      }
+      // Normalization before sensing or commit: strip the trailing refs-only
+      // "Sources:" footer (the surface renders citations itself), then rewrite
+      // the internal tokens this run served the model into their operator
+      // wording — deterministic and evidence-bound, the operatorMessages.ts
+      // mechanism applied to the answer.
+      const namespacesRead = [...new Set(attempts.flatMap((attempt) => attempt.citations.map((citation) => citation.namespace)))];
+      const lexicon = host.lexicon ?? APP_PRODUCT_LEXICON;
+      const normalizeOptions = {
+        evidence: { fieldNames: [...toneEvidence.fieldNames], enumLiterals: [...toneEvidence.enumLiterals], moneyAmounts: toneEvidence.moneyAmounts },
+        namespaces: namespacesRead,
+        lexicon,
+        question: host.question ?? "",
+      };
+      const narrative = normalizeNarrative(stripSourcesFooter(args.narrative), normalizeOptions);
+      // The title reaches the operator too: same rewrite, same evidence.
+      const title = args.title === undefined ? undefined : normalizeNarrative(args.title, normalizeOptions);
+      // Product-tone sensor: the narrative is held to the run's own evidence
+      // (fields, enum spellings, minor-unit amounts it was shown, plus the
+      // grant's namespaces and this turn's refs). Warn mode records findings
+      // for telemetry; enforce mode spends at most ONE corrective denial —
+      // the fix is named, and the retry commits regardless.
+      const sensed = senseTone({
+        narrative,
+        question: host.question ?? "",
+        fieldNames: [...toneEvidence.fieldNames],
+        enumLiterals: [...toneEvidence.enumLiterals],
+        moneyAmounts: toneEvidence.moneyAmounts,
+        namespaces: namespacesRead,
+        refs: [...knownAttemptRefs, ...knownCitationRefs],
+        lexicon,
+      });
+      // Accumulate across invocations so a denial's findings survive the clean
+      // retry into turn_report telemetry.
+      for (const finding of sensed) {
+        if (!toneFindings.some((existing) => existing.code === finding.code && existing.token === finding.token)) toneFindings = [...toneFindings, finding];
+      }
+      if (toneEvidence.truncated && !toneFindings.some((existing) => existing.code === "evidence_truncated")) {
+        // Telemetry only, never a denial: a capped harvest means tone
+        // policing was degraded for this turn, and silence would read clean.
+        toneFindings = [...toneFindings, { code: "evidence_truncated", token: "harvest_caps", fix: "Evidence harvest hit its cap; tone policing may be incomplete for this turn." }];
+      }
+      if (host.tonePolicy === "enforce" && sensed.length > 0 && !toneDeniedOnce) {
+        toneDeniedOnce = true;
+        const fixes = sensed.map((finding) => finding.fix).join(" ");
+        return denied("tone", `Rewrite the narrative for the operator, then call completeRun again. ${fixes}`);
       }
       await host.reportProgress?.("finalizing");
       const preparedRef = completionRequestRef(args);
       const prepared = (await host.ctx.runMutation(host.refs.prepareCompletion, { bindingId: host.bindingId, runId: host.runId, preparedCompletionRef: preparedRef, now: host.now() })) as AgentPrepareCompletionOutcome;
       if (prepared.outcome === "rejected") return denied(prepared.code, prepared.message);
-      const cited = new Set(args.citedAttemptRefs);
+      const cited = new Set(citedAttemptRefs);
       // The narrative may quote anything the provider was shown, so the answer's
       // class is the maximum over EVERY attempt whose result was released to the
       // provider — never the model-chosen cited subset, which would let a
@@ -453,16 +662,16 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
       const committed = (await host.ctx.runMutation(host.refs.completeRun, {
         runId: host.runId,
         idempotencyKey: prepared.preparedCompletionRef,
-        citedAttemptRefs: [...args.citedAttemptRefs],
-        citations: args.citations.map((citation) => ({ ...citation })),
+        citedAttemptRefs: [...citedAttemptRefs],
+        citations: citations.map((citation) => ({ ...citation })),
         artifact: {
-          ...(args.title ? { title: args.title } : {}),
-          summary: args.narrative.slice(0, 280),
+          ...(title ? { title } : {}),
+          summary: narrative.slice(0, 280),
           payload: buildAnswerArtifactPayload({
             outcome: args.outcome,
-            narrative: args.narrative,
+            narrative,
             egressClass,
-            citations: args.citations.map((citation) => ({ ref: citation.ref, ...(namespaceOf.has(citation.ref) ? { namespace: namespaceOf.get(citation.ref) } : {}) })),
+            citations: citations.map((citation) => ({ ref: citation.ref, ...(namespaceOf.has(citation.ref) ? { namespace: namespaceOf.get(citation.ref) } : {}) })),
             ...(args.outcome === "no_usable_sources" ? { sourcesTried: [...new Set(attempts.flatMap((attempt) => attempt.citations.map((citation) => citation.namespace)))] } : {}),
           }),
           ...(args.confidence !== undefined ? { confidence: args.confidence } : {}),
@@ -484,7 +693,7 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
           if (AGENT_AUTHORITY_REVOCATION_REASONS.has(committed.reason)) revocations.push(committed.reason);
           return denied(committed.reason, "The answer could not be released.");
         case "rejected":
-          return failure(committed.reason, committed.message, true);
+          return failure(committed.reason, `${committed.message}${validRefsHint()}`, true);
       }
     },
   };
@@ -496,6 +705,7 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
       attempts: () => attempts.map((attempt) => ({ ...attempt, citations: [...attempt.citations] })),
       completion: () => ({ ...completion }),
       authorityRevocations: () => [...revocations],
+      toneFindings: () => [...toneFindings],
     },
   };
 }

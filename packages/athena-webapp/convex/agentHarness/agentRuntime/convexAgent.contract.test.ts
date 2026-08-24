@@ -31,6 +31,7 @@ import {
   CONVEX_AGENT_PINNED_VERSIONS,
   fromNativeToolName,
   normalizeNativeUsage,
+  terminalToolNudge,
   toNativeToolName,
 } from "./convexAgent";
 
@@ -518,5 +519,174 @@ describe("Convex Agent adapter specifics", () => {
       const valueImports = [...source.matchAll(/^import\s+(?!type\s)[^;]*from\s+"([^"]+)"/gm)].map((match) => match[1]);
       expect(valueImports.filter((specifier) => /^(@convex-dev\/agent|ai|@ai-sdk\/)/.test(specifier)), file).toEqual([]);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Terminal tool: stop at the commit; force one continuation on prose endings
+// ---------------------------------------------------------------------------
+
+const completeRunDouble: AgentToolDefinition<Record<string, never>, { committed: boolean }> = {
+  toolId: "athena.completeRun",
+  description: "Commit the answer (test double).",
+  validateInput: () => ({ ok: true, args: {} as Record<string, never> }),
+};
+
+/** Kernel whose completeRun double answers from a scripted outcome list (last entry repeats). */
+function terminalKernel(adapterVersion: string, outcomes: readonly ("success" | "denied")[]) {
+  const events: AgentRuntimeEvent[] = [];
+  let call = 0;
+  const echoRegistration: AgentToolRegistration<{ readonly value: string }, { echoed: string }> = {
+    definition: echoTool,
+    handler: async (args) => ({ kind: "success", result: { echoed: args.value } }),
+  };
+  const completeRegistration: AgentToolRegistration<Record<string, never>, { committed: boolean }> = {
+    definition: completeRunDouble,
+    handler: async () => {
+      const outcome = outcomes[Math.min(call, outcomes.length - 1)];
+      call += 1;
+      return outcome === "success"
+        ? { kind: "success", result: { committed: true } }
+        : { kind: "denied", denial: { code: "citations_required", message: "An answer must cite at least one attempt." } };
+    },
+  };
+  const ledger = createAgentToolDispatchLedger({ adapterVersion, tools: [echoRegistration, completeRegistration] });
+  const hooks: AgentRuntimeTurnHooks = {
+    onEvent: (event) => {
+      events.push(event);
+      if (event.kind === "turn_started" || event.kind === "turn_resumed") ledger.beginTurn(event.turnRef);
+      if (event.kind === "turn_completed") ledger.terminalizeTurn(event.turnRef, `turn_${event.outcome}`);
+    },
+    dispatchTool: (request) => ledger.dispatch(request),
+  };
+  return { events, hooks };
+}
+
+async function openTerminalTurn(
+  harness: ReturnType<typeof createConvexAgentContractHarness>,
+  hooks: AgentRuntimeTurnHooks,
+  turnKey: string,
+) {
+  const thread = await harness.adapter.ensureThread({
+    threadKey: `${turnKey}|thread`,
+    contextBindingRef: opaqueRef("context_binding", "ctx"),
+    correlation: { operatorRef: "athenaUser:o", profileId: "p" },
+  });
+  const input = await harness.adapter.saveInput({
+    threadRef: thread.threadRef,
+    turnKey,
+    prompt: { text: "how much sold today?", egressClass: "operational", promptHash: "sha256:h", untrustedDataLabel: "retrieved_store_data" },
+    history: { messages: [], projectionDigest: "sha256:empty", reauthorizedAt: 1 },
+  });
+  return harness.adapter.startTurn(
+    {
+      threadRef: thread.threadRef,
+      inputRef: input.inputRef,
+      turnKey,
+      tools: [echoTool, completeRunDouble],
+      model: { providerId: "fixture", modelId: "fixture-1", region: "eu" },
+      limits: { maxToolCalls: 4, maxElapsedMs: 10_000 },
+    },
+    hooks,
+  );
+}
+
+describe("Convex Agent adapter terminal tool", () => {
+  it("stops the provider loop as soon as the terminal tool succeeds — no trailing prose step", async () => {
+    const harness = createConvexAgentContractHarness();
+    const kernel = terminalKernel(harness.adapter.descriptor.adapterVersion, ["success"]);
+    // No step after the commit: a post-commit provider call would exhaust the
+    // script and fail the turn, so completion here proves the loop stopped.
+    harness.scriptTurn("turn-stop-at-commit", [
+      { kind: "narrative", deltas: ["Committing the answer."] },
+      { kind: "tool_call", callId: "c1", toolId: "athena.completeRun", args: {} },
+    ]);
+    const { turnRef } = await openTerminalTurn(harness, kernel.hooks, "turn-stop-at-commit");
+    await harness.adapter.inspect.settled(turnRef);
+    const completed = kernel.events.find((event) => event.kind === "turn_completed");
+    expect(completed).toMatchObject({ outcome: "completed" });
+    expect(harness.modelCalls("turn-stop-at-commit")).toHaveLength(1);
+    const dispatched = harness.adapter.inspect.dispatchResults(turnRef);
+    expect(dispatched).toHaveLength(1);
+    expect(dispatched[0]).toMatchObject({ kind: "outcome", toolId: "athena.completeRun", outcome: { kind: "success" } });
+  });
+
+  it("keeps the loop alive after a denied terminal call so the model can correct its submission", async () => {
+    const harness = createConvexAgentContractHarness();
+    const kernel = terminalKernel(harness.adapter.descriptor.adapterVersion, ["denied", "success"]);
+    harness.scriptTurn("turn-denied-retry", [
+      { kind: "tool_call", callId: "c1", toolId: "athena.completeRun", args: {} },
+      { kind: "tool_call", callId: "c2", toolId: "athena.completeRun", args: {} },
+    ]);
+    const { turnRef } = await openTerminalTurn(harness, kernel.hooks, "turn-denied-retry");
+    await harness.adapter.inspect.settled(turnRef);
+    expect(kernel.events.find((event) => event.kind === "turn_completed")).toMatchObject({ outcome: "completed" });
+    const outcomes = harness.adapter.inspect
+      .dispatchResults(turnRef)
+      .map((result) => (result.kind === "outcome" ? result.outcome.kind : result.kind));
+    expect(outcomes).toEqual(["denied", "success"]);
+    expect(harness.modelCalls("turn-denied-retry")).toHaveLength(2);
+  });
+
+  it("forces one terminal continuation when the model ends in prose, carrying the prose along", async () => {
+    const harness = createConvexAgentContractHarness();
+    const kernel = terminalKernel(harness.adapter.descriptor.adapterVersion, ["success"]);
+    harness.scriptTurn("turn-forced-commit", [
+      { kind: "complete", narrative: "Total sales today: GHS 1,414,900." },
+      { kind: "tool_call", callId: "c9", toolId: "athena.completeRun", args: {} },
+    ]);
+    const { turnRef } = await openTerminalTurn(harness, kernel.hooks, "turn-forced-commit");
+    await harness.adapter.inspect.settled(turnRef);
+    expect(kernel.events.find((event) => event.kind === "turn_completed")).toMatchObject({
+      outcome: "completed",
+      narrative: "Total sales today: GHS 1,414,900.",
+    });
+    const dispatched = harness.adapter.inspect.dispatchResults(turnRef);
+    expect(dispatched).toHaveLength(1);
+    expect(dispatched[0]).toMatchObject({ kind: "outcome", toolId: "athena.completeRun", outcome: { kind: "success" } });
+    const calls = harness.modelCalls("turn-forced-commit");
+    expect(calls).toHaveLength(2);
+    // The continuation may only call the terminal tool, and it carries both the
+    // nudge and the prose the model already wrote.
+    const forced = JSON.stringify(calls[1]);
+    expect(calls[1].toolChoice).toEqual({ type: "tool", toolName: toNativeToolName("athena.completeRun") });
+    expect(forced).toContain(terminalToolNudge("athena.completeRun").slice(0, 40));
+    expect(forced).toContain("Total sales today: GHS 1,414,900.");
+  });
+
+  it("falls back to plain completion when the continuation cannot run", async () => {
+    const harness = createConvexAgentContractHarness();
+    const kernel = terminalKernel(harness.adapter.descriptor.adapterVersion, ["success"]);
+    // No scripted step for the continuation: the scripted model throws, and the
+    // adapter still completes with the prose so the kernel can type the miss.
+    harness.scriptTurn("turn-forced-fallback", [{ kind: "complete", narrative: "Prose only, never committed." }]);
+    const { turnRef } = await openTerminalTurn(harness, kernel.hooks, "turn-forced-fallback");
+    await harness.adapter.inspect.settled(turnRef);
+    expect(kernel.events.find((event) => event.kind === "turn_completed")).toMatchObject({
+      outcome: "completed",
+      narrative: "Prose only, never committed.",
+    });
+    expect(harness.adapter.inspect.dispatchResults(turnRef)).toHaveLength(0);
+    expect(harness.modelCalls("turn-forced-fallback")).toHaveLength(2);
+  });
+});
+
+describe("Convex Agent adapter forced-continuation retry", () => {
+  it("gives the forced continuation one corrective step when the first submission is refused", async () => {
+    const harness = createConvexAgentContractHarness();
+    const kernel = terminalKernel(harness.adapter.descriptor.adapterVersion, ["denied", "success"]);
+    harness.scriptTurn("turn-forced-retry", [
+      { kind: "complete", narrative: "Prose ending." },
+      { kind: "tool_call", callId: "c1", toolId: "athena.completeRun", args: {} },
+      { kind: "tool_call", callId: "c2", toolId: "athena.completeRun", args: {} },
+    ]);
+    const { turnRef } = await openTerminalTurn(harness, kernel.hooks, "turn-forced-retry");
+    await harness.adapter.inspect.settled(turnRef);
+    expect(kernel.events.find((event) => event.kind === "turn_completed")).toMatchObject({ outcome: "completed" });
+    const outcomes = harness.adapter.inspect
+      .dispatchResults(turnRef)
+      .map((result) => (result.kind === "outcome" ? result.outcome.kind : result.kind));
+    expect(outcomes).toEqual(["denied", "success"]);
+    expect(harness.modelCalls("turn-forced-retry")).toHaveLength(3);
   });
 });

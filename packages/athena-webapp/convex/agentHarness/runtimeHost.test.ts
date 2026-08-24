@@ -372,6 +372,11 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ create }) => {
       { kind: "tool_call", callId: "c2", toolId: "athena.describe", args: { namespace: "ops.shifts" } },
       { kind: "tool_call", callId: "c3", toolId: "athena.executeProgram", args: { source: PROGRAM } },
       { kind: "pause", gate: "drafted" },
+      // The final prose rides in the same provider step as the commit: the
+      // loop stops at a successful completeRun, so a post-commit prose step
+      // no longer exists to script for the streaming adapter (the contract
+      // fake still ends on the `complete` step below).
+      { kind: "narrative", deltas: ["MODEL-NARRATIVE-NEVER-STORED"] },
       { kind: "tool_call", callId: "c4", toolId: "athena.completeRun", args: () => ({ title: "Open shifts", narrative: "One shift is open.", citedAttemptRefs: [captured.attemptRef], citations: [{ ref: captured.citation, claim: "One shift is open." }] }) },
       { kind: "usage", providerInvocationRef: "inv-1", retryIndex: 0, sequence: 1, eventKey: "inv-1#final", mode: "cumulative", tokens: { input: 40, output: 10 }, terminal: true },
       { kind: "complete", narrative: "MODEL-NARRATIVE-NEVER-STORED" },
@@ -1119,7 +1124,9 @@ describe("turn host — the provisional draft", () => {
     const traced = await t.run((ctx) => listTurnTraceByBindingWithCtx(ctx, seeded.bindingId, AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN + 10));
     expect(traced.filter((row) => row.kind === "trace_capped")).toHaveLength(1);
     expect(traced.at(-1)?.kind).toBe("turn_report");
-    expect(traced.length).toBeLessThanOrEqual(AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN + 2);
+    // +3: the cap marker, the summary row, and the terminal tool_dispatch row
+    // (the durable record of the model-submitted answer) are all exempt.
+    expect(traced.length).toBeLessThanOrEqual(AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN + 3);
   });
 
   it("logs a failed trace write and drops it, and the turn's outcome is untouched", async () => {

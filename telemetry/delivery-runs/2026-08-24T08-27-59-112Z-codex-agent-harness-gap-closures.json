@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-24T08:27:59.112Z",
+  "branch": "codex/agent-harness-gap-closures",
+  "headSha": "bbba6575778ffd3bccdf9d1025e3a6c932df7948",
+  "deliverableDiffFingerprint": "ddb040b10416fb55ad93b562991947bc1dbbae2d90e6c8ad9b834c8b8393380c",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 3,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 1093262.965124
+  },
+  "reviewLoop": {
+    "providerId": "execute",
+    "runId": "agent-harness-gap-closures-40225a6dc6c4",
+    "finalPassId": "final-9852869d",
+    "recordedAt": "2026-08-24T08:09:19.230Z",
+    "iterationCount": 5,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 2,
+      "P2": 19,
+      "P3": 34
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}

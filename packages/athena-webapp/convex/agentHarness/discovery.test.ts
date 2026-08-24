@@ -23,6 +23,7 @@ import {
   type AgentRuntimeGrant,
 } from "./discovery";
 import { buildAgentCapabilityRegistry, projectGrant, toRuntimeGrant } from "./registry";
+import { summarizeCapability } from "../../shared/agentHarness/manifest";
 import {
   FLEET_STORE_HEALTH_MANIFEST,
   SYNTHETIC_SECOND_SURFACE_MANIFESTS,
@@ -73,16 +74,7 @@ const schemas = {
     }),
   ),
   summaries: Object.fromEntries(
-    SYNTHETIC_SECOND_SURFACE_MANIFESTS.map((manifest) => [
-      manifest.capabilityId,
-      {
-        capabilityId: manifest.capabilityId,
-        namespace: `${manifest.namespace.package}.${manifest.namespace.resource}`,
-        purpose: manifest.purpose,
-        verbs: Object.keys(manifest.operations),
-        scopeKind: manifest.scope.kind,
-      },
-    ]),
+    SYNTHETIC_SECOND_SURFACE_MANIFESTS.map((manifest) => [manifest.capabilityId, summarizeCapability(manifest)]),
   ),
   namespaceIndex: Object.fromEntries(
     SYNTHETIC_SECOND_SURFACE_MANIFESTS.map((manifest) => [
@@ -98,7 +90,7 @@ const schemas = {
 const options = { schemas };
 
 describe("grant-filtered discovery", () => {
-  it("discovers compact summaries only, never fields, examples, or bindings", () => {
+  it("discovers compact summaries with call shapes; never meanings, gated fields, or bindings", () => {
     const summaries = discoverCapabilities(grantFor({}), options);
     expect(summaries.map((summary) => summary.namespace).sort()).toEqual([
       "directory.teams",
@@ -111,12 +103,21 @@ describe("grant-filtered discovery", () => {
     expect(serialized).not.toContain("readIntents");
     expect(serialized).not.toContain("functionPath");
     expect(Object.keys(summaries[0]).sort()).toEqual([
+      "calls",
       "capabilityId",
       "namespace",
       "purpose",
+      "resultFields",
       "scopeKind",
       "verbs",
     ]);
+    // Signatures name the declared filters so the first program is not a guess...
+    for (const summary of summaries) {
+      expect(summary.calls.length).toBe(summary.verbs.length);
+      for (const call of summary.calls) expect(call).toMatch(/^(get|list)\(\{.*\}\)$/);
+    }
+    // ...but projection-gated field names stay undisclosed in the global catalog.
+    expect(serialized).not.toContain("incidentNotes");
   });
 
   it("omits packages and capabilities outside the grant", () => {

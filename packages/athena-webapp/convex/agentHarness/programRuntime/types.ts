@@ -72,6 +72,8 @@ export type AgentProgramFacadeEntry = {
   readonly package: string;
   readonly resource: string;
   readonly verbs: readonly AgentProgramFacadeVerb[];
+  /** Public top-level result field names (grant-projected); advisory field checks only, never enforcement. */
+  readonly fields?: readonly string[];
 };
 
 export type AgentProgramHostCall = {

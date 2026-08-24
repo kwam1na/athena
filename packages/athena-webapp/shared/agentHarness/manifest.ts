@@ -861,14 +861,43 @@ export function composeCapabilityPackages(
 // Model-visible projections
 // ---------------------------------------------------------------------------
 
-/** Compact discovery summary: what exists, never what fields it carries. */
+/**
+ * Compact discovery summary: names and call shapes, never meanings, examples,
+ * bounds, or projection-gated material. The call signatures and public field
+ * names exist so the model's first program is written against the declared
+ * arguments and fields instead of guessed ones; everything richer still waits
+ * for `athena.describe`.
+ */
 export type AgentCapabilitySummary = {
   readonly capabilityId: string;
   readonly namespace: string;
   readonly purpose: string;
   readonly verbs: readonly AgentReadVerb[];
   readonly scopeKind: AgentScopeKind;
+  /** One call signature per verb, e.g. `get({ operatingDate })`; an optional filter carries `?`. */
+  readonly calls: readonly string[];
+  /** Public top-level result field names (`[]` marks arrays); projection-gated fields stay undisclosed. */
+  readonly resultFields: readonly string[];
 };
+
+function verbSignature(verb: AgentReadVerb, filters: AgentFilterRecord): string {
+  const names = Object.entries(filters).map(([name, schema]) => {
+    const label = schema.required ? name : `${name}?`;
+    // Small enums are disclosed inline: a filter whose legal values are never
+    // shown is answered with a guess, and the guess costs a denied round trip.
+    if (schema.kind === "enum" && schema.values.length <= 4) {
+      return `${label}: ${schema.values.map((value) => `"${value}"`).join("|")}`;
+    }
+    return label;
+  });
+  return names.length === 0 ? `${verb}({})` : `${verb}({ ${names.join(", ")} })`;
+}
+
+function publicResultFieldNames(fields: AgentFieldRecord): readonly string[] {
+  return Object.entries(fields)
+    .filter(([, schema]) => schema.projection === undefined)
+    .map(([name, schema]) => (schema.kind === "array" ? `${name}[]` : name));
+}
 
 export function summarizeCapability(manifest: AgentCapabilityManifest): AgentCapabilitySummary {
   return {
@@ -877,6 +906,8 @@ export function summarizeCapability(manifest: AgentCapabilityManifest): AgentCap
     purpose: manifest.purpose,
     verbs: supportedVerbs(manifest),
     scopeKind: manifest.scope.kind,
+    calls: supportedVerbs(manifest).map((verb) => verbSignature(verb, manifest.operations[verb]?.filters ?? {})),
+    resultFields: publicResultFieldNames(manifest.result.fields),
   };
 }
 

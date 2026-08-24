@@ -298,18 +298,28 @@ function analyze(source: string, root: BabelNode, wrapper: BabelNode, facade: Fa
     if (typeof node.start === "number" && typeof node.end === "number") deletions.push([node.start, node.end]);
   };
 
+  const grantedPaths = () => {
+    const paths: string[] = [];
+    for (const [pkg, resources] of facade) {
+      for (const [resource, verbs] of resources) paths.push(`${pkg}.${resource}.${[...verbs].sort().join("|")}`);
+    }
+    return paths.sort().join(", ");
+  };
   const checkFacadeUse = (node: BabelNode, parent: BabelNode | undefined, key: string) => {
     const chain = memberChain(node);
     if (!chain || (chain.root.name as string) !== "athena" || declared.has("athena")) return;
     facadeRoots.add(chain.root);
     const path = chain.segments.join(".");
     if (chain.segments.length !== 3 || !parent || parent.type !== "CallExpression" || key !== "callee") {
-      add("facade_misuse", node, `\`athena${path ? `.${path}` : ""}\` must be called as \`athena.<package>.<resource>.<verb>(args)\`; it cannot be aliased, assigned, passed, or partially applied.`);
+      // A wrong-arity path is a guessed namespace, not aliasing: name what is
+      // actually granted so the correction is a lookup, not another guess.
+      const hint = chain.segments.length > 0 && chain.segments.length !== 3 ? ` Granted reads: ${grantedPaths()}.` : "";
+      add("facade_misuse", node, `\`athena${path ? `.${path}` : ""}\` must be called as \`athena.<package>.<resource>.<verb>(args)\`; it cannot be aliased, assigned, passed, or partially applied.${hint}`);
       return;
     }
     const [pkg, resource, verb] = chain.segments;
     const verbs = facade.get(pkg)?.get(resource);
-    if (!verbs || !verbs.has(verb)) add("facade_path_unknown", node, `\`athena.${path}\` is not part of the granted facade.`);
+    if (!verbs || !verbs.has(verb)) add("facade_path_unknown", node, `\`athena.${path}\` is not part of the granted facade. Granted reads: ${grantedPaths()}.`);
     const args = parent.arguments as BabelNode[];
     if (args.length > 1) add("facade_args_invalid", node, "Facade calls take a single arguments object.");
     const [arg] = args;
@@ -500,4 +510,123 @@ export function validateProgramSource(source: string, options: ValidateProgramSo
     return { ok: false, status: "rejected", issues: [{ ...issue, message: `Type stripping produced invalid JavaScript: ${issue.message}` }] };
   }
   return { ok: true, source: withStrictDirective(stripped), sourceBytes };
+}
+
+// ---------------------------------------------------------------------------
+// Advisory field scan (never blocks execution)
+// ---------------------------------------------------------------------------
+
+export type AgentProgramFieldAdvisory = {
+  readonly namespace: string;
+  readonly field: string;
+  readonly message: string;
+};
+
+/**
+ * Advisory scan for reads of result fields the capability does not declare:
+ * `day.envelope.data.totalSales` when `reports.daySales` has no `totalSales`
+ * yields `undefined`, the program returns `null`, and the model narrates a
+ * misread as missing data. The scan resolves the simple binding forms programs
+ * actually write — `const day = await athena.p.r.get(...)`, an alias
+ * `const data = day.envelope.data`, and destructures of that object — and
+ * checks accessed names against the entry's declared `fields`.
+ *
+ * Advisory only: it runs after validation, never rejects a program, and never
+ * enters replay identity. Only `get` reads are checked; a `list` result's data
+ * is an array whose element shape is exercised through callbacks this scan
+ * does not follow.
+ */
+export function collectProgramFieldAdvisories(
+  source: string,
+  facade: readonly AgentProgramFacadeEntry[],
+): readonly AgentProgramFieldAdvisory[] {
+  const fieldsByNamespace = new Map<string, ReadonlySet<string>>();
+  for (const entry of facade) {
+    if (entry.fields && entry.fields.length > 0 && entry.verbs.includes("get")) {
+      fieldsByNamespace.set(`${entry.package}.${entry.resource}`, new Set(entry.fields));
+    }
+  }
+  if (fieldsByNamespace.size === 0) return [];
+  let file: BabelNode;
+  try {
+    file = parse(wrap(source), PARSE_OPTIONS) as unknown as BabelNode;
+  } catch {
+    return []; // Validation owns syntax reporting; advisories need a parse.
+  }
+
+  const readVars = new Map<string, string>(); // identifier -> namespace of a `get` read
+  const dataVars = new Map<string, string>(); // identifier -> namespace of an `envelope.data` alias
+  const advisories: AgentProgramFieldAdvisory[] = [];
+  const seen = new Set<string>();
+  const check = (namespace: string, field: string) => {
+    const fields = fieldsByNamespace.get(namespace);
+    if (!fields || fields.has(field)) return;
+    const key = `${namespace}:${field}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    advisories.push({
+      namespace,
+      field,
+      message: `\`${field}\` is not a field of ${namespace}; its fields are: ${[...fields].join(", ")}.`,
+    });
+  };
+
+  /** Namespace of a checked facade `get` call: `athena.<pkg>.<res>.get(...)`, awaited or not. */
+  const facadeGetNamespace = (node: BabelNode): string | undefined => {
+    const expr = node.type === "AwaitExpression" ? (node.argument as BabelNode) : node;
+    if (expr.type !== "CallExpression") return undefined;
+    const chain = memberChain(expr.callee as BabelNode);
+    if (!chain || (chain.root.name as string) !== "athena" || chain.segments.length !== 3) return undefined;
+    const [pkg, resource, verb] = chain.segments;
+    if (verb !== "get") return undefined;
+    const namespace = `${pkg}.${resource}`;
+    return fieldsByNamespace.has(namespace) ? namespace : undefined;
+  };
+
+  const checkPattern = (pattern: BabelNode, namespace: string) => {
+    if (pattern.type !== "ObjectPattern") return;
+    for (const property of pattern.properties as BabelNode[]) {
+      if (property.type === "ObjectProperty" && property.computed !== true) {
+        const key = property.key as BabelNode;
+        if (key.type === "Identifier") check(namespace, key.name as string);
+      }
+    }
+  };
+
+  const visit = (node: BabelNode, parent: BabelNode | undefined, key: string) => {
+    if (node.type === "VariableDeclarator" && isNode(node.init)) {
+      const init = node.init as BabelNode;
+      const id = node.id as BabelNode;
+      const namespace = facadeGetNamespace(init);
+      if (namespace && id.type === "Identifier") readVars.set(id.name as string, namespace);
+      const chain = memberChain(init.type === "AwaitExpression" ? (init.argument as BabelNode) : init);
+      if (chain) {
+        const fromRead = readVars.get(chain.root.name as string);
+        if (fromRead && chain.segments.length === 2 && chain.segments[0] === "envelope" && chain.segments[1] === "data") {
+          if (id.type === "Identifier") dataVars.set(id.name as string, fromRead);
+          else checkPattern(id, fromRead);
+        }
+        const fromData = dataVars.get(chain.root.name as string);
+        if (fromData && chain.segments.length === 0) {
+          if (id.type === "Identifier") dataVars.set(id.name as string, fromData);
+          else checkPattern(id, fromData);
+        }
+      }
+    }
+    const parentIsChain = parent && (parent.type === "MemberExpression" || parent.type === "OptionalMemberExpression") && key === "object";
+    if ((node.type === "MemberExpression" || node.type === "OptionalMemberExpression") && !parentIsChain) {
+      const chain = memberChain(node);
+      if (chain) {
+        const fromRead = readVars.get(chain.root.name as string);
+        if (fromRead && chain.segments.length >= 3 && chain.segments[0] === "envelope" && chain.segments[1] === "data") {
+          check(fromRead, chain.segments[2]);
+        }
+        const fromData = dataVars.get(chain.root.name as string);
+        if (fromData && chain.segments.length >= 1) check(fromData, chain.segments[0]);
+      }
+    }
+    for (const { key: childKey, child } of children(node)) visit(child, node, childKey);
+  };
+  visit(file, undefined, "root");
+  return advisories;
 }

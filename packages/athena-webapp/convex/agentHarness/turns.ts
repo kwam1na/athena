@@ -101,6 +101,8 @@ import {
   resumeTurnBindingWithCtx,
 } from "./turnBindings";
 import { AGENT_TOOL_NARRATIVE_MAX_BYTES, type AgentDescribeGrantOutcome } from "./tools";
+import { profileLexicon } from "../../shared/agentHarness/productLexicon";
+import { discoverCapabilities, type AgentCapabilitySchemaIndex } from "./discovery";
 
 type ReadCtx = QueryCtx | MutationCtx;
 
@@ -112,7 +114,10 @@ export const AGENT_CONTEXT_MAX_KEYS = 8;
 export const AGENT_CONTEXT_VALUE_MAX_BYTES = 256;
 export const AGENT_TURN_PROGRESS_CAP = 24;
 /** Turn elapsed headroom above the program ceiling so a running program is never raced by the turn timer. */
-export const AGENT_TURN_ELAPSED_HEADROOM_MS = 30_000;
+// 60 s, not 30: with the catalog in the prompt the model runs fewer, longer
+// provider steps, and a final answer step legitimately mid-generation was
+// dying at the 90 s ceiling. The ceiling is a hang backstop, not a pace-setter.
+export const AGENT_TURN_ELAPSED_HEADROOM_MS = 60_000;
 
 /** The runtime adapter's thread key: profile + store + operator + client thread key. Hashed by the adapter. */
 export function athenaThreadKeyFor(input: { profileId: string; storeId: Id<"store">; actorRef: string; threadKey: string }): string {
@@ -210,6 +215,8 @@ export type AgentTurnSeamConfig = {
    * provisional row's exposure bound). Production is `Date.now`; tests pin it.
    */
   readonly clock?: () => number;
+  /** Model-projectable capability schemas for the prompt catalog (tests bind fixtures; production defaults to the generated index). */
+  readonly schemas?: AgentCapabilitySchemaIndex;
 };
 
 export type AgentTurnPlan = {
@@ -225,11 +232,15 @@ export type AgentTurnPlan = {
   readonly adapterVersion: string;
   readonly adapter: { readonly threadKey: string; readonly contextBindingRef: string; readonly correlation: { readonly operatorRef: string; readonly profileId: string }; readonly turnKey: string };
   readonly prompt: AgentProjectedPrompt;
+  /** The operator's question, verbatim: tone-sensor waivers come from it. */
+  readonly question: string;
   readonly history: AgentProjectedHistory;
   readonly model: AgentModelSelection;
   readonly egressClass: AgentEgressClass;
   readonly provider: AgentProviderEvidence;
   readonly limits: AgentTurnLimits;
+  /** The prompt carries the grant catalog, so the provider list may omit athena.discover. */
+  readonly catalogEmbedded: boolean;
   readonly recorded: { readonly runtimeThreadRef?: string; readonly runtimeInputRef?: string; readonly runtimeScheduleRef?: string; readonly runtimeTurnRef?: string };
 };
 
@@ -356,7 +367,15 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
     const selected = selectProviderForEgress(profile.egressPolicy, egressClass, { isConfigured: isProviderConfigured });
     if (selected.kind !== "selected") return refuse("no_compatible_provider", "No allowlisted provider covers this turn's egress class.", false);
 
-    const prompt = assembleTurnPrompt({ profileId: grant.profileKey, intent: profile.promptPolicy.intent, untrustedDataLabel: profile.promptPolicy.untrustedDataLabel, context, question, egressClass: "operational" });
+    // The catalog is deterministic per grant, so it rides in the prompt: every
+    // measured turn spent its first provider step on a discover whose answer
+    // the kernel already knew. The viewer-authority resolution above already
+    // projected the grant under live enablement, so its runtime grant is the
+    // catalog's source — dispatch-purpose reauthorization is unusable at this
+    // rung (the run is not `running` yet), and a silent fallback on it once
+    // shipped an empty catalog.
+    const capabilities = discoverCapabilities(authority.runtimeGrant, { schemas: config.schemas });
+    const prompt = assembleTurnPrompt({ profileId: grant.profileKey, intent: profile.promptPolicy.intent, untrustedDataLabel: profile.promptPolicy.untrustedDataLabel, context, question, capabilities, egressClass: "operational", lexicon: profileLexicon(grant.profileKey) });
     const provider = describeProviderSelectionForEvidence(selected, egressClass);
 
     const existingInvocation = await ctx.db.query("intelligenceProviderInvocation").withIndex("by_runId", (q) => q.eq("runId", run._id)).take(1);
@@ -394,6 +413,7 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
         profileId: grant.profileKey,
         actorRef: grant.initiatingActorRef,
         threadKey,
+        question,
         step: binding.step,
         adapterKind: grant.adapterKind,
         adapterVersion: grant.adapterVersion,
@@ -409,6 +429,7 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
         egressClass,
         provider,
         limits: { maxToolCalls: grant.budgetPolicy.maxAttempts * 2 + 4, maxElapsedMs: elapsed },
+        catalogEmbedded: capabilities.length > 0,
         recorded: {
           runtimeThreadRef: binding.runtimeThreadRef,
           runtimeInputRef: binding.runtimeInputRef,

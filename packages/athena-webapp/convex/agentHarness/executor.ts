@@ -40,7 +40,7 @@ import type {
   AgentSettleCallResponse,
 } from "./executorSeams";
 // eslint-disable-next-line @convex-dev/import-wrong-runtime -- this module is "use node" too; the rule only inspects the imported file
-import { validateProgramSource } from "./programRuntime/programValidation";
+import { collectProgramFieldAdvisories, validateProgramSource, type AgentProgramFieldAdvisory } from "./programRuntime/programValidation";
 // eslint-disable-next-line @convex-dev/import-wrong-runtime -- this module is "use node" too; the rule only inspects the imported file
 import { createQuickJsProgramRuntime } from "./programRuntime/quickJsRuntime";
 import {
@@ -106,7 +106,7 @@ export type AgentExecutorCallRecord = {
 };
 
 export type AgentExecuteProgramResult =
-  | (Extract<AgentFinishAttemptOutcome, { outcome: "result" }> & { readonly diagnostics: AgentProgramDiagnostics; readonly calls: readonly AgentExecutorCallRecord[] })
+  | (Extract<AgentFinishAttemptOutcome, { outcome: "result" }> & { readonly diagnostics: AgentProgramDiagnostics; readonly calls: readonly AgentExecutorCallRecord[]; readonly fieldAdvisories?: readonly AgentProgramFieldAdvisory[] })
   | (Extract<AgentFinishAttemptOutcome, { outcome: "withheld" }> & { readonly diagnostics: AgentProgramDiagnostics; readonly calls: readonly AgentExecutorCallRecord[] })
   | { readonly outcome: "rejected"; readonly attemptId?: Id<"agentProgramAttempt">; readonly issues: readonly AgentProgramValidationIssue[] }
   | { readonly outcome: "failed" | "canceled"; readonly attemptId: Id<"agentProgramAttempt">; readonly error: { code: string; message: string; retryable?: boolean }; readonly diagnostics: AgentProgramDiagnostics; readonly calls: readonly AgentExecutorCallRecord[] }
@@ -174,6 +174,13 @@ export function createProgramExecutor(config: AgentProgramExecutorConfig) {
       facade: facade.map((entry) => ({ package: entry.package, resource: entry.resource, verbs: entry.verbs })),
       maxSourceBytes: ceilings.maxSourceBytes,
     });
+    // Advisory only: reads of undeclared result fields ride back on a successful
+    // result so a `null` from a guessed field name reads as a misread, not as
+    // missing data. Never blocks execution and never enters replay identity.
+    // Computed lazily: only a completed attempt attaches advisories, so the
+    // second parse never runs for rejected, failed, or withheld attempts.
+    let advisories: readonly AgentProgramFieldAdvisory[] | undefined;
+    const fieldAdvisoriesLazy = () => (advisories ??= validation.ok ? collectProgramFieldAdvisories(input.source, facade) : []);
     const begun = (await ctx.runMutation(config.seams.beginAttempt, {
       runId: input.runId,
       attemptIdempotencyKey: input.attemptIdempotencyKey,
@@ -312,24 +319,30 @@ export function createProgramExecutor(config: AgentProgramExecutorConfig) {
     }
     if (outcome.status === "completed") {
       const finished = await finish(ctx, attemptId, { status: "completed", output: outcome.output, diagnostics });
-      return withDiagnostics(finished, diagnostics, calls);
+      return withDiagnostics(finished, diagnostics, calls, finished.outcome === "result" ? fieldAdvisoriesLazy() : []);
     }
     if (outcome.status === "canceled") {
       const finished = await finish(ctx, attemptId, { status: "canceled", reason: "aborted", diagnostics });
-      return withDiagnostics(finished, diagnostics, calls);
+      return withDiagnostics(finished, diagnostics, calls, finished.outcome === "result" ? fieldAdvisoriesLazy() : []);
     }
     const failure = normalizeProgramFailure(outcome);
     const finished = await finish(ctx, attemptId, { status: "failed", code: failure.code, message: failure.message, diagnostics });
-    return withDiagnostics(finished, diagnostics, calls);
+    return withDiagnostics(finished, diagnostics, calls, finished.outcome === "result" ? fieldAdvisoriesLazy() : []);
   }
 
   async function finish(ctx: AgentExecutorCtx, attemptId: Id<"agentProgramAttempt">, end: AgentAttemptEnd): Promise<AgentFinishAttemptOutcome> {
     return (await ctx.runMutation(config.seams.finishAttempt, { attemptId, end, now: now() })) as AgentFinishAttemptOutcome;
   }
 
-  function withDiagnostics(finished: AgentFinishAttemptOutcome, diagnostics: AgentProgramDiagnostics, calls: readonly AgentExecutorCallRecord[]): AgentExecuteProgramResult {
+  function withDiagnostics(
+    finished: AgentFinishAttemptOutcome,
+    diagnostics: AgentProgramDiagnostics,
+    calls: readonly AgentExecutorCallRecord[],
+    fieldAdvisories: readonly AgentProgramFieldAdvisory[] = [],
+  ): AgentExecuteProgramResult {
     switch (finished.outcome) {
       case "result":
+        return { ...finished, diagnostics, calls, ...(fieldAdvisories.length > 0 ? { fieldAdvisories } : {}) };
       case "withheld":
         return { ...finished, diagnostics, calls };
       case "failed":

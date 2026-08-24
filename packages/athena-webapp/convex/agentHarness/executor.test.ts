@@ -106,6 +106,24 @@ beforeEach(() => {
   TEST_PORT_BEHAVIOR.shifts = "normal";
 });
 
+describe("field advisories thread from the grant-projected facade to the result (review t-5)", () => {
+  it("a read of an undeclared field rides back as an advisory naming the declared fields", async () => {
+    const t = convexTest(schema, modules);
+    const run = await t.run((ctx) => seedDelegatedRun(ctx, "advisory"));
+    const executor = await makeExecutor();
+    // Advisories cover get reads (a list's rows are the program's to shape);
+    // read an undeclared field off the storeDay snapshot.
+    const source = `const day = await athena.ops.storeDay.get({ operatingDate: "2026-08-21" });
+return { closedBy: day.kind === "result" ? day.envelope.data.closedBy : null };`;
+    const result = expectResult(await executor.executeProgram(executorCtx(t), { runId: run.runId, attemptIdempotencyKey: "adv1", source }));
+    const advisories = result.fieldAdvisories ?? [];
+    expect(advisories.length).toBeGreaterThan(0);
+    const combined = advisories.map((advisory) => advisory.message).join(" ");
+    expect(combined).toContain("closedBy");
+    expect(combined).toContain("operatingDate");
+  });
+});
+
 describe("one execution path: validate → attempt → sandbox → one async bridge → one result", () => {
   it("admits registered reads through the bridge, returns exactly one structured result with citations, commits provider egress, and leaves the run running", async () => {
     const t = convexTest(schema, modules);

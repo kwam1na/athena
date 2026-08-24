@@ -6,6 +6,10 @@
  * contract proofs for every public function (`assertConformsToExportedReturns`).
  */
 import { convexTest, type TestConvex } from "convex-test";
+
+import { TEST_ADMISSION as TEST_ADMISSION_FOR_CATALOG, TEST_MANIFESTS } from "./delegatedAdmission.testPorts";
+import { summarizeCapability } from "../../shared/agentHarness/manifest";
+import type { AgentCapabilitySchemaIndex } from "./discovery";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { Id } from "../_generated/dataModel";
@@ -23,7 +27,7 @@ import {
   seedDelegatedOperator,
 } from "./delegatedAdmission.testPorts";
 import { TEST_EXECUTOR_SEAMS, beginExecutingAttempt, bridgeCall } from "./executor.testSeams";
-import { buildAnswerArtifactPayload } from "./historyProjection";
+import { buildAnswerArtifactPayload, resolveViewerAuthorityWithCtx } from "./historyProjection";
 import { advanceCompatibilityEpochWithCtx, cancelAgentRunWithCtx, failAgentRunWithCtx, getCurrentCompatibilityEpochWithCtx, markAgentRunRunningWithCtx } from "./lifecycle";
 import { AGENT_TURN_NARRATIVE_TRAIL_RETENTION_MS, loadTurnNarrativeTrailByBindingWithCtx } from "./narrativeTrail";
 import { AGENT_PROVISIONAL_NARRATIVE_TTL_MS, loadProvisionalNarrativeByBindingWithCtx, upsertProvisionalNarrativeWithCtx } from "./provisionalNarrative";
@@ -46,9 +50,8 @@ import {
   inspectCitationEvidence,
   previewTurnNarrative,
   resumeTurn,
-  startTurn,
-} from "./turns";
-import { TEST_TURN_SEAMS, seedRecordedTurn } from "./turns.testSeams";
+  startTurn, createAgentTurnSeams } from "./turns";
+import { TEST_OUTBOX, TEST_TURN_SEAMS, seedRecordedTurn } from "./turns.testSeams";
 
 const modules = Object.fromEntries(
   Object.entries(import.meta.glob("../**/*.ts")).map(([path, loader]) => [
@@ -1015,3 +1018,79 @@ describe("narrative trail: written at commit, released and withdrawn with the an
     expect(await t.run((ctx) => entry.getTurnAnswer(admitted(ctx, downgraded.operator.userId), downgradedArgs))).toEqual({ kind: "unavailable", reason: "egress_beyond_authority" });
   });
 });
+
+describe("viewer authority carries the projected runtime grant", () => {
+  it("prepareTurn's catalog source is the live projection, not dispatch reauthorization", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run((ctx) => seedRecordedTurn(ctx, "catalog-source"));
+    const authority = await t.run((ctx) =>
+      resolveViewerAuthorityWithCtx(ctx, TEST_ADMISSION.config, {
+        viewer: { kind: "normal_user", athenaUserId: seeded.operator.userId },
+        storeId: seeded.operator.storeId,
+        organizationId: seeded.operator.organizationId,
+        profileId: TEST_PROFILE_ID,
+        now: TEST_NOW_BASE + 1,
+      }),
+    );
+    expect(authority.kind).toBe("authorized");
+    if (authority.kind !== "authorized") return;
+    // The runtime grant is projected under live enablement at prepare time —
+    // the run is not `running` yet at that rung, so dispatch reauthorization
+    // (which a silent fallback once leaned on) can never serve the catalog.
+    expect(authority.runtimeGrant.capabilityIds.length).toBeGreaterThan(0);
+    expect(authority.runtimeGrant.profileId).toBe(TEST_PROFILE_ID);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Embedded catalog: prepareTurn with a bound schema index (review t-1/t-2)
+// ---------------------------------------------------------------------------
+
+describe("prepareTurn with a bound schema index embeds the grant catalog", () => {
+  const TEST_SCHEMA_INDEX: AgentCapabilitySchemaIndex = {
+    declarations: Object.fromEntries(
+      TEST_MANIFESTS.map((manifest) => {
+        const { binding: _binding, ...declaration } = manifest;
+        return [manifest.capabilityId, declaration as never];
+      }),
+    ),
+    summaries: Object.fromEntries(TEST_MANIFESTS.map((manifest) => [manifest.capabilityId, summarizeCapability(manifest)])),
+    namespaceIndex: Object.fromEntries(TEST_MANIFESTS.map((manifest) => [`${manifest.namespace.package}.${manifest.namespace.resource}`, manifest.capabilityId])),
+    packageIndex: Object.fromEntries(TEST_MANIFESTS.map((manifest) => [manifest.capabilityId, manifest.namespace.package])),
+  };
+  const SCHEMA_BOUND_SEAMS = createAgentTurnSeams({
+    admission: TEST_ADMISSION_FOR_CATALOG,
+    outbox: TEST_OUTBOX,
+    isProviderConfigured: (providerId) => providerId === "athena_contract_fake",
+    clock: () => TEST_CLOCK.now,
+    schemas: TEST_SCHEMA_INDEX,
+  });
+
+  it("the plan carries catalogEmbedded, the verbatim question, and the rendered call shapes", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run((ctx) => seedRecordedTurn(ctx, "catalog-embed", {}));
+    const prepared = await t.run((ctx) => SCHEMA_BOUND_SEAMS.prepareTurnWithCtx(ctx, { bindingId: seeded.bindingId, now: TEST_NOW_BASE + 1 }));
+    expect(prepared.kind, JSON.stringify(prepared)).toBe("ready");
+    if (prepared.kind !== "ready") throw new Error("unreachable");
+    expect(prepared.plan.catalogEmbedded).toBe(true);
+    expect(typeof prepared.plan.question).toBe("string");
+    expect(prepared.plan.question.length).toBeGreaterThan(0);
+    expect(prepared.plan.prompt.text).toContain(prepared.plan.question);
+    // The catalog block renders the granted namespaces with their signatures,
+    // including the disclosed small-enum values, and drops every discover mention.
+    expect(prepared.plan.prompt.text).toContain("ops.shifts");
+    expect(prepared.plan.prompt.text).toContain('status?: "open"|"closed"');
+    expect(prepared.plan.prompt.text).not.toContain("athena.discover");
+  });
+
+  it("without a schema index the catalog stays out and the discover-first policy line stands", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run((ctx) => seedRecordedTurn(ctx, "catalog-none", {}));
+    const prepared = await t.run((ctx) => TEST_TURN_SEAMS.prepareTurnWithCtx(ctx, { bindingId: seeded.bindingId, now: TEST_NOW_BASE + 1 }));
+    expect(prepared.kind, JSON.stringify(prepared)).toBe("ready");
+    if (prepared.kind !== "ready") throw new Error("unreachable");
+    expect(prepared.plan.catalogEmbedded).toBe(false);
+    expect(prepared.plan.prompt.text).toContain("athena.discover");
+  });
+});
+
