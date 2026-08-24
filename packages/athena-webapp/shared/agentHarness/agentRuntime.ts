@@ -23,6 +23,7 @@
  * its edge and never owns capability, admission, executor, or spend policy.
  */
 import { computeContentDigest } from "./execution";
+import type { JsonValue } from "./manifest";
 import {
   AGENT_HARNESS_PROTOCOL_VERSION,
   isNonEmptyString,
@@ -37,7 +38,7 @@ import {
   type Timestamp,
 } from "./values";
 
-export const AGENT_RUNTIME_PROTOCOL_VERSION = "athena.agent-runtime.v2" as const;
+export const AGENT_RUNTIME_PROTOCOL_VERSION = "athena.agent-runtime.v3" as const;
 
 export type RuntimeThreadRef = OpaqueRef<"runtime_thread">;
 export type RuntimeInputRef = OpaqueRef<"runtime_input">;
@@ -788,6 +789,7 @@ export function calculateUsageCost(tokens: AgentTokenCounts, rateCard: AgentUsag
 /** Server-authored, non-sensitive milestones; the only progress the browser may see. */
 export const AGENT_PROGRESS_MILESTONES = [
   "reconnecting",
+  "reading_ahead",
   "checking_sources",
   "reading_sources",
   "composing_answer",
@@ -952,6 +954,67 @@ export type AgentRuntimeProjectionOutcome =
   | { readonly kind: "projected"; readonly projectionRef: RuntimeProjectionRef; readonly replayed: boolean }
   | { readonly kind: "rejected"; readonly reason: "turn_unknown" | "turn_not_terminal" | "thread_mismatch" };
 
+// ---------------------------------------------------------------------------
+// Pre-executed exchange (protocol v3)
+// ---------------------------------------------------------------------------
+
+/**
+ * A tool exchange the HOST already executed, seeded into the transcript
+ * before the first model step. Carried on `startTurn` input; each adapter
+ * renders it in its native transcript shape (a synthetic assistant tool call
+ * plus its tool result) and never dispatches it. The payloads are exactly
+ * what a real dispatch would have produced: canonicalized args and the
+ * kernel-sanitized result envelope.
+ */
+export type AgentPreExecutedExchange = {
+  /** The Athena tool the exchange replays (the program tool in v1). */
+  readonly toolId: string;
+  /** Distinguishes this exchange's synthetic call id; stable per attempt. */
+  readonly exchangeKey: string;
+  readonly args: JsonValue;
+  readonly result: JsonValue;
+};
+
+const EXCHANGE_JSON_DEPTH_MAX = 64;
+
+function isJsonLike(value: unknown, depth = 0): boolean {
+  if (depth > EXCHANGE_JSON_DEPTH_MAX) return false;
+  if (value === null) return true;
+  const kind = typeof value;
+  if (kind === "string" || kind === "boolean") return true;
+  if (kind === "number") return Number.isFinite(value as number);
+  if (Array.isArray(value)) return value.every((entry) => isJsonLike(entry, depth + 1));
+  if (isPlainObject(value)) return Object.values(value).every((entry) => entry === undefined || isJsonLike(entry, depth + 1));
+  return false;
+}
+
+export function validatePreExecutedExchange(
+  value: unknown,
+):
+  | { readonly ok: true; readonly exchange: AgentPreExecutedExchange }
+  | { readonly ok: false; readonly issues: readonly AgentContractIssue[] } {
+  const issues: AgentContractIssue[] = [];
+  if (!isPlainObject(value)) {
+    return { ok: false, issues: [{ code: "exchange_invalid", path: "$", message: "A pre-executed exchange must be a plain object." }] };
+  }
+  if (!isNonEmptyString(value.toolId)) issues.push({ code: "exchange_invalid", path: "toolId", message: "toolId must be a non-empty string." });
+  if (!isNonEmptyString(value.exchangeKey) || (value.exchangeKey as string).length > 128) {
+    issues.push({ code: "exchange_invalid", path: "exchangeKey", message: "exchangeKey must be a short non-empty string." });
+  }
+  if (!isJsonLike(value.args)) issues.push({ code: "exchange_invalid", path: "args", message: "args must be a JSON value." });
+  if (!isJsonLike(value.result)) issues.push({ code: "exchange_invalid", path: "result", message: "result must be a JSON value." });
+  if (issues.length > 0) return { ok: false, issues };
+  return {
+    ok: true,
+    exchange: {
+      toolId: (value.toolId as string).trim(),
+      exchangeKey: value.exchangeKey as string,
+      args: canonicalize(value.args) as JsonValue,
+      result: canonicalize(value.result) as JsonValue,
+    },
+  };
+}
+
 export type AgentRuntimeAdapter = {
   readonly descriptor: AgentRuntimeAdapterDescriptor;
 
@@ -978,6 +1041,13 @@ export type AgentRuntimeAdapter = {
       readonly tools: readonly AgentToolDefinition[];
       readonly model: AgentModelSelection;
       readonly limits: AgentTurnLimits;
+      /**
+       * A host pre-executed tool exchange to seed into the transcript before
+       * the first model step (protocol v3): the model sees the call and its
+       * sanitized result as if it had made the read itself, and never
+       * re-authors it. Rendered natively by each adapter; never dispatched.
+       */
+      readonly preExecutedExchange?: AgentPreExecutedExchange;
     },
     hooks: AgentRuntimeTurnHooks,
   ) => Promise<{ readonly turnRef: RuntimeTurnRef }>;

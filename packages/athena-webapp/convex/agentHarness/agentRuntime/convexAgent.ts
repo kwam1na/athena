@@ -68,6 +68,8 @@ import {
   type RuntimeProjectionRef,
   type RuntimeThreadRef,
   type RuntimeTurnRef,
+  validatePreExecutedExchange,
+  type AgentPreExecutedExchange,
 } from "../../../shared/agentHarness/agentRuntime";
 import { opaqueRef, type Timestamp } from "../../../shared/agentHarness/values";
 import { cleanupConvexAgentRuntime } from "./convexAgentCleanup";
@@ -144,6 +146,20 @@ const NARRATIVE_SENTENCE_BOUNDARY = /[.!?…\n][)\]"'”’]*\s*$/;
 const NATIVE_SEPARATOR = "__";
 
 /** Provider tool names must match `^[a-zA-Z0-9_-]+$`; Athena ids use dots. */
+/**
+ * The synthetic transcript pair for a host pre-executed exchange: the
+ * assistant "made" the call and the tool "answered" with the sanitized
+ * result. Never dispatched; the ledger never sees it.
+ */
+function preExecutedMessages(exchange: AgentPreExecutedExchange): ModelMessage[] {
+  const toolCallId = `preexec-${exchange.exchangeKey}`;
+  const toolName = toNativeToolName(exchange.toolId);
+  return [
+    { role: "assistant", content: [{ type: "tool-call", toolCallId, toolName, input: exchange.args }] },
+    { role: "tool", content: [{ type: "tool-result", toolCallId, toolName, output: { type: "json", value: exchange.result } }] },
+  ] as ModelMessage[];
+}
+
 export function toNativeToolName(toolId: string): string {
   if (toolId.includes(NATIVE_SEPARATOR)) throw new Error(`Athena tool id "${toolId}" may not contain "${NATIVE_SEPARATOR}".`);
   const native = toolId.split(".").join(NATIVE_SEPARATOR);
@@ -297,6 +313,8 @@ type TurnState = {
   terminalToolSettled: boolean;
   readonly events: AgentRuntimeEvent[];
   readonly dispatchResults: AgentToolDispatchResult[];
+  /** Host pre-executed exchange to seed as a synthetic tool exchange (protocol v3). */
+  readonly preExecutedExchange?: AgentPreExecutedExchange;
   readonly abort: AbortController;
   readonly settled: { promise: Promise<void>; resolve: () => void };
   timer?: ReturnType<typeof setTimeout>;
@@ -598,8 +616,12 @@ export function createConvexAgentRuntimeAdapter(options: ConvexAgentRuntimeAdapt
         actionCtx(),
         { threadId: turn.input.thread.threadId },
         {
-          prompt: turn.input.prompt.text,
-          messages: history,
+          // With a pre-executed exchange the question moves INTO messages so
+          // the synthetic call-and-result pair sits after it — the transcript
+          // shape the model continues from is "asked, read, now answer".
+          ...(turn.preExecutedExchange
+            ? { messages: [...history, { role: "user", content: turn.input.prompt.text } as ModelMessage, ...preExecutedMessages(turn.preExecutedExchange)] }
+            : { prompt: turn.input.prompt.text, messages: history }),
           tools: nativeTools(turn, definitions),
           stopWhen: nativeTerminal ? [stepCountIs(limits.maxToolCalls + 1), () => turn.terminalToolSettled] : stepCountIs(limits.maxToolCalls + 1),
           ...(options.providerOptions ? { providerOptions: options.providerOptions as never } : {}),
@@ -694,6 +716,14 @@ export function createConvexAgentRuntimeAdapter(options: ConvexAgentRuntimeAdapt
       if (!inputState || inputState.thread.threadRef !== input.threadRef) {
         throw new ConvexAgentAdapterError("input_not_loaded", "saveInput must run in this invocation before startTurn (history is re-projected per attempt).");
       }
+      let preExecutedExchange: AgentPreExecutedExchange | undefined;
+      if (input.preExecutedExchange !== undefined) {
+        const validated = validatePreExecutedExchange(input.preExecutedExchange);
+        if (!validated.ok) {
+          throw new ConvexAgentAdapterError("exchange_invalid", `The pre-executed exchange is malformed: ${JSON.stringify(validated.issues)}`);
+        }
+        preExecutedExchange = validated.exchange;
+      }
       const startedAt = clock();
       const token = await mintScopedToken("tn", inputState.thread.token, inputState.token, String(startedAt), String(turnsByRef.size));
       const turnRef = opaqueRef("runtime_turn", token);
@@ -730,6 +760,7 @@ export function createConvexAgentRuntimeAdapter(options: ConvexAgentRuntimeAdapt
         terminalToolSettled: false,
         events: [],
         dispatchResults: [],
+        ...(preExecutedExchange ? { preExecutedExchange } : {}),
         abort: new AbortController(),
         settled: { promise: settledPromise, resolve },
       };

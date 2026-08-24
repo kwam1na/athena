@@ -332,8 +332,8 @@ describe("starter-intent program conformance", () => {
       Object.entries(entry.resources).map(([resource, resourceShape]) => ({
         package: pkg,
         resource,
-        verbs: resourceShape.verbs,
-        fields: resourceShape.fields,
+        verbs: [...resourceShape.verbs],
+        fields: Object.keys(resourceShape.resultFields),
       })),
     );
   }
@@ -352,11 +352,11 @@ describe("starter-intent program conformance", () => {
     for (const [profileId, programs] of Object.entries(AGENT_STARTER_INTENT_PROGRAMS)) {
       const profile = profiles[profileId];
       expect(profile, `unknown profile ${profileId} in the starter-program registry`).toBeDefined();
-      const declared = new Set(profile.presentation.starterIntents.map((intent) => intent.id));
+      const declared = new Set<string>(profile.presentation.starterIntents.map((intent) => intent.id));
       const snapshotKeys = profile.presentation.contextBinding.snapshotKeys ?? [];
       const facade = await fullTierFacade(profileId, profile.packages.map((selection) => selection.packageKey));
       expect(Object.keys(programs).length).toBeGreaterThan(0);
-      for (const [starterIntentId, template] of Object.entries(programs)) {
+      for (const [starterIntentId, template] of Object.entries(programs as Record<string, string>)) {
         expect(declared.has(starterIntentId), `${profileId}:${starterIntentId} is not a declared starter intent`).toBe(
           true,
         );

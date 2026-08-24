@@ -4,7 +4,12 @@
  * A harness wraps an adapter with a scripted model so the suite can drive
  * identical scenarios against every implementation. Type-only module.
  */
-import type { AgentRuntimeAdapter, AgentToolDispatchResult, RuntimeTurnRef } from "./agentRuntime";
+import type {
+  AgentPreExecutedExchange,
+  AgentRuntimeAdapter,
+  AgentToolDispatchResult,
+  RuntimeTurnRef,
+} from "./agentRuntime";
 
 export type AgentRuntimeScriptArgs = unknown | (() => unknown | Promise<unknown>);
 
@@ -75,4 +80,8 @@ export type AgentRuntimeContractHarness = {
   readonly settle: (turnRef: RuntimeTurnRef) => Promise<void>;
   /** Dispatch results the adapter observed, in the order it received them. */
   readonly dispatchResults: (turnRef: RuntimeTurnRef) => readonly AgentToolDispatchResult[];
+  /** Opt-in: the harness can seed and observe a pre-executed exchange (protocol v3). */
+  readonly supportsPreExecutedExchange?: boolean;
+  /** The exchange the adapter rendered into the turn's transcript, if any. */
+  readonly observedPreExecutedExchange?: (turnRef: RuntimeTurnRef) => AgentPreExecutedExchange | undefined;
 };

@@ -521,6 +521,7 @@ const MILESTONE_COPY: Record<AgentProgressMilestone, string> = {
   reading_sources: "Reading sources",
   composing_answer: "Composing the answer",
   finalizing: "Finishing up",
+  reading_ahead: "Reading today's records ahead",
 };
 
 /**

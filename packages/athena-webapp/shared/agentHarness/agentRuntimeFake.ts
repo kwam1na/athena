@@ -24,6 +24,8 @@ import {
   type RuntimeProjectionRef,
   type RuntimeThreadRef,
   type RuntimeTurnRef,
+  validatePreExecutedExchange,
+  type AgentPreExecutedExchange,
 } from "./agentRuntime";
 import { resolveScriptArgs, type AgentRuntimeContractHarness, type AgentRuntimeScriptArgs, type AgentRuntimeScriptStep } from "./agentRuntimeHarness";
 import { opaqueRef, type Timestamp } from "./values";
@@ -80,6 +82,7 @@ type TurnState = {
   draftOrdinal: number;
   events: AgentRuntimeEvent[];
   dispatchResults: AgentToolDispatchResult[];
+  preExecutedExchange?: AgentPreExecutedExchange;
   settled: Deferred;
 };
 
@@ -243,6 +246,12 @@ export function createAgentRuntimeContractFake(
     startTurn: async (input, hooks) => {
       if (!threadsByRef.has(input.threadRef)) throw new Error("fake runtime: unknown thread ref");
       if (!inputs.has(input.inputRef)) throw new Error("fake runtime: unknown input ref");
+      let preExecutedExchange: AgentPreExecutedExchange | undefined;
+      if (input.preExecutedExchange !== undefined) {
+        const validated = validatePreExecutedExchange(input.preExecutedExchange);
+        if (!validated.ok) throw new Error(`fake runtime: invalid pre-executed exchange: ${JSON.stringify(validated.issues)}`);
+        preExecutedExchange = validated.exchange;
+      }
       const turnRef = opaqueRef("runtime_turn", `fake-turn-${++counters.turn}`);
       const turn: TurnState = {
         turnRef,
@@ -255,6 +264,7 @@ export function createAgentRuntimeContractFake(
         draftOrdinal: 0,
         events: [],
         dispatchResults: [],
+        ...(preExecutedExchange ? { preExecutedExchange } : {}),
         settled: deferred(),
       };
       turns.set(turnRef, turn);
@@ -327,6 +337,8 @@ export function createAgentRuntimeContractFake(
     adapter,
     clock,
     supportsNarrativeStreaming: true,
+    supportsPreExecutedExchange: true,
+    observedPreExecutedExchange: (turnRef) => turns.get(turnRef)?.preExecutedExchange,
     scriptTurn: (turnKey, steps) => {
       scripts.set(turnKey, steps);
     },

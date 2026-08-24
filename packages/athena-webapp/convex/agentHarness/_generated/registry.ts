@@ -2703,7 +2703,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       }
     }
   },
-  "compatibilityDigest": "fnv1a64:672e5b3f3c77a7ba",
+  "compatibilityDigest": "fnv1a64:5f6c323f38546281",
   "contractVersion": 1,
   "enablement": {
     "capabilities": {
@@ -3111,7 +3111,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
   "protocolVersions": {
     "admissionPolicy": "u4.0",
     "harness": "athena.agent-harness.v1",
-    "runtime": "athena.agent-runtime.v2",
+    "runtime": "athena.agent-runtime.v3",
     "runtimeAdapter": {
       "adapterKind": "convex_agent",
       "adapterVersion": "convex_agent@0.7.1+ai@7.0.76+athena.1"
@@ -3708,7 +3708,7 @@ export const AGENT_GENERATED_SOURCE_KEYS: readonly string[] = [
 ];
 
 /** What a run pins; the deployment epoch fence compares it with the durable epoch digest. */
-export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:672e5b3f3c77a7ba";
+export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:5f6c323f38546281";
 
 /** Schema identity only; unchanged when a capability is enabled or disabled. */
 export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:b1e8f08897c36532";
