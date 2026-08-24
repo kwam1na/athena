@@ -272,6 +272,16 @@ export const DAILY_OPERATIONS_PROFILE = defineAgentProfile({
         prompt: "Which register had a variance today, and what proves it?",
         expects: ["cash.registerSessions citation resolves to a session and closeout version"],
       },
+      {
+        id: "ambiguous_referent",
+        kind: "partial_or_no_data",
+        prompt: "How did we do on Wednesday?",
+        expects: [
+          "outcome needs_clarification asking which Wednesday, or an answer that names the operating date it actually reports",
+          "never no_usable_sources while the turn holds successful cited reads",
+          "no fabricated day",
+        ],
+      },
     ],
   },
 });

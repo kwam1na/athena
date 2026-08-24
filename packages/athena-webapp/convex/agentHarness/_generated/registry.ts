@@ -2703,7 +2703,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       }
     }
   },
-  "compatibilityDigest": "fnv1a64:11d07403b4139cd6",
+  "compatibilityDigest": "fnv1a64:574874feb9ada2f3",
   "contractVersion": 1,
   "enablement": {
     "capabilities": {
@@ -2884,6 +2884,16 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
             "id": "citation_resolution",
             "kind": "citation_resolution",
             "prompt": "Which register had a variance today, and what proves it?"
+          },
+          {
+            "expects": [
+              "outcome needs_clarification asking which Wednesday, or an answer that names the operating date it actually reports",
+              "never no_usable_sources while the turn holds successful cited reads",
+              "no fabricated day"
+            ],
+            "id": "ambiguous_referent",
+            "kind": "partial_or_no_data",
+            "prompt": "How did we do on Wednesday?"
           }
         ]
       },
@@ -3698,7 +3708,7 @@ export const AGENT_GENERATED_SOURCE_KEYS: readonly string[] = [
 ];
 
 /** What a run pins; the deployment epoch fence compares it with the durable epoch digest. */
-export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:11d07403b4139cd6";
+export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:574874feb9ada2f3";
 
 /** Schema identity only; unchanged when a capability is enabled or disabled. */
 export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:f14333bb7b4db2fa";
