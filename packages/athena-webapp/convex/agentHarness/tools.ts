@@ -31,6 +31,15 @@ import {
   type AgentToolRegistration,
 } from "../../shared/agentHarness/agentRuntime";
 import { AGENT_FIXED_TOOL_IDS } from "../../shared/agentHarness/bridge";
+import {
+  annotateMoneyDisplays,
+  APP_PRODUCT_LEXICON,
+  collectNarrativeEvidence,
+  senseTone,
+  type AgentMoneyAmount,
+  type AgentProductLexicon,
+  type AgentToneFinding,
+} from "../../shared/agentHarness/productLexicon";
 import { computeSha256Digest } from "../../shared/agentHarness/digest";
 import { measureJsonByteLength } from "../../shared/agentHarness/execution";
 import type { JsonValue } from "../../shared/agentHarness/manifest";
@@ -158,7 +167,7 @@ export const scratchTool: AgentToolDefinition<AgentScratchArgs, unknown> = {
 export const completeRunTool: AgentToolDefinition<AgentCompleteRunArgs, unknown> = {
   toolId: "athena.completeRun",
   description:
-    "Finish the run exactly once with the final answer. Arguments: { outcome?: \"answer\" | \"no_usable_sources\", narrative: string, title?: string, citedAttemptRefs: string[] (attemptRef values from executeProgram results the answer relies on), citations: [{ ref: string (citation refs from those results), claim?: string }], confidence?: 0..1, limitedEvidence?: boolean }. An answer needs at least one cited attempt and citation; use no_usable_sources when nothing usable was read. Submit by CALLING this tool — arguments written out as prose are not a submission. Say a value was unavailable only when its read returned kind !== \"result\" or its state was not \"known\".",
+    "Finish the run exactly once with the final answer. Arguments: { outcome?: \"answer\" | \"no_usable_sources\", narrative: string, title?: string, citedAttemptRefs: string[] (attemptRef values from executeProgram results the answer relies on), citations: [{ ref: string (citation refs from those results), claim?: string }], confidence?: 0..1, limitedEvidence?: boolean }. The narrative is the complete answer a store operator reads — plain operator language, never field names, namespaces, enum spellings, or refs; title is only a short label and never the answer. Money values in results carry a display string — quote display, never amount. An answer needs at least one cited attempt and citation; use no_usable_sources when nothing usable was read. Submit by CALLING this tool — arguments written out as prose are not a submission. Say a value was unavailable only when its read returned kind !== \"result\" or its state was not \"known\".",
   validateInput: (raw): Validation<AgentCompleteRunArgs> => {
     const object = objectOf(raw);
     if (!object) return { ok: false, issues: [{ path: "$", message: "completeRun takes an object" }] };
@@ -306,6 +315,16 @@ export type AgentToolHostContext = {
   readonly egressFloor: AgentEgressClass;
   /** Discovery schemas (tests bind the test package; production defaults to the generated index). */
   readonly schemas?: AgentCapabilitySchemaIndex;
+  /** The operator's question, verbatim: tokens it contains are never tone findings. */
+  readonly question?: string;
+  /** Merged product lexicon (app-wide + the profile's surface overlay). */
+  readonly lexicon?: AgentProductLexicon;
+  /**
+   * Tone sensor policy. "warn" (default) records findings on the turn state
+   * for telemetry; "enforce" denies the first completeRun whose narrative
+   * carries findings — one corrective denial, never a loop.
+   */
+  readonly tonePolicy?: "warn" | "enforce";
 };
 
 /** What the turn host learns from the handlers as the turn progresses. */
@@ -313,6 +332,8 @@ export type AgentToolTurnState = {
   readonly attempts: () => readonly { attemptRef: string; egressClass: AgentEgressClass; completeness: "complete" | "partial"; providerExposed: boolean; citations: readonly { citation: string; namespace: string }[] }[];
   readonly completion: () => { committed: boolean; artifactId?: Id<"intelligenceArtifact"> };
   readonly authorityRevocations: () => readonly string[];
+  /** Product-tone findings from the last sensed completeRun narrative. */
+  readonly toneFindings: () => readonly AgentToneFinding[];
 };
 
 /** Refusal reasons that mean the operator's authority changed under the run (not a budget or argument problem). */
@@ -350,6 +371,9 @@ function failure(code: string, message: string, retryable = false): AgentToolHan
 export function createAthenaToolRegistrations(host: AgentToolHostContext): { registrations: AgentAnyToolRegistration[]; state: AgentToolTurnState } {
   const attempts: { attemptRef: string; egressClass: AgentEgressClass; completeness: "complete" | "partial"; providerExposed: boolean; citations: { citation: string; namespace: string }[] }[] = [];
   const revocations: string[] = [];
+  const toneEvidence = { fieldNames: new Set<string>(), enumLiterals: new Set<string>(), moneyKeys: new Set<string>(), moneyAmounts: [] as AgentMoneyAmount[] };
+  let toneFindings: readonly AgentToneFinding[] = [];
+  let toneDeniedOnce = false;
   let completion: { committed: boolean; artifactId?: Id<"intelligenceArtifact"> } = { committed: false };
   let surface: ReturnType<typeof createRunDiscoverySurface> | undefined;
 
@@ -412,11 +436,24 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
             providerExposed: true,
             citations: result.citations.map((candidate) => ({ citation: candidate.citation, namespace: candidate.namespace })),
           });
+          // Money values gain product display strings before the model sees
+          // them, and the raw internal tokens the model was shown are
+          // harvested so the tone sensor can hold the narrative to them.
+          const harvested = collectNarrativeEvidence(result.result.output);
+          for (const name of harvested.fieldNames) toneEvidence.fieldNames.add(name);
+          for (const literal of harvested.enumLiterals) toneEvidence.enumLiterals.add(literal);
+          for (const money of harvested.moneyAmounts) {
+            const moneyKey = `${money.amount}:${money.currency}`;
+            if (!toneEvidence.moneyKeys.has(moneyKey)) {
+              toneEvidence.moneyKeys.add(moneyKey);
+              toneEvidence.moneyAmounts.push(money);
+            }
+          }
           return {
             kind: "success",
             result: {
               attemptRef: result.attemptRef,
-              output: result.result.output,
+              output: annotateMoneyDisplays(result.result.output),
               completeness: result.result.completeness,
               freshness: result.result.freshness,
               citations: result.citations.map((candidate) => ({
@@ -525,6 +562,26 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
       if (args.outcome === "answer" && (citedAttemptRefs.length === 0 || citations.length === 0)) {
         return denied("citations_required", `An answer must cite at least one attempt and one citation; use outcome no_usable_sources when nothing usable was read.${validRefsHint()}`);
       }
+      // Product-tone sensor: the narrative is held to the run's own evidence
+      // (fields, enum spellings, minor-unit amounts it was shown, plus the
+      // grant's namespaces and this turn's refs). Warn mode records findings
+      // for telemetry; enforce mode spends at most ONE corrective denial —
+      // the fix is named, and the retry commits regardless.
+      toneFindings = senseTone({
+        narrative: args.narrative,
+        question: host.question ?? "",
+        fieldNames: [...toneEvidence.fieldNames],
+        enumLiterals: [...toneEvidence.enumLiterals],
+        moneyAmounts: toneEvidence.moneyAmounts,
+        namespaces: [...new Set(attempts.flatMap((attempt) => attempt.citations.map((citation) => citation.namespace)))],
+        refs: [...knownAttemptRefs, ...knownCitationRefs],
+        lexicon: host.lexicon ?? APP_PRODUCT_LEXICON,
+      });
+      if (host.tonePolicy === "enforce" && toneFindings.length > 0 && !toneDeniedOnce) {
+        toneDeniedOnce = true;
+        const fixes = toneFindings.map((finding) => finding.fix).join(" ");
+        return denied("tone", `Rewrite the narrative for the operator, then call completeRun again. ${fixes}`);
+      }
       await host.reportProgress?.("finalizing");
       const preparedRef = completionRequestRef(args);
       const prepared = (await host.ctx.runMutation(host.refs.prepareCompletion, { bindingId: host.bindingId, runId: host.runId, preparedCompletionRef: preparedRef, now: host.now() })) as AgentPrepareCompletionOutcome;
@@ -585,6 +642,7 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
       attempts: () => attempts.map((attempt) => ({ ...attempt, citations: [...attempt.citations] })),
       completion: () => ({ ...completion }),
       authorityRevocations: () => [...revocations],
+      toneFindings: () => [...toneFindings],
     },
   };
 }

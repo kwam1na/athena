@@ -12,6 +12,7 @@ import type { Id } from "../_generated/dataModel";
 import type { AgentToolHandlerContext } from "../../shared/agentHarness/agentRuntime";
 import { opaqueRef, type AgentEgressClass } from "../../shared/agentHarness/values";
 import { ATHENA_TOOL_DEFINITIONS, completeRunTool, createAthenaToolRegistrations, modelVisibleToolDefinitions, type AgentToolHostContext } from "./tools";
+import { APP_PRODUCT_LEXICON } from "../../shared/agentHarness/productLexicon";
 
 type CompleteRunCall = { artifact: { payload: Record<string, unknown> } };
 
@@ -321,6 +322,133 @@ describe("athena.completeRun ref resolution by content-hash tail", () => {
     const call = tools.completions[0] as unknown as { citedAttemptRefs: string[]; citations: { ref: string; claim?: string }[] };
     expect(call.citedAttemptRefs).toEqual(["attempt_v1.1.aaaabbbbccccdddd0000111122223333"]);
     expect(call.citations).toEqual([{ ref: "citation:v1.1.1.99998888777766665555444433332220", claim: "positions read" }]);
+  });
+});
+
+
+describe("athena.completeRun tone sensor and money display annotation", () => {
+  const salesOutput = {
+    grossRevenue: { state: "known", value: { amount: 1_414_900, currency: "GHS" } },
+    lifecycleStage: "close_blocked",
+    transactionCount: 4,
+  };
+
+  function toneTools(options: { tonePolicy?: "warn" | "enforce"; question?: string } = {}) {
+    const completions: CompleteRunCall[] = [];
+    const host = {
+      runId: "run_1" as Id<"intelligenceRun">,
+      bindingId: "binding_1" as Id<"agentTurnBinding">,
+      ctx: {
+        runQuery: async () => ({ kind: "refused", stage: "test", reason: "unused" }),
+        runMutation: async (reference: unknown, args: unknown) => {
+          if (reference === PREPARE_COMPLETION) return { outcome: "prepared", preparedCompletionRef: "prepared_1" };
+          completions.push(args as CompleteRunCall);
+          return { outcome: "completed", artifactId: "artifact_1", citations: [] };
+        },
+      },
+      refs: { prepareCompletion: PREPARE_COMPLETION, completeRun: COMPLETE_RUN } as unknown as AgentToolHostContext["refs"],
+      executeProgram: async () =>
+        ({
+          outcome: "result",
+          attemptRef: "attempt_v1.1.0123456789abcdef0123456789abcdef",
+          attemptId: "attempt_id_1" as Id<"agentProgramAttempt">,
+          result: {
+            output: salesOutput,
+            egressClass: "operational",
+            completeness: { status: "complete", sources: [] },
+            freshness: { class: "live", authority: "live_read" },
+          },
+          citations: [{ citation: "citation:v1.1.0.fedcba9876543210fedcba9876543210", namespace: "reports.daySales", verb: "get" }],
+          calls: [],
+        }) as never,
+      now: () => 1_700_000_000_000,
+      egressFloor: "operational",
+      question: options.question ?? "how much sales today?",
+      lexicon: APP_PRODUCT_LEXICON,
+      ...(options.tonePolicy ? { tonePolicy: options.tonePolicy } : {}),
+    } satisfies Partial<AgentToolHostContext> as unknown as AgentToolHostContext;
+    const { registrations, state } = createAthenaToolRegistrations(host);
+    const byId = new Map(registrations.map((registration) => [registration.definition.toolId, registration]));
+    return {
+      completions,
+      state,
+      executeProgram: () => byId.get("athena.executeProgram")!.handler({ source: "return 1;" } as never, handlerContext("exec_1")),
+      completeRun: (args: Record<string, unknown>) => byId.get("athena.completeRun")!.handler(args as never, handlerContext("complete_1")),
+    };
+  }
+
+  const CITED = {
+    citedAttemptRefs: ["attempt_v1.1.0123456789abcdef0123456789abcdef"],
+    citations: [{ ref: "citation:v1.1.0.fedcba9876543210fedcba9876543210" }],
+  };
+
+  it("annotates money-shaped values in the executeProgram result with display strings", async () => {
+    const tools = toneTools();
+    const outcome = (await tools.executeProgram()) as { kind: string; result: { output: { grossRevenue: { value: { display?: string } } } } };
+    expect(outcome.kind).toBe("success");
+    expect(outcome.result.output.grossRevenue.value.display).toBe("GH₵14,149");
+  });
+
+  it("warn mode records findings on the turn state and still commits", async () => {
+    const tools = toneTools();
+    await tools.executeProgram();
+    const outcome = await tools.completeRun({
+      outcome: "answer",
+      narrative: "Revenue is GHS 1,414,900 and lifecycleStage is close_blocked.",
+      ...CITED,
+    });
+    expect(outcome.kind).toBe("success");
+    expect(tools.completions).toHaveLength(1);
+    const codes = tools.state.toneFindings().map((finding) => finding.code);
+    expect(codes).toContain("raw_minor_amount");
+    expect(codes).toContain("internal_field_name");
+    expect(codes).toContain("raw_enum_literal");
+  });
+
+  it("enforce mode denies once with the named fixes, then lets a retry through", async () => {
+    const tools = toneTools({ tonePolicy: "enforce" });
+    await tools.executeProgram();
+    const denied = await tools.completeRun({
+      outcome: "answer",
+      narrative: "Revenue is GHS 1,414,900 and lifecycleStage is close_blocked.",
+      ...CITED,
+    });
+    expect(denied.kind).toBe("denied");
+    expect((denied as { denial: { code: string; message: string } }).denial.code).toBe("tone");
+    expect((denied as { denial: { message: string } }).denial.message).toContain("GH₵14,149");
+    expect(tools.completions).toHaveLength(0);
+    // The bound is one corrective denial: the retry commits even if still imperfect.
+    const retried = await tools.completeRun({
+      outcome: "answer",
+      narrative: "Revenue is GHS 1,414,900 so far today.",
+      ...CITED,
+    });
+    expect(retried.kind).toBe("success");
+    expect(tools.completions).toHaveLength(1);
+  });
+
+  it("a clean narrative commits in enforce mode with no findings", async () => {
+    const tools = toneTools({ tonePolicy: "enforce" });
+    await tools.executeProgram();
+    const outcome = await tools.completeRun({
+      outcome: "answer",
+      narrative: "Sales so far today are GH₵14,149 across 4 sales, and the close is blocked until Register 06's drawer is counted.",
+      ...CITED,
+    });
+    expect(outcome.kind).toBe("success");
+    expect(tools.state.toneFindings()).toEqual([]);
+  });
+
+  it("waives tokens the operator asked with", async () => {
+    const tools = toneTools({ tonePolicy: "enforce", question: "what is the lifecycleStage right now?" });
+    await tools.executeProgram();
+    const outcome = await tools.completeRun({
+      outcome: "answer",
+      narrative: "The lifecycleStage is blocked on Register 06's open drawer; sales stand at GH₵14,149.",
+      ...CITED,
+    });
+    expect(outcome.kind).toBe("success");
+    expect(tools.state.toneFindings()).toEqual([]);
   });
 });
 

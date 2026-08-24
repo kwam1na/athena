@@ -457,6 +457,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`shared/agentHarness/contracts.test.ts`](../../shared/agentHarness/contracts.test.ts)
 - [`shared/agentHarness/digest.test.ts`](../../shared/agentHarness/digest.test.ts)
 - [`shared/agentHarness/execution.test.ts`](../../shared/agentHarness/execution.test.ts)
+- [`shared/agentHarness/productLexicon.test.ts`](../../shared/agentHarness/productLexicon.test.ts)
 - [`shared/commandResult.test.ts`](../../shared/commandResult.test.ts)
 - [`shared/currencyFormatter.test.ts`](../../shared/currencyFormatter.test.ts)
 - [`shared/homepageRanking.test.ts`](../../shared/homepageRanking.test.ts)

@@ -55,6 +55,8 @@ import { getProductionProgramExecutor, type AgentExecuteProgramResult, type Agen
 // eslint-disable-next-line @convex-dev/import-wrong-runtime -- this module is "use node" too; the rule only inspects the imported file
 import { createAthenaModelResolver, rateCardFor } from "./modelRegistry";
 import { createAthenaToolRegistrations, completeRunTool, modelVisibleToolDefinitions, AGENT_AUTHORITY_REVOCATION_REASONS, type AgentToolSeamRefs } from "./tools";
+import { profileLexicon } from "./profiles/lexicons";
+import type { AgentToneFinding } from "../../shared/agentHarness/productLexicon";
 import type { AdvanceTurnBindingResult } from "./turnBindings";
 import type { AgentFinalizeTurnOutcome, AgentProvisionalFlushOutcome, AgentRecordTurnTraceOutcome, AgentTurnPreparation, AgentTurnUsageSettlement } from "./turns";
 import { AGENT_TURN_TRACE_MAX_EVENTS_PER_TURN, type AgentTurnTraceSource } from "./turnTrace";
@@ -159,6 +161,8 @@ export type AgentTurnHostDeps = {
   /** How often the host checks for external cancellation while the runtime turn runs. */
   readonly cancelPollMs?: number;
   readonly schemas?: AgentCapabilitySchemaIndex;
+  /** Tone-sensor policy for completeRun narratives; default "warn" (telemetry only). */
+  readonly tonePolicy?: "warn" | "enforce";
   /** Test seam: observe settled ledger entries (e.g. to cite refs minted earlier in the turn). */
   readonly observeDispatch?: (entry: AgentToolLedgerEntry) => void;
 };
@@ -357,6 +361,7 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
      * dispatch outcomes. Written BEFORE finalize, so a crash between the two
      * loses the finalize, not the record of what the model did.
      */
+    let toneFindingsAtReport: (() => readonly AgentToneFinding[]) | undefined;
     const traceTurnReport = async (outcome: AgentTurnHostReport["outcome"], code?: string): Promise<void> => {
       pushHostTrace("turn_report", {
         turnId: bindingId,
@@ -369,6 +374,7 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
         firstProgressMs: timings.firstProgressMs,
         completionMs: timings.completionMs,
         elapsedMs: now() - startedAt,
+        tone: toneFindingsAtReport?.() ?? [],
       });
       await drainTrace();
     };
@@ -464,7 +470,11 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
       // written from it cannot be classed below what that history carried.
       egressFloor: historyEgressClass(plan.history),
       schemas: deps.schemas,
+      question: plan.question,
+      lexicon: profileLexicon(plan.profileId),
+      tonePolicy: deps.tonePolicy ?? "warn",
     });
+    toneFindingsAtReport = () => tools.state.toneFindings();
     const ledger = createAgentToolDispatchLedger({ adapterVersion: adapter.descriptor.adapterVersion, tools: tools.registrations });
     const usage = createUsageReconciler();
     let turnRef: RuntimeTurnRef | undefined;
@@ -858,7 +868,15 @@ async function productionHost(ctx: HostActionCtx, bindingId?: Id<"agentTurnBindi
     maxRetries: 1,
   });
   void bindingId;
-  return createTurnHost({ ctx: executorCtx, adapter, refs: PRODUCTION_REFS, executeProgram: (input) => executor.executeProgram(executorCtx, input) });
+  return createTurnHost({
+    ctx: executorCtx,
+    adapter,
+    refs: PRODUCTION_REFS,
+    executeProgram: (input) => executor.executeProgram(executorCtx, input),
+    // Tone sensor rollout knob: warn (telemetry only) until the corpus replay
+    // proves the false-positive rate, then enforce.
+    tonePolicy: process.env.ATHENA_AGENT_TONE_POLICY === "enforce" ? "enforce" : "warn",
+  });
 }
 
 /** `internal.agentHarness.runtimeHost.driveTurn` — scheduled by `turns.startTurn` / `resumeTurn`. */

@@ -231,6 +231,8 @@ export type AgentTurnPlan = {
   readonly adapterVersion: string;
   readonly adapter: { readonly threadKey: string; readonly contextBindingRef: string; readonly correlation: { readonly operatorRef: string; readonly profileId: string }; readonly turnKey: string };
   readonly prompt: AgentProjectedPrompt;
+  /** The operator's question, verbatim: tone-sensor waivers come from it. */
+  readonly question: string;
   readonly history: AgentProjectedHistory;
   readonly model: AgentModelSelection;
   readonly egressClass: AgentEgressClass;
@@ -410,6 +412,7 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
         profileId: grant.profileKey,
         actorRef: grant.initiatingActorRef,
         threadKey,
+        question,
         step: binding.step,
         adapterKind: grant.adapterKind,
         adapterVersion: grant.adapterVersion,
