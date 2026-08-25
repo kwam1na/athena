@@ -328,6 +328,7 @@ describe("athena.completeRun ref resolution by content-hash tail", () => {
 
 describe("athena.completeRun tone sensor and money display annotation", () => {
   const salesOutput = {
+    operatingDate: "2026-08-24",
     grossRevenue: { state: "known", value: { amount: 1_414_900, currency: "GHS" } },
     lifecycleStage: "close_blocked",
     transactionCount: 4,
@@ -382,10 +383,21 @@ describe("athena.completeRun tone sensor and money display annotation", () => {
     citations: [{ ref: "citation:v1.1.0.fedcba9876543210fedcba9876543210" }],
   };
 
-  it("annotates money-shaped values in the executeProgram result with display strings", async () => {
+  it("annotates money and date values in the executeProgram result with display strings", async () => {
     const tools = toneTools();
-    const outcome = (await tools.executeProgram()) as { kind: string; result: { output: { grossRevenue: { value: { display?: string } } } } };
+    const outcome = (await tools.executeProgram()) as {
+      kind: string;
+      result: {
+        output: {
+          operatingDate: string;
+          operatingDateDisplay?: string;
+          grossRevenue: { value: { display?: string } };
+        };
+      };
+    };
     expect(outcome.kind).toBe("success");
+    expect(outcome.result.output.operatingDate).toBe("2026-08-24");
+    expect(outcome.result.output.operatingDateDisplay).toBe("Mon, Aug 24, 2026");
     expect(outcome.result.output.grossRevenue.value.display).toBe("GH₵14,149");
   });
 

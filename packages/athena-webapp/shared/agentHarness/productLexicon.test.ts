@@ -6,16 +6,63 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  annotateDateDisplays,
   annotateMoneyDisplays,
   normalizeNarrative,
   stripSourcesFooter,
   APP_PRODUCT_LEXICON,
   collectNarrativeEvidence,
   formatMinorMoney,
+  formatOperatingDateDisplay,
   mergeLexicons,
   senseTone,
   type AgentToneSensorInput,
 } from "./productLexicon";
+
+describe("formatOperatingDateDisplay", () => {
+  it("renders valid date-only values in UTC without shifting the store day", () => {
+    expect(formatOperatingDateDisplay("2026-08-24")).toBe("Mon, Aug 24, 2026");
+    expect(formatOperatingDateDisplay("2024-02-29")).toBe("Thu, Feb 29, 2024");
+    expect(formatOperatingDateDisplay("2026-02-29")).toBeNull();
+    expect(formatOperatingDateDisplay("2026-8-24")).toBeNull();
+  });
+});
+
+describe("annotateDateDisplays", () => {
+  it("adds sibling display values for date-only fields throughout the model-visible tree", () => {
+    expect(
+      annotateDateDisplays({
+        operatingDate: "2026-08-24",
+        rows: [{ openedOperatingDate: "2026-08-23" }],
+      }),
+    ).toEqual({
+      operatingDate: "2026-08-24",
+      operatingDateDisplay: "Mon, Aug 24, 2026",
+      rows: [
+        {
+          openedOperatingDate: "2026-08-23",
+          openedOperatingDateDisplay: "Sun, Aug 23, 2026",
+        },
+      ],
+    });
+  });
+
+  it("preserves authoritative, invalid, and already-supplied values", () => {
+    expect(
+      annotateDateDisplays({
+        operatingDate: "2026-08-24",
+        operatingDateDisplay: "Store day 24 August",
+        invalidDate: "2026-02-29",
+        note: "Scheduled for 2026-08-24",
+      }),
+    ).toEqual({
+      operatingDate: "2026-08-24",
+      operatingDateDisplay: "Store day 24 August",
+      invalidDate: "2026-02-29",
+      note: "Scheduled for 2026-08-24",
+    });
+  });
+});
 
 describe("formatMinorMoney", () => {
   it("renders GHS with the GH₵ glyph, minor units only when non-zero", () => {

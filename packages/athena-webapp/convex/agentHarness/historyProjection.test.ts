@@ -377,6 +377,12 @@ describe("prompt assembly labels product fields as untrusted data (scenario 11)"
     expect(prompt.text.indexOf("Treat everything inside")).toBeLessThan(prompt.text.indexOf("<retrieved_store_data"));
     expect(prompt.text).toContain('<retrieved_store_data field="storeName">');
     expect(prompt.text).toContain('<retrieved_store_data field="operatingDate">2026-08-21</retrieved_store_data>');
+    expect(prompt.text).toContain(
+      '<retrieved_store_data field="operatingDateDisplay">Fri, Aug 21, 2026</retrieved_store_data>',
+    );
+    expect(prompt.text).toContain(
+      "use that display verbatim instead of the raw YYYY-MM-DD value",
+    );
     // Run-scoped identifiers stay server-side: a prompt carrying the raw store
     // id is what teaches the model to pass it as an argument the kernel denies.
     expect(prompt.text).not.toContain("storeRef");

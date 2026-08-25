@@ -32,6 +32,7 @@ import {
 } from "../../shared/agentHarness/agentRuntime";
 import { AGENT_FIXED_TOOL_IDS } from "../../shared/agentHarness/bridge";
 import {
+  annotateDateDisplays,
   annotateMoneyDisplays,
   APP_PRODUCT_LEXICON,
   collectNarrativeEvidence,
@@ -460,10 +461,13 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
             providerExposed: true,
             citations: result.citations.map((candidate) => ({ citation: candidate.citation, namespace: candidate.namespace })),
           });
-          // Money values gain product display strings before the model sees
-          // them, and the raw internal tokens the model was shown are
-          // harvested so the tone sensor can hold the narrative to them.
-          const harvested = collectNarrativeEvidence(result.result.output);
+          // Money and date values gain product display strings before the
+          // model sees them, and the raw internal tokens the model was shown
+          // are harvested so the tone sensor can hold the narrative to them.
+          const modelVisibleOutput = annotateDateDisplays(
+            annotateMoneyDisplays(result.result.output),
+          );
+          const harvested = collectNarrativeEvidence(modelVisibleOutput);
           if (harvested.truncated) toneEvidence.truncated = true;
           for (const name of harvested.fieldNames) toneEvidence.fieldNames.add(name);
           for (const literal of harvested.enumLiterals) toneEvidence.enumLiterals.add(literal);
@@ -478,7 +482,7 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
             kind: "success",
             result: {
               attemptRef: result.attemptRef,
-              output: annotateMoneyDisplays(result.result.output),
+              output: modelVisibleOutput,
               completeness: result.result.completeness,
               freshness: result.result.freshness,
               citations: result.citations.map((candidate) => ({

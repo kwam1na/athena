@@ -4,11 +4,11 @@
  * The machine-readable projection of `docs/product-copy-tone.md` that the
  * harness enforces mechanically instead of by instruction:
  *
- * - `annotateMoneyDisplays` runs at the result boundary: every money-shaped
- *   value the model is shown carries a `display` string rendered by the same
- *   currency convention as the app (`GH₵14,149`, minor units only when
- *   non-zero), so quoting the right figure is the path of least resistance
- *   and the raw minor-unit integer never has to be interpreted.
+ * - `annotateMoneyDisplays` and `annotateDateDisplays` run at the result
+ *   boundary: every money-shaped value and exact calendar date the model is
+ *   shown carries an operator-ready display string, so quoting the right
+ *   value is the path of least resistance and raw storage forms never need to
+ *   be interpreted in prose.
  * - `collectNarrativeEvidence` harvests, from those same results, the tokens
  *   an operator must never see echoed back: backend field names, raw enum
  *   spellings, and minor-unit amounts.
@@ -131,6 +131,69 @@ export function annotateMoneyDisplays(value: unknown, depth = 0): unknown {
   }
   const annotated: Record<string, unknown> = {};
   for (const [key, entry] of Object.entries(record)) annotated[key] = annotateMoneyDisplays(entry, depth + 1);
+  return annotated;
+}
+
+// ---------------------------------------------------------------------------
+// Date display
+// ---------------------------------------------------------------------------
+
+const OPERATING_DATE_PATTERN = /^([1-9]\d{3})-(\d{2})-(\d{2})$/;
+const OPERATING_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  weekday: "short",
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+/**
+ * Render a date-only value without allowing the runtime timezone to move it
+ * onto another calendar day. Invalid dates are not annotated.
+ */
+export function formatOperatingDateDisplay(value: string): string | null {
+  const match = OPERATING_DATE_PATTERN.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return OPERATING_DATE_FORMATTER.format(date);
+}
+
+/**
+ * Keep canonical date-only fields intact and add `<field>Display` beside each
+ * one in the model-visible copy. Existing product-authored display fields win.
+ */
+export function annotateDateDisplays(value: unknown, depth = 0): unknown {
+  if (depth > WALK_DEPTH_MAX || typeof value !== "object" || value === null) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => annotateDateDisplays(item, depth + 1));
+  }
+
+  const record = value as { readonly [key: string]: unknown };
+  const annotated: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(record)) {
+    annotated[key] = annotateDateDisplays(entry, depth + 1);
+    if (
+      key.endsWith("Display") ||
+      typeof entry !== "string" ||
+      Object.hasOwn(record, `${key}Display`)
+    ) {
+      continue;
+    }
+    const display = formatOperatingDateDisplay(entry);
+    if (display) annotated[`${key}Display`] = display;
+  }
   return annotated;
 }
 
