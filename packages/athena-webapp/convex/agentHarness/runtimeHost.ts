@@ -1,4 +1,3 @@
-import { opaqueRef } from "../../shared/agentHarness/values";
 "use node";
 /**
  * Runtime host (kernel; Node runtime): drives ONE operator turn through the
@@ -19,6 +18,7 @@ import { opaqueRef } from "../../shared/agentHarness/values";
  * adapter to purge while the exposure audit stays on the attempt rows.
  */
 import { v } from "convex/values";
+import { opaqueRef } from "../../shared/agentHarness/values";
 
 import type { FunctionArgs, FunctionReference, FunctionReturnType } from "convex/server";
 
