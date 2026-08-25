@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Agent Agency Levers, Compiled Starter Intents, and the Detached Panel</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="70b8e6dc9cc1fd7473fa910039a26b6efc78e4600cc81a6e6aff0f46568f8205">
+  <header data-report-section="header">
+    <h1>Agent Agency Levers, Compiled Starter Intents, and the Detached Panel</h1>
+    <p>How the Daily Operations agent got faster, more truthful, and easier to reach — and how we measure it now</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch feat/agent-harness-agency-levers</li>
+      <li>No production deploy</li>
+      <li>Merge pending</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Status</dt><dd>Delivery candidate (pre-merge)</dd>
+      <dt>Base</dt><dd>origin/main (48173d59)</dd>
+      <dt>Plan</dt><dd>docs/plans/2026-08-24-001-feat-compiled-starter-intents-plan.md</dd>
+      <dt>Production deploy</dt><dd>Pending — dev deployment jovial-wildebeest-179 runs the branch tip</dd>
+      <dt>Root alignment</dt><dd>Pending — work merged from the local root working tree into this branch</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive Summary</h2>
+      <p>This delivery rebuilds how the Daily Operations agent works and how operators reach it, in seven connected moves: agency levers that stop the harness from killing work it could have kept (budget exhaustion returned as a value, in-flight queueing, ceilings tuned from observed use to 48 calls and 4 attempts, denials that name the offending argument), truthful read ports (register sessions keyed by operating date, catalog-scale inventory bounds, a payment-mix label that stops accusing clean books), mechanical product tone (opaque-reference scrubbing plus money and date display annotation at the result boundary, so quoting the right value is the path of least resistance), a permanent measurement loop (a real-turn eval driver with deployment-digest fencing, and a profile-neutral scorecard any future surface inherits without edits), compiled starter intents (a tap runs a curated read before the model&#x27;s first token, seeded into the transcript as a completed tool exchange under runtime protocol v3), POS offline-sync closeout workflow traces, and a detached, shell-owned agent panel with a floating launcher and a chat-shaped transcript.</p>
+      <p>The through-line is a single lesson the branch proves twice over: shape the input before policing the output. Instructions were the weakest layer every time they were measured; mechanism (disclosed units, annotated displays, pre-executed reads, guest-side budgets) is what moved the numbers.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Why This Mattered</h2>
+      <p>Trace analysis of the live agent showed an operator experience quietly degraded at every layer. 94% of observed register-session reads answered partial because the port scanned status partitions instead of the operating date. 100% of replenishment reads hit a 200-SKU ceiling sized far below the ~1,300-SKU catalog. Every money figure risked being quoted 100x too large, because capability results carried minor units with no unit disclosure. Tone violations were the top completeRun retry (9 of 13 retried turns), and each denial cost a full provider round. Budget overruns crashed programs and lost everything they had already read.</p>
+      <p>On top of that, a starter-intent tap was just a prefilled prompt: the model spent one whole provider round (~5-8 s of a ~14 s p50 turn) authoring a program the profile could have written better itself. And the panel lived inside the route, so navigating away destroyed the conversation&#x27;s local state.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>The Mental Model</h2>
+      <p>Think of the harness as a restaurant kitchen serving a very literal-minded chef. The old kitchen handed the chef raw inventory codes and minor-unit prices, gave them a small pantry ration that ran out mid-dish (discarding the dish), and made every regular&#x27;s usual order start from a blank ticket. The new kitchen labels every ingredient in the language the diner speaks (display strings for money and dates), lets the chef see the ration meter instead of hitting a wall (budget as a value), and for the four most common orders it preps the mise en place before the chef arrives: the curated read has already run, sits in the transcript as a completed exchange, and the chef&#x27;s job collapses to plating — narrating an answer from data already on the counter.</p>
+      <p>The one untested bet — that a model handed a completed exchange commits first-pass instead of re-reading — was named in the plan as a falsification experiment to run before trusting the plumbing. It held: all four starter intents committed from the seeded exchange, citing its refs, with zero re-reads.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and After</h2>
+      <p>Agency: before, budgets and concurrency were enforced only at the host bridge, so an overrun was a program crash that discarded every result already fetched; after, the QuickJS prelude mirrors a soft budget and an in-flight queue, so exhaustion is a returned value ({ kind: &quot;denied&quot;, code: &quot;budget_exhausted&quot; }) the program can answer around, and the host bridge remains the hard backstop.</p>
+      <p>Reads: before, cash.registerSessions scanned the newest rows of every status partition (94% partial) and inventory paged 100 rows x 3 pages; after, register reads resolve through operating-date indexes and inventory pages 200 x 8 with an explicit page cost.</p>
+      <p>Tone: before, the model was instructed to sound like the product and mechanically punished when it did not; after, money and every date-only field carry sibling display strings into the model&#x27;s view, known opaque references are rewritten to product phrasing at commit, and the bounded sensor is a backstop rather than the enforcement mechanism. On the 20-question regression set, jargon fell from 8.0 to 0.5 tokens per 1k characters and denials from 15/20 to 1/20.</p>
+      <p>Starter intents: before, a tap prefilled the composer; after, a tap submits immediately with the intent id, the server substitutes the pinned canonical prompt (client and deployment can never disagree about the question), the host runs the curated program through the production executor under the run&#x27;s real grant, and the model wakes to a transcript in which the read already happened.</p>
+      <p>Panel: before, the agent surface was mounted under route content and its open state, draft, width, and scroll died on navigation; after, a shell-owned provider at the authenticated layout root owns the panel, a floating launcher activates the registered surface, and the pinned target survives reloads through validated sessionStorage state — restored closed, never as a surprise overlay.</p>
+  </section>
+  <section data-report-section="changes">
+    <h2>What Changed and What Deliberately Did Not</h2>
+      <p>Changed: the QuickJS prelude and validator (budget/date helpers, helper signatures), runtime ceilings, executeProgram and completeRun tool contracts (needs_clarification outcome, one-shot no_usable_sources pushback, deduped tone fixes), register/sales/inventory ports with implementationVersion bumps, the product lexicon (scrubOpaqueIdentifiers, annotateDateDisplays), the turn prompt (breadth, clarification, and display-verbatim guidance), runtime protocol v3 with preExecutedExchange across both adapters and the contract suite, turns.ts and runtimeHost.ts for starter-intent substitution and host pre-execution with its downgrade ladder, the eval driver and scorecard scripts, POS offline-sync closeout traces, and the whole panel surface including routes wiring, CSS, and the border-beam dependency.</p>
+      <p>Deliberately unchanged: the scratch tool is untouched (reserved for future cross-turn memory work). The egress checkpoint stays exactly at finishAttempt — the pre-executed program passes through it like any dispatched call. The pre-executed exchange never enters the tool-dispatch ledger; it is rendered into the provider transcript and is not a dispatch. The default model stays gpt-5-mini: gpt-5 was measured (broader reads, zero tone findings) and rejected for 2-3x latency and ~5-7x cost. And the kernel-rendered zero-provider-round answer was considered and explicitly rejected to protect the conversational surface, recorded so a future latency push can revisit it deliberately.</p>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure Boundaries</h2>
+      <p>Starter intents fail open, in one direction only. A malformed starterIntentId is the single hard refusal (starter_intent_invalid). Everything downstream downgrades to a normal free-form turn with a durable trace naming why: intent_unknown (panel/deployment skew during rollouts), no_program (intent without a curated read), render_failed (a template placeholder that is not a known snapshot key, or a value with the wrong shape), and handler or executor failures at pre-execution time. The one non-downgrade exit: if authority revocations arrive during pre-execution, the turn cancels through the existing authority_revoked path before any provider call — withheld-at-finish is an authority signal, not an executor failure. A resumed turn never re-runs pre-execution.</p>
+      <p>Budget exhaustion inside a program returns a denied value and the program keeps its prior results. The guest budget is per-program while the run ledger spans programs; the ledger remains the hard limit. Tone enforcement denies at most once per cause — a repeated honest submission is accepted. Shell restore validates everything it reads from sessionStorage (version, profile registry membership, context key completeness, store binding) and discards the stored target on any mismatch rather than restoring a wrong context.</p>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key Files</h2>
+      <p>The files that carry the delivery&#x27;s load, in data-flow order.</p>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and Review Evidence</h2>
+      <p>Local gates on the branch tip: the full vitest suites for the harness, shared modules, POS sync, and panel components pass (including 103 DailyOperationsView tests and the runtime adapter contract parity suites); project typecheck passes; per-package lint and the Convex pagination/return-validator checks pass through pr:athena:prepare; agent-sdk generate/check passes with the compatibility digest carrying protocol v3.</p>
+      <p>Live evidence on the dev deployment (jovial-wildebeest-179): the eval drive ran 11/11 scenarios green, including all four starter intents. starter_close_readiness completed in 15.3 s over 8 pre-executed reads against 32.7 s for the equivalent free-form readiness question in the same drive; starter_open_drawers 10.1 s; starter_automation_today 9.1 s; starter_stock_pressure 27.0 s. Zero tone denials across all turns, and every starter answer cited a citation minted by its pre-executed attempt (the hard gate). These drive numbers live in the session record, not in tracked files.</p>
+      <p>Review: a full ce-code-review pass (13 reviewers: correctness, security, adversarial, testing, maintainability, project-standards, performance, api-contract, reliability, kieran-typescript, julik-frontend-races, plus the agent-native and learnings agents) ran against this candidate as part of the delivery gate; its evidence is recorded through the harness obligation ledger. Production deploy and root alignment are pending — this report does not claim either.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Next Time</h2>
+      <p>When model output violates a convention, ask first what the harness knew and did not disclose. Instructions were measured twice on this branch and lost both times; disclosure and annotation won. When adding a new agent surface, the scorecard and eval driver need no changes — add scenarios, tag a drive, and compare medians over N tagged drives, never single samples.</p>
+      <p>When adding a starter intent: write the curated program in the registry keyed by (profileId, intentId), keep placeholders to snapshot keys with declared shapes, and let conformance validate the rendered source against the real facade. If a future change moves where the pre-executed exchange is injected, re-read the plan&#x27;s rejected alternative — fenced-prompt injection moves the egress checkpoint into prompt assembly and was rejected by three independent review findings.</p>
+      <p>When extending the shell: never infer an assistant context from the URL; only a contextual entry click or New thread re-pins. Persist reconnect handles and bounded context metadata, never prompt text or model-authored content.</p>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>packages/athena-webapp/convex/agentHarness/programRuntime/quickJsRuntime.ts</code></td><td>Sandbox prelude: guest-side budget-as-value, in-flight queue, athena.dates/budget helpers — where exhaustion stopped being a crash.</td></tr>
+        <tr><td><code>packages/athena-webapp/shared/agentHarness/productLexicon.ts</code></td><td>Mechanical tone: money and UTC-pinned date display annotation, opaque-reference scrubbing, the bounded tone sensor.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/agentHarness/tools.ts</code></td><td>The five fixed tools: budget/pages guidance, needs_clarification, one-shot pushbacks, display annotation at the result boundary.</td></tr>
+        <tr><td><code>packages/athena-webapp/shared/agentHarness/starterIntentProgram.ts</code></td><td>Fail-closed template rendering: placeholders limited to snapshot keys with declared value shapes.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/agentHarness/profiles/starterIntentPrograms.ts</code></td><td>The kernel-side registry of curated programs keyed by (profileId, starterIntentId) — four daily_operations intents.</td></tr>
+        <tr><td><code>packages/athena-webapp/shared/agentHarness/agentRuntime.ts</code></td><td>Runtime protocol v3: AgentPreExecutedExchange, its validator, and the reading_ahead milestone.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/agentHarness/runtimeHost.ts</code></td><td>Host pre-execution after markTurnRunning: runs the curated read, seeds the exchange, traces success or the downgrade reason, cancels on revocation.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/agentHarness/turns.ts</code></td><td>startTurn accepts starterIntentId, substitutes the pinned canonical prompt server-side, and plans pre-execution with its skip ladder.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgent.ts</code></td><td>Renders the pre-executed exchange as a synthetic assistant tool-call plus tool-result pair in the provider transcript.</td></tr>
+        <tr><td><code>scripts/agent-eval-drive.ts</code></td><td>The measurement loop: real operator turns with digest fencing, hard/soft gates per scenario, starter-intent seeding and citation checks.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/agentHarness/scorecardQuery.ts</code></td><td>Profile-neutral scorecard over kernel tables — future surfaces are scored without edits.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts</code></td><td>Offline-synced closeouts now emit closeout_submitted and approval_pending workflow traces at projection.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx</code></td><td>The detached panel: shell provider, floating launcher, validated sessionStorage restore, chat transcript, immediate-send starter taps.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/routes/-authed-layout.tsx</code></td><td>Shell wiring: provider wraps the authenticated workspace, launcher lives in the top bar, suppressed on shared-demo restricted paths.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How does a starter-intent tap&#x27;s curated read reach the model?</p>
+        <ol data-quiz-options>
+          <li>The read&#x27;s results are pasted into the operator question inside the untrusted-data fence</li>
+          <li data-quiz-correct>The host runs the program before the first model step and seeds it into the transcript as a completed athena.executeProgram exchange</li>
+          <li>The panel executes the read client-side and sends the rows with startTurn</li>
+          <li>The model receives a hint naming which program to write, then writes and dispatches it itself</li>
+        </ol>
+        <p data-quiz-explanation>Protocol v3 carries a preExecutedExchange that the adapter renders as a synthetic assistant tool-call plus tool-result pair before the first model step. A tool exchange is the representation the model is post-trained to continue from — that is the whole first-pass-commit bet. Fenced-prompt injection was explicitly rejected in review.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A panel ships with a starter intent id the deployed backend does not know. What happens when an operator taps it?</p>
+        <ol data-quiz-options>
+          <li>The turn is refused with starter_intent_invalid</li>
+          <li>The turn waits for the deployment to catch up</li>
+          <li data-quiz-correct>The turn downgrades to a normal free-form turn, with an intent_unknown skip trace</li>
+          <li>The panel falls back to drafting the prompt into the composer</li>
+        </ol>
+        <p data-quiz-explanation>Panel/deployment skew is routine during rollouts, so unknown ids downgrade instead of refusing — refusing would strand operators for every deploy window. Only a malformed id (failing the shape pattern) is refused outright.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does the pre-executed read charge the run&#x27;s real budget and pass the normal egress checkpoint?</p>
+        <ol data-quiz-options>
+          <li>Because the budget ledger cannot distinguish host calls from model calls</li>
+          <li data-quiz-correct>Because the curated read runs through the production executor under the run&#x27;s grant — it is a real read with real egress, not a cached snapshot</li>
+          <li>To make the eval driver&#x27;s call counts comparable across scenarios</li>
+          <li>Because Convex actions cannot skip the checkpoint</li>
+        </ol>
+        <p data-quiz-explanation>The host invokes the same registered executeProgram handler the model would, under the same grant and admission. Keeping the egress checkpoint at finishAttempt untouched was a load-bearing design constraint — the rejected design moved it into prompt assembly.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does a program see when it exceeds the guest-side call budget mid-execution?</p>
+        <ol data-quiz-options>
+          <li>The sandbox throws and the attempt is discarded</li>
+          <li data-quiz-correct>The facade resolves { kind: &quot;denied&quot;, code: &quot;budget_exhausted&quot;, retryable: false } and the program keeps its prior results</li>
+          <li>The call silently returns empty data</li>
+          <li>The host pauses the program until the next attempt&#x27;s budget refills</li>
+        </ol>
+        <p data-quiz-explanation>Refusal-as-value is the core agency lever: exhaustion becomes something the program can answer around instead of a crash that loses everything already read. The run-wide ledger remains the hard backstop.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>The tone work&#x27;s central finding, measured twice on this branch, is:</p>
+        <ol data-quiz-options>
+          <li>Stronger enforcement denials produce cleaner prose</li>
+          <li>Larger models follow tone instructions reliably</li>
+          <li data-quiz-correct>Instructions are the weakest layer — disclosing units and annotating displays at the input boundary is what moved the numbers</li>
+          <li>Tone sensing must run on the model-submitted text, not the committed text</li>
+        </ol>
+        <p data-quiz-explanation>Enforcement without disclosure made prose worse (8.0 → 10.9 jargon tokens/1k chars, 73 s p90 retry tails). Input shaping — money and date display siblings, unit disclosure — took jargon to 0.5/1k with denials at 1/20. And measurement is of committed text.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why do money and date values keep their canonical forms alongside the new display strings?</p>
+        <ol data-quiz-options>
+          <li>Backwards compatibility with older panels</li>
+          <li data-quiz-correct>Programs and filters still consume canonical values; only the model-visible copy gains display siblings, and product-authored displays win over generated ones</li>
+          <li>The display strings are locale-dependent and unstable</li>
+          <li>Canonical values are needed to compute citations</li>
+        </ol>
+        <p data-quiz-explanation>The rule is &#x27;preserve canonical values and annotate the model-visible copy&#x27;: programs keep YYYY-MM-DD and minor units for computation, while the provider-returned result gains UTC-pinned display siblings the prose quotes verbatim.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What did the payment-mix investigation conclude?</p>
+        <ol data-quiz-options>
+          <li>A reconciliation defect was corrupting 81 days of sales data</li>
+          <li data-quiz-correct>There was no data bug — the flagged days predate the feature, and the port&#x27;s label was accusing clean books of not reconciling</li>
+          <li>The mix computation double-counted split tenders</li>
+          <li>Momo payments were misattributed to cash</li>
+        </ol>
+        <p data-quiz-explanation>All 81 flagged days predate payment-mix recording. The fix is truthful labeling: payment_mix_not_recorded instead of payment_mix_does_not_reconcile. A harness must not turn absence of data into an accusation.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>An offline register closeout syncs up needing manager approval. What does the workflow timeline now show that it did not before?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>closeout_submitted and approval_pending trace stages recorded at projection time, with the approval request id</li>
+          <li>The manager&#x27;s eventual decision, backfilled to the closeout time</li>
+          <li>A synthetic approval auto-granted for offline events</li>
+          <li>Nothing changed for offline closeouts</li>
+        </ol>
+        <p data-quiz-explanation>Before, the trace only began when the manager acted — a hole in the timeline exactly where the variance was. Projection now emits both stages with syncOrigin local_sync, matching the online path.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>The panel moved out of the route and into a shell-owned provider. What alone is allowed to change the pinned conversation context?</p>
+        <ol data-quiz-options>
+          <li>Any route navigation that renders a different store surface</li>
+          <li data-quiz-correct>A contextual entry click or New thread — visible navigation is not authorization to change what the assistant answers about</li>
+          <li>The sessionStorage restore on reload</li>
+          <li>The launcher&#x27;s open/close toggle</li>
+        </ol>
+        <p data-quiz-explanation>Route navigation alone never re-pins; the origin context stays pinned until the operator explicitly switches. Restore brings the target back validated but closed, and the launcher toggles visibility, not context.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is this delivery&#x27;s current finish-line status?</p>
+        <ol data-quiz-options>
+          <li>Merged and deployed to production</li>
+          <li>Merged, production deploy pending</li>
+          <li data-quiz-correct>A pre-merge delivery candidate: review and gates run against the branch; production deploy and root alignment are pending</li>
+          <li>Deployed to production from the branch without merging</li>
+        </ol>
+        <p data-quiz-explanation>This report describes a delivery candidate. The dev deployment runs the branch tip and the eval drive ran there, but merge, production deploy, and root alignment had not occurred when the report was generated — and the report must not predict them.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>session context</dt><dd>Reconstructed the narrative arc, key decisions, and measured outcomes from the plan, brainstorms, solution notes, and full commit messages; flagged which eval figures live only in the session record.</dd>
+      <dt>delivered diff</dt><dd>Mapped every changed file by concern, the architectural before/after, the downgrade and failure boundaries, what intentionally did not change, per-concern test coverage, and named risks.</dd>
+      <dt>review team (13 reviewers)</dt><dd>Full ce-code-review pass over the candidate — correctness, security, adversarial, testing, maintainability, project-standards, performance, api-contract, reliability, kieran-typescript, julik-frontend-races, agent-native, and learnings — feeding the delivery gate&#x27;s review evidence.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>
