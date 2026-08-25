@@ -6437,6 +6437,40 @@ describe("projectLocalSyncEvent", () => {
           variance: -10,
         }),
       },
+      {
+        registerSessionId: "register-session-1",
+        patch: {
+          workflowTraceId: "register-trace-1",
+        },
+      },
+    ]);
+    expect(repository.recordedRegisterSessionTraces).toEqual([
+      expect.objectContaining({
+        actorStaffProfileId: "staff-1",
+        countedCash: 90,
+        occurredAt: 30,
+        stage: "closeout_submitted",
+        variance: -10,
+        session: expect.objectContaining({
+          countedCash: 90,
+          status: "closing",
+          variance: -10,
+        }),
+      }),
+      expect.objectContaining({
+        actorStaffProfileId: "staff-1",
+        approvalRequestId: "approval-request-1",
+        countedCash: 90,
+        occurredAt: 30,
+        stage: "approval_pending",
+        variance: -10,
+        session: expect.objectContaining({
+          countedCash: 90,
+          managerApprovalRequestId: "approval-request-1",
+          status: "closing",
+          variance: -10,
+        }),
+      }),
     ]);
     expect(repository.createdOperationalEvents).toEqual([
       expect.objectContaining({
@@ -6458,6 +6492,61 @@ describe("projectLocalSyncEvent", () => {
         terminalId: "terminal-1",
       }),
     ]);
+  });
+
+  it("persists the approval_pending trace id when the closeout_submitted stage does not create a trace", async () => {
+    const repository = createProjectionRepository({
+      storeConfig: {
+        operations: {
+          cashControls: {
+            varianceApprovalThreshold: 5,
+          },
+        },
+      },
+    });
+    // The recorder can decline a stage (deduped elsewhere) without failing:
+    // the projection must fall back to the stage that actually created one.
+    const recordTrace = repository.recordRegisterSessionWorkflowTrace!.bind(repository);
+    repository.recordRegisterSessionWorkflowTrace = async (input) => {
+      const result = await recordTrace(input);
+      return input.stage === "closeout_submitted" ? { traceCreated: false, traceId: result.traceId } : result;
+    };
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-closed-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 3,
+        eventType: "register_closed",
+        occurredAt: 30,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          countedCash: 90,
+          notes: "Short drawer",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.recordedRegisterSessionTraces.map((trace) => (trace as { stage: string }).stage)).toEqual([
+      "closeout_submitted",
+      "approval_pending",
+    ]);
+    expect(repository.registerSessionPatches).toEqual(
+      expect.arrayContaining([
+        {
+          registerSessionId: "register-session-1",
+          patch: {
+            workflowTraceId: "register-trace-2",
+          },
+        },
+      ]),
+    );
   });
 
   it("honors store manager-signoff variance policy during offline closeout projection", async () => {

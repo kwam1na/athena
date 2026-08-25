@@ -166,8 +166,9 @@ const MATRIX = [
     verbs: ["get", "list"],
     requiredFilters: ["skuRef"],
     optionalFilters: ["category", "stockState"],
-    maxItemsPerPage: 100,
-    maxPagesPerRun: 3,
+    // Catalog-scale bounds (2026-08-24): 200 x 8 reads a ~1,300-SKU store whole.
+    maxItemsPerPage: 200,
+    maxPagesPerRun: 8,
     readIntents: ["inventory.stock.view"],
     projections: ["costOverlay"],
     freshness: ["live"],

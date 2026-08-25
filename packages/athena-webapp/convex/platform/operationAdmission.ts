@@ -1,5 +1,6 @@
 import { internal } from "../_generated/api";
 import { AGENT_GENERATED_REGISTRY } from "../agentHarness/_generated/registry";
+import { starterIntentProgramFor } from "../agentHarness/profiles/starterIntentPrograms";
 import { createDelegatedAdmission } from "../agentHarness/delegatedAdmission";
 import { resolveDurableEnablementWithCtx } from "../agentHarness/deploymentState";
 import { createAgentReadPortRegistry } from "../agentHarness/readPorts";
@@ -241,6 +242,7 @@ export const agentDelegatedAdmission = createDelegatedAdmission({
   // durable profile/capability switches, every profile DEFAULT OFF. Read on
   // every delegated check, so a flipped switch denies immediately.
   resolveEnablement: (ctx) => resolveDurableEnablementWithCtx(ctx, AGENT_GENERATED_REGISTRY.enablement),
+  starterIntentProgramFor,
 });
 
 /** Run start: pin the grant. `prepareAgentRunGrantWithCtx` feeds `recordTurnIntentWithCtx`. */

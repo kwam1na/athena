@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-25T01:51:11.349Z",
+  "branch": "feat/agent-harness-agency-levers",
+  "headSha": "fd17febefbe10ac86f878253f9ea02a59770f1b5",
+  "deliverableDiffFingerprint": "4a587bb5707c4e59bb49d4b519837eeb8dedd26c815be1d0d59e01eb93a9d704",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 8,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 986047.3744170001
+  },
+  "reviewLoop": {
+    "providerId": "ce-code-review",
+    "runId": "20260824-212558-0a665f0d",
+    "finalPassId": "pass-3-20260824-212558-0a665f0d",
+    "recordedAt": "2026-08-25T01:34:41.482Z",
+    "iterationCount": 3,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 5,
+      "P2": 12,
+      "P3": 4
+    },
+    "deferredExpansionCount": 3,
+    "deferredIssueIds": [
+      "V26-1325",
+      "V26-1326",
+      "V26-1327"
+    ]
+  }
+}

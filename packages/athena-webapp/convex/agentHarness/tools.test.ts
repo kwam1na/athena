@@ -328,6 +328,7 @@ describe("athena.completeRun ref resolution by content-hash tail", () => {
 
 describe("athena.completeRun tone sensor and money display annotation", () => {
   const salesOutput = {
+    operatingDate: "2026-08-24",
     grossRevenue: { state: "known", value: { amount: 1_414_900, currency: "GHS" } },
     lifecycleStage: "close_blocked",
     transactionCount: 4,
@@ -382,10 +383,21 @@ describe("athena.completeRun tone sensor and money display annotation", () => {
     citations: [{ ref: "citation:v1.1.0.fedcba9876543210fedcba9876543210" }],
   };
 
-  it("annotates money-shaped values in the executeProgram result with display strings", async () => {
+  it("annotates money and date values in the executeProgram result with display strings", async () => {
     const tools = toneTools();
-    const outcome = (await tools.executeProgram()) as { kind: string; result: { output: { grossRevenue: { value: { display?: string } } } } };
+    const outcome = (await tools.executeProgram()) as {
+      kind: string;
+      result: {
+        output: {
+          operatingDate: string;
+          operatingDateDisplay?: string;
+          grossRevenue: { value: { display?: string } };
+        };
+      };
+    };
     expect(outcome.kind).toBe("success");
+    expect(outcome.result.output.operatingDate).toBe("2026-08-24");
+    expect(outcome.result.output.operatingDateDisplay).toBe("Mon, Aug 24, 2026");
     expect(outcome.result.output.grossRevenue.value.display).toBe("GH₵14,149");
   });
 
@@ -429,6 +441,59 @@ describe("athena.completeRun tone sensor and money display annotation", () => {
     });
     expect(retried.kind).toBe("success");
     expect(tools.completions).toHaveLength(1);
+  });
+
+  it("scrubs refs from the narrative and commits first-pass instead of denying", async () => {
+    const tools = toneTools({ tonePolicy: "enforce" });
+    await tools.executeProgram();
+    const outcome = await tools.completeRun({
+      outcome: "answer",
+      narrative:
+        "Largest variance was resource:register session.8d5c0a4d9a7e78365b5c876b9c4525d135c0bcbf9d0781dd.171d48524313ed1ecd38efe7 on register 07; all other drawers are counted.",
+      ...CITED,
+    });
+    expect(outcome.kind).toBe("success");
+    expect(tools.completions).toHaveLength(1);
+    // The committed record still carries refs where they BELONG (citations);
+    // the narrative the operator reads carries none.
+    const narrative = (tools.completions[0] as { artifact: { payload: { narrative: string } } }).artifact.payload.narrative;
+    expect(narrative).not.toMatch(/[0-9a-f]{16,}/);
+    expect(narrative).toContain("the cited record");
+    expect(narrative).toContain("register 07");
+  });
+  // (The former duplicate-fix denial case is gone by construction: the ref
+  // findings that shared one fix sentence are scrubbed by normalization
+  // before the sensor runs; the denial assembly still dedupes as a backstop.)
+
+  it("pushes back once on no_usable_sources when the turn read sources, then accepts the model's judgment", async () => {
+    const tools = toneTools();
+    await tools.executeProgram();
+    const capitulation = {
+      outcome: "no_usable_sources" as const,
+      narrative: "I could not read any store data for this run, so I cannot answer how the day went.",
+      citedAttemptRefs: [],
+      citations: [],
+    };
+    const denied = await tools.completeRun(capitulation);
+    expect(denied.kind).toBe("denied");
+    expect((denied as { denial: { code: string; message: string } }).denial.code).toBe("sources_were_read");
+    expect((denied as { denial: { message: string } }).denial.message).toContain("needs_clarification");
+    // A repeat is the model standing by its judgment: accepted.
+    const accepted = await tools.completeRun(capitulation);
+    expect(accepted.kind).toBe("success");
+  });
+
+  it("needs_clarification commits without citations, carrying the question as the narrative", async () => {
+    const tools = toneTools({ tonePolicy: "enforce" });
+    const outcome = await tools.completeRun({
+      outcome: "needs_clarification",
+      narrative: "Which Wednesday do you mean — 2026-08-19 or 2026-08-26? Sales differ between them.",
+      citedAttemptRefs: [],
+      citations: [],
+    });
+    expect(outcome.kind).toBe("success");
+    expect(tools.completions).toHaveLength(1);
+    expect(tools.completions[0]).toMatchObject({ artifact: { payload: { outcome: "needs_clarification" } } });
   });
 
   it("a clean narrative commits in enforce mode with no findings", async () => {

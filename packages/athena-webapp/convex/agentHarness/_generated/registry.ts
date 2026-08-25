@@ -767,7 +767,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     },
     "cap_dailyops_day_sales": {
       "binding": {
-        "implementationVersion": "1",
+        "implementationVersion": "3",
         "portKey": "reports.daySales",
         "readIntents": [
           "reports.view",
@@ -1007,7 +1007,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     },
     "cap_dailyops_inventory_positions": {
       "binding": {
-        "implementationVersion": "3",
+        "implementationVersion": "4",
         "portKey": "inventory.positions",
         "readIntents": [
           "inventory.stock.view"
@@ -1029,11 +1029,11 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       "contractVersion": 1,
       "cost": {
         "worstCasePerCall": {
-          "bytes": 196608,
+          "bytes": 262144,
           "calls": 1,
-          "costUnits": 3,
-          "elapsedMs": 2500,
-          "rows": 100
+          "costUnits": 4,
+          "elapsedMs": 3000,
+          "rows": 200
         }
       },
       "egressClass": "operational",
@@ -1094,8 +1094,8 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "list": {
           "bounds": {
             "kind": "collection",
-            "maxItemsPerPage": 100,
-            "maxPagesPerRun": 3
+            "maxItemsPerPage": 200,
+            "maxPagesPerRun": 8
           },
           "filters": {
             "category": {
@@ -1208,7 +1208,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     },
     "cap_dailyops_register_sessions": {
       "binding": {
-        "implementationVersion": "1",
+        "implementationVersion": "2",
         "portKey": "cash.registerSessions",
         "readIntents": [
           "cash_controls.view"
@@ -1486,7 +1486,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     },
     "cap_dailyops_replenishment": {
       "binding": {
-        "implementationVersion": "3",
+        "implementationVersion": "4",
         "portKey": "inventory.replenishment",
         "readIntents": [
           "procurement.view",
@@ -1979,7 +1979,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     },
     "cap_dailyops_store_pulse": {
       "binding": {
-        "implementationVersion": "1",
+        "implementationVersion": "3",
         "portKey": "reports.storePulse",
         "readIntents": [
           "reports.view"
@@ -2199,7 +2199,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     },
     "cap_dailyops_week_performance": {
       "binding": {
-        "implementationVersion": "1",
+        "implementationVersion": "3",
         "portKey": "reports.weekPerformance",
         "readIntents": [
           "reports.view"
@@ -2703,7 +2703,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       }
     }
   },
-  "compatibilityDigest": "fnv1a64:d57f15b714dcff64",
+  "compatibilityDigest": "fnv1a64:5f6c323f38546281",
   "contractVersion": 1,
   "enablement": {
     "capabilities": {
@@ -2765,8 +2765,8 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       "sourceDigest": "sha256:c282f3e177297161300e403f27dcc02862cdf9c8ac89b21fcbbbc1ed6547fe55"
     },
     "cash.registerSessions": {
-      "implementationVersion": "1",
-      "sourceDigest": "sha256:71d58c34adc814d582561a6a70c63771679052eb677e9990ea7d9e35059dffa6"
+      "implementationVersion": "2",
+      "sourceDigest": "sha256:be63b9d2f6c49d1a7a20b633c582f5d49a3465980dd80b8557c6ba646e202b83"
     },
     "directory.teams": {
       "implementationVersion": "2",
@@ -2781,12 +2781,12 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       "sourceDigest": "sha256:34307738e9d37077b15e0c3f2e49b5473d3e9a117b7e496e780ae2eb83098919"
     },
     "inventory.positions": {
-      "implementationVersion": "3",
-      "sourceDigest": "sha256:6844e2877d540cd5f6b7640de4d170a7cd6afa8029d7c403704fe9c21013d77a"
+      "implementationVersion": "4",
+      "sourceDigest": "sha256:b93a1bc26e241330032b90d35f7d75aa74e8e6ca61e3bf35a3d26a7bb38b2179"
     },
     "inventory.replenishment": {
-      "implementationVersion": "3",
-      "sourceDigest": "sha256:6844e2877d540cd5f6b7640de4d170a7cd6afa8029d7c403704fe9c21013d77a"
+      "implementationVersion": "4",
+      "sourceDigest": "sha256:b93a1bc26e241330032b90d35f7d75aa74e8e6ca61e3bf35a3d26a7bb38b2179"
     },
     "operations.activity": {
       "implementationVersion": "1",
@@ -2805,26 +2805,26 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       "sourceDigest": "sha256:6cdb3ac336b82a3485926c95dd7f97857616e1e4c7c12d81160ee0319cfa1fd1"
     },
     "reports.daySales": {
-      "implementationVersion": "1",
-      "sourceDigest": "sha256:6019507eb5803fd8a1c21d277e82eb3c5501a202d9186a1befa068172465826d"
+      "implementationVersion": "3",
+      "sourceDigest": "sha256:a3716f109a787e3f378aed147f3f2ead5be8c606f4a1f20c3b13d151f7ce85d9"
     },
     "reports.storePulse": {
-      "implementationVersion": "1",
-      "sourceDigest": "sha256:6019507eb5803fd8a1c21d277e82eb3c5501a202d9186a1befa068172465826d"
+      "implementationVersion": "3",
+      "sourceDigest": "sha256:a3716f109a787e3f378aed147f3f2ead5be8c606f4a1f20c3b13d151f7ce85d9"
     },
     "reports.weekPerformance": {
-      "implementationVersion": "1",
-      "sourceDigest": "sha256:6019507eb5803fd8a1c21d277e82eb3c5501a202d9186a1befa068172465826d"
+      "implementationVersion": "3",
+      "sourceDigest": "sha256:a3716f109a787e3f378aed147f3f2ead5be8c606f4a1f20c3b13d151f7ce85d9"
     }
   },
   "profiles": {
     "daily_operations": {
       "budgetPolicy": {
-        "maxAttempts": 3,
+        "maxAttempts": 4,
         "maxInFlightCalls": 4,
         "runLimits": {
           "bytes": 2097152,
-          "calls": 24,
+          "calls": 48,
           "costUnits": 2000,
           "elapsedMs": 60000,
           "rows": 5000
@@ -2884,6 +2884,16 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
             "id": "citation_resolution",
             "kind": "citation_resolution",
             "prompt": "Which register had a variance today, and what proves it?"
+          },
+          {
+            "expects": [
+              "outcome needs_clarification asking which Wednesday, or an answer that names the operating date it actually reports",
+              "never no_usable_sources while the turn holds successful cited reads",
+              "no fabricated day"
+            ],
+            "id": "ambiguous_referent",
+            "kind": "partial_or_no_data",
+            "prompt": "How did we do on Wednesday?"
           }
         ]
       },
@@ -3101,7 +3111,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
   "protocolVersions": {
     "admissionPolicy": "u4.0",
     "harness": "athena.agent-harness.v1",
-    "runtime": "athena.agent-runtime.v2",
+    "runtime": "athena.agent-runtime.v3",
     "runtimeAdapter": {
       "adapterKind": "convex_agent",
       "adapterVersion": "convex_agent@0.7.1+ai@7.0.76+athena.1"
@@ -3157,7 +3167,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "functionPath": "cashControls/agentCapabilities/registersPorts:readRegisterSessions",
         "kind": "internal_query"
       },
-      "implementationVersion": "1",
+      "implementationVersion": "2",
       "portKey": "cash.registerSessions",
       "projections": [
         "cashFinancials"
@@ -3268,17 +3278,17 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       ],
       "contractVersion": 1,
       "declaredCost": {
-        "bytes": 196608,
+        "bytes": 262144,
         "calls": 1,
-        "costUnits": 3,
-        "elapsedMs": 2500,
-        "rows": 100
+        "costUnits": 4,
+        "elapsedMs": 3000,
+        "rows": 200
       },
       "handler": {
         "functionPath": "stockOps/agentCapabilities/inventoryPorts:readPositions",
         "kind": "internal_query"
       },
-      "implementationVersion": "3",
+      "implementationVersion": "4",
       "portKey": "inventory.positions",
       "projections": [
         "costOverlay"
@@ -3310,7 +3320,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "functionPath": "stockOps/agentCapabilities/inventoryPorts:listReplenishment",
         "kind": "internal_query"
       },
-      "implementationVersion": "3",
+      "implementationVersion": "4",
       "portKey": "inventory.replenishment",
       "projections": [
         "supplierCommercial"
@@ -3470,7 +3480,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "functionPath": "reports/agentCapabilities/salesPorts:getDaySales",
         "kind": "internal_query"
       },
-      "implementationVersion": "1",
+      "implementationVersion": "3",
       "portKey": "reports.daySales",
       "projections": [
         "financial"
@@ -3503,7 +3513,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "functionPath": "reports/agentCapabilities/salesPorts:getStorePulse",
         "kind": "internal_query"
       },
-      "implementationVersion": "1",
+      "implementationVersion": "3",
       "portKey": "reports.storePulse",
       "projections": [
         "financial"
@@ -3533,7 +3543,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "functionPath": "reports/agentCapabilities/salesPorts:getWeekPerformance",
         "kind": "internal_query"
       },
-      "implementationVersion": "1",
+      "implementationVersion": "3",
       "portKey": "reports.weekPerformance",
       "projections": [
         "financial"
@@ -3547,7 +3557,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       ]
     }
   },
-  "registryDigest": "fnv1a64:f19326767d8913de",
+  "registryDigest": "fnv1a64:b1e8f08897c36532",
   "sdkView": {
     "contractVersion": 1,
     "packages": {
@@ -3698,7 +3708,7 @@ export const AGENT_GENERATED_SOURCE_KEYS: readonly string[] = [
 ];
 
 /** What a run pins; the deployment epoch fence compares it with the durable epoch digest. */
-export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:d57f15b714dcff64";
+export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:5f6c323f38546281";
 
 /** Schema identity only; unchanged when a capability is enabled or disabled. */
-export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:f19326767d8913de";
+export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:b1e8f08897c36532";

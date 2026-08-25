@@ -98,11 +98,11 @@ function expectRejected(outcome: AgentProgramValidationResult | AgentProgramOutc
 }
 
 describe("program runtime ceilings (typed config the executor consumes)", () => {
-  it("publishes the initial safety ceilings from the plan", () => {
+  it("publishes the safety ceilings (initial plan values, calls/attempts tuned 2026-08-24 from observed use)", () => {
     expect(AGENT_PROGRAM_RUNTIME_CEILINGS).toMatchObject({
       maxElapsedMs: 60_000,
-      maxAttempts: 3,
-      maxCapabilityCalls: 24,
+      maxAttempts: 4,
+      maxCapabilityCalls: 48,
       maxInFlightCalls: 4,
       maxRows: 5_000,
       maxRunBridgeBytes: 2 * 1024 * 1024,
@@ -356,25 +356,88 @@ describe("sandbox limits terminate cleanly with typed diagnostics", () => {
     expectFailed(clamped, "stack_overflow");
   });
 
-  it("stops at the capability-call ceiling and the in-flight ceiling", async () => {
+  it("refuses reads past the call ceiling as values, keeping what the program already read", async () => {
+    // Observed on a driven turn (30-day census): the old hard fail at call 25
+    // discarded 24 fetched results. The budget is still enforced — the host
+    // bridge never sees call 25 — but the program keeps its state and answers.
     const { bridge: countingBridge, calls } = makeBridge();
-    const tooMany = await execute(
-      `for (let i = 0; i < 30; i += 1) { await athena.ops.queue.list({ i }); } return "done";`,
+    const outcome = await execute(
+      `const kinds = { result: 0, budget_exhausted: 0, other: 0 };
+       for (let i = 0; i < 30; i += 1) {
+         const r = await athena.ops.queue.list({ i });
+         if (r.code === "budget_exhausted") kinds.budget_exhausted += 1;
+         else if (r.path === "ops.queue.list") kinds.result += 1;
+         else kinds.other += 1;
+       }
+       return { kinds, remaining: athena.budget.remaining().callsRemaining };`,
       { bridge: countingBridge, ceilings: { maxCapabilityCalls: 24 } },
     );
-    expectFailed(tooMany, "call_limit");
+    expect(outcome.status, JSON.stringify(outcome)).toBe("completed");
+    if (outcome.status !== "completed") return;
+    expect(outcome.output).toEqual({ kinds: { result: 24, budget_exhausted: 6, other: 0 }, remaining: 0 });
     expect(calls).toHaveLength(24);
+  });
 
+  it("throttles calls above the in-flight ceiling instead of failing a wide Promise.all", async () => {
+    let inFlight = 0;
+    let highWater = 0;
     const { bridge: slowBridge, calls: slowCalls } = makeBridge(async () => {
+      inFlight += 1;
+      highWater = Math.max(highWater, inFlight);
       await new Promise((resolve) => setTimeout(resolve, 20));
+      inFlight -= 1;
       return { ok: true };
     });
-    const tooWide = await execute(
-      `await Promise.all(Array.from({ length: 8 }, (_, i) => athena.ops.queue.list({ i }))); return "done";`,
+    const outcome = await execute(
+      `const all = await Promise.all(Array.from({ length: 8 }, (_, i) => athena.ops.queue.list({ i })));
+       return all.filter((r) => r.ok === true).length;`,
       { bridge: slowBridge, ceilings: { maxInFlightCalls: 4 } },
     );
-    expectFailed(tooWide, "in_flight_limit");
-    expect(slowCalls.length).toBeLessThanOrEqual(4);
+    expect(outcome.status, JSON.stringify(outcome)).toBe("completed");
+    if (outcome.status !== "completed") return;
+    expect(outcome.output).toBe(8);
+    expect(slowCalls).toHaveLength(8);
+    expect(highWater).toBeLessThanOrEqual(4);
+  });
+
+  it("serves pure date arithmetic and budget introspection from the prelude", async () => {
+    const { bridge } = makeBridge();
+    const outcome = await execute(
+      `const week = athena.dates.range(athena.dates.shift("2026-08-24", -6), "2026-08-24");
+       const before = athena.budget.remaining().callsRemaining;
+       await athena.ops.queue.list({});
+       const after = athena.budget.remaining().callsRemaining;
+       return { week, spent: before - after, leap: athena.dates.shift("2024-03-01", -1) };`,
+      { bridge },
+    );
+    expect(outcome.status, JSON.stringify(outcome)).toBe("completed");
+    if (outcome.status !== "completed") return;
+    const output = outcome.output as { week: string[]; spent: number; leap: string };
+    expect(output.week).toEqual([
+      "2026-08-18",
+      "2026-08-19",
+      "2026-08-20",
+      "2026-08-21",
+      "2026-08-22",
+      "2026-08-23",
+      "2026-08-24",
+    ]);
+    expect(output.spent).toBe(1);
+    expect(output.leap).toBe("2024-02-29");
+  });
+
+  it("rejects a helper misuse with the helper's signature, and bounds a runaway range", async () => {
+    const aliased = validateProgramSource(`const shift = athena.dates.shift; return shift("2026-08-24", -1);`, {
+      facade: FACADE,
+    });
+    expect(aliased.ok).toBe(false);
+    if (aliased.ok) return;
+    expect(aliased.issues.map((issue) => issue.code)).toContain("facade_misuse");
+    expect(aliased.issues.some((issue) => issue.message.includes('athena.dates.shift("YYYY-MM-DD", wholeDays)'))).toBe(true);
+
+    const { bridge } = makeBridge();
+    const runaway = await execute(`return athena.dates.range("2020-01-01", "2026-01-01").length;`, { bridge });
+    expect(runaway.status).toBe("failed");
   });
 
   it("stops at the per-call output ceiling and the run bridge ceiling before the program sees the data", async () => {

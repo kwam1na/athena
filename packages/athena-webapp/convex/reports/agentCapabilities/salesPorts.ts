@@ -126,10 +126,20 @@ export const getDaySalesHandler: AgentReadPortHandler = async (ctx, input): Prom
       capturedAt: input.now,
     },
     {
-      // The mix is deliberately two-state: it reconciles exactly, or it is unavailable.
+      // The mix reconciles exactly or it is unavailable — but the REASON must
+      // be truthful: a day folded before mix tracking existed (no projection
+      // at all, 81 of 93 observed days on the reference store) was never
+      // measured, and telling an operator its payments "do not reconcile" is
+      // an accusation the books do not deserve. Only a stored `unavailable`
+      // projection — the derivation actually refusing — earns that reason.
       sourceKey: "paymentMix",
       status: day?.paymentMix?.status === "complete" ? "complete" : "unavailable",
-      reason: day?.paymentMix?.status === "complete" ? undefined : "payment_mix_does_not_reconcile",
+      reason:
+        day?.paymentMix?.status === "complete"
+          ? undefined
+          : day?.paymentMix?.status === "unavailable"
+            ? "payment_mix_does_not_reconcile"
+            : "payment_mix_not_recorded",
       capturedAt: input.now,
     },
   ];
@@ -229,6 +239,25 @@ export const getWeekPerformanceHandler: AgentReadPortHandler = async (ctx, input
   );
   const anyAccepted = days.some((day) => day.authority === "accepted");
   const warnings: AgentWarning[] = window.derivation === "utc_fallback" ? [fallbackWarning("days")] : [];
+  // The Saturday alignment silently rewrites the caller's question; say so,
+  // and name the served days that fall after the date the caller actually
+  // gave — a mid-week request otherwise reads days that have not happened
+  // and mistakes their emptiness for a quiet week.
+  if (weekEndOperatingDate !== requested) {
+    warnings.push({
+      code: "week_aligned",
+      message: `Requested week end ${requested} was aligned to the Saturday-ending operating week ${weekStartOperatingDate}..${weekEndOperatingDate}.`,
+      sourceKey: "days",
+    });
+    const afterRequested = operatingDates.filter((operatingDate) => operatingDate > requested);
+    if (afterRequested.length > 0) {
+      warnings.push({
+        code: "days_after_requested",
+        message: `${afterRequested.length} served day(s) (${afterRequested[0]}..${afterRequested[afterRequested.length - 1]}) fall after the requested ${requested} and may not have occurred yet.`,
+        sourceKey: "days",
+      });
+    }
+  }
 
   return {
     kind: "data",

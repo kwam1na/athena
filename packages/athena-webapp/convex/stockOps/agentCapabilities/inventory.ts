@@ -20,6 +20,14 @@ import { defineCapabilityManifest } from "../../../shared/agentHarness/manifest"
 import { defineAgentReadPort, type AgentReadPortIndex } from "../../../shared/agentHarness/readPort";
 import type { AgentEvidenceExtractor } from "../../agentHarness/conformance";
 import { AGENT_PAGE_COST } from "../../lib/agentCapabilityManifests";
+import { budgetVector } from "../../../shared/agentHarness/execution";
+
+/**
+ * Positions serve 200-row pages (catalog-scale, see the bounds note), so the
+ * declared worst case covers the bigger page; other dimensions match the
+ * shared page cost.
+ */
+const POSITIONS_PAGE_COST = budgetVector({ calls: 1, rows: 200, bytes: 262_144, costUnits: 4, elapsedMs: 3_000 });
 
 export const INVENTORY_PACKAGE_VERSION = "1.0.0";
 export const POSITIONS_PORT_KEY = "inventory.positions";
@@ -45,7 +53,11 @@ export const POSITIONS_MANIFEST = defineCapabilityManifest({
           meaning: "Restrict to a stock-pressure band.",
         },
       },
-      bounds: { kind: "collection", maxItemsPerPage: 100, maxPagesPerRun: 3 },
+      // Sized 2026-08-24 from the observed catalog scale (~1,300 SKUs on the
+      // reference store): 200 x 8 lets one run read a full catalog within the
+      // rows budget, where 100 x 3 guaranteed "partial" on every store of
+      // real size.
+      bounds: { kind: "collection", maxItemsPerPage: 200, maxPagesPerRun: 8 },
     },
     get: {
       purpose: "One SKU's stock position.",
@@ -118,7 +130,7 @@ export const POSITIONS_MANIFEST = defineCapabilityManifest({
     extractorVersion: "1",
     claimShapes: ["onHand"],
   },
-  cost: { worstCasePerCall: AGENT_PAGE_COST },
+  cost: { worstCasePerCall: POSITIONS_PAGE_COST },
   egressClass: "operational",
   examples: [
     {
@@ -137,7 +149,7 @@ export const POSITIONS_MANIFEST = defineCapabilityManifest({
   binding: {
     readIntents: ["inventory.stock.view"],
     portKey: POSITIONS_PORT_KEY,
-    implementationVersion: "3",
+    implementationVersion: "4",
   },
 });
 
@@ -296,7 +308,7 @@ export const REPLENISHMENT_MANIFEST = defineCapabilityManifest({
   binding: {
     readIntents: ["procurement.view", "inventory.stock.view"],
     portKey: REPLENISHMENT_PORT_KEY,
-    implementationVersion: "3",
+    implementationVersion: "4",
   },
 });
 
@@ -312,8 +324,8 @@ export const INVENTORY_READ_PORTS: AgentReadPortIndex = {
       verbs: ["list", "get"],
       scopeKind: "store",
       readIntents: POSITIONS_MANIFEST.binding.readIntents,
-      implementationVersion: "3",
-      declaredCost: AGENT_PAGE_COST,
+      implementationVersion: "4",
+      declaredCost: POSITIONS_PAGE_COST,
       handler: { kind: "internal_query", functionPath: "stockOps/agentCapabilities/inventoryPorts:readPositions" },
       projections: ["costOverlay"],
       completenessSourceKeys: ["positions"],
@@ -325,7 +337,7 @@ export const INVENTORY_READ_PORTS: AgentReadPortIndex = {
       verbs: ["list"],
       scopeKind: "store",
       readIntents: REPLENISHMENT_MANIFEST.binding.readIntents,
-      implementationVersion: "3",
+      implementationVersion: "4",
       declaredCost: AGENT_PAGE_COST,
       handler: { kind: "internal_query", functionPath: "stockOps/agentCapabilities/inventoryPorts:listReplenishment" },
       projections: ["supplierCommercial"],

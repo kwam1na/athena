@@ -16,13 +16,21 @@
 
 @layer base {
   :root {
-    --font-preset-athena-classic-sans: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-    --font-preset-athena-classic-display: var(--font-preset-athena-classic-sans);
-    --font-preset-athena-classic-mono: "SFMono-Regular", "JetBrains Mono", "Menlo", monospace;
-    --font-preset-athena-classic-numeric: var(--font-preset-athena-classic-sans);
-    --font-preset-athena-story-sans: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+    --font-preset-athena-classic-sans:
+      Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+    --font-preset-athena-classic-display: var(
+      --font-preset-athena-classic-sans
+    );
+    --font-preset-athena-classic-mono:
+      "SFMono-Regular", "JetBrains Mono", "Menlo", monospace;
+    --font-preset-athena-classic-numeric: var(
+      --font-preset-athena-classic-sans
+    );
+    --font-preset-athena-story-sans:
+      Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
     --font-preset-athena-story-display: var(--font-preset-athena-story-sans);
-    --font-preset-athena-story-mono: "SFMono-Regular", "JetBrains Mono", "Menlo", monospace;
+    --font-preset-athena-story-mono:
+      "SFMono-Regular", "JetBrains Mono", "Menlo", monospace;
     --font-preset-athena-story-numeric: var(--font-preset-athena-story-sans);
     --font-sans: var(--font-preset-athena-story-sans);
     --font-display: var(--font-preset-athena-story-display);
@@ -345,7 +353,6 @@
   }
 
   @media (max-width: 767px) {
-
     input:not([type="checkbox"]):not([type="radio"]),
     select,
     textarea {
@@ -390,7 +397,6 @@
 }
 
 @keyframes status-breathe {
-
   0%,
   100% {
     opacity: 0.45;
@@ -473,12 +479,59 @@
   }
 }
 
+@keyframes athena-agent-thinking-wipe {
+  0% {
+    background-position: 180% 50%;
+    clip-path: inset(0 100% 0 0);
+  }
+
+  52% {
+    background-position: 50% 50%;
+    clip-path: inset(0);
+  }
+
+  100% {
+    background-position: -80% 50%;
+    clip-path: inset(0 0 0 100%);
+  }
+}
+
 .athena-agent-wipe-word {
   display: inline-block;
 }
 
-@media (prefers-reduced-motion: no-preference) {
+.athena-agent-thinking-wipe {
+  display: none;
+}
 
+/* border-beam owns the travel and masking; these overrides keep its light
+   Athena launcher treatment on the application's semantic color tokens. */
+.athena-agent-themed-beam[data-active]::after,
+.athena-agent-themed-beam[data-fading]::after {
+  /* A continuous color field lets border-beam's rotating mask make the
+     illuminated segment complete a full circuit without intersecting a
+     second, stationary arc. */
+  background: hsl(var(--primary)) !important;
+  filter: none !important;
+}
+
+.athena-agent-themed-beam[data-active]::before,
+.athena-agent-themed-beam[data-fading]::before {
+  background: linear-gradient(
+    135deg,
+    hsl(var(--primary) / 0.32),
+    transparent 58%
+  ) !important;
+  filter: none !important;
+}
+
+.athena-agent-themed-beam[data-active] [data-beam-bloom],
+.athena-agent-themed-beam[data-fading] [data-beam-bloom] {
+  background: hsl(var(--primary) / 0.58) !important;
+  filter: blur(8px) !important;
+}
+
+@media (prefers-reduced-motion: no-preference) {
   ::view-transition-old(root),
   ::view-transition-new(root) {
     animation-duration: var(--motion-fast);
@@ -502,7 +555,23 @@
 
   /* 760 ms: WORD_INK_MS in streamReveal.ts holds the wrapping for one fade. */
   .athena-agent-wipe-word {
-    animation: athena-agent-word-ink 760ms cubic-bezier(0.37, 0.06, 0.28, 0.96) both;
+    animation: athena-agent-word-ink 760ms cubic-bezier(0.37, 0.06, 0.28, 0.96)
+      both;
+  }
+
+  .athena-agent-thinking-wipe {
+    animation: athena-agent-thinking-wipe 1.8s var(--ease-standard) infinite;
+    background-image: linear-gradient(
+      100deg,
+      hsl(var(--muted-foreground) / 0.35) 20%,
+      hsl(var(--foreground)) 50%,
+      hsl(var(--muted-foreground) / 0.35) 80%
+    );
+    background-clip: text;
+    background-size: 260% 100%;
+    color: transparent;
+    display: block;
+    -webkit-background-clip: text;
   }
 
   .store-pulse-sales-trend-chart .recharts-area-curve,
@@ -520,7 +589,6 @@
 }
 
 @layer utilities {
-
   /* Rotate the loop group about the figure's center (its viewBox coords). */
   .control-loop-spin {
     transform-box: view-box;
@@ -579,15 +647,18 @@
   .dark .from-gray-50\/50,
   .dark .from-slate-50\/50,
   .dark .from-zinc-50\/50 {
-    --tw-gradient-from: hsl(var(--legacy-neutral-50) / 0.68) var(--tw-gradient-from-position);
-    --tw-gradient-to: hsl(var(--legacy-neutral-50) / 0) var(--tw-gradient-to-position);
+    --tw-gradient-from: hsl(var(--legacy-neutral-50) / 0.68)
+      var(--tw-gradient-from-position);
+    --tw-gradient-to: hsl(var(--legacy-neutral-50) / 0)
+      var(--tw-gradient-to-position);
     --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
   }
 
   .dark .to-gray-100\/30,
   .dark .to-slate-100\/30,
   .dark .to-zinc-100\/30 {
-    --tw-gradient-to: hsl(var(--legacy-neutral-100) / 0.5) var(--tw-gradient-to-position);
+    --tw-gradient-to: hsl(var(--legacy-neutral-100) / 0.5)
+      var(--tw-gradient-to-position);
   }
 
   .dark .text-gray-950,
@@ -851,4 +922,18 @@
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .athena-agent-detached-panel {
+    background: hsl(var(--surface-raised));
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .athena-agent-detached-panel {
+    background: hsl(var(--surface-raised));
+    border-color: hsl(var(--foreground) / 0.5);
+  }
 }

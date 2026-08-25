@@ -53,6 +53,8 @@ export const HOST_ALLOWED_SPECIFIER_PATTERNS = [
   /^react\//,
   /^convex\/react$/,
   /^lucide-react$/,
+  // The shell launcher's responding glow; presentation-only, no data flow.
+  /^border-beam$/,
   /^vitest$/,
   /^@testing-library\//,
   /^@\/lib\//,

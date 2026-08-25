@@ -29,7 +29,7 @@ import { AGENT_TURN_TRACE_EVENT_PAYLOAD_MAX_BYTES, AGENT_TURN_TRACE_MAX_EVENTS_P
 import { reserveTurnSpendWithCtx, settleTurnSpendWithCtx, spendWindowKey, turnProviderCostReservation } from "./runAdmission";
 import type { AgentProgramRuntime } from "./programRuntime/types";
 import { registerAgentRuntimeCleanupHook, resetAgentRuntimeCleanupHooksForTests, type AgentRuntimeCleanupDescriptor } from "./retention";
-import { collapseEventKinds, createTurnHost, type AgentTurnHostRefs } from "./runtimeHost";
+import { collapseEventKinds, createTurnHost, PREEXEC_EXCHANGE_BYTE_BUDGET, PREEXEC_EXCHANGE_PARTIAL_BYTES, type AgentTurnHostRefs } from "./runtimeHost";
 import { TEST_ADMISSION } from "./delegatedAdmission.testPorts";
 import { TEST_TOOL_REFS, TEST_TURN_REFS, TEST_TURN_SEAMS, seedRecordedTurn } from "./turns.testSeams";
 import { createAgentTurnEntryPoints, turnKeyFor } from "./turns";
@@ -497,6 +497,163 @@ describe.each(ADAPTERS)("turn host parity — $name", ({ create }) => {
       projectThreadHistoryWithCtx(ctx, TEST_ADMISSION.config, { storeId: seeded.operator.storeId, organizationId: seeded.operator.organizationId, profileId: TEST_PROFILE_ID, threadKey: "thread-happy", viewer: { kind: "normal_user", athenaUserId: seeded.operator.userId }, now: clock() }),
     );
     expect(history).toMatchObject({ kind: "projected", entries: [{ state: "answered", question: "Which shifts are open?", answer: { narrative: "One shift is open." } }] });
+  });
+
+  it("pre-executes a starter intent, seeds the exchange, and commits citing the pre-read (starter-intents plan U2)", async () => {
+    const t = backend();
+    const harness = create(t);
+    const seeded = await seedAdmittedTurn(t, "preexec-happy", { starterIntentId: "open_shifts" });
+    const turnKey = turnKeyFor(seeded.bindingId);
+    // The pre-read's refs come from the flushed `starter_intent_preexec`
+    // trace row — durable before the provider turn starts, so the scripted
+    // model can cite exactly what a real model would read off the exchange.
+    const seededRefs = async () => {
+      const trace = await traceRows(t, seeded.bindingId);
+      const row = trace.find((candidate) => candidate.kind === "starter_intent_preexec");
+      return row!.payload as { attemptRef: string; citations: string[] };
+    };
+    harness.scriptTurn(turnKey, [
+      // The model authors NO read: the curated pre-execution already ran, so
+      // its first step is the commit, citing the pre-read's refs.
+      { kind: "tool_call", callId: "c1", toolId: "athena.completeRun", args: async () => { const refs = await seededRefs(); return { title: "Open shifts", narrative: "One shift is open.", citedAttemptRefs: [refs.attemptRef], citations: [{ ref: refs.citations[0], claim: "One shift is open." }] }; } },
+      { kind: "usage", providerInvocationRef: "inv-1", retryIndex: 0, sequence: 1, eventKey: "inv-1#final", mode: "cumulative", tokens: { input: 20, output: 5 }, terminal: true },
+      { kind: "complete", narrative: "One shift is open." },
+    ]);
+    harness.modelUsage?.(turnKey, [{ inputTokens: 10, outputTokens: 2 }, { inputTokens: 10, outputTokens: 2 }]);
+
+    const host = await hostFor(t, harness);
+    const report = await host.driveTurn({ bindingId: seeded.bindingId });
+    expect(report, JSON.stringify(report)).toMatchObject({ outcome: "completed", finalize: { outcome: "completed", runStatus: "completed" } });
+    // Only the commit was dispatched: the curated read never crossed the adapter ledger.
+    expect(report.dispatch).toEqual(["athena.completeRun:success"]);
+
+    // The adapter received the exchange before the model step, carrying the
+    // exact result the model would have read from a real dispatch.
+    const refs = await seededRefs();
+    const binding = await t.run((ctx) => ctx.db.get("agentTurnBinding", seeded.bindingId));
+    const exchange = harness.observedPreExecutedExchange?.(binding!.runtimeTurnRef as never);
+    expect(exchange?.toolId).toBe("athena.executeProgram");
+    expect(JSON.stringify(exchange?.result)).toContain(refs.attemptRef);
+
+    // Trace records the seeding, and the reading_ahead milestone landed durably.
+    const trace = await traceRows(t, seeded.bindingId);
+    expect(trace.some((row) => row.kind === "starter_intent_preexec")).toBe(true);
+    expect((binding!.progress ?? []).some((milestone: { milestone: string }) => milestone.milestone === "reading_ahead")).toBe(true);
+  });
+
+  it("an unknown starter intent downgrades to free-form with an intent_unknown skip trace (starter-intents plan U2)", async () => {
+    const t = backend();
+    const harness = create(t);
+    const seeded = await seedAdmittedTurn(t, "preexec-unknown", { starterIntentId: "not_a_declared_intent" });
+    const { captured, observe } = captureProgramResult();
+    const turnKey = turnKeyFor(seeded.bindingId);
+    harness.scriptTurn(turnKey, [
+      { kind: "tool_call", callId: "c1", toolId: "athena.executeProgram", args: { source: PROGRAM } },
+      { kind: "tool_call", callId: "c2", toolId: "athena.completeRun", args: () => ({ title: "Open shifts", narrative: "One shift is open.", citedAttemptRefs: [captured.attemptRef], citations: [{ ref: captured.citation, claim: "One shift is open." }] }) },
+      { kind: "usage", providerInvocationRef: "inv-1", retryIndex: 0, sequence: 1, eventKey: "inv-1#final", mode: "cumulative", tokens: { input: 20, output: 5 }, terminal: true },
+      { kind: "complete", narrative: "One shift is open." },
+    ]);
+    harness.modelUsage?.(turnKey, [{ inputTokens: 10, outputTokens: 2 }, { inputTokens: 10, outputTokens: 2 }, { inputTokens: 10, outputTokens: 2 }]);
+
+    const host = await hostFor(t, harness, { observe });
+    const report = await host.driveTurn({ bindingId: seeded.bindingId });
+    expect(report, JSON.stringify(report)).toMatchObject({ outcome: "completed" });
+    // The model read for itself — today's flow — and the skip is traced.
+    expect(report.dispatch).toEqual(["athena.executeProgram:success", "athena.completeRun:success"]);
+    const binding = await t.run((ctx) => ctx.db.get("agentTurnBinding", seeded.bindingId));
+    expect(harness.observedPreExecutedExchange?.(binding!.runtimeTurnRef as never)).toBeUndefined();
+    const trace = await traceRows(t, seeded.bindingId);
+    const skip = trace.find((row) => row.kind === "starter_intent_preexec_skipped");
+    expect(skip).toBeTruthy();
+    expect((skip!.payload as { outcome?: string }).outcome).toBe("intent_unknown");
+  });
+
+  it("a curated pre-read the executor rejects downgrades to free-form instead of seeding the rejection (starter-intents plan R8)", async () => {
+    const t = backend();
+    const harness = create(t);
+    const seeded = await seedAdmittedTurn(t, "preexec-rejected", { starterIntentId: "bad_read" });
+    const { captured, observe } = captureProgramResult();
+    const turnKey = turnKeyFor(seeded.bindingId);
+    harness.scriptTurn(turnKey, [
+      { kind: "tool_call", callId: "c1", toolId: "athena.executeProgram", args: { source: PROGRAM } },
+      { kind: "tool_call", callId: "c2", toolId: "athena.completeRun", args: () => ({ title: "Open shifts", narrative: "One shift is open.", citedAttemptRefs: [captured.attemptRef], citations: [{ ref: captured.citation, claim: "One shift is open." }] }) },
+      { kind: "usage", providerInvocationRef: "inv-1", retryIndex: 0, sequence: 1, eventKey: "inv-1#final", mode: "cumulative", tokens: { input: 20, output: 5 }, terminal: true },
+      { kind: "complete", narrative: "One shift is open." },
+    ]);
+    harness.modelUsage?.(turnKey, [{ inputTokens: 10, outputTokens: 2 }, { inputTokens: 10, outputTokens: 2 }, { inputTokens: 10, outputTokens: 2 }]);
+
+    const host = await hostFor(t, harness, { observe });
+    const report = await host.driveTurn({ bindingId: seeded.bindingId });
+    expect(report, JSON.stringify(report)).toMatchObject({ outcome: "completed" });
+    // A rejected validation is a success envelope with no attemptRef: it must
+    // not seed, and the model reads for itself.
+    const binding = await t.run((ctx) => ctx.db.get("agentTurnBinding", seeded.bindingId));
+    expect(harness.observedPreExecutedExchange?.(binding!.runtimeTurnRef as never)).toBeUndefined();
+    const trace = await traceRows(t, seeded.bindingId);
+    const skip = trace.find((row) => row.kind === "starter_intent_preexec_skipped");
+    expect(skip).toBeTruthy();
+    expect((skip!.payload as { outcome?: string }).outcome).toBe("rejected");
+  });
+
+  it("a curated result over the injected-exchange budget seeds a JSON-safe truncation marker pointing at the committed attempt (starter-intents plan R7)", async () => {
+    const t = backend();
+    const harness = create(t);
+    const seeded = await seedAdmittedTurn(t, "preexec-oversize", { starterIntentId: "big_read" });
+    const turnKey = turnKeyFor(seeded.bindingId);
+    const seededRefs = async () => {
+      const trace = await traceRows(t, seeded.bindingId);
+      const row = trace.find((candidate) => candidate.kind === "starter_intent_preexec");
+      return row!.payload as { attemptRef: string; citations: string[]; truncatedToBytes?: number };
+    };
+    harness.scriptTurn(turnKey, [
+      { kind: "tool_call", callId: "c1", toolId: "athena.completeRun", args: async () => { const refs = await seededRefs(); return { title: "Big read", narrative: "The read is on record.", citedAttemptRefs: [refs.attemptRef], citations: [{ ref: refs.citations[0], claim: "The read is on record." }] }; } },
+      { kind: "usage", providerInvocationRef: "inv-1", retryIndex: 0, sequence: 1, eventKey: "inv-1#final", mode: "cumulative", tokens: { input: 20, output: 5 }, terminal: true },
+      { kind: "complete", narrative: "The read is on record." },
+    ]);
+    harness.modelUsage?.(turnKey, [{ inputTokens: 10, outputTokens: 2 }, { inputTokens: 10, outputTokens: 2 }]);
+
+    const host = await hostFor(t, harness);
+    const report = await host.driveTurn({ bindingId: seeded.bindingId });
+    expect(report, JSON.stringify(report)).toMatchObject({ outcome: "completed" });
+    const refs = await seededRefs();
+    expect(refs.truncatedToBytes).toBe(PREEXEC_EXCHANGE_PARTIAL_BYTES);
+    const binding = await t.run((ctx) => ctx.db.get("agentTurnBinding", seeded.bindingId));
+    const exchange = harness.observedPreExecutedExchange?.(binding!.runtimeTurnRef as never);
+    const marker = exchange?.result as { truncated?: boolean; attemptRef?: string; partial?: string; note?: string };
+    expect(marker?.truncated).toBe(true);
+    expect(marker?.attemptRef).toBe(refs.attemptRef);
+    expect(marker?.partial?.length).toBeLessThanOrEqual(PREEXEC_EXCHANGE_PARTIAL_BYTES);
+    // The seeded exchange is bounded even though the committed result is not.
+    expect(JSON.stringify(exchange?.result).length).toBeLessThan(PREEXEC_EXCHANGE_BYTE_BUDGET);
+  });
+
+  it("a run canceled while the curated read runs never reaches the provider (starter-intents plan U2)", async () => {
+    const t = backend();
+    const harness = create(t);
+    const seeded = await seedAdmittedTurn(t, "preexec-canceled", { starterIntentId: "open_shifts" });
+    const turnKey = turnKeyFor(seeded.bindingId);
+    harness.scriptTurn(turnKey, [
+      { kind: "tool_call", callId: "c1", toolId: "athena.completeRun", args: { title: "Never", narrative: "Never reached.", citedAttemptRefs: [], citations: [] } },
+      { kind: "complete", narrative: "Never reached." },
+    ]);
+
+    // The operator cancels while the curated read is mid-flight: hook the
+    // executor's finishAttempt mutation, which only the pre-execution can be
+    // issuing this early in the turn.
+    let canceled = false;
+    const host = await hostFor(t, harness, {
+      delayMutation: async (functionName) => {
+        if (canceled || !functionName.includes("finishAttempt")) return;
+        canceled = true;
+        await t.run((ctx) => cancelAgentRunWithCtx(ctx, { runId: seeded.runId, idempotencyKey: "preexec-cancel", reason: "operator_canceled", now: clock() }));
+      },
+    });
+    const report = await host.driveTurn({ bindingId: seeded.bindingId });
+    expect(canceled).toBe(true);
+    expect(report, JSON.stringify(report)).toMatchObject({ outcome: "canceled", code: "canceled_during_pre_execution" });
+    // No provider turn was started, so the adapter observed nothing.
+    const binding = await t.run((ctx) => ctx.db.get("agentTurnBinding", seeded.bindingId));
+    expect(binding!.runtimeTurnRef).toBeUndefined();
   });
 
   it("provider failure and model retry produce a monotonic failed run with attributable, conservatively settled usage (scenario 5)", async () => {

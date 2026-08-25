@@ -27,6 +27,7 @@ export const AGENT_DEFAULT_RATE_CARD: AgentUsageRateCard = Object.freeze({
 export const AGENT_MODEL_RATE_CARDS: { readonly [model: string]: AgentUsageRateCard } = Object.freeze({
   "openai/gpt-5-nano": { perMillion: { input: 50, output: 400, cachedInput: 5, reasoning: 400 } },
   "openai/gpt-5-mini": { perMillion: { input: 250, output: 2_000, cachedInput: 25, reasoning: 2_000 } },
+  "openai/gpt-5": { perMillion: { input: 1_250, output: 10_000, cachedInput: 125, reasoning: 10_000 } },
   [`${AGENT_CONTRACT_FAKE_PROVIDER_ID}/fake-1`]: { perMillion: { input: 0, output: 0, cachedInput: 0, reasoning: 0 } },
 });
 

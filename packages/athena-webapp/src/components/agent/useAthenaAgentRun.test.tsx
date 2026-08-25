@@ -237,6 +237,32 @@ describe("submitting one turn", () => {
     expect(result.current.blockedSubmission?.reason).toBe("turn_active");
   });
 
+  it("sends the starter intent id a tap passes explicitly (starter-intents plan U3)", async () => {
+    backend.results.startTurn = { outcome: "started", bindingId: BINDING_ID, runId: "run-1", threadKey: "thread" };
+    const { result } = mountRun();
+    const intent = result.current.starterIntents[0]!;
+
+    await act(async () => {
+      await result.current.submit(intent.prompt, { starterIntentId: intent.id });
+    });
+    const start = callsNamed("startTurn");
+    expect(start).toHaveLength(1);
+    expect(start[0]?.args).toMatchObject({ prompt: intent.prompt, starterIntentId: intent.id });
+  });
+
+  it("sends no intent id for a typed submission (free-form turns are untouched)", async () => {
+    backend.results.startTurn = { outcome: "started", bindingId: BINDING_ID, runId: "run-1", threadKey: "thread" };
+    const { result } = mountRun();
+    const intent = result.current.starterIntents[0]!;
+
+    await act(async () => {
+      await result.current.submit(intent.prompt);
+    });
+    const start = callsNamed("startTurn");
+    expect(start).toHaveLength(1);
+    expect((start[0]?.args as { starterIntentId?: string }).starterIntentId).toBeUndefined();
+  });
+
   it("reports queued work without claiming model progress", async () => {
     backend.results.startTurn = {
       outcome: "started",
@@ -251,7 +277,7 @@ describe("submitting one turn", () => {
     });
 
     expect(result.current.hostState).toBe("submitting");
-    expect(result.current.status.headline).toBe("Starting your request…");
+    expect(result.current.status.headline).toBe("Thinking...");
     expect(result.current.canCancel).toBe(true);
   });
 
@@ -307,8 +333,8 @@ describe("running, cancelling, and completing", () => {
 
     await waitFor(() => expect(result.current.hostState).toBe("running"));
     expect(result.current.milestones.map((entry) => entry.label)).toEqual([
-      "Checking the requested sources",
-      "Reading sources",
+      "Thinking...",
+      "Thinking...",
     ]);
     expect(result.current.answer).toBeNull();
     expect(result.current.canInspectSources).toBe(false);
@@ -723,6 +749,38 @@ describe("citations", () => {
 });
 
 describe("history", () => {
+  it("keeps the active turn out of earlier history", () => {
+    backend.view = baseView();
+    backend.history = {
+      kind: "history",
+      threadKey: "t",
+      reauthorizedAt: 5,
+      entries: [
+        {
+          bindingId: BINDING_ID,
+          createdAt: 2,
+          state: "active",
+          questionState: "retained",
+          question: "What is blocking the close?",
+        },
+        {
+          bindingId: "binding-0",
+          createdAt: 1,
+          state: "answered",
+          questionState: "retained",
+          question: "Earlier question",
+        },
+      ],
+    };
+
+    const { result } = mountRun({ activeTurnId: BINDING_ID });
+
+    expect(result.current.turn?.turnId).toBe(BINDING_ID);
+    expect(result.current.history.map((entry) => entry.turnId)).toEqual([
+      "binding-0",
+    ]);
+  });
+
   it("renders the reauthorized projection and names what was withheld", () => {
     backend.history = {
       kind: "history",

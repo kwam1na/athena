@@ -41,6 +41,7 @@ import type * as agentHarness_narrativeTrail from "../agentHarness/narrativeTrai
 import type * as agentHarness_profiles_dailyOperations from "../agentHarness/profiles/dailyOperations.js";
 import type * as agentHarness_profiles_dailyOperationsConformance from "../agentHarness/profiles/dailyOperationsConformance.js";
 import type * as agentHarness_profiles_dailyOperationsUiCoverage from "../agentHarness/profiles/dailyOperationsUiCoverage.js";
+import type * as agentHarness_profiles_starterIntentPrograms from "../agentHarness/profiles/starterIntentPrograms.js";
 import type * as agentHarness_profiles_syntheticSecondSurface from "../agentHarness/profiles/syntheticSecondSurface.js";
 import type * as agentHarness_profiles_syntheticSecondSurfaceConformance from "../agentHarness/profiles/syntheticSecondSurfaceConformance.js";
 import type * as agentHarness_profiles_syntheticSecondSurfacePorts from "../agentHarness/profiles/syntheticSecondSurfacePorts.js";
@@ -55,6 +56,8 @@ import type * as agentHarness_retention from "../agentHarness/retention.js";
 import type * as agentHarness_runAdmission from "../agentHarness/runAdmission.js";
 import type * as agentHarness_runtimeHost from "../agentHarness/runtimeHost.js";
 import type * as agentHarness_runtimeRetention from "../agentHarness/runtimeRetention.js";
+import type * as agentHarness_scorecard from "../agentHarness/scorecard.js";
+import type * as agentHarness_scorecardQuery from "../agentHarness/scorecardQuery.js";
 import type * as agentHarness_testSupport from "../agentHarness/testSupport.js";
 import type * as agentHarness_tools from "../agentHarness/tools.js";
 import type * as agentHarness_turnBindings from "../agentHarness/turnBindings.js";
@@ -776,6 +779,7 @@ declare const fullApi: ApiFromModules<{
   "agentHarness/profiles/dailyOperations": typeof agentHarness_profiles_dailyOperations;
   "agentHarness/profiles/dailyOperationsConformance": typeof agentHarness_profiles_dailyOperationsConformance;
   "agentHarness/profiles/dailyOperationsUiCoverage": typeof agentHarness_profiles_dailyOperationsUiCoverage;
+  "agentHarness/profiles/starterIntentPrograms": typeof agentHarness_profiles_starterIntentPrograms;
   "agentHarness/profiles/syntheticSecondSurface": typeof agentHarness_profiles_syntheticSecondSurface;
   "agentHarness/profiles/syntheticSecondSurfaceConformance": typeof agentHarness_profiles_syntheticSecondSurfaceConformance;
   "agentHarness/profiles/syntheticSecondSurfacePorts": typeof agentHarness_profiles_syntheticSecondSurfacePorts;
@@ -790,6 +794,8 @@ declare const fullApi: ApiFromModules<{
   "agentHarness/runAdmission": typeof agentHarness_runAdmission;
   "agentHarness/runtimeHost": typeof agentHarness_runtimeHost;
   "agentHarness/runtimeRetention": typeof agentHarness_runtimeRetention;
+  "agentHarness/scorecard": typeof agentHarness_scorecard;
+  "agentHarness/scorecardQuery": typeof agentHarness_scorecardQuery;
   "agentHarness/testSupport": typeof agentHarness_testSupport;
   "agentHarness/tools": typeof agentHarness_tools;
   "agentHarness/turnBindings": typeof agentHarness_turnBindings;

@@ -13,8 +13,9 @@ applies_when:
   - "A harness serves the model internal data (field names, enum spellings, minor-unit amounts) and expects product wording back"
   - "An enforcement denial or retry loop is being considered to police model output"
   - "Money or unit-bearing values cross a model boundary without their display convention"
-tags: [agent-harness, product-tone, disclosure, enforcement, lexicon, prompt-engineering]
-delivery_diff_fingerprint: ddb040b10416fb55ad93b562991947bc1dbbae2d90e6c8ad9b834c8b8393380c
+  - "Canonical date-only values cross a model boundary and should remain exact while operator prose uses a human-readable form"
+tags: [agent-harness, product-tone, disclosure, enforcement, lexicon, prompt-engineering, date-display]
+delivery_diff_fingerprint: 4a587bb5707c4e59bb49d4b519837eeb8dedd26c815be1d0d59e01eb93a9d704
 ---
 
 # Shape the Input Before Policing the Output — Mechanical Tone Enforcement for Agent Prose
@@ -42,12 +43,15 @@ The measurements ranked the layers unambiguously:
 
 1. **Input shaping first (largest win, zero cost).** Annotate every
    money-shaped value at the result boundary with the product display string
-   (`display: "GH₵14,149"`, computed by the app's own `currencyFormatter`);
-   disclose field labels in the catalog (`grossRevenue (say: revenue)`) and
-   enum wording (`close_blocked → close blocked`). The model parrots the
-   vocabulary it is shown. Enforcement **without** this disclosure made prose
-   measurably worse (jargon density 8.0 → 10.9 per 1k chars, 73 s p90 from
-   retry tails): the model was punished without being shown the right words.
+   (`display: "GH₵14,149"`, computed by the app's own `currencyFormatter`).
+   Keep exact date-only fields such as `operatingDate: "2026-08-24"` intact
+   and add a sibling display field (`operatingDateDisplay: "Mon, Aug 24,
+   2026"`) formatted in UTC so the calendar day cannot shift. Disclose field
+   labels in the catalog (`grossRevenue (say: revenue)`) and enum wording
+   (`close_blocked → close blocked`). The model parrots the vocabulary it is
+   shown. Enforcement **without** this disclosure made prose measurably worse
+   (jargon density 8.0 → 10.9 per 1k chars, 73 s p90 from retry tails): the
+   model was punished without being shown the right words.
 2. **Deterministic normalization at commit (the floor).**
    `normalizeNarrative` rewrites internal tokens in the committed narrative
    under two safety rules that keep prose grammatical and free text
@@ -76,6 +80,11 @@ retry tax disappeared when denials dropped 15/20 → 1/20).
   platform had and withheld. Instructions are the weakest layer; measured
   twice on this branch (the discover-first habit and the sources footer both
   survived explicit instructions and died to mechanism).
+- **Preserve canonical values and annotate the model-visible copy.** Programs
+  and authoritative records keep `YYYY-MM-DD`; only the result returned to the
+  provider gains the sibling display field. Accept exact, valid date-only
+  strings, format them in UTC, preserve an existing product-authored display,
+  and leave invalid dates or dates embedded in prose untouched.
 - **Rewrite model prose only under the two safety rules.** Structure-preserving
   and platform-known. Anything looser garbles grammar or free text; anything
   tighter leaks. Unknown residue (workflow step ids) is telemetry, and each

@@ -621,7 +621,13 @@ export function createAgentReadPortQueryDefiner(config: AgentReadPortQueryConfig
           return invalidInvocation("grant_mismatch", "The invocation names a different grant.");
         }
         const argsValidation = validateAgentReadRequestArgs(manifest, invocation.verb, invocation.args);
-        if (!argsValidation.ok) return invalidInvocation("args_invalid", "The arguments do not match the capability's filters.");
+        if (!argsValidation.ok) {
+          // Same wording contract as delegated admission: the message is what
+          // a model reads, and a denial that hides the offending argument is
+          // what makes it guess again.
+          const detail = argsValidation.issues.map((issue) => `${issue.code} at ${issue.path}`).join("; ");
+          return invalidInvocation("args_invalid", `The arguments do not match the capability's filters (${detail}).`);
+        }
         let rawCursor: string | undefined;
         let pageIndex = 0;
         if (invocation.cursor !== undefined) {

@@ -1,4 +1,10 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -52,6 +58,9 @@ const mocked = vi.hoisted(() => ({
 
 vi.mock("@tanstack/react-router", () => ({
   createFileRoute: () => () => ({}),
+  Link: ({ children, to }: { children: ReactNode; to: string }) => (
+    <a href={to}>{children}</a>
+  ),
   Outlet: () => {
     const OutletComponent = mocked.OutletComponent;
     return OutletComponent ? (
@@ -447,7 +456,9 @@ describe("Authed layout", () => {
 
     expect(container).toBeEmptyDOMElement();
     expect(screen.queryByTestId("authed-outlet")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("pos-remote-assist-host")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("pos-remote-assist-host"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: /pos terminal/i }),
@@ -695,6 +706,7 @@ describe("Authed layout", () => {
       }),
     );
     expect(screen.getByTestId("app-header")).toBeInTheDocument();
+    expect(screen.getByTestId("athena-agent-entry")).toBeDisabled();
     expect(screen.getByTestId("app-header").parentElement).toHaveClass(
       "min-w-0",
       "overflow-hidden",
@@ -728,6 +740,24 @@ describe("Authed layout", () => {
     expect(screen.getByTestId("store-modal")).toBeInTheDocument();
     expect(screen.getByTestId("organization-modal")).toBeInTheDocument();
     expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
+  });
+
+  it("does not mount the Athena shell on a shared-demo restricted route", () => {
+    mocked.useAuth.mockReturnValue({
+      user: { _id: "demo-user", email: "store@osustudio.com" },
+      isLoading: false,
+    });
+    mocked.useSharedDemoContext.mockReturnValue({ kind: "shared_demo" });
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname: "/wigclub/settings" } }),
+    );
+
+    render(<Layout />);
+
+    expect(
+      screen.queryByTestId("athena-agent-entry"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("athena-agent-panel")).not.toBeInTheDocument();
   });
 
   it("keeps the contained app header independent of the collapsed sidebar state", () => {

@@ -6,16 +6,63 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  annotateDateDisplays,
   annotateMoneyDisplays,
   normalizeNarrative,
   stripSourcesFooter,
   APP_PRODUCT_LEXICON,
   collectNarrativeEvidence,
   formatMinorMoney,
+  formatOperatingDateDisplay,
   mergeLexicons,
   senseTone,
   type AgentToneSensorInput,
 } from "./productLexicon";
+
+describe("formatOperatingDateDisplay", () => {
+  it("renders valid date-only values in UTC without shifting the store day", () => {
+    expect(formatOperatingDateDisplay("2026-08-24")).toBe("Mon, Aug 24, 2026");
+    expect(formatOperatingDateDisplay("2024-02-29")).toBe("Thu, Feb 29, 2024");
+    expect(formatOperatingDateDisplay("2026-02-29")).toBeNull();
+    expect(formatOperatingDateDisplay("2026-8-24")).toBeNull();
+  });
+});
+
+describe("annotateDateDisplays", () => {
+  it("adds sibling display values for date-only fields throughout the model-visible tree", () => {
+    expect(
+      annotateDateDisplays({
+        operatingDate: "2026-08-24",
+        rows: [{ openedOperatingDate: "2026-08-23" }],
+      }),
+    ).toEqual({
+      operatingDate: "2026-08-24",
+      operatingDateDisplay: "Mon, Aug 24, 2026",
+      rows: [
+        {
+          openedOperatingDate: "2026-08-23",
+          openedOperatingDateDisplay: "Sun, Aug 23, 2026",
+        },
+      ],
+    });
+  });
+
+  it("preserves authoritative, invalid, and already-supplied values", () => {
+    expect(
+      annotateDateDisplays({
+        operatingDate: "2026-08-24",
+        operatingDateDisplay: "Store day 24 August",
+        invalidDate: "2026-02-29",
+        note: "Scheduled for 2026-08-24",
+      }),
+    ).toEqual({
+      operatingDate: "2026-08-24",
+      operatingDateDisplay: "Store day 24 August",
+      invalidDate: "2026-02-29",
+      note: "Scheduled for 2026-08-24",
+    });
+  });
+});
 
 describe("formatMinorMoney", () => {
   it("renders GHS with the GH₵ glyph, minor units only when non-zero", () => {
@@ -150,6 +197,37 @@ describe("senseTone", () => {
     expect(findings.map((finding) => finding.code)).toEqual(["ref_in_prose"]);
   });
 
+  it("flags an opaque identifier from data even when its ref kind was rewritten", () => {
+    // Observed on a driven turn: the lexicon's "register session" wording was
+    // applied INSIDE a resource ref, so the exact-match loop missed it.
+    const findings = senseTone(
+      baseInput({
+        narrative:
+          "Largest variance: resource:register session.8d5c0a4d9a7e78365b5c876b9c4525d135c0bcbf9d0781dd.171d48524313ed1ecd38efe7 on register 07.",
+      }),
+    );
+    expect(findings.map((finding) => finding.code)).toContain("ref_in_prose");
+  });
+
+  it("does not double-report a known ref, and leaves plain numbers alone", () => {
+    const ref = "citation:v1.1.0.fedcba9876543210fedcba9876543210";
+    const findings = senseTone(
+      baseInput({ narrative: `Per ${ref}, 1234567890123456 units moved on 2026-08-24.`, refs: [ref] }),
+    );
+    expect(findings.map((finding) => finding.code)).toEqual(["ref_in_prose"]);
+  });
+
+  it("waives an opaque identifier the operator asked with", () => {
+    const tail = "8d5c0a4d9a7e78365b5c876b9c4525d1";
+    const findings = senseTone(
+      baseInput({
+        narrative: `Session ${tail} closed with no variance.`,
+        question: `what happened to session ${tail}?`,
+      }),
+    );
+    expect(findings).toEqual([]);
+  });
+
   it("flags a stub narrative that reports the reads instead of answering", () => {
     for (const stub of [
       "Summary comparing this week to last, and items to watch today for Wigclub on 2026-08-23.",
@@ -234,6 +312,93 @@ describe("normalizeNarrative", () => {
       { evidence, namespaces: ["reports.daySales"], lexicon, question: "" },
     );
     expect(out).toBe("The lifecycle stage is close blocked; register blocker count is 1 per the daily sales report.");
+  });
+
+  it("scrubs the run's own refs from prose instead of leaving them for a denial", () => {
+    const ref = "citation:v1.1.0.fedcba9876543210fedcba9876543210";
+    const out = normalizeNarrative(`Per ${ref}, sales are up on register 07.`, {
+      evidence,
+      namespaces: [],
+      lexicon,
+      question: "",
+      refs: [ref],
+    });
+    expect(out).toBe("Per the cited record, sales are up on register 07.");
+  });
+
+  it("scrubs ref-shaped identifiers from data, including the lexicon-mangled two-fragment form", () => {
+    const intact = normalizeNarrative(
+      "Session resource:register_session.8d5c0a4e832f3a3b4246c768c8596289.70561fce8f11265186d8b89f closed clean.",
+      { evidence, namespaces: [], lexicon, question: "" },
+    );
+    expect(intact).toBe("Session the cited record closed clean.");
+    // Observed on a driven turn: "register_session" rewritten to "register
+    // session" INSIDE the ref, splitting it into two prose fragments.
+    const mangled = normalizeNarrative(
+      "Largest variance: resource:register session.8d5c0a4d9a7e78365b5c876b9c4525d1.171d48524313ed1ecd38efe7 on register 07.",
+      { evidence, namespaces: [], lexicon, question: "" },
+    );
+    expect(mangled).toBe("Largest variance: the cited record on register 07.");
+  });
+
+  it("leaves ordinary prose alone when a ref keyword ends a sentence or clause", () => {
+    for (const sentence of [
+      "I could not read that source.",
+      "The attempt: it did not finish.",
+      "Each citation. Each source. Every resource.",
+      "No usable source, so nothing is cited.",
+    ]) {
+      expect(
+        normalizeNarrative(sentence, { evidence, namespaces: [], lexicon, question: "" }),
+      ).toBe(sentence);
+    }
+    // A real keyword-led ref with a tail still scrubs.
+    const out = normalizeNarrative("See source:day_sales.4f2a9b1c for the total.", {
+      evidence,
+      namespaces: [],
+      lexicon,
+      question: "",
+    });
+    expect(out).toBe("See the cited record for the total.");
+  });
+
+  it("scrubs bare hex-tailed tokens but preserves an identifier the operator asked with", () => {
+    const scrubbed = normalizeNarrative("Drawer 8d5c0a4d9a7e78365b5c876b9c4525d1 is still open.", {
+      evidence,
+      namespaces: [],
+      lexicon,
+      question: "",
+    });
+    expect(scrubbed).toBe("Drawer the cited record is still open.");
+    const asked = normalizeNarrative("Drawer 8d5c0a4d9a7e78365b5c876b9c4525d1 is still open.", {
+      evidence,
+      namespaces: [],
+      lexicon,
+      question: "what happened to 8d5c0a4d9a7e78365b5c876b9c4525d1?",
+    });
+    expect(asked).toBe("Drawer 8d5c0a4d9a7e78365b5c876b9c4525d1 is still open.");
+  });
+
+  it("leaves nothing for the ref sensor after scrubbing", () => {
+    const ref = "attempt_v1.1.d26722690726d41ac79be9f0b6690cd0";
+    const out = normalizeNarrative(`Based on ${ref} and resource:closeout.aa11bb22cc33dd44ee55ff6677889900.deadbeefdeadbeefdeadbeef, all clear.`, {
+      evidence,
+      namespaces: [],
+      lexicon,
+      question: "",
+      refs: [ref],
+    });
+    const findings = senseTone({
+      narrative: out,
+      question: "",
+      fieldNames: [],
+      enumLiterals: [],
+      moneyAmounts: [],
+      namespaces: [],
+      refs: [ref],
+      lexicon,
+    });
+    expect(findings.filter((finding) => finding.code === "ref_in_prose")).toEqual([]);
   });
 
   it("humanizes harvested tokens without lexicon entries", () => {

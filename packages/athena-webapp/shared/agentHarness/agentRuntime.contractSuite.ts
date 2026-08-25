@@ -15,6 +15,7 @@ import {
   createAgentToolDispatchLedger,
   createUsageReconciler,
   validateRuntimeEvent,
+  type AgentPreExecutedExchange,
   type AgentRuntimeEvent,
   type AgentToolDefinition,
   type AgentToolDispatchResult,
@@ -178,6 +179,7 @@ async function openTurn(
   kernel: ReturnType<typeof buildKernel>,
   turnKey: string,
   threadKey = "contract|thread-1",
+  extras: { readonly preExecutedExchange?: AgentPreExecutedExchange } = {},
 ) {
   const thread = await harness.adapter.ensureThread({
     threadKey,
@@ -203,6 +205,7 @@ async function openTurn(
       tools: kernel.tools,
       model: { providerId: "fixture", modelId: "fixture-1", region: "eu" },
       limits: { maxToolCalls: 8, maxElapsedMs: 60_000 },
+      ...(extras.preExecutedExchange ? { preExecutedExchange: extras.preExecutedExchange } : {}),
     },
     kernel.hooks,
   );
@@ -623,6 +626,43 @@ export function runAgentRuntimeAdapterContractSuite(
       const settlement = kernel.usage.settleAll("terminal_total");
       expect(settlement.tokens).toEqual({ input: 22, output: 10, cachedInput: 0, reasoning: 0 });
       expect(settlement.streams.map((stream) => stream.streamKey)).toEqual(["inv-1#0", "inv-1#1"]);
+    });
+
+    it("seeds a pre-executed exchange before the first model step and never dispatches it", async () => {
+      const harness = createHarness();
+      if (!harness.supportsPreExecutedExchange) return;
+      const kernel = buildKernel(harness.adapter.descriptor.adapterVersion);
+      const exchange: AgentPreExecutedExchange = {
+        toolId: "athena.test.echo",
+        exchangeKey: "preexec-1",
+        args: { value: "seeded" },
+        result: { echoed: "seeded" },
+      };
+      harness.scriptTurn("turn-preexec", [{ kind: "complete", narrative: "Answer drawn from the seeded read." }]);
+      const { turnRef } = await openTurn(harness, kernel, "turn-preexec", "contract|thread-preexec", {
+        preExecutedExchange: exchange,
+      });
+      await harness.settle(turnRef);
+      // The adapter rendered the exchange into its transcript...
+      expect(harness.observedPreExecutedExchange?.(turnRef)).toEqual(exchange);
+      // ...and never dispatched it: no kernel handler ran, no ledger record.
+      expect(kernel.handlerCalls).toHaveLength(0);
+      expect(harness.dispatchResults(turnRef)).toHaveLength(0);
+      const completed = kernel.events.find((event) => event.kind === "turn_completed");
+      expect(completed).toBeTruthy();
+    });
+
+    it("rejects a malformed pre-executed exchange before any model step", async () => {
+      const harness = createHarness();
+      if (!harness.supportsPreExecutedExchange) return;
+      const kernel = buildKernel(harness.adapter.descriptor.adapterVersion);
+      harness.scriptTurn("turn-preexec-bad", [{ kind: "complete", narrative: "never runs" }]);
+      await expect(
+        openTurn(harness, kernel, "turn-preexec-bad", "contract|thread-preexec-bad", {
+          preExecutedExchange: { toolId: "", exchangeKey: "k", args: {}, result: {} } as never,
+        }),
+      ).rejects.toThrow();
+      expect(kernel.events.filter((event) => event.kind === "turn_started")).toHaveLength(0);
     });
   });
 }

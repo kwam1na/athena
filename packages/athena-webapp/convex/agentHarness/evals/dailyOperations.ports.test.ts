@@ -303,6 +303,19 @@ describe("Daily Operations resources", () => {
     expect(weekData.days).toHaveLength(8);
     expect(weekData.days.filter((day) => day.isPriorBoundary)).toHaveLength(1);
     expect(new Set(weekData.days.map((day) => day.authority))).toEqual(new Set(["accepted", "live"]));
+    // 2026-08-21 is a Friday: the Saturday alignment must be disclosed, and
+    // the served day after the requested date must be named as not-yet-occurred.
+    expect(week.envelope.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "week_aligned", sourceKey: "days" }),
+        expect.objectContaining({ code: "days_after_requested", sourceKey: "days" }),
+      ]),
+    );
+    const alignedWarning = (week.envelope.warnings as { code: string; message: string }[]).find(
+      (warning) => warning.code === "week_aligned",
+    );
+    expect(alignedWarning?.message).toContain(CURRENT_OPERATING_DATE);
+    expect(alignedWarning?.message).toContain("2026-08-22");
 
     const pulse = expectEnvelope(
       await read(t, run, attemptId, {
@@ -501,6 +514,125 @@ describe("Daily Operations resources", () => {
     expect(day.envelope.warnings).toEqual([
       expect.objectContaining({ code: "operating_window_fallback", sourceKey: "lifecycle" }),
     ]);
+  });
+
+  it("names the payment-mix absence truthfully: not-recorded history is not a reconciliation failure", async () => {
+    const t = convexTest(schema, modules);
+    const run = await t.run((ctx) => seedSmokeRun(ctx, { slug: "mixreasons" }));
+    await t.run(async (ctx) => {
+      const base = {
+        storeId: run.storeId,
+        currency: "GHS",
+        grossSalesMinor: 10_000,
+        netSalesMinor: 10_000,
+        refundsMinor: 0,
+        unitsSold: 1,
+        unitsReturned: 0,
+        uncostedRevenueMinor: 0,
+        grossProfitMinor: 2_000,
+        paymentsCollectedMinor: 10_000,
+        paymentsRefundedMinor: 0,
+        paymentAllocatedMinor: 10_000,
+        transactionCount: 1,
+        foldedAt: Date.parse("2026-08-11T00:00:00.000Z"),
+        foldVersion: 6,
+        factCount: 1,
+        lastFactRecordedAt: Date.parse("2026-08-10T12:00:00.000Z"),
+        flags: { mixedCurrency: false, hasUncostedRevenue: false, quarantinedFactCount: 0 },
+        status: "reconciled" as const,
+      };
+      // A day folded before mix tracking existed: no paymentMix at all.
+      await ctx.db.insert("reportDay", { ...base, operatingDate: "2026-08-10" });
+      // A day whose evidence genuinely did not reconcile.
+      await ctx.db.insert("reportDay", { ...base, operatingDate: "2026-08-09", paymentMix: { status: "unavailable" } });
+    });
+    const attemptId = await beginAttempt(t, run);
+    const mixSource = (envelope: ReturnType<typeof expectEnvelope>) =>
+      (envelope.envelope.completeness as { sources: { sourceKey: string; status: string; reason?: string }[] }).sources.find(
+        (source) => source.sourceKey === "paymentMix",
+      );
+
+    const preFeature = expectEnvelope(
+      await read(t, run, attemptId, { namespace: "reports.daySales", verb: "get", args: { operatingDate: "2026-08-10" } }),
+    );
+    expect(mixSource(preFeature)).toMatchObject({ status: "unavailable", reason: "payment_mix_not_recorded" });
+
+    const broken = expectEnvelope(
+      await read(t, run, attemptId, { namespace: "reports.daySales", verb: "get", args: { operatingDate: "2026-08-09" } }),
+    );
+    expect(mixSource(broken)).toMatchObject({ status: "unavailable", reason: "payment_mix_does_not_reconcile" });
+  });
+
+  it("register sessions read is date-keyed: exact for dated rows, carries undated open drawers, discloses undated closed history", async () => {
+    const t = convexTest(schema, modules);
+    const run = await t.run((ctx) => seedSmokeRun(ctx, { slug: "datekeyed" }));
+    await t.run(async (ctx) => {
+      const { insertRegisterSessionWithAuthority } = await import("../../operations/registerSessionAuthorityRevision");
+      const base = {
+        storeId: run.storeId,
+        organizationId: run.fixture.organizationId,
+        openingFloat: 10_000,
+        expectedCash: 10_000,
+      };
+      // A drawer opened before stamping existed and never closed: still real today.
+      await insertRegisterSessionWithAuthority(ctx, {
+        ...base,
+        registerNumber: "Legacy open",
+        status: "active",
+        openedAt: Date.parse("2026-07-01T09:00:00.000Z"),
+      });
+      // Closed history from before stamping: attributable to no date.
+      await insertRegisterSessionWithAuthority(ctx, {
+        ...base,
+        registerNumber: "Legacy closed",
+        status: "closed",
+        openedAt: Date.parse("2026-07-01T09:00:00.000Z"),
+        closedAt: Date.parse("2026-07-01T20:00:00.000Z"),
+        countedCash: 10_000,
+        variance: 0,
+      });
+      // A dated session on another day: must not bleed into the current date.
+      await insertRegisterSessionWithAuthority(ctx, {
+        ...base,
+        registerNumber: "Other day",
+        status: "closed",
+        openedAt: Date.parse(`${PRIOR_OPERATING_DATE}T09:00:00.000Z`),
+        openedOperatingDate: PRIOR_OPERATING_DATE,
+        closeoutOperatingDate: PRIOR_OPERATING_DATE,
+        closedAt: Date.parse(`${PRIOR_OPERATING_DATE}T20:00:00.000Z`),
+        countedCash: 10_000,
+        variance: 0,
+      });
+    });
+    const attemptId = await beginAttempt(t, run);
+    const current = expectEnvelope(
+      await read(t, run, attemptId, {
+        namespace: "cash.registerSessions",
+        verb: "list",
+        args: { operatingDate: CURRENT_OPERATING_DATE },
+      }),
+    );
+    const labels = (current.data as { registerLabel: string }[]).map((row) => row.registerLabel).sort();
+    // The two fixture sessions of the day plus the undated open drawer;
+    // neither the other day's session nor the undated closed history.
+    expect(labels).toEqual(["Legacy open", "Register 1", "Register 2"]);
+    const partitions = (current.envelope.completeness as { sources: { sourceKey: string; status: string }[] }).sources.find(
+      (source) => source.sourceKey === "partitions",
+    );
+    expect(partitions?.status).toBe("complete");
+    expect(current.envelope.warnings).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: "undated_closed_history_not_listed" })]),
+    );
+
+    const prior = expectEnvelope(
+      await read(t, run, attemptId, {
+        namespace: "cash.registerSessions",
+        verb: "list",
+        args: { operatingDate: PRIOR_OPERATING_DATE },
+      }),
+    );
+    const priorLabels = (prior.data as { registerLabel: string }[]).map((row) => row.registerLabel).sort();
+    expect(priorLabels).toEqual(["Legacy open", "Other day"]);
   });
 
   it("never leaks a raw identifier into any resource's result", async () => {

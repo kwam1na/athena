@@ -46,8 +46,13 @@ export type AgentProgramRuntimeCeilings = {
 
 export const AGENT_PROGRAM_RUNTIME_CEILINGS: AgentProgramRuntimeCeilings = Object.freeze({
   maxElapsedMs: 60_000,
-  maxAttempts: 3,
-  maxCapabilityCalls: 24,
+  // Tuned 2026-08-24 from observed use (the plan marks these as initial
+  // values): p90 across driven turns was 4 calls, but the first legitimately
+  // deep question (a 30-day census) needed 30 and hit the old 24; and two of
+  // three attempts on that turn were spent on static rejections alone. 24
+  // sequential reads cost ~7 s of the 60 s window, so 48 still fits.
+  maxAttempts: 4,
+  maxCapabilityCalls: 48,
   maxInFlightCalls: 4,
   maxRows: 5_000,
   maxRunBridgeBytes: 2 * 1024 * 1024,

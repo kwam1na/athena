@@ -4774,6 +4774,48 @@ async function projectRegisterClosed(
         });
       }
 
+      const approvalPendingSession = {
+        ...registerSession,
+        countedCash,
+        managerApprovalRequestId: reviewResult.approvalRequest._id,
+        status: "closing" as const,
+        variance: closeoutReview.variance,
+      };
+      const closeoutSubmittedTraceResult =
+        await repository.recordRegisterSessionWorkflowTrace?.({
+          stage: "closeout_submitted",
+          session: approvalPendingSession,
+          occurredAt: args.event.occurredAt,
+          actorStaffProfileId: args.event.staffProfileId,
+          actorUserId: args.submittedByUserId,
+          countedCash,
+          syncOrigin: "local_sync",
+          variance: closeoutReview.variance,
+        });
+      const approvalPendingTraceResult =
+        await repository.recordRegisterSessionWorkflowTrace?.({
+          stage: "approval_pending",
+          session: approvalPendingSession,
+          occurredAt: args.event.occurredAt,
+          actorStaffProfileId: args.event.staffProfileId,
+          actorUserId: args.submittedByUserId,
+          approvalRequestId: reviewResult.approvalRequest._id,
+          countedCash,
+          syncOrigin: "local_sync",
+          variance: closeoutReview.variance,
+        });
+      const persistedTraceResult = closeoutSubmittedTraceResult?.traceCreated
+        ? closeoutSubmittedTraceResult
+        : approvalPendingTraceResult;
+      if (persistedTraceResult) {
+        await persistRegisterSessionWorkflowTraceId(repository, {
+          registerSessionId: registerSession._id,
+          traceCreated: persistedTraceResult.traceCreated,
+          traceId: persistedTraceResult.traceId,
+          workflowTraceId: registerSession.workflowTraceId,
+        });
+      }
+
       const mapping = await createMapping(repository, args, {
         localIdKind: "closeout",
         localId: args.event.localEventId,

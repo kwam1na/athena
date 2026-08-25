@@ -201,13 +201,13 @@ export const DAILY_OPERATIONS_PROFILE = defineAgentProfile({
    */
   budgetPolicy: {
     runLimits: budgetVector({
-      calls: 24,
+      calls: 48,
       rows: 5_000,
       bytes: 2_097_152,
       costUnits: 2_000,
       elapsedMs: 60_000,
     }),
-    maxAttempts: 3,
+    maxAttempts: 4,
     maxInFlightCalls: 4,
   },
   promptPolicy: {
@@ -225,6 +225,13 @@ export const DAILY_OPERATIONS_PROFILE = defineAgentProfile({
     // gpt-5-mini adopted 2026-08-24 after the CLI regression phases: same
     // 20/20 commit rate as nano with half the output tokens and ~40% faster
     // first delta; nano remains the fallback default in the adapter smoke.
+    // gpt-5 A/B (2026-08-24, full eval-drive suite): broader reads (8 vs 6
+    // capabilities on the readiness question), decisive clarification (asked
+    // in 6.5 s with zero reads), zero tone findings — but 2-3x the completion
+    // latency (34-72 s vs 14-46 s), ~5-7x the cost, and it OVER-clarifies:
+    // it answered "which register had a variance today" and "what did the
+    // store take today" with clarifying questions. Mini stays the default;
+    // re-run `bun run agent-eval:drive` after prompt changes to revisit.
     providers: [{ providerId: "openai", modelId: "gpt-5-mini", region: "us", maxClass: "sensitive" }],
   },
   runtimeAdapterKind: "convex_agent",
@@ -271,6 +278,16 @@ export const DAILY_OPERATIONS_PROFILE = defineAgentProfile({
         kind: "citation_resolution",
         prompt: "Which register had a variance today, and what proves it?",
         expects: ["cash.registerSessions citation resolves to a session and closeout version"],
+      },
+      {
+        id: "ambiguous_referent",
+        kind: "partial_or_no_data",
+        prompt: "How did we do on Wednesday?",
+        expects: [
+          "outcome needs_clarification asking which Wednesday, or an answer that names the operating date it actually reports",
+          "never no_usable_sources while the turn holds successful cited reads",
+          "no fabricated day",
+        ],
       },
     ],
   },

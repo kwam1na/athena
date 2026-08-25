@@ -4,11 +4,11 @@
  * The machine-readable projection of `docs/product-copy-tone.md` that the
  * harness enforces mechanically instead of by instruction:
  *
- * - `annotateMoneyDisplays` runs at the result boundary: every money-shaped
- *   value the model is shown carries a `display` string rendered by the same
- *   currency convention as the app (`GH₵14,149`, minor units only when
- *   non-zero), so quoting the right figure is the path of least resistance
- *   and the raw minor-unit integer never has to be interpreted.
+ * - `annotateMoneyDisplays` and `annotateDateDisplays` run at the result
+ *   boundary: every money-shaped value and exact calendar date the model is
+ *   shown carries an operator-ready display string, so quoting the right
+ *   value is the path of least resistance and raw storage forms never need to
+ *   be interpreted in prose.
  * - `collectNarrativeEvidence` harvests, from those same results, the tokens
  *   an operator must never see echoed back: backend field names, raw enum
  *   spellings, and minor-unit amounts.
@@ -47,6 +47,7 @@ export const APP_PRODUCT_LEXICON: AgentProductLexicon = {
     daily_close: "daily close",
     operations_queue: "operations queue",
     no_usable_sources: "no usable sources",
+    needs_clarification: "needs clarification",
   },
   fieldLabels: {
     registerSession: "drawer",
@@ -134,6 +135,69 @@ export function annotateMoneyDisplays(value: unknown, depth = 0): unknown {
 }
 
 // ---------------------------------------------------------------------------
+// Date display
+// ---------------------------------------------------------------------------
+
+const OPERATING_DATE_PATTERN = /^([1-9]\d{3})-(\d{2})-(\d{2})$/;
+const OPERATING_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  weekday: "short",
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+/**
+ * Render a date-only value without allowing the runtime timezone to move it
+ * onto another calendar day. Invalid dates are not annotated.
+ */
+export function formatOperatingDateDisplay(value: string): string | null {
+  const match = OPERATING_DATE_PATTERN.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return OPERATING_DATE_FORMATTER.format(date);
+}
+
+/**
+ * Keep canonical date-only fields intact and add `<field>Display` beside each
+ * one in the model-visible copy. Existing product-authored display fields win.
+ */
+export function annotateDateDisplays(value: unknown, depth = 0): unknown {
+  if (depth > WALK_DEPTH_MAX || typeof value !== "object" || value === null) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => annotateDateDisplays(item, depth + 1));
+  }
+
+  const record = value as { readonly [key: string]: unknown };
+  const annotated: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(record)) {
+    annotated[key] = annotateDateDisplays(entry, depth + 1);
+    if (
+      key.endsWith("Display") ||
+      typeof entry !== "string" ||
+      Object.hasOwn(record, `${key}Display`)
+    ) {
+      continue;
+    }
+    const display = formatOperatingDateDisplay(entry);
+    if (display) annotated[`${key}Display`] = display;
+  }
+  return annotated;
+}
+
+// ---------------------------------------------------------------------------
 // Narrative evidence harvest
 // ---------------------------------------------------------------------------
 
@@ -147,6 +211,13 @@ export type AgentNarrativeEvidence = {
 
 const INTERNAL_NAME_PATTERN = /(?:[a-z0-9][A-Z]|_)/; // camelCase joint or snake_case
 const ENUM_LITERAL_PATTERN = /^[a-z]+(?:_[a-z]+)+$/;
+/**
+ * A hex run long enough to be an opaque identifier's hash tail. The letter
+ * requirement keeps plain numbers (counts, amounts, timestamps) out.
+ */
+const OPAQUE_HEX_RUN_PATTERN = /(?=[0-9a-f]*[a-f])[0-9a-f]{16,}/g;
+/** The same shape without /g: `.test` on a global regex is stateful. */
+const OPAQUE_HEX_RUN_TEST = /(?=[0-9a-f]*[a-f])[0-9a-f]{16,}/;
 
 /** Harvest, from a model-visible result, the internal tokens prose must not echo. */
 const EVIDENCE_FIELD_CAP = 200;
@@ -268,7 +339,45 @@ export type AgentNormalizeNarrativeOptions = {
   readonly namespaces: readonly string[];
   readonly lexicon: AgentProductLexicon;
   readonly question: string;
+  /** The refs this run handed out; scrubbed from prose exactly, on top of the shape-based scrub. */
+  readonly refs?: readonly string[];
 };
+
+const OPAQUE_SCRUB_REPLACEMENT = "the cited record";
+/** A ref-shaped data identifier: kind prefix plus a dotted opaque tail. */
+// The separator excludes `.` and the tail must be non-empty: a bare keyword
+// ending a sentence ("…read that source.") is prose, not a ref.
+const REF_CLUSTER_PATTERN = /\b(?:resource|source|citation|attempt)[:_][A-Za-z0-9_.:-]+/g;
+
+/**
+ * Replace opaque identifiers with operator wording. This is what retires the
+ * `ref_in_prose` denial for the common cases: the answer surface renders the
+ * committed citations itself, so an identifier in prose carries nothing the
+ * operator can use — and a corrective denial costs a full provider round. The
+ * sensor stays armed behind this as the backstop.
+ */
+function scrubOpaqueIdentifiers(narrative: string, options: { readonly refs: readonly string[]; readonly asked: (token: string) => boolean }): string {
+  let text = narrative;
+  for (const ref of options.refs) {
+    if (options.asked(ref)) continue;
+    text = text.split(ref).join(OPAQUE_SCRUB_REPLACEMENT);
+  }
+  text = text.replace(REF_CLUSTER_PATTERN, (match) => (options.asked(match) ? match : OPAQUE_SCRUB_REPLACEMENT));
+  // Any remaining token carrying a hash tail (a mangled ref's second
+  // fragment, a bare id) is an identifier wherever it appears. Trailing
+  // sentence punctuation survives the replacement.
+  text = text.replace(/\S+/g, (token) => {
+    if (!OPAQUE_HEX_RUN_TEST.test(token) || options.asked(token)) return token;
+    const trailing = token.match(/[.,;:!?)\]]+$/) ?? null;
+    return OPAQUE_SCRUB_REPLACEMENT + (trailing ? trailing[0] : "");
+  });
+  // A mangled ref scrubs as two adjacent fragments; say it once.
+  text = text.replace(
+    new RegExp(`${OPAQUE_SCRUB_REPLACEMENT}(?:[\\s]+${OPAQUE_SCRUB_REPLACEMENT})+`, "g"),
+    OPAQUE_SCRUB_REPLACEMENT,
+  );
+  return text;
+}
 
 /**
  * Deterministically rewrite internal tokens in a committed narrative to their
@@ -282,7 +391,7 @@ export type AgentNormalizeNarrativeOptions = {
 export function normalizeNarrative(narrative: string, options: AgentNormalizeNarrativeOptions): string {
   const question = options.question.toLowerCase();
   const asked = (token: string) => question.includes(token.toLowerCase());
-  let text = narrative;
+  let text = scrubOpaqueIdentifiers(narrative, { refs: options.refs ?? [], asked });
   const rewriteWord = (token: string, replacement: string) => {
     text = text.replace(new RegExp("\\b" + escapeRegExp(token) + "\\b", "g"), replacement);
   };
@@ -429,6 +538,20 @@ export function senseTone(input: AgentToneSensorInput): readonly AgentToneFindin
     if (narrative.includes(ref)) {
       findings.push({ code: "ref_in_prose", token: ref, fix: "Refs belong in citedAttemptRefs and citations, never in the narrative." });
     }
+  }
+  // Opaque identifiers from DATA (`resource:...`/`source:...` refs, or any
+  // ref the model rewrote — observed: underscores lexicon-swapped to spaces)
+  // never exact-match `input.refs`. Their hash tails still give them away: a
+  // 16+ character hex run with at least one letter is an identifier, not
+  // prose, wherever it appears.
+  for (const match of new Set(narrative.match(OPAQUE_HEX_RUN_PATTERN) ?? [])) {
+    if (asked(match)) continue;
+    if (input.refs.some((ref) => ref.includes(match))) continue; // already reported exactly above
+    findings.push({
+      code: "ref_in_prose",
+      token: match.slice(0, 24),
+      fix: "Opaque references and record ids never belong in the narrative; describe the record in operator words (its register, date, or label) instead.",
+    });
   }
   for (const namespace of input.namespaces) {
     if (asked(namespace)) continue;

@@ -978,11 +978,11 @@ export const AGENT_GENERATED_CAPABILITY_SCHEMAS: AgentCapabilitySchemaIndex = {
       "contractVersion": 1,
       "cost": {
         "worstCasePerCall": {
-          "bytes": 196608,
+          "bytes": 262144,
           "calls": 1,
-          "costUnits": 3,
-          "elapsedMs": 2500,
-          "rows": 100
+          "costUnits": 4,
+          "elapsedMs": 3000,
+          "rows": 200
         }
       },
       "egressClass": "operational",
@@ -1043,8 +1043,8 @@ export const AGENT_GENERATED_CAPABILITY_SCHEMAS: AgentCapabilitySchemaIndex = {
         "list": {
           "bounds": {
             "kind": "collection",
-            "maxItemsPerPage": 100,
-            "maxPagesPerRun": 3
+            "maxItemsPerPage": 200,
+            "maxPagesPerRun": 8
           },
           "filters": {
             "category": {
@@ -2949,4 +2949,4 @@ export const AGENT_GENERATED_CAPABILITY_SCHEMAS: AgentCapabilitySchemaIndex = {
 
 
 /** Identity of the model-visible schema set; changes whenever a declaration changes. */
-export const AGENT_GENERATED_SCHEMAS_DIGEST = "fnv1a64:332e881bbea556c0";
+export const AGENT_GENERATED_SCHEMAS_DIGEST = "fnv1a64:c5d3bc99b03187fb";

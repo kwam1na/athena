@@ -32,6 +32,7 @@ import {
 } from "../../shared/agentHarness/agentRuntime";
 import { AGENT_FIXED_TOOL_IDS } from "../../shared/agentHarness/bridge";
 import {
+  annotateDateDisplays,
   annotateMoneyDisplays,
   APP_PRODUCT_LEXICON,
   collectNarrativeEvidence,
@@ -135,13 +136,19 @@ export const executeProgramTool: AgentToolDefinition<AgentExecuteProgramArgs, un
     "Guarded fields (money and similar) arrive as `{ state, value }`: read `value` only when `state === \"known\"`, and report any other state as unavailable rather than missing.\n" +
     "If the result carries `fieldDiagnostics`, the program read a field the capability does not declare — rewrite using the named fields instead of concluding the data is unreadable.\n" +
     "Arguments are ONLY the filters `athena.describe` lists for that capability: the store is fixed by the run, so a store name or id is never an argument.\n" +
-    "No imports, no `require`, no timers, no randomness, no clock.\n" +
+    "BUDGET: one run serves a fixed number of capability calls across all of its programs; `athena.budget.remaining().callsRemaining` tells you how many are left WITHIN the current program (a later program starts its own count, but the run-wide budget still spans them all). A read past either budget returns `{ kind: \"denied\", code: \"budget_exhausted\" }` as a value — keep what you already read and return it.\n" +
+    "PAGES: a `list` result's `envelope.pagination` carries `hasMore` and an opaque `cursor`; pass it back (`.list({ ...sameFilters, cursor })`) to read the next page, within the capability's small per-run page budget. A truncated or paged read is `completeness: \"partial\"` — page onward when the question needs the rest.\n" +
+    "SPEED: calls run up to 4 at a time — `Promise.all` over a batch is much faster than awaiting one by one, and excess calls queue rather than fail. Repeating an identical read inside one program is served from cache and reserves no new run budget, but it still decrements this program's own call counter — reuse the variable instead.\n" +
+    "DATES: there is no clock. `athena.dates.shift(\"2026-08-22\", -7)` and `athena.dates.range(startIso, endIso)` do date arithmetic; take today's operating date from the turn context.\n" +
+    "You may run several programs in one turn: read first, look at the result, then write the next program to drill into what it revealed — a follow-up program is a normal step, not a failure.\n" +
+    "No imports, no `require`, no timers, no randomness.\n" +
     "Example:\n" +
     "const day = await athena.operations.storeDay.get({ operatingDate: \"2026-08-22\" });\n" +
-    "const registers = await athena.cash.registerSessions.list({ operatingDate: \"2026-08-22\" });\n" +
+    "const week = athena.dates.range(athena.dates.shift(\"2026-08-22\", -6), \"2026-08-22\");\n" +
+    "const registers = await Promise.all(week.map((operatingDate) => athena.cash.registerSessions.list({ operatingDate })));\n" +
     "return {\n" +
     "  stage: day.kind === \"result\" ? day.envelope.data.lifecycleStage : null,\n" +
-    "  openDrawers: registers.kind === \"result\" ? registers.envelope.data.filter((s) => s.status === \"open\").length : null,\n" +
+    "  openDrawers: registers.filter((r) => r.kind === \"result\").flatMap((r) => r.envelope.data).filter((s) => s.status === \"open\").length,\n" +
     "};",
   validateInput: (raw): Validation<AgentExecuteProgramArgs> => {
     const object = objectOf(raw);
@@ -169,13 +176,13 @@ export const scratchTool: AgentToolDefinition<AgentScratchArgs, unknown> = {
 export const completeRunTool: AgentToolDefinition<AgentCompleteRunArgs, unknown> = {
   toolId: "athena.completeRun",
   description:
-    "Finish the run exactly once with the final answer. Arguments: { outcome?: \"answer\" | \"no_usable_sources\", narrative: string, title?: string, citedAttemptRefs: string[] (attemptRef values from executeProgram results the answer relies on), citations: [{ ref: string (citation refs from those results), claim?: string }], confidence?: 0..1, limitedEvidence?: boolean }. The narrative is the complete answer a store operator reads — plain operator language, never field names, namespaces, enum spellings, or refs; title is only a short label and never the answer. The answer surface already lists your citations under \"Sources\", so never write a sources or refs section into the narrative. Money values in results carry a display string — quote display, never amount. An answer needs at least one cited attempt and citation; use no_usable_sources when nothing usable was read. Submit by CALLING this tool — arguments written out as prose are not a submission. Say a value was unavailable only when its read returned kind !== \"result\" or its state was not \"known\".",
+    "Finish the run exactly once with the final answer. Arguments: { outcome?: \"answer\" | \"no_usable_sources\" | \"needs_clarification\", narrative: string, title?: string, citedAttemptRefs: string[] (attemptRef values from executeProgram results the answer relies on), citations: [{ ref: string (citation refs from those results), claim?: string }], confidence?: 0..1, limitedEvidence?: boolean }. The narrative is the complete answer a store operator reads — plain operator language, never field names, namespaces, enum spellings, or refs; title is only a short label and never the answer. The answer surface already lists your citations under \"Sources\", so never write a sources or refs section into the narrative. Money values in results carry a display string — quote display, never amount. An answer needs at least one cited attempt and citation; use no_usable_sources when nothing usable was read, and needs_clarification — with the narrative asking the operator one specific question — when the question is too ambiguous to answer without guessing (neither requires citations). Submit by CALLING this tool — arguments written out as prose are not a submission. Say a value was unavailable only when its read returned kind !== \"result\" or its state was not \"known\".",
   validateInput: (raw): Validation<AgentCompleteRunArgs> => {
     const object = objectOf(raw);
     if (!object) return { ok: false, issues: [{ path: "$", message: "completeRun takes an object" }] };
     const issues: Issue[] = [];
     const outcome = object.outcome === undefined ? "answer" : object.outcome;
-    if (outcome !== "answer" && outcome !== "no_usable_sources") issues.push({ path: "outcome", message: "outcome must be answer or no_usable_sources" });
+    if (outcome !== "answer" && outcome !== "no_usable_sources" && outcome !== "needs_clarification") issues.push({ path: "outcome", message: "outcome must be answer, no_usable_sources, or needs_clarification" });
     const narrative = object.narrative;
     if (typeof narrative !== "string" || narrative.trim().length === 0) issues.push({ path: "narrative", message: "narrative must be a non-empty string" });
     else if (measureJsonByteLength(narrative) - 2 > AGENT_TOOL_NARRATIVE_MAX_BYTES) issues.push({ path: "narrative", message: `narrative exceeds ${AGENT_TOOL_NARRATIVE_MAX_BYTES} bytes` });
@@ -391,6 +398,7 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
   const toneEvidence = { fieldNames: new Set<string>(), enumLiterals: new Set<string>(), moneyKeys: new Set<string>(), moneyAmounts: [] as AgentMoneyAmount[], truncated: false };
   let toneFindings: readonly AgentToneFinding[] = [];
   let toneDeniedOnce = false;
+  let sourcesDeniedOnce = false;
   let completion: { committed: boolean; artifactId?: Id<"intelligenceArtifact"> } = { committed: false };
   let surface: ReturnType<typeof createRunDiscoverySurface> | undefined;
 
@@ -453,10 +461,13 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
             providerExposed: true,
             citations: result.citations.map((candidate) => ({ citation: candidate.citation, namespace: candidate.namespace })),
           });
-          // Money values gain product display strings before the model sees
-          // them, and the raw internal tokens the model was shown are
-          // harvested so the tone sensor can hold the narrative to them.
-          const harvested = collectNarrativeEvidence(result.result.output);
+          // Money and date values gain product display strings before the
+          // model sees them, and the raw internal tokens the model was shown
+          // are harvested so the tone sensor can hold the narrative to them.
+          const modelVisibleOutput = annotateDateDisplays(
+            annotateMoneyDisplays(result.result.output),
+          );
+          const harvested = collectNarrativeEvidence(modelVisibleOutput);
           if (harvested.truncated) toneEvidence.truncated = true;
           for (const name of harvested.fieldNames) toneEvidence.fieldNames.add(name);
           for (const literal of harvested.enumLiterals) toneEvidence.enumLiterals.add(literal);
@@ -471,7 +482,7 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
             kind: "success",
             result: {
               attemptRef: result.attemptRef,
-              output: annotateMoneyDisplays(result.result.output),
+              output: modelVisibleOutput,
               completeness: result.result.completeness,
               freshness: result.result.freshness,
               citations: result.citations.map((candidate) => ({
@@ -529,11 +540,12 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
     definition: completeRunTool,
     handler: async (args) => {
       if (completion.committed) return denied("already_completed", "The run already has its answer.");
-      // `no_usable_sources` is precisely for the run whose every read failed:
-      // it must stay reachable with zero successful attempts, or a turn that
-      // spent its attempt budget on rejected programs can never end honestly.
-      if (attempts.length === 0 && args.outcome !== "no_usable_sources") {
-        return denied("no_attempts", "Read at least one source with athena.executeProgram before completing, or complete with outcome no_usable_sources.");
+      // `no_usable_sources` is precisely for the run whose every read failed,
+      // and `needs_clarification` for the question too ambiguous to read for
+      // at all: both must stay reachable with zero successful attempts, or a
+      // turn that cannot honestly read anything can never end honestly.
+      if (attempts.length === 0 && args.outcome !== "no_usable_sources" && args.outcome !== "needs_clarification") {
+        return denied("no_attempts", "Read at least one source with athena.executeProgram before completing, or complete with outcome no_usable_sources (nothing usable was readable) or needs_clarification (the question needs the operator's answer first).");
       }
       // Refs are opaque handles this turn itself handed out, and models
       // transcribe them imperfectly (dropped prefixes, dropped version
@@ -599,6 +611,19 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
       if (args.outcome === "answer" && (citedAttemptRefs.length === 0 || citations.length === 0)) {
         return denied("citations_required", `An answer must cite at least one attempt and one citation; use outcome no_usable_sources when nothing usable was read.${validRefsHint()}`);
       }
+      // The mirror gate, denied once like tone: observed after a tone denial,
+      // the model abandoned a good cited answer and resubmitted
+      // no_usable_sources with a "could not read" narrative — while this very
+      // turn held successful reads and minted citations. Push back once; a
+      // repeated submission is accepted as the model's honest judgment (a
+      // turn CAN read successfully yet find nothing usable in the data).
+      if (args.outcome === "no_usable_sources" && knownCitationRefs.length > 0 && !sourcesDeniedOnce) {
+        sourcesDeniedOnce = true;
+        return denied(
+          "sources_were_read",
+          `This turn read sources successfully and minted citations. If they answer the question, complete with outcome answer and cite them; if the question is too ambiguous to answer, complete with needs_clarification asking the operator one specific question. Use no_usable_sources only if nothing read was actually usable.${validRefsHint()}`,
+        );
+      }
       // Normalization before sensing or commit: strip the trailing refs-only
       // "Sources:" footer (the surface renders citations itself), then rewrite
       // the internal tokens this run served the model into their operator
@@ -611,6 +636,9 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
         namespaces: namespacesRead,
         lexicon,
         question: host.question ?? "",
+        // Scrubbed, not denied: this run's own refs plus anything ref-shaped
+        // from data; the answer surface renders citations itself.
+        refs: [...knownAttemptRefs, ...knownCitationRefs],
       };
       const narrative = normalizeNarrative(stripSourcesFooter(args.narrative), normalizeOptions);
       // The title reaches the operator too: same rewrite, same evidence.
@@ -642,7 +670,10 @@ export function createAthenaToolRegistrations(host: AgentToolHostContext): { reg
       }
       if (host.tonePolicy === "enforce" && sensed.length > 0 && !toneDeniedOnce) {
         toneDeniedOnce = true;
-        const fixes = sensed.map((finding) => finding.fix).join(" ");
+        // Distinct fixes only: several findings can carry the same sentence
+        // (every ref in prose does), and a message that repeats itself reads
+        // as a glitch rather than an instruction.
+        const fixes = [...new Set(sensed.map((finding) => finding.fix))].join(" ");
         return denied("tone", `Rewrite the narrative for the operator, then call completeRun again. ${fixes}`);
       }
       await host.reportProgress?.("finalizing");

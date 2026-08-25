@@ -54,6 +54,12 @@ export type DelegatedGrantConfig = {
   readonly authorityPorts: { readonly [K in DelegatedOperatorKind]: DelegatedAuthorityPort };
   /** The live shrink-only overlay (kill switch); defaults to the published baseline. */
   readonly resolveEnablement: (ctx: ReadCtx) => Promise<AgentEnablementOverlay>;
+  /**
+   * Curated starter-intent program lookup, injected by the composition root
+   * (the kernel never imports profile modules). Absent lookups downgrade the
+   * turn to free-form; nothing here refuses.
+   */
+  readonly starterIntentProgramFor?: (profileId: string, starterIntentId: string) => string | undefined;
   readonly now?: () => number;
 };
 

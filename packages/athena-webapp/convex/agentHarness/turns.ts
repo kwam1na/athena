@@ -31,6 +31,10 @@ import { AGENT_PROGRESS_MILESTONES } from "../../shared/agentHarness/agentRuntim
 import { sha256Hex } from "../../shared/agentHarness/digest";
 import { isBindingStepAtOrBeyond, isTerminalRunStatus, type AgentTurnBindingStep } from "../../shared/agentHarness/execution";
 import { AGENT_THREAD_KEY_PATTERN } from "../../shared/agentHarness/profile";
+import { renderStarterIntentProgram } from "../../shared/agentHarness/starterIntentProgram";
+
+/** Starter-intent ids are profile-authored slugs; anything else refuses at startTurn. */
+const STARTER_INTENT_ID_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
 import { egressClassRank, opaqueRef, type AgentEgressClass } from "../../shared/agentHarness/values";
 import {
   acknowledgeProvisionalViewOperationDefinition,
@@ -241,6 +245,12 @@ export type AgentTurnPlan = {
   readonly limits: AgentTurnLimits;
   /** The prompt carries the grant catalog, so the provider list may omit athena.discover. */
   readonly catalogEmbedded: boolean;
+  /**
+   * The turn's curated pre-execution, decided at prepare: a rendered source
+   * to run, or the reason the host must skip (a traced downgrade, never a
+   * refusal). Absent on free-form turns.
+   */
+  readonly preExecution?: { readonly starterIntentId: string; readonly source: string } | { readonly starterIntentId: string; readonly skip: string };
   readonly recorded: { readonly runtimeThreadRef?: string; readonly runtimeInputRef?: string; readonly runtimeScheduleRef?: string; readonly runtimeTurnRef?: string };
 };
 
@@ -375,7 +385,21 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
     // rung (the run is not `running` yet), and a silent fallback on it once
     // shipped an empty catalog.
     const capabilities = discoverCapabilities(authority.runtimeGrant, { schemas: config.schemas });
-    const prompt = assembleTurnPrompt({ profileId: grant.profileKey, intent: profile.promptPolicy.intent, untrustedDataLabel: profile.promptPolicy.untrustedDataLabel, context, question, capabilities, egressClass: "operational", lexicon: profileLexicon(grant.profileKey) });
+    // Curated pre-execution: decided here so the prompt's one extra policy
+    // sentence and the recorded promptHash stay truthful together.
+    const starterIntentId = typeof promptRow.payload.starterIntentId === "string" ? promptRow.payload.starterIntentId : undefined;
+    let preExecution: AgentTurnPlan["preExecution"];
+    if (starterIntentId !== undefined) {
+      const declaredIntent = profile.presentation.starterIntents.find((intent) => intent.id === starterIntentId);
+      const template = declaredIntent ? admission.config.starterIntentProgramFor?.(grant.profileKey, starterIntentId) : undefined;
+      if (!declaredIntent) preExecution = { starterIntentId, skip: "intent_unknown" };
+      else if (template === undefined) preExecution = { starterIntentId, skip: "no_program" };
+      else {
+        const rendered = renderStarterIntentProgram(template, context, profile.presentation.contextBinding.snapshotKeys ?? []);
+        preExecution = rendered.ok ? { starterIntentId, source: rendered.source } : { starterIntentId, skip: "render_failed" };
+      }
+    }
+    const prompt = assembleTurnPrompt({ profileId: grant.profileKey, intent: profile.promptPolicy.intent, untrustedDataLabel: profile.promptPolicy.untrustedDataLabel, context, question, capabilities, egressClass: "operational", lexicon: profileLexicon(grant.profileKey), preExecutedRead: preExecution !== undefined && "source" in preExecution });
     const provider = describeProviderSelectionForEvidence(selected, egressClass);
 
     const existingInvocation = await ctx.db.query("intelligenceProviderInvocation").withIndex("by_runId", (q) => q.eq("runId", run._id)).take(1);
@@ -430,6 +454,7 @@ export function createAgentTurnSeams(config: AgentTurnSeamConfig) {
         provider,
         limits: { maxToolCalls: grant.budgetPolicy.maxAttempts * 2 + 4, maxElapsedMs: elapsed },
         catalogEmbedded: capabilities.length > 0,
+        ...(preExecution ? { preExecution } : {}),
         recorded: {
           runtimeThreadRef: binding.runtimeThreadRef,
           runtimeInputRef: binding.runtimeInputRef,
@@ -878,7 +903,7 @@ export type AgentTurnEntryPointConfig = {
 type AdmittedMutationCtx = MutationCtx & { operationAdmission: { actor: OperationActor } };
 type AdmittedQueryCtx = QueryCtx & { operationAdmission: { actor: OperationActor } };
 
-export type StartTurnArgs = { storeId: Id<"store">; profileId: string; threadKey: string; turnIdempotencyKey: string; prompt: string; context?: { [key: string]: string } };
+export type StartTurnArgs = { storeId: Id<"store">; profileId: string; threadKey: string; turnIdempotencyKey: string; prompt: string; context?: { [key: string]: string }; starterIntentId?: string };
 type TurnArgs = { storeId: Id<"store">; bindingId: Id<"agentTurnBinding"> };
 
 const deniedResult = (code: string, message: string, retryable = false) => ({ outcome: "denied" as const, code, message, retryable });
@@ -1022,7 +1047,21 @@ export function createAgentTurnEntryPoints(config: AgentTurnEntryPointConfig) {
     const at = now();
     const profile = registry.profiles[args.profileId];
     if (!profile) return deniedResult("profile_unavailable", "Ask Athena isn't available here yet.");
-    const validated = validateOperatorPrompt(args.prompt, { maxPromptBytes: profile.promptPolicy.maxPromptBytes, maxPromptTokens: profile.promptPolicy.maxPromptTokens });
+    // A starter-intent tap: the server substitutes the pinned intent's
+    // canonical prompt (a drifted client cannot pair its own question with a
+    // curated read); an id the pinned profile does not declare is stored
+    // as-is and downgrades at the host with an `intent_unknown` skip trace.
+    let starterIntentId: string | undefined;
+    let promptText = args.prompt;
+    if (args.starterIntentId !== undefined) {
+      if (!STARTER_INTENT_ID_PATTERN.test(args.starterIntentId)) {
+        return deniedResult("starter_intent_invalid", "The quick-question reference is not valid.");
+      }
+      starterIntentId = args.starterIntentId;
+      const declared = profile.presentation.starterIntents.find((intent) => intent.id === starterIntentId);
+      if (declared) promptText = declared.prompt;
+    }
+    const validated = validateOperatorPrompt(promptText, { maxPromptBytes: profile.promptPolicy.maxPromptBytes, maxPromptTokens: profile.promptPolicy.maxPromptTokens });
     if (!validated.ok) return deniedResult(`prompt_${validated.code}`, validated.message);
     const operator = operatorFromActor(ctx.operationAdmission.actor);
     if (!operator) return deniedResult("operator_unauthorized", "Sign in to ask Athena.");
@@ -1065,7 +1104,7 @@ export function createAgentTurnEntryPoints(config: AgentTurnEntryPointConfig) {
       ...prepared.runInput,
       turnIdempotencyKey: args.turnIdempotencyKey,
       threadKey: args.threadKey,
-      promptPayload: { question: validated.text, context: context.context, normalizations: [...validated.normalizations], estimatedTokens: validated.estimatedTokens },
+      promptPayload: { question: validated.text, context: context.context, normalizations: [...validated.normalizations], estimatedTokens: validated.estimatedTokens, ...(starterIntentId ? { starterIntentId } : {}) },
       now: at,
     });
     if (intent.outcome === "rejected") {
@@ -1396,7 +1435,7 @@ const turnViewResult = v.union(
     promptState: v.union(v.literal("retained"), v.literal("expired"), v.literal("deleted")),
     answer: v.object({
       available: v.boolean(),
-      outcome: v.optional(v.union(v.literal("answer"), v.literal("no_usable_sources"))),
+      outcome: v.optional(v.union(v.literal("answer"), v.literal("no_usable_sources"), v.literal("needs_clarification"))),
       suppressed: v.boolean(),
       viewedAt: v.optional(v.number()),
     }),
@@ -1409,7 +1448,7 @@ const turnViewResult = v.union(
 const answerResult = v.union(
   v.object({
     kind: v.literal("answer"),
-    outcome: v.union(v.literal("answer"), v.literal("no_usable_sources")),
+    outcome: v.union(v.literal("answer"), v.literal("no_usable_sources"), v.literal("needs_clarification")),
     title: v.optional(v.string()),
     summary: v.optional(v.string()),
     narrative: v.string(),
@@ -1488,7 +1527,7 @@ const historyEntry = v.object({
   context: v.optional(v.record(v.string(), v.string())),
   answer: v.optional(
     v.object({
-      outcome: v.union(v.literal("answer"), v.literal("no_usable_sources")),
+      outcome: v.union(v.literal("answer"), v.literal("no_usable_sources"), v.literal("needs_clarification")),
       title: v.optional(v.string()),
       summary: v.optional(v.string()),
       narrative: v.string(),
@@ -1543,6 +1582,7 @@ export const startTurn = mutation({
     turnIdempotencyKey: v.string(),
     prompt: v.string(),
     context: v.optional(v.record(v.string(), v.string())),
+    starterIntentId: v.optional(v.string()),
   },
   returns: startTurnResult,
   handler: admitPublicMutation(startTurnOperationDefinition, async (ctx, args: StartTurnArgs) => agentTurnEntryPoints.startTurn(ctx, args)),

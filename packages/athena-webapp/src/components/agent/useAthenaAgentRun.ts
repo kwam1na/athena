@@ -59,7 +59,7 @@ export type AthenaAgentCitation = {
 };
 
 export type AthenaAgentAnswer = {
-  readonly outcome: "answer" | "no_usable_sources";
+  readonly outcome: "answer" | "no_usable_sources" | "needs_clarification";
   readonly title?: string;
   readonly summary?: string;
   readonly narrative: string;
@@ -315,7 +315,7 @@ export type AthenaAgentRun = {
   readonly canFollowUp: boolean;
   readonly canStartNewThread: boolean;
   readonly canInspectSources: boolean;
-  readonly submit: (prompt: string) => Promise<void>;
+  readonly submit: (prompt: string, options?: { readonly starterIntentId?: string }) => Promise<void>;
   readonly cancel: () => Promise<void>;
   readonly startNewThread: () => void;
   readonly confirmContextChange: () => void;
@@ -345,7 +345,7 @@ type TurnView = {
   promptState: "retained" | "expired" | "deleted";
   answer: {
     available: boolean;
-    outcome?: "answer" | "no_usable_sources";
+    outcome?: "answer" | "no_usable_sources" | "needs_clarification";
     suppressed: boolean;
     viewedAt?: number;
   };
@@ -955,7 +955,7 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
     ) {
       return {
         hostState: "submitting",
-        status: { headline: "Starting your request…", tone: "progress" },
+        status: { headline: "Thinking...", tone: "progress" },
       };
     }
     if (turnId && !view) {
@@ -991,7 +991,7 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
     if (view.phase === "queued") {
       return {
         hostState: "submitting",
-        status: { headline: "Starting your request…", tone: "progress" },
+        status: { headline: "Thinking...", tone: "progress" },
       };
     }
     if (view.phase === "running") {
@@ -999,7 +999,7 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
       return {
         hostState: "running",
         status: {
-          headline: latest?.label ?? "Working on your question",
+          headline: latest?.label ?? "Thinking...",
           tone: "progress",
         },
       };
@@ -1107,27 +1107,32 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
         }
       | undefined;
     if (!result || result.kind !== "history") return [];
-    return result.entries.map((entry) => ({
-      turnId: entry.bindingId,
-      createdAt: entry.createdAt,
-      state: entry.state,
-      ...(entry.question !== undefined ? { question: entry.question } : {}),
-      questionState: entry.questionState,
-      ...(entry.context
-        ? { contextLabel: presentation.contextLabel(entry.context) }
-        : {}),
-      ...(entry.answer ? { answer: entry.answer } : {}),
-      ...(entry.omittedReason
-        ? {
-            omittedHeadline: describeAthenaUnavailable(entry.omittedReason)
-              .headline,
-          }
-        : {}),
-      ...(entry.error
-        ? { failureHeadline: describeAthenaFailure(entry.error.code).headline }
-        : {}),
-    }));
-  }, [historyResult, presentation]);
+    // The server projection contains the whole thread, including the binding
+    // read separately through getTurnView. The panel reserves `history` for
+    // earlier turns and renders the active binding in its current-turn slot.
+    return result.entries
+      .filter((entry) => entry.bindingId !== turnId)
+      .map((entry) => ({
+        turnId: entry.bindingId,
+        createdAt: entry.createdAt,
+        state: entry.state,
+        ...(entry.question !== undefined ? { question: entry.question } : {}),
+        questionState: entry.questionState,
+        ...(entry.context
+          ? { contextLabel: presentation.contextLabel(entry.context) }
+          : {}),
+        ...(entry.answer ? { answer: entry.answer } : {}),
+        ...(entry.omittedReason
+          ? {
+              omittedHeadline: describeAthenaUnavailable(entry.omittedReason)
+                .headline,
+            }
+          : {}),
+        ...(entry.error
+          ? { failureHeadline: describeAthenaFailure(entry.error.code).headline }
+          : {}),
+      }));
+  }, [historyResult, presentation, turnId]);
 
   const canSubmit =
     availability.available &&
@@ -1137,7 +1142,7 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
     pendingContextChange === null;
 
   const submit = useCallback(
-    async (prompt: string) => {
+    async (prompt: string, options: { readonly starterIntentId?: string } = {}) => {
       const trimmed = prompt.trim();
       setBlockedSubmission(null);
       if (trimmed.length === 0) {
@@ -1178,6 +1183,10 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
             turnIdempotencyKey: createTurnKey(),
             prompt: trimmed,
             context: snapshotAthenaContext(presentation, context),
+            // A tap passes the intent id explicitly; typed questions stay
+            // free-form. The server substitutes the pinned intent's canonical
+            // prompt for the id, so the two can never disagree.
+            ...(options.starterIntentId ? { starterIntentId: options.starterIntentId } : {}),
           }),
         ),
       );

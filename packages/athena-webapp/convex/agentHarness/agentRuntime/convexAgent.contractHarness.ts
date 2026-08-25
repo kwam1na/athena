@@ -17,6 +17,7 @@ import schema from "../../schema";
 import agentComponentSchema from "../../../../../node_modules/@convex-dev/agent/dist/component/schema.js";
 import {
   createConvexAgentRuntimeAdapter,
+  fromNativeToolName,
   toNativeToolName,
   type ConvexAgentRuntimeAdapter,
   type ConvexAgentRuntimeCtx,
@@ -289,6 +290,40 @@ export function createConvexAgentContractHarness(options: ConvexAgentContractHar
       gateWaiters.delete(gate);
     },
     settle: (turnRef) => adapter.inspect.settled(turnRef),
+    supportsPreExecutedExchange: true,
+    observedPreExecutedExchange: (turnRef) => {
+      // Observed from the provider request itself: the synthetic pair must be
+      // present in the messages the scripted model actually received.
+      const turnKey = [...turnRefsByKey.entries()].find(([, ref]) => ref === turnRef)?.[0];
+      if (!turnKey) return undefined;
+      for (const call of models.get(turnKey)?.doStreamCalls ?? []) {
+        const prompt = (call as { prompt?: unknown }).prompt;
+        if (!Array.isArray(prompt)) continue;
+        let found: { toolCallId: string; toolName: string; args: unknown } | undefined;
+        let result: unknown;
+        for (const message of prompt as { role?: string; content?: unknown }[]) {
+          if (!Array.isArray(message.content)) continue;
+          for (const part of message.content as Record<string, unknown>[]) {
+            if (message.role === "assistant" && part.type === "tool-call" && String(part.toolCallId ?? "").startsWith("preexec-")) {
+              found = { toolCallId: String(part.toolCallId), toolName: String(part.toolName), args: part.input ?? part.args };
+            }
+            if (message.role === "tool" && part.type === "tool-result" && found && part.toolCallId === found.toolCallId) {
+              const output = part.output as { value?: unknown } | undefined;
+              result = output && typeof output === "object" && "value" in output ? output.value : part.result;
+            }
+          }
+        }
+        if (found && result !== undefined) {
+          return {
+            toolId: fromNativeToolName(found.toolName),
+            exchangeKey: found.toolCallId.replace(/^preexec-/, ""),
+            args: found.args as never,
+            result: result as never,
+          };
+        }
+      }
+      return undefined;
+    },
     dispatchResults: (turnRef) => adapter.inspect.dispatchResults(turnRef),
     modelUsage: (turnKey, usages) => usageQueues.set(turnKey, [...usages]),
     failWithNativeError: (turnKey, failure) => nativeFailures.set(turnKey, failure),
