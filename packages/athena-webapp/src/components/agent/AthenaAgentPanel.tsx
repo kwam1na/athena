@@ -429,6 +429,9 @@ export function AthenaAgentPanel({
   // "uncaptured" sentinel.
   const setScrollNode = useCallback((node: HTMLDivElement | null) => {
     if (scrollRef.current === node) return;
+    // A layout swap replaces the scroll container: a settle still gliding the
+    // old node must not hold the follow suppressed on the new one.
+    activeQuestionSettleRef.current?.();
     scrollRef.current = node;
     if (!node) return;
     mountedScrollRef.current = false;

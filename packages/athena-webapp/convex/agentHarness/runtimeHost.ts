@@ -542,7 +542,10 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
         // registry assumed) and downgrades like every other skip.
         if (outcome && outcome.kind === "success" && seededResult?.attemptRef) {
           const canonical = JSON.stringify(outcome.result);
-          const truncated = canonical.length > PREEXEC_EXCHANGE_BYTE_BUDGET;
+          // Real bytes, matching measurePromptBytes' convention: a multibyte
+          // result must not slip past the budget on its UTF-16 length.
+          const canonicalBytes = new TextEncoder().encode(canonical);
+          const truncated = canonicalBytes.byteLength > PREEXEC_EXCHANGE_BYTE_BUDGET;
           preExecutedExchange = {
             toolId: "athena.executeProgram",
             exchangeKey: "1",
@@ -555,9 +558,13 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
               ? {
                   truncated: true,
                   attemptRef: seededResult.attemptRef,
-                  citations: seededResult.citations ?? [],
+                  citations: (seededResult.citations ?? []).slice(0, 8),
                   note: "The curated read succeeded but its full result exceeds the injected-exchange budget. The complete result is committed on the cited attempt; re-read the specific slice you need with athena.executeProgram.",
-                  partial: canonical.slice(0, PREEXEC_EXCHANGE_PARTIAL_BYTES),
+                  // A byte-bounded prefix, decoded surrogate-safe: a cut
+                  // trailing sequence decodes to U+FFFD and is dropped.
+                  partial: new TextDecoder("utf-8")
+                    .decode(canonicalBytes.subarray(0, PREEXEC_EXCHANGE_PARTIAL_BYTES))
+                    .replace(/�+$/, ""),
                 }
               : outcome.result) as never,
           };

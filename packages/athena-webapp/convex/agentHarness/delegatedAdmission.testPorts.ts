@@ -397,9 +397,13 @@ return { outcome: shifts.kind, openShifts: shifts.kind === "result" ? shifts.env
 export const TEST_STARTER_INTENT_REJECTED_PROGRAM = `const nothing = await athena.nowhere.nothing.get({});
 return { nothing };`;
 
-/** Valid, but its result overflows the injected-exchange byte budget. */
+/**
+ * Valid, but its result overflows the injected-exchange byte budget — and
+ * only in encoded bytes ("é" is two UTF-8 bytes but one UTF-16 unit), so a
+ * gate measuring string length instead of bytes fails this fixture.
+ */
 export const TEST_STARTER_INTENT_OVERSIZE_PROGRAM = `const shifts = await athena.ops.shifts.list({ status: "open" });
-return { outcome: shifts.kind, filler: "x".repeat(200000) };`;
+return { outcome: shifts.kind, filler: "\\u00e9".repeat(90000) };`;
 
 const TEST_STARTER_INTENT_PROGRAMS: Record<string, string> = {
   open_shifts: TEST_STARTER_INTENT_PROGRAM,
