@@ -6437,6 +6437,40 @@ describe("projectLocalSyncEvent", () => {
           variance: -10,
         }),
       },
+      {
+        registerSessionId: "register-session-1",
+        patch: {
+          workflowTraceId: "register-trace-1",
+        },
+      },
+    ]);
+    expect(repository.recordedRegisterSessionTraces).toEqual([
+      expect.objectContaining({
+        actorStaffProfileId: "staff-1",
+        countedCash: 90,
+        occurredAt: 30,
+        stage: "closeout_submitted",
+        variance: -10,
+        session: expect.objectContaining({
+          countedCash: 90,
+          status: "closing",
+          variance: -10,
+        }),
+      }),
+      expect.objectContaining({
+        actorStaffProfileId: "staff-1",
+        approvalRequestId: "approval-request-1",
+        countedCash: 90,
+        occurredAt: 30,
+        stage: "approval_pending",
+        variance: -10,
+        session: expect.objectContaining({
+          countedCash: 90,
+          managerApprovalRequestId: "approval-request-1",
+          status: "closing",
+          variance: -10,
+        }),
+      }),
     ]);
     expect(repository.createdOperationalEvents).toEqual([
       expect.objectContaining({

@@ -781,10 +781,17 @@ export type SyncProjectionRepository = {
     paymentCount?: number;
   }): Promise<PosSyncWorkflowTraceResult>;
   recordRegisterSessionWorkflowTrace?(input: {
-    stage: "opened" | "sale_recorded" | "closed" | "closeout_reopened";
+    stage:
+      | "opened"
+      | "sale_recorded"
+      | "closeout_submitted"
+      | "approval_pending"
+      | "closed"
+      | "closeout_reopened";
     session: RegisterSessionTraceableSession;
     occurredAt?: number;
     amount?: number;
+    approvalRequestId?: Id<"approvalRequest">;
     actorStaffProfileId?: Id<"staffProfile">;
     actorUserId?: Id<"athenaUser">;
     cashDelta?: number;
