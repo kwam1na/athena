@@ -15,7 +15,7 @@ tags:
   - authenticated-shell
   - context-pinning
   - session-continuity
-delivery_diff_fingerprint: d884c9c24699367fae7af8d5dc41881fcbfe847a2072add0d6182af7c612fca5
+delivery_diff_fingerprint: 70b8e6dc9cc1fd7473fa910039a26b6efc78e4600cc81a6e6aff0f46568f8205
 ---
 
 # Shell-owned contextual agent panels preserve route continuity
