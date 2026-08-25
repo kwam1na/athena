@@ -325,6 +325,9 @@ function describeQuality(answer: AthenaAgentAnswer): {
   if (answer.outcome === "no_usable_sources") {
     return { label: "No usable sources", tone: "warning" };
   }
+  if (answer.outcome === "needs_clarification") {
+    return { label: "Needs your answer", tone: "warning" };
+  }
   if (answer.limitedEvidence)
     return { label: "Limited evidence", tone: "warning" };
   return { label: "Complete answer", tone: "neutral" };
@@ -385,6 +388,10 @@ export function AthenaAgentPanel({
   const pendingQuestionAlignmentRef = useRef<{ prompt: string } | undefined>(
     undefined,
   );
+  // Teardown for a question-top smooth scroll still settling; owned by the
+  // settle itself (or the operator interrupting), never by effect re-runs.
+  const activeQuestionSettleRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => activeQuestionSettleRef.current?.(), []);
   const [questionTopActive, setQuestionTopActive] = useState(false);
   const mountedScrollRef = useRef(false);
   const latestRef = useRef<HTMLButtonElement>(null);
@@ -631,6 +638,9 @@ export function AthenaAgentPanel({
       setQuestionTopActive(true);
       return;
     }
+    // A settle already in flight owns the pending alignment; re-running the
+    // effect must not restart the scroll or tear the settle's listeners down.
+    if (activeQuestionSettleRef.current !== null) return;
     const node = scrollRef.current;
     const question = currentQuestionRef.current;
     if (!node || !question) return;
@@ -640,32 +650,40 @@ export function AthenaAgentPanel({
         question.getBoundingClientRect().top -
         node.getBoundingClientRect().top,
     );
-    let correctionTimer: number | null = null;
-    const settleQuestionTop = () => {
-      node.removeEventListener("scrollend", settleQuestionTop);
-      if (correctionTimer !== null) window.clearTimeout(correctionTimer);
-      const delta =
-        question.getBoundingClientRect().top - node.getBoundingClientRect().top;
-      if (Math.abs(delta) > 1) {
-        positionAt(node, Math.max(0, node.scrollTop + delta));
-      }
-    };
     if (reducedMotion) {
       positionAt(node, top);
+      pendingQuestionAlignmentRef.current = undefined;
     } else {
+      let correctionTimer: number | null = null;
+      const settleQuestionTop = () => {
+        activeQuestionSettleRef.current = null;
+        // Only now is the alignment done: while the smooth scroll is in
+        // flight the pending marker keeps the follow effect's instant
+        // corrections suppressed.
+        pendingQuestionAlignmentRef.current = undefined;
+        node.removeEventListener("scrollend", settleQuestionTop);
+        if (correctionTimer !== null) window.clearTimeout(correctionTimer);
+        const delta =
+          question.getBoundingClientRect().top -
+          node.getBoundingClientRect().top;
+        if (Math.abs(delta) > 1) {
+          positionAt(node, Math.max(0, node.scrollTop + delta));
+        }
+      };
+      activeQuestionSettleRef.current = () => {
+        activeQuestionSettleRef.current = null;
+        pendingQuestionAlignmentRef.current = undefined;
+        node.removeEventListener("scrollend", settleQuestionTop);
+        if (correctionTimer !== null) window.clearTimeout(correctionTimer);
+      };
       node.addEventListener("scrollend", settleQuestionTop, { once: true });
       // `scrollend` is the primary signal. The fallback covers engines that
       // expose smooth scrolling without dispatching that event.
       correctionTimer = window.setTimeout(settleQuestionTop, 900);
       node.scrollTo({ top, behavior: "smooth" });
     }
-    pendingQuestionAlignmentRef.current = undefined;
     followRef.current = true;
     syncLatest();
-    return () => {
-      node.removeEventListener("scrollend", settleQuestionTop);
-      if (correctionTimer !== null) window.clearTimeout(correctionTimer);
-    };
   }, [
     followContentKey,
     questionTopActive,
@@ -679,11 +697,14 @@ export function AthenaAgentPanel({
   const interruptFollowing = useCallback(() => {
     followRef.current = false;
     setQuestionTopActive(false);
+    // The operator taking the scroll wins over an in-flight question-top glide.
+    activeQuestionSettleRef.current?.();
   }, []);
 
   const scrollToLatest = useCallback(() => {
     followRef.current = true;
     setQuestionTopActive(false);
+    activeQuestionSettleRef.current?.();
     const node = scrollRef.current;
     if (node) anchorToBottom(node);
     syncLatest();
@@ -817,6 +838,7 @@ export function AthenaAgentPanel({
     async (prompt: string, options: { readonly starterIntentId?: string } = {}) => {
       // Wait for the new turn bubble before moving the transcript. Moving the
       // old transcript here would put the wrong question at the viewport edge.
+      activeQuestionSettleRef.current?.();
       pendingQuestionAlignmentRef.current = { prompt };
       setQuestionTopActive(false);
       followRef.current = true;

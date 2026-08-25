@@ -171,6 +171,16 @@ export type AgentTurnHostDeps = {
 
 export const AGENT_HOST_CANCEL_POLL_MS = 2_000;
 
+/**
+ * The injected pre-executed exchange has its own byte budget, deliberately
+ * separate from the executor's result ceiling and from maxPromptBytes (which
+ * governs the operator question): the exchange lands verbatim in the provider
+ * transcript, so an over-budget result is replaced by a JSON-safe marker that
+ * carries a bounded prefix and points the model back at the committed attempt.
+ */
+export const PREEXEC_EXCHANGE_BYTE_BUDGET = 131_072;
+export const PREEXEC_EXCHANGE_PARTIAL_BYTES = 8_192;
+
 /** What one projection attempt did; `projection_exhausted` is the outbox giving up on the runtime mirror. */
 export type AgentProjectionResult = AgentProjectionLoad["kind"] | "projected" | "projection_exhausted";
 
@@ -523,19 +533,40 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
           outcome = undefined;
           preexecFailure = error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300);
         }
-        if (outcome && outcome.kind === "success") {
+        const seededResult =
+          outcome && outcome.kind === "success"
+            ? (outcome.result as { attemptRef?: string; citations?: readonly { ref: string }[] })
+            : undefined;
+        // Only a committed attempt seeds: a success envelope without an
+        // attemptRef is a turn-time rejection (a narrower grant than the
+        // registry assumed) and downgrades like every other skip.
+        if (outcome && outcome.kind === "success" && seededResult?.attemptRef) {
+          const canonical = JSON.stringify(outcome.result);
+          const truncated = canonical.length > PREEXEC_EXCHANGE_BYTE_BUDGET;
           preExecutedExchange = {
             toolId: "athena.executeProgram",
             exchangeKey: "1",
             args: { source: plan.preExecution.source },
-            result: outcome.result as never,
+            // The injected exchange carries its own byte budget, separate from
+            // the executor's result ceiling: an over-budget result is seeded as
+            // a JSON-safe marker that points the model back at the committed
+            // attempt instead of flooding the provider transcript.
+            result: (truncated
+              ? {
+                  truncated: true,
+                  attemptRef: seededResult.attemptRef,
+                  citations: seededResult.citations ?? [],
+                  note: "The curated read succeeded but its full result exceeds the injected-exchange budget. The complete result is committed on the cited attempt; re-read the specific slice you need with athena.executeProgram.",
+                  partial: canonical.slice(0, PREEXEC_EXCHANGE_PARTIAL_BYTES),
+                }
+              : outcome.result) as never,
           };
-          const seededResult = outcome.result as { attemptRef?: string; citations?: readonly { ref: string }[] };
           pushHostTrace("starter_intent_preexec", {
             starterIntentId: plan.preExecution.starterIntentId,
             outcome: "seeded",
             attemptRef: seededResult.attemptRef,
             citations: (seededResult.citations ?? []).slice(0, 8).map((citation) => citation.ref),
+            ...(truncated ? { truncatedToBytes: PREEXEC_EXCHANGE_PARTIAL_BYTES } : {}),
           });
         } else {
           const code =
@@ -545,7 +576,9 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
                 ? outcome.denial.code
                 : outcome.kind === "failure"
                   ? outcome.error.code
-                  : outcome.kind;
+                  : outcome.kind === "success"
+                    ? "rejected"
+                    : outcome.kind;
           pushHostTrace("starter_intent_preexec_skipped", { starterIntentId: plan.preExecution.starterIntentId, outcome: code, ...(preexecFailure ? { failure: preexecFailure } : {}) });
         }
         // The pre-exec record must survive a host crash before the provider
@@ -566,6 +599,23 @@ export function createTurnHost(deps: AgentTurnHostDeps) {
             now: now(),
           });
           return report("canceled", { code: "authority_revoked", usage: settlementEarly, finalize: finalizeEarly });
+        }
+        // An operator cancel (or any terminal run state) that landed while the
+        // curated read ran must stop the turn here: the polling watcher only
+        // starts with the provider turn, so without this check the provider
+        // would be invoked on a run that is already over.
+        const stateAfterPreexec = await runQuery(refs.peekTurnState, { bindingId });
+        if (!stateAfterPreexec.found || stateAfterPreexec.runStatus === "canceled" || stateAfterPreexec.runStatus === "failed" || stateAfterPreexec.abandoned) {
+          await traceTurnReport("canceled", "canceled_during_pre_execution");
+          const settlementCanceled = settlementOf(usage.settleAll("cancel"), plan.model, deps.rateCardFor);
+          const finalizeCanceled = await runMutation(refs.finalizeTurn, {
+            bindingId,
+            outcome: "canceled",
+            error: { code: "canceled_during_pre_execution", message: "The turn ended while its curated read was running; no provider turn was started.", retryable: false },
+            usage: settlementCanceled,
+            now: now(),
+          });
+          return report("canceled", { code: "canceled_during_pre_execution", usage: settlementCanceled, finalize: finalizeCanceled });
         }
       }
     }

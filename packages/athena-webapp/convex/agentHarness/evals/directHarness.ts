@@ -62,7 +62,7 @@ import {
 } from "../readPorts";
 import { buildAgentCapabilityRegistry, evaluateEnablement, type AgentEnablementOverlay } from "../registry";
 import { agentTurnEntryPoints } from "../turns";
-import { pageTurnTraceByBindingWithCtx, takeRecentTurnTraceEventsWithCtx } from "../turnTrace";
+import { pageTurnTraceByBindingWithCtx } from "../turnTrace";
 import { listAutomationEvidenceHandler } from "../../automation/agentCapabilities/evidencePorts";
 import { readRegisterSessionsHandler } from "../../cashControls/agentCapabilities/registersPorts";
 import { listActivityHandler } from "../../operations/agentCapabilities/activityPorts";

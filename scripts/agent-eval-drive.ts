@@ -80,7 +80,6 @@ export type EvalScenario = {
   readonly id: string;
   readonly prompt: string;
   /** Profile scenarios keep their profile id; extras are the deep suite. */
-  readonly source: "profile" | "deep";
   /** The driver resolves the first citation of the answer when set. */
   readonly inspectFirstCitation?: boolean;
   /** Sent with startTurn: the turn opts into this intent's curated pre-read. */
@@ -114,7 +113,6 @@ function commonIssues(context: EvalTurnContext): EvalIssue[] {
 export const EVAL_SCENARIOS: readonly EvalScenario[] = [
   {
     id: "cross_package_readiness",
-    source: "profile",
     prompt:
       "Is this store day ready to close? Cover the readiness lanes, open registers, the work queue, today's sales, what automation did, and any stock that needs ordering.",
     check: (context) => {
@@ -128,7 +126,6 @@ export const EVAL_SCENARIOS: readonly EvalScenario[] = [
   },
   {
     id: "partial_no_data_day",
-    source: "profile",
     prompt: "How did the store trade on 2025-12-25?",
     check: (context) => {
       const issues = commonIssues(context);
@@ -143,7 +140,6 @@ export const EVAL_SCENARIOS: readonly EvalScenario[] = [
   },
   {
     id: "citation_resolution",
-    source: "profile",
     prompt: "Which register had a variance today, and what proves it?",
     inspectFirstCitation: true,
     check: (context) => {
@@ -157,7 +153,6 @@ export const EVAL_SCENARIOS: readonly EvalScenario[] = [
   },
   {
     id: "ambiguous_referent",
-    source: "profile",
     prompt: "How did we do on Wednesday?",
     check: (context) => {
       const issues = commonIssues(context);
@@ -173,7 +168,6 @@ export const EVAL_SCENARIOS: readonly EvalScenario[] = [
   },
   {
     id: "role_restricted_financials",
-    source: "profile",
     prompt: "What did the store take today, and how does that compare with the rest of the week?",
     check: (context) => {
       // Full-role half only: a full admin must reach the reports package. The
@@ -189,7 +183,6 @@ export const EVAL_SCENARIOS: readonly EvalScenario[] = [
   },
   {
     id: "deep_census",
-    source: "deep",
     prompt:
       "How many register sessions exist for this store across all statuses over the last 30 days? Give the count per status, and tell me exactly how many sessions you actually read versus how many exist.",
     check: (context) => {
@@ -204,7 +197,6 @@ export const EVAL_SCENARIOS: readonly EvalScenario[] = [
   },
   {
     id: "deep_week_variance",
-    source: "deep",
     prompt:
       "Which register session had the largest cash variance at closeout this past week, and on which day? Say how many closed sessions you compared.",
     check: (context) => {
@@ -226,7 +218,6 @@ export const EVAL_SCENARIOS: readonly EvalScenario[] = [
   ...(["close_readiness", "open_drawers", "stock_pressure", "automation_today"] as const).map(
     (intentId): EvalScenario => ({
       id: `starter_${intentId}`,
-      source: "deep",
       starterIntentId: intentId,
       // The prompt is a placeholder: the server substitutes the pinned
       // intent's canonical prompt when the id is present.
@@ -484,7 +475,7 @@ export async function main(argv: readonly string[], rootDir: string): Promise<nu
       `[${flag}] ${scenario.id} — outcome=${answer?.outcome ?? "none"} calls=${context.calls.length} tone=${context.toneDenials} completion=${context.completionMs ?? "?"}ms`,
     );
     for (const issue of verdict.issues) console.log(`       ${issue.severity}: ${issue.message}`);
-    results.push({ ...verdict, runId, bindingId, outcome: answer?.outcome, calls: context.calls.length, completionMs: context.completionMs, firstDeltaMs: context.firstDeltaMs, toneDenials: context.toneDenials });
+    results.push({ ...verdict, runId, bindingId, outcome: answer?.outcome, calls: context.calls.length, completeRunCalls: context.completeRunCalls, completionMs: context.completionMs, firstDeltaMs: context.firstDeltaMs, toneDenials: context.toneDenials });
 
     await assertDigest(cwd, `after ${scenario.id}`);
   }

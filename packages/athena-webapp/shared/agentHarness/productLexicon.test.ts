@@ -341,6 +341,27 @@ describe("normalizeNarrative", () => {
     expect(mangled).toBe("Largest variance: the cited record on register 07.");
   });
 
+  it("leaves ordinary prose alone when a ref keyword ends a sentence or clause", () => {
+    for (const sentence of [
+      "I could not read that source.",
+      "The attempt: it did not finish.",
+      "Each citation. Each source. Every resource.",
+      "No usable source, so nothing is cited.",
+    ]) {
+      expect(
+        normalizeNarrative(sentence, { evidence, namespaces: [], lexicon, question: "" }),
+      ).toBe(sentence);
+    }
+    // A real keyword-led ref with a tail still scrubs.
+    const out = normalizeNarrative("See source:day_sales.4f2a9b1c for the total.", {
+      evidence,
+      namespaces: [],
+      lexicon,
+      question: "",
+    });
+    expect(out).toBe("See the cited record for the total.");
+  });
+
   it("scrubs bare hex-tailed tokens but preserves an identifier the operator asked with", () => {
     const scrubbed = normalizeNarrative("Drawer 8d5c0a4d9a7e78365b5c876b9c4525d1 is still open.", {
       evidence,

@@ -222,6 +222,12 @@ export const TEST_PRESENTATION = definePresentationAdapter({
   mountMode: "docked_panel",
   starterIntents: [
     { id: "open_shifts", label: "Open shifts", prompt: "Which shifts are still open?", requiresPackages: [TEST_PACKAGE] },
+    // A curated program the executor rejects at turn time (unknown facade):
+    // exercises the host's rejected-pre-read downgrade.
+    { id: "bad_read", label: "Bad read", prompt: "Read the unreadable?", requiresPackages: [TEST_PACKAGE] },
+    // A curated program whose result overflows the injected-exchange budget:
+    // exercises the host's JSON-safe truncation marker.
+    { id: "big_read", label: "Big read", prompt: "Read everything at once?", requiresPackages: [TEST_PACKAGE] },
   ],
   resolveSourceDestination: () => null,
   threadKeyPolicy: {
@@ -387,12 +393,26 @@ export const TEST_AUTHORITY_PORTS = {
 export const TEST_STARTER_INTENT_PROGRAM = `const shifts = await athena.ops.shifts.list({ status: "open" });
 return { outcome: shifts.kind, openShifts: shifts.kind === "result" ? shifts.envelope.data : null };`;
 
+/** Statically invalid under the grant: the executor rejects it at turn time. */
+export const TEST_STARTER_INTENT_REJECTED_PROGRAM = `const nothing = await athena.nowhere.nothing.get({});
+return { nothing };`;
+
+/** Valid, but its result overflows the injected-exchange byte budget. */
+export const TEST_STARTER_INTENT_OVERSIZE_PROGRAM = `const shifts = await athena.ops.shifts.list({ status: "open" });
+return { outcome: shifts.kind, filler: "x".repeat(200000) };`;
+
+const TEST_STARTER_INTENT_PROGRAMS: Record<string, string> = {
+  open_shifts: TEST_STARTER_INTENT_PROGRAM,
+  bad_read: TEST_STARTER_INTENT_REJECTED_PROGRAM,
+  big_read: TEST_STARTER_INTENT_OVERSIZE_PROGRAM,
+};
+
 export const TEST_GRANT_CONFIG: DelegatedGrantConfig = {
   registry: TEST_REGISTRY,
   authorityPorts: TEST_AUTHORITY_PORTS,
   resolveEnablement: async () => TEST_ENABLEMENT.current(),
   starterIntentProgramFor: (profileId, starterIntentId) =>
-    profileId === TEST_PROFILE_ID && starterIntentId === "open_shifts" ? TEST_STARTER_INTENT_PROGRAM : undefined,
+    profileId === TEST_PROFILE_ID ? TEST_STARTER_INTENT_PROGRAMS[starterIntentId] : undefined,
   now: () => TEST_CLOCK.now,
 };
 

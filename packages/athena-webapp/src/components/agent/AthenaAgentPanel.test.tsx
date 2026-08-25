@@ -1519,6 +1519,31 @@ describe("accessibility", () => {
     );
   });
 
+  it("labels a clarifying answer as needing the operator, not as complete", () => {
+    render(
+      <PanelHarness
+        run={baseRun({
+          hostState: "completed",
+          status: { headline: "Answered", tone: "neutral" },
+          answer: {
+            outcome: "needs_clarification",
+            narrative: "Which Wednesday did you mean — this week's or last week's?",
+            egressClass: "operational",
+            committedAt: 5,
+            citations: [],
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("athena-agent-quality")).toHaveTextContent(
+      "Needs your answer",
+    );
+    expect(screen.getByTestId("athena-agent-quality")).not.toHaveTextContent(
+      "Complete answer",
+    );
+  });
+
   it("keeps focus in the composer when a request starts", async () => {
     const user = userEvent.setup();
     backend.results.startTurn = {

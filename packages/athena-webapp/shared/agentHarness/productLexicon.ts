@@ -345,7 +345,9 @@ export type AgentNormalizeNarrativeOptions = {
 
 const OPAQUE_SCRUB_REPLACEMENT = "the cited record";
 /** A ref-shaped data identifier: kind prefix plus a dotted opaque tail. */
-const REF_CLUSTER_PATTERN = /\b(?:resource|source|citation|attempt)[:_.][A-Za-z0-9_.:-]*/g;
+// The separator excludes `.` and the tail must be non-empty: a bare keyword
+// ending a sentence ("…read that source.") is prose, not a ref.
+const REF_CLUSTER_PATTERN = /\b(?:resource|source|citation|attempt)[:_][A-Za-z0-9_.:-]+/g;
 
 /**
  * Replace opaque identifiers with operator wording. This is what retires the

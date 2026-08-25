@@ -21,6 +21,7 @@ import {
   assembleTurnPrompt,
   buildAnswerArtifactPayload,
   fenceUntrustedData,
+  parseAnswerPayload,
   projectThreadHistoryWithCtx,
   toModelHistory,
 } from "./historyProjection";
@@ -346,6 +347,32 @@ describe("thread history bound (newest turns, per operator)", () => {
     const colleague = await read(t, seeded.owner, viewerOf(seeded.colleague), 2);
     expect(colleague.kind === "projected" && colleague.entries.map((entry) => entry.question)).toEqual(["Colleague 1", "Colleague 2"]);
     expect(JSON.stringify(colleague)).not.toContain("Owner");
+  });
+});
+
+describe("answer payload round trip", () => {
+  it("carries needs_clarification through the artifact round trip", () => {
+    const payload = buildAnswerArtifactPayload({
+      narrative: "Which Wednesday did you mean?",
+      outcome: "needs_clarification",
+      citations: [],
+      egressClass: "operational",
+    });
+    const parsed = parseAnswerPayload(JSON.parse(JSON.stringify(payload)));
+    expect(parsed).not.toBeNull();
+    expect(parsed!.outcome).toBe("needs_clarification");
+    expect(parsed!.narrative).toBe("Which Wednesday did you mean?");
+  });
+
+  it("defaults an unknown outcome to answer instead of failing the parse", () => {
+    const payload = buildAnswerArtifactPayload({
+      narrative: "Done.",
+      outcome: "answer",
+      citations: [],
+      egressClass: "operational",
+    });
+    const parsed = parseAnswerPayload({ ...payload, outcome: "not_a_real_outcome" });
+    expect(parsed!.outcome).toBe("answer");
   });
 });
 
