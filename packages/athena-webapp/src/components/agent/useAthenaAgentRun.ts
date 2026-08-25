@@ -955,7 +955,7 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
     ) {
       return {
         hostState: "submitting",
-        status: { headline: "Starting your request…", tone: "progress" },
+        status: { headline: "Thinking...", tone: "progress" },
       };
     }
     if (turnId && !view) {
@@ -991,7 +991,7 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
     if (view.phase === "queued") {
       return {
         hostState: "submitting",
-        status: { headline: "Starting your request…", tone: "progress" },
+        status: { headline: "Thinking...", tone: "progress" },
       };
     }
     if (view.phase === "running") {
@@ -999,7 +999,7 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
       return {
         hostState: "running",
         status: {
-          headline: latest?.label ?? "Working on your question",
+          headline: latest?.label ?? "Thinking...",
           tone: "progress",
         },
       };
@@ -1107,27 +1107,32 @@ export function useAthenaAgentRun(options: AthenaAgentRunOptions): AthenaAgentRu
         }
       | undefined;
     if (!result || result.kind !== "history") return [];
-    return result.entries.map((entry) => ({
-      turnId: entry.bindingId,
-      createdAt: entry.createdAt,
-      state: entry.state,
-      ...(entry.question !== undefined ? { question: entry.question } : {}),
-      questionState: entry.questionState,
-      ...(entry.context
-        ? { contextLabel: presentation.contextLabel(entry.context) }
-        : {}),
-      ...(entry.answer ? { answer: entry.answer } : {}),
-      ...(entry.omittedReason
-        ? {
-            omittedHeadline: describeAthenaUnavailable(entry.omittedReason)
-              .headline,
-          }
-        : {}),
-      ...(entry.error
-        ? { failureHeadline: describeAthenaFailure(entry.error.code).headline }
-        : {}),
-    }));
-  }, [historyResult, presentation]);
+    // The server projection contains the whole thread, including the binding
+    // read separately through getTurnView. The panel reserves `history` for
+    // earlier turns and renders the active binding in its current-turn slot.
+    return result.entries
+      .filter((entry) => entry.bindingId !== turnId)
+      .map((entry) => ({
+        turnId: entry.bindingId,
+        createdAt: entry.createdAt,
+        state: entry.state,
+        ...(entry.question !== undefined ? { question: entry.question } : {}),
+        questionState: entry.questionState,
+        ...(entry.context
+          ? { contextLabel: presentation.contextLabel(entry.context) }
+          : {}),
+        ...(entry.answer ? { answer: entry.answer } : {}),
+        ...(entry.omittedReason
+          ? {
+              omittedHeadline: describeAthenaUnavailable(entry.omittedReason)
+                .headline,
+            }
+          : {}),
+        ...(entry.error
+          ? { failureHeadline: describeAthenaFailure(entry.error.code).headline }
+          : {}),
+      }));
+  }, [historyResult, presentation, turnId]);
 
   const canSubmit =
     availability.available &&

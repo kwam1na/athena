@@ -277,7 +277,7 @@ describe("submitting one turn", () => {
     });
 
     expect(result.current.hostState).toBe("submitting");
-    expect(result.current.status.headline).toBe("Starting your request…");
+    expect(result.current.status.headline).toBe("Thinking...");
     expect(result.current.canCancel).toBe(true);
   });
 
@@ -333,8 +333,8 @@ describe("running, cancelling, and completing", () => {
 
     await waitFor(() => expect(result.current.hostState).toBe("running"));
     expect(result.current.milestones.map((entry) => entry.label)).toEqual([
-      "Checking the requested sources",
-      "Reading sources",
+      "Thinking...",
+      "Thinking...",
     ]);
     expect(result.current.answer).toBeNull();
     expect(result.current.canInspectSources).toBe(false);
@@ -749,6 +749,38 @@ describe("citations", () => {
 });
 
 describe("history", () => {
+  it("keeps the active turn out of earlier history", () => {
+    backend.view = baseView();
+    backend.history = {
+      kind: "history",
+      threadKey: "t",
+      reauthorizedAt: 5,
+      entries: [
+        {
+          bindingId: BINDING_ID,
+          createdAt: 2,
+          state: "active",
+          questionState: "retained",
+          question: "What is blocking the close?",
+        },
+        {
+          bindingId: "binding-0",
+          createdAt: 1,
+          state: "answered",
+          questionState: "retained",
+          question: "Earlier question",
+        },
+      ],
+    };
+
+    const { result } = mountRun({ activeTurnId: BINDING_ID });
+
+    expect(result.current.turn?.turnId).toBe(BINDING_ID);
+    expect(result.current.history.map((entry) => entry.turnId)).toEqual([
+      "binding-0",
+    ]);
+  });
+
   it("renders the reauthorized projection and names what was withheld", () => {
     backend.history = {
       kind: "history",

@@ -9,10 +9,7 @@ import {
   describeAthenaFailure,
   describeAthenaMilestone,
   describeAthenaProvisionalCue,
-  describeAthenaProvisionalEntry,
-  describeAthenaProvisionalTimeline,
   describeAthenaProvisionalTimelineEmpty,
-  describeAthenaProvisionalNotice,
   describeAthenaShortenedNotice,
   describeAthenaUnavailable,
   describeProvisionalWithdrawal,
@@ -271,10 +268,8 @@ describe("Athena agent operator copy", () => {
   });
 
   it("describes only server-authored milestones", () => {
-    expect(describeAthenaMilestone("checking_sources")).toBe(
-      "Checking the requested sources",
-    );
-    expect(describeAthenaMilestone("reading_sources")).toBe("Reading sources");
+    expect(describeAthenaMilestone("checking_sources")).toBe("Thinking...");
+    expect(describeAthenaMilestone("reading_sources")).toBe("Thinking...");
     expect(describeAthenaMilestone("composing_answer")).toBe(
       "Composing the answer",
     );
@@ -284,20 +279,7 @@ describe("Athena agent operator copy", () => {
 });
 
 describe("provisional draft copy", () => {
-  it("says the draft is unverified, must not be acted on, and will be replaced", () => {
-    const notice = describeAthenaProvisionalNotice();
-
-    expect(notice.headline).toBe("Draft in progress. Not verified.");
-    expect(notice.detail).toContain("thinking out loud");
-    expect(notice.detail).toMatch(/don't act on/i);
-    expect(notice.detail).toMatch(/replaces it/i);
-    expect(notice.detail).toMatch(/may differ/i);
-  });
-
-  it("gives the reset, limit, and pause cues their own polite lines", () => {
-    expect(describeAthenaProvisionalCue("reset")).toBe(
-      "Moved on to the next step. The earlier draft is still shown above.",
-    );
+  it("gives the limit and pause cues their own polite lines", () => {
     expect(describeAthenaProvisionalCue("paused_at_limit")).toBe(
       "Draft display limit reached. The rest of the draft isn't shown here.",
     );
@@ -360,13 +342,7 @@ describe("provisional draft copy", () => {
 });
 
 describe("the provisional timeline copy", () => {
-  it("labels finished drafts by position and the collapsed timeline as unverified", () => {
-    expect(describeAthenaProvisionalEntry(0)).toBe("Earlier draft 1");
-    expect(describeAthenaProvisionalEntry(2)).toBe("Earlier draft 3");
-    expect(describeAthenaProvisionalTimeline()).toEqual({
-      summary: "How Athena got here",
-      detail: "Athena's drafts along the way. Not verified — the answer above is the only checked text.",
-    });
+  it("describes an empty saved draft trail", () => {
     expect(describeAthenaProvisionalTimelineEmpty()).toBe("No drafts were kept for this question.");
   });
 });

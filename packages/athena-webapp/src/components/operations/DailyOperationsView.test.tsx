@@ -15,6 +15,11 @@ import {
   DailyOperationsViewContent,
   type DailyOperationsSnapshot,
 } from "./DailyOperationsView";
+import {
+  AthenaAgentShellControl,
+  AthenaAgentShellProvider,
+} from "@/components/agent/AthenaAgentPanel";
+import { DAILY_OPERATIONS_AGENT_PRESENTATION } from "./dailyOperationsAgentPresentation";
 import type { Id } from "~/convex/_generated/dataModel";
 
 const mockedHooks = vi.hoisted(() => ({
@@ -1170,7 +1175,8 @@ describe("DailyOperationsViewContent", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 4, 10, 12));
     window.scrollTo = vi.fn();
-    scrollIntoViewMock = vi.fn<(arg?: boolean | ScrollIntoViewOptions) => void>();
+    scrollIntoViewMock =
+      vi.fn<(arg?: boolean | ScrollIntoViewOptions) => void>();
     Element.prototype.scrollIntoView = scrollIntoViewMock;
     HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
     window.history.pushState({}, "", "/wigclub/store/osu/operations");
@@ -4987,6 +4993,18 @@ describe("DailyOperationsView", () => {
 });
 
 describe("DailyOperationsView — Ask Athena", () => {
+  function renderAgentView() {
+    return render(
+      <AthenaAgentShellProvider
+        presentations={[DAILY_OPERATIONS_AGENT_PRESENTATION]}
+        sessionScope="user-1"
+      >
+        <DailyOperationsView />
+        <AthenaAgentShellControl />
+      </AthenaAgentShellProvider>,
+    );
+  }
+
   const agentQueryNames = new Set([
     "getThreadHistory",
     "getTurnView",
@@ -4995,6 +5013,21 @@ describe("DailyOperationsView — Ask Athena", () => {
 
   beforeEach(() => {
     window.scrollTo = vi.fn();
+    // jsdom has no matchMedia; the launcher's beam and reduced-motion checks
+    // read it on mount.
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn(() => ({
+        matches: false,
+        media: "",
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
     (
       mockedApi as { getDailyOperationsSnapshot?: unknown }
     ).getDailyOperationsSnapshot = "getDailyOperationsSnapshot";
@@ -5035,24 +5068,30 @@ describe("DailyOperationsView — Ask Athena", () => {
 
   const agentMutationCalls: { name: string; args: unknown }[] = [];
 
-  it("puts a restrained entry in the header and keeps it closed", () => {
-    render(<DailyOperationsView />);
+  it("provides a floating agent launcher and keeps it closed", () => {
+    renderAgentView();
 
-    expect(screen.getByTestId("athena-agent-entry")).toHaveTextContent(
+    expect(screen.getByTestId("athena-agent-entry")).toHaveAccessibleName(
       "Ask Athena",
     );
+    // The host wrapper floats the launcher; the button itself stays round.
+    expect(screen.getByTestId("athena-agent-launcher-host")).toHaveClass(
+      "fixed",
+      "bottom-layout-md",
+      "right-layout-md",
+      "rounded-full",
+    );
+    expect(screen.getByTestId("athena-agent-entry")).toHaveClass("rounded-full");
     expect(screen.queryByTestId("athena-agent-panel")).not.toBeInTheDocument();
   });
 
-  it("shows the store and the operating day before any question is asked", async () => {
+  it("opens the agent for the current store surface", async () => {
     const user = userEvent.setup();
-    render(<DailyOperationsView />);
+    renderAgentView();
 
     await user.click(screen.getByTestId("athena-agent-entry"));
 
-    const context = screen.getByTestId("athena-agent-context");
-    expect(context).toHaveTextContent("Osu");
-    expect(context).toHaveTextContent(operatingSnapshot.operatingDate);
+    expect(screen.getByTestId("athena-agent-panel")).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByTestId("athena-agent-prompt")).toHaveFocus(),
     );
@@ -5060,7 +5099,7 @@ describe("DailyOperationsView — Ask Athena", () => {
 
   it("asks through the profile with the store day snapshotted into the turn", async () => {
     const user = userEvent.setup();
-    render(<DailyOperationsView />);
+    renderAgentView();
 
     await user.click(screen.getByTestId("athena-agent-entry"));
     await user.type(
@@ -5093,8 +5132,9 @@ describe("DailyOperationsView — Ask Athena", () => {
       storeId: "store-1",
     });
 
-    render(<DailyOperationsView />);
+    renderAgentView();
 
-    expect(screen.queryByTestId("athena-agent-entry")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("athena-agent-surface")).not.toBeInTheDocument();
+    expect(screen.getByTestId("athena-agent-entry")).toBeDisabled();
   });
 });

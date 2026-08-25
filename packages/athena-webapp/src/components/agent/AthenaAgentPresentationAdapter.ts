@@ -517,8 +517,8 @@ export function describeAthenaFailure(code: string): AthenaAgentFailure {
 
 const MILESTONE_COPY: Record<AgentProgressMilestone, string> = {
   reconnecting: "Reconnecting",
-  checking_sources: "Checking the requested sources",
-  reading_sources: "Reading sources",
+  checking_sources: "Thinking...",
+  reading_sources: "Thinking...",
   composing_answer: "Composing the answer",
   finalizing: "Finishing up",
   reading_ahead: "Reading today's records ahead",
@@ -534,32 +534,9 @@ export function describeAthenaMilestone(milestone: string): string | null {
   return known ? MILESTONE_COPY[milestone as AgentProgressMilestone] : null;
 }
 
-// ---------------------------------------------------------------------------
-// Provisional draft copy
-// ---------------------------------------------------------------------------
-
-export type AthenaAgentProvisionalNotice = {
-  readonly headline: string;
-  readonly detail: string;
-};
-
-/**
- * The persistent copy of the provisional container. It has three jobs and no
- * others: name what the text is, say it is unverified and must not be acted on,
- * and warn that the released answer replaces it and may say something else.
- */
-export function describeAthenaProvisionalNotice(): AthenaAgentProvisionalNotice {
-  return {
-    headline: "Draft in progress. Not verified.",
-    detail:
-      "Athena is thinking out loud here. Don't act on this text. The checked answer replaces it and may differ.",
-  };
-}
-
-export type AthenaAgentProvisionalCue = "reset" | "paused_at_limit" | "stalled";
+export type AthenaAgentProvisionalCue = "paused_at_limit" | "stalled";
 
 const PROVISIONAL_CUE_COPY: Record<AthenaAgentProvisionalCue, string> = {
-  reset: "Moved on to the next step. The earlier draft is still shown above.",
   paused_at_limit:
     "Draft display limit reached. The rest of the draft isn't shown here.",
   // A stalled draft can be an operator's last signal — a dead host leaves the
@@ -572,31 +549,9 @@ export function describeAthenaProvisionalCue(cue: AthenaAgentProvisionalCue): st
   return PROVISIONAL_CUE_COPY[cue];
 }
 
-/** The label of a finished draft in the timeline, by position (oldest first). */
-export function describeAthenaProvisionalEntry(index: number): string {
-  return `Earlier draft ${index + 1}`;
-}
-
-export type AthenaAgentProvisionalTimelineCopy = {
-  readonly summary: string;
-  readonly detail: string;
-};
-
 /** A committed turn that kept no drafts (it narrated nothing, or predates the trail). */
 export function describeAthenaProvisionalTimelineEmpty(): string {
   return "No drafts were kept for this question.";
-}
-
-/**
- * The collapsed timeline behind a committed answer. It names what the drafts
- * are and, like the live container, says they are not the checked text.
- */
-export function describeAthenaProvisionalTimeline(): AthenaAgentProvisionalTimelineCopy {
-  return {
-    summary: "How Athena got here",
-    detail:
-      "Athena's drafts along the way. Not verified — the answer above is the only checked text.",
-  };
 }
 
 /** The inert renderer's overflow notice, worded for what it is bounding. */

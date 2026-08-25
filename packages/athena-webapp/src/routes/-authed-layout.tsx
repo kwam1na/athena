@@ -20,14 +20,13 @@ import { AppSidebar } from "../components/app-sidebar";
 import { useAuth } from "../hooks/useAuth";
 import { usePermissions } from "../hooks/usePermissions";
 import { PermissionsProvider } from "../contexts/PermissionsContext";
-import {
-  ArrowUpRight,
-  Moon,
-  ShieldCheck,
-  Sun,
-  UserCircle,
-} from "lucide-react";
+import { ArrowUpRight, Moon, ShieldCheck, Sun, UserCircle } from "lucide-react";
 import { AppHeader } from "@/components/Navbar";
+import {
+  AthenaAgentShellControl,
+  AthenaAgentShellProvider,
+} from "@/components/agent/AthenaAgentPanel";
+import { DAILY_OPERATIONS_AGENT_PRESENTATION } from "@/components/operations/dailyOperationsAgentPresentation";
 import { cn } from "@/lib/utils";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { LOGGED_IN_USER_ID_KEY, POS_APP_ACCOUNT_ID_KEY } from "@/lib/constants";
@@ -60,21 +59,13 @@ import {
   toPosTerminalAppSessionRecoveryRuntimeInput,
 } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
 import type { PosTerminalRuntimeAppSessionRecoveryInput } from "@/lib/pos/infrastructure/local/terminalRuntimeStatus";
-import {
-  setAthenaThemeModeWithTransition,
-  useAthenaTheme,
-} from "@/lib/theme";
+import { setAthenaThemeModeWithTransition, useAthenaTheme } from "@/lib/theme";
 import { SharedDemoRuntime } from "@/components/shared-demo/SharedDemoRuntime";
 import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
 import { useSharedDemoOperatingClock } from "@/hooks/useStoreOperatingClock";
-import {
-  SharedDemoRestrictedSurface,
-} from "@/components/shared-demo/SharedDemoRestrictedSurface";
+import { SharedDemoRestrictedSurface } from "@/components/shared-demo/SharedDemoRestrictedSurface";
 import { isSharedDemoRestrictedPath } from "@/components/shared-demo/sharedDemoRestrictions";
-import {
-  LOGIN_PATH,
-  PUBLIC_HOME_PATH,
-} from "@/lib/navigation/appEntryRoutes";
+import { LOGIN_PATH, PUBLIC_HOME_PATH } from "@/lib/navigation/appEntryRoutes";
 
 const POS_TERMINAL_FULLSCREEN_PATH_PATTERN =
   /^\/(?<orgUrlSlug>[^/]+)\/store\/(?<storeUrlSlug>[^/]+)\/pos\/(?:register|expense)\/?$/;
@@ -200,7 +191,9 @@ function useBrowserOfflineStatus() {
 }
 
 function AuthedComponent() {
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
   const demoContext = useSharedDemoContext();
   if (demoContext && isSharedDemoRestrictedPath(pathname)) {
     const storeRoot = pathname.match(/^\/[^/]+\/store\/[^/]+/)?.[0];
@@ -458,7 +451,9 @@ function UserMenu({
             aria-label={`Open account menu for ${userEmail}`}
             className={cn(
               "flex h-10 w-10 shrink-0 items-center justify-center gap-layout-xs px-0 text-sm text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:w-auto sm:min-w-0 sm:px-layout-xs",
-              isContainedShell ? `rounded-lg ${containedControlSurface}` : "rounded-md",
+              isContainedShell
+                ? `rounded-lg ${containedControlSurface}`
+                : "rounded-md",
             )}
           >
             <UserCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -512,7 +507,9 @@ function UserMenu({
         title={themeToggleLabel}
         className={cn(
           "group flex h-10 w-10 shrink-0 items-center justify-center text-muted-foreground transition-[background-color,color,transform] duration-fast ease-standard hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.96] sm:h-9 sm:w-9",
-          isContainedShell ? `rounded-lg ${containedControlSurface}` : "rounded-md",
+          isContainedShell
+            ? `rounded-lg ${containedControlSurface}`
+            : "rounded-md",
         )}
         onClick={() => setAthenaThemeModeWithTransition(nextTheme)}
       >
@@ -526,9 +523,11 @@ function UserMenu({
 }
 
 function TopBar({
+  showAthenaAgent = true,
   shellVariant,
   userEmail,
 }: {
+  showAthenaAgent?: boolean;
   shellVariant: AppShellVariant;
   userEmail: string;
 }) {
@@ -587,6 +586,9 @@ function TopBar({
             : "min-w-0 flex-1 px-layout-sm md:px-layout-xl",
         )}
       >
+        {showAthenaAgent ? (
+          <AthenaAgentShellControl />
+        ) : null}
         <UserMenu shellVariant={shellVariant} userEmail={userEmail} />
       </div>
     </header>
@@ -619,7 +621,8 @@ export default function Layout() {
   // that always renders — makes every `getLocalOperatingDate` call site agree
   // with the server, and keeps ownership single so no shell's unmount (a
   // fullscreen toggle, say) can release a zone another shell still needs.
-  useSharedDemoOperatingClock(useSharedDemoContext()?.timezone);
+  const sharedDemoContext = useSharedDemoContext();
+  useSharedDemoOperatingClock(sharedDemoContext?.timezone);
   const [fullscreenOverride, setFullscreenOverride] = useState<boolean | null>(
     null,
   );
@@ -726,11 +729,14 @@ export default function Layout() {
   const userEmail =
     user?.email ??
     (shouldRenderPosTerminalShell ||
-      shouldRenderPosSignInGate ||
-      shouldRenderPendingPosTerminalShell
+    shouldRenderPosSignInGate ||
+    shouldRenderPendingPosTerminalShell
       ? "POS terminal"
       : "");
   const isFullscreenActive = fullscreenOverride ?? routeWantsFullscreen;
+  const isSharedDemoRestricted = Boolean(
+    sharedDemoContext && isSharedDemoRestrictedPath(pathname),
+  );
   const authRedirectTo = isUnknownRouterPath(pathname)
     ? browserPathWithSearch
     : getRedirectPathWithSearch(pathname, browserPathWithSearch);
@@ -838,35 +844,52 @@ export default function Layout() {
       </PosTerminalShell>
     );
   } else {
+    const authenticatedWorkspace = (
+      <SidebarProvider
+        className="fixed inset-0 !min-h-0 flex-col overflow-hidden bg-app-canvas"
+        defaultOpen
+      >
+        <MobileSidebarRouteDismiss routeKey={routeKey} />
+        {isFullscreenActive ? null : (
+          <TopBar
+            shellVariant={APP_SHELL_VARIANT}
+            showAthenaAgent={!isSharedDemoRestricted}
+            userEmail={userEmail}
+          />
+        )}
+        <div
+          className={cn("flex !min-h-0 flex-1", isFullscreenActive && "h-svh")}
+        >
+          {isFullscreenActive ? null : (
+            <AppSidebar shellVariant={APP_SHELL_VARIANT} />
+          )}
+          <SidebarInset className="h-full !min-h-0 overflow-hidden">
+            <main className="box-border flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-transparent p-layout-md md:p-8">
+              {shouldMountRemoteAssistRuntime ? (
+                <PosRemoteAssistRuntimeHost
+                  appSessionRecovery={posAppSessionRecoveryRuntimeInput}
+                  entryContext={localPosEntryContext}
+                />
+              ) : null}
+              <AuthedComponent />
+            </main>
+          </SidebarInset>
+        </div>
+      </SidebarProvider>
+    );
     shellContent = (
       <AppShellFullscreenContext.Provider value={{ setFullscreenOverride }}>
-        <SidebarProvider
-          className="fixed inset-0 !min-h-0 flex-col overflow-hidden bg-app-canvas"
-          defaultOpen
-        >
-          <MobileSidebarRouteDismiss routeKey={routeKey} />
-          {isFullscreenActive ? null : (
-            <TopBar shellVariant={APP_SHELL_VARIANT} userEmail={userEmail} />
-          )}
-          <div
-            className={cn("flex !min-h-0 flex-1", isFullscreenActive && "h-svh")}
+        {isSharedDemoRestricted ? (
+          authenticatedWorkspace
+        ) : (
+          <AthenaAgentShellProvider
+            key={String(user?._id)}
+            presentations={[DAILY_OPERATIONS_AGENT_PRESENTATION]}
+            sessionScope={String(user?._id)}
           >
-            {isFullscreenActive ? null : (
-              <AppSidebar shellVariant={APP_SHELL_VARIANT} />
-            )}
-            <SidebarInset className="h-full !min-h-0 overflow-hidden">
-              <main className="box-border flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-transparent p-layout-md md:p-8">
-                {shouldMountRemoteAssistRuntime ? (
-                  <PosRemoteAssistRuntimeHost
-                    appSessionRecovery={posAppSessionRecoveryRuntimeInput}
-                    entryContext={localPosEntryContext}
-                  />
-                ) : null}
-                <AuthedComponent />
-              </main>
-            </SidebarInset>
-          </div>
-        </SidebarProvider>
+            {authenticatedWorkspace}
+          </AthenaAgentShellProvider>
+        )}
       </AppShellFullscreenContext.Provider>
     );
   }
