@@ -3011,7 +3011,7 @@
       "relation": "calls",
       "source": "athenaagentpanel_positionat",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L670",
+      "source_location": "L673",
       "target": "athenaagentpanel_settlequestiontop",
       "weight": 1
     },
@@ -43895,7 +43895,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_delegatedadmission_testports_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/delegatedAdmission.testPorts.ts",
-      "source_location": "L454",
+      "source_location": "L458",
       "target": "delegatedadmission_testports_money",
       "weight": 1
     },
@@ -43907,7 +43907,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_delegatedadmission_testports_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/delegatedAdmission.testPorts.ts",
-      "source_location": "L425",
+      "source_location": "L429",
       "target": "delegatedadmission_testports_seeddelegatedoperator",
       "weight": 1
     },
@@ -48647,7 +48647,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_runtimehost_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.ts",
-      "source_location": "L998",
+      "source_location": "L1005",
       "target": "runtimehost_productionhost",
       "weight": 1
     },
@@ -48659,7 +48659,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_runtimehost_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.ts",
-      "source_location": "L953",
+      "source_location": "L960",
       "target": "runtimehost_settlementof",
       "weight": 1
     },
@@ -112763,7 +112763,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L2105",
+      "source_location": "L2108",
       "target": "athenaagentpanel_cn",
       "weight": 1
     },
@@ -112811,7 +112811,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L798",
+      "source_location": "L801",
       "target": "athenaagentpanel_renderprovisionalentries",
       "weight": 1
     },
@@ -112823,7 +112823,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L658",
+      "source_location": "L661",
       "target": "athenaagentpanel_settlequestiontop",
       "weight": 1
     },
@@ -177479,7 +177479,7 @@
       "relation": "calls",
       "source": "runtimehost_createturnhost",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.ts",
-      "source_location": "L1012",
+      "source_location": "L1019",
       "target": "runtimehost_productionhost",
       "weight": 1
     },
@@ -258670,7 +258670,7 @@
       "label": "cn()",
       "norm_label": "cn()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L1290"
+      "source_location": "L1293"
     },
     {
       "community": 205,
@@ -258706,7 +258706,7 @@
       "label": "renderProvisionalEntries()",
       "norm_label": "renderprovisionalentries()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L798"
+      "source_location": "L801"
     },
     {
       "community": 205,
@@ -258715,7 +258715,7 @@
       "label": "settleQuestionTop()",
       "norm_label": "settlequestiontop()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L658"
+      "source_location": "L661"
     },
     {
       "community": 205,
@@ -309448,7 +309448,7 @@
       "label": "productionHost()",
       "norm_label": "productionhost()",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.ts",
-      "source_location": "L998"
+      "source_location": "L1005"
     },
     {
       "community": 545,
@@ -309457,7 +309457,7 @@
       "label": "settlementOf()",
       "norm_label": "settlementof()",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.ts",
-      "source_location": "L953"
+      "source_location": "L960"
     },
     {
       "community": 545,
@@ -330013,7 +330013,7 @@
       "label": "money()",
       "norm_label": "money()",
       "source_file": "packages/athena-webapp/convex/agentHarness/delegatedAdmission.testPorts.ts",
-      "source_location": "L454"
+      "source_location": "L458"
     },
     {
       "community": 800,
@@ -330022,7 +330022,7 @@
       "label": "seedDelegatedOperator()",
       "norm_label": "seeddelegatedoperator()",
       "source_file": "packages/athena-webapp/convex/agentHarness/delegatedAdmission.testPorts.ts",
-      "source_location": "L425"
+      "source_location": "L429"
     },
     {
       "community": 800,
