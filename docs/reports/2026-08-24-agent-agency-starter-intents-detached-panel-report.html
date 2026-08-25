@@ -5,7 +5,7 @@
   <title>Agent Agency Levers, Compiled Starter Intents, and the Detached Panel</title>
 </head>
 <body>
-<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="70b8e6dc9cc1fd7473fa910039a26b6efc78e4600cc81a6e6aff0f46568f8205">
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="d0a172798fbda55aee335df82d02fcbc669bfb5aec281bede8c8d276c65884b9">
   <header data-report-section="header">
     <h1>Agent Agency Levers, Compiled Starter Intents, and the Detached Panel</h1>
     <p>How the Daily Operations agent got faster, more truthful, and easier to reach — and how we measure it now</p>
@@ -64,7 +64,7 @@
     <h2>Validation and Review Evidence</h2>
       <p>Local gates on the branch tip: the full vitest suites for the harness, shared modules, POS sync, and panel components pass (including 103 DailyOperationsView tests and the runtime adapter contract parity suites); project typecheck passes; per-package lint and the Convex pagination/return-validator checks pass through pr:athena:prepare; agent-sdk generate/check passes with the compatibility digest carrying protocol v3.</p>
       <p>Live evidence on the dev deployment (jovial-wildebeest-179): the eval drive ran 11/11 scenarios green, including all four starter intents. starter_close_readiness completed in 15.3 s over 8 pre-executed reads against 32.7 s for the equivalent free-form readiness question in the same drive; starter_open_drawers 10.1 s; starter_automation_today 9.1 s; starter_stock_pressure 27.0 s. Zero tone denials across all turns, and every starter answer cited a citation minted by its pre-executed attempt (the hard gate). These drive numbers live in the session record, not in tracked files.</p>
-      <p>Review: a full ce-code-review pass (13 reviewers: correctness, security, adversarial, testing, maintainability, project-standards, performance, api-contract, reliability, kieran-typescript, julik-frontend-races, plus the agent-native and learnings agents) ran against this candidate as part of the delivery gate; its evidence is recorded through the harness obligation ledger. Production deploy and root alignment are pending — this report does not claim either.</p>
+      <p>Review: two full ce-code-review rounds (13 reviewers each: correctness, security, adversarial, testing, maintainability, project-standards, performance, api-contract, reliability, kieran-typescript, julik-frontend-races, plus the agent-native and learnings agents) ran against the candidate as part of the delivery gate. Round 1 surfaced and the delivery fixed: rejected pre-reads seeding as success, the unconditional pre-read prompt sentence, the missing injected-exchange byte cap, the reference scrubber mangling ordinary prose, clarifying answers labeled as complete, and a scroll-settle race; valid out-of-contract proposals were deferred as V26-1325, V26-1326, and V26-1327. Round 2 re-reviewed the fixed candidate, and the green evidence is recorded through the harness obligation ledger. Production deploy and root alignment are pending — this report does not claim either.</p>
   </section>
   <section data-report-section="guidance">
     <h2>Next Time</h2>

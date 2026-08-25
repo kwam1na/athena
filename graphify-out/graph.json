@@ -1379,7 +1379,7 @@
       "relation": "calls",
       "source": "agent_eval_drive_callfunction",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L398",
+      "source_location": "L389",
       "target": "agent_eval_drive_assertdigest",
       "weight": 1
     },
@@ -1391,7 +1391,7 @@
       "relation": "calls",
       "source": "agent_eval_drive_parsejson",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L384",
+      "source_location": "L375",
       "target": "agent_eval_drive_callfunction",
       "weight": 1
     },
@@ -1403,7 +1403,7 @@
       "relation": "calls",
       "source": "agent_eval_drive_hard",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L97",
+      "source_location": "L96",
       "target": "agent_eval_drive_commonissues",
       "weight": 1
     },
@@ -1415,7 +1415,7 @@
       "relation": "calls",
       "source": "agent_eval_drive_soft",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L110",
+      "source_location": "L109",
       "target": "agent_eval_drive_commonissues",
       "weight": 1
     },
@@ -1427,7 +1427,7 @@
       "relation": "calls",
       "source": "agent_eval_drive_assertdigest",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L421",
+      "source_location": "L412",
       "target": "agent_eval_drive_main",
       "weight": 1
     },
@@ -1439,7 +1439,7 @@
       "relation": "calls",
       "source": "agent_eval_drive_callfunction",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L427",
+      "source_location": "L418",
       "target": "agent_eval_drive_main",
       "weight": 1
     },
@@ -1451,7 +1451,7 @@
       "relation": "calls",
       "source": "agent_eval_drive_evaluatescenario",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L480",
+      "source_location": "L471",
       "target": "agent_eval_drive_main",
       "weight": 1
     },
@@ -1463,7 +1463,7 @@
       "relation": "calls",
       "source": "agent_eval_drive_parsedriveargs",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L410",
+      "source_location": "L401",
       "target": "agent_eval_drive_main",
       "weight": 1
     },
@@ -1475,7 +1475,7 @@
       "relation": "calls",
       "source": "agent_eval_drive_sleep",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L448",
+      "source_location": "L439",
       "target": "agent_eval_drive_main",
       "weight": 1
     },
@@ -1487,7 +1487,7 @@
       "relation": "calls",
       "source": "agent_eval_drive_summarizetrace",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L461",
+      "source_location": "L452",
       "target": "agent_eval_drive_main",
       "weight": 1
     },
@@ -3011,7 +3011,7 @@
       "relation": "calls",
       "source": "athenaagentpanel_positionat",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L650",
+      "source_location": "L670",
       "target": "athenaagentpanel_settlequestiontop",
       "weight": 1
     },
@@ -32027,7 +32027,7 @@
       "relation": "calls",
       "source": "historyprojection_fenceuntrusteddata",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L436",
+      "source_location": "L439",
       "target": "historyprojection_assembleturnprompt",
       "weight": 1
     },
@@ -32039,7 +32039,7 @@
       "relation": "calls",
       "source": "historyprojection_neutralizefence",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.ts",
-      "source_location": "L439",
+      "source_location": "L442",
       "target": "historyprojection_assembleturnprompt",
       "weight": 1
     },
@@ -32099,7 +32099,7 @@
       "relation": "calls",
       "source": "historyprojection_test_viewerof",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.test.ts",
-      "source_location": "L169",
+      "source_location": "L170",
       "target": "historyprojection_test_input",
       "weight": 1
     },
@@ -32507,7 +32507,7 @@
       "relation": "calls",
       "source": "importboundary_test_importsof",
       "source_file": "packages/athena-webapp/src/components/agent/importBoundary.test.ts",
-      "source_location": "L103",
+      "source_location": "L105",
       "target": "importboundary_test_finddisallowedimports",
       "weight": 1
     },
@@ -32555,7 +32555,7 @@
       "relation": "calls",
       "source": "importboundary_test_importsof",
       "source_file": "packages/athena-webapp/src/components/agent/importBoundary.test.ts",
-      "source_location": "L117",
+      "source_location": "L119",
       "target": "importboundary_test_findproductsurfaceimports",
       "weight": 1
     },
@@ -32627,7 +32627,7 @@
       "relation": "calls",
       "source": "importboundary_test_importsof",
       "source_file": "packages/athena-webapp/src/components/agent/importBoundary.test.ts",
-      "source_location": "L129",
+      "source_location": "L131",
       "target": "importboundary_test_findruntimenativeviolations",
       "weight": 1
     },
@@ -43895,7 +43895,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_delegatedadmission_testports_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/delegatedAdmission.testPorts.ts",
-      "source_location": "L434",
+      "source_location": "L454",
       "target": "delegatedadmission_testports_money",
       "weight": 1
     },
@@ -43907,7 +43907,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_delegatedadmission_testports_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/delegatedAdmission.testPorts.ts",
-      "source_location": "L405",
+      "source_location": "L425",
       "target": "delegatedadmission_testports_seeddelegatedoperator",
       "weight": 1
     },
@@ -43919,7 +43919,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_delegatedadmission_testports_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/delegatedAdmission.testPorts.ts",
-      "source_location": "L367",
+      "source_location": "L373",
       "target": "delegatedadmission_testports_testportref",
       "weight": 1
     },
@@ -45671,7 +45671,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_historyprojection_test_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.test.ts",
-      "source_location": "L229",
+      "source_location": "L230",
       "target": "historyprojection_test_input",
       "weight": 1
     },
@@ -45683,7 +45683,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_historyprojection_test_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.test.ts",
-      "source_location": "L283",
+      "source_location": "L284",
       "target": "historyprojection_test_read",
       "weight": 1
     },
@@ -45695,7 +45695,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_historyprojection_test_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.test.ts",
-      "source_location": "L42",
+      "source_location": "L43",
       "target": "historyprojection_test_seedturn",
       "weight": 1
     },
@@ -45707,7 +45707,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_historyprojection_test_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.test.ts",
-      "source_location": "L105",
+      "source_location": "L106",
       "target": "historyprojection_test_viewerof",
       "weight": 1
     },
@@ -48443,7 +48443,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_runtimehost_test_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.test.ts",
-      "source_location": "L1030",
+      "source_location": "L1118",
       "target": "runtimehost_test_completerunargs",
       "weight": 1
     },
@@ -48455,7 +48455,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_runtimehost_test_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.test.ts",
-      "source_location": "L662",
+      "source_location": "L750",
       "target": "runtimehost_test_dispatched",
       "weight": 1
     },
@@ -48563,7 +48563,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_runtimehost_test_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.test.ts",
-      "source_location": "L510",
+      "source_location": "L603",
       "target": "runtimehost_test_seededrefs",
       "weight": 1
     },
@@ -48623,7 +48623,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_runtimehost_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.ts",
-      "source_location": "L201",
+      "source_location": "L211",
       "target": "runtimehost_collapseeventkinds",
       "weight": 1
     },
@@ -48635,7 +48635,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_runtimehost_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.ts",
-      "source_location": "L219",
+      "source_location": "L229",
       "target": "runtimehost_createturnhost",
       "weight": 1
     },
@@ -48647,7 +48647,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_runtimehost_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.ts",
-      "source_location": "L948",
+      "source_location": "L998",
       "target": "runtimehost_productionhost",
       "weight": 1
     },
@@ -48659,7 +48659,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_runtimehost_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.ts",
-      "source_location": "L903",
+      "source_location": "L953",
       "target": "runtimehost_settlementof",
       "weight": 1
     },
@@ -48671,7 +48671,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_agentharness_runtimehost_ts",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.ts",
-      "source_location": "L215",
+      "source_location": "L225",
       "target": "runtimehost_sleep",
       "weight": 1
     },
@@ -85079,7 +85079,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_sync_projectlocalevents_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.test.ts",
-      "source_location": "L8476",
+      "source_location": "L8531",
       "target": "projectlocalevents_test_buildexpenserecordedevent",
       "weight": 1
     },
@@ -85091,7 +85091,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_sync_projectlocalevents_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.test.ts",
-      "source_location": "L8559",
+      "source_location": "L8614",
       "target": "projectlocalevents_test_buildpendingcheckoutitemdefinedevent",
       "weight": 1
     },
@@ -85103,7 +85103,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_sync_projectlocalevents_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.test.ts",
-      "source_location": "L9645",
+      "source_location": "L9700",
       "target": "projectlocalevents_test_buildregistercloseoutreviewfact",
       "weight": 1
     },
@@ -85115,7 +85115,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_sync_projectlocalevents_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.test.ts",
-      "source_location": "L8612",
+      "source_location": "L8667",
       "target": "projectlocalevents_test_buildsaleclearedevent",
       "weight": 1
     },
@@ -85127,7 +85127,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_sync_projectlocalevents_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.test.ts",
-      "source_location": "L8513",
+      "source_location": "L8568",
       "target": "projectlocalevents_test_buildsalecompletedevent",
       "weight": 1
     },
@@ -85139,7 +85139,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_sync_projectlocalevents_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.test.ts",
-      "source_location": "L8592",
+      "source_location": "L8647",
       "target": "projectlocalevents_test_buildserviceline",
       "weight": 1
     },
@@ -85151,7 +85151,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_sync_projectlocalevents_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.test.ts",
-      "source_location": "L8631",
+      "source_location": "L8686",
       "target": "projectlocalevents_test_createprojectionrepository",
       "weight": 1
     },
@@ -108059,7 +108059,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_productlexicon_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L496",
+      "source_location": "L498",
       "target": "productlexicon_escaperegexp",
       "weight": 1
     },
@@ -108143,7 +108143,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_productlexicon_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L389",
+      "source_location": "L391",
       "target": "productlexicon_normalizenarrative",
       "weight": 1
     },
@@ -108155,7 +108155,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_productlexicon_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L670",
+      "source_location": "L672",
       "target": "productlexicon_profilelexicon",
       "weight": 1
     },
@@ -108167,7 +108167,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_productlexicon_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L357",
+      "source_location": "L359",
       "target": "productlexicon_scrubopaqueidentifiers",
       "weight": 1
     },
@@ -108179,7 +108179,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_productlexicon_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L516",
+      "source_location": "L518",
       "target": "productlexicon_sensetone",
       "weight": 1
     },
@@ -108215,7 +108215,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_shared_agentharness_productlexicon_ts",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L500",
+      "source_location": "L502",
       "target": "productlexicon_wordpresent",
       "weight": 1
     },
@@ -112595,7 +112595,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L2627",
+      "source_location": "L2652",
       "target": "athenaagentpanel_test_anchorfocusoutsidecomposer",
       "weight": 1
     },
@@ -112607,7 +112607,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3626",
+      "source_location": "L3651",
       "target": "athenaagentpanel_test_answered",
       "weight": 1
     },
@@ -112619,7 +112619,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3611",
+      "source_location": "L3636",
       "target": "athenaagentpanel_test_fakeframes",
       "weight": 1
     },
@@ -112631,7 +112631,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L2582",
+      "source_location": "L2607",
       "target": "athenaagentpanel_test_for",
       "weight": 1
     },
@@ -112643,7 +112643,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3648",
+      "source_location": "L3673",
       "target": "athenaagentpanel_test_frames",
       "weight": 1
     },
@@ -112655,7 +112655,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3384",
+      "source_location": "L3409",
       "target": "athenaagentpanel_test_long",
       "weight": 1
     },
@@ -112667,7 +112667,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3642",
+      "source_location": "L3667",
       "target": "athenaagentpanel_test_paintedanswer",
       "weight": 1
     },
@@ -112679,7 +112679,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3399",
+      "source_location": "L3424",
       "target": "athenaagentpanel_test_paintedtext",
       "weight": 1
     },
@@ -112703,7 +112703,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3296",
+      "source_location": "L3321",
       "target": "athenaagentpanel_test_prompt",
       "weight": 1
     },
@@ -112715,7 +112715,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3298",
+      "source_location": "L3323",
       "target": "athenaagentpanel_test_send",
       "weight": 1
     },
@@ -112727,7 +112727,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3644",
+      "source_location": "L3669",
       "target": "athenaagentpanel_test_wipedwords",
       "weight": 1
     },
@@ -112763,7 +112763,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L2083",
+      "source_location": "L2105",
       "target": "athenaagentpanel_cn",
       "weight": 1
     },
@@ -112811,7 +112811,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L777",
+      "source_location": "L798",
       "target": "athenaagentpanel_renderprovisionalentries",
       "weight": 1
     },
@@ -112823,7 +112823,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L644",
+      "source_location": "L658",
       "target": "athenaagentpanel_settlequestiontop",
       "weight": 1
     },
@@ -113267,7 +113267,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_importboundary_test_ts",
       "source_file": "packages/athena-webapp/src/components/agent/importBoundary.test.ts",
-      "source_location": "L100",
+      "source_location": "L102",
       "target": "importboundary_test_finddisallowedimports",
       "weight": 1
     },
@@ -113279,7 +113279,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_importboundary_test_ts",
       "source_file": "packages/athena-webapp/src/components/agent/importBoundary.test.ts",
-      "source_location": "L114",
+      "source_location": "L116",
       "target": "importboundary_test_findproductsurfaceimports",
       "weight": 1
     },
@@ -113291,7 +113291,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_importboundary_test_ts",
       "source_file": "packages/athena-webapp/src/components/agent/importBoundary.test.ts",
-      "source_location": "L126",
+      "source_location": "L128",
       "target": "importboundary_test_findruntimenativeviolations",
       "weight": 1
     },
@@ -166691,7 +166691,7 @@
       "relation": "calls",
       "source": "productlexicon_normalizenarrative",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L411",
+      "source_location": "L413",
       "target": "productlexicon_escaperegexp",
       "weight": 1
     },
@@ -166703,7 +166703,7 @@
       "relation": "calls",
       "source": "productlexicon_formatminormoney",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L448",
+      "source_location": "L450",
       "target": "productlexicon_normalizenarrative",
       "weight": 1
     },
@@ -166715,7 +166715,7 @@
       "relation": "calls",
       "source": "productlexicon_humanizetoken",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L406",
+      "source_location": "L408",
       "target": "productlexicon_normalizenarrative",
       "weight": 1
     },
@@ -166727,7 +166727,7 @@
       "relation": "calls",
       "source": "productlexicon_scrubopaqueidentifiers",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L392",
+      "source_location": "L394",
       "target": "productlexicon_normalizenarrative",
       "weight": 1
     },
@@ -166739,7 +166739,7 @@
       "relation": "calls",
       "source": "productlexicon_mergelexicons",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L672",
+      "source_location": "L674",
       "target": "productlexicon_profilelexicon",
       "weight": 1
     },
@@ -166751,7 +166751,7 @@
       "relation": "calls",
       "source": "productlexicon_escaperegexp",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L590",
+      "source_location": "L592",
       "target": "productlexicon_sensetone",
       "weight": 1
     },
@@ -166763,7 +166763,7 @@
       "relation": "calls",
       "source": "productlexicon_formatminormoney",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L583",
+      "source_location": "L585",
       "target": "productlexicon_sensetone",
       "weight": 1
     },
@@ -166775,7 +166775,7 @@
       "relation": "calls",
       "source": "productlexicon_humanizetoken",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L563",
+      "source_location": "L565",
       "target": "productlexicon_sensetone",
       "weight": 1
     },
@@ -166787,7 +166787,7 @@
       "relation": "calls",
       "source": "productlexicon_wordpresent",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L562",
+      "source_location": "L564",
       "target": "productlexicon_sensetone",
       "weight": 1
     },
@@ -166811,7 +166811,7 @@
       "relation": "calls",
       "source": "productlexicon_escaperegexp",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L501",
+      "source_location": "L503",
       "target": "productlexicon_wordpresent",
       "weight": 1
     },
@@ -177479,7 +177479,7 @@
       "relation": "calls",
       "source": "runtimehost_createturnhost",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.ts",
-      "source_location": "L962",
+      "source_location": "L1012",
       "target": "runtimehost_productionhost",
       "weight": 1
     },
@@ -177899,7 +177899,7 @@
       "relation": "contains",
       "source": "scripts_agent_eval_drive_ts",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L397",
+      "source_location": "L388",
       "target": "agent_eval_drive_assertdigest",
       "weight": 1
     },
@@ -177911,7 +177911,7 @@
       "relation": "contains",
       "source": "scripts_agent_eval_drive_ts",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L378",
+      "source_location": "L369",
       "target": "agent_eval_drive_callfunction",
       "weight": 1
     },
@@ -177923,7 +177923,7 @@
       "relation": "contains",
       "source": "scripts_agent_eval_drive_ts",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L94",
+      "source_location": "L93",
       "target": "agent_eval_drive_commonissues",
       "weight": 1
     },
@@ -177935,7 +177935,7 @@
       "relation": "contains",
       "source": "scripts_agent_eval_drive_ts",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L351",
+      "source_location": "L342",
       "target": "agent_eval_drive_evaluatescenario",
       "weight": 1
     },
@@ -177947,7 +177947,7 @@
       "relation": "contains",
       "source": "scripts_agent_eval_drive_ts",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L91",
+      "source_location": "L90",
       "target": "agent_eval_drive_hard",
       "weight": 1
     },
@@ -177959,7 +177959,7 @@
       "relation": "contains",
       "source": "scripts_agent_eval_drive_ts",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L409",
+      "source_location": "L400",
       "target": "agent_eval_drive_main",
       "weight": 1
     },
@@ -177971,7 +177971,7 @@
       "relation": "contains",
       "source": "scripts_agent_eval_drive_ts",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L271",
+      "source_location": "L262",
       "target": "agent_eval_drive_parsedriveargs",
       "weight": 1
     },
@@ -177983,7 +177983,7 @@
       "relation": "contains",
       "source": "scripts_agent_eval_drive_ts",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L364",
+      "source_location": "L355",
       "target": "agent_eval_drive_parsejson",
       "weight": 1
     },
@@ -177995,7 +177995,7 @@
       "relation": "contains",
       "source": "scripts_agent_eval_drive_ts",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L407",
+      "source_location": "L398",
       "target": "agent_eval_drive_sleep",
       "weight": 1
     },
@@ -178007,7 +178007,7 @@
       "relation": "contains",
       "source": "scripts_agent_eval_drive_ts",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L92",
+      "source_location": "L91",
       "target": "agent_eval_drive_soft",
       "weight": 1
     },
@@ -178019,7 +178019,7 @@
       "relation": "contains",
       "source": "scripts_agent_eval_drive_ts",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L316",
+      "source_location": "L307",
       "target": "agent_eval_drive_summarizetrace",
       "weight": 1
     },
@@ -218800,7 +218800,7 @@
       "label": "findDisallowedImports()",
       "norm_label": "finddisallowedimports()",
       "source_file": "packages/athena-webapp/src/components/agent/importBoundary.test.ts",
-      "source_location": "L100"
+      "source_location": "L102"
     },
     {
       "community": 107,
@@ -218836,7 +218836,7 @@
       "label": "findProductSurfaceImports()",
       "norm_label": "findproductsurfaceimports()",
       "source_file": "packages/athena-webapp/src/components/agent/importBoundary.test.ts",
-      "source_location": "L114"
+      "source_location": "L116"
     },
     {
       "community": 107,
@@ -218890,7 +218890,7 @@
       "label": "findRuntimeNativeViolations()",
       "norm_label": "findruntimenativeviolations()",
       "source_file": "packages/athena-webapp/src/components/agent/importBoundary.test.ts",
-      "source_location": "L126"
+      "source_location": "L128"
     },
     {
       "community": 107,
@@ -226954,7 +226954,7 @@
       "label": "completeRunArgs()",
       "norm_label": "completerunargs()",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.test.ts",
-      "source_location": "L1030"
+      "source_location": "L1118"
     },
     {
       "community": 123,
@@ -226963,7 +226963,7 @@
       "label": "dispatched()",
       "norm_label": "dispatched()",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.test.ts",
-      "source_location": "L662"
+      "source_location": "L750"
     },
     {
       "community": 123,
@@ -232615,7 +232615,7 @@
       "label": "escapeRegExp()",
       "norm_label": "escaperegexp()",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L496"
+      "source_location": "L498"
     },
     {
       "community": 135,
@@ -232678,7 +232678,7 @@
       "label": "normalizeNarrative()",
       "norm_label": "normalizenarrative()",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L389"
+      "source_location": "L391"
     },
     {
       "community": 135,
@@ -232687,7 +232687,7 @@
       "label": "profileLexicon()",
       "norm_label": "profilelexicon()",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L670"
+      "source_location": "L672"
     },
     {
       "community": 135,
@@ -232696,7 +232696,7 @@
       "label": "scrubOpaqueIdentifiers()",
       "norm_label": "scrubopaqueidentifiers()",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L357"
+      "source_location": "L359"
     },
     {
       "community": 135,
@@ -232705,7 +232705,7 @@
       "label": "senseTone()",
       "norm_label": "sensetone()",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L516"
+      "source_location": "L518"
     },
     {
       "community": 135,
@@ -232732,7 +232732,7 @@
       "label": "wordPresent()",
       "norm_label": "wordpresent()",
       "source_file": "packages/athena-webapp/shared/agentHarness/productLexicon.ts",
-      "source_location": "L500"
+      "source_location": "L502"
     },
     {
       "community": 1350,
@@ -258670,7 +258670,7 @@
       "label": "cn()",
       "norm_label": "cn()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L1268"
+      "source_location": "L1290"
     },
     {
       "community": 205,
@@ -258706,7 +258706,7 @@
       "label": "renderProvisionalEntries()",
       "norm_label": "renderprovisionalentries()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L777"
+      "source_location": "L798"
     },
     {
       "community": 205,
@@ -258715,7 +258715,7 @@
       "label": "settleQuestionTop()",
       "norm_label": "settlequestiontop()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L644"
+      "source_location": "L658"
     },
     {
       "community": 205,
@@ -265258,7 +265258,7 @@
       "label": "anchorFocusOutsideComposer()",
       "norm_label": "anchorfocusoutsidecomposer()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L2627"
+      "source_location": "L2652"
     },
     {
       "community": 231,
@@ -265267,7 +265267,7 @@
       "label": "answered()",
       "norm_label": "answered()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3626"
+      "source_location": "L3651"
     },
     {
       "community": 231,
@@ -265276,7 +265276,7 @@
       "label": "fakeFrames()",
       "norm_label": "fakeframes()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3388"
+      "source_location": "L3413"
     },
     {
       "community": 231,
@@ -265285,7 +265285,7 @@
       "label": "for()",
       "norm_label": "for()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L2582"
+      "source_location": "L2607"
     },
     {
       "community": 231,
@@ -265294,7 +265294,7 @@
       "label": "frames()",
       "norm_label": "frames()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3405"
+      "source_location": "L3430"
     },
     {
       "community": 231,
@@ -265303,7 +265303,7 @@
       "label": "long()",
       "norm_label": "long()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3384"
+      "source_location": "L3409"
     },
     {
       "community": 231,
@@ -265312,7 +265312,7 @@
       "label": "paintedAnswer()",
       "norm_label": "paintedanswer()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3642"
+      "source_location": "L3667"
     },
     {
       "community": 231,
@@ -265321,7 +265321,7 @@
       "label": "paintedText()",
       "norm_label": "paintedtext()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3399"
+      "source_location": "L3424"
     },
     {
       "community": 231,
@@ -265339,7 +265339,7 @@
       "label": "prompt()",
       "norm_label": "prompt()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3296"
+      "source_location": "L3321"
     },
     {
       "community": 231,
@@ -265348,7 +265348,7 @@
       "label": "send()",
       "norm_label": "send()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3298"
+      "source_location": "L3323"
     },
     {
       "community": 231,
@@ -265357,7 +265357,7 @@
       "label": "wipedWords()",
       "norm_label": "wipedwords()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3401"
+      "source_location": "L3426"
     },
     {
       "community": 231,
@@ -272764,7 +272764,7 @@
       "label": "assertDigest()",
       "norm_label": "assertdigest()",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L397"
+      "source_location": "L388"
     },
     {
       "community": 263,
@@ -272773,7 +272773,7 @@
       "label": "callFunction()",
       "norm_label": "callfunction()",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L378"
+      "source_location": "L369"
     },
     {
       "community": 263,
@@ -272782,7 +272782,7 @@
       "label": "commonIssues()",
       "norm_label": "commonissues()",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L94"
+      "source_location": "L93"
     },
     {
       "community": 263,
@@ -272791,7 +272791,7 @@
       "label": "evaluateScenario()",
       "norm_label": "evaluatescenario()",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L351"
+      "source_location": "L342"
     },
     {
       "community": 263,
@@ -272800,7 +272800,7 @@
       "label": "hard()",
       "norm_label": "hard()",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L91"
+      "source_location": "L90"
     },
     {
       "community": 263,
@@ -272809,7 +272809,7 @@
       "label": "main()",
       "norm_label": "main()",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L409"
+      "source_location": "L400"
     },
     {
       "community": 263,
@@ -272818,7 +272818,7 @@
       "label": "parseDriveArgs()",
       "norm_label": "parsedriveargs()",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L271"
+      "source_location": "L262"
     },
     {
       "community": 263,
@@ -272827,7 +272827,7 @@
       "label": "parseJson()",
       "norm_label": "parsejson()",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L364"
+      "source_location": "L355"
     },
     {
       "community": 263,
@@ -272836,7 +272836,7 @@
       "label": "sleep()",
       "norm_label": "sleep()",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L407"
+      "source_location": "L398"
     },
     {
       "community": 263,
@@ -272845,7 +272845,7 @@
       "label": "soft()",
       "norm_label": "soft()",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L92"
+      "source_location": "L91"
     },
     {
       "community": 263,
@@ -272854,7 +272854,7 @@
       "label": "summarizeTrace()",
       "norm_label": "summarizetrace()",
       "source_file": "scripts/agent-eval-drive.ts",
-      "source_location": "L316"
+      "source_location": "L307"
     },
     {
       "community": 263,
@@ -296704,7 +296704,7 @@
       "label": "buildExpenseRecordedEvent()",
       "norm_label": "buildexpenserecordedevent()",
       "source_file": "packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.test.ts",
-      "source_location": "L8476"
+      "source_location": "L8531"
     },
     {
       "community": 414,
@@ -296713,7 +296713,7 @@
       "label": "buildPendingCheckoutItemDefinedEvent()",
       "norm_label": "buildpendingcheckoutitemdefinedevent()",
       "source_file": "packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.test.ts",
-      "source_location": "L8559"
+      "source_location": "L8614"
     },
     {
       "community": 414,
@@ -296722,7 +296722,7 @@
       "label": "buildRegisterCloseoutReviewFact()",
       "norm_label": "buildregistercloseoutreviewfact()",
       "source_file": "packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.test.ts",
-      "source_location": "L9645"
+      "source_location": "L9700"
     },
     {
       "community": 414,
@@ -296731,7 +296731,7 @@
       "label": "buildSaleClearedEvent()",
       "norm_label": "buildsaleclearedevent()",
       "source_file": "packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.test.ts",
-      "source_location": "L8612"
+      "source_location": "L8667"
     },
     {
       "community": 414,
@@ -296740,7 +296740,7 @@
       "label": "buildSaleCompletedEvent()",
       "norm_label": "buildsalecompletedevent()",
       "source_file": "packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.test.ts",
-      "source_location": "L8513"
+      "source_location": "L8568"
     },
     {
       "community": 414,
@@ -296749,7 +296749,7 @@
       "label": "buildServiceLine()",
       "norm_label": "buildserviceline()",
       "source_file": "packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.test.ts",
-      "source_location": "L8592"
+      "source_location": "L8647"
     },
     {
       "community": 414,
@@ -296758,7 +296758,7 @@
       "label": "createProjectionRepository()",
       "norm_label": "createprojectionrepository()",
       "source_file": "packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.test.ts",
-      "source_location": "L8631"
+      "source_location": "L8686"
     },
     {
       "community": 415,
@@ -309430,7 +309430,7 @@
       "label": "collapseEventKinds()",
       "norm_label": "collapseeventkinds()",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.ts",
-      "source_location": "L201"
+      "source_location": "L211"
     },
     {
       "community": 545,
@@ -309439,7 +309439,7 @@
       "label": "createTurnHost()",
       "norm_label": "createturnhost()",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.ts",
-      "source_location": "L219"
+      "source_location": "L229"
     },
     {
       "community": 545,
@@ -309448,7 +309448,7 @@
       "label": "productionHost()",
       "norm_label": "productionhost()",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.ts",
-      "source_location": "L948"
+      "source_location": "L998"
     },
     {
       "community": 545,
@@ -309457,7 +309457,7 @@
       "label": "settlementOf()",
       "norm_label": "settlementof()",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.ts",
-      "source_location": "L903"
+      "source_location": "L953"
     },
     {
       "community": 545,
@@ -309466,7 +309466,7 @@
       "label": "sleep()",
       "norm_label": "sleep()",
       "source_file": "packages/athena-webapp/convex/agentHarness/runtimeHost.ts",
-      "source_location": "L215"
+      "source_location": "L225"
     },
     {
       "community": 546,
@@ -320239,7 +320239,7 @@
       "label": "input()",
       "norm_label": "input()",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.test.ts",
-      "source_location": "L169"
+      "source_location": "L170"
     },
     {
       "community": 675,
@@ -320248,7 +320248,7 @@
       "label": "read()",
       "norm_label": "read()",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.test.ts",
-      "source_location": "L283"
+      "source_location": "L284"
     },
     {
       "community": 675,
@@ -320257,7 +320257,7 @@
       "label": "seedTurn()",
       "norm_label": "seedturn()",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.test.ts",
-      "source_location": "L42"
+      "source_location": "L43"
     },
     {
       "community": 675,
@@ -320266,7 +320266,7 @@
       "label": "viewerOf()",
       "norm_label": "viewerof()",
       "source_file": "packages/athena-webapp/convex/agentHarness/historyProjection.test.ts",
-      "source_location": "L105"
+      "source_location": "L106"
     },
     {
       "community": 675,
@@ -330013,7 +330013,7 @@
       "label": "money()",
       "norm_label": "money()",
       "source_file": "packages/athena-webapp/convex/agentHarness/delegatedAdmission.testPorts.ts",
-      "source_location": "L434"
+      "source_location": "L454"
     },
     {
       "community": 800,
@@ -330022,7 +330022,7 @@
       "label": "seedDelegatedOperator()",
       "norm_label": "seeddelegatedoperator()",
       "source_file": "packages/athena-webapp/convex/agentHarness/delegatedAdmission.testPorts.ts",
-      "source_location": "L405"
+      "source_location": "L425"
     },
     {
       "community": 800,
@@ -330031,7 +330031,7 @@
       "label": "testPortRef()",
       "norm_label": "testportref()",
       "source_file": "packages/athena-webapp/convex/agentHarness/delegatedAdmission.testPorts.ts",
-      "source_location": "L367"
+      "source_location": "L373"
     },
     {
       "community": 800,

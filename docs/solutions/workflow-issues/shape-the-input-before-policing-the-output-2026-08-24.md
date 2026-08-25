@@ -15,7 +15,7 @@ applies_when:
   - "Money or unit-bearing values cross a model boundary without their display convention"
   - "Canonical date-only values cross a model boundary and should remain exact while operator prose uses a human-readable form"
 tags: [agent-harness, product-tone, disclosure, enforcement, lexicon, prompt-engineering, date-display]
-delivery_diff_fingerprint: 70b8e6dc9cc1fd7473fa910039a26b6efc78e4600cc81a6e6aff0f46568f8205
+delivery_diff_fingerprint: d0a172798fbda55aee335df82d02fcbc669bfb5aec281bede8c8d276c65884b9
 ---
 
 # Shape the Input Before Policing the Output — Mechanical Tone Enforcement for Agent Prose
