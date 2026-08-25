@@ -41,6 +41,7 @@ import type * as agentHarness_narrativeTrail from "../agentHarness/narrativeTrai
 import type * as agentHarness_profiles_dailyOperations from "../agentHarness/profiles/dailyOperations.js";
 import type * as agentHarness_profiles_dailyOperationsConformance from "../agentHarness/profiles/dailyOperationsConformance.js";
 import type * as agentHarness_profiles_dailyOperationsUiCoverage from "../agentHarness/profiles/dailyOperationsUiCoverage.js";
+import type * as agentHarness_profiles_starterIntentPrograms from "../agentHarness/profiles/starterIntentPrograms.js";
 import type * as agentHarness_profiles_syntheticSecondSurface from "../agentHarness/profiles/syntheticSecondSurface.js";
 import type * as agentHarness_profiles_syntheticSecondSurfaceConformance from "../agentHarness/profiles/syntheticSecondSurfaceConformance.js";
 import type * as agentHarness_profiles_syntheticSecondSurfacePorts from "../agentHarness/profiles/syntheticSecondSurfacePorts.js";
@@ -778,6 +779,7 @@ declare const fullApi: ApiFromModules<{
   "agentHarness/profiles/dailyOperations": typeof agentHarness_profiles_dailyOperations;
   "agentHarness/profiles/dailyOperationsConformance": typeof agentHarness_profiles_dailyOperationsConformance;
   "agentHarness/profiles/dailyOperationsUiCoverage": typeof agentHarness_profiles_dailyOperationsUiCoverage;
+  "agentHarness/profiles/starterIntentPrograms": typeof agentHarness_profiles_starterIntentPrograms;
   "agentHarness/profiles/syntheticSecondSurface": typeof agentHarness_profiles_syntheticSecondSurface;
   "agentHarness/profiles/syntheticSecondSurfaceConformance": typeof agentHarness_profiles_syntheticSecondSurfaceConformance;
   "agentHarness/profiles/syntheticSecondSurfacePorts": typeof agentHarness_profiles_syntheticSecondSurfacePorts;
