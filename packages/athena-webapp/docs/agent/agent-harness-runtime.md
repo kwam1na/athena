@@ -271,3 +271,15 @@ Rules the adapter relies on:
 - Turn elapsed ceiling: the adapter fails the turn with `turn_elapsed_ceiling` when `limits.maxElapsedMs` passes.
 - `cleanup` from a mutation context uses the component's async deletion (self-scheduling); with an action context it deletes synchronously.
 - Programs must call the facade as `athena.<package>.<resource>.<verb>({ ... })` — no aliasing, no passing facade functions around — and may reference only the allowlisted globals (`Promise`, `JSON`, `Math` minus `random`, `Array`, `Object`, `String`, `Number`, `Boolean`, `Map`, `Set`, `Error`, `TypeError`, `RangeError`, and a few scalars/helpers).
+
+## Starter-intent pre-execution (protocol v3)
+
+A starter-intent tap (`startTurn` with `starterIntentId`) makes the HOST run the intent's curated program before the first provider invocation, in the slot after `markTurnRunning`: the registered `executeProgram` handler drives the production executor under the run's own grant — attempt 1, real charges, the egress checkpoint at `finishAttempt` exactly as a dispatched call. A produced result is seeded into the runtime transcript through the `preExecutedExchange` input on `startTurn` (each adapter renders it as a synthetic assistant tool call plus its tool result; it never crosses the dispatch ledger), the prompt gains one policy sentence, and the model narrates and commits citing the pre-read's refs.
+
+Failure semantics are a downgrade ladder, never a turn error:
+
+- `intent_unknown` (a stale panel across a deploy), `no_program`, `render_failed`, executor rejection/failure, and a resume-replay (`resumed`) all free-form the turn with a `starter_intent_preexec_skipped` host trace event carrying the outcome code (and any thrown failure detail).
+- An **authority signal** observed at the checkpoint (revocation, epoch fence) cancels the turn through the host's existing revocation path — no provider invocation follows.
+- A seeded turn writes a `starter_intent_preexec` trace event with the attempt ref and citation refs, flushed durably **before** the provider turn starts.
+
+Diagnostics: the trace events above are the per-turn record (turn trace capture is env-gated by `AGENT_TURN_TRACE`); the drive scenarios in `scripts/agent-eval-drive.ts` (`starter_<intentId>`) are the guard — they fail when the pre-read did not seed or the committed answer does not cite it, and note a model re-read as a soft trend. Curated programs live in `convex/agentHarness/profiles/starterIntentPrograms.ts`, are conformance-validated against the profile's full-tier facade at definition time, and must return structured objects with explicit absent-capable fields (the executor rejects unstructured results).

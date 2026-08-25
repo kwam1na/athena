@@ -77,6 +77,52 @@ describe("summarizeTrace", () => {
   });
 });
 
+describe("starter-intent scenarios", () => {
+  it("covers every curated Daily Operations starter intent", async () => {
+    const { AGENT_STARTER_INTENT_PROGRAMS } = await import(
+      "../packages/athena-webapp/convex/agentHarness/profiles/starterIntentPrograms"
+    );
+    const suiteIntentIds = new Set(
+      EVAL_SCENARIOS.filter((candidate) => candidate.starterIntentId).map((candidate) => candidate.starterIntentId),
+    );
+    for (const intentId of Object.keys(AGENT_STARTER_INTENT_PROGRAMS.daily_operations)) {
+      expect(suiteIntentIds, `curated intent ${intentId} has no drive scenario`).toContain(intentId);
+    }
+  });
+
+  it("passes when the commit cites the pre-executed attempt, fails when it does not", () => {
+    const starter = EVAL_SCENARIOS.find((candidate) => candidate.starterIntentId === "close_readiness");
+    expect(starter).toBeDefined();
+    const seeded = context({
+      preexec: { outcome: "seeded", attemptRef: "attempt_v1.1.abc", citations: ["citation:v1.1.1.def"] },
+      answer: { outcome: "answer", narrative: "All lanes clear on 2026-08-24.", citations: [{ citationRef: "citation:v1.1.1.def" }] },
+    });
+    expect(evaluateScenario(starter!, seeded).pass).toBe(true);
+    const uncited = context({
+      preexec: { outcome: "seeded", attemptRef: "attempt_v1.1.abc", citations: ["citation:v1.1.1.def"] },
+      answer: { outcome: "answer", narrative: "All lanes clear on 2026-08-24.", citations: [{ citationRef: "citation:v1.9.9.zzz" }] },
+    });
+    expect(evaluateScenario(starter!, uncited).pass).toBe(false);
+  });
+
+  it("fails when the pre-execution skipped, and notes a re-read softly", () => {
+    const starter = EVAL_SCENARIOS.find((candidate) => candidate.starterIntentId === "close_readiness");
+    const skipped = context({ preexec: { outcome: "intent_unknown" } });
+    expect(evaluateScenario(starter!, skipped).pass).toBe(false);
+    const reRead = context({
+      preexec: { outcome: "seeded", attemptRef: "attempt_v1.1.abc", citations: ["citation:v1.1.1.def"] },
+      answer: { outcome: "answer", narrative: "Clear on 2026-08-24.", citations: [{ citationRef: "citation:v1.1.1.def" }] },
+      attempts: [
+        { sequence: 1, status: "result_produced" },
+        { sequence: 2, status: "result_produced" },
+      ],
+    });
+    const verdict = evaluateScenario(starter!, reRead);
+    expect(verdict.pass).toBe(true);
+    expect(verdict.issues.some((issue) => issue.severity === "soft" && issue.message.includes("re-read"))).toBe(true);
+  });
+});
+
 describe("scenario checks", () => {
   it("passes a healthy cross-package answer and fails a narrow one", () => {
     expect(evaluateScenario(scenario("cross_package_readiness"), context({})).pass).toBe(true);

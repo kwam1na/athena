@@ -70,6 +70,8 @@ export type EvalTurnContext = {
   readonly firstDeltaMs?: number;
   /** Set by the driver when the follow-up citation inspection ran. */
   readonly citationResolved?: boolean;
+  /** The host's pre-execution record for a starter-intent turn, from the trace. */
+  readonly preexec?: { readonly outcome: string; readonly attemptRef?: string; readonly citations?: readonly string[] };
 };
 
 export type EvalIssue = { readonly severity: "hard" | "soft"; readonly message: string };
@@ -81,6 +83,8 @@ export type EvalScenario = {
   readonly source: "profile" | "deep";
   /** The driver resolves the first citation of the answer when set. */
   readonly inspectFirstCitation?: boolean;
+  /** Sent with startTurn: the turn opts into this intent's curated pre-read. */
+  readonly starterIntentId?: string;
   readonly check: (context: EvalTurnContext) => readonly EvalIssue[];
 };
 
@@ -219,6 +223,34 @@ export const EVAL_SCENARIOS: readonly EvalScenario[] = [
       return issues;
     },
   },
+  ...(["close_readiness", "open_drawers", "stock_pressure", "automation_today"] as const).map(
+    (intentId): EvalScenario => ({
+      id: `starter_${intentId}`,
+      source: "deep",
+      starterIntentId: intentId,
+      // The prompt is a placeholder: the server substitutes the pinned
+      // intent's canonical prompt when the id is present.
+      prompt: "starter intent tap",
+      check: (context) => {
+        const issues = commonIssues(context);
+        if (!context.answer) return issues;
+        if (!context.preexec || context.preexec.outcome !== "seeded") {
+          issues.push(hard(`the curated pre-read did not seed (${context.preexec?.outcome ?? "no trace"})`));
+          return issues;
+        }
+        if (context.answer.outcome !== "answer") issues.push(hard(`expected an answer, got ${context.answer.outcome}`));
+        const preexecCitations = new Set(context.preexec.citations ?? []);
+        const cited = (context.answer.citations ?? []).map((citation) => citation.citationRef);
+        if (!cited.some((ref) => preexecCitations.has(ref))) {
+          issues.push(hard("the committed answer cites nothing from the pre-executed read"));
+        }
+        if (context.attempts.length > 1) {
+          issues.push(soft(`the model re-read after the pre-executed exchange (${context.attempts.length} attempts)`));
+        }
+        return issues;
+      },
+    }),
+  ),
 ];
 
 // ---------------------------------------------------------------------------
@@ -286,11 +318,13 @@ export function summarizeTrace(events: readonly Record<string, unknown>[]): {
   completeRunCalls: number;
   completionMs?: number;
   firstDeltaMs?: number;
+  preexec?: { outcome: string; attemptRef?: string; citations?: readonly string[] };
 } {
   let toneDenials = 0;
   let completeRunCalls = 0;
   let completionMs: number | undefined;
   let firstDeltaMs: number | undefined;
+  let preexec: { outcome: string; attemptRef?: string; citations?: readonly string[] } | undefined;
   for (const event of events) {
     const payload = (event.payload ?? {}) as Record<string, unknown>;
     if (event.kind === "tool_call_completed" && payload.toolId === "athena.completeRun") {
@@ -303,8 +337,15 @@ export function summarizeTrace(events: readonly Record<string, unknown>[]): {
       if (typeof payload.completionMs === "number") completionMs = payload.completionMs;
       if (typeof payload.firstDeltaMs === "number") firstDeltaMs = payload.firstDeltaMs;
     }
+    if (event.kind === "starter_intent_preexec" || event.kind === "starter_intent_preexec_skipped") {
+      preexec = {
+        outcome: String(payload.outcome ?? "unknown"),
+        ...(typeof payload.attemptRef === "string" ? { attemptRef: payload.attemptRef } : {}),
+        ...(Array.isArray(payload.citations) ? { citations: payload.citations.map(String) } : {}),
+      };
+    }
   }
-  return { toneDenials, completeRunCalls, completionMs, firstDeltaMs };
+  return { toneDenials, completeRunCalls, completionMs, firstDeltaMs, ...(preexec ? { preexec } : {}) };
 }
 
 export function evaluateScenario(scenario: EvalScenario, context: EvalTurnContext) {
@@ -390,6 +431,7 @@ export async function main(argv: readonly string[], rootDir: string): Promise<nu
       turnIdempotencyKey: `turn-${nonce}`.slice(0, 128),
       prompt: scenario.prompt,
       context: { operatingDate: options.operatingDate, storeName: options.storeSlug },
+      ...(scenario.starterIntentId ? { starterIntentId: scenario.starterIntentId } : {}),
     });
     if (started.outcome !== "started" && started.outcome !== "resumed") {
       console.error(`[${scenario.id}] turn refused: ${JSON.stringify(started)}`);
