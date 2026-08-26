@@ -6680,6 +6680,29 @@ describe("cash control deposits", () => {
     );
   });
 
+  it("omits dashboard sales totals when a session exceeds the bounded transaction probe", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      posTransaction: Array.from({ length: 51 }, (_, index) => ({
+        _id: `transaction_${index}`,
+        completedAt: index,
+        paymentMethod: "cash",
+        registerSessionId: "session_open",
+        status: "completed",
+        storeId: "store_1",
+        total: 100,
+        transactionNumber: `${index}`,
+      })),
+    });
+
+    const snapshot = await getHandler(getDashboardSnapshot)(ctx as never, {
+      storeId: "store_1" as Id<"store">,
+    });
+
+    expect(snapshot.openSessions).toEqual([
+      expect.not.objectContaining({ totalSales: expect.any(Number) }),
+    ]);
+  });
+
   it("rejects dashboard snapshots when the caller is unauthenticated", async () => {
     mockedAuthServer.getAuthUserId.mockResolvedValue(null);
     const ctx = createQueryCtx({

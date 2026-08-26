@@ -80,6 +80,8 @@ const CASH_DEPOSIT_SUBJECT_TYPE = "register_cash_deposit";
 const REGISTER_SESSION_SYNC_REVIEW_APPROVAL_ACTION_KEY =
   "cash_controls.register_session.resolve_sync_review";
 const CLOSED_SESSION_DASHBOARD_LIMIT = 5;
+const DASHBOARD_SALES_SESSION_LIMIT = 8;
+const DASHBOARD_SALES_TRANSACTION_LIMIT = 50;
 const RECENT_DEPOSIT_LIMIT = 10;
 const SESSION_LIMIT = 100;
 const STAFF_ROLE_LOOKUP_LIMIT = 20;
@@ -1049,29 +1051,39 @@ async function listRegisterSessionTotalSalesBySessionId(
     storeId: Id<"store">;
   },
 ) {
+  const registerSessions = args.registerSessions
+    .filter(isRegisterSessionSaleUsable)
+    .sort((left, right) => right.openedAt - left.openedAt)
+    .slice(0, DASHBOARD_SALES_SESSION_LIMIT);
   const entries = await Promise.all(
-    args.registerSessions
-      .filter(isRegisterSessionSaleUsable)
-      .map(async (registerSession) => {
-        let totalSales = 0;
-        const query = ctx.db
-          .query("posTransaction")
-          .withIndex("by_storeId_status_registerSessionId_completedAt", (q) =>
-            q
-              .eq("storeId", args.storeId)
-              .eq("status", "completed")
-              .eq("registerSessionId", registerSession._id),
-          );
+    registerSessions.map(async (registerSession) => {
+      const transactions = await ctx.db
+        .query("posTransaction")
+        .withIndex("by_storeId_status_registerSessionId_completedAt", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("status", "completed")
+            .eq("registerSessionId", registerSession._id),
+        )
+        .take(DASHBOARD_SALES_TRANSACTION_LIMIT + 1);
 
-        for await (const transaction of query) {
-          totalSales += transaction.total;
-        }
+      if (transactions.length > DASHBOARD_SALES_TRANSACTION_LIMIT) {
+        return null;
+      }
 
-        return [registerSession._id, totalSales] as const;
-      }),
+      return [
+        registerSession._id,
+        transactions.reduce(
+          (totalSales, transaction) => totalSales + transaction.total,
+          0,
+        ),
+      ] as const;
+    }),
   );
 
-  return new Map(entries);
+  return new Map(
+    entries.filter(Boolean) as Array<[Id<"registerSession">, number]>,
+  );
 }
 
 async function listPendingVoidApprovalSummariesBySessionId(
