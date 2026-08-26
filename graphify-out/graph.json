@@ -2999,7 +2999,7 @@
       "relation": "calls",
       "source": "athenaagentpanel_anchortobottom",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L108",
+      "source_location": "L109",
       "target": "athenaagentpanel_positionat",
       "weight": 1
     },
@@ -3011,7 +3011,7 @@
       "relation": "calls",
       "source": "athenaagentpanel_positionat",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L673",
+      "source_location": "L676",
       "target": "athenaagentpanel_settlequestiontop",
       "weight": 1
     },
@@ -112739,7 +112739,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L100",
+      "source_location": "L101",
       "target": "athenaagentpanel_anchortobottom",
       "weight": 1
     },
@@ -112751,7 +112751,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L113",
+      "source_location": "L114",
       "target": "athenaagentpanel_awayfromlatest",
       "weight": 1
     },
@@ -112763,7 +112763,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L2108",
+      "source_location": "L2111",
       "target": "athenaagentpanel_cn",
       "weight": 1
     },
@@ -112775,7 +112775,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L321",
+      "source_location": "L322",
       "target": "athenaagentpanel_describequality",
       "weight": 1
     },
@@ -112787,7 +112787,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L276",
+      "source_location": "L277",
       "target": "athenaagentpanel_formatturnduration",
       "weight": 1
     },
@@ -112799,7 +112799,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L105",
+      "source_location": "L106",
       "target": "athenaagentpanel_positionat",
       "weight": 1
     },
@@ -112811,7 +112811,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L801",
+      "source_location": "L804",
       "target": "athenaagentpanel_renderprovisionalentries",
       "weight": 1
     },
@@ -112823,7 +112823,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L661",
+      "source_location": "L664",
       "target": "athenaagentpanel_settlequestiontop",
       "weight": 1
     },
@@ -112835,7 +112835,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L256",
+      "source_location": "L257",
       "target": "athenaagentpanel_useprefersreducedmotion",
       "weight": 1
     },
@@ -112847,7 +112847,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L141",
+      "source_location": "L142",
       "target": "athenaagentpanel_usestreamingtext",
       "weight": 1
     },
@@ -112859,7 +112859,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L242",
+      "source_location": "L243",
       "target": "athenaagentpanel_usewordwipe",
       "weight": 1
     },
@@ -112871,7 +112871,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L304",
+      "source_location": "L305",
       "target": "athenaagentpanel_workedduration",
       "weight": 1
     },
@@ -112883,7 +112883,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L288",
+      "source_location": "L289",
       "target": "athenaagentpanel_workingduration",
       "weight": 1
     },
@@ -113315,7 +113315,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_streamreveal_ts",
       "source_file": "packages/athena-webapp/src/components/agent/streamReveal.ts",
-      "source_location": "L30",
+      "source_location": "L44",
       "target": "streamreveal_charactercount",
       "weight": 1
     },
@@ -113327,7 +113327,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_streamreveal_ts",
       "source_file": "packages/athena-webapp/src/components/agent/streamReveal.ts",
-      "source_location": "L22",
+      "source_location": "L25",
       "target": "streamreveal_revealduration",
       "weight": 1
     },
@@ -113339,7 +113339,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_streamreveal_ts",
       "source_file": "packages/athena-webapp/src/components/agent/streamReveal.ts",
-      "source_location": "L35",
+      "source_location": "L49",
       "target": "streamreveal_revealedprefix",
       "weight": 1
     },
@@ -113351,7 +113351,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_streamreveal_ts",
       "source_file": "packages/athena-webapp/src/components/agent/streamReveal.ts",
-      "source_location": "L46",
+      "source_location": "L60",
       "target": "streamreveal_revealedprose",
       "weight": 1
     },
@@ -201047,7 +201047,7 @@
       "relation": "calls",
       "source": "streamreveal_revealedprefix",
       "source_file": "packages/athena-webapp/src/components/agent/streamReveal.ts",
-      "source_location": "L47",
+      "source_location": "L61",
       "target": "streamreveal_revealedprose",
       "weight": 1
     },
@@ -258652,7 +258652,7 @@
       "label": "anchorToBottom()",
       "norm_label": "anchortobottom()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L100"
+      "source_location": "L101"
     },
     {
       "community": 205,
@@ -258661,7 +258661,7 @@
       "label": "awayFromLatest()",
       "norm_label": "awayfromlatest()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L113"
+      "source_location": "L114"
     },
     {
       "community": 205,
@@ -258670,7 +258670,7 @@
       "label": "cn()",
       "norm_label": "cn()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L1293"
+      "source_location": "L1296"
     },
     {
       "community": 205,
@@ -258679,7 +258679,7 @@
       "label": "describeQuality()",
       "norm_label": "describequality()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L321"
+      "source_location": "L322"
     },
     {
       "community": 205,
@@ -258688,7 +258688,7 @@
       "label": "formatTurnDuration()",
       "norm_label": "formatturnduration()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L276"
+      "source_location": "L277"
     },
     {
       "community": 205,
@@ -258697,7 +258697,7 @@
       "label": "positionAt()",
       "norm_label": "positionat()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L105"
+      "source_location": "L106"
     },
     {
       "community": 205,
@@ -258706,7 +258706,7 @@
       "label": "renderProvisionalEntries()",
       "norm_label": "renderprovisionalentries()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L801"
+      "source_location": "L804"
     },
     {
       "community": 205,
@@ -258715,7 +258715,7 @@
       "label": "settleQuestionTop()",
       "norm_label": "settlequestiontop()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L661"
+      "source_location": "L664"
     },
     {
       "community": 205,
@@ -258724,7 +258724,7 @@
       "label": "usePrefersReducedMotion()",
       "norm_label": "useprefersreducedmotion()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L256"
+      "source_location": "L257"
     },
     {
       "community": 205,
@@ -258733,7 +258733,7 @@
       "label": "useStreamingText()",
       "norm_label": "usestreamingtext()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L141"
+      "source_location": "L142"
     },
     {
       "community": 205,
@@ -258742,7 +258742,7 @@
       "label": "useWordWipe()",
       "norm_label": "usewordwipe()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L242"
+      "source_location": "L243"
     },
     {
       "community": 205,
@@ -258751,7 +258751,7 @@
       "label": "WorkedDuration()",
       "norm_label": "workedduration()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L304"
+      "source_location": "L305"
     },
     {
       "community": 205,
@@ -258760,7 +258760,7 @@
       "label": "WorkingDuration()",
       "norm_label": "workingduration()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L288"
+      "source_location": "L289"
     },
     {
       "community": 205,
@@ -325036,7 +325036,7 @@
       "label": "characterCount()",
       "norm_label": "charactercount()",
       "source_file": "packages/athena-webapp/src/components/agent/streamReveal.ts",
-      "source_location": "L30"
+      "source_location": "L44"
     },
     {
       "community": 737,
@@ -325045,7 +325045,7 @@
       "label": "revealDuration()",
       "norm_label": "revealduration()",
       "source_file": "packages/athena-webapp/src/components/agent/streamReveal.ts",
-      "source_location": "L22"
+      "source_location": "L25"
     },
     {
       "community": 737,
@@ -325054,7 +325054,7 @@
       "label": "revealedPrefix()",
       "norm_label": "revealedprefix()",
       "source_file": "packages/athena-webapp/src/components/agent/streamReveal.ts",
-      "source_location": "L35"
+      "source_location": "L49"
     },
     {
       "community": 737,
@@ -325063,7 +325063,7 @@
       "label": "revealedProse()",
       "norm_label": "revealedprose()",
       "source_file": "packages/athena-webapp/src/components/agent/streamReveal.ts",
-      "source_location": "L46"
+      "source_location": "L60"
     },
     {
       "community": 738,
