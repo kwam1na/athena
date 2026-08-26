@@ -44,6 +44,7 @@ import {
   characterCount,
   revealDuration,
   revealedProse,
+  type RevealMode,
 } from "./streamReveal";
 import {
   composeAthenaThreadKey,
@@ -141,13 +142,13 @@ export type AthenaAgentLayout = "docked" | "fullscreen";
 function useStreamingText(input: {
   text: string | null;
   key: string | null;
-  /** Pace: a streaming text catches up within 180 ms, a settled one within 120 ms. */
-  isStreaming: boolean;
+  /** Draft flushes, draft tails, and atomic final answers have distinct pacing. */
+  revealMode: RevealMode;
   /** A new key is seen to arrive from nothing instead of painting whole. */
   arrives: boolean;
   animate: boolean;
 }): { text: string | null; settled: boolean } {
-  const { text, key, isStreaming, arrives, animate } = input;
+  const { text, key, revealMode, arrives, animate } = input;
   const visibleRef = useRef<{ key: string; text: string } | null>(null);
   const frameRef = useRef<number | null>(null);
   const [visible, setVisible] = useState<{ key: string; text: string } | null>(
@@ -202,7 +203,7 @@ function useStreamingText(input: {
       return;
     }
     paint(revealedProse(text, visibleLength));
-    const duration = revealDuration(pending, isStreaming);
+    const duration = revealDuration(pending, revealMode);
     const now = () =>
       typeof performance !== "undefined" ? performance.now() : Date.now();
     const startedAt = now();
@@ -220,7 +221,7 @@ function useStreamingText(input: {
     };
     frameRef.current = requestAnimationFrame(tick);
     return stop;
-  }, [text, key, isStreaming, arrives, animate]);
+  }, [text, key, revealMode, arrives, animate]);
 
   if (text === null || key === null) return { text: null, settled: true };
   const shown = visible && visible.key === key ? visible.text : null;
@@ -455,7 +456,7 @@ export function AthenaAgentPanel({
       draftOrdinal === null || !run.activeTurnId
         ? null
         : `${run.activeTurnId}:${draftOrdinal}`,
-    isStreaming: draftStreaming,
+    revealMode: draftStreaming ? "streaming" : "settling",
     arrives: draftStreaming,
     animate: !reducedMotion,
   });
@@ -485,14 +486,16 @@ export function AthenaAgentPanel({
   const answerReveal = useStreamingText({
     text: run.answer?.narrative ?? null,
     key: answerKey,
-    // An answer that lands live arrives from nothing at the settled pace; one
+    // An answer that lands live arrives from nothing at the answer pace; one
     // the panel mounts onto is already settled and paints whole.
-    isStreaming: false,
+    revealMode: "answer",
     arrives: answerArrivalRef.current?.live === true,
     animate: !reducedMotion && answerArrivalRef.current?.live === true,
   });
   const answerWipe = useWordWipe(
-    !reducedMotion && run.hostState === "running" && !answerReveal.settled,
+    !reducedMotion &&
+      answerArrivalRef.current?.live === true &&
+      !answerReveal.settled,
   );
   const followContentKey = [
     run.activeTurnId ?? "none",

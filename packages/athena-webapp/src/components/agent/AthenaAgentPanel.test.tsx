@@ -3678,7 +3678,7 @@ describe("stream reveal of the committed answer", () => {
     }
   };
 
-  it("reveals an answer that lands while the turn is on screen without replaying the live ink wipe", () => {
+  it("reveals an answer that lands while the turn is on screen with the live ink wipe", () => {
     fakeFrames();
     try {
       const { rerender } = render(
@@ -3703,21 +3703,25 @@ describe("stream reveal of the committed answer", () => {
         expect((painted.match(/\[/g) ?? []).length).toBe(
           (painted.match(/\]/g) ?? []).length,
         );
-        // The model has stopped running, so the committed answer does not
-        // replay the live narration wipe.
-        expect(wipedWords()).toHaveLength(0);
+        expect(wipedWords().length).toBeGreaterThan(0);
       }
       for (let index = 1; index < lengths.length; index += 1) {
         expect(lengths[index]).toBeGreaterThanOrEqual(lengths[index - 1]!);
       }
       expect(new Set(lengths).size).toBeGreaterThan(3);
-      // A settled answer lands within 120 ms, rendered exactly as a mount would render it.
+      // A long live answer remains visibly in flight instead of being compressed
+      // into the draft-tail settle window.
+      expect(screen.getByTestId("athena-agent-answer-text")).toHaveAttribute(
+        "data-reveal",
+        "revealing",
+      );
+      frames(110);
       expect(screen.getByTestId("athena-agent-answer-text")).toHaveAttribute(
         "data-reveal",
         "settled",
       );
       const settled = paintedAnswer();
-      expect(wipedWords()).toHaveLength(0);
+      expect(wipedWords().length).toBeGreaterThan(0);
       frames(50);
       expect(wipedWords()).toHaveLength(0);
       expect(paintedAnswer()).toBe(settled);
