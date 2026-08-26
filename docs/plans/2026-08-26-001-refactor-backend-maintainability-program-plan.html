@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Backend reliability and maintainability program</title>
+  <style>
+    :root { color-scheme: light; --ink:#18212b; --muted:#5b6775; --line:#d8dee6; --panel:#f5f7fa; --accent:#215b9a; --risk:#8a3b12; --ok:#23683f; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:#eef1f4; color:var(--ink); font:15px/1.55 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(1120px,calc(100% - 32px)); margin:24px auto 56px; background:white; border:1px solid var(--line); border-radius:10px; box-shadow:0 8px 28px rgba(20,30,45,.08); }
+    header, section, nav { padding:24px 32px; border-bottom:1px solid var(--line); }
+    section:last-child { border-bottom:0; }
+    h1 { margin:0 0 8px; font-size:30px; line-height:1.2; }
+    h2 { margin:0 0 14px; font-size:21px; }
+    h3 { margin:18px 0 8px; font-size:16px; }
+    p { margin:8px 0; }
+    a { color:var(--accent); }
+    .meta { color:var(--muted); display:flex; flex-wrap:wrap; gap:8px 18px; }
+    .lead { margin-top:18px; font-size:17px; max-width:900px; }
+    nav ul { columns:3; margin:0; padding-left:18px; }
+    .callout { background:var(--panel); border-left:4px solid var(--accent); padding:14px 16px; border-radius:4px; }
+    .risk { border-left-color:var(--risk); }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    .card { border:1px solid var(--line); border-radius:7px; padding:14px 16px; }
+    .card h3 { margin-top:0; }
+    table { width:100%; border-collapse:collapse; font-size:14px; }
+    th, td { text-align:left; vertical-align:top; padding:10px; border:1px solid var(--line); }
+    th { background:var(--panel); }
+    ol, ul { margin:8px 0; padding-left:22px; }
+    .phase { color:var(--accent); font-weight:700; }
+    .posture { color:var(--ok); font-weight:600; }
+    code { background:var(--panel); padding:1px 4px; border-radius:3px; }
+    @media (max-width:760px) { header,section,nav{padding:20px} nav ul{columns:1}.grid{grid-template-columns:1fr} }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Backend reliability and maintainability program</h1>
+    <div class="meta"><span>Created and deepened 2026-08-26</span><span>Type: refactor</span><span>Status: unanimously reviewed</span><span>45 stable implementation units</span></div>
+    <p class="lead">Close replay and partial-commit gaps first, make authority and data-lifecycle ownership explicit, then reduce change amplification behind stable Convex facades. Preserve Athena’s monolith and one-transaction business model throughout.</p>
+    <p><a href="2026-08-26-001-refactor-backend-maintainability-program-plan.md">Canonical Markdown plan with unit-level files, tests, dependencies, and sensor matrix</a></p>
+  </header>
+
+  <nav aria-label="Plan contents">
+    <h2>Contents</h2>
+    <ul>
+      <li><a href="#frame">Problem and invariants</a></li>
+      <li><a href="#decisions">Settled decisions</a></li>
+      <li><a href="#delivery">Five delivery milestones</a></li>
+      <li><a href="#units">Implementation-unit digest</a></li>
+      <li><a href="#operations">Operations and security</a></li>
+      <li><a href="#verification">Verification and rollout</a></li>
+    </ul>
+  </nav>
+
+  <section id="frame">
+    <h2>Problem and invariants</h2>
+    <p>The backend has roughly 245,000 non-generated lines, 199 tables, 617 admitted operations, and multiple 3,000–6,000-line high-churn orchestration files. The expensive complexity clusters around invisible provider intermediate state, duplicate lifecycle authority, open payload/retention contracts, resource-growth uncertainty, and overly broad facades.</p>
+    <div class="callout"><strong>Preserve:</strong> one Convex transaction per business action, direct <code>*WithCtx</code> domain composition, inventory-ledger authority, append-only reporting facts, in-transaction approval proof consumption, complete fail-closed operation admission, and stable registered paths.</div>
+    <div class="callout risk"><strong>Do not:</strong> split into services, turn outboxes into an internal event bus, build a universal provider reducer, move registered functions during extraction, or remove compatibility seams without measured evidence and a separately tracked contraction.</div>
+  </section>
+
+  <section id="decisions">
+    <h2>Settled decisions</h2>
+    <table>
+      <thead><tr><th>Surface</th><th>Decision</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Provider evidence</td><td>Authenticated immutable observations, provider-specific reducers, explicit ambiguity, durable reconciliation</td><td>Paystack, MTN, and Meta differ in replay, callback, ordering, and finality semantics.</td></tr>
+        <tr><td>Local effects</td><td>Inventory, settlement, facts, approvals, and entitlement stay inline in one transaction</td><td>External I/O is the only normal outbox boundary.</td></tr>
+        <tr><td>Human exceptions</td><td>Typed Operations lanes or deployment dual control, with named role, proof, SLO, metrics, and pause switch</td><td>A quarantine without an adopted resolution path is unfinished state.</td></tr>
+        <tr><td>Governance metadata</td><td>One canonical surface record projected into lifecycle and resource-budget checks</td><td>Owner, waiver, risk, telemetry, and expiry cannot drift between catalogs.</td></tr>
+        <tr><td>Legacy waivers</td><td>Unknown/security/financial/data-loss/platform-risk gaps block; evidence-supported lower-risk debt is owned, expiring, observable, and shrink-only</td><td>Inventories stay exhaustive without making delivery an unlimited cleanup program.</td></tr>
+        <tr><td>Structural extraction</td><td>Stable facade, characterized seam, pre/post representative-change measurement</td><td>Extraction proceeds only when it demonstrably reduces change cost.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="delivery">
+    <h2>Five delivery milestones</h2>
+    <div class="grid">
+      <article class="card"><h3><span class="phase">A.</span> Guardrails and correctness</h3><p>U1, U2, and U14 land in parallel; U44 follows U1/U2. U5, U3, U4, U6, and U7 then harden rewards, Paystack, refunds, MTN, and WhatsApp with independently live recovery.</p></article>
+      <article class="card"><h3><span class="phase">B.</span> Authority and bounded operations</h3><p>U8–U13, U15, U26–U28, and U39–U42 establish stable auth identity, intelligence ownership, typed contracts, retention, and blocking async-governance closure.</p></article>
+      <article class="card"><h3><span class="phase">C.</span> Structural decomposition</h3><p>U16–U23, U29–U34, and U43 modularize admission and schema ownership and run evidence-gated facade-preserving hotspot pilots.</p></article>
+      <article class="card"><h3><span class="phase">D.</span> Retirement readiness</h3><p>U24 and U35–U38 census the LLM seam, inventory authority, checkout key, embedded order collections, and reporting compatibility. No deletion is implied.</p></article>
+      <article class="card"><h3><span class="phase">E.</span> Program closure</h3><p>U45 closes the finite blocking budget set after structural/census work; U25 performs the final sensor, artifact, and standing-documentation audit.</p></article>
+    </div>
+    <p><span class="posture">Authoritative ordering:</span> each unit’s <code>Dependencies</code> field in the Markdown plan. Delivery uses independent PRs; each PR regenerates the artifacts it owns.</p>
+  </section>
+
+  <section id="units">
+    <h2>Implementation-unit digest</h2>
+    <table>
+      <thead><tr><th>Units</th><th>Outcome group</th><th>Representative proof</th></tr></thead>
+      <tbody>
+        <tr><td>U1–U2, U14, U44–U45</td><td>Dependency, lifecycle-governance, scheduling, and resource-budget guardrails/closure</td><td>Shrink-only baselines; canonical metadata parity; reachable enforcement; zero blocking gaps</td></tr>
+        <tr><td>U3–U7</td><td>Paystack charge/refund, reward, MTN, and WhatsApp correctness</td><td>Replay permutations, lost responses, scoped evidence, parent/chunk recovery, provider sandbox smoke</td></tr>
+        <tr><td>U8, U39–U42</td><td>Staged <code>intelligenceRun</code> owner migration and single writer authority</td><td>Widen, guard, backfill/quarantine, cut over/observe, then require owner</td></tr>
+        <tr><td>U9–U13, U26</td><td>Completion bounds, typed notifications/problems/results, stable auth identity</td><td>Cap-plus-one, validator parity, safe errors, writer inventory, collision-safe migration</td></tr>
+        <tr><td>U15, U27–U28</td><td>Notification and legacy-intelligence retention/deletion governance</td><td>Durable fences, poison workflows, cron reachability, blocking-gap closure and waiver ratchet</td></tr>
+        <tr><td>U16–U18, U30–U34, U43</td><td>Admission checker/authoring and independently mergeable schema composition</td><td>Golden findings, zero admission findings, post-migration expected manifest, composition-only delta</td></tr>
+        <tr><td>U19–U23, U29</td><td>Daily Close/Operations, POS, catalog, cash, and order facade-preserving extraction</td><td>Representative output parity plus measured pre/post maintenance exercise</td></tr>
+        <tr><td>U24, U35–U38</td><td>Compatibility census and keep-or-contract evidence</td><td>Bounded preview/checkpoint/final-delta, live-use telemetry, explicit exit gate</td></tr>
+        <tr><td>U25</td><td>Final sensors, generated artifacts, docs, and merge-ready proof</td><td>Reversion-sensitive checks, fresh Graphify/harness artifacts, final <code>pr:athena</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="operations">
+    <h2>Operations and security</h2>
+    <ul>
+      <li>Provider evidence is authenticated before persistence or application; client fields are correlation hints until server-to-provider verification succeeds.</li>
+      <li>Refund request IDs are cryptographically unpredictable, scoped to organization/store/order, never bearer authority, and re-authorized on every create/status/resume/cancel path.</li>
+      <li>WhatsApp callbacks use explicit parent/chunk tables, a durable customer-messaging deletion-fence generation, monotone reduction, and acknowledgement only after every child is applied, duplicate, quarantined, or deletion-terminal.</li>
+      <li>Paystack/reward/refund and MTN exceptions, ambiguous messages, notification/intelligence cleanup poison, POS conflicts, and catalog conflicts all have a named workflow, role, proof posture, SLO, metrics, and capacity fallback.</li>
+      <li>Auth-link and intelligence-owner ambiguity uses deployment dual control and blocks cutover; no broad in-product resolver is introduced.</li>
+    </ul>
+  </section>
+
+  <section id="verification">
+    <h2>Verification and rollout</h2>
+    <ul>
+      <li>Correctness behavior is test-first; fragile extraction and migrations are characterization-first; derived docs/artifacts use sensor-only closure.</li>
+      <li>Each code-bearing unit runs focused tests plus changed Convex lint/audit, webapp typecheck, Graphify rebuild/check, and merge-ready <code>bun run pr:athena</code>. Ingress and script units add admission and harness checks.</li>
+      <li>Provider flows cover duplicate/conflict, reversed order, wrong scope, accepted-plus-timeout, local-commit-plus-lost-response, retention/deletion races, poison work, and reconciliation.</li>
+      <li>Migrations cover preview, bounded resumable apply, overlap delta, collision/quarantine, cutover, observation, and forward-safe recovery.</li>
+      <li>Each hotspot repeats the same representative maintenance change after extraction, must regress on no dimension and improve at least one, and records keep/revert/redirect before follow-on expansion.</li>
+      <li>Six reviewer lenses—coherence, feasibility, product, security, scope, and adversarial—returned unanimous empty findings on the settled Markdown revision.</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>
