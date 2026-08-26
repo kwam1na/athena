@@ -82,6 +82,7 @@ const REGISTER_SESSION_SYNC_REVIEW_APPROVAL_ACTION_KEY =
 const CLOSED_SESSION_DASHBOARD_LIMIT = 5;
 const DASHBOARD_SALES_SESSION_LIMIT = 8;
 const DASHBOARD_SALES_TRANSACTION_LIMIT = 50;
+const DASHBOARD_SYNC_REVIEW_LIMIT = 50;
 const RECENT_DEPOSIT_LIMIT = 10;
 const SESSION_LIMIT = 100;
 const STAFF_ROLE_LOOKUP_LIMIT = 20;
@@ -1198,6 +1199,7 @@ export const getDashboardSnapshot = query({
             .take(SESSION_LIMIT),
           listRegisterSessionSyncReviewConflicts(ctx, args.storeId, {
             includeRejectedEvidence: true,
+            limit: DASHBOARD_SYNC_REVIEW_LIMIT,
           }),
         ]);
 

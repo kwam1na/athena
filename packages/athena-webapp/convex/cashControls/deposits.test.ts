@@ -45,6 +45,11 @@ function getHandler(definition: unknown) {
 
 function createQueryCtx(seed: Record<string, Array<Record<string, unknown>>>) {
   const indexReads: Array<{ indexName: string; tableName: string }> = [];
+  const takeReads: Array<{
+    indexName?: string;
+    limit: number;
+    tableName: string;
+  }> = [];
   const rowsByTable = new Map(
     Object.entries(seed).map(([tableName, rows]) => [
       tableName,
@@ -89,6 +94,7 @@ function createQueryCtx(seed: Record<string, Array<Record<string, unknown>>>) {
         Object.assign(row, value);
       },
       query: (tableName: string) => {
+        let activeIndexName: string | undefined;
         const filters: Array<[string, unknown]> = [];
         const predicateFilters: Array<
           (row: Record<string, unknown>) => boolean
@@ -126,6 +132,7 @@ function createQueryCtx(seed: Record<string, Array<Record<string, unknown>>>) {
             return query;
           },
           withIndex: (indexName: string, build: (q: any) => unknown) => {
+            activeIndexName = indexName;
             indexReads.push({ indexName, tableName });
             const indexQuery = {
               eq(field: string, value: unknown) {
@@ -168,6 +175,7 @@ function createQueryCtx(seed: Record<string, Array<Record<string, unknown>>>) {
             return getRows(tableName).find((row) => matches(row)) ?? null;
           },
           async take(limit: number) {
+            takeReads.push({ indexName: activeIndexName, limit, tableName });
             return getRows(tableName)
               .filter((row) => matches(row))
               .slice(0, limit);
@@ -188,6 +196,7 @@ function createQueryCtx(seed: Record<string, Array<Record<string, unknown>>>) {
     },
     auth: {},
     indexReads,
+    takeReads,
   };
 }
 
@@ -6677,6 +6686,20 @@ describe("cash control deposits", () => {
           }),
         ]),
       }),
+    );
+    expect(ctx.takeReads).toEqual(
+      expect.arrayContaining([
+        {
+          indexName: "by_store_status",
+          limit: 51,
+          tableName: "posLocalSyncConflict",
+        },
+        {
+          indexName: "by_store_status",
+          limit: 51,
+          tableName: "posLocalSyncEvent",
+        },
+      ]),
     );
   });
 
