@@ -3,12 +3,17 @@ import { describe, expect, it } from "vitest";
 import { characterCount, revealDuration, revealedPrefix, revealedProse } from "./streamReveal";
 
 describe("stream reveal", () => {
-  it("keeps streaming catch-up brief and settles completed text faster", () => {
-    expect(revealDuration(0, true)).toBe(0);
-    expect(revealDuration(1, true)).toBe(70);
-    expect(revealDuration(12, true)).toBe(120);
-    expect(revealDuration(100, true)).toBe(180);
-    expect(revealDuration(100, false)).toBe(120);
+  it("keeps draft catch-up brief while scaling a live final answer into view", () => {
+    expect(revealDuration(0, "streaming")).toBe(0);
+    expect(revealDuration(1, "streaming")).toBe(70);
+    expect(revealDuration(12, "streaming")).toBe(120);
+    expect(revealDuration(100, "streaming")).toBe(180);
+    expect(revealDuration(100, "settling")).toBe(120);
+    expect(revealDuration(1, "answer")).toBe(3);
+    expect(revealDuration(100, "answer")).toBe(300);
+    expect(revealDuration(300, "answer")).toBe(900);
+    expect(revealDuration(1_000, "answer")).toBe(3_000);
+    expect(revealDuration(5_000, "answer")).toBe(15_000);
   });
 
   it("reveals whole Unicode code points and clamps the character boundary", () => {
