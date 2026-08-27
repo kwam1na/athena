@@ -363,7 +363,10 @@ vi.mock(
 
 function buildMockLocalStore() {
   return {
-    appendEvent: mockAppendLocalEvent,
+    // These presentation tests inspect the durable ledger input. The optional
+    // diagnostic context is a separate port argument and is covered at the
+    // local-command boundary, so keep it out of this payload spy.
+    appendEvent: (input: unknown) => mockAppendLocalEvent(input),
     attachStaffProofTokenToPendingEvents:
       mockAttachStaffProofTokenToPendingEvents,
     getStaffAuthorityReadiness: mockGetStaffAuthorityReadiness,

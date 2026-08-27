@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 
@@ -8,7 +15,11 @@ import {
   getInitialRuntimeBuildMetadata,
   type AthenaWebappRuntimeBuildMetadata,
 } from "@/lib/runtimeBuildMetadata";
-import { snapshotPosRuntimeCounters } from "@/lib/pos/infrastructure/telemetry/runtimeCounters";
+import {
+  getPosRuntimeCounterRevision,
+  snapshotPosRuntimeCounters,
+  subscribePosRuntimeCounters,
+} from "@/lib/pos/infrastructure/telemetry/runtimeCounters";
 import { isLocalPinVerifierMetadata } from "@/lib/security/localPinVerifier";
 import { isNonBlockingRegisterLifecycleReviewEvent } from "~/shared/registerSessionLifecyclePolicy";
 import {
@@ -307,6 +318,11 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const [runtimeBuildMetadata] = useState(getInitialRuntimeBuildMetadata);
   const [recoveryCommandRetryToken, setRecoveryCommandRetryToken] = useState(0);
   const [debug, setDebug] = useState<PosLocalRuntimeSyncDebug>({});
+  const runtimeCounterRevision = useSyncExternalStore(
+    subscribePosRuntimeCounters,
+    getPosRuntimeCounterRevision,
+    getPosRuntimeCounterRevision,
+  );
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator === "undefined" ? true : navigator.onLine,
   );
@@ -1255,8 +1271,11 @@ export function usePosLocalSyncRuntimeStatus(input: {
     [appUpdateCommandCorrelation, appUpdateCoordinator, runtimeBuildMetadata],
   );
 
-  const runtimeStatusInput = useMemo(
-    () => ({
+  const runtimeStatusInput = useMemo(() => {
+    // Reading the revision is what makes this otherwise query-free counter
+    // snapshot reactive to telemetry writes.
+    void runtimeCounterRevision;
+    return {
       activeRegisterSession: runtimeReadiness.activeRegisterSession,
       appShell: runtimeReadiness.appShell,
       appSessionRecovery: input.appSessionRecovery,
@@ -1277,29 +1296,29 @@ export function usePosLocalSyncRuntimeStatus(input: {
       runtimeCounters: snapshotPosRuntimeCounters(),
       terminalIntegrity: runtimeReadiness.terminalIntegrity,
       terminalSeed: runtimeReadiness.terminalSeed,
-    }),
-    [
-      events,
-      input.appSessionRecovery,
-      input.staffAuthorityStatus,
-      isOnline,
-      readError,
-      runtimeAppUpdate,
-      runtimeReadiness.activeRegisterSession,
-      runtimeReadiness.appShell,
-      runtimeBuildMetadata.appVersion,
-      runtimeBuildMetadata.buildSha,
-      runtimeReadiness.drawerAuthority,
-      runtimeReadiness.snapshots,
-      runtimeReadiness.staffAuthorityStatus,
-      runtimeReadiness.terminalIntegrity,
-      runtimeReadiness.terminalSeed,
-      runtimeStatusSyncDebug,
-      source,
-      staffProfileId,
-      storageHealth,
-    ],
-  );
+    };
+  }, [
+    events,
+    input.appSessionRecovery,
+    input.staffAuthorityStatus,
+    isOnline,
+    readError,
+    runtimeAppUpdate,
+    runtimeReadiness.activeRegisterSession,
+    runtimeReadiness.appShell,
+    runtimeBuildMetadata.appVersion,
+    runtimeBuildMetadata.buildSha,
+    runtimeReadiness.drawerAuthority,
+    runtimeReadiness.snapshots,
+    runtimeReadiness.staffAuthorityStatus,
+    runtimeReadiness.terminalIntegrity,
+    runtimeReadiness.terminalSeed,
+    runtimeStatusSyncDebug,
+    runtimeCounterRevision,
+    source,
+    staffProfileId,
+    storageHealth,
+  ]);
   const runtimeStatus = useMemo(
     () => buildPosTerminalRuntimeStatus(runtimeStatusInput),
     [runtimeStatusInput],
@@ -1921,8 +1940,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
             } catch (error) {
               return {
                 ok: false,
-                message:
-                  error instanceof Error ? error.message : String(error),
+                message: error instanceof Error ? error.message : String(error),
               };
             }
           },

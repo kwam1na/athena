@@ -57,6 +57,15 @@ import type {
 import { canReportPosRegisterSessionLocalActivityType } from "../../../../../shared/posRegisterSessionActivityContract";
 import { reconcileRegisterLifecycleServerAuthority } from "./registerLifecycleAuthorityReconciliation";
 import { assessPosLocalLedgerRetention } from "./posLocalLedgerPolicy";
+import { reportPosUnexpectedError } from "@/lib/pos/application/errorTelemetry";
+import type { PosLocalStoreDiagnosticContext } from "@/lib/pos/application/posLocalStorePort";
+import type { PosDiagnosticClassification } from "~/shared/posDiagnosticRedaction";
+import {
+  beginPosTerminalIdentityTransition,
+  markPosTerminalIdentityUncoordinated,
+  settlePosTerminalIdentityTransition,
+  withPosTerminalIdentityWriteLock,
+} from "@/lib/pos/infrastructure/telemetry/telemetryContext";
 
 // Temporary compatibility for tests and migration utilities. Production
 // consumers import semantic contracts from the application boundary directly.
@@ -110,6 +119,7 @@ export interface PosLocalStoreTransaction {
 }
 
 export interface PosLocalStorageAdapter {
+  diagnosticStorageEngine?: "indexeddb" | "memory";
   transaction<T>(
     mode: "readonly" | "readwrite",
     storeNames: PosLocalObjectStoreName[],
@@ -190,12 +200,73 @@ class PosLocalStoreOperationError extends Error {
   }
 }
 
+let memoryTerminalSeedWriteTail = Promise.resolve();
+
 export function createPosLocalStore(options: PosLocalStoreOptions) {
   const clock = options.clock ?? Date.now;
   const createLocalId =
     options.createLocalId ??
     ((kind: string) =>
       `${kind}-${clock()}-${Math.random().toString(36).slice(2)}`);
+  const mintTelemetryIdentityEpoch = () => {
+    try {
+      if (typeof crypto !== "undefined" && crypto.randomUUID) {
+        return `pos-identity-epoch-${crypto.randomUUID()}`;
+      }
+    } catch {
+      // Fall through to the bounded opaque fallback.
+    }
+    return `pos-identity-epoch-${clock().toString(36)}-${Math.random().toString(36).slice(2, 14)}`;
+  };
+  async function runTerminalSeedWriteExclusive<T>(
+    callback: () => Promise<T>,
+  ): Promise<T> {
+    const previous = memoryTerminalSeedWriteTail;
+    let release!: () => void;
+    memoryTerminalSeedWriteTail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await callback();
+    } finally {
+      release();
+    }
+  }
+
+  async function runTerminalSeedMutation<T>(
+    callback: () => Promise<T>,
+  ): Promise<T> {
+    const uncoordinatedMutation = async () => {
+      markPosTerminalIdentityUncoordinated("in_flight");
+      try {
+        return await callback();
+      } finally {
+        markPosTerminalIdentityUncoordinated("settled");
+      }
+    };
+    const coordinatedMutation = async () => {
+      const lease = beginPosTerminalIdentityTransition();
+      if (!lease) {
+        return uncoordinatedMutation();
+      }
+      try {
+        return await callback();
+      } finally {
+        settlePosTerminalIdentityTransition(lease);
+      }
+    };
+    if (options.adapter.diagnosticStorageEngine === "memory") {
+      return runTerminalSeedWriteExclusive(coordinatedMutation);
+    }
+    const locked = await withPosTerminalIdentityWriteLock(coordinatedMutation);
+    if (locked.acquired) return locked.value;
+
+    // This marker is only a shared fail-closed telemetry fence. It does not
+    // claim exclusivity; the business mutation proceeds without pretending
+    // localStorage can serialize cross-document writers.
+    return uncoordinatedMutation();
+  }
 
   function catalogRevisionKey(revision: PosRegisterCatalogRevision) {
     return revision === "legacy" ? "legacy" : `server-${revision}`;
@@ -216,7 +287,11 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
     return `${REGISTER_CATALOG_STAGED_PREFIX}${storeId}`;
   }
 
-  function catalogPinKey(storeId: string, terminalId: string, ownerId?: string) {
+  function catalogPinKey(
+    storeId: string,
+    terminalId: string,
+    ownerId?: string,
+  ) {
     return `${REGISTER_CATALOG_PIN_PREFIX}${storeId}:${terminalId}:${ownerId ?? "default"}`;
   }
 
@@ -441,8 +516,18 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
     }
   }
 
-  function toFailure<T>(error: unknown): PosLocalStoreResult<T> {
+  function toFailure<T>(
+    error: unknown,
+    diagnosticContext?: PosLocalStoreDiagnosticContext,
+  ): PosLocalStoreResult<T> {
     if (error instanceof PosLocalStoreSchemaError) {
+      reportLocalStoreFailure({
+        classification: "local_storage_schema_mismatch",
+        code: error.code,
+        context: diagnosticContext,
+        error,
+        mode: "readwrite",
+      });
       return {
         ok: false,
         error: {
@@ -453,6 +538,13 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
     }
 
     if (error instanceof PosLocalStoreLogicalRecordVersionError) {
+      reportLocalStoreFailure({
+        classification: "local_storage_schema_mismatch",
+        code: error.code,
+        context: diagnosticContext,
+        error,
+        mode: "readwrite",
+      });
       return {
         ok: false,
         error: { code: error.code, message: error.message },
@@ -460,6 +552,13 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
     }
 
     if (error instanceof PosLocalStoreMissingObjectStoresError) {
+      reportLocalStoreFailure({
+        classification: "local_storage_schema_mismatch",
+        code: error.code,
+        context: diagnosticContext,
+        error,
+        mode: "readwrite",
+      });
       return {
         ok: false,
         error: {
@@ -481,6 +580,14 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       operationError?.mode,
     );
 
+    reportLocalStoreFailure({
+      classification: classifyPosLocalStoreDiagnostic(classified, nativeName),
+      code: classified,
+      context: diagnosticContext,
+      error: nativeError,
+      mode: operationError?.mode ?? "readwrite",
+    });
+
     return {
       ok: false,
       error: {
@@ -488,6 +595,29 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
         message: safePosLocalStoreFailureMessage(classified),
       },
     };
+  }
+
+  function reportLocalStoreFailure(input: {
+    classification: PosDiagnosticClassification;
+    code: PosLocalStoreErrorCode;
+    context?: PosLocalStoreDiagnosticContext;
+    error: unknown;
+    mode: "readonly" | "readwrite";
+  }) {
+    if (!input.context) return;
+    reportPosUnexpectedError({
+      classification: input.classification,
+      error: input.error,
+      flow: input.context.flow,
+      localRegisterSessionId: input.context.localRegisterSessionId,
+      message: "POS local storage operation failed",
+      metadata: {
+        accessMode: input.mode,
+        storageCode: input.code,
+        storageEngine: options.adapter.diagnosticStorageEngine ?? "indexeddb",
+      },
+      operation: input.context.operation,
+    });
   }
 
   async function appendEventInTransaction(
@@ -649,7 +779,10 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
         );
         return { ok: true, value };
       } catch (error) {
-        return toFailure(error);
+        return toFailure(error, {
+          flow: "storage",
+          operation: "initializeStorage",
+        });
       }
     },
 
@@ -765,25 +898,27 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
 
     async resetSharedDemoFirstVisitState(): Promise<PosLocalStoreResult<null>> {
       try {
-        await options.adapter.transaction(
-          "readwrite",
-          [...POS_LOCAL_OBJECT_STORE_NAMES],
-          async (transaction) => {
-            await ensureSupportedSchema(transaction, "readwrite");
-            for (const storeName of POS_LOCAL_OBJECT_STORE_NAMES) {
-              const keys = await transaction.getAllKeys(storeName);
-              for (const key of keys) {
-                if (
-                  storeName === "meta" &&
-                  (key === META_SCHEMA_VERSION_KEY ||
-                    key === META_LOGICAL_RECORD_VERSION_KEY)
-                ) {
-                  continue;
+        await runTerminalSeedMutation(() =>
+          options.adapter.transaction(
+            "readwrite",
+            [...POS_LOCAL_OBJECT_STORE_NAMES],
+            async (transaction) => {
+              await ensureSupportedSchema(transaction, "readwrite");
+              for (const storeName of POS_LOCAL_OBJECT_STORE_NAMES) {
+                const keys = await transaction.getAllKeys(storeName);
+                for (const key of keys) {
+                  if (
+                    storeName === "meta" &&
+                    (key === META_SCHEMA_VERSION_KEY ||
+                      key === META_LOGICAL_RECORD_VERSION_KEY)
+                  ) {
+                    continue;
+                  }
+                  await transaction.delete(storeName, key);
                 }
-                await transaction.delete(storeName, key);
               }
-            }
-          },
+            },
+          ),
         );
         return { ok: true, value: null };
       } catch (error) {
@@ -795,19 +930,31 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       seed: PosProvisionedTerminalSeed,
     ): Promise<PosLocalStoreResult<PosProvisionedTerminalSeed>> {
       try {
-        const value = await options.adapter.transaction(
-          "readwrite",
-          ["meta", "terminalSeed"],
-          async (transaction) => {
-            await ensureSupportedSchema(transaction, "readwrite");
-            await transaction.put("terminalSeed", TERMINAL_SEED_KEY, seed);
-            return seed;
-          },
+        const value = await runTerminalSeedMutation(() =>
+          options.adapter.transaction(
+            "readwrite",
+            ["meta", "terminalSeed"],
+            async (transaction) => {
+              await ensureSupportedSchema(transaction, "readwrite");
+              const storedSeed = {
+                ...seed,
+                telemetryIdentityEpoch: mintTelemetryIdentityEpoch(),
+              };
+              await transaction.put(
+                "terminalSeed",
+                TERMINAL_SEED_KEY,
+                storedSeed,
+              );
+              return storedSeed;
+            },
+          ),
         );
-
         return { ok: true, value };
       } catch (error) {
-        return toFailure(error);
+        return toFailure(error, {
+          flow: "settings",
+          operation: "writeProvisionedTerminalSeed",
+        });
       }
     },
 
@@ -816,43 +963,56 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       terminalIntegrity: { storeId: string; terminalId: string };
     }): Promise<PosLocalStoreResult<PosProvisionedTerminalSeed>> {
       try {
-        const value = await options.adapter.transaction(
-          "readwrite",
-          ["meta", "terminalSeed", "authority"],
-          async (transaction) => {
-            await ensureSupportedSchema(transaction, "readwrite");
-            const states = await transaction.getAll<unknown>("authority");
-            for (const state of states) {
-              if (
-                isTerminalIntegrityState(state) &&
-                state.storeId === input.terminalIntegrity.storeId &&
-                (state.terminalId === input.terminalIntegrity.terminalId ||
-                  state.cloudTerminalId === input.terminalIntegrity.terminalId)
-              ) {
-                await transaction.delete(
-                  "authority",
-                  terminalIntegrityKey(state.storeId, state.terminalId),
-                );
+        const value = await runTerminalSeedMutation(() =>
+          options.adapter.transaction(
+            "readwrite",
+            ["meta", "terminalSeed", "authority"],
+            async (transaction) => {
+              await ensureSupportedSchema(transaction, "readwrite");
+              const states = await transaction.getAll<unknown>("authority");
+              for (const state of states) {
+                if (
+                  isTerminalIntegrityState(state) &&
+                  state.storeId === input.terminalIntegrity.storeId &&
+                  (state.terminalId === input.terminalIntegrity.terminalId ||
+                    state.cloudTerminalId ===
+                      input.terminalIntegrity.terminalId)
+                ) {
+                  await transaction.delete(
+                    "authority",
+                    terminalIntegrityKey(state.storeId, state.terminalId),
+                  );
+                }
               }
-            }
-            await transaction.put(
-              "terminalSeed",
-              TERMINAL_SEED_KEY,
-              input.seed,
-            );
-            return input.seed;
-          },
+              await transaction.put(
+                "terminalSeed",
+                TERMINAL_SEED_KEY,
+                {
+                  ...input.seed,
+                  telemetryIdentityEpoch: mintTelemetryIdentityEpoch(),
+                },
+              );
+              return (
+                (await transaction.get<PosProvisionedTerminalSeed>(
+                  "terminalSeed",
+                  TERMINAL_SEED_KEY,
+                )) ?? input.seed
+              );
+            },
+          ),
         );
-
         return { ok: true, value };
       } catch (error) {
-        return toFailure(error);
+        return toFailure(error, {
+          flow: "settings",
+          operation: "writeProvisionedTerminalSeedAndClearTerminalIntegrity",
+        });
       }
     },
 
-    async readProvisionedTerminalSeed(): Promise<
-      PosLocalStoreResult<PosProvisionedTerminalSeed | null>
-    > {
+    async readProvisionedTerminalSeed(input?: {
+      reportFailure?: boolean;
+    }): Promise<PosLocalStoreResult<PosProvisionedTerminalSeed | null>> {
       try {
         const value = await options.adapter.transaction(
           "readonly",
@@ -870,7 +1030,12 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
 
         return { ok: true, value };
       } catch (error) {
-        return toFailure(error);
+        return input?.reportFailure === false
+          ? toFailure(error)
+          : toFailure(error, {
+              flow: "settings",
+              operation: "readProvisionedTerminalSeed",
+            });
       }
     },
 
@@ -1791,8 +1956,9 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
               input.revision,
             );
             const version = [state.active, state.staged, requestedVersion]
-              .filter((candidate): candidate is PosLocalRegisterCatalogVersion =>
-                Boolean(candidate),
+              .filter(
+                (candidate): candidate is PosLocalRegisterCatalogVersion =>
+                  Boolean(candidate),
               )
               .sort((left, right) =>
                 compareCatalogRevisions(right.revision, left.revision),
@@ -2097,6 +2263,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
 
     async appendEvent(
       input: PosLocalAppendEventInput,
+      diagnosticContext?: PosLocalStoreDiagnosticContext,
     ): Promise<PosLocalStoreResult<PosLocalEventRecord>> {
       try {
         const value = await options.adapter.transaction(
@@ -2110,7 +2277,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
 
         return { ok: true, value };
       } catch (error) {
-        return toFailure(error);
+        return toFailure(error, diagnosticContext);
       }
     },
 
@@ -2129,7 +2296,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
 
         return { ok: true, value };
       } catch (error) {
-        return toFailure(error);
+        return toFailure(error, { flow: "sync", operation: "listEvents" });
       }
     },
 
@@ -2315,7 +2482,10 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
         );
         return { ok: true, value };
       } catch (error) {
-        return toFailure(error);
+        return toFailure(error, {
+          flow: "sync",
+          operation: "listEventsForUpload",
+        });
       }
     },
 
@@ -2475,7 +2645,10 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
 
         return { ok: true, value };
       } catch (error) {
-        return toFailure(error);
+        return toFailure(error, {
+          flow: "sync",
+          operation: "writeLocalCloudMapping",
+        });
       }
     },
 
@@ -2519,7 +2692,10 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
 
         return { ok: true, value };
       } catch (error) {
-        return toFailure(error);
+        return toFailure(error, {
+          flow: "sync",
+          operation: "markEventsSynced",
+        });
       }
     },
 
@@ -2640,7 +2816,10 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
 
         return { ok: true, value };
       } catch (error) {
-        return toFailure(error);
+        return toFailure(error, {
+          flow: "sync",
+          operation: "readLocalCloudMapping",
+        });
       }
     },
 
@@ -2690,7 +2869,10 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
           },
         };
       } catch (error) {
-        return toFailure(error);
+        return toFailure(error, {
+          flow: "sync",
+          operation: "readLocalCloudMapping",
+        });
       }
     },
 
@@ -2859,8 +3041,8 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
               // session are purge candidates.
               const pastRetentionBoundary = Boolean(
                 sessionId &&
-                  sessionId !== input.activeLocalRegisterSessionId &&
-                  !currentRegisterSessionIds.has(sessionId),
+                sessionId !== input.activeLocalRegisterSessionId &&
+                !currentRegisterSessionIds.has(sessionId),
               );
               const assessment = assessPosLocalLedgerRetention({
                 activityStatus: event.activity?.status,
@@ -2895,7 +3077,9 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
             return {
               status: "completed",
               purgedCount: purgedSequences.length,
-              purgedSequences: purgedSequences.sort((left, right) => left - right),
+              purgedSequences: purgedSequences.sort(
+                (left, right) => left - right,
+              ),
               retainedCount,
             };
           },
@@ -2922,7 +3106,10 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
 
         return { ok: true, value };
       } catch (error) {
-        return toFailure(error);
+        return toFailure(error, {
+          flow: "sync",
+          operation: "readLocalCloudMapping",
+        });
       }
     },
   };
@@ -3936,6 +4123,7 @@ export function createIndexedDbPosLocalStorageAdapter(options?: {
   }
 
   return {
+    diagnosticStorageEngine: "indexeddb",
     async transaction<T>(
       mode: "readonly" | "readwrite",
       storeNames: PosLocalObjectStoreName[],
@@ -4362,6 +4550,7 @@ export function createMemoryPosLocalStorageAdapter(options?: {
   }
 
   return {
+    diagnosticStorageEngine: "memory",
     async transaction(_mode, _storeNames, callback) {
       const run = async () => {
         const transactionData = cloneMemoryStore(data);
@@ -4629,6 +4818,31 @@ function classifyPosLocalStoreErrorCode(
       return "unsupported_schema_version";
     default:
       return mode === "readonly" ? "read_failed" : "write_failed";
+  }
+}
+
+function classifyPosLocalStoreDiagnostic(
+  code: PosLocalStoreErrorCode,
+  nativeName: string,
+): PosDiagnosticClassification {
+  switch (code) {
+    case "unsupported_schema_version":
+    case "unsupported_logical_record_version":
+    case "missing_object_stores":
+      return "local_storage_schema_mismatch";
+    case "quota_exceeded":
+      return "local_storage_quota_exceeded";
+    case "corruption":
+      return "local_storage_corrupt";
+    case "contention":
+      return "local_storage_transaction_failed";
+    case "read_failed":
+    case "write_failed":
+      return nativeName === "Error"
+        ? "local_storage_transaction_failed"
+        : "local_storage_unknown";
+    default:
+      return "local_storage_unknown";
   }
 }
 

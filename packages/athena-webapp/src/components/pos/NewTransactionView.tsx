@@ -1,4 +1,4 @@
-import { logger } from "@/lib/logger";
+import { reportPosHandledException } from "@/lib/pos/infrastructure/telemetry/loggerGateway";
 import { useState } from "react";
 import View from "../View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
@@ -83,7 +83,12 @@ export function NewTransactionView() {
         },
       });
     } catch (error) {
-      logger.error("Failed to start transaction", error instanceof Error ? error : { error: String(error) });
+      reportPosHandledException({
+        error,
+        flow: "transaction",
+        localMessage: "Failed to start transaction",
+        operation: "startTransaction",
+      });
     } finally {
       setIsStarting(false);
     }

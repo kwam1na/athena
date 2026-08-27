@@ -229,9 +229,13 @@ export function finalizePrintAttempt(
     ) {
       enqueuePosClientEvent({
         level: "warn",
-        flow: "runtime",
-        message: "POS print lifecycle diagnostic",
-        metadata: buildMetadata(attempt, completionReason),
+        flow: "printing",
+        classification: "continuity_warning",
+        operation: "recordReceiptPrint",
+        metadata: {
+          printAttemptId: attempt.id,
+          printCorrelation: completionReason,
+        },
       });
     }
 

@@ -1,5 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POS_LOCAL_LOGICAL_RECORD_VERSION } from "@/lib/pos/application/posLocalStoreTypes";
+import {
+  POS_TERMINAL_IDENTITY_CHANGE_EVENT,
+  POS_TERMINAL_IDENTITY_GENERATION_STORAGE_KEY,
+  readPosTerminalIdentityTransition,
+} from "@/lib/pos/infrastructure/telemetry/telemetryContext";
 
 import type {
   PosRegisterCatalogAvailabilityRowDto,
@@ -9,6 +14,8 @@ import type {
 import {
   REGISTER_CATALOG_PIN_LEASE_MS,
   POS_LOCAL_STORE_SCHEMA_VERSION,
+  type PosLocalStorageAdapter,
+  type PosLocalStoreTransaction,
   clearIndexedDbPosLocalStore,
   createIndexedDbPosLocalStorageAdapter,
   createMemoryPosLocalStorageAdapter,
@@ -16,6 +23,51 @@ import {
   toSafePosLocalCashierPresenceDiagnostic,
 } from "./posLocalStore";
 import { readProjectedLocalRegisterModel } from "./localRegisterReader";
+
+beforeEach(() => {
+  const values = new Map<string, string>();
+  vi.mocked(window.localStorage.getItem).mockImplementation(
+    (key) => values.get(key) ?? null,
+  );
+  vi.mocked(window.localStorage.setItem).mockImplementation(
+    (key, value) => void values.set(key, value),
+  );
+  vi.mocked(window.localStorage.removeItem).mockImplementation(
+    (key) => void values.delete(key),
+  );
+  vi.mocked(window.localStorage.clear).mockImplementation(() => values.clear());
+});
+
+function installSerialWebLocks() {
+  const original = Object.getOwnPropertyDescriptor(navigator, "locks");
+  let tail = Promise.resolve();
+  Object.defineProperty(navigator, "locks", {
+    configurable: true,
+    value: {
+      request: async <T>(
+        name: string,
+        _options: LockOptions,
+        callback: (lock: Lock) => Promise<T>,
+      ) => {
+        const previous = tail;
+        let release!: () => void;
+        tail = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        await previous;
+        try {
+          return await callback({ name, mode: "exclusive" } as Lock);
+        } finally {
+          release();
+        }
+      },
+    } as unknown as LockManager,
+  });
+  return () => {
+    if (original) Object.defineProperty(navigator, "locks", original);
+    else Reflect.deleteProperty(navigator, "locks");
+  };
+}
 
 function buildAuthorityRecord(overrides = {}) {
   return {
@@ -556,6 +608,14 @@ describe("posLocalStore", () => {
       createLocalId: () => "local-event-1",
     });
 
+    const phases: string[] = [];
+    const handleIdentityChange = (event: Event) => {
+      phases.push((event as CustomEvent<{ phase: string }>).detail.phase);
+    };
+    window.addEventListener(
+      POS_TERMINAL_IDENTITY_CHANGE_EVENT,
+      handleIdentityChange,
+    );
     const write = await store.writeProvisionedTerminalSeed({
       terminalId: "local-terminal-1",
       cloudTerminalId: "terminal_cloud_1",
@@ -566,9 +626,16 @@ describe("posLocalStore", () => {
       provisionedAt: 1_000,
       schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
     });
+    window.removeEventListener(
+      POS_TERMINAL_IDENTITY_CHANGE_EVENT,
+      handleIdentityChange,
+    );
 
     expect(write.ok).toBe(true);
-    await expect(store.readProvisionedTerminalSeed()).resolves.toEqual({
+    if (!write.ok) throw new Error("expected seed write to succeed");
+    expect(write.value.telemetryIdentityEpoch).toEqual(expect.any(String));
+    expect(phases).toEqual(["changing", "changed"]);
+    await expect(store.readProvisionedTerminalSeed()).resolves.toMatchObject({
       ok: true,
       value: {
         terminalId: "local-terminal-1",
@@ -581,6 +648,258 @@ describe("posLocalStore", () => {
         schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
       },
     });
+  });
+
+  it("replaces the telemetry identity epoch on every successful seed write", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    const seed = {
+      terminalId: "local-terminal-1",
+      cloudTerminalId: "terminal-1",
+      syncSecretHash: "secret-1",
+      storeId: "store-1",
+      displayName: "Terminal 1",
+      provisionedAt: 1,
+      schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
+    };
+
+    const first = await store.writeProvisionedTerminalSeed(seed);
+    const second = await store.writeProvisionedTerminalSeed(seed);
+    if (!first.ok || !second.ok) throw new Error("expected seed writes to succeed");
+
+    expect(first.value.telemetryIdentityEpoch).toEqual(expect.any(String));
+    expect(second.value.telemetryIdentityEpoch).toEqual(expect.any(String));
+    expect(second.value.telemetryIdentityEpoch).not.toBe(
+      first.value.telemetryIdentityEpoch,
+    );
+    await expect(store.readProvisionedTerminalSeed()).resolves.toMatchObject({
+      ok: true,
+      value: { telemetryIdentityEpoch: second.value.telemetryIdentityEpoch },
+    });
+  });
+
+  it("serializes overlapping cross-tab seed writers even when the second transaction is faster", async () => {
+    const restoreLocks = installSerialWebLocks();
+    const baseAdapter = createMemoryPosLocalStorageAdapter();
+    let mutationStarts = 0;
+    let releaseFirst!: () => void;
+    let markFirstStarted!: () => void;
+    const firstStarted = new Promise<void>((resolve) => {
+      markFirstStarted = resolve;
+    });
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const adapter = {
+      ...baseAdapter,
+      diagnosticStorageEngine: "indexeddb" as const,
+      async transaction<T>(
+        mode: "readonly" | "readwrite",
+        storeNames: Parameters<PosLocalStorageAdapter["transaction"]>[1],
+        callback: (transaction: PosLocalStoreTransaction) => Promise<T>,
+      ) {
+        if (mode === "readwrite" && storeNames.includes("terminalSeed")) {
+          mutationStarts += 1;
+          if (mutationStarts === 1) {
+            markFirstStarted();
+            await firstGate;
+          }
+        }
+        return baseAdapter.transaction(mode, storeNames, callback);
+      },
+    } satisfies PosLocalStorageAdapter;
+    const firstStore = createPosLocalStore({ adapter });
+    const secondStore = createPosLocalStore({ adapter });
+    const seed = (terminalId: string, provisionedAt: number) => ({
+      terminalId: `local-${terminalId}`,
+      cloudTerminalId: terminalId,
+      syncSecretHash: `secret-${terminalId}`,
+      storeId: "store-1",
+      registerNumber: "1",
+      displayName: terminalId,
+      provisionedAt,
+      schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
+    });
+
+    try {
+      const firstWrite = firstStore.writeProvisionedTerminalSeed(
+        seed("terminal-1", 1),
+      );
+      await firstStarted;
+      const secondWrite = secondStore.writeProvisionedTerminalSeed(
+        seed("terminal-2", 2),
+      );
+      await Promise.resolve();
+      expect(mutationStarts).toBe(1);
+
+      releaseFirst();
+      await expect(firstWrite).resolves.toMatchObject({ ok: true });
+      await expect(secondWrite).resolves.toMatchObject({ ok: true });
+      await expect(
+        firstStore.readProvisionedTerminalSeed(),
+      ).resolves.toMatchObject({
+        ok: true,
+        value: { cloudTerminalId: "terminal-2" },
+      });
+    } finally {
+      restoreLocks();
+    }
+  });
+
+  it("commits provisioning without Web Locks while fencing telemetry identity", async () => {
+    const originalLocks = Object.getOwnPropertyDescriptor(navigator, "locks");
+    Reflect.deleteProperty(navigator, "locks");
+    const memoryAdapter = createMemoryPosLocalStorageAdapter();
+    const store = createPosLocalStore({
+      adapter: {
+        ...memoryAdapter,
+        diagnosticStorageEngine: "indexeddb",
+      },
+    });
+    try {
+      await expect(
+        store.writeProvisionedTerminalSeed({
+          terminalId: "local-terminal-1",
+          cloudTerminalId: "terminal-1",
+          syncSecretHash: "secret-1",
+          storeId: "store-1",
+          registerNumber: "1",
+          displayName: "Terminal 1",
+          provisionedAt: 1,
+          schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
+        }),
+      ).resolves.toMatchObject({ ok: true });
+      await expect(store.readProvisionedTerminalSeed()).resolves.toMatchObject({
+        ok: true,
+        value: { cloudTerminalId: "terminal-1" },
+      });
+      expect(readPosTerminalIdentityTransition()).toMatchObject({
+        phase: "uncoordinated",
+        uncoordinatedSettledAt: expect.any(Number),
+      });
+      expect(
+        JSON.parse(
+          window.localStorage.getItem(
+            POS_TERMINAL_IDENTITY_GENERATION_STORAGE_KEY,
+          ) ?? "null",
+        ),
+      ).toMatchObject({
+        phase: "uncoordinated",
+        uncoordinatedSettledAt: expect.any(Number),
+      });
+    } finally {
+      if (originalLocks)
+        Object.defineProperty(navigator, "locks", originalLocks);
+    }
+  });
+
+  it("commits provisioning when Web Lock acquisition rejects and keeps telemetry fenced", async () => {
+    const originalLocks = Object.getOwnPropertyDescriptor(navigator, "locks");
+    Object.defineProperty(navigator, "locks", {
+      configurable: true,
+      value: {
+        request: vi.fn().mockRejectedValue(new Error("lock service failed")),
+      } as unknown as LockManager,
+    });
+    const memoryAdapter = createMemoryPosLocalStorageAdapter();
+    const store = createPosLocalStore({
+      adapter: {
+        ...memoryAdapter,
+        diagnosticStorageEngine: "indexeddb",
+      },
+    });
+    try {
+      await expect(
+        store.writeProvisionedTerminalSeed({
+          terminalId: "local-terminal-2",
+          cloudTerminalId: "terminal-2",
+          syncSecretHash: "secret-2",
+          storeId: "store-1",
+          registerNumber: "2",
+          displayName: "Terminal 2",
+          provisionedAt: 2,
+          schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
+        }),
+      ).resolves.toMatchObject({ ok: true });
+      await expect(store.readProvisionedTerminalSeed()).resolves.toMatchObject({
+        ok: true,
+        value: { cloudTerminalId: "terminal-2" },
+      });
+      expect(readPosTerminalIdentityTransition()).toMatchObject({
+        phase: "uncoordinated",
+        uncoordinatedSettledAt: expect.any(Number),
+      });
+    } finally {
+      if (originalLocks)
+        Object.defineProperty(navigator, "locks", originalLocks);
+      else Reflect.deleteProperty(navigator, "locks");
+    }
+  });
+
+  it("commits once under an acquired lock when transition publication is denied", async () => {
+    const restoreLocks = installSerialWebLocks();
+    const setItem = vi.mocked(window.localStorage.setItem);
+    const workingSetItem = setItem.getMockImplementation();
+    setItem.mockImplementation((key, value) => {
+      if (key === POS_TERMINAL_IDENTITY_GENERATION_STORAGE_KEY) {
+        throw new Error("transition storage denied");
+      }
+      workingSetItem?.(key, value);
+    });
+    const memoryAdapter = createMemoryPosLocalStorageAdapter();
+    let mutationCount = 0;
+    const store = createPosLocalStore({
+      adapter: {
+        ...memoryAdapter,
+        diagnosticStorageEngine: "indexeddb",
+        async transaction(mode, storeNames, callback) {
+          if (mode === "readwrite" && storeNames.includes("terminalSeed")) {
+            mutationCount += 1;
+          }
+          return memoryAdapter.transaction(mode, storeNames, callback);
+        },
+      },
+    });
+    try {
+      await expect(
+        store.writeProvisionedTerminalSeed({
+          terminalId: "local-terminal-3",
+          cloudTerminalId: "terminal-3",
+          syncSecretHash: "secret-3",
+          storeId: "store-1",
+          registerNumber: "3",
+          displayName: "Terminal 3",
+          provisionedAt: 3,
+          schemaVersion: POS_LOCAL_LOGICAL_RECORD_VERSION,
+        }),
+      ).resolves.toMatchObject({ ok: true });
+      expect(mutationCount).toBe(1);
+      expect(readPosTerminalIdentityTransition()).toMatchObject({
+        phase: "uncoordinated",
+        uncoordinatedSettledAt: expect.any(Number),
+      });
+
+      if (workingSetItem) setItem.mockImplementation(workingSetItem);
+      readPosTerminalIdentityTransition({ forceSharedRead: true });
+      expect(
+        JSON.parse(
+          window.localStorage.getItem(
+            POS_TERMINAL_IDENTITY_GENERATION_STORAGE_KEY,
+          ) ?? "null",
+        ),
+      ).toMatchObject({
+        phase: "uncoordinated",
+        uncoordinatedSettledAt: expect.any(Number),
+      });
+      await expect(store.readProvisionedTerminalSeed()).resolves.toMatchObject({
+        ok: true,
+        value: { cloudTerminalId: "terminal-3" },
+      });
+    } finally {
+      if (workingSetItem) setItem.mockImplementation(workingSetItem);
+      restoreLocks();
+    }
   });
 
   it("preserves terminal identity while resetting demo operational state", async () => {
@@ -1472,6 +1791,29 @@ describe("posLocalStore", () => {
       terminalId: "local-terminal-1",
     });
 
+    const repaired = await store.writeProvisionedTerminalSeedAndClearTerminalIntegrity({
+      seed: {
+        terminalId: "local-terminal-1",
+        cloudTerminalId: "terminal-cloud-1",
+        syncSecretHash: "sync-secret-2",
+        storeId: "store-1",
+        registerNumber: "1",
+        displayName: "Front register",
+        provisionedAt: 2_000,
+        schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
+      },
+      terminalIntegrity: {
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+    });
+    expect(repaired).toMatchObject({
+      ok: true,
+      value: {
+        syncSecretHash: "sync-secret-2",
+        telemetryIdentityEpoch: expect.any(String),
+      },
+    });
     await expect(
       store.writeProvisionedTerminalSeedAndClearTerminalIntegrity({
         seed: {
@@ -1493,8 +1835,15 @@ describe("posLocalStore", () => {
       ok: true,
       value: {
         syncSecretHash: "sync-secret-2",
+        telemetryIdentityEpoch: expect.any(String),
       },
     });
+    if (!repaired.ok) throw new Error("expected repaired seed write to succeed");
+    const latest = await store.readProvisionedTerminalSeed();
+    if (!latest.ok || !latest.value) throw new Error("expected stored seed");
+    expect(latest.value.telemetryIdentityEpoch).not.toBe(
+      repaired.value.telemetryIdentityEpoch,
+    );
     await expect(store.readProvisionedTerminalSeed()).resolves.toMatchObject({
       ok: true,
       value: {

@@ -1,20 +1,17 @@
 import { v } from "convex/values";
+import {
+  POS_CLIENT_EVENT_FLOWS,
+  POS_CLIENT_EVENT_LEVELS,
+  POS_DIAGNOSTIC_CLASSIFICATIONS,
+  POS_DIAGNOSTIC_ROUTE_IDS,
+} from "../../../shared/posDiagnosticRedaction";
 
-export const POS_CLIENT_EVENT_LEVELS = ["warn", "error"] as const;
-
-export const POS_CLIENT_EVENT_FLOWS = [
-  "checkout",
-  "session",
-  "register",
-  "sync",
-  "storage",
-  "catalog",
-  "expense",
-  "settings",
-  "runtime",
-  "unhandled",
-  "other",
-] as const;
+export {
+  POS_CLIENT_EVENT_FLOWS,
+  POS_CLIENT_EVENT_LEVELS,
+  POS_DIAGNOSTIC_CLASSIFICATIONS,
+  POS_DIAGNOSTIC_ROUTE_IDS,
+};
 
 export type PosClientEventLevel = (typeof POS_CLIENT_EVENT_LEVELS)[number];
 export type PosClientEventFlow = (typeof POS_CLIENT_EVENT_FLOWS)[number];
@@ -36,7 +33,45 @@ export const posClientEventFlowValidator = v.union(
   v.literal(POS_CLIENT_EVENT_FLOWS[8]),
   v.literal(POS_CLIENT_EVENT_FLOWS[9]),
   v.literal(POS_CLIENT_EVENT_FLOWS[10]),
+  v.literal(POS_CLIENT_EVENT_FLOWS[11]),
+  v.literal(POS_CLIENT_EVENT_FLOWS[12]),
 );
+
+export const posDiagnosticClassificationValidator = v.union(
+  v.literal(POS_DIAGNOSTIC_CLASSIFICATIONS[0]),
+  v.literal(POS_DIAGNOSTIC_CLASSIFICATIONS[1]),
+  v.literal(POS_DIAGNOSTIC_CLASSIFICATIONS[2]),
+  v.literal(POS_DIAGNOSTIC_CLASSIFICATIONS[3]),
+  v.literal(POS_DIAGNOSTIC_CLASSIFICATIONS[4]),
+  v.literal(POS_DIAGNOSTIC_CLASSIFICATIONS[5]),
+  v.literal(POS_DIAGNOSTIC_CLASSIFICATIONS[6]),
+  v.literal(POS_DIAGNOSTIC_CLASSIFICATIONS[7]),
+  v.literal(POS_DIAGNOSTIC_CLASSIFICATIONS[8]),
+  v.literal(POS_DIAGNOSTIC_CLASSIFICATIONS[9]),
+  v.literal(POS_DIAGNOSTIC_CLASSIFICATIONS[10]),
+  v.literal(POS_DIAGNOSTIC_CLASSIFICATIONS[11]),
+);
+
+export const posDiagnosticRouteIdValidator = v.union(
+  v.literal(POS_DIAGNOSTIC_ROUTE_IDS[0]),
+  v.literal(POS_DIAGNOSTIC_ROUTE_IDS[1]),
+  v.literal(POS_DIAGNOSTIC_ROUTE_IDS[2]),
+  v.literal(POS_DIAGNOSTIC_ROUTE_IDS[3]),
+  v.literal(POS_DIAGNOSTIC_ROUTE_IDS[4]),
+  v.literal(POS_DIAGNOSTIC_ROUTE_IDS[5]),
+  v.literal(POS_DIAGNOSTIC_ROUTE_IDS[6]),
+  v.literal(POS_DIAGNOSTIC_ROUTE_IDS[7]),
+  v.literal(POS_DIAGNOSTIC_ROUTE_IDS[8]),
+  v.literal(POS_DIAGNOSTIC_ROUTE_IDS[9]),
+  v.literal(POS_DIAGNOSTIC_ROUTE_IDS[10]),
+  v.literal(POS_DIAGNOSTIC_ROUTE_IDS[11]),
+);
+
+export const posDiagnosticSourceValidator = v.object({
+  asset: v.string(),
+  line: v.optional(v.number()),
+  column: v.optional(v.number()),
+});
 
 export const posClientEventMetadataValueValidator = v.union(
   v.string(),
@@ -53,13 +88,20 @@ export const posClientEventSchema = v.object({
   localRegisterSessionId: v.optional(v.string()),
   // Client-minted idempotency key so retried drains never duplicate rows.
   clientEventId: v.string(),
+  version: v.optional(v.literal(2)),
   level: posClientEventLevelValidator,
   flow: posClientEventFlowValidator,
+  classification: v.optional(posDiagnosticClassificationValidator),
+  routeId: v.optional(posDiagnosticRouteIdValidator),
+  online: v.optional(v.boolean()),
+  operation: v.optional(v.string()),
   message: v.string(),
   errorName: v.optional(v.string()),
   errorMessage: v.optional(v.string()),
   errorStack: v.optional(v.string()),
   appVersion: v.optional(v.string()),
+  buildSha: v.optional(v.string()),
+  source: v.optional(posDiagnosticSourceValidator),
   metadata: v.record(v.string(), posClientEventMetadataValueValidator),
   occurredAt: v.number(),
   receivedAt: v.number(),

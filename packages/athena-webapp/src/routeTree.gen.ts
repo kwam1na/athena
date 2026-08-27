@@ -36,6 +36,7 @@ import { Route as AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRouteImport } from '
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/index'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/app-settings'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugHomeRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/home'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPosRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reports'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/shared-demo'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugAssetsIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/assets.index'
@@ -254,6 +255,12 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute =
     path: '/$orgUrlSlug/store/$storeUrlSlug/home',
     getParentRoute: () => AuthedRoute,
   } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/pos',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/pos',
+    getParentRoute: () => AuthedRoute,
+  } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugReportsRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/reports',
@@ -398,9 +405,9 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute =
   } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/',
-    getParentRoute: () => AuthedRoute,
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute,
   } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRouteImport.update({
@@ -576,64 +583,64 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRoute =
   } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/',
-    getParentRoute: () => AuthedRoute,
+    id: '/expense-reports/',
+    path: '/expense-reports/',
+    getParentRoute: () => AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute,
   } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId',
-    getParentRoute: () => AuthedRoute,
+    id: '/expense-reports/$reportId',
+    path: '/expense-reports/$reportId',
+    getParentRoute: () => AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute,
   } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense/',
-    getParentRoute: () => AuthedRoute,
+    id: '/expense/',
+    path: '/expense/',
+    getParentRoute: () => AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute,
   } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/register/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/register/',
-    getParentRoute: () => AuthedRoute,
+    id: '/register/',
+    path: '/register/',
+    getParentRoute: () => AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute,
   } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugPosSessionsIndexRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugPosSessionsIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/sessions/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/sessions/',
-    getParentRoute: () => AuthedRoute,
+    id: '/sessions/',
+    path: '/sessions/',
+    getParentRoute: () => AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute,
   } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/settings/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/settings/',
-    getParentRoute: () => AuthedRoute,
+    id: '/settings/',
+    path: '/settings/',
+    getParentRoute: () => AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute,
   } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsIndexRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/',
-    getParentRoute: () => AuthedRoute,
+    id: '/terminals/',
+    path: '/terminals/',
+    getParentRoute: () => AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute,
   } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId',
-    getParentRoute: () => AuthedRoute,
+    id: '/terminals/$terminalId',
+    path: '/terminals/$terminalId',
+    getParentRoute: () => AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute,
   } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRouteImport.update({
-    id: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/',
-    path: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/',
-    getParentRoute: () => AuthedRoute,
+    id: '/transactions/',
+    path: '/transactions/',
+    getParentRoute: () => AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute,
   } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRouteImport.update(
     {
-      id: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId',
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId',
-      getParentRoute: () => AuthedRoute,
+      id: '/transactions/$transactionId',
+      path: '/transactions/$transactionId',
+      getParentRoute: () => AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute,
     } as any,
   )
 const AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRoute =
@@ -747,6 +754,7 @@ export interface FileRoutesByFullPath {
   '/$orgUrlSlug/settings/stores/$storeUrlSlug': typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute
   '/$orgUrlSlug/store/$storeUrlSlug/app-settings': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRoute
   '/$orgUrlSlug/store/$storeUrlSlug/home': typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/pos': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRouteWithChildren
   '/$orgUrlSlug/store/$storeUrlSlug/reports': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteWithChildren
   '/$orgUrlSlug/store/$storeUrlSlug/shared-demo': typeof AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute
   '/$orgUrlSlug/settings/organization/': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
@@ -949,6 +957,7 @@ export interface FileRoutesById {
   '/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug': typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/app-settings': typeof AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/home': typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRouteWithChildren
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports': typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteWithChildren
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/shared-demo': typeof AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute
   '/_authed/$orgUrlSlug/settings/organization/': typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
@@ -1053,6 +1062,7 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/settings/stores/$storeUrlSlug'
     | '/$orgUrlSlug/store/$storeUrlSlug/app-settings'
     | '/$orgUrlSlug/store/$storeUrlSlug/home'
+    | '/$orgUrlSlug/store/$storeUrlSlug/pos'
     | '/$orgUrlSlug/store/$storeUrlSlug/reports'
     | '/$orgUrlSlug/store/$storeUrlSlug/shared-demo'
     | '/$orgUrlSlug/settings/organization/'
@@ -1254,6 +1264,7 @@ export interface FileRouteTypes {
     | '/_authed/$orgUrlSlug/settings/stores/$storeUrlSlug'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/app-settings'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/home'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/shared-demo'
     | '/_authed/$orgUrlSlug/settings/organization/'
@@ -1538,6 +1549,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/pos'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/reports'
       path: '/$orgUrlSlug/store/$storeUrlSlug/reports'
@@ -1701,10 +1719,10 @@ declare module '@tanstack/react-router' {
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos'
+      path: '/'
       fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/'
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRouteImport
-      parentRoute: typeof AuthedRoute
+      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement/': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement/'
@@ -1897,73 +1915,73 @@ declare module '@tanstack/react-router' {
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports'
+      path: '/expense-reports'
       fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/'
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRouteImport
-      parentRoute: typeof AuthedRoute
+      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
+      path: '/expense-reports/$reportId'
       fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId'
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRouteImport
-      parentRoute: typeof AuthedRoute
+      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense/': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense'
+      path: '/expense'
       fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/expense/'
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRouteImport
-      parentRoute: typeof AuthedRoute
+      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register/': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/register'
+      path: '/register'
       fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/register/'
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRouteImport
-      parentRoute: typeof AuthedRoute
+      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/sessions/': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/sessions/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/sessions'
+      path: '/sessions'
       fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/sessions/'
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosSessionsIndexRouteImport
-      parentRoute: typeof AuthedRoute
+      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings/': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/settings'
+      path: '/settings'
       fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/settings/'
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRouteImport
-      parentRoute: typeof AuthedRoute
+      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals'
+      path: '/terminals'
       fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/'
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsIndexRouteImport
-      parentRoute: typeof AuthedRoute
+      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId'
+      path: '/terminals/$terminalId'
       fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId'
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRouteImport
-      parentRoute: typeof AuthedRoute
+      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions'
+      path: '/transactions'
       fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/'
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRouteImport
-      parentRoute: typeof AuthedRoute
+      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
-      path: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
+      path: '/transactions/$transactionId'
       fullPath: '/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId'
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRouteImport
-      parentRoute: typeof AuthedRoute
+      parentRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute
     }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/'
@@ -2059,6 +2077,51 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthedOrgUrlSlugStoreStoreUrlSlugPosRouteChildren {
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosSessionsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosSessionsIndexRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsIndexRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRoute
+}
+
+const AuthedOrgUrlSlugStoreStoreUrlSlugPosRouteChildren: AuthedOrgUrlSlugStoreStoreUrlSlugPosRouteChildren =
+  {
+    AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute:
+      AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute,
+    AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute:
+      AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute,
+    AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRoute:
+      AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRoute,
+    AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute:
+      AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute,
+    AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRoute:
+      AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRoute,
+    AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRoute:
+      AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRoute,
+    AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRoute:
+      AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRoute,
+    AuthedOrgUrlSlugStoreStoreUrlSlugPosSessionsIndexRoute:
+      AuthedOrgUrlSlugStoreStoreUrlSlugPosSessionsIndexRoute,
+    AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRoute:
+      AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRoute,
+    AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsIndexRoute:
+      AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsIndexRoute,
+    AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRoute:
+      AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRoute,
+  }
+
+const AuthedOrgUrlSlugStoreStoreUrlSlugPosRouteWithChildren =
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute._addFileChildren(
+    AuthedOrgUrlSlugStoreStoreUrlSlugPosRouteChildren,
+  )
+
 interface AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsRouteChildren {
   AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsProductSkuIdRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsProductSkuIdRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsItemsIndexRoute
@@ -2139,6 +2202,7 @@ interface AuthedRouteChildren {
   AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute: typeof AuthedOrgUrlSlugSettingsStoresStoreUrlSlugRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRouteWithChildren
   AuthedOrgUrlSlugStoreStoreUrlSlugReportsRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteWithChildren
   AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute
   AuthedOrgUrlSlugSettingsOrganizationIndexRoute: typeof AuthedOrgUrlSlugSettingsOrganizationIndexRoute
@@ -2171,16 +2235,12 @@ interface AuthedRouteChildren {
   AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugMembersIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugOperationsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugServicesIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugServicesIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRouteWithChildren
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRoute
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersIndexRoute
@@ -2192,13 +2252,6 @@ interface AuthedRouteChildren {
   AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersOutForDeliveryIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRoute
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRoute
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRoute
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRoute
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosSessionsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosSessionsIndexRoute
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRoute
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsIndexRoute
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugReviewsNewIndexRoute
@@ -2221,6 +2274,8 @@ const AuthedRouteChildren: AuthedRouteChildren = {
     AuthedOrgUrlSlugStoreStoreUrlSlugAppSettingsRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugHomeRoute,
+  AuthedOrgUrlSlugStoreStoreUrlSlugPosRoute:
+    AuthedOrgUrlSlugStoreStoreUrlSlugPosRouteWithChildren,
   AuthedOrgUrlSlugStoreStoreUrlSlugReportsRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugReportsRouteWithChildren,
   AuthedOrgUrlSlugStoreStoreUrlSlugSharedDemoRoute:
@@ -2285,8 +2340,6 @@ const AuthedRouteChildren: AuthedRouteChildren = {
     AuthedOrgUrlSlugStoreStoreUrlSlugOperationsIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugOrdersIndexRoute,
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute:
-    AuthedOrgUrlSlugStoreStoreUrlSlugPosIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugProcurementIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsIndexRoute:
@@ -2299,12 +2352,6 @@ const AuthedRouteChildren: AuthedRouteChildren = {
     AuthedOrgUrlSlugStoreStoreUrlSlugServicesIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRouteWithChildren,
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute:
-    AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsReportIdRoute,
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRoute:
-    AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsTerminalIdRoute,
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute:
-    AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsTransactionIdRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugEditRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryNewRoute:
@@ -2327,20 +2374,6 @@ const AuthedRouteChildren: AuthedRouteChildren = {
     AuthedOrgUrlSlugStoreStoreUrlSlugOrdersReadyIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugOrdersRefundedIndexRoute,
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRoute:
-    AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseReportsIndexRoute,
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRoute:
-    AuthedOrgUrlSlugStoreStoreUrlSlugPosExpenseIndexRoute,
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRoute:
-    AuthedOrgUrlSlugStoreStoreUrlSlugPosRegisterIndexRoute,
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosSessionsIndexRoute:
-    AuthedOrgUrlSlugStoreStoreUrlSlugPosSessionsIndexRoute,
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRoute:
-    AuthedOrgUrlSlugStoreStoreUrlSlugPosSettingsIndexRoute,
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsIndexRoute:
-    AuthedOrgUrlSlugStoreStoreUrlSlugPosTerminalsIndexRoute,
-  AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRoute:
-    AuthedOrgUrlSlugStoreStoreUrlSlugPosTransactionsIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugProductsProductSlugIndexRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsComplimentaryIndexRoute:

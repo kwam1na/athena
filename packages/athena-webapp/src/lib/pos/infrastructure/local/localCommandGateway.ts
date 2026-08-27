@@ -27,10 +27,12 @@ import type {
   PosRegisterCatalogRevision,
 } from "@/lib/pos/application/posLocalStoreTypes";
 import type { PosRegisterCatalogRowDto } from "@/lib/pos/application/dto";
+import type { PosLocalStoreDiagnosticContext } from "@/lib/pos/application/posLocalStorePort";
 
 type PosLocalCommandStore = {
   appendEvent(
     input: PosLocalAppendEventInput,
+    diagnosticContext?: PosLocalStoreDiagnosticContext,
   ): Promise<PosLocalStoreResult<PosLocalEventRecord>>;
   listEvents(): Promise<PosLocalStoreResult<PosLocalEventRecord[]>>;
   listLocalCloudMappings?(): Promise<
@@ -155,16 +157,19 @@ export function createLocalCommandGateway(
     });
   }
 
-  function settleCatalogPinGuard(catalogPin?: CapturedRegisterCatalogPin | null) {
+  function settleCatalogPinGuard(
+    catalogPin?: CapturedRegisterCatalogPin | null,
+  ) {
     catalogPin?.settleActionGuard?.();
   }
 
   async function append(
     input: PosLocalAppendEventInput,
     catalogPin?: CapturedRegisterCatalogPin | null,
+    diagnosticContext?: PosLocalStoreDiagnosticContext,
   ) {
     try {
-      const result = await options.store.appendEvent({
+      const eventInput = {
         ...input,
         ...(catalogPin
           ? {
@@ -175,7 +180,10 @@ export function createLocalCommandGateway(
               },
             }
           : {}),
-      });
+      };
+      const result = diagnosticContext
+        ? await options.store.appendEvent(eventInput, diagnosticContext)
+        : await options.store.appendEvent(eventInput);
       if (!result.ok) return toLocalUserError(result.error.message);
       options.onEventAppended?.();
       return null;
@@ -219,6 +227,11 @@ export function createLocalCommandGateway(
         },
       },
       catalogPin,
+      {
+        flow: "register",
+        localRegisterSessionId,
+        operation: "openDrawer",
+      },
     );
     if (appendError) return appendError;
 
@@ -647,78 +660,79 @@ export function createLocalCommandGateway(
         if (isAuthorityPersistenceFailed()) {
           return authorityPersistenceUserError();
         }
-      if (
-        !hasCommandIdentity({ ...input, localRegisterSessionId: "pending" })
-      ) {
-        return toLocalUserError(
-          blockedSaleMessage(
-            !input.staffProfileId
-              ? "missing_identity"
-              : "missing_event_destination",
-          ),
-        );
-      }
-      const existingModel = await readModel({
-        storeId: input.storeId.toString(),
-        terminalId: input.terminalId.toString(),
-      });
-      if (!existingModel.ok) {
-        return toLocalUserError(existingModel.error.message);
-      }
-      const hasSettledCloseout = hasSettledRegisterCloseout({
-        events: existingModel.value.sourceEvents,
-        session: existingModel.value.activeRegisterSession,
-      });
-      const canOpenReplacementDrawer = canOpenReplacementDrawerForLocalBlock({
-        activeRegisterSession: existingModel.value.activeRegisterSession,
-        drawerAuthorityReason: existingModel.value.drawerAuthorityReason,
-        hasSettledCloseout,
-        saleBlockReason: existingModel.value.saleBlockReason,
-      });
-      if (existingModel.value.saleBlockReason && !canOpenReplacementDrawer) {
-        return toLocalUserError(
-          blockedSaleMessage(existingModel.value.saleBlockReason),
-        );
-      }
-
-      const activeRegisterSession = existingModel.value.activeRegisterSession;
-      if (
-        activeRegisterSession &&
-        isOpenLocalRegisterSessionStatus(activeRegisterSession.status)
-      ) {
-        if (canOpenReplacementDrawer && !existingModel.value.canSell) {
-          return await appendNewDrawer(input, catalogPin);
+        if (
+          !hasCommandIdentity({ ...input, localRegisterSessionId: "pending" })
+        ) {
+          return toLocalUserError(
+            blockedSaleMessage(
+              !input.staffProfileId
+                ? "missing_identity"
+                : "missing_event_destination",
+            ),
+          );
         }
-        if (!existingModel.value.canSell) {
+        const existingModel = await readModel({
+          storeId: input.storeId.toString(),
+          terminalId: input.terminalId.toString(),
+        });
+        if (!existingModel.ok) {
+          return toLocalUserError(existingModel.error.message);
+        }
+        const hasSettledCloseout = hasSettledRegisterCloseout({
+          events: existingModel.value.sourceEvents,
+          session: existingModel.value.activeRegisterSession,
+        });
+        const canOpenReplacementDrawer = canOpenReplacementDrawerForLocalBlock({
+          activeRegisterSession: existingModel.value.activeRegisterSession,
+          drawerAuthorityReason: existingModel.value.drawerAuthorityReason,
+          hasSettledCloseout,
+          saleBlockReason: existingModel.value.saleBlockReason,
+        });
+        if (existingModel.value.saleBlockReason && !canOpenReplacementDrawer) {
           return toLocalUserError(
             blockedSaleMessage(existingModel.value.saleBlockReason),
           );
         }
+
+        const activeRegisterSession = existingModel.value.activeRegisterSession;
         if (
-          activeRegisterSession.registerNumber &&
-          input.registerNumber &&
-          activeRegisterSession.registerNumber !== input.registerNumber
+          activeRegisterSession &&
+          isOpenLocalRegisterSessionStatus(activeRegisterSession.status)
         ) {
-          return userError({
-            code: "conflict",
-            message:
-              "A local drawer is already open for another register on this terminal.",
+          if (canOpenReplacementDrawer && !existingModel.value.canSell) {
+            return await appendNewDrawer(input, catalogPin);
+          }
+          if (!existingModel.value.canSell) {
+            return toLocalUserError(
+              blockedSaleMessage(existingModel.value.saleBlockReason),
+            );
+          }
+          if (
+            activeRegisterSession.registerNumber &&
+            input.registerNumber &&
+            activeRegisterSession.registerNumber !== input.registerNumber
+          ) {
+            return userError({
+              code: "conflict",
+              message:
+                "A local drawer is already open for another register on this terminal.",
+            });
+          }
+
+          return ok({
+            localRegisterSessionId:
+              activeRegisterSession.localRegisterSessionId,
+            status: "open",
+            terminalId:
+              activeRegisterSession.terminalId ?? input.terminalId.toString(),
+            registerNumber:
+              activeRegisterSession.registerNumber ?? input.registerNumber,
+            openingFloat: activeRegisterSession.openingFloat,
+            expectedCash: activeRegisterSession.expectedCash,
+            openedAt: activeRegisterSession.openedAt,
+            notes: activeRegisterSession.notes,
           });
         }
-
-        return ok({
-          localRegisterSessionId: activeRegisterSession.localRegisterSessionId,
-          status: "open",
-          terminalId:
-            activeRegisterSession.terminalId ?? input.terminalId.toString(),
-          registerNumber:
-            activeRegisterSession.registerNumber ?? input.registerNumber,
-          openingFloat: activeRegisterSession.openingFloat,
-          expectedCash: activeRegisterSession.expectedCash,
-          openedAt: activeRegisterSession.openedAt,
-          notes: activeRegisterSession.notes,
-        });
-      }
 
         return await appendNewDrawer(input, catalogPin);
       } finally {
@@ -814,94 +828,94 @@ export function createLocalCommandGateway(
         if (isAuthorityPersistenceFailed()) {
           return authorityPersistenceUserError();
         }
-      if (
-        !hasCommandIdentity({ ...input, localRegisterSessionId: "pending" })
-      ) {
-        return toLocalUserError(
-          blockedSaleMessage(
-            !input.staffProfileId
-              ? "missing_identity"
-              : "missing_event_destination",
-          ),
-        );
-      }
-      const model = await readModel({
-        storeId: input.storeId.toString(),
-        terminalId: input.terminalId.toString(),
-      });
-      if (!model.ok) return toLocalUserError(model.error.message);
-      const explicitRegisterSessionId = input.localRegisterSessionId;
-      const activeRegisterSession = model.value.activeRegisterSession;
-      const registerSessionCanSell =
-        model.value.canSell &&
-        activeRegisterSession &&
-        (!explicitRegisterSessionId ||
-          activeRegisterSession.localRegisterSessionId ===
-            explicitRegisterSessionId);
-      const explicitlyTrustedBeforeProjection =
-        options.allowExplicitRegisterSessionWithoutProjection &&
-        explicitRegisterSessionId &&
-        model.eventCount === 0 &&
-        !model.value.saleBlockReason;
-      if (explicitlyTrustedBeforeProjection) {
-        const drawerAuthority = await readDrawerAuthorityBlock({
-          localRegisterSessionId: explicitRegisterSessionId,
-          storeId: input.storeId.toString(),
-          terminalId: input.terminalId.toString(),
-        });
-        if (!drawerAuthority.ok || drawerAuthority.blocked) {
+        if (
+          !hasCommandIdentity({ ...input, localRegisterSessionId: "pending" })
+        ) {
           return toLocalUserError(
-            "Drawer setup needs repair before selling can continue.",
+            blockedSaleMessage(
+              !input.staffProfileId
+                ? "missing_identity"
+                : "missing_event_destination",
+            ),
           );
         }
-      }
-      if (!registerSessionCanSell && !explicitlyTrustedBeforeProjection) {
-        return toLocalUserError(
-          blockedSaleMessage(model.value.saleBlockReason) ??
-            "Open the drawer before starting a sale.",
-        );
-      }
-
-      const expiresAt = clock() + SESSION_TTL_MS;
-      const localRegisterSessionId =
-        explicitRegisterSessionId ??
-        activeRegisterSession?.localRegisterSessionId;
-      if (!localRegisterSessionId) {
-        return toLocalUserError("Open the drawer before starting a sale.");
-      }
-      if (
-        model.value.activeSale?.localRegisterSessionId ===
-          localRegisterSessionId &&
-        model.value.activeSale.staffProfileId ===
-          input.staffProfileId?.toString()
-      ) {
-        return ok({
-          localPosSessionId: model.value.activeSale.localPosSessionId,
-          expiresAt,
-        });
-      }
-
-      const localPosSessionId =
-        input.localPosSessionId ?? createLocalId("local-pos-session");
-      const appendError = await append(
-        {
-          type: "session.started",
-          terminalId: input.terminalId.toString(),
+        const model = await readModel({
           storeId: input.storeId.toString(),
-          registerNumber: input.registerNumber,
-          localRegisterSessionId,
-          localPosSessionId,
-          staffProfileId: input.staffProfileId?.toString(),
-          validationMetadata: input.validationMetadata,
-          payload: {
-            localPosSessionId,
+          terminalId: input.terminalId.toString(),
+        });
+        if (!model.ok) return toLocalUserError(model.error.message);
+        const explicitRegisterSessionId = input.localRegisterSessionId;
+        const activeRegisterSession = model.value.activeRegisterSession;
+        const registerSessionCanSell =
+          model.value.canSell &&
+          activeRegisterSession &&
+          (!explicitRegisterSessionId ||
+            activeRegisterSession.localRegisterSessionId ===
+              explicitRegisterSessionId);
+        const explicitlyTrustedBeforeProjection =
+          options.allowExplicitRegisterSessionWithoutProjection &&
+          explicitRegisterSessionId &&
+          model.eventCount === 0 &&
+          !model.value.saleBlockReason;
+        if (explicitlyTrustedBeforeProjection) {
+          const drawerAuthority = await readDrawerAuthorityBlock({
+            localRegisterSessionId: explicitRegisterSessionId,
+            storeId: input.storeId.toString(),
+            terminalId: input.terminalId.toString(),
+          });
+          if (!drawerAuthority.ok || drawerAuthority.blocked) {
+            return toLocalUserError(
+              "Drawer setup needs repair before selling can continue.",
+            );
+          }
+        }
+        if (!registerSessionCanSell && !explicitlyTrustedBeforeProjection) {
+          return toLocalUserError(
+            blockedSaleMessage(model.value.saleBlockReason) ??
+              "Open the drawer before starting a sale.",
+          );
+        }
+
+        const expiresAt = clock() + SESSION_TTL_MS;
+        const localRegisterSessionId =
+          explicitRegisterSessionId ??
+          activeRegisterSession?.localRegisterSessionId;
+        if (!localRegisterSessionId) {
+          return toLocalUserError("Open the drawer before starting a sale.");
+        }
+        if (
+          model.value.activeSale?.localRegisterSessionId ===
+            localRegisterSessionId &&
+          model.value.activeSale.staffProfileId ===
+            input.staffProfileId?.toString()
+        ) {
+          return ok({
+            localPosSessionId: model.value.activeSale.localPosSessionId,
+            expiresAt,
+          });
+        }
+
+        const localPosSessionId =
+          input.localPosSessionId ?? createLocalId("local-pos-session");
+        const appendError = await append(
+          {
+            type: "session.started",
+            terminalId: input.terminalId.toString(),
+            storeId: input.storeId.toString(),
+            registerNumber: input.registerNumber,
             localRegisterSessionId,
-            status: "active",
+            localPosSessionId,
+            staffProfileId: input.staffProfileId?.toString(),
+            validationMetadata: input.validationMetadata,
+            payload: {
+              localPosSessionId,
+              localRegisterSessionId,
+              status: "active",
+            },
           },
-        },
-        catalogPin,
-      );
-      if (appendError) return appendError;
+          catalogPin,
+        );
+        if (appendError) return appendError;
 
         return ok({
           localPosSessionId,
@@ -966,22 +980,22 @@ export function createLocalCommandGateway(
         }
         return await appendWithResult(
           {
-          type: "register.closeout_started",
-          terminalId: input.terminalId,
-          storeId: input.storeId,
-          registerNumber: input.registerNumber,
-          localRegisterSessionId: input.localRegisterSessionId,
-          staffProfileId: input.staffProfileId,
-          staffProofToken: resolveStaffProofToken(
-            options.staffProofToken,
-            input.staffProfileId,
-          ),
-          validationMetadata: input.validationMetadata,
-          payload: {
-            countedCash: input.countedCash,
-            notes: input.notes ?? null,
+            type: "register.closeout_started",
+            terminalId: input.terminalId,
+            storeId: input.storeId,
+            registerNumber: input.registerNumber,
+            localRegisterSessionId: input.localRegisterSessionId,
+            staffProfileId: input.staffProfileId,
+            staffProofToken: resolveStaffProofToken(
+              options.staffProofToken,
+              input.staffProfileId,
+            ),
+            validationMetadata: input.validationMetadata,
+            payload: {
+              countedCash: input.countedCash,
+              notes: input.notes ?? null,
+            },
           },
-        },
           catalogPin,
         ).then((result) =>
           result.kind === "ok"

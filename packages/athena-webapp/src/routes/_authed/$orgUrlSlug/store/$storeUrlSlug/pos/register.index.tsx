@@ -3,7 +3,6 @@ import { useAppShellFullscreenMode } from "@/contexts/AppShellFullscreenContext"
 import { useAppMessageCommunicationPreference } from "@/lib/app-messages";
 import { POSRegisterOpeningGuard } from "~/src/components/pos/register/POSRegisterOpeningGuard";
 import { POSRegisterView } from "~/src/components/pos/register/POSRegisterView";
-import { PosClientTelemetryHost } from "~/src/components/pos/PosClientTelemetryHost";
 import { NotFoundView } from "~/src/components/states/not-found/NotFoundView";
 
 export const Route = createFileRoute(
@@ -22,12 +21,9 @@ function POSRegisterRoute() {
   });
 
   return (
-    <>
-      <PosClientTelemetryHost />
-      <POSRegisterOpeningGuard>
-        <POSRegisterView />
-      </POSRegisterOpeningGuard>
-    </>
+    <POSRegisterOpeningGuard>
+      <POSRegisterView />
+    </POSRegisterOpeningGuard>
   );
 }
 

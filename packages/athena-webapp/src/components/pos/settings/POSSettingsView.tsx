@@ -1,4 +1,4 @@
-import { logger } from "@/lib/logger";
+import { reportPosHandledException } from "@/lib/pos/infrastructure/telemetry/loggerGateway";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
@@ -31,6 +31,11 @@ import {
 } from "@/lib/browserFingerprint";
 import { toast } from "sonner";
 import { FINGERPRINT_STORAGE_KEY } from "@/lib/constants";
+import {
+  beginPosTerminalIdentityTransition,
+  markPosTerminalIdentityUncoordinated,
+  settlePosTerminalIdentityTransition,
+} from "@/lib/pos/infrastructure/telemetry/telemetryContext";
 import {
   registerAndProvisionPosTerminal,
   type ProvisionedTerminalRecord,
@@ -766,7 +771,7 @@ function RegisterCloseoutApprovalPolicyAdminPanel({
       });
       toast.success("Closeout approval policy saved.");
     } catch (error) {
-      logger.error("POS settings operation failed", error instanceof Error ? error : { error: String(error) });
+      reportPosHandledException({ error, flow: "settings", localMessage: "POS settings operation failed", operation: "saveCloseoutApprovalPolicy" });
       setMessage({
         kind: "error",
         text: "Closeout approval policy was not saved.",
@@ -1034,7 +1039,7 @@ function EodCompletionAutomationAdminPanel({
       });
       toast.success("EOD completion automation settings saved.");
     } catch (error) {
-      logger.error("POS settings operation failed", error instanceof Error ? error : { error: String(error) });
+      reportPosHandledException({ error, flow: "settings", localMessage: "POS settings operation failed", operation: "saveEodAutomationPolicy" });
       setMessage({
         kind: "error",
         text: "EOD completion automation settings were not saved.",
@@ -1364,7 +1369,7 @@ function StoreDayAutomationAdminPanel({
       });
       toast.success("Store-day automation settings saved.");
     } catch (error) {
-      logger.error("POS settings operation failed", error instanceof Error ? error : { error: String(error) });
+      reportPosHandledException({ error, flow: "settings", localMessage: "POS settings operation failed", operation: "saveStoreDayAutomationPolicy" });
       setMessage({
         kind: "error",
         text: "Store-day automation settings were not saved.",
@@ -1519,7 +1524,7 @@ function POSRecoveryCodeAdminPanel({ storeId }: { storeId?: string | null }) {
       setRevealedCode(result.code);
       toast.success("POS recovery code rotated");
     } catch (error) {
-      logger.error("POS settings operation failed", error instanceof Error ? error : { error: String(error) });
+      reportPosHandledException({ error, flow: "settings", localMessage: "POS settings operation failed", operation: "rotateRecoveryCode" });
       toast.error("Unable to rotate POS recovery code");
     } finally {
       setIsRotating(false);
@@ -1535,7 +1540,7 @@ function POSRecoveryCodeAdminPanel({ storeId }: { storeId?: string | null }) {
       await unlockRecoveryCode({ storeId: storeId as never });
       toast.success("POS recovery code unlocked");
     } catch (error) {
-      logger.error("POS settings operation failed", error instanceof Error ? error : { error: String(error) });
+      reportPosHandledException({ error, flow: "settings", localMessage: "POS settings operation failed", operation: "unlockRecoveryCode" });
       toast.error("Unable to unlock POS recovery code");
     } finally {
       setIsUnlocking(false);
@@ -1552,7 +1557,7 @@ function POSRecoveryCodeAdminPanel({ storeId }: { storeId?: string | null }) {
       await revokeRecoveryCode({ storeId: storeId as never });
       toast.success("POS recovery code revoked");
     } catch (error) {
-      logger.error("POS settings operation failed", error instanceof Error ? error : { error: String(error) });
+      reportPosHandledException({ error, flow: "settings", localMessage: "POS settings operation failed", operation: "revokeRecoveryCode" });
       toast.error("Unable to revoke POS recovery code");
     } finally {
       setIsRevoking(false);
@@ -1978,6 +1983,7 @@ export function POSSettingsView({
     const loadFingerprint = async () => {
       setIsFingerprintLoading(true);
       setFingerprintError(null);
+      let shouldClearStoredFingerprint = false;
 
       try {
         const stored = window.localStorage.getItem(FINGERPRINT_STORAGE_KEY);
@@ -1997,14 +2003,21 @@ export function POSSettingsView({
               return;
             }
           } else {
-            window.localStorage.removeItem(FINGERPRINT_STORAGE_KEY);
+            shouldClearStoredFingerprint = true;
           }
         }
       } catch (error) {
-        logger.error("Failed to read stored fingerprint", error instanceof Error ? error : { error: String(error) });
+        reportPosHandledException({ error, flow: "settings", localMessage: "Failed to read stored fingerprint", operation: "readStoredFingerprint" });
       }
 
+      const identityTransition = beginPosTerminalIdentityTransition();
+      if (!identityTransition) {
+        markPosTerminalIdentityUncoordinated("in_flight");
+      }
       try {
+        if (shouldClearStoredFingerprint) {
+          window.localStorage.removeItem(FINGERPRINT_STORAGE_KEY);
+        }
         const result = await generateBrowserFingerprint();
         if (!cancelled) {
           setFingerprintResult(result);
@@ -2014,7 +2027,7 @@ export function POSSettingsView({
           );
         }
       } catch (error) {
-        logger.error("POS settings operation failed", error instanceof Error ? error : { error: String(error) });
+        reportPosHandledException({ error, flow: "settings", localMessage: "POS settings operation failed", operation: "generateFingerprint" });
         if (!cancelled) {
           setFingerprintError(
             error instanceof Error
@@ -2023,6 +2036,11 @@ export function POSSettingsView({
           );
         }
       } finally {
+        if (identityTransition) {
+          settlePosTerminalIdentityTransition(identityTransition);
+        } else {
+          markPosTerminalIdentityUncoordinated("settled");
+        }
         if (!cancelled) {
           setIsFingerprintLoading(false);
         }
@@ -2132,7 +2150,7 @@ export function POSSettingsView({
       setLoginModeTouched(false);
       setTransactionCapabilityTouched(false);
     } catch (error) {
-      logger.error("POS settings operation failed", error instanceof Error ? error : { error: String(error) });
+      reportPosHandledException({ error, flow: "settings", localMessage: "POS settings operation failed", operation: "registerTerminal" });
       toast.error("Unable to register terminal");
     } finally {
       setIsRegistering(false);
@@ -2176,7 +2194,7 @@ export function POSSettingsView({
       setTransactionCapabilityTouched(false);
       toast.success("Terminal settings saved");
     } catch (error) {
-      logger.error("POS settings operation failed", error instanceof Error ? error : { error: String(error) });
+      reportPosHandledException({ error, flow: "settings", localMessage: "POS settings operation failed", operation: "updateTerminal" });
       toast.error("Unable to save terminal settings");
     } finally {
       setIsUpdatingExisting(false);
