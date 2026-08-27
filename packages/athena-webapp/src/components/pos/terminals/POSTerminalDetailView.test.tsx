@@ -7,8 +7,10 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Id } from "~/convex/_generated/dataModel";
 
 import {
+  getDiagnosticRailHealth,
   POSTerminalDetailView,
   POSTerminalDetailViewContent,
 } from "./POSTerminalDetailView";
@@ -269,6 +271,58 @@ const detail: TerminalHealthDetail = {
   },
 };
 
+describe("diagnostic rail health", () => {
+  it("distinguishes unreported, healthy, pending, and degraded snapshots", () => {
+    const status = detail.runtimeStatus!;
+    expect(
+      getDiagnosticRailHealth({ ...status, runtimeCounters: undefined }),
+    ).toBe("not_reported");
+    expect(
+      getDiagnosticRailHealth({
+        ...status,
+        runtimeCounters: {
+          "telemetry.railInitialized": 1,
+          "telemetry.pendingScopeCount": 0,
+          "telemetry.storageFallbackCount": 0,
+          "telemetry.uploadFailureCount": 0,
+        },
+      }),
+    ).toBe("healthy");
+    expect(
+      getDiagnosticRailHealth({
+        ...status,
+        runtimeCounters: {
+          "telemetry.railInitialized": 1,
+          "telemetry.pendingScopeCount": 1,
+          "telemetry.storageFallbackCount": 0,
+          "telemetry.uploadFailureCount": 0,
+        },
+      }),
+    ).toBe("pending");
+    expect(
+      getDiagnosticRailHealth({
+        ...status,
+        runtimeCounters: {
+          "telemetry.railInitialized": 1,
+          "telemetry.pendingScopeCount": 1,
+          "telemetry.storageFallbackCount": 0,
+          "telemetry.uploadFailureCount": 1,
+        },
+      }),
+    ).toBe("degraded");
+    expect(
+      getDiagnosticRailHealth({
+        ...status,
+        runtimeCounters: {
+          "telemetry.railInitialized": 1,
+          "telemetry.pendingScopeCount": 0,
+          "telemetry.identityRefreshFailureCount": 1,
+        },
+      }),
+    ).toBe("degraded");
+  });
+});
+
 describe("POSTerminalDetailViewContent", () => {
   beforeEach(() => {
     vi.stubGlobal(
@@ -390,6 +444,60 @@ describe("POSTerminalDetailViewContent", () => {
     expect(screen.getByText("Upload failed")).toBeInTheDocument();
   });
 
+  it("places terminal-scoped client diagnostics before support notes and explains an unreported rail", async () => {
+    const user = userEvent.setup();
+    const unreportedDetail = {
+      ...detail,
+      terminal: { ...detail.terminal, storeId: undefined },
+      runtimeStatus: detail.runtimeStatus
+        ? { ...detail.runtimeStatus, runtimeCounters: undefined }
+        : null,
+    };
+
+    render(
+      <POSTerminalDetailViewContent
+        detail={unreportedDetail}
+        isLoading={false}
+        storeId={"store-1" as Id<"store">}
+        terminalId={"terminal-1" as Id<"posTerminal">}
+      />,
+    );
+
+    const conflictHeading = screen.getByRole("heading", {
+      name: "Conflicts and review",
+    });
+    const diagnosticsHeading = screen.getByRole("heading", {
+      name: "Client diagnostics",
+    });
+    const supportHeading = screen.getByRole("heading", {
+      name: "Support notes",
+    });
+    expect(
+      conflictHeading.compareDocumentPosition(diagnosticsHeading) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      diagnosticsHeading.compareDocumentPosition(supportHeading) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    expect(mocks.useQuery).toHaveBeenCalledWith(expect.anything(), {
+      level: "error",
+      limit: 50,
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "Open client errors" }),
+    );
+    expect(
+      screen.getByText(
+        "Diagnostic delivery has not been reported by this terminal yet.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("explains why storage needs attention without presenting the event count as the cause", async () => {
     const user = userEvent.setup();
     render(
@@ -505,7 +613,9 @@ describe("POSTerminalDetailViewContent", () => {
       ),
     ).toBeInTheDocument();
     const storageDetails = within(screen.getByRole("tooltip"));
-    expect(storageDetails.getByText("490 MB of 10 GB (5%)")).toBeInTheDocument();
+    expect(
+      storageDetails.getByText("490 MB of 10 GB (5%)"),
+    ).toBeInTheDocument();
     expect(storageDetails.getByText("Normal")).toBeInTheDocument();
     expect(storageDetails.getByText("Warning")).toBeInTheDocument();
   });
@@ -2760,9 +2870,7 @@ describe("POSTerminalDetailViewContent", () => {
 
     expect(screen.queryByText("#4535")).not.toBeInTheDocument();
     expect(screen.queryByText("transaction.completed")).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("Local review item"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Local review item")).not.toBeInTheDocument();
   });
 
   it("renders no-data and query unavailable states", () => {

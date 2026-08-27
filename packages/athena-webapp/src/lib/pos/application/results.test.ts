@@ -14,7 +14,11 @@ describe("mapThrownError", () => {
     setPosErrorTelemetrySink(sink);
     const thrown = new Error("ReferenceError: totals is undefined");
 
-    const result = mapThrownError(thrown, "completeTransaction");
+    const result = mapThrownError(
+      thrown,
+      "openDrawer",
+      "register",
+    );
 
     expect(result).toEqual({
       ok: false,
@@ -22,8 +26,10 @@ describe("mapThrownError", () => {
       message: GENERIC_UNEXPECTED_ERROR_MESSAGE,
     });
     expect(sink).toHaveBeenCalledWith({
+      classification: "unexpected_application_error",
       message: "POS use case threw an unexpected error",
-      operation: "completeTransaction",
+      flow: "register",
+      operation: "openDrawer",
       error: thrown,
     });
   });

@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>fix: Close POS frontend telemetry gaps</title>
+  <style>
+    :root { color-scheme: light; --ink:#182026; --muted:#5e6971; --line:#d8dfe3; --panel:#f6f8f9; --accent:#176c5f; --soft:#e7f3ef; --warn:#8a5a00; --warn-soft:#fff5dc; --risk:#9b3030; --risk-soft:#fbe9e8; }
+    * { box-sizing: border-box; }
+    body { margin:0; color:var(--ink); background:#fff; font:15px/1.55 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { max-width:1120px; margin:0 auto; padding:34px 24px 60px; }
+    header { padding-bottom:24px; border-bottom:1px solid var(--line); }
+    h1 { margin:0 0 10px; font-size:clamp(30px,5vw,48px); line-height:1.06; }
+    h2 { margin:36px 0 14px; font-size:23px; line-height:1.25; }
+    h3 { margin:0 0 8px; font-size:17px; }
+    p { margin:0 0 13px; }
+    ul,ol { margin:8px 0 18px; padding-left:23px; }
+    li + li { margin-top:6px; }
+    a { color:var(--accent); }
+    code { padding:1px 4px; border:1px solid #d8e5e1; border-radius:4px; background:#edf4f2; color:#123d36; }
+    .meta,.toc,.flow { display:flex; flex-wrap:wrap; gap:9px; }
+    .meta { margin-top:15px; }
+    .pill { padding:4px 10px; border:1px solid var(--line); border-radius:999px; color:var(--muted); font-size:13px; }
+    .toc { margin:20px 0 8px; padding:14px; border:1px solid var(--line); border-radius:8px; background:var(--panel); }
+    .toc a { text-decoration:none; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    .card { padding:16px; border:1px solid var(--line); border-radius:9px; background:#fff; }
+    .card p:last-child,.card ul:last-child { margin-bottom:0; }
+    .callout { margin:18px 0; padding:15px 17px; border-left:4px solid var(--accent); background:var(--soft); }
+    .warn { border-color:var(--warn); background:var(--warn-soft); }
+    .risk { border-color:var(--risk); background:var(--risk-soft); }
+    table { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:14px; }
+    th,td { padding:10px; border:1px solid var(--line); text-align:left; vertical-align:top; }
+    th { background:var(--panel); }
+    .flow { align-items:stretch; margin:14px 0 20px; }
+    .step { flex:1 1 230px; padding:14px; border:1px solid var(--line); border-radius:8px; background:var(--panel); }
+    .step strong { display:block; color:var(--accent); margin-bottom:4px; }
+    .units { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    .unit { padding:15px; border:1px solid var(--line); border-radius:8px; }
+    .unit .id { color:var(--accent); font-weight:700; }
+    .small { color:var(--muted); font-size:13px; }
+    @media (max-width:760px) { main{padding:24px 16px 44px}.grid,.units{grid-template-columns:1fr}table{display:block;overflow-x:auto} }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>fix: Close POS frontend telemetry gaps</h1>
+      <p>Repair the existing POS telemetry rails so unexpected frontend failures are remotely diagnosable without changing cashier behavior or adding another observability system.</p>
+      <div class="meta">
+        <span class="pill">type: fix</span><span class="pill">status: active</span><span class="pill">date: 2026-08-27</span><span class="pill">deepened: 2026-08-27</span>
+      </div>
+      <p class="small">Canonical source: <a href="2026-08-27-001-fix-pos-frontend-telemetry-gaps-plan.md">Markdown plan</a></p>
+    </header>
+
+    <nav class="toc" aria-label="Plan contents">
+      <a href="#summary">Summary</a><a href="#scope">Scope</a><a href="#decisions">Decisions</a><a href="#delivery">Delivery</a><a href="#units">Units</a><a href="#risks">Risks</a><a href="#verification">Verification</a><a href="#alignment">Review alignment</a>
+    </nav>
+
+    <section id="summary">
+      <h2>Summary and problem frame</h2>
+      <div class="grid">
+        <article class="card">
+          <h3>What surfaced</h3>
+          <p>M Supplies Register 1 showed “The drawer could not open locally,” but the native IndexedDB failure was flattened before any remotely accessible event was recorded.</p>
+          <p>The audit also found route coverage gaps, console-only handled failures, drain-time scope assignment, warning-dominated inspection, invisible telemetry-rail degradation, and unbounded server retention.</p>
+        </article>
+        <article class="card">
+          <h3>What changes</h3>
+          <p>Reuse the bounded offline buffer, Convex ingest/dedupe, runtime heartbeat, and Terminal Health panel. Add occurrence-time scope, finite failure classifications, safe legacy compatibility, exact handled seams, terminal/error filtering, and 30-day local/server retention.</p>
+        </article>
+      </div>
+      <div class="callout"><strong>Core posture:</strong> telemetry remains best effort and evidentiary. It never becomes register authority, blocks a command, changes operator copy, or participates in recovery.</div>
+    </section>
+
+    <section id="scope">
+      <h2>Scope boundaries</h2>
+      <div class="grid">
+        <article class="card">
+          <h3>In scope</h3>
+          <ul>
+            <li>All production <code>/pos/**</code> routes and early/render/browser failures.</li>
+            <li>Drawer/native-storage evidence and exact audited handled seams.</li>
+            <li>Immutable store scope and clearly client-reported terminal/session correlation.</li>
+            <li>Finite v2 diagnostics, legacy rollout compatibility, rail-health gauges, terminal filtering, and retention.</li>
+          </ul>
+        </article>
+        <article class="card">
+          <h3>Explicitly out</h3>
+          <ul>
+            <li>The underlying ledger purge/drawer reconciliation fix.</li>
+            <li>External SDKs, a new event table/transport, logger replacement, alerting, grouping, or sampling.</li>
+            <li>Raw payloads, arbitrary thrown text, public source maps, or exact-once cross-tab machinery.</li>
+            <li>Broader non-POS frontend telemetry.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="decisions">
+      <h2>Key decisions</h2>
+      <table>
+        <thead><tr><th>Area</th><th>Decision</th><th>Simplicity/reuse rationale</th></tr></thead>
+        <tbody>
+          <tr><td>Ownership</td><td>One POS parent layout plus a POS error component and one idempotent bootstrap listener.</td><td>Structural route coverage without moving collection into the whole app shell.</td></tr>
+          <tr><td>Scope</td><td>Stamp authorized store and client-reported terminal/fingerprint at occurrence time; drain one oldest eligible scope per wakeup.</td><td>Fixes relabeling while preserving current batch ingest and replay dedupe.</td></tr>
+          <tr><td>Privacy</td><td>Closed classification, derived copy, allowlisted error names, closed route IDs, recognized build sources and primitive metadata.</td><td>Validator-enforceable safety; arbitrary messages and dynamic paths never enter v2 storage.</td></tr>
+          <tr><td>Legacy</td><td>New server temporarily accepts old-client wire events, discards unsafe fields, and persists <code>legacy_client_event</code>; stored legacy rows remain schema-valid but raw fields are suppressed.</td><td>Avoids a deployment observability blackout and avoids backfill.</td></tr>
+          <tr><td>Handled failures</td><td>Capture at the raw local-store boundary and a fixed list of audited exceptional seams.</td><td>No every-catch instrumentation or logging framework.</td></tr>
+          <tr><td>Remote workflow</td><td>Extend the existing panel/query/roles; default to Errors, add terminal+level index, keep Warnings secondary.</td><td>No second detail API, permission model, dashboard, or grouping engine.</td></tr>
+          <tr><td>Health and retention</td><td>Named telemetry gauges ride the existing heartbeat; local lifecycle and existing cron rail enforce 30 days.</td><td>No recursive telemetry, new health document, or scheduler.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="delivery">
+      <h2>Delivery sequence</h2>
+      <div class="flow">
+        <div class="step"><strong>1. Incident vertical slice</strong>U2 scoped finite envelope → U3 drawer/native storage → U4 terminal-filtered inspection and production-build support proof.</div>
+        <div class="step"><strong>2. Surface-wide closure</strong>U1 parent/bootstrap coverage → U6 remaining exact handled seams.</div>
+        <div class="step"><strong>3. Operational completion</strong>U7 retention → U5 documentation and repository validation.</div>
+      </div>
+    </section>
+
+    <section id="units">
+      <h2>Implementation-unit digest</h2>
+      <div class="units">
+        <article class="unit"><div class="id">U2 · Scoped finite buffer and drain</div><p>Version the local envelope, quarantine local v1 rows, map routes/classifications to closed values, isolate per-scope backoff, preserve full-ack removal and mixed-version server compatibility, and publish named rail gauges.</p><p class="small">Depends on: none</p></article>
+        <article class="unit"><div class="id">U3 · Drawer and native storage</div><p>Pass a non-persisted operation context into the raw local-store catch so <code>AbortError</code> becomes one safe classified event while the existing generic drawer copy and ledger input remain unchanged.</p><p class="small">Depends on: U2</p></article>
+        <article class="unit"><div class="id">U4 · Terminal Health inspection</div><p>Add terminal+level reads, Errors/Warnings filtering, a Client diagnostics section in the existing hierarchy, legacy-safe projection, accessibility states, and production-build support diagnosis.</p><p class="small">Depends on: U2, U3</p></article>
+        <article class="unit"><div class="id">U1 · Route-wide capture</div><p>Add the POS parent layout, fixture-aware host gating, shared expected-outcome classifier, route boundary, and idempotent browser capture.</p><p class="small">Depends on: U2</p></article>
+        <article class="unit"><div class="id">U6 · Exact handled seams</div><p>Use the existing gateway only in the named expense, settings, transaction-start, print, and background-continuity exception branches.</p><p class="small">Depends on: U1, U2</p></article>
+        <article class="unit"><div class="id">U7 · Retention</div><p>Expire local rows on buffer lifecycle and delete strictly older server rows through one bounded self-continuing job on the existing cron rail.</p><p class="small">Depends on: U2, U4</p></article>
+        <article class="unit"><div class="id">U5 · Contract and release proof</div><p>Correct the operations guide, compose the focused U1–U4/U6/U7 suites, regenerate owned artifacts, and finish with the repository validation ladder.</p><p class="small">Depends on: U1, U3, U4, U6, U7</p></article>
+      </div>
+    </section>
+
+    <section id="risks">
+      <h2>Primary risks and controls</h2>
+      <div class="grid">
+        <article class="card"><h3>Replay and attribution</h3><p>One oldest eligible scope per wakeup, order-preserving prefixes, per-scope backoff, and removal only after <code>accepted + duplicates === sent</code>.</p></article>
+        <article class="card"><h3>Capture noise</h3><p>One code-first expected-outcome classifier is shared by bootstrap, route boundary, and application sink. Unknown failures report; typed expected outcomes do not.</p></article>
+        <article class="card"><h3>Privacy and rollout</h3><p>Finite validators prohibit open-ended v2 text. Old clients are accepted only through a destructive legacy normalizer, and old stored raw fields never return to the UI.</p></article>
+        <article class="card"><h3>Fixture and rail safety</h3><p>Fixture resolution happens before any host/store hook. Telemetry failures become heartbeat facts, never recursive events or POS failures.</p></article>
+      </div>
+    </section>
+
+    <section id="verification">
+      <h2>Verification strategy</h2>
+      <ul>
+        <li>Inject IndexedDB <code>AbortError</code> during drawer opening: unchanged operator copy, one safely classified event, correct store/client-reported terminal scope, no ledger/business text.</li>
+        <li>Prove offline/reload/reconnect, mixed stores/terminals, full and partial acknowledgements, replay dedupe, per-scope backoff, and concurrent-tab best-effort behavior.</li>
+        <li>Prove v1/v2 local decoding, old-client/new-server ingestion, unsafe legacy-field destruction, mixed stored-row reads, and 30-day boundary behavior.</li>
+        <li>Prove every POS route is structurally covered; fixture and expected auth/session/offline/conflict outcomes remain silent.</li>
+        <li>Using a production build and Terminal Health only, identify the actionable category, flow/operation, build, route ID, and terminal/session correlation for the drawer error and a generic runtime/render failure.</li>
+        <li>Run focused frontend/Convex suites, Convex audits, operation-admission checks, typecheck/build, Graphify rebuild, then <code>pr:athena</code> as merge-ready authority.</li>
+      </ul>
+      <div class="callout warn"><strong>Completion bar:</strong> remotely visible is insufficient. If finite classifications and production source identifiers do not let support diagnose both representative failures, strengthen the closed classification set before U4 completes. Private symbolication remains deferred unless that still proves insufficient.</div>
+    </section>
+
+    <section id="alignment">
+      <h2>Review alignment</h2>
+      <p>Settled after iterative review with all relevant lenses reporting no blocking or material findings:</p>
+      <div class="meta">
+        <span class="pill">coherence · aligned</span><span class="pill">feasibility · aligned</span><span class="pill">security · aligned</span><span class="pill">scope · aligned</span><span class="pill">adversarial · aligned</span><span class="pill">design · aligned</span><span class="pill">product · aligned</span>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,4 +1,4 @@
-import { logger } from "@/lib/logger";
+import { reportPosHandledException } from "@/lib/pos/infrastructure/telemetry/loggerGateway";
 import { useCallback, useMemo, useState } from "react";
 import type { RegisterCheckoutState } from "@/lib/pos/presentation/register/registerUiState";
 import { ExpenseCompletion } from "@/components/expense/ExpenseCompletion";
@@ -74,7 +74,12 @@ export function ExpenseCompletionPanel({
       printReceipt(receiptHtml);
       return true;
     } catch (error) {
-      logger.error("Error printing expense receipt", error instanceof Error ? error : { error: String(error) });
+      reportPosHandledException({
+        error,
+        flow: "printing",
+        localMessage: "Error printing expense receipt",
+        operation: "printExpenseReceipt",
+      });
       return false;
     }
   }, [

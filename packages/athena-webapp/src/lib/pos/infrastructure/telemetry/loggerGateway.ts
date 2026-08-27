@@ -1,13 +1,12 @@
 import type { PosTelemetryGateway } from "@/lib/pos/application/ports";
+import { isExpectedPosTelemetryOutcome } from "@/lib/pos/application/expectedTelemetryOutcome";
 import { logger, type LogContext } from "@/lib/logger";
+import type {
+  PosDiagnosticClassification,
+  PosDiagnosticOperation,
+} from "~/shared/posDiagnosticRedaction";
+import type { PosClientEventFlow } from "./telemetryBuffer";
 import { enqueuePosClientEvent } from "./telemetryBuffer";
-
-function toMetadataRecord(metadata: unknown): Record<string, unknown> | undefined {
-  if (typeof metadata !== "object" || metadata === null) {
-    return undefined;
-  }
-  return metadata as Record<string, unknown>;
-}
 
 export const loggerGateway: PosTelemetryGateway = {
   debug(message, metadata) {
@@ -18,21 +17,34 @@ export const loggerGateway: PosTelemetryGateway = {
   },
   warn(message, metadata) {
     logger.warn(message, metadata as LogContext | undefined);
-    enqueuePosClientEvent({
-      level: "warn",
-      flow: "runtime",
-      message,
-      metadata: toMetadataRecord(metadata),
-    });
   },
   error(message, metadata) {
     logger.error(message, metadata as LogContext | Error | undefined);
-    enqueuePosClientEvent({
-      level: "error",
-      flow: "runtime",
-      message,
-      error: metadata instanceof Error ? metadata : undefined,
-      metadata: metadata instanceof Error ? undefined : toMetadataRecord(metadata),
-    });
   },
 };
+
+export function reportPosHandledException(input: {
+  classification?: PosDiagnosticClassification;
+  error: unknown;
+  flow: PosClientEventFlow;
+  level?: "error" | "warn";
+  localMessage: string;
+  operation: PosDiagnosticOperation;
+}): void {
+  const level = input.level ?? "error";
+  if (level === "warn") loggerGateway.warn(input.localMessage, input.error);
+  else loggerGateway.error(input.localMessage, input.error);
+
+  if (isExpectedPosTelemetryOutcome(input.error)) return;
+  enqueuePosClientEvent({
+    classification:
+      input.classification ??
+      (level === "warn"
+        ? "continuity_warning"
+        : "unexpected_application_error"),
+    error: input.error,
+    flow: input.flow,
+    level,
+    operation: input.operation,
+  });
+}

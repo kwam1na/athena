@@ -7,9 +7,21 @@
  * use case.
  */
 
+import type {
+  PosClientEventFlow,
+  PosDiagnosticClassification,
+  PosDiagnosticOperation,
+} from "~/shared/posDiagnosticRedaction";
+
+export type PosErrorTelemetryFlow = PosClientEventFlow;
+
 export type PosErrorTelemetryReport = {
+  classification?: PosDiagnosticClassification;
+  flow?: PosErrorTelemetryFlow;
   message: string;
-  operation?: string;
+  localRegisterSessionId?: string;
+  metadata?: Record<string, string | number | boolean>;
+  operation?: PosDiagnosticOperation;
   error: unknown;
 };
 
@@ -23,7 +35,9 @@ export function setPosErrorTelemetrySink(
   sink = nextSink;
 }
 
-export function reportPosUnexpectedError(report: PosErrorTelemetryReport): void {
+export function reportPosUnexpectedError(
+  report: PosErrorTelemetryReport,
+): void {
   try {
     sink?.(report);
   } catch {

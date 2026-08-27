@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { Component, useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import { ArrowLeft, CircleAlert, TriangleAlert } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -15,27 +16,25 @@ import type { Id } from "~/convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { formatTerminalTimestamp } from "./terminalHealthPresentation";
 
-export type PosClientErrorEvent = {
-  _id: Id<"posClientEvent">;
-  clientEventId: string;
-  level: "warn" | "error";
-  flow: string;
-  message: string;
-  errorName?: string;
-  errorMessage?: string;
-  errorStack?: string;
-  appVersion?: string;
-  terminalFingerprint?: string;
-  localRegisterSessionId?: string;
-  metadata: Record<string, string | number | boolean>;
-  occurredAt: number;
-  receivedAt: number;
+type PosClientErrorQueryEvent = FunctionReturnType<
+  typeof api.pos.public.telemetry.listClientEvents
+>[number];
+type RequiredQueryFields<T> = {
+  [K in keyof T as undefined extends T[K] ? never : K]: T[K];
 };
+type OptionalQueryFields<T> = {
+  [K in keyof T as undefined extends T[K] ? K : never]?: Exclude<
+    T[K],
+    undefined
+  >;
+};
+export type PosClientErrorEvent =
+  RequiredQueryFields<PosClientErrorQueryEvent> &
+    OptionalQueryFields<PosClientErrorQueryEvent>;
 
-type LevelFilter = "all" | "error" | "warn";
+type LevelFilter = "error" | "warn";
 
 const LEVEL_FILTERS: Array<{ label: string; value: LevelFilter }> = [
-  { label: "All", value: "all" },
   { label: "Errors", value: "error" },
   { label: "Warnings", value: "warn" },
 ];
@@ -49,24 +48,95 @@ const LIST_LIMIT = 50;
  */
 export function PosClientErrorsMetricTile({
   storeId,
+  terminalId,
+  railHealth = "healthy",
 }: {
   storeId: Id<"store">;
+  terminalId?: Id<"posTerminal">;
+  railHealth?: DiagnosticRailHealth;
 }) {
-  const [levelFilter, setLevelFilter] = useState<LevelFilter>("all");
+  const [levelFilter, setLevelFilter] = useState<LevelFilter>("error");
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+
+  return (
+    <PosClientDiagnosticsQueryBoundary
+      fallback={
+        <PosClientErrorsMetricTileContent
+          events={[]}
+          isLoading={false}
+          levelFilter={levelFilter}
+          onLevelFilterChange={setLevelFilter}
+          controlledSheetOpen={isSheetOpen}
+          onControlledSheetOpenChange={setIsSheetOpen}
+          queryUnavailable
+          railHealth={railHealth}
+        />
+      }
+      key={levelFilter}
+    >
+      <PosClientErrorsMetricTileQuery
+        levelFilter={levelFilter}
+        onLevelFilterChange={setLevelFilter}
+        controlledSheetOpen={isSheetOpen}
+        onControlledSheetOpenChange={setIsSheetOpen}
+        railHealth={railHealth}
+        storeId={storeId}
+        terminalId={terminalId}
+      />
+    </PosClientDiagnosticsQueryBoundary>
+  );
+}
+
+function PosClientErrorsMetricTileQuery({
+  storeId,
+  terminalId,
+  levelFilter,
+  onLevelFilterChange,
+  controlledSheetOpen,
+  onControlledSheetOpenChange,
+  railHealth,
+}: {
+  storeId: Id<"store">;
+  terminalId?: Id<"posTerminal">;
+  levelFilter: LevelFilter;
+  onLevelFilterChange: (filter: LevelFilter) => void;
+  controlledSheetOpen: boolean;
+  onControlledSheetOpenChange: (open: boolean) => void;
+  railHealth: DiagnosticRailHealth;
+}) {
   const events = useQuery(api.pos.public.telemetry.listClientEvents, {
     storeId,
-    ...(levelFilter === "all" ? {} : { level: levelFilter }),
+    ...(terminalId ? { terminalId } : {}),
+    level: levelFilter,
     limit: LIST_LIMIT,
-  }) as PosClientErrorEvent[] | undefined;
+  });
 
   return (
     <PosClientErrorsMetricTileContent
       events={events ?? []}
       isLoading={events === undefined}
       levelFilter={levelFilter}
-      onLevelFilterChange={setLevelFilter}
+      onLevelFilterChange={onLevelFilterChange}
+      controlledSheetOpen={controlledSheetOpen}
+      onControlledSheetOpenChange={onControlledSheetOpenChange}
+      railHealth={railHealth}
     />
   );
+}
+
+class PosClientDiagnosticsQueryBoundary extends Component<
+  { children: ReactNode; fallback: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
 }
 
 export function PosClientErrorsMetricTileContent({
@@ -74,19 +144,37 @@ export function PosClientErrorsMetricTileContent({
   isLoading,
   levelFilter,
   onLevelFilterChange,
+  queryUnavailable = false,
+  railHealth = "healthy",
+  controlledSheetOpen,
+  onControlledSheetOpenChange,
 }: {
   events: PosClientErrorEvent[];
   isLoading: boolean;
   levelFilter: LevelFilter;
   onLevelFilterChange: (filter: LevelFilter) => void;
+  queryUnavailable?: boolean;
+  railHealth?: DiagnosticRailHealth;
+  controlledSheetOpen?: boolean;
+  onControlledSheetOpenChange?: (open: boolean) => void;
 }) {
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [internalSheetOpen, setInternalSheetOpen] = useState(false);
+  const isSheetOpen = controlledSheetOpen ?? internalSheetOpen;
+  const setIsSheetOpen = onControlledSheetOpenChange ?? setInternalSheetOpen;
   const [selectedEvent, setSelectedEvent] =
     useState<PosClientErrorEvent | null>(null);
-  // The tile count reflects the unfiltered recent window only while the
-  // filter is at its default; once the operator filters inside the sheet the
-  // count follows what the sheet shows, which is honest and avoids a second
-  // query subscription just for the tile.
+  const returnFocusEventId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (selectedEvent || !returnFocusEventId.current) return;
+    const eventId = returnFocusEventId.current;
+    returnFocusEventId.current = null;
+    document
+      .querySelector<HTMLButtonElement>(
+        `[data-client-event-id="${CSS.escape(eventId)}"]`,
+      )
+      ?.focus();
+  }, [selectedEvent]);
   const countValue =
     events.length >= LIST_LIMIT ? `${LIST_LIMIT}+` : events.length;
   const hasErrors = !isLoading && events.length > 0;
@@ -139,7 +227,10 @@ export function PosClientErrorsMetricTileContent({
               {selectedEvent ? (
                 <Button
                   aria-label="Back to client errors"
-                  onClick={() => setSelectedEvent(null)}
+                  onClick={() => {
+                    returnFocusEventId.current = selectedEvent.clientEventId;
+                    setSelectedEvent(null);
+                  }}
                   size="sm"
                   variant="ghost"
                 >
@@ -161,6 +252,8 @@ export function PosClientErrorsMetricTileContent({
               levelFilter={levelFilter}
               onLevelFilterChange={onLevelFilterChange}
               onSelect={setSelectedEvent}
+              queryUnavailable={queryUnavailable}
+              railHealth={railHealth}
             />
           )}
         </SheetContent>
@@ -175,12 +268,16 @@ function ClientErrorList({
   levelFilter,
   onLevelFilterChange,
   onSelect,
+  queryUnavailable,
+  railHealth,
 }: {
   events: PosClientErrorEvent[];
   isLoading: boolean;
   levelFilter: LevelFilter;
   onLevelFilterChange: (filter: LevelFilter) => void;
   onSelect: (event: PosClientErrorEvent) => void;
+  queryUnavailable: boolean;
+  railHealth: DiagnosticRailHealth;
 }) {
   return (
     <div className="min-h-0 flex-1 space-y-layout-md overflow-y-auto p-layout-lg">
@@ -206,15 +303,38 @@ function ClientErrorList({
             </Button>
           ))}
         </div>
+        {railHealth === "degraded" ? (
+          <p className="text-sm text-warning">
+            Diagnostic delivery is degraded on this terminal. Recent events may
+            be incomplete.
+          </p>
+        ) : railHealth === "pending" ? (
+          <p className="text-sm text-warning">
+            Diagnostic delivery is waiting for terminal setup to finish.
+          </p>
+        ) : railHealth === "not_reported" ? (
+          <p className="text-sm text-muted-foreground">
+            Diagnostic delivery has not been reported by this terminal yet.
+          </p>
+        ) : null}
       </div>
 
-      {/* No loading placeholder: while the query resolves this area stays
-          empty, then the list or empty state appears — nothing is swapped. */}
-      {isLoading ? null : events.length === 0 ? (
+      {queryUnavailable ? (
+        <div
+          className="rounded-lg border border-danger/30 bg-danger/5 px-layout-lg py-layout-lg text-sm text-danger"
+          role="alert"
+        >
+          Client diagnostics are not available right now. Try again shortly.
+        </div>
+      ) : isLoading ? (
+        <p className="text-sm text-muted-foreground" role="status">
+          Loading client errors…
+        </p>
+      ) : events.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-muted/25 px-layout-lg py-layout-lg text-sm text-muted-foreground">
-          No client errors reported
-          {levelFilter === "all" ? "" : " at this level"}. Terminals report
-          here as soon as they can reach the network.
+          {levelFilter === "error"
+            ? "No client errors reported"
+            : "No client warnings reported"}
         </div>
       ) : (
         <ul className="divide-y divide-border rounded-lg border border-border bg-background">
@@ -222,6 +342,7 @@ function ClientErrorList({
             <li key={event.clientEventId}>
               <button
                 className="flex w-full flex-wrap items-center gap-layout-sm px-layout-md py-layout-sm text-left hover:bg-muted/40"
+                data-client-event-id={event.clientEventId}
                 onClick={() => onSelect(event)}
                 type="button"
               >
@@ -248,6 +369,12 @@ function ClientErrorList({
 }
 
 function ClientErrorDetail({ event }: { event: PosClientErrorEvent }) {
+  const source = event.source
+    ? [event.source.asset, event.source.line, event.source.column]
+        .filter((part) => part !== undefined)
+        .join(":")
+    : "Not reported";
+
   return (
     <div className="min-h-0 flex-1 space-y-layout-md overflow-y-auto p-layout-lg">
       <div className="flex flex-wrap items-center gap-layout-xs">
@@ -275,35 +402,42 @@ function ClientErrorDetail({ event }: { event: PosClientErrorEvent }) {
           value={event.appVersion ?? "Not reported"}
         />
         <ClientErrorFact
-          label="Terminal fingerprint"
+          label="Build SHA"
+          value={event.buildSha ?? "Not reported"}
+        />
+        <ClientErrorFact label="Classification" value={event.classification} />
+        <ClientErrorFact
+          label="Operation"
+          value={event.operation ?? "Not reported"}
+        />
+        <ClientErrorFact
+          label="Route"
+          value={event.routeId ?? "Not reported"}
+        />
+        <ClientErrorFact label="Source" value={source} />
+        <ClientErrorFact
+          label="Client-reported terminal"
+          value={event.terminalId ?? "Not reported"}
+        />
+        <ClientErrorFact
+          label="Client-reported fingerprint"
           value={event.terminalFingerprint ?? "Not reported"}
         />
         <ClientErrorFact
-          label="Register session"
+          label="Client-reported register session"
           value={event.localRegisterSessionId ?? "None"}
         />
         <ClientErrorFact label="Event id" value={event.clientEventId} />
       </dl>
 
-      {event.errorName || event.errorMessage ? (
+      {event.errorName ? (
         <div>
           <h3 className="text-xs font-medium uppercase text-muted-foreground">
             Error
           </h3>
           <p className="mt-1 break-words text-sm text-foreground">
-            {[event.errorName, event.errorMessage].filter(Boolean).join(": ")}
+            {event.errorName}
           </p>
-        </div>
-      ) : null}
-
-      {event.errorStack ? (
-        <div>
-          <h3 className="text-xs font-medium uppercase text-muted-foreground">
-            Stack trace
-          </h3>
-          <pre className="mt-1 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-muted/40 p-layout-sm text-xs text-foreground">
-            {event.errorStack}
-          </pre>
         </div>
       ) : null}
 
@@ -328,6 +462,9 @@ function ClientErrorDetail({ event }: { event: PosClientErrorEvent }) {
     </div>
   );
 }
+
+export type DiagnosticRailHealth =
+  "healthy" | "pending" | "degraded" | "not_reported";
 
 function ClientErrorLevelBadge({ level }: { level: "warn" | "error" }) {
   return (

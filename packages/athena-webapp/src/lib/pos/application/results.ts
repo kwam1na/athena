@@ -1,6 +1,10 @@
 import type { CommandResult, UserErrorCode } from "~/shared/commandResult";
 import { GENERIC_UNEXPECTED_ERROR_MESSAGE } from "~/shared/commandResult";
-import { reportPosUnexpectedError } from "./errorTelemetry";
+import {
+  reportPosUnexpectedError,
+  type PosErrorTelemetryFlow,
+} from "./errorTelemetry";
+import { isPosDiagnosticOperation } from "~/shared/posDiagnosticRedaction";
 
 const KNOWN_THROWN_USER_MESSAGES = [
   "A register session is already open for this terminal",
@@ -103,6 +107,7 @@ export function mapCommandResult<TData>(
 export function mapThrownError<TData = never>(
   error: unknown,
   operation?: string,
+  flow?: PosErrorTelemetryFlow,
 ): PosUseCaseResult<TData> {
   const thrownMessage =
     error instanceof Error
@@ -118,8 +123,10 @@ export function mapThrownError<TData = never>(
   // failure still reaches telemetry so it stays diagnosable remotely.
   if (!knownMessage) {
     reportPosUnexpectedError({
+      classification: "unexpected_application_error",
+      flow,
       message: "POS use case threw an unexpected error",
-      operation,
+      operation: isPosDiagnosticOperation(operation) ? operation : "app_use_case",
       error,
     });
   }

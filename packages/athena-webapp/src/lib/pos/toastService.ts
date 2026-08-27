@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import { logger } from "../logger";
+import { reportPosHandledException } from "./infrastructure/telemetry/loggerGateway";
 
 /**
  * POS Toast Service
@@ -71,8 +72,7 @@ export const POS_MESSAGES = {
  * Result type for operations that return success/error objects
  */
 export type OperationResult<T = unknown> =
-  | { success: true; data: T }
-  | { success: false; message: string };
+  { success: true; data: T } | { success: false; message: string };
 
 /**
  * Options for handlePOSOperation wrapper
@@ -170,8 +170,9 @@ export interface POSOperationResponse<T> {
  */
 export async function handlePOSOperation<T>(
   operation: () => Promise<T | OperationResult<T>>,
-  options: POSOperationOptions<T> = {}
+  options: POSOperationOptions<T> = {},
 ): Promise<POSOperationResponse<T>> {
+  let ordinaryResultFailure = false;
   const {
     successMessage,
     errorPrefix,
@@ -234,6 +235,7 @@ export async function handlePOSOperation<T>(
         logger.error(`${logPrefix} Operation failed`, { error: errorMessage });
 
         if (rethrowErrors) {
+          ordinaryResultFailure = true;
           throw new Error(errorMessage);
         }
 
@@ -273,7 +275,16 @@ export async function handlePOSOperation<T>(
       toast.error(fullError, errorToastOptions);
     }
 
-    logger.error(`${logPrefix} Operation exception`, error as Error);
+    if (ordinaryResultFailure) {
+      logger.error(`${logPrefix} Operation exception`, error as Error);
+    } else {
+      reportPosHandledException({
+        error,
+        flow: "runtime",
+        localMessage: `${logPrefix} Operation exception`,
+        operation: "handlePosOperation",
+      });
+    }
 
     if (rethrowErrors) {
       throw error;

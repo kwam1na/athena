@@ -96,6 +96,7 @@ export interface PosLocalEventValidationMetadata {
 }
 
 export interface PosProvisionedTerminalSeed {
+  telemetryIdentityEpoch?: string;
   terminalId: string;
   cloudTerminalId: string;
   syncSecretHash: string;

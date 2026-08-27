@@ -25,6 +25,7 @@ import {
 } from "@/lib/pos/presentation/register/catalogSearchPresentation";
 import { useRegisterCatalogIndex } from "@/lib/pos/presentation/register/useRegisterCatalogIndex";
 import { logger } from "@/lib/logger";
+import { reportPosHandledException } from "@/lib/pos/infrastructure/telemetry/loggerGateway";
 import { toast } from "sonner";
 import {
   buildRegisterUpdateApplyBlockerState,
@@ -485,7 +486,12 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
 
     createSession(activeStore._id, cashierStaffProfileId || undefined).catch(
       (error) => {
-        logger.error("[Expense] Failed to auto-create session", error);
+        reportPosHandledException({
+          error,
+          flow: "expense",
+          localMessage: "[Expense] Failed to auto-create session",
+          operation: "autoCreateExpenseSession",
+        });
         autoSessionInitialized.current = false;
       },
     );
@@ -747,7 +753,12 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       store.clearCart();
       store.clearSession();
     } catch (error) {
-      logger.error("[Expense] Failed to complete expense", error as Error);
+      reportPosHandledException({
+        error,
+        flow: "expense",
+        localMessage: "[Expense] Failed to complete expense",
+        operation: "completeExpense",
+      });
     } finally {
       store.setTransactionCompleting(false);
     }
@@ -761,10 +772,12 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
         await voidSession();
         logger.info("[Expense] Voided session on navigate back", { sessionId });
       } catch (error) {
-        logger.error(
-          "[Expense] Failed to void session on navigate back",
-          error as Error,
-        );
+        reportPosHandledException({
+          error,
+          flow: "expense",
+          localMessage: "[Expense] Failed to void session on navigate back",
+          operation: "voidExpenseSession",
+        });
       }
     }
 

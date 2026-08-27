@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   incrementPosRuntimeCounter,
   resetPosRuntimeCounters,
+  setPosRuntimeCounter,
   snapshotPosRuntimeCounters,
 } from "./runtimeCounters";
 
@@ -29,5 +30,19 @@ describe("posRuntimeCounters", () => {
 
     expect(snapshot).toEqual({ a: 1 });
     expect(snapshotPosRuntimeCounters()).toEqual({ a: 2 });
+  });
+
+  it("sets bounded gauges and timestamps without inventing missing evidence", () => {
+    setPosRuntimeCounter("telemetry.bufferDepth", 4.8);
+    setPosRuntimeCounter("telemetry.lastAcceptedAt", 1_700_000_000_000);
+    setPosRuntimeCounter("telemetry.invalid", Number.POSITIVE_INFINITY);
+
+    expect(snapshotPosRuntimeCounters()).toEqual({
+      "telemetry.bufferDepth": 4,
+      "telemetry.lastAcceptedAt": 1_700_000_000_000,
+    });
+    expect(snapshotPosRuntimeCounters()).not.toHaveProperty(
+      "telemetry.pendingScopeCount",
+    );
   });
 });

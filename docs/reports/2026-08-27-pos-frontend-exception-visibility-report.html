@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>POS Frontend Exception Visibility</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="ca49f1ddc505ff28777eb56623a3bafdee210f6980456051d2d1aa185a47450b">
+  <header data-report-section="header">
+    <h1>POS Frontend Exception Visibility</h1>
+    <p>How Athena now captures, scopes, uploads, retains, and presents privacy-safe POS client diagnostics.</p>
+    <ul data-report-pills>
+      <li>V26-1403</li>
+      <li>Delivery candidate</li>
+      <li>Browser validated</li>
+      <li>No production deploy</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Ticket</dt><dd>V26-1403</dd>
+      <dt>Status</dt><dd>Merge-ready candidate</dd>
+      <dt>Base</dt><dd>origin/main @ 8b4d528</dd>
+      <dt>Production</dt><dd>Deployment intentionally skipped</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+      <p>POS frontend failures that previously stopped at console output or local UI feedback now travel through one bounded diagnostic rail into Terminal Health. The change covers all POS child routes, handled infrastructure failures, global runtime failures, route-render failures, local durability, authorized Convex ingestion, 30-day retention, and support-facing inspection.</p>
+      <p>The envelope is deliberately finite and redacted: it records closed classifications, operations, route IDs, standard error names, sanitized source coordinates, and approved scalar metadata without arbitrary error messages, stacks, customer data, receipt content, credentials, or raw paths.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Problem and constraints</h2>
+      <p>Athena already had pieces of POS telemetry, but ownership and evidence were uneven. Some routes had no host, many handled exceptions never entered the rail, reconnect-time identity could relabel historical events, and unbounded diagnostic text was unsafe to retain remotely.</p>
+      <p>The implementation had to remain best-effort and local-first: telemetry cannot block checkout, mutate business state, weaken manager authorization, or invent terminal identity when browser coordination or IndexedDB is unavailable.</p>
+      <ul>
+        <li>One business action still commits its domain state in one Convex transaction.</li>
+        <li>Client-reported terminal and fingerprint fields remain correlation evidence, not authorization.</li>
+        <li>No production deployment is part of this delivery.</li>
+      </ul>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model</h2>
+      <p>Think of the rail as capture → immutable local shard → occurrence witness → scoped drain → authorized Convex row → Terminal Health. Scope is stamped at occurrence time and later enrichment is allowed only when exact route, owner token, terminal generation, transition revision, store seed, and telemetry identity epoch agree.</p>
+      <p>Terminal or fingerprint changes publish an owner-specific transition lease. Capture fences immediately; only the writer&#x27;s exact lease may settle. If exact coordination is unavailable, an uncoordinated fence keeps rows pending until authoritative recovery or bounded quiescence.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+      <ul>
+        <li>Before: child routes could mount without a telemetry owner. After: the POS parent route owns the host and error boundary for every /pos/** surface.</li>
+        <li>Before: handled storage, settings, printing, expense, and drawer failures often ended at logs or toasts. After: approved producers emit finite diagnostic classifications and operation labels.</li>
+        <li>Before: shared-array persistence and reconnect-time context could race. After: immutable per-event shards, exact occurrence bindings, generation leases, epoch witnesses, and scoped acknowledgements preserve historical attribution.</li>
+        <li>Before: support saw limited client context. After: Terminal Health exposes errors and warnings with restrained empty states and terminal detail placement.</li>
+        <li>Before: sustained error volume could accumulate removal fences. After: the live ring is 200 events and removal fences are normally capped at 400, with safety-first retention when artifact deletion fails.</li>
+      </ul>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed</h2>
+      <ul>
+        <li>Added v2 shared redaction and vocabulary contracts used by browser and Convex validators.</li>
+        <li>Added route-wide browser capture, handled-exception gateways, runtime counters, immutable shards, tombstones, occurrence bindings, exact IndexedDB witnesses, per-scope backoff, and fair retry scheduling.</li>
+        <li>Added Convex ingestion, deduplication, authorization, same-store terminal validation, queries, schema fields, indexes, and bounded retention continuation.</li>
+        <li>Added Terminal Health filters, detail presentation, support copy, and tests.</li>
+        <li>Updated operational guidance, agent architecture/testing indexes, generated API and route artifacts, and Graphify output.</li>
+      </ul>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation evidence</h2>
+      <p>The implementation was exercised from unit seams through the running application. Focused dependency validation after the final storage hardening passed 22 files and 409 tests; the broader related graph previously passed 105 files and 1,941 tests. TypeScript, changed-file frontend and Convex lint, architecture checks, Convex audit/admission checks, build, Graphify, and preparation gates passed.</p>
+      <p>In the dev server, the in-app browser opened /demo/store/central/pos and Terminal Health. Errors were selected by default, warnings toggled correctly, both empty states were distinct, and terminal detail ordered Conflicts and review → Client diagnostics → Support notes. That pass found and drove a store-ID wiring correction. The only console noise was the pre-existing development version-checker HTML/JSON mismatch.</p>
+      <ul>
+        <li>Final exact candidate approved by 13 reviewer lenses with zero actionable findings.</li>
+        <li>No production deploy was run or implied.</li>
+      </ul>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Operational guidance</h2>
+      <ul>
+        <li>Use Terminal Health → Client diagnostics to inspect terminal-scoped errors and warnings.</li>
+        <li>Treat terminal/fingerprint attribution as client-reported evidence; authorization remains organization and store based on the server.</li>
+        <li>When adding a producer, choose an existing closed flow, classification, operation, route, and metadata key; do not add free-form messages.</li>
+        <li>When changing terminal seed or fingerprint identity, use the exact lease/uncoordinated transition contract so capture fences before mutation.</li>
+        <li>If storage degradation counters rise, diagnostics remain best-effort and business operations continue; investigate browser storage and IndexedDB separately.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos.tsx</code></td><td>Structural owner for the POS telemetry host and route error boundary.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/lib/pos/infrastructure/telemetry/telemetryBuffer.ts</code></td><td>Bounded immutable buffer, removal fences, occurrence bindings, and witness upgrade scheduling.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/lib/pos/infrastructure/telemetry/telemetryContext.ts</code></td><td>Occurrence-time route scope and cross-tab terminal identity transition protocol.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/lib/pos/infrastructure/telemetry/usePosClientTelemetryDrain.ts</code></td><td>Scope partitioning, identity proof, fair retry, backoff, upload, and acknowledgement.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/pos/public/telemetry.ts</code></td><td>Authorized ingestion and support-facing diagnostic reads.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/pos/terminals/PosClientErrorsPanel.tsx</code></td><td>Terminal Health errors and warnings interface.</td></tr>
+        <tr><td><code>docs/operations/pos-observability-v1.md</code></td><td>Support and operational contract for the diagnostic rail.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where is POS telemetry ownership mounted?</p>
+        <ol data-quiz-options>
+          <li>Every child route independently</li>
+          <li data-quiz-correct>The shared POS parent route</li>
+          <li>Only Terminal Health</li>
+        </ol>
+        <p data-quiz-explanation>The parent route structurally covers every /pos/** child and owns the error boundary.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>May v2 diagnostics persist arbitrary thrown messages?</p>
+        <ol data-quiz-options>
+          <li>Yes, when redacted later</li>
+          <li>Only for managers</li>
+          <li data-quiz-correct>No</li>
+        </ol>
+        <p data-quiz-explanation>The browser constructs a finite envelope and never persists arbitrary messages or stacks.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What authorizes a telemetry upload?</p>
+        <ol data-quiz-options>
+          <li>A client-supplied staff ID</li>
+          <li data-quiz-correct>Server-side organization access and store validation</li>
+          <li>The reported fingerprint alone</li>
+        </ol>
+        <p data-quiz-explanation>Terminal and fingerprint fields are correlation evidence; server authorization remains authoritative.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>When is event identity scoped?</p>
+        <ol data-quiz-options>
+          <li>At upload time</li>
+          <li data-quiz-correct>At occurrence time</li>
+          <li>When support opens Terminal Health</li>
+        </ol>
+        <p data-quiz-explanation>Occurrence-time route and generation evidence prevents later terminal changes from relabeling history.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens when exact cross-tab coordination is unavailable?</p>
+        <ol data-quiz-options>
+          <li>Checkout is blocked</li>
+          <li>Identity is guessed</li>
+          <li data-quiz-correct>An uncoordinated fence keeps attribution pending while business work proceeds</li>
+        </ol>
+        <p data-quiz-explanation>Telemetry degrades fail-closed without becoming a prerequisite for POS operations.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How large is the live local event ring?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>200 events</li>
+          <li>400 events</li>
+          <li>Unlimited for 30 days</li>
+        </ol>
+        <p data-quiz-explanation>The live ring retains at most 200 ordered events.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why can removal fences temporarily exceed their nominal cap?</p>
+        <ol data-quiz-options>
+          <li>A reporting preference</li>
+          <li data-quiz-correct>To prevent resurrection when related artifacts cannot be cleared</li>
+          <li>Because retention is disabled</li>
+        </ol>
+        <p data-quiz-explanation>Correctness wins over the nominal cap when storage refuses artifact deletion.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where do support users inspect these diagnostics?</p>
+        <ol data-quiz-options>
+          <li>Cash Controls only</li>
+          <li data-quiz-correct>Terminal Health client diagnostics</li>
+          <li>Browser developer tools only</li>
+        </ol>
+        <p data-quiz-explanation>Errors and warnings are presented in Terminal Health and terminal detail.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Does this delivery include production deployment?</p>
+        <ol data-quiz-options>
+          <li>Yes</li>
+          <li>Only Convex</li>
+          <li data-quiz-correct>No</li>
+        </ol>
+        <p data-quiz-explanation>The requested finish line is merged remote main with production deployment explicitly skipped.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What should a new telemetry producer use?</p>
+        <ol data-quiz-options>
+          <li>Free-form text and arbitrary metadata</li>
+          <li data-quiz-correct>The closed shared vocabulary and approved metadata keys</li>
+          <li>A new parallel telemetry service</li>
+        </ol>
+        <p data-quiz-explanation>Shared closed contracts preserve privacy, validator parity, and support consistency.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>Implementation and execution</dt><dd>Specialist subagents examined the plan, repository contracts, session context, and staged diff while the primary agent implemented and integrated the delivery.</dd>
+      <dt>Correctness and adversarial review</dt><dd>Repeated exact-tree passes found and drove fixes for identity ABA, same-tab fingerprint fencing, cross-tab lease ownership, tombstone resurrection, clock rollback, and failed-deletion safety.</dd>
+      <dt>Security, data, API, and reliability review</dt><dd>Validated finite redaction, authorization, validator parity, schema/retention integrity, bounded retry behavior, and failure recovery.</dd>
+      <dt>Testing, performance, frontend-race, standards, TypeScript, and agent-parity review</dt><dd>Confirmed focused proof, bounded fault-storm behavior, cross-document race controls, repository conventions, type safety, and no regression to existing agent capabilities.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

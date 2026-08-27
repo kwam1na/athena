@@ -1402,11 +1402,18 @@ const schema = defineSchema({
     .index("by_store_clientEvent", ["storeId", "clientEventId"])
     .index("by_store_received", ["storeId", "receivedAt"])
     .index("by_store_level_received", ["storeId", "level", "receivedAt"])
+    .index("by_storeId_and_terminalId_and_level_and_receivedAt", [
+      "storeId",
+      "terminalId",
+      "level",
+      "receivedAt",
+    ])
     .index("by_store_terminal_received", [
       "storeId",
       "terminalId",
       "receivedAt",
-    ]),
+    ])
+    .index("by_receivedAt", ["receivedAt"]),
   posRegisterSessionActivityCheckpoint: defineTable(
     posRegisterSessionActivityCheckpointSchema,
   )
