@@ -1,8 +1,11 @@
 ---
+title: "Shrink-Only Backend Dependency Guard for Athena Convex Kernels"
 module: "athena-webapp"
 date: "2026-08-27"
 problem_type: "architecture_pattern"
+category: "architecture-patterns"
 component: "tooling"
+resolution_type: "tooling_addition"
 severity: "medium"
 applies_when:
   - "Adding a structural guardrail to prevent new backend dependency cycles"
@@ -18,6 +21,7 @@ related_components:
   - "inventoryLedger"
   - "agentHarness"
   - "operationAdmission"
+delivery_diff_fingerprint: "8e9f006e6c65ec75caa7fb8c952e46b0377646c80d3b75c174d567d45c2d253c"
 ---
 
 ## Problem
