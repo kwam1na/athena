@@ -1534,6 +1534,10 @@ const schema = defineSchema({
     .index("by_customerProfileId", ["customerProfileId"])
     .index("by_workItemId", ["workItemId"])
     .index("by_registerSessionId", ["registerSessionId"])
+    .index("by_registerSessionId_and_eventType", [
+      "registerSessionId",
+      "eventType",
+    ])
     .index("by_terminalId", ["terminalId"])
     .index("by_localEventId", ["localEventId"]),
   managerElevation: defineTable(managerElevationSchema)

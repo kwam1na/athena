@@ -68,35 +68,42 @@ function createMutationCtx(seed?: {
 
       return sessions.find((session) => session._id === id) ?? null;
     }),
-    insert: vi.fn(async (table: string, value: Omit<RegisterSessionRecord, "_id">) => {
-      if (table !== "registerSession") {
-        throw new Error(`Unsupported insert into ${table}`);
-      }
+    insert: vi.fn(
+      async (table: string, value: Omit<RegisterSessionRecord, "_id">) => {
+        if (table !== "registerSession") {
+          throw new Error(`Unsupported insert into ${table}`);
+        }
 
-      const record = {
-        _id: `session-${sessions.length + 1}`,
-        ...value,
-      } as RegisterSessionRecord;
-      sessions.push(record);
-      return record._id;
-    }),
-    patch: vi.fn(async (table: string, id: string, patch: Record<string, unknown>) => {
-      if (table !== "registerSession") {
-        return;
-      }
+        const record = {
+          _id: `session-${sessions.length + 1}`,
+          ...value,
+        } as RegisterSessionRecord;
+        sessions.push(record);
+        return record._id;
+      },
+    ),
+    patch: vi.fn(
+      async (table: string, id: string, patch: Record<string, unknown>) => {
+        if (table !== "registerSession") {
+          return;
+        }
 
-      const session = sessions.find((entry) => entry._id === id);
-      if (!session) {
-        return;
-      }
+        const session = sessions.find((entry) => entry._id === id);
+        if (!session) {
+          return;
+        }
 
-      Object.assign(session, patch);
-    }),
+        Object.assign(session, patch);
+      },
+    ),
     query: vi.fn((table: string) => ({
-      withIndex(indexName: string, buildQuery?: (q: {
-        eq: (field: string, value: string) => unknown;
-        lte: (field: string, value: number) => unknown;
-      }) => unknown) {
+      withIndex(
+        indexName: string,
+        buildQuery?: (q: {
+          eq: (field: string, value: string) => unknown;
+          lte: (field: string, value: number) => unknown;
+        }) => unknown,
+      ) {
         if (
           table !== "registerSession" &&
           table !== "workflowTrace" &&
@@ -105,7 +112,9 @@ function createMutationCtx(seed?: {
           throw new Error(`Unsupported query table ${table}`);
         }
 
-        if (table === "registerSession" && indexName !== "by_storeId_registerNumber" &&
+        if (
+          table === "registerSession" &&
+          indexName !== "by_storeId_registerNumber" &&
           indexName !== "by_terminalId"
         ) {
           throw new Error(`Unsupported registerSession index ${indexName}`);
@@ -121,7 +130,8 @@ function createMutationCtx(seed?: {
         }
 
         const filters = new Map<string, string>();
-        const rangeFilters: Array<(row: Record<string, unknown>) => boolean> = [];
+        const rangeFilters: Array<(row: Record<string, unknown>) => boolean> =
+          [];
         const queryBuilder = {
           eq(field: string, value: string) {
             filters.set(field, value);
@@ -129,8 +139,7 @@ function createMutationCtx(seed?: {
           },
           lte(field: string, value: number) {
             rangeFilters.push(
-              (row) =>
-                typeof row[field] === "number" && row[field] <= value,
+              (row) => typeof row[field] === "number" && row[field] <= value,
             );
             return queryBuilder;
           },
@@ -157,12 +166,12 @@ function createMutationCtx(seed?: {
                 startMinute: 0,
               })),
             },
-          ].filter((schedule) =>
-            [...filters].every(
-              ([field, value]) =>
-                schedule[field as keyof typeof schedule] === value,
-            ) &&
-            rangeFilters.every((matches) => matches(schedule)),
+          ].filter(
+            (schedule) =>
+              [...filters].every(
+                ([field, value]) =>
+                  schedule[field as keyof typeof schedule] === value,
+              ) && rangeFilters.every((matches) => matches(schedule)),
           );
           const query = {
             order: () => query,
@@ -173,12 +182,12 @@ function createMutationCtx(seed?: {
 
         return {
           first: async () => {
-            const rows = table === "registerSession" ? sessions : workflowTraces;
+            const rows =
+              table === "registerSession" ? sessions : workflowTraces;
             return (
               rows.find((row) =>
                 [...filters].every(
-                  ([field, value]) =>
-                    row[field as keyof typeof row] === value,
+                  ([field, value]) => row[field as keyof typeof row] === value,
                 ),
               ) ?? null
             );
@@ -334,9 +343,13 @@ describe("register session workflow trace handlers", () => {
       openingFloat: 5_000,
     });
 
-    expect(ctx.db.patch).not.toHaveBeenCalledWith("registerSession", "session-1", {
-      workflowTraceId: "register_session:session-1",
-    });
+    expect(ctx.db.patch).not.toHaveBeenCalledWith(
+      "registerSession",
+      "session-1",
+      {
+        workflowTraceId: "register_session:session-1",
+      },
+    );
   });
 
   it("links an existing deterministic register-session trace", async () => {
@@ -577,7 +590,9 @@ describe("register session workflow trace handlers", () => {
         registerNumber: "A1",
         openingFloat: 5_000,
       }),
-    ).rejects.toThrow("A register session is already open for this register number.");
+    ).rejects.toThrow(
+      "A register session is already open for this register number.",
+    );
   });
 
   it("still blocks opening a drawer when terminal identity is missing", async () => {
@@ -692,7 +707,9 @@ describe("register session workflow trace handlers", () => {
 
   it("records a void adjustment trace when register-session cash decreases", async () => {
     const ctx = createMutationCtx({
-      sessions: [buildRegisterSession({ expectedCash: 13_000, status: "closing" })],
+      sessions: [
+        buildRegisterSession({ expectedCash: 13_000, status: "closing" }),
+      ],
     });
 
     const updatedSession = await getHandler(recordRegisterSessionTransaction)(
@@ -733,55 +750,84 @@ describe("register session workflow trace handlers", () => {
     );
   });
 
+  it("records a handed-off sale void using the register session's current terminal", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildRegisterSession({
+          expectedCash: 13_000,
+          status: "closing",
+          terminalId: "terminal-2",
+        }),
+      ],
+    });
+
+    await expect(
+      getHandler(recordRegisterSessionTransaction)(ctx as never, {
+        adjustmentKind: "void",
+        payments: [{ method: "cash", amount: 4_000, timestamp: 1 }],
+        registerSessionId: "session-1",
+        storeId: "store-1",
+        terminalId: "terminal-2",
+        transactionId: "transaction-from-terminal-1",
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        expectedCash: 9_000,
+        status: "closing",
+        terminalId: "terminal-2",
+      }),
+    );
+  });
+
   it.each(["card", "mobile_money"])(
     "records a %s void trace without changing expected cash",
     async (paymentMethod) => {
-    const ctx = createMutationCtx({
-      sessions: [buildRegisterSession({ expectedCash: 13_000 })],
-    });
+      const ctx = createMutationCtx({
+        sessions: [buildRegisterSession({ expectedCash: 13_000 })],
+      });
 
-    const updatedSession = await getHandler(recordRegisterSessionTransaction)(
-      ctx as never,
-      {
-        actorStaffProfileId: "staff-1",
-        registerSessionId: "session-1",
-        storeId: "store-1",
-        adjustmentKind: "void",
-        approvedByStaffProfileId: "manager-1",
-        payments: [{ method: paymentMethod, amount: 9_000, timestamp: 1 }],
-        paymentCount: 1,
-        paymentMethodLabels: [paymentMethod],
-        registerNumber: "A1",
-        saleTotal: 9_000,
-        terminalId: "terminal-1",
-        transactionId: "transaction-1",
-        transactionNumber: "R-001",
-      },
-    );
+      const updatedSession = await getHandler(recordRegisterSessionTransaction)(
+        ctx as never,
+        {
+          actorStaffProfileId: "staff-1",
+          registerSessionId: "session-1",
+          storeId: "store-1",
+          adjustmentKind: "void",
+          approvedByStaffProfileId: "manager-1",
+          payments: [{ method: paymentMethod, amount: 9_000, timestamp: 1 }],
+          paymentCount: 1,
+          paymentMethodLabels: [paymentMethod],
+          registerNumber: "A1",
+          saleTotal: 9_000,
+          terminalId: "terminal-1",
+          transactionId: "transaction-1",
+          transactionNumber: "R-001",
+        },
+      );
 
-    expect(updatedSession).toEqual(
-      expect.objectContaining({
-        _id: "session-1",
-        expectedCash: 13_000,
-        status: "open",
-      }),
-    );
-    expect(mocks.traceRecord).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        actorStaffProfileId: "staff-1",
-        approvedByStaffProfileId: "manager-1",
-        amount: 0,
-        cashDelta: 0,
-        occurredAt: 999,
-        paymentCount: 1,
-        paymentMethodLabels: [paymentMethod],
-        saleTotal: 9_000,
-        stage: "void_recorded",
-        transactionId: "transaction-1",
-        transactionNumber: "R-001",
-      }),
-    );
+      expect(updatedSession).toEqual(
+        expect.objectContaining({
+          _id: "session-1",
+          expectedCash: 13_000,
+          status: "open",
+        }),
+      );
+      expect(mocks.traceRecord).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          actorStaffProfileId: "staff-1",
+          approvedByStaffProfileId: "manager-1",
+          amount: 0,
+          cashDelta: 0,
+          occurredAt: 999,
+          paymentCount: 1,
+          paymentMethodLabels: [paymentMethod],
+          saleTotal: 9_000,
+          stage: "void_recorded",
+          transactionId: "transaction-1",
+          transactionNumber: "R-001",
+        }),
+      );
     },
   );
 });

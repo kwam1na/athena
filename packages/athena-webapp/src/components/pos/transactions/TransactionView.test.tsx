@@ -1220,6 +1220,57 @@ describe("TransactionView", () => {
     expect(screen.queryByLabelText("Void reason")).not.toBeInTheDocument();
   });
 
+  it("authenticates a handed-off sale on the register session's current terminal", async () => {
+    const user = userEvent.setup();
+    const terminalAuthMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        activeRoles: ["cashier"],
+        posLocalStaffProof: { expiresAt: 2, token: "proof-token-1" },
+        staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
+        staffProfileId: "staff_1",
+      },
+    });
+    const voidMutation = vi.fn().mockResolvedValue({
+      kind: "approval_required",
+      approval: voidApprovalRequirement("txn_void_handoff", {
+        includeAsyncRequest: true,
+      }),
+    });
+    mockTransactionMutations(
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      terminalAuthMutation,
+      vi.fn(),
+      voidMutation,
+    );
+    useParamsMock.mockReturnValue({ transactionId: "txn_void_handoff" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      _id: "txn_void_handoff",
+      registerSessionStatus: "closing",
+      registerSessionTerminalId: "terminal_2",
+      terminalId: "terminal_1",
+    });
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Void sale" }));
+    await user.type(screen.getByLabelText("Void reason"), "Duplicate sale.");
+    await user.click(screen.getByRole("button", { name: "Submit void" }));
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(terminalAuthMutation).toHaveBeenCalledWith(
+      expect.objectContaining({ terminalId: "terminal_2" }),
+    );
+    expect(voidMutation).toHaveBeenCalledWith(
+      expect.objectContaining({ staffProofToken: "proof-token-1" }),
+    );
+  });
+
   it("does not retry the void command when manager approval is cancelled", async () => {
     const user = userEvent.setup();
     const authMutation = vi.fn().mockResolvedValue({
@@ -1734,7 +1785,7 @@ describe("TransactionView", () => {
     ).toBeInTheDocument();
   });
 
-  it("disables sale voiding while the register session is closing", async () => {
+  it("allows a sale void request while the register closeout is open for correction", async () => {
     const user = userEvent.setup();
     useParamsMock.mockReturnValue({ transactionId: "txn_23" });
     useQueryMock.mockReturnValue({
@@ -1747,16 +1798,16 @@ describe("TransactionView", () => {
 
     const voidButton = screen.getByRole("button", { name: "Void sale" });
 
-    expect(voidButton).toBeDisabled();
+    expect(voidButton).toBeEnabled();
     expect(
-      screen.getByText("Reopen Register 3 to void this sale"),
-    ).toBeInTheDocument();
+      screen.queryByText("Reopen Register 3 to void this sale"),
+    ).not.toBeInTheDocument();
 
     await user.click(voidButton);
 
     expect(
-      screen.queryByRole("button", { name: "Submit void" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Submit void" }),
+    ).toBeInTheDocument();
   });
 
   it("uses a generic reopen message when a closing register has no number", async () => {

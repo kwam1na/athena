@@ -33,6 +33,8 @@ import {
   buildRegisterSessionLocalSyncStatus,
   classifyRegisterSessionSyncReview,
 } from "../pos/application/sync/registerSessionSyncReview";
+import { ingestLocalEventsWithCtx } from "../pos/application/sync/ingestLocalEvents";
+import { hashPosLocalStaffProofToken } from "../pos/application/sync/staffProof";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 
 function getSource(relativePath: string) {
@@ -82,9 +84,17 @@ function createQueryCtx(seed: Record<string, Array<Record<string, unknown>>>) {
         getRows(tableName).some((row) => row._id === id) ? id : null,
       patch: async (
         tableName: string,
-        id: string,
-        value: Record<string, unknown>,
+        id: string | Record<string, unknown>,
+        value?: Record<string, unknown>,
       ) => {
+        if (value === undefined) {
+          value = id as Record<string, unknown>;
+          id = tableName;
+          tableName =
+            Array.from(rowsByTable.entries()).find(([, rows]) =>
+              rows.some((candidate) => candidate._id === id),
+            )?.[0] ?? tableName;
+        }
         const row = getRows(tableName).find(
           (candidate) => candidate._id === id,
         );
@@ -795,6 +805,7 @@ describe("cash control deposits", () => {
             sequence: 13,
             status: "needs_review",
             summary: "A register session is already open for this terminal.",
+            terminalId: "terminal_2" as Id<"posTerminal">,
           },
         ],
         {
@@ -1815,6 +1826,628 @@ describe("cash control deposits", () => {
         }),
       ]),
     );
+  });
+
+  it("hands an active drawer to a replacement terminal identity without treating the physical count as opening float", async () => {
+    const laterSaleProofToken = "later-sale-proof-token";
+    const seed: Record<
+      string,
+      Array<Record<string, unknown>>
+    > = createMissingMappingRepairSeed({
+      withCloudTransaction: false,
+      withTransactionMapping: false,
+    });
+    seed.registerSession = seed.registerSession.map((session) => ({
+      ...session,
+      expectedCash: 44300,
+      lifecycleAuthorityRevision: 4,
+      openingFloat: 4800,
+      terminalId: "terminal_old",
+    }));
+    seed.posTerminal = [
+      {
+        _id: "terminal_old",
+        registerNumber: "0",
+        registeredByUserId: "athena_user_1",
+        status: "active",
+        storeId: "store_1",
+      },
+      ...seed.posTerminal,
+    ];
+    seed.posLocalSyncConflict.unshift({
+      _id: "sync_conflict_duplicate_open",
+      storeId: "store_1",
+      terminalId: "terminal_1",
+      localRegisterSessionId: "local-register-1",
+      localEventId: "event_open_1",
+      sequence: 1,
+      conflictType: "permission",
+      status: "needs_review",
+      summary: "A register session is already open for this register number.",
+      details: { blockingRegisterSessionId: "session_open" },
+      createdAt: 1,
+    });
+    seed.posLocalSyncEvent.unshift({
+      _id: "sync_event_open_1",
+      storeId: "store_1",
+      terminalId: "terminal_1",
+      localRegisterSessionId: "local-register-1",
+      localEventId: "event_open_1",
+      sequence: 1,
+      eventType: "register_opened",
+      occurredAt: 1,
+      staffProfileId: "staff_1",
+      payload: { openingFloat: 63800, registerNumber: "1" },
+      status: "conflicted",
+      submittedAt: 1,
+    });
+    seed.posLocalSyncConflict.push({
+      _id: "sync_conflict_sale_cleared",
+      storeId: "store_1",
+      terminalId: "terminal_1",
+      localRegisterSessionId: "local-register-1",
+      localEventId: "event_sale_cleared",
+      sequence: 3,
+      conflictType: "permission",
+      status: "needs_review",
+      summary: "Register session mapping is missing for synced POS history.",
+      details: { localPosSessionId: "local-pos-session-cleared" },
+      createdAt: 2,
+    });
+    seed.posLocalSyncEvent.push({
+      _id: "sync_event_sale_cleared",
+      storeId: "store_1",
+      terminalId: "terminal_1",
+      localRegisterSessionId: "local-register-1",
+      localEventId: "event_sale_cleared",
+      sequence: 3,
+      eventType: "sale_cleared",
+      occurredAt: 2,
+      staffProfileId: "staff_1",
+      payload: {
+        localPosSessionId: "local-pos-session-cleared",
+        reason: "Sale cleared",
+      },
+      status: "conflicted",
+      submittedAt: 2,
+    });
+    seed.posLocalSyncConflict.push({
+      _id: "sync_conflict_late_sale",
+      storeId: "store_1",
+      terminalId: "terminal_1",
+      localRegisterSessionId: "local-register-1",
+      localEventId: "event_sale_2",
+      sequence: 4,
+      conflictType: "permission",
+      status: "needs_review",
+      summary: "Register session mapping is missing for synced POS history.",
+      details: { localTransactionId: "local-transaction-2" },
+      createdAt: 3,
+    });
+    seed.posLocalSyncEvent.push({
+      _id: "sync_event_sale_2",
+      storeId: "store_1",
+      terminalId: "terminal_1",
+      localRegisterSessionId: "local-register-1",
+      localEventId: "event_sale_2",
+      sequence: 4,
+      eventType: "sale_completed",
+      occurredAt: 3,
+      staffProfileId: "staff_1",
+      payload: {
+        localTransactionId: "local-transaction-2",
+        localPosSessionId: "local-pos-session-2",
+        localReceiptNumber: "local-receipt-2",
+        receiptNumber: "R-1002",
+        registerNumber: "1",
+        totals: { subtotal: 15000, tax: 0, total: 15000 },
+        items: [
+          {
+            localTransactionItemId: "local-item-2",
+            productId: "product_1",
+            productName: "Test product",
+            productSku: "SKU-1",
+            productSkuId: "product_sku_1",
+            quantity: 1,
+            unitPrice: 15000,
+          },
+        ],
+        payments: [
+          {
+            amount: 15000,
+            localPaymentId: "local-payment-2",
+            method: "mobile_money",
+            timestamp: 3,
+          },
+        ],
+      },
+      status: "conflicted",
+      submittedAt: 3,
+    });
+    seed.approvalProof = [
+      {
+        _id: "approval_proof_handoff",
+        actionKey: "cash_controls.register_session.terminal_identity_handoff",
+        approvedByCredentialId: "credential_manager_1",
+        approvedByStaffProfileId: "manager_1",
+        createdAt: 1,
+        expiresAt: Date.now() + 60_000,
+        requestedByStaffProfileId: "staff_1",
+        requiredRole: "manager",
+        storeId: "store_1",
+        subjectId:
+          '["session_open","terminal_old","terminal_1","local-register-1"]',
+        subjectLabel: "1",
+        subjectType: "register_session_terminal_identity_handoff",
+      },
+    ];
+    seed.staffCredential = [
+      {
+        _id: "credential_staff_1",
+        localVerifierVersion: 1,
+        organizationId: "org_1",
+        staffProfileId: "staff_1",
+        status: "active",
+        storeId: "store_1",
+        username: "cashier",
+      },
+    ];
+    seed.posLocalStaffProof = [
+      {
+        _id: "local_staff_proof_1",
+        createdAt: 1,
+        credentialId: "credential_staff_1",
+        credentialVersion: 1,
+        expiresAt: Date.now() + 60_000,
+        staffProfileId: "staff_1",
+        status: "active",
+        storeId: "store_1",
+        terminalId: "terminal_1",
+        tokenHash: await hashPosLocalStaffProofToken(laterSaleProofToken),
+      },
+    ];
+    seed.posLocalSyncCursor = [
+      {
+        _id: "sync_cursor_1",
+        acceptedThroughSequence: 4,
+        localRegisterSessionId: "local-register-1",
+        localSyncCursorId: "local-register-1",
+        storeId: "store_1",
+        syncScope: "pos",
+        terminalId: "terminal_1",
+        updatedAt: 4,
+      },
+    ];
+
+    const ordinaryProofSeed = structuredClone(seed);
+    ordinaryProofSeed.approvalProof = ordinaryProofSeed.approvalProof.map(
+      (proof) => ({
+        ...proof,
+        actionKey: "cash_controls.register_session.resolve_sync_review",
+        subjectId: "session_open",
+        subjectType: "register_session",
+      }),
+    );
+    const ordinaryProofCtx =
+      createAuthorizedRegisterDepositCtx(ordinaryProofSeed);
+    const beforeOrdinaryProofAttempt = structuredClone([
+      ...ordinaryProofCtx.tables.entries(),
+    ]);
+    await expect(
+      getHandler(resolveRegisterSessionSyncReview)(ordinaryProofCtx as never, {
+        approvalProofId: "approval_proof_handoff" as Id<"approvalProof">,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        requestedByStaffProfileId: "staff_1" as Id<"staffProfile">,
+        storeId: "store_1" as Id<"store">,
+        terminalIdentityHandoff: {
+          countedCash: 63800,
+          expectedPreviousTerminalId: "terminal_old" as Id<"posTerminal">,
+          localRegisterSessionId: "local-register-1",
+          replacementTerminalId: "terminal_1" as Id<"posTerminal">,
+        },
+      }),
+    ).resolves.toEqual(
+      userError({
+        code: "precondition_failed",
+        message: "Approval proof does not match this command.",
+      }),
+    );
+    expect([...ordinaryProofCtx.tables.entries()]).toEqual(
+      beforeOrdinaryProofAttempt,
+    );
+
+    const staleSourceSeed = structuredClone(seed);
+    staleSourceSeed.registerSession = staleSourceSeed.registerSession.map(
+      (session) =>
+        session._id === "session_open"
+          ? { ...session, terminalId: "terminal_other" }
+          : session,
+    );
+    staleSourceSeed.posTerminal.push({
+      _id: "terminal_other",
+      registerNumber: "1",
+      registeredByUserId: "athena_user_1",
+      status: "active",
+      storeId: "store_1",
+    });
+    const staleSourceCtx = createAuthorizedRegisterDepositCtx(staleSourceSeed);
+    const beforeStaleSourceAttempt = structuredClone([
+      ...staleSourceCtx.tables.entries(),
+    ]);
+    await expect(
+      getHandler(resolveRegisterSessionSyncReview)(staleSourceCtx as never, {
+        approvalProofId: "approval_proof_handoff" as Id<"approvalProof">,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        requestedByStaffProfileId: "staff_1" as Id<"staffProfile">,
+        storeId: "store_1" as Id<"store">,
+        terminalIdentityHandoff: {
+          countedCash: 63800,
+          expectedPreviousTerminalId: "terminal_old" as Id<"posTerminal">,
+          localRegisterSessionId: "local-register-1",
+          replacementTerminalId: "terminal_1" as Id<"posTerminal">,
+        },
+      }),
+    ).resolves.toEqual(
+      userError({
+        code: "precondition_failed",
+        message:
+          "The register session terminal owner changed after this handoff was approved.",
+      }),
+    );
+    expect([...staleSourceCtx.tables.entries()]).toEqual(
+      beforeStaleSourceAttempt,
+    );
+
+    const unsupportedSeed = structuredClone(seed);
+    unsupportedSeed.posLocalSyncConflict.push({
+      _id: "sync_conflict_unrelated_inventory",
+      storeId: "store_1",
+      terminalId: "terminal_1",
+      localRegisterSessionId: "local-register-1",
+      localEventId: "event_sale_2",
+      sequence: 4,
+      conflictType: "inventory",
+      status: "needs_review",
+      summary: "Inventory needs manager review for a synced offline sale.",
+      details: {},
+      createdAt: 3,
+    });
+    unsupportedSeed.approvalProof = [
+      {
+        _id: "approval_proof_handoff",
+        actionKey: "cash_controls.register_session.terminal_identity_handoff",
+        approvedByCredentialId: "credential_manager_1",
+        approvedByStaffProfileId: "manager_1",
+        createdAt: 1,
+        expiresAt: Date.now() + 60_000,
+        requestedByStaffProfileId: "staff_1",
+        requiredRole: "manager",
+        storeId: "store_1",
+        subjectId:
+          '["session_open","terminal_old","terminal_1","local-register-1"]',
+        subjectLabel: "1",
+        subjectType: "register_session_terminal_identity_handoff",
+      },
+    ];
+    const unsupportedCtx = createAuthorizedRegisterDepositCtx(unsupportedSeed);
+    const beforeUnsupportedHandoff = structuredClone([
+      ...unsupportedCtx.tables.entries(),
+    ]);
+    const unsupportedResult = await getHandler(
+      resolveRegisterSessionSyncReview,
+    )(unsupportedCtx as never, {
+      approvalProofId: "approval_proof_handoff" as Id<"approvalProof">,
+      registerSessionId: "session_open" as Id<"registerSession">,
+      requestedByStaffProfileId: "staff_1" as Id<"staffProfile">,
+      storeId: "store_1" as Id<"store">,
+      terminalIdentityHandoff: {
+        countedCash: 63800,
+        expectedPreviousTerminalId: "terminal_old" as Id<"posTerminal">,
+        localRegisterSessionId: "local-register-1",
+        replacementTerminalId: "terminal_1" as Id<"posTerminal">,
+      },
+    });
+    expect(unsupportedResult).toEqual(
+      userError({
+        code: "precondition_failed",
+        message:
+          "This replacement drawer has review items that need separate attention before its terminal identity can be handed off.",
+      }),
+    );
+    expect([...unsupportedCtx.tables.entries()]).toEqual(
+      beforeUnsupportedHandoff,
+    );
+
+    const inventoryShortfallSeed = structuredClone(seed);
+    inventoryShortfallSeed.productSku =
+      inventoryShortfallSeed.productSku.map((sku) => ({
+        ...sku,
+        inventoryCount: 0,
+        quantityAvailable: 0,
+      }));
+    const inventoryShortfallCtx = createAuthorizedRegisterDepositCtx(
+      inventoryShortfallSeed,
+    );
+    await expect(
+      getHandler(resolveRegisterSessionSyncReview)(
+        inventoryShortfallCtx as never,
+        {
+          approvalProofId: "approval_proof_handoff" as Id<"approvalProof">,
+          registerSessionId: "session_open" as Id<"registerSession">,
+          requestedByStaffProfileId: "staff_1" as Id<"staffProfile">,
+          storeId: "store_1" as Id<"store">,
+          terminalIdentityHandoff: {
+            countedCash: 63800,
+            expectedPreviousTerminalId: "terminal_old" as Id<"posTerminal">,
+            localRegisterSessionId: "local-register-1",
+            replacementTerminalId: "terminal_1" as Id<"posTerminal">,
+          },
+        },
+      ),
+    ).resolves.toEqual(
+      ok({
+        action: "resolved",
+        projectedCount: 2,
+        registerSession: expect.objectContaining({
+          _id: "session_open",
+          expectedCash: 59300,
+          terminalId: "terminal_1",
+        }),
+        resolvedCount: 4,
+      }),
+    );
+    expect(inventoryShortfallCtx.tables.get("operationalWorkItem")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            localEventId: "event_sale_1",
+            skippedMutationItems: expect.arrayContaining([
+              expect.objectContaining({
+                productSkuId: "product_sku_1",
+                reason: "stock_shortfall",
+              }),
+            ]),
+          }),
+          status: "open",
+          type: "synced_sale_inventory_review",
+        }),
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            localEventId: "event_sale_2",
+            skippedMutationItems: expect.arrayContaining([
+              expect.objectContaining({
+                productSkuId: "product_sku_1",
+                reason: "stock_shortfall",
+              }),
+            ]),
+          }),
+          status: "open",
+          type: "synced_sale_inventory_review",
+        }),
+      ]),
+    );
+
+    const projectionDriftSeed = structuredClone(seed);
+    const driftingSale = projectionDriftSeed.posLocalSyncEvent.find(
+      (event) => event._id === "sync_event_sale_2",
+    );
+    const driftingPayload = driftingSale?.payload as
+      | {
+          items?: Array<Record<string, unknown>>;
+          payments?: Array<Record<string, unknown>>;
+          totals?: Record<string, unknown>;
+        }
+      | undefined;
+    if (
+      !driftingPayload?.items?.[0] ||
+      !driftingPayload.payments?.[0] ||
+      !driftingPayload.totals
+    ) {
+      throw new Error("Expected second synced sale fixture.");
+    }
+    driftingPayload.items[0].unitPrice = 18000;
+    driftingPayload.payments[0].amount = 18000;
+    driftingPayload.totals.subtotal = 18000;
+    driftingPayload.totals.total = 18000;
+    const projectionDriftCtx =
+      createAuthorizedRegisterDepositCtx(projectionDriftSeed);
+    await expect(
+      getHandler(resolveRegisterSessionSyncReview)(
+        projectionDriftCtx as never,
+        {
+          approvalProofId: "approval_proof_handoff" as Id<"approvalProof">,
+          registerSessionId: "session_open" as Id<"registerSession">,
+          requestedByStaffProfileId: "staff_1" as Id<"staffProfile">,
+          storeId: "store_1" as Id<"store">,
+          terminalIdentityHandoff: {
+            countedCash: 63800,
+            expectedPreviousTerminalId: "terminal_old" as Id<"posTerminal">,
+            localRegisterSessionId: "local-register-1",
+            replacementTerminalId: "terminal_1" as Id<"posTerminal">,
+          },
+        },
+      ),
+    ).rejects.toThrow(
+      "Terminal identity handoff history projection failed: Product price changed before this offline sale synced.",
+    );
+
+    const ctx = createAuthorizedRegisterDepositCtx(seed);
+
+    const result = await getHandler(resolveRegisterSessionSyncReview)(
+      ctx as never,
+      {
+        approvalProofId: "approval_proof_handoff" as Id<"approvalProof">,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        requestedByStaffProfileId: "staff_1" as Id<"staffProfile">,
+        reviewConflictIds: [
+          "sync_conflict_duplicate_open",
+          "sync_conflict_missing_mapping",
+        ],
+        storeId: "store_1" as Id<"store">,
+        terminalIdentityHandoff: {
+          countedCash: 63800,
+          expectedPreviousTerminalId: "terminal_old" as Id<"posTerminal">,
+          localRegisterSessionId: "local-register-1",
+          replacementTerminalId: "terminal_1" as Id<"posTerminal">,
+        },
+      },
+    );
+
+    expect(result).toEqual(
+      ok({
+        action: "resolved",
+        projectedCount: 2,
+        registerSession: expect.objectContaining({
+          _id: "session_open",
+          expectedCash: 59300,
+          lifecycleAuthorityRevision: 5,
+          openingFloat: 4800,
+          terminalId: "terminal_1",
+        }),
+        resolvedCount: 4,
+      }),
+    );
+    expect(ctx.tables.get("posTerminal")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ _id: "terminal_old", status: "lost" }),
+        expect.objectContaining({ _id: "terminal_1", status: "active" }),
+      ]),
+    );
+    expect(ctx.tables.get("approvalProof")).toEqual([
+      expect.objectContaining({
+        _id: "approval_proof_handoff",
+        consumedAt: expect.any(Number),
+      }),
+    ]);
+    expect(
+      ctx.tables
+        .get("registerSession")
+        ?.find((session) => session._id === "session_open"),
+    ).not.toHaveProperty("countedCash");
+    expect(ctx.tables.get("posLocalSyncEvent")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          _id: "sync_event_open_1",
+          rejectionCode: "terminal_identity_handoff",
+          status: "rejected",
+        }),
+        expect.objectContaining({
+          _id: "sync_event_sale_1",
+          status: "projected",
+        }),
+        expect.objectContaining({
+          _id: "sync_event_sale_2",
+          status: "projected",
+        }),
+        expect.objectContaining({
+          _id: "sync_event_sale_cleared",
+          status: "projected",
+        }),
+      ]),
+    );
+    expect(ctx.tables.get("operationalEvent")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventType: "register_session_terminal_identity_handed_off",
+          metadata: expect.objectContaining({
+            approvalProofId: "approval_proof_handoff",
+            countedCashAtHandoff: 63800,
+            decisionApprovedByStaffProfileId: "manager_1",
+            expectedCashAtHandoff: 44300,
+            handoffVariance: 19500,
+            localReviewClearCommandId: expect.any(String),
+            localReviewEventIds: [
+              "event_open_1",
+              "event_sale_1",
+              "event_sale_cleared",
+              "event_sale_2",
+            ],
+            previousTerminalId: "terminal_old",
+            replacementTerminalId: "terminal_1",
+          }),
+          registerSessionId: "session_open",
+        }),
+      ]),
+    );
+    expect(ctx.tables.get("posTerminalRecoveryCommand")).toEqual([
+      expect.objectContaining({
+        commandContext: expect.objectContaining({
+          localReviewEventIds: [
+            "event_open_1",
+            "event_sale_1",
+            "event_sale_cleared",
+            "event_sale_2",
+          ],
+        }),
+        commandType: "clear_local_review_items",
+        status: "pending",
+        terminalId: "terminal_1",
+      }),
+    ]);
+
+    const laterSaleResult = await ingestLocalEventsWithCtx(ctx as never, {
+      events: [
+        {
+          eventType: "sale_completed",
+          localEventId: "event_sale_after_handoff",
+          localRegisterSessionId: "local-register-1",
+          occurredAt: Date.now(),
+          payload: {
+            items: [
+              {
+                localTransactionItemId: "local-item-after-handoff",
+                productId: "product_1",
+                productName: "Test product",
+                productSku: "SKU-1",
+                productSkuId: "product_sku_1",
+                quantity: 1,
+                unitPrice: 15000,
+              },
+            ],
+            localPosSessionId: "local-pos-session-after-handoff",
+            localReceiptNumber: "local-receipt-after-handoff",
+            localTransactionId: "local-transaction-after-handoff",
+            payments: [
+              {
+                amount: 15000,
+                localPaymentId: "local-payment-after-handoff",
+                method: "cash",
+                timestamp: Date.now(),
+              },
+            ],
+            receiptNumber: "R-1003",
+            registerNumber: "1",
+            totals: { subtotal: 15000, tax: 0, total: 15000 },
+          },
+          sequence: 5,
+          staffProfileId: "staff_1" as Id<"staffProfile">,
+          staffProofToken: laterSaleProofToken,
+        },
+      ],
+      storeId: "store_1" as Id<"store">,
+      submittedAt: Date.now(),
+      submittedByUserId: "athena_user_1" as Id<"athenaUser">,
+      terminalId: "terminal_1" as Id<"posTerminal">,
+    });
+    expect(laterSaleResult).toMatchObject({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event_sale_after_handoff",
+            sequence: 5,
+            status: "projected",
+          },
+        ],
+        conflicts: [],
+        held: [],
+      },
+    });
+    expect(
+      ctx.tables
+        .get("registerSession")
+        ?.find((session) => session._id === "session_open"),
+    ).toEqual(expect.objectContaining({ expectedCash: 74300 }));
   });
 
   it("rejects synced register reviews with an inline manager approval proof", async () => {
@@ -6534,6 +7167,73 @@ describe("cash control deposits", () => {
         ],
       ]),
     );
+  });
+
+  it("does not resurface a terminal-identity handoff opening as cash-controls review", async () => {
+    const ctx = createQueryCtx({
+      posLocalSyncConflict: [
+        {
+          _id: "sync_conflict_handoff_open",
+          conflictType: "permission",
+          createdAt: 1,
+          details: { blockingRegisterSessionId: "session_open" },
+          localEventId: "event_handoff_open",
+          localRegisterSessionId: "local-register-1",
+          sequence: 1,
+          status: "resolved",
+          storeId: "store_1",
+          summary:
+            "A register session is already open for this register number.",
+          terminalId: "terminal_1",
+        },
+      ],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_handoff_open",
+          eventType: "register_opened",
+          localEventId: "event_handoff_open",
+          localRegisterSessionId: "local-register-1",
+          occurredAt: 1,
+          payload: { openingFloat: 63800, registerNumber: "1" },
+          rejectionCode: "terminal_identity_handoff",
+          rejectionMessage:
+            "Drawer opening retained as a physical count during terminal identity handoff.",
+          sequence: 1,
+          status: "rejected",
+          storeId: "store_1",
+          submittedAt: 1,
+          terminalId: "terminal_1",
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "register_mapping_1",
+          cloudId: "session_open",
+          cloudTable: "registerSession",
+          localEventId: "event_handoff_open",
+          localId: "local-register-1",
+          localIdKind: "registerSession",
+          localRegisterSessionId: "local-register-1",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session_open",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+        },
+      ],
+    });
+
+    await expect(
+      listOpenLocalSyncConflictsByRegisterSession(
+        ctx as never,
+        "store_1" as Id<"store">,
+        { includeRejectedEvidence: true },
+      ),
+    ).resolves.toEqual(new Map());
   });
 
   it("resolves mapped sync conflicts beyond the dashboard session display limit", async () => {

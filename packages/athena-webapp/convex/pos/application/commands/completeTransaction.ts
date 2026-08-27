@@ -972,7 +972,8 @@ async function recordPriceOverrideAudit(
         delta: deviation.delta,
       })),
     },
-    actorStaffProfileId: args.approvedByStaffProfileId ?? args.requesterStaffProfileId,
+    actorStaffProfileId:
+      args.approvedByStaffProfileId ?? args.requesterStaffProfileId,
     registerSessionId: args.registerSessionId,
     posTransactionId: args.posTransactionId,
   });
@@ -1645,8 +1646,7 @@ export async function completeTransaction(
   await recordCompletedPosSaleFacts(ctx, {
     acceptedAt: completedAt,
     items: args.items.map((item, index) => ({
-      inventoryImportProvisionalSkuId:
-        item.inventoryImportProvisionalSkuId,
+      inventoryImportProvisionalSkuId: item.inventoryImportProvisionalSkuId,
       lineKey: String(transactionItems[index]),
       productId: reportingProductIds.get(item.skuId)!,
       productSkuId: item.skuId,
@@ -2030,28 +2030,23 @@ async function validateTransactionVoidPreconditions(
     });
   }
 
-  const registerSession = await getRegisterSessionById(
-    ctx,
-    transaction.registerSessionId,
-  );
-
-  const registerSessionPolicy =
-    options?.registerSessionPolicy ?? "sale_usable";
-  const registerSessionAllowed =
-    registerSessionPolicy === "void_applicable"
+  const registerSessionPolicy = options?.registerSessionPolicy ?? "sale_usable";
+  const registerSessionAuthority =
+    await resolveTransactionRegisterSessionTerminalAuthority(ctx, transaction);
+  const registerSessionAllowed = Boolean(
+    registerSessionAuthority &&
+    (registerSessionPolicy === "void_applicable"
       ? getRegisterSessionVoidApplicationStatus({
-          registerSession,
+          previousTerminalIds: registerSessionAuthority.previousTerminalIds,
+          registerSession: registerSessionAuthority.registerSession,
           storeId: transaction.storeId,
           terminalId: transaction.terminalId,
         }).allowed
-      : Boolean(
-          registerSession &&
-            registerSession.storeId === transaction.storeId &&
-            registerSessionMatchesIdentity(registerSession, {
-              terminalId: transaction.terminalId,
-            }) &&
-            isUsableRegisterSession(registerSession),
-        );
+      : registerSessionMatchesIdentity(
+          registerSessionAuthority.registerSession,
+          { terminalId: transaction.terminalId },
+        ) && isUsableRegisterSession(registerSessionAuthority.registerSession)),
+  );
 
   if (!registerSessionAllowed) {
     return userError({
@@ -2088,7 +2083,75 @@ async function validateTransactionVoidPreconditions(
     skuRows.push({ item, sku });
   }
 
-  return ok({ items: skuRows });
+  return ok({
+    items: skuRows,
+    registerSessionTerminalId: registerSessionAuthority!.currentTerminalId,
+  });
+}
+
+export async function resolveTransactionRegisterSessionTerminalAuthority(
+  ctx: MutationCtx,
+  transaction: NonNullable<Awaited<ReturnType<typeof getPosTransactionById>>>,
+) {
+  if (!transaction.registerSessionId || !transaction.terminalId) {
+    return null;
+  }
+
+  const registerSession = await getRegisterSessionById(
+    ctx,
+    transaction.registerSessionId,
+  );
+  if (
+    !registerSession ||
+    !registerSession.terminalId ||
+    registerSession.storeId !== transaction.storeId
+  ) {
+    return null;
+  }
+
+  const previousTerminalIds =
+    registerSession.terminalId !== transaction.terminalId
+      ? await listRegisterSessionPreviousTerminalIds(
+          ctx,
+          transaction.registerSessionId,
+        )
+      : [];
+  if (
+    registerSession.terminalId !== transaction.terminalId &&
+    !previousTerminalIds.includes(transaction.terminalId)
+  ) {
+    return null;
+  }
+
+  return {
+    currentTerminalId: registerSession.terminalId,
+    previousTerminalIds,
+    registerSession,
+  };
+}
+
+async function listRegisterSessionPreviousTerminalIds(
+  ctx: MutationCtx,
+  registerSessionId: Id<"registerSession">,
+) {
+  const historyLimit = 20;
+  const handoffEvents = await ctx.db
+    .query("operationalEvent")
+    .withIndex("by_registerSessionId_and_eventType", (q) =>
+      q
+        .eq("registerSessionId", registerSessionId)
+        .eq("eventType", "register_session_terminal_identity_handed_off"),
+    )
+    .take(historyLimit + 1);
+
+  if (handoffEvents.length > historyLimit) {
+    return [];
+  }
+
+  return handoffEvents.flatMap((event) => {
+    const previousTerminalId = event.metadata?.previousTerminalId;
+    return typeof previousTerminalId === "string" ? [previousTerminalId] : [];
+  });
 }
 
 async function applyApprovedTransactionVoid(
@@ -2105,6 +2168,7 @@ async function applyApprovedTransactionVoid(
       sku: NonNullable<Awaited<ReturnType<typeof getProductSkuById>>>;
     }>;
     reason?: string;
+    registerSessionTerminalId: Id<"posTerminal">;
     requesterStaffProfileId?: Id<"staffProfile">;
     requesterUserId?: Id<"athenaUser">;
     reviewerUserId?: Id<"athenaUser">;
@@ -2112,8 +2176,7 @@ async function applyApprovedTransactionVoid(
   },
 ): Promise<CommandResult<VoidTransactionResult>> {
   const registerSessionId = args.transaction.registerSessionId;
-  const terminalId = args.transaction.terminalId;
-  if (!registerSessionId || !terminalId) {
+  if (!registerSessionId || !args.transaction.terminalId) {
     return userError({
       code: "precondition_failed",
       message: "Register sale is missing drawer context.",
@@ -2165,7 +2228,7 @@ async function applyApprovedTransactionVoid(
     registerSessionId,
     registerNumber: args.transaction.registerNumber,
     storeId: args.transaction.storeId,
-    terminalId,
+    terminalId: args.registerSessionTerminalId,
     transactionTotal: args.transaction.total,
     transactionId: args.transaction._id,
     transactionNumber: args.transaction.transactionNumber,
@@ -2304,12 +2367,14 @@ async function applyApprovedTransactionVoid(
     if (movement?._id) {
       inventoryMovementIds.push(movement._id);
     }
-
   }
 
   const pendingVoidCorrections = new Map<
     Id<"posPendingCheckoutItem">,
-    { pendingCheckoutItemId: Id<"posPendingCheckoutItem">; quantityDelta: number }
+    {
+      pendingCheckoutItemId: Id<"posPendingCheckoutItem">;
+      quantityDelta: number;
+    }
   >();
   for (const { item } of args.items) {
     if (!item.pendingCheckoutItemId) {
@@ -2471,6 +2536,9 @@ export async function voidTransaction(
   const preconditions = await validateTransactionVoidPreconditions(
     ctx,
     transaction,
+    {
+      registerSessionPolicy: "void_applicable",
+    },
   );
   if (preconditions.kind !== "ok") {
     return preconditions;
@@ -2484,11 +2552,11 @@ export async function voidTransaction(
     const createdApprovalRequest = existingApprovalRequest
       ? null
       : await createVoidApprovalRequest(ctx, {
-        actorStaffProfileId,
-        actorUserId: args.actorUserId,
-        reason,
-        transaction,
-      });
+          actorStaffProfileId,
+          actorUserId: args.actorUserId,
+          reason,
+          transaction,
+        });
 
     if (createdApprovalRequest?.kind === "user_error") {
       return createdApprovalRequest;
@@ -2569,8 +2637,10 @@ export async function voidTransaction(
         ? matchingApprovalRequest.data._id
         : undefined,
     approverStaffProfileId: approvalProof.data.approvedByStaffProfileId,
-    decisionApprovedByStaffProfileId: approvalProof.data.approvedByStaffProfileId,
+    decisionApprovedByStaffProfileId:
+      approvalProof.data.approvedByStaffProfileId,
     items: preconditions.data.items,
+    registerSessionTerminalId: preconditions.data.registerSessionTerminalId,
     reason,
     requesterStaffProfileId: actorStaffProfileId,
     requesterUserId: args.actorUserId,
@@ -2631,7 +2701,8 @@ export async function resolveTransactionVoidApprovalDecisionWithCtx(
     throw new Error("Manager approval is required to void a completed sale.");
   }
 
-  const transactionId = approvalRequest.posTransactionId ?? approvalRequest.subjectId;
+  const transactionId =
+    approvalRequest.posTransactionId ?? approvalRequest.subjectId;
   if (!transactionId) {
     throw new Error("Void approval request is missing transaction details.");
   }
@@ -2672,10 +2743,9 @@ export async function resolveTransactionVoidApprovalDecisionWithCtx(
     approvalRequestId: args.approvalRequestId,
     approverStaffProfileId,
     items: preconditions.data.items,
+    registerSessionTerminalId: preconditions.data.registerSessionTerminalId,
     reason:
-      args.decisionNotes?.trim() ||
-      approvalRequest.notes?.trim() ||
-      undefined,
+      args.decisionNotes?.trim() || approvalRequest.notes?.trim() || undefined,
     requesterStaffProfileId: approvalRequest.requestedByStaffProfileId,
     requesterUserId: approvalRequest.requestedByUserId,
     reviewerUserId: args.reviewedByUserId,
@@ -2813,12 +2883,15 @@ export async function createTransactionFromSessionHandler(
     }
 
     if (item.inventoryImportProvisionalSkuId) {
-      const provisionalSku = await readActiveProvisionalImportSkuForStoreSku(ctx, {
-        storeId: session.storeId,
-        productId: item.productId,
-        productSkuId: item.productSkuId,
-        provisionalSkuId: item.inventoryImportProvisionalSkuId,
-      });
+      const provisionalSku = await readActiveProvisionalImportSkuForStoreSku(
+        ctx,
+        {
+          storeId: session.storeId,
+          productId: item.productId,
+          productSkuId: item.productSkuId,
+          provisionalSkuId: item.inventoryImportProvisionalSkuId,
+        },
+      );
       if (provisionalSku) {
         provisionalImportLinesById.set(
           item.inventoryImportProvisionalSkuId,
@@ -2956,7 +3029,7 @@ export async function createTransactionFromSessionHandler(
       // an arbitrary price with no override or audit.
       exemptFromReprice: Boolean(
         item.pendingCheckoutItemId &&
-          !linkedPendingTrustedItemIds.has(item.pendingCheckoutItemId),
+        !linkedPendingTrustedItemIds.has(item.pendingCheckoutItemId),
       ),
     })),
   });
@@ -3146,7 +3219,10 @@ export async function createTransactionFromSessionHandler(
         item.pendingCheckoutItemId &&
         linkedPendingTrustedItemIds.has(item.pendingCheckoutItemId);
 
-      if (!provisionalSku && (!item.pendingCheckoutItemId || linkedPendingTrustedLine)) {
+      if (
+        !provisionalSku &&
+        (!item.pendingCheckoutItemId || linkedPendingTrustedLine)
+      ) {
         await recordPosSaleInventoryMovement(ctx, {
           storeId: session.storeId,
           organizationId: store?.organizationId,
@@ -3214,8 +3290,7 @@ export async function createTransactionFromSessionHandler(
   await recordCompletedPosSaleFacts(ctx, {
     acceptedAt: completedAt,
     items: items.map((item, index) => ({
-      inventoryImportProvisionalSkuId:
-        item.inventoryImportProvisionalSkuId,
+      inventoryImportProvisionalSkuId: item.inventoryImportProvisionalSkuId,
       lineKey: String(transactionItems[index]),
       pendingCheckoutItemId: item.pendingCheckoutItemId,
       productId: item.productId,

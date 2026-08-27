@@ -55,6 +55,7 @@ import { hashPosLocalStaffProofToken } from "../application/sync/staffProof";
 import {
   completeTransaction as completeTransactionCommand,
   createTransactionFromSessionHandler,
+  resolveTransactionRegisterSessionTerminalAuthority,
   updateInventory as updateInventoryCommand,
   voidTransaction as voidTransactionCommand,
 } from "../application/commands/completeTransaction";
@@ -636,6 +637,7 @@ export const getTransactionById = query({
       registerNumber: v.optional(v.string()),
       registerSessionId: v.optional(v.id("registerSession")),
       registerSessionStatus: v.optional(v.string()),
+      registerSessionTerminalId: v.optional(v.id("posTerminal")),
       terminalId: v.optional(v.id("posTerminal")),
       terminalName: v.optional(v.string()),
       paymentMethod: v.optional(v.string()),
@@ -842,9 +844,16 @@ export const voidTransaction = mutation({
         });
       }
 
+      const registerSessionAuthority = access.transaction.terminalId
+        ? await resolveTransactionRegisterSessionTerminalAuthority(
+            ctx,
+            access.transaction,
+          )
+        : null;
       if (
         access.transaction.terminalId &&
-        proof.terminalId !== access.transaction.terminalId
+        (!registerSessionAuthority ||
+          proof.terminalId !== registerSessionAuthority.currentTerminalId)
       ) {
         return userError({
           code: "authentication_failed",
