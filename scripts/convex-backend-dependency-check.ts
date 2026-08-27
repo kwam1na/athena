@@ -9,6 +9,21 @@
  * This is a characterization-first tool: it captures today's graph and proves
  * the guard is green before adding failure fixtures.
  *
+ * Scan coverage:
+ *  - Only the exact top-level `convex/_generated` directory (the Convex runtime
+ *    facade) is excluded from the scan. A nested directory named `_generated`
+ *    under a kernel subtree is a hard failure unless a protected kernel
+ *    declares it (prefix) in its `excludedPaths` — a kernel subtree must never
+ *    silently hide its own generated code.
+ *  - Import extraction is comment/string/regex-literal aware, anchored at
+ *    statement boundaries (`data.from("x")` is not an import), and also reads
+ *    backtick (template-literal) specifiers unless they contain `${`
+ *    interpolation (not statically resolvable).
+ *  - Kernel checks classify every import that addresses the Convex backend:
+ *    `.`-relative specifiers, bare `convex/...` specifiers, and tsconfig-path
+ *    aliases that expand into `convex/...` or `src/...`. External packages are
+ *    never kernel-surface.
+ *
  * Shrink-only contract:
  *  - The committed baseline freezes exact cycle memberships and exact kernel
  *    violation edges. ANY change to those sets — an addition OR a removal —
@@ -16,9 +31,12 @@
  *    A removed edge can therefore never pay for a new cycle elsewhere.
  *  - --update-baseline only ever contracts the baseline: it refuses to persist
  *    when the current graph introduces a cycle or a kernel violation that is
- *    not already baselined, and it refuses on an empty scan.
+ *    not already baselined (a cycle that is an exact member or a strict subset
+ *    of a baselined cycle is a contraction, not a new cycle), and it refuses on
+ *    an empty scan or a corrupt baseline.
  *  - Regeneration is the ONLY way the baseline changes, and it is only allowed
- *    from a state where every difference from the baseline is a removal.
+ *    from a state where every difference from the baseline is a removal (or a
+ *    strict contraction of a baselined cycle).
  */
 
 import {
@@ -57,6 +75,36 @@ type KernelDefinition = {
 };
 
 /**
+ * Product domains forbidden to BOTH protected kernels. Kept in one place so
+ * the two kernels cannot drift apart, and spelled with both `storefront`
+ * casings because the real directory is `convex/storeFront/` (git-canonical)
+ * while macOS is case-insensitive: either spelling in source must be caught.
+ */
+const SHARED_FORBIDDEN_PRODUCT_DOMAINS = [
+  "convex/operations/",
+  "convex/reports/",
+  "convex/cashControls/",
+  "convex/automation/",
+  "convex/stockOps/",
+  "convex/inventory/", // except schema
+  "convex/pos/",
+  "convex/storefront/",
+  "convex/storeFront/",
+  "convex/serviceOps/",
+  "convex/expenses/",
+  "convex/staff/",
+  "convex/onlineOrders/",
+  "convex/procurement/",
+  "convex/sharedDemo/",
+  "convex/workflowTraces/",
+  "convex/notifications/",
+  "convex/customerMessaging/",
+  "convex/storeTime/",
+  "convex/llm/",
+  "src/",
+];
+
+/**
  * Kernel modules that must remain leaf-like: they may not import product domains.
  * These are the "stable kernels" that define core transaction boundaries.
  *
@@ -74,27 +122,8 @@ export const PROTECTED_KERNELS = {
       // Internal inventoryLedger modules
       "convex/inventoryLedger/",
     ],
-    // Product domains that must NEVER be imported by the kernel
     forbiddenImports: [
-      "convex/operations/",
-      "convex/reports/",
-      "convex/cashControls/",
-      "convex/automation/",
-      "convex/stockOps/",
-      "convex/inventory/", // except schema
-      "convex/pos/",
-      "convex/storefront/",
-      "convex/serviceOps/",
-      "convex/expenses/",
-      "convex/staff/",
-      "convex/onlineOrders/",
-      "convex/procurement/",
-      "convex/sharedDemo/",
-      "convex/workflowTraces/",
-      "convex/notifications/",
-      "convex/customerMessaging/",
-      "convex/storeTime/",
-      "convex/llm/",
+      ...SHARED_FORBIDDEN_PRODUCT_DOMAINS,
       "convex/intelligence/",
       "convex/agentHarness/",
       "convex/auth/",
@@ -111,7 +140,6 @@ export const PROTECTED_KERNELS = {
       "convex/harnessWaiver/",
       "convex/types/",
       "convex/cache/",
-      "src/",
     ],
   },
   agentHarness: {
@@ -133,29 +161,12 @@ export const PROTECTED_KERNELS = {
       // Internal agentHarness kernel modules
       "convex/agentHarness/",
     ],
-    forbiddenImports: [
-      "convex/operations/",
-      "convex/reports/",
-      "convex/cashControls/",
-      "convex/automation/",
-      "convex/stockOps/",
-      "convex/inventory/",
-      "convex/pos/",
-      "convex/storefront/",
-      "convex/serviceOps/",
-      "convex/expenses/",
-      "convex/staff/",
-      "convex/onlineOrders/",
-      "convex/procurement/",
-      "convex/sharedDemo/",
-      "convex/workflowTraces/",
-      "convex/notifications/",
-      "convex/customerMessaging/",
-      "convex/storeTime/",
-      "convex/llm/",
-      "src/",
-    ],
-    // Excluded subdirectories (not kernel modules)
+    forbiddenImports: [...SHARED_FORBIDDEN_PRODUCT_DOMAINS],
+    // Excluded subdirectories (not kernel modules). These subtrees still
+    // participate in the graph: their cycles are detected and baselined, and
+    // their nested `_generated/` directory (generated capability registry) is
+    // deliberately declared here so the scan treats it as expected output
+    // rather than an undeclared bypass.
     excludedPaths: [
       "convex/agentHarness/profiles/",
       "convex/agentHarness/evals/",
@@ -172,6 +183,8 @@ export const PROTECTED_KERNELS = {
 
 type SourceFile = { path: string; source: string };
 type DependencyGraph = Map<string, Set<string>>;
+/** Alias prefix -> expanded target (relative to packageDir), both with `*` resolved. */
+type AliasMap = Map<string, string>;
 
 interface Violation {
   file: string;
@@ -184,6 +197,8 @@ interface Violation {
     | "cycle-not-in-baseline"
     | "baseline-drift";
   cycle?: string[];
+  /** 1-based source line of the import statement (kernel violations only). */
+  line?: number;
 }
 
 interface BaselineData {
@@ -200,19 +215,50 @@ interface CheckResult {
   isClean: boolean;
   /** Set when the scan itself could not be trusted (empty scan, refused regen). */
   scanError?: string;
+  /** Actionable next step emitted whenever the check is not clean. */
+  repairHint?: string;
+}
+
+/**
+ * Locale-independent byte comparison so emitted output is identical on every
+ * machine regardless of ICU collation data.
+ */
+function compareByBytes(left: string, right: string): number {
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
 }
 
 // ============================================================================
-// Import Extraction (comment/string aware)
+// Import Extraction (comment/string/regex aware)
 // ============================================================================
 
 /**
- * Ranges of the source that are inside comments or string literals. Import
- * specifiers must only be collected from real code: a commented-out import or
- * prose that quotes an import must never produce a guard finding.
+ * Ranges of the source that are inside comments, string literals, or regex
+ * literals. Import specifiers must only be collected from real code: a
+ * commented-out import, prose that quotes an import, or a regex literal that
+ * happens to contain `from "..."` must never produce a guard finding.
  */
 function collectNonCodeRanges(source: string): Array<[number, number]> {
   const ranges: Array<[number, number]> = [];
+  // Control-flow keywords that legitimately precede a regex literal even when
+  // the previous token is a word (e.g. `return /from "..\/x"/.test(s);`).
+  const regexPrecedingKeywords = new Set([
+    "return",
+    "typeof",
+    "instanceof",
+    "in",
+    "of",
+    "new",
+    "delete",
+    "void",
+    "case",
+    "do",
+    "else",
+    "yield",
+    "await",
+    "throw",
+  ]);
   let i = 0;
   while (i < source.length) {
     const ch = source[i];
@@ -234,6 +280,47 @@ function collectNonCodeRanges(source: string): Array<[number, number]> {
       ranges.push([start, i]);
       continue;
     }
+    if (ch === "/" && next !== "/" && next !== "*") {
+      // Candidate regex literal vs division. A `/` starts a regex only in an
+      // expression position (previous significant token is an operator/symbol
+      // or a control keyword); after a value it is division, which we leave
+      // for the normal scan.
+      let j = i - 1;
+      while (j >= 0 && /\s/.test(source[j])) j -= 1;
+      let isRegexStart = false;
+      if (j < 0) {
+        isRegexStart = true;
+      } else if (/[A-Za-z0-9_$]/.test(source[j])) {
+        let k = j;
+        while (k >= 0 && /[A-Za-z0-9_$]/.test(source[k])) k -= 1;
+        isRegexStart = regexPrecedingKeywords.has(source.slice(k + 1, j + 1));
+      } else {
+        isRegexStart = "=({[,!:;&|?+-*%<>^~".includes(source[j]);
+      }
+      if (isRegexStart) {
+        let k = i + 1;
+        let escaped = false;
+        while (k < source.length) {
+          const c = source[k];
+          if (c === "\\" && !escaped) {
+            escaped = true;
+            k += 1;
+            continue;
+          }
+          if (c === "\n") break; // regex literals (in practice) do not span lines
+          if (c === "/" && !escaped) break;
+          escaped = false;
+          k += 1;
+        }
+        if (k < source.length && source[k] === "/") {
+          let end = k + 1;
+          while (end < source.length && /[a-z]/i.test(source[end])) end += 1;
+          ranges.push([i, end]);
+          i = end;
+          continue;
+        }
+      }
+    }
     if (ch === '"' || ch === "'" || ch === "`") {
       const start = i;
       const quote = ch;
@@ -251,17 +338,39 @@ function collectNonCodeRanges(source: string): Array<[number, number]> {
   return ranges;
 }
 
-const IMPORT_PATTERN = /(?:from|import)\s*\(?\s*["']([^"']+)["']\s*\)?/g;
+/**
+ * `from "spec"` / `import "spec"` / `import("spec")` matches. The negative
+ * lookbehind anchors the keyword at a statement boundary so member calls like
+ * `data.from("x")` or `selection.import("x")` are never mistaken for imports.
+ * Backtick specifiers are supported (template-literal imports); `${...}`
+ * interpolated ones are filtered in the extractor.
+ */
+const IMPORT_PATTERN = /(?<![A-Za-z0-9_$.])(?:from|import)\s*\(?\s*["'\x60]([^"'\x60]+)["'\x60]\s*\)?/g;
 
-function extractImportSpecifiers(source: string): string[] {
+function lineAt(source: string, index: number): number {
+  let line = 1;
+  for (let i = 0; i < index && i < source.length; i += 1) {
+    if (source[i] === "\n") line += 1;
+  }
+  return line;
+}
+
+function extractImportSpecifiers(
+  source: string,
+): { specifier: string; line: number }[] {
   const nonCode = collectNonCodeRanges(source);
-  const specifiers: string[] = [];
+  const specifiers: { specifier: string; line: number }[] = [];
   for (const match of source.matchAll(IMPORT_PATTERN)) {
     const at = match.index ?? 0;
     const inNonCode = nonCode.some(
       ([start, end]) => start <= at && at < end,
     );
-    if (!inNonCode) specifiers.push(match[1]);
+    if (inNonCode) continue;
+    const specifier = match[1];
+    // A template-literal import with interpolation is not statically
+    // resolvable by this guard; skipping it is honest, not coverage loss.
+    if (specifier.includes("${")) continue;
+    specifiers.push({ specifier, line: lineAt(source, at) });
   }
   return specifiers;
 }
@@ -270,27 +379,83 @@ function extractImportSpecifiers(source: string): string[] {
 // File Collection
 // ============================================================================
 
-function collectSources(
-  convexDir: string,
+type SourceCollector = {
+  files: SourceFile[];
+  /** `_generated` directories that are NOT the exact top-level convex one. */
+  nestedGeneratedDirs: string[];
+};
+
+function walkCollect(
+  dir: string,
+  convexRoot: string,
   packageDir: string,
-): SourceFile[] {
-  if (!existsSync(convexDir)) return [];
-  const entries: SourceFile[] = [];
-  for (const name of readdirSync(convexDir)) {
-    const absolute = path.join(convexDir, name);
-    if (statSync(absolute).isDirectory()) {
-      if (name === "node_modules" || name === "_generated") continue;
-      entries.push(...collectSources(absolute, packageDir));
+  collector: SourceCollector,
+): void {
+  if (!existsSync(dir)) return;
+  for (const name of readdirSync(dir)) {
+    const absolute = path.join(dir, name);
+    let stat;
+    try {
+      stat = statSync(absolute);
+    } catch {
+      continue;
+    }
+    if (stat.isDirectory()) {
+      if (name === "node_modules") continue;
+      if (name === "_generated") {
+        if (absolute === path.join(convexRoot, "_generated")) {
+          // The exact top-level Convex runtime facade is the only generated
+          // directory excluded from the scan.
+          continue;
+        }
+        collector.nestedGeneratedDirs.push(
+          path.relative(convexRoot, absolute).split(path.sep).join("/"),
+        );
+        continue;
+      }
+      walkCollect(absolute, convexRoot, packageDir, collector);
       continue;
     }
     if (!/\.(ts|tsx)$/.test(name)) continue;
     const relative = path.relative(packageDir, absolute).split(path.sep).join("/");
     // Test files are not runtime modules and do not participate in cycles.
-    if (relative.endsWith(".test.ts") || relative.endsWith(".test.tsx")) continue;
-    entries.push({ path: relative, source: readFileSync(absolute, "utf8") });
+    if (/\.test\.(ts|tsx)$/.test(relative)) continue;
+    collector.files.push({ path: relative, source: readFileSync(absolute, "utf8") });
   }
+}
+
+function collectSources(
+  convexDir: string,
+  packageDir: string,
+): SourceCollector {
+  const collector: SourceCollector = { files: [], nestedGeneratedDirs: [] };
+  walkCollect(convexDir, convexDir, packageDir, collector);
   // Deterministic traversal so emitted output is stable across machines.
-  return entries.sort((left, right) => left.path.localeCompare(right.path));
+  collector.files.sort((left, right) => compareByBytes(left.path, right.path));
+  return collector;
+}
+
+/**
+ * A nested `_generated` directory under the Convex tree is only acceptable
+ * when a protected kernel declares it (or a prefix of it) in `excludedPaths`.
+ * Anything else means code is hiding inside a directory that the scan would
+ * otherwise skip — the caller must turn that into a loud failure.
+ */
+function undeclaredNestedGeneratedDirs(nested: string[]): string[] {
+  const declared: string[] = [];
+  for (const kernel of Object.values(PROTECTED_KERNELS)) {
+    for (const excludedPath of kernel.excludedPaths ?? []) {
+      declared.push(excludedPath.endsWith("/") ? excludedPath : `${excludedPath}/`);
+    }
+  }
+  return nested.filter((dir) => {
+    const candidate = `convex/${dir}`;
+    const normalized = candidate.endsWith("/") ? candidate : `${candidate}/`;
+    return !declared.some(
+      (declaredPath) =>
+        normalized.startsWith(declaredPath) || declaredPath.startsWith(normalized),
+    );
+  });
 }
 
 /**
@@ -324,12 +489,69 @@ function resolveLocalImportTarget(
   return null;
 }
 
+/** Resolve a bare `convex/...` or alias-expanded convex target to a file path. */
+function resolveConvexModule(packageDir: string, convexRel: string): string | null {
+  const base = path.join(packageDir, convexRel);
+  const candidates = [
+    base,
+    `${base}.ts`,
+    `${base}.tsx`,
+    path.join(base, "index.ts"),
+    path.join(base, "index.tsx"),
+  ];
+  for (const fileCandidate of candidates) {
+    if (existsSync(fileCandidate) && statSync(fileCandidate).isFile()) {
+      return path.relative(packageDir, fileCandidate).split(path.sep).join("/");
+    }
+  }
+  return null;
+}
+
+/** Read tsconfig `compilerOptions.paths` as an alias prefix -> target map. */
+function loadTsconfigAliases(packageDir: string): AliasMap {
+  const aliases: AliasMap = new Map();
+  const tsconfigPath = path.join(packageDir, "tsconfig.json");
+  if (!existsSync(tsconfigPath)) return aliases;
+  try {
+    const raw = JSON.parse(readFileSync(tsconfigPath, "utf8")) as {
+      compilerOptions?: { paths?: Record<string, string[]> };
+    };
+    const paths = raw?.compilerOptions?.paths;
+    if (!paths) return aliases;
+    for (const [alias, targets] of Object.entries(paths)) {
+      const target = targets?.[0];
+      if (typeof target !== "string") continue;
+      if (alias.endsWith("*") && target.endsWith("*")) {
+        aliases.set(alias.slice(0, -1), target.slice(0, -1).replace(/^\.\//, ""));
+      } else {
+        aliases.set(alias, target.replace(/^\.\//, ""));
+      }
+    }
+  } catch {
+    // Unreadable tsconfig: treat as no aliases rather than failing the scan.
+  }
+  return aliases;
+}
+
+function expandAlias(specifier: string, aliases: AliasMap): string | null {
+  for (const [aliasPrefix, target] of aliases) {
+    if (aliasPrefix.endsWith("/") && specifier.startsWith(aliasPrefix)) {
+      return target + specifier.slice(aliasPrefix.length);
+    }
+    if (specifier === aliasPrefix) return target;
+  }
+  return null;
+}
+
+type ImportEntry = { specifier: string; resolved: string; line: number };
+
 function importsOf(
   file: SourceFile,
   packageDir: string,
-): { specifier: string; resolved: string }[] {
-  const out: { specifier: string; resolved: string }[] = [];
-  for (const specifier of extractImportSpecifiers(file.source)) {
+  aliases: AliasMap,
+): ImportEntry[] {
+  const out: ImportEntry[] = [];
+  for (const { specifier, line } of extractImportSpecifiers(file.source)) {
     if (specifier.startsWith(".")) {
       const resolved =
         resolveLocalImportTarget(packageDir, file.path, specifier) ??
@@ -343,12 +565,23 @@ function importsOf(
           )
           .split(path.sep)
           .join("/");
-      out.push({ specifier, resolved });
-    } else {
-      // External or bare package import (e.g. "convex/values"). Not a cycle
-      // participant; the specifier itself is the identity.
-      out.push({ specifier, resolved: specifier });
+      out.push({ specifier, resolved, line });
+      continue;
     }
+    const expanded = expandAlias(specifier, aliases);
+    if (
+      specifier.startsWith("convex/") ||
+      (expanded !== null && expanded.startsWith("convex/"))
+    ) {
+      const convexRel = specifier.startsWith("convex/") ? specifier : expanded;
+      const resolved = resolveConvexModule(packageDir, convexRel) ?? convexRel;
+      out.push({ specifier, resolved, line });
+      continue;
+    }
+    // External or bare package import (e.g. "react", "convex/values") that
+    // resolves to a file outside convex, or a src/-scoped alias: not a cycle
+    // participant; the specifier itself is the identity.
+    out.push({ specifier, resolved: specifier, line });
   }
   return out;
 }
@@ -360,6 +593,7 @@ function importsOf(
 function buildDependencyGraph(
   files: SourceFile[],
   packageDir: string,
+  aliases: AliasMap,
 ): DependencyGraph {
   const graph = new Map<string, Set<string>>();
 
@@ -368,7 +602,9 @@ function buildDependencyGraph(
   }
 
   for (const file of files) {
-    for (const { resolved } of importsOf(file, packageDir)) {
+    for (const { resolved } of importsOf(file, packageDir, aliases)) {
+      // Edges are only meaningful between modules the graph contains: a bare
+      // `convex/values` reference never resolves to a file and adds no edge.
       if (resolved.startsWith("convex/") && graph.has(resolved)) {
         graph.get(file.path)!.add(resolved);
       }
@@ -436,8 +672,8 @@ function findSCCs(graph: DependencyGraph): string[][] {
 
 function sortCycles(cycles: string[][]): string[][] {
   return cycles
-    .map((cycle) => cycle.slice().sort())
-    .sort((a, b) => a[0].localeCompare(b[0]));
+    .map((cycle) => cycle.slice().sort(compareByBytes))
+    .sort((a, b) => compareByBytes(a[0], b[0]));
 }
 
 // ============================================================================
@@ -453,7 +689,11 @@ function isKernelModule(
   for (const excludedPath of excluded) {
     if (filePath.startsWith(excludedPath)) return false;
   }
-  // Test files and test support modules are not kernel modules.
+  // Test files and test-support modules are not kernel modules. The
+  // `.test[A-Z]...` carve-out is deliberately narrow (e.g. *.testSeams.ts,
+  // *.testPorts.ts) and only applies to genuinely test-support files, verified
+  // by the boundary tests: excluded subtrees still participate in cycle
+  // detection, so hiding a violation inside one does not make it invisible.
   if (filePath.endsWith(".test.ts") || filePath.endsWith(".test.tsx")) return false;
   if (/\.test[A-Z][A-Za-z]*\.tsx?$/.test(filePath)) return false;
   return true;
@@ -463,6 +703,7 @@ function checkKernelViolations(
   files: SourceFile[],
   kernelName: keyof typeof PROTECTED_KERNELS,
   packageDir: string,
+  aliases: AliasMap,
 ): Violation[] {
   const kernel = PROTECTED_KERNELS[kernelName];
   const violations: Violation[] = [];
@@ -472,8 +713,18 @@ function checkKernelViolations(
   for (const file of files) {
     if (!isKernelModule(file.path, kernel)) continue;
 
-    for (const { specifier, resolved } of importsOf(file, packageDir)) {
-      if (!specifier.startsWith(".")) continue; // Only local imports are checked.
+    for (const { specifier, resolved, line } of importsOf(
+      file,
+      packageDir,
+      aliases,
+    )) {
+      const isRelative = specifier.startsWith(".");
+      // Classification surface: relative imports inside the package, plus any
+      // bare `convex/...` specifier or tsconfig alias that addresses the
+      // backend (convex/ or src/). External packages are not kernel-surface.
+      const addressesBackend =
+        isRelative || resolved.startsWith("convex/") || resolved.startsWith("src/");
+      if (!addressesBackend) continue;
 
       // Forbidden prefixes take precedence over allowed entries by design: a
       // product domain named in `forbiddenImports` may never be imported by a
@@ -487,6 +738,7 @@ function checkKernelViolations(
           imports: specifier,
           resolved,
           type: "kernel-forbidden",
+          line,
         });
         continue;
       }
@@ -500,6 +752,7 @@ function checkKernelViolations(
           imports: specifier,
           resolved,
           type: "kernel-not-allowed",
+          line,
         });
       }
     }
@@ -512,13 +765,44 @@ function checkKernelViolations(
 // Baseline Management
 // ============================================================================
 
-function loadBaseline(baselinePath: string): BaselineData | null {
-  if (!existsSync(baselinePath)) return null;
+type BaselineLoad =
+  | { status: "missing"; baseline: null }
+  | { status: "valid"; baseline: BaselineData }
+  | { status: "corrupt"; baseline: null; reason: string };
+
+/**
+ * Distinguish a missing baseline (created on first `--update-baseline`) from a
+ * corrupt one. A corrupt baseline must never be silently treated as missing
+ * and regenerated from scratch — the failure must be loud.
+ */
+function loadBaseline(baselinePath: string): BaselineLoad {
+  if (!existsSync(baselinePath)) return { status: "missing", baseline: null };
+  let parsed: unknown;
   try {
-    return JSON.parse(readFileSync(baselinePath, "utf8")) as BaselineData;
-  } catch {
-    return null;
+    parsed = JSON.parse(readFileSync(baselinePath, "utf8"));
+  } catch (error) {
+    return {
+      status: "corrupt",
+      baseline: null,
+      reason: `not valid JSON (${error instanceof Error ? error.message : String(error)})`,
+    };
   }
+  const candidate = parsed as Partial<BaselineData>;
+  const shapeValid =
+    typeof candidate === "object" &&
+    candidate !== null &&
+    Array.isArray(candidate.cycles) &&
+    Array.isArray(candidate.kernelViolations);
+  return shapeValid
+    ? {
+        status: "valid",
+        baseline: parsed as BaselineData,
+      }
+    : {
+        status: "corrupt",
+        baseline: null,
+        reason: "missing fields `cycles` or `kernelViolations`",
+      };
 }
 
 function saveBaseline(baselinePath: string, baseline: BaselineData): void {
@@ -549,13 +833,31 @@ function findNewCycles(
 ): { newCycles: string[][]; removedCycles: string[][] } {
   if (!baseline) return { newCycles: currentCycles, removedCycles: [] };
 
-  const currentSet = new Set(currentCycles.map((c) => c.slice().sort().join("|")));
-  const baselineSet = new Set(baseline.cycles.map((c) => c.slice().sort().join("|")));
+  const currentSet = new Set(currentCycles.map((c) => c.slice().sort(compareByBytes).join("|")));
+  const baselineSet = new Set(baseline.cycles.map((c) => c.slice().sort(compareByBytes).join("|")));
 
-  const newCycles = currentCycles.filter((c) => !baselineSet.has(c.slice().sort().join("|")));
-  const removedCycles = baseline.cycles.filter((c) => !currentSet.has(c.slice().sort().join("|")));
+  const newCycles = currentCycles.filter((c) => !baselineSet.has(c.slice().sort(compareByBytes).join("|")));
+  const removedCycles = baseline.cycles.filter((c) => !currentSet.has(c.slice().sort(compareByBytes).join("|")));
 
   return { newCycles, removedCycles };
+}
+
+/**
+ * True when a current cycle is an exact member OR a strict subset of a
+ * baselined cycle. A contracted survivor is a shrink of an already-baselined
+ * cycle, so in --update-baseline mode it is never treated as "new": reintroducing
+ * the removed members later produces a cycle that no longer matches the
+ * contracted baseline and fails again.
+ */
+function cycleCoveredByBaseline(
+  current: string[],
+  baseline: BaselineData,
+): boolean {
+  const members = current.slice().sort(compareByBytes);
+  return baseline.cycles.some((baselined) => {
+    const baselinedMembers = baselined.slice().sort(compareByBytes);
+    return members.every((member) => baselinedMembers.includes(member));
+  });
 }
 
 function findNewKernelViolations(
@@ -595,7 +897,8 @@ export function runDependencyCheck(options: {
   const baselinePath = options.baselinePath ?? DEFAULT_BASELINE_PATH;
 
   if (!silent) console.log("Scanning Convex backend files...");
-  const files = collectSources(convexDir, packageDir);
+  const collector = collectSources(convexDir, packageDir);
+  const files = collector.files;
   if (!silent) console.log(`Found ${files.length} source files`);
 
   // A guard that cannot see its protected surface must fail loudly, never pass.
@@ -605,13 +908,35 @@ export function runDependencyCheck(options: {
     return {
       violations: [],
       cycles: [],
-      baseline: loadBaseline(baselinePath),
+      baseline: loadBaseline(baselinePath).status === "valid" ? loadBaseline(baselinePath).baseline : null,
       isClean: false,
       scanError: message,
+      repairHint: "Restore the convex source tree; an empty scan is never passable.",
     };
   }
 
-  const graph = buildDependencyGraph(files, packageDir);
+  // Undeclared nested `_generated` directories are a hard failure: a kernel
+  // subtree must never silently hide its own generated code.
+  const undeclaredGenerated = undeclaredNestedGeneratedDirs(collector.nestedGeneratedDirs);
+  if (undeclaredGenerated.length > 0) {
+    const message =
+      `Unexpected nested "_generated" director${undeclaredGenerated.length === 1 ? "y" : "ies"} ` +
+      `${undeclaredGenerated.map((d) => `convex/${d}`).join(", ")} found under the convex tree. ` +
+      `The scan would otherwise skip it silently. Declare each in a protected kernel's ` +
+      `excludedPaths (for franchise-generated output) or remove it.`;
+    if (!silent) console.error(message);
+    return {
+      violations: [],
+      cycles: [],
+      baseline: null,
+      isClean: false,
+      scanError: message,
+      repairHint: "Declare the nested _generated directory in PROTECTED_KERNELS.excludedPaths or remove it.",
+    };
+  }
+
+  const aliases = loadTsconfigAliases(packageDir);
+  const graph = buildDependencyGraph(files, packageDir, aliases);
   const cycles = findSCCs(graph);
   if (!silent) {
     console.log(
@@ -619,27 +944,42 @@ export function runDependencyCheck(options: {
     );
   }
 
-  const inventoryLedgerViolations = checkKernelViolations(
-    files,
-    "inventoryLedger",
-    packageDir,
+  const kernelViolations = (
+    Object.keys(PROTECTED_KERNELS) as Array<keyof typeof PROTECTED_KERNELS>
+  ).flatMap((kernelName) =>
+    checkKernelViolations(files, kernelName, packageDir, aliases),
   );
-  const agentHarnessViolations = checkKernelViolations(
-    files,
-    "agentHarness",
-    packageDir,
-  );
-  const kernelViolations = [
-    ...inventoryLedgerViolations,
-    ...agentHarnessViolations,
-  ];
   if (!silent) {
-    console.log(
-      `Kernel violations: ${inventoryLedgerViolations.length} (inventoryLedger), ${agentHarnessViolations.length} (agentHarness)`,
-    );
+    const byKernel = (Object.keys(PROTECTED_KERNELS) as Array<keyof typeof PROTECTED_KERNELS>)
+      .map(
+        (name) =>
+          `${name}: ${
+            kernelViolations.filter((v) => v.file.startsWith(`${PROTECTED_KERNELS[name].root}/`))
+              .length
+          }`,
+      )
+      .join(", ");
+    console.log(`Kernel violations (${byKernel})`);
   }
 
-  const baseline = loadBaseline(baselinePath);
+  const baselineLoad = loadBaseline(baselinePath);
+  if (baselineLoad.status === "corrupt") {
+    const message =
+      `Baseline file exists but is corrupt at ${baselinePath}: ${baselineLoad.reason}. ` +
+      `It will not be treated as missing, and --update-baseline will refuse to ` +
+      `regenerate it — restore or repair the baseline file.`;
+    if (!silent) console.error(message);
+    return {
+      violations: [],
+      cycles,
+      baseline: null,
+      isClean: false,
+      scanError: message,
+      repairHint: "Restore or repair the corrupt baseline file; it is never regenerated from scratch.",
+    };
+  }
+  const baseline = baselineLoad.baseline;
+
   const { newCycles, removedCycles } = findNewCycles(cycles, baseline);
 
   const cycleViolations: Violation[] = newCycles.map((cycle) => ({
@@ -682,18 +1022,35 @@ export function runDependencyCheck(options: {
     ...cycleViolations,
     ...cycleDriftViolations,
     ...kernelDriftViolations,
-  ].sort((left, right) => violationKey(left).localeCompare(violationKey(right)));
-  let isClean = allViolations.length === 0;
+  ].sort((left, right) => compareByBytes(violationKey(left), violationKey(right)));
+  const isClean = allViolations.length === 0;
 
-  // --update-baseline: persist ONLY shrink-only changes. New cycles or new
-  // kernel violations must never be absorbed into the baseline.
+  let repairHint: string | undefined;
+  if (!isClean) {
+    const driftOnly =
+      newCycles.length === 0 &&
+      newKernelViolations.length === 0 &&
+      (cycleDriftViolations.length > 0 || kernelDriftViolations.length > 0);
+    repairHint = driftOnly
+      ? "Only baseline drift was detected (removed cycles or kernel edges), or a baselined cycle contracted. " +
+        "Regenerate with --update-baseline after review confirms the removals are intentional; the update " +
+        "is shrink-only and refuses new cycles and new kernel violations."
+      : "New cycles or kernel violations were detected. Fix them in the backend graph — --update-baseline " +
+        "refuses to absorb new violations or growth of baselined cycles.";
+  }
+
+  // --update-baseline: persist ONLY shrink-only changes. New cycles (or growth
+  // of a baselined cycle) and new kernel violations must never be absorbed.
   if (updateBaseline) {
     const hasBaseline = baseline !== null;
-    if (hasBaseline && (newCycles.length > 0 || newKernelViolations.length > 0)) {
+    const unabsorbableCycles = hasBaseline
+      ? cycles.filter((cycle) => !cycleCoveredByBaseline(cycle, baseline))
+      : cycles;
+    if (hasBaseline && (unabsorbableCycles.length > 0 || newKernelViolations.length > 0)) {
       const message =
-        "Refusing to update baseline: the current graph introduces new cycles or new kernel violations " +
-        "that are not already baselined. The baseline is shrink-only — fix the new violations before " +
-        "regenerating; --update-baseline exists only to contract existing entries.";
+        "Refusing to update baseline: the current graph introduces new cycles (or grows baselined ones) " +
+        "or new kernel violations that are not already baselined. The baseline is shrink-only — fix the " +
+        "new violations before regenerating; --update-baseline exists only to contract existing entries.";
       if (!silent) console.error(message);
       return {
         violations: allViolations,
@@ -701,6 +1058,7 @@ export function runDependencyCheck(options: {
         baseline,
         isClean: false,
         scanError: message,
+        repairHint: "Fix the new cycles/kernel violations first; --update-baseline is shrink-only.",
       };
     }
 
@@ -709,7 +1067,7 @@ export function runDependencyCheck(options: {
       cycles: sortCycles(cycles),
       kernelViolations: kernelViolations
         .map((v) => `${v.file}|${v.imports}|${v.resolved}|${v.type}`)
-        .sort((left, right) => left.localeCompare(right)),
+        .sort((left, right) => compareByBytes(left, right)),
     };
     saveBaseline(baselinePath, newBaseline);
     if (!silent) console.log("Baseline updated.");
@@ -724,31 +1082,14 @@ export function runDependencyCheck(options: {
     };
   }
 
-  return { violations: allViolations, cycles, baseline, isClean };
+  return { violations: allViolations, cycles, baseline, isClean, repairHint };
 }
 
 // ============================================================================
 // CLI
 // ============================================================================
 
-const VALID_FLAGS = new Set([
-  "--update-baseline",
-  "--json",
-  "--convex-dir",
-  "--package-dir",
-  "--baseline",
-  "--help",
-  "-h",
-]);
-
-function flagValue(
-  args: string[],
-  name: string,
-): string | undefined {
-  const at = args.indexOf(name);
-  if (at === -1 || at + 1 >= args.length) return undefined;
-  return args[at + 1];
-}
+const VALUE_FLAGS = new Set(["--convex-dir", "--package-dir", "--baseline"]);
 
 function usage(): string {
   return [
@@ -757,38 +1098,65 @@ function usage(): string {
     "Options:",
     "  --update-baseline   Regenerate the baseline from the current graph. Only",
     "                      allowed for shrink-only changes; refuses to absorb new",
-    "                      cycles or kernel violations, and refuses on an empty scan.",
+    "                      cycles or kernel violations, refuses on an empty scan,",
+    "                      and refuses to regenerate a corrupt baseline.",
     "  --json              Emit machine-readable JSON (silences human progress).",
     "  --convex-dir <path> Scan this convex directory instead of the default.",
     "  --package-dir <path> Package root used to compute relative module paths.",
     "  --baseline <path>   Read/write this baseline file instead of the default.",
     "  --help, -h          Show this help.",
+    "",
+    "Value flags require a value; flags with a missing value or unknown flags",
+    "exit with status 2.",
   ].join("\n");
 }
 
 function main() {
   const args = process.argv.slice(2);
 
-  if (args.some((arg) => arg === "--help" || arg === "-h")) {
+  if (args.includes("--help") || args.includes("-h")) {
     console.log(usage());
     process.exit(0);
   }
-  for (const arg of args) {
-    if (arg.startsWith("--") && !VALID_FLAGS.has(arg)) {
-      console.error(`Unknown flag: ${arg}\n\n${usage()}`);
-      process.exit(2);
-    }
-  }
 
-  const updateBaseline = args.includes("--update-baseline");
-  const jsonOutput = args.includes("--json");
+  const errors: string[] = [];
+  let updateBaseline = false;
+  let jsonOutput = false;
+  const values = new Map<string, string>();
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === "--update-baseline") {
+      updateBaseline = true;
+      continue;
+    }
+    if (arg === "--json") {
+      jsonOutput = true;
+      continue;
+    }
+    if (VALUE_FLAGS.has(arg)) {
+      const value = args[i + 1];
+      if (value === undefined || value.startsWith("--")) {
+        errors.push(`Flag ${arg} requires a value.`);
+      } else {
+        values.set(arg, value);
+        i += 1;
+      }
+      continue;
+    }
+    errors.push(`Unknown flag: ${arg}`);
+  }
+  if (errors.length > 0) {
+    console.error(errors.join("\n"));
+    console.error(usage());
+    process.exit(2);
+  }
 
   const result = runDependencyCheck({
     updateBaseline,
     silent: jsonOutput,
-    convexDir: flagValue(args, "--convex-dir"),
-    packageDir: flagValue(args, "--package-dir"),
-    baselinePath: flagValue(args, "--baseline"),
+    convexDir: values.get("--convex-dir"),
+    packageDir: values.get("--package-dir"),
+    baselinePath: values.get("--baseline"),
   });
 
   if (jsonOutput) {
@@ -802,7 +1170,7 @@ function main() {
   console.log(`Status: ${result.isClean ? "CLEAN" : "VIOLATIONS FOUND"}`);
 
   for (const v of result.violations) {
-    console.log(`\n${v.type.toUpperCase()}: ${v.file}`);
+    console.log(`\n${v.type.toUpperCase()}: ${v.file}${v.line !== undefined ? `:${v.line}` : ""}`);
     console.log(`  Imports: ${v.imports}`);
     console.log(`  Resolved: ${v.resolved}`);
     if (v.cycle) {
@@ -824,7 +1192,9 @@ function main() {
 
   if (!result.isClean) {
     console.log("\n❌ Dependency check FAILED");
-    if (!updateBaseline && result.baseline) {
+    if (result.repairHint) {
+      console.log(`\nNext step: ${result.repairHint}`);
+    } else if (!updateBaseline && result.baseline) {
       console.log("Run with --update-baseline to regenerate baseline after intentional changes.");
     }
     process.exit(1);

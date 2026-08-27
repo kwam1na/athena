@@ -21,7 +21,7 @@ related_components:
   - "inventoryLedger"
   - "agentHarness"
   - "operationAdmission"
-delivery_diff_fingerprint: "c6ec1b71bdba08cc71abcb9267e7173d4eb9027bdb6532e949daa9538897ff6b"
+delivery_diff_fingerprint: "31f6298fb7822258122c0429432589086c7c878a62b5b8e42f076f09d3c439a4"
 ---
 
 ## Problem
@@ -114,6 +114,21 @@ Tests build ephemeral graphs under `mkdtemp` so error-path scenarios are exercis
 - Imports quoted inside comments or string literals are ignored.
 - A new kernel violation reports the exact resolved edge (file + resolved `.ts` module).
 
+### 6. Hardening pass (post-review)
+
+The first delivery was reviewed by nine specialized agents (correctness, adversarial, reliability, testing, maintainability, agent-native, project-standards, cli-readiness, learnings). The review produced two P1/contract items worth single-line summaries plus a set of P2/P3 defensive gaps; this pass closed the actionable set **without changing the committed baseline** (the real tree still reports the same 4 cycles and 7 grandfathered kernel violations):
+
+- **Import extraction is now statement-anchored and regex-aware.** `(?<![A-Za-z0-9_$.])` before `from|import` stops member calls like `data.from("x")` or `selection.import("y")` from ever becoming a finding; regex literals in expression positions are masked as non-code (so `/from "..\/reports\/access"/` inside a regex is ignored); backtick/template-literal specifiers are extracted too (unless they contain `${` interpolation, which is not statically resolvable). Regression tests pin both directions.
+- **Nested `_generated` directories are fail-closed.** Only the exact top-level `convex/_generated` (the Convex runtime facade) is excluded from the scan. Any deeper `_generated` directory is a hard `scanError` unless a protected kernel declares it in `excludedPaths` — `agentHarness/_generated/` is the legitimate, declared franchise-generated registry; an undocumented `inventoryLedger/_generated/` now fails loudly instead of hiding violations. Note that type-only imports stay graph edges: the baselined `manifestRegistrations ↔ profiles/syntheticSecondSurfaceConformance` pair only exists because the reverse edge is an `import type`, so any "drop type edges from cycles" change would silently rewrite the committed snapshot.
+- **Bare `convex/...` and tsconfig aliases are kernel-surface.** Kernel checks now classify `convex/values`/`convex/server` (allowed), bare `convex/<domain>` specifiers, and alias-expanded targets (`@cvx/*` → `convex/*`, `@/*` → `src/*`, read from `compilerOptions.paths`) exactly like relative imports; external packages remain invisible. Addressed the reviewer probe where `import { x } from "@cvx/reports/access"` would otherwise evade detection.
+- **Corrupt vs missing baselines are distinct.** `loadBaseline` now returns a discriminated result; a corrupt baseline is a loud failure that `--update-baseline` refuses to regenerate from scratch (it must be restored/repaired), never silently treated as absent. Shape validation covers well-formed-but-missing-fields JSON.
+- **CLI value flags are strict.** `--convex-dir`/`--package-dir`/`--baseline` require a value; a missing/swallowed value or an unknown flag exits with status 2 instead of silently using defaults.
+- **Shrink-only update admits strict cycle contraction.** `--update-baseline` treats a current cycle that is an exact member **or a strict subset** of a baselined cycle as a contraction (not "new"), so splitting a baselined cycle can be persisted; reintroducing the removed members later produces a cycle that no longer matches the contracted baseline and fails again. The normal check still reports the contraction as drift.
+- **Deterministic byte comparison** replaces `localeCompare`, so output is identical across ICU collation data.
+- **Kernel config deduplicated.** Both kernels now share `SHARED_FORBIDDEN_PRODUCT_DOMAINS` (which includes both `convex/storefront/` and `convex/storeFront/` casings, since the real directory is `storeFront`) plus per-kernel extras; the driver loop iterates `Object.keys(PROTECTED_KERNELS)` instead of hardcoding two calls.
+- **Reparability output.** Kernel violations carry a 1-based `line`, and every failure emits a `repairHint` (drift-only → regenerate; new violation → fix first) in both human and `--json` output.
+- **Semantics pinned for excluded subtrees.** Boundary tests prove a cycle *through* an excluded subtree (`profiles/`) is still detected while a forbidden import *inside* it is deliberately not a kernel violation, and self-loops are reported as single-node cycles.
+
 ## Why This Works
 
 1. **Characterization-first**: Captures today's graph exactly (4 real cycles + 7 grandfathered inventoryLedger kernel violations) before enforcing.
@@ -128,13 +143,15 @@ Tests build ephemeral graphs under `mkdtemp` so error-path scenarios are exercis
 - Run `bun run dependency:check:backend` locally before pushing.
 - If a new cycle is detected, refactor to break it rather than updating the baseline.
 - If a kernel violation is detected, move the imported logic into a leaf helper or a shared platform module; never add a product domain to `allowedImports`.
-- Use `--update-baseline` **only** after intentional refactoring that removes cycles or kernel edges, and only for shrink-only changes.
+- Use `--update-baseline` **only** after intentional refactoring that removes cycles or kernel edges, and only for shrink-only changes (a baselined cycle may contract to a strict subset).
+- Never create a nested `_generated` directory under a kernel unless it is franchise-generated and declared in that kernel's `excludedPaths`; never write kernel imports through tsconfig aliases that resolve into `convex/` product domains.
+- If the baseline reads as corrupt, restore/repair it — the guard refuses to regenerate it from scratch.
 - The baseline is the contract — it should only shrink over time.
 
 ## Files Created / Modified
 
 - `scripts/convex-backend-dependency-check.ts` — Main check script with CLI (defaults for convex dir and baseline path; `--update-baseline`, `--json`, `--convex-dir`, `--package-dir`, `--baseline`, `--help`)
-- `scripts/convex-backend-dependency-check.test.ts` — Test suite (9 sandbox-based scenarios + real-tree characterization)
+- `scripts/convex-backend-dependency-check.test.ts` — Test suite (21 sandbox-based scenarios + real-tree characterization)
 - `scripts/convex-backend-dependency-baseline.json` — Committed baseline (4 real cycles, 7 grandfathered kernel violations)
 - `package.json` — `dependency:check:backend` script
 - `scripts/harness-app-registry.ts` — `athena.convex-backend-adjacent` scenario now includes the guard command and document the shrink-only contract
