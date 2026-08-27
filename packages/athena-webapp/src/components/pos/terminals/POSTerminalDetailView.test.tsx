@@ -86,6 +86,10 @@ vi.mock("sonner", () => ({
   },
 }));
 
+vi.mock("@/lib/security/pinHash", () => ({
+  hashPin: vi.fn(async (pin: string) => `hashed:${pin}`),
+}));
+
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => mocks.authState,
 }));
@@ -496,6 +500,41 @@ describe("POSTerminalDetailViewContent", () => {
         "Diagnostic delivery has not been reported by this terminal yet.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("offers the exact replacement-terminal handoff candidate", async () => {
+    const user = userEvent.setup();
+    const onRequestTerminalIdentityHandoff = vi.fn();
+
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          syncEvidence: {
+            ...detail.syncEvidence,
+            terminalIdentityHandoffCandidate: {
+              canonicalRegisterSessionId: "register-session-old",
+              countedCash: 63800,
+              localRegisterSessionId: "local-register-new",
+              previousTerminalId: "terminal-old",
+              replacementTerminalId: "terminal-1",
+            },
+          },
+        }}
+        isLoading={false}
+        onRequestTerminalIdentityHandoff={onRequestTerminalIdentityHandoff}
+      />,
+    );
+
+    expect(
+      screen.getByText("Reconnect this replacement terminal"),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", {
+        name: "Reconnect replacement terminal",
+      }),
+    );
+    expect(onRequestTerminalIdentityHandoff).toHaveBeenCalledOnce();
   });
 
   it("explains why storage needs attention without presenting the event count as the cause", async () => {
@@ -3082,6 +3121,88 @@ describe("POSTerminalDetailView", () => {
     );
     expect(mocks.toastSuccess).toHaveBeenCalledWith(
       "Terminal heartbeat paused.",
+    );
+  });
+
+  it("binds manager approval and the handoff command to the exact replacement drawer", async () => {
+    const user = userEvent.setup();
+    const handoffDetail: TerminalHealthDetail = {
+      ...detail,
+      syncEvidence: {
+        ...detail.syncEvidence,
+        terminalIdentityHandoffCandidate: {
+          canonicalRegisterSessionId: "register-session-old",
+          countedCash: 63800,
+          previousTerminalId: "terminal-old",
+          localRegisterSessionId: "local-register-new",
+          replacementTerminalId: "terminal-1",
+        },
+      },
+    };
+    (mocks.useQuery as ReturnType<typeof vi.fn>).mockReturnValue(handoffDetail);
+    mocks.mutation
+      .mockResolvedValueOnce({
+        data: {
+          approvalProofId: "approval-proof-handoff",
+          approvedByStaffProfileId: "manager-1",
+          expiresAt: Date.now() + 60_000,
+        },
+        kind: "ok",
+      })
+      .mockResolvedValueOnce({
+        data: { action: "resolved", projectedCount: 2, resolvedCount: 3 },
+        kind: "ok",
+      });
+
+    render(<POSTerminalDetailView />);
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Reconnect replacement terminal",
+      }),
+    );
+    await user.type(screen.getByLabelText("Username"), "manager");
+    const pinInput = screen
+      .getAllByRole("textbox")
+      .find((input) => input.hasAttribute("data-input-otp"));
+    expect(pinInput).toBeDefined();
+    await user.type(pinInput!, "1234");
+
+    await waitFor(() =>
+      expect(mocks.mutation).toHaveBeenNthCalledWith(1, {
+        actionKey: "cash_controls.register_session.terminal_identity_handoff",
+        pinHash: "hashed:1234",
+        reason:
+          "Transfer an active register session to its replacement terminal identity.",
+        requiredRole: "manager",
+        requesterBinding: undefined,
+        requestedByStaffProfileId: undefined,
+        storeId: "store-1",
+        subject: {
+          id: '["register-session-old","terminal-old","terminal-1","local-register-new"]',
+          label: "Register 1",
+          type: "register_session_terminal_identity_handoff",
+        },
+        username: "manager",
+      }),
+    );
+    await waitFor(() =>
+      expect(mocks.mutation).toHaveBeenNthCalledWith(2, {
+        actorStaffProfileId: "manager-1",
+        approvalProofId: "approval-proof-handoff",
+        decision: "approved",
+        registerSessionId: "register-session-old",
+        storeId: "store-1",
+        terminalIdentityHandoff: {
+          countedCash: 63800,
+          expectedPreviousTerminalId: "terminal-old",
+          localRegisterSessionId: "local-register-new",
+          replacementTerminalId: "terminal-1",
+        },
+      }),
+    );
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(
+      "Replacement terminal reconnected",
     );
   });
 });

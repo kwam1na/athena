@@ -37,6 +37,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { RemoteAssistSupportConsole } from "@/components/remote-assist/RemoteAssistSupportConsole";
+import {
+  CommandApprovalDialog,
+  type CommandApprovalDialogProps,
+} from "@/components/operations/CommandApprovalDialog";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -52,6 +56,11 @@ import {
 } from "@/lib/runtimeBuildMetadata";
 import { cn } from "@/lib/utils";
 import type { ApprovalRequirement } from "~/shared/approvalPolicy";
+import {
+  buildPosTerminalIdentityHandoffApprovalSubjectId,
+  POS_TERMINAL_IDENTITY_HANDOFF_APPROVAL_ACTION_KEY,
+  POS_TERMINAL_IDENTITY_HANDOFF_APPROVAL_SUBJECT_TYPE,
+} from "~/shared/posLocalSyncContract";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import { useSharedDemoContext } from "@/hooks/useSharedDemoContext";
@@ -169,6 +178,7 @@ type POSTerminalDetailViewContentProps = {
   onResolveRegisterSessionReview?: (args: {
     registerSessionId: Id<"registerSession"> | string;
   }) => Promise<TerminalRegisterSessionReviewResult>;
+  onRequestTerminalIdentityHandoff?: () => void;
   canStartRemoteAssist?: boolean;
   onStartRemoteAssist?: (args: {
     clientId: Id<"remoteAssistClient"> | string;
@@ -3225,6 +3235,7 @@ export function POSTerminalDetailViewContent({
   onIssueTerminalRecoveryCommand,
   onResolveTerminalCloudRepair,
   onResolveRegisterSessionReview,
+  onRequestTerminalIdentityHandoff,
   onSetTerminalHeartbeat,
   onStartRemoteAssist,
   orgUrlSlug,
@@ -3295,6 +3306,29 @@ export function POSTerminalDetailViewContent({
             />
 
             <main className="space-y-layout-lg">
+              {detail.syncEvidence.terminalIdentityHandoffCandidate &&
+              onRequestTerminalIdentityHandoff ? (
+                <section className="space-y-layout-md rounded-lg border border-warning-border/40 bg-warning-soft/40 p-layout-lg">
+                  <div className="space-y-layout-xs">
+                    <h2 className="font-display text-lg font-semibold text-foreground">
+                      Reconnect this replacement terminal
+                    </h2>
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      This browser identity has a duplicate drawer opening and
+                      eligible sales for an active register owned by its prior
+                      terminal identity. Manager approval preserves the original
+                      opening float, transfers drawer authority, and clears the
+                      repaired local review items after server confirmation.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={onRequestTerminalIdentityHandoff}
+                    type="button"
+                  >
+                    Reconnect replacement terminal
+                  </Button>
+                </section>
+              ) : null}
               <RemoteAssistPanel
                 canStartRemoteAssist={canStartRemoteAssist}
                 client={remoteAssistClient}
@@ -3352,6 +3386,7 @@ export function POSTerminalDetailView() {
     isLoading: isLoadingPermissions,
   } = usePermissions();
   const demoContext = useSharedDemoContext();
+  const [isHandoffApprovalOpen, setIsHandoffApprovalOpen] = useState(false);
   const params = useParams({ strict: false }) as
     | {
         orgUrlSlug?: string;
@@ -3397,6 +3432,9 @@ export function POSTerminalDetailView() {
   const resolveRegisterSessionSyncReview = useMutation(
     api.cashControls.deposits.resolveRegisterSessionSyncReview,
   );
+  const authenticateStaffCredentialForApproval = useMutation(
+    api.operations.staffCredentials.authenticateStaffCredentialForApproval,
+  );
   const resolveTerminalCloudRepair = useMutation(
     api.pos.public.terminals.resolveTerminalCloudRepair,
   );
@@ -3427,6 +3465,80 @@ export function POSTerminalDetailView() {
         storeId: activeStore._id,
       }),
     ) as Promise<TerminalRegisterSessionReviewResult>;
+  }
+
+  const handoffCandidate =
+    detail?.syncEvidence.terminalIdentityHandoffCandidate ?? null;
+  const handoffApproval: ApprovalRequirement | null = handoffCandidate
+    ? {
+        action: {
+          key: POS_TERMINAL_IDENTITY_HANDOFF_APPROVAL_ACTION_KEY,
+          label: "Reconnect replacement terminal",
+        },
+        copy: {
+          message:
+            "Confirm that this replacement browser identity operates the same physical drawer as the active register session.",
+          primaryActionLabel: "Approve and reconnect",
+          secondaryActionLabel: "Cancel",
+          title: "Manager approval required",
+        },
+        reason:
+          "Transfer an active register session to its replacement terminal identity.",
+        requiredRole: "manager",
+        resolutionModes: [{ kind: "inline_manager_proof" }],
+        selfApproval: "allowed",
+        subject: {
+          id: buildPosTerminalIdentityHandoffApprovalSubjectId({
+            expectedPreviousTerminalId: handoffCandidate.previousTerminalId,
+            localRegisterSessionId: handoffCandidate.localRegisterSessionId,
+            registerSessionId: handoffCandidate.canonicalRegisterSessionId,
+            replacementTerminalId: handoffCandidate.replacementTerminalId,
+          }),
+          label: detail?.terminal.registerNumber
+            ? `Register ${detail.terminal.registerNumber}`
+            : detail?.terminal.displayName,
+          type: POS_TERMINAL_IDENTITY_HANDOFF_APPROVAL_SUBJECT_TYPE,
+        },
+      }
+    : null;
+
+  const onAuthenticateForHandoffApproval: CommandApprovalDialogProps["onAuthenticateForApproval"] =
+    (args) =>
+      runCommand(() =>
+        authenticateStaffCredentialForApproval(args),
+      ) as ReturnType<CommandApprovalDialogProps["onAuthenticateForApproval"]>;
+
+  async function onApprovedTerminalIdentityHandoff(input: {
+    approvalProofId: Id<"approvalProof">;
+    approvedByStaffProfileId: Id<"staffProfile">;
+  }) {
+    if (!activeStore?._id || !handoffCandidate) {
+      return;
+    }
+    const result = await runCommand(() =>
+      resolveRegisterSessionSyncReview({
+        actorStaffProfileId: input.approvedByStaffProfileId,
+        approvalProofId: input.approvalProofId,
+        decision: "approved",
+        registerSessionId:
+          handoffCandidate.canonicalRegisterSessionId as Id<"registerSession">,
+        storeId: activeStore._id,
+        terminalIdentityHandoff: {
+          countedCash: handoffCandidate.countedCash,
+          expectedPreviousTerminalId:
+            handoffCandidate.previousTerminalId as Id<"posTerminal">,
+          localRegisterSessionId: handoffCandidate.localRegisterSessionId,
+          replacementTerminalId:
+            handoffCandidate.replacementTerminalId as Id<"posTerminal">,
+        },
+      }),
+    );
+    if (result.kind === "ok") {
+      setIsHandoffApprovalOpen(false);
+      toast.success("Replacement terminal reconnected");
+      return;
+    }
+    toast.error(result.error.message);
   }
 
   async function onResolveTerminalCloudRepair({
@@ -3561,37 +3673,54 @@ export function POSTerminalDetailView() {
   }
 
   return (
-    <POSTerminalDetailViewContent
-      detail={detail ?? null}
-      canStartRemoteAssist={canManageTerminalHealth}
-      isLoading={detail === undefined}
-      onIssueTerminalRecoveryCommand={
-        canManageTerminalHealth ? onIssueTerminalRecoveryCommand : undefined
-      }
-      onResolveTerminalCloudRepair={
-        canManageTerminalHealth ? onResolveTerminalCloudRepair : undefined
-      }
-      onResolveRegisterSessionReview={
-        canManageTerminalHealth ? onResolveRegisterSessionReview : undefined
-      }
-      onSetTerminalHeartbeat={
-        canManageTerminalHealth ? onSetTerminalHeartbeat : undefined
-      }
-      onEndRemoteAssist={
-        canManageTerminalHealth ? onEndRemoteAssist : undefined
-      }
-      onStartRemoteAssist={
-        canManageTerminalHealth ? onStartRemoteAssist : undefined
-      }
-      orgUrlSlug={params.orgUrlSlug}
-      queryUnavailable={detail === null && !params.terminalId}
-      remoteAssistClient={remoteAssistClient ?? null}
-      remoteAssistSession={remoteAssistSession ?? null}
-      storeId={activeStore._id}
-      terminalId={terminalId}
-      storeUrlSlug={params.storeUrlSlug}
-      isSharedDemo={Boolean(demoContext)}
-    />
+    <>
+      <POSTerminalDetailViewContent
+        detail={detail ?? null}
+        canStartRemoteAssist={canManageTerminalHealth}
+        isLoading={detail === undefined}
+        onIssueTerminalRecoveryCommand={
+          canManageTerminalHealth ? onIssueTerminalRecoveryCommand : undefined
+        }
+        onResolveTerminalCloudRepair={
+          canManageTerminalHealth ? onResolveTerminalCloudRepair : undefined
+        }
+        onResolveRegisterSessionReview={
+          canManageTerminalHealth ? onResolveRegisterSessionReview : undefined
+        }
+        onRequestTerminalIdentityHandoff={
+          canManageTerminalHealth && handoffCandidate
+            ? () => setIsHandoffApprovalOpen(true)
+            : undefined
+        }
+        onSetTerminalHeartbeat={
+          canManageTerminalHealth ? onSetTerminalHeartbeat : undefined
+        }
+        onEndRemoteAssist={
+          canManageTerminalHealth ? onEndRemoteAssist : undefined
+        }
+        onStartRemoteAssist={
+          canManageTerminalHealth ? onStartRemoteAssist : undefined
+        }
+        orgUrlSlug={params.orgUrlSlug}
+        queryUnavailable={detail === null && !params.terminalId}
+        remoteAssistClient={remoteAssistClient ?? null}
+        remoteAssistSession={remoteAssistSession ?? null}
+        storeId={activeStore._id}
+        storeUrlSlug={params.storeUrlSlug}
+        terminalId={terminalId}
+        isSharedDemo={Boolean(demoContext)}
+      />
+      <CommandApprovalDialog
+        approval={handoffApproval}
+        onApproved={(result) => {
+          void onApprovedTerminalIdentityHandoff(result);
+        }}
+        onAuthenticateForApproval={onAuthenticateForHandoffApproval}
+        onDismiss={() => setIsHandoffApprovalOpen(false)}
+        open={isHandoffApprovalOpen}
+        storeId={activeStore._id}
+      />
+    </>
   );
 }
 

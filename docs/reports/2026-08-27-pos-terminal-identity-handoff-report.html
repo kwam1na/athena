@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>POS Terminal Identity Handoff</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="fee36cfe46f71e7b88010ae263f371c4b6aae33e5d50523d7ad4e67da751631c">
+  <header data-report-section="header">
+    <h1>POS Terminal Identity Handoff</h1>
+    <p>Safely reconnecting one physical drawer after browser identity loss</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch codex/pos-terminal-identity-handoff</li>
+      <li>Production deploy pending</li>
+      <li>317 focused tests green</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Source</dt><dd>codex/pos-terminal-identity-handoff</dd>
+      <dt>Base</dt><dd>origin/main at 8b4d528c</dd>
+      <dt>Status</dt><dd>Delivery candidate</dd>
+      <dt>Deploy</dt><dd>Pending; production unchanged</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+      <p>This candidate adds a manager-approved way to transfer one active POS drawer from a lost browser terminal identity to its replacement without inventing a second register session.</p>
+      <p>The original cloud session remains canonical. The replacement opening amount is retained as a physical cash observation, eligible completed-sale and sale-clear history is replayed through the ordinary projector, terminal authority moves with a revision bump, current browser review rows receive a recovery command, and later uploads use the installed mapping normally.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Why this was needed</h2>
+      <p>Clearing browser identity and registering the same device again creates a new terminal scope. If the original cloud drawer is still active, the replacement browser records a duplicate local open and its later sales cannot infer a cross-terminal register-session mapping.</p>
+      <p>The review queue is correct to stop: guessing across terminal identities could attach sales to the wrong drawer. The missing capability was an explicit, audited handoff where a manager attests the identity replacement and the stored store, register, duplicate-open, count, and mapping evidence is consistent.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model: change the key, not the cash history</h2>
+      <p>Think of the cloud register session as the ledger for one physical drawer and the browser terminal id as the key currently allowed to operate it. Losing the browser identity means replacing the key; it does not mean opening another drawer.</p>
+      <p>The handoff therefore preserves the original opening float and the pre-handoff expected-cash baseline in audit metadata, records the replacement count as evidence, applies ordinary sale cash deltas, then changes the authority owner.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+      <p>Before: replacement identity → duplicate open conflict → sales without a terminal-scoped session mapping → manager review items → old terminal still owns the cloud drawer.</p>
+      <p>After: manager approval → execution-time drawer reread → strict preflight → durable mapping → duplicate open rejected as count evidence → eligible sales replayed in sequence → conflicts settled → authority transferred → old identity marked lost → exact local-review cleanup queued for the replacement browser.</p>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed and what did not</h2>
+      <p>The replacement terminal detail page exposes the action only when its public, return-validated read model proves the drawer is eligible. The cash-controls mutation validates the canonical session, approved source terminal, replacement terminal, replacement register number, local drawer id, duplicate-open blocker, physical count, mapping state, and every current review kind before writing.</p>
+      <p>It deliberately does not relax cross-terminal inference globally, create a second cloud session, replace the original opening float, add non-cash payments to expected cash, delete sync evidence, or alter ordinary non-handoff review behavior.</p>
+      <ul>
+        <li>Caller review IDs do not select handoff work.</li>
+        <li>The mutation rereads current needs-review conflicts and drawer events for the exact replacement local drawer.</li>
+        <li>A 501-row sentinel fails closed when either bounded evidence read is incomplete.</li>
+        <li>At most 20 pending completed-sale or sale-clear events and 100 total sale or service lines may replay in one transaction.</li>
+        <li>Inline approval proofs are validated before preflight and consumed only after preflight succeeds.</li>
+        <li>Any post-write projection drift throws so Convex rolls the whole transaction back.</li>
+        <li>The approving proof and manager ids are persisted in the operational audit.</li>
+        <li>A terminal recovery command names the exact repaired event ids and requires a fresh zero-review heartbeat before production completion.</li>
+      </ul>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+      <p>The command refuses automatic or rejected actions, stale approval for a different source terminal, inactive or closing drawers, missing or mismatched terminals, a wrong replacement register, mismatched count/open evidence, an existing mapping to another session, malformed history, unsupported review kinds, more than 500 evidence rows, more than 20 replay events, or more than 100 total sale or service lines.</p>
+      <p>Once mutation begins, a sale that cannot project is an exception rather than a returned command error. That distinction is intentional: throwing preserves all-or-nothing behavior for the mapping, sales, conflict resolution, authority transfer, terminal retirement, and audit record.</p>
+      <ul>
+        <li>Operational assumption: the manager is attesting that the old and replacement identities represent the same physical drawer; browser continuity and old-terminal inactivity are not independently proven by this command.</li>
+        <li>A failed preflight does not consume an inline approval proof or mutate drawer state.</li>
+      </ul>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and delivery status</h2>
+      <p>Focused proof is green: 317 cash-control, authority-revision, approval-proof, terminal-read-model, public-validator, and terminal-detail UI tests pass; webapp typecheck passes. Convex audit, changed-file lint, operation admission, and Graphify rebuild pass; final review evidence and the authoritative gate are rerun after the candidate stops changing.</p>
+      <p>The regression fixture omits a later sale from the caller&#x27;s review IDs, includes the real non-financial sale-clear shape, and expects every supported event to settle. It then uploads another cash sale only after the handoff has completed and proves that sale projects through the durable mapping without a conflict. Cash changes expected cash, mobile money and sale-clear do not, the opening float remains unchanged, and the handoff count stays in operational metadata.</p>
+      <p>Read-model regressions prove the settled handoff opening cannot reappear as cash-controls or terminal review. The handoff also queues exact local event ids for the existing server-confirmed terminal recovery path; production is not complete until that command is acknowledged and a fresh runtime heartbeat reports zero local review items.</p>
+      <p>This is a delivery candidate. It is not merged, root-aligned, deployed, or applied to production yet. Final review evidence, report validation, and the authoritative pr:athena gate remain required.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>How to extend or operate this safely</h2>
+      <ul>
+        <li>Use this path only when a manager can attest browser-identity replacement of one physical drawer and the stored evidence is consistent.</li>
+        <li>Do not pre-mark the old terminal lost; the handoff validates that it still owns an active session and retires it transactionally.</li>
+        <li>Treat review IDs from the UI as stale by default and reread authoritative pending state at execution.</li>
+        <li>Keep unsupported conflict kinds outside the handoff rather than widening manager approval implicitly.</li>
+        <li>After deployment, invoke the handoff with exact terminal and local drawer identifiers, then verify session owner, expected cash, mapping authority, resolved conflicts, old-terminal status, operational audit metadata, recovery-command acknowledgement, and a fresh zero-local-review runtime heartbeat.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>packages/athena-webapp/convex/cashControls/deposits.ts</code></td><td>Owns preflight, execution-time reread, sale replay, conflict settlement, authority transfer, terminal retirement, and audit recording.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/cashControls/deposits.test.ts</code></td><td>Proves count-only accounting, catches a sale omitted from the caller&#x27;s stale review snapshot, and projects another sale uploaded only after the handoff.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/operations/registerSessionAuthorityRevision.ts</code></td><td>Centralizes terminal ownership transfer and increments lifecycle authority revision.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/operations/approvalProofs.ts</code></td><td>Separates proof validation from consumption so failed handoff preflight does not burn manager approval.</td></tr>
+        <tr><td><code>packages/athena-webapp/shared/posLocalSyncContract.ts</code></td><td>Centralizes settled rejection codes and the approval subject bound to the canonical session, source terminal, replacement terminal, and local drawer.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRepository.ts</code></td><td>Publishes a fail-closed handoff candidate only when current replacement-terminal evidence matches mutation preflight.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/pos/terminals/POSTerminalDetailView.tsx</code></td><td>Provides the production operator path and mints a handoff-specific manager proof for the exact identity tuple.</td></tr>
+        <tr><td><code>docs/solutions/logic-errors/athena-pos-terminal-identity-handoff-2026-08-27.md</code></td><td>Captures the reusable operational and transactional safety pattern.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What remains canonical after a browser terminal identity is replaced?</p>
+        <ol data-quiz-options>
+          <li>The replacement local open event</li>
+          <li data-quiz-correct>The original cloud register session</li>
+          <li>A newly created cloud session</li>
+          <li>The old terminal&#x27;s register number</li>
+        </ol>
+        <p data-quiz-explanation>One physical drawer keeps one canonical cloud ledger; only its terminal authority changes.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How is the replacement opening amount treated?</p>
+        <ol data-quiz-options>
+          <li>Added to opening float</li>
+          <li>Added directly to expected cash</li>
+          <li data-quiz-correct>Recorded as a physical count observation</li>
+          <li>Discarded with the duplicate open</li>
+        </ol>
+        <p data-quiz-explanation>The amount is useful handoff evidence but is not a second float or a cash movement.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why are caller-supplied review IDs not the repair boundary?</p>
+        <ol data-quiz-options>
+          <li>They are never authenticated</li>
+          <li data-quiz-correct>More sales may upload after the UI snapshot</li>
+          <li>They cannot identify conflicts</li>
+          <li>They only work for cash payments</li>
+        </ol>
+        <p data-quiz-explanation>Execution-time rereading prevents newly uploaded eligible sales from being stranded by a stale selection.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens to a sale uploaded after a successful handoff?</p>
+        <ol data-quiz-options>
+          <li>It always needs another manager repair</li>
+          <li>It creates a new register session</li>
+          <li data-quiz-correct>It projects through the durable mapping</li>
+          <li>It is rejected as a duplicate open</li>
+        </ol>
+        <p data-quiz-explanation>The replacement terminal&#x27;s local drawer is durably mapped to the canonical session.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which payment changes expected drawer cash during replay?</p>
+        <ol data-quiz-options>
+          <li>Mobile money only</li>
+          <li data-quiz-correct>Cash only</li>
+          <li>Every payment method</li>
+          <li>No payment method</li>
+        </ol>
+        <p data-quiz-explanation>Ordinary projection accounting remains authoritative: cash affects the drawer and non-cash payments do not.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does projection drift throw instead of return a command error after writes begin?</p>
+        <ol data-quiz-options>
+          <li>To skip audit logging</li>
+          <li data-quiz-correct>To force the entire Convex transaction to roll back</li>
+          <li>To retry only the failed sale</li>
+          <li>To bypass manager approval</li>
+        </ol>
+        <p data-quiz-explanation>An exception prevents a partial handoff with mapping or authority changes committed without every eligible sale in the transaction&#x27;s execution-time snapshot.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens to the previous terminal identity on success?</p>
+        <ol data-quiz-options>
+          <li>It stays active as a fallback</li>
+          <li>It is deleted</li>
+          <li data-quiz-correct>It is marked lost</li>
+          <li>Its sales are reversed</li>
+        </ol>
+        <p data-quiz-explanation>Retiring the old identity prevents two active terminal keys from claiming the same drawer.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which condition blocks the handoff rather than being silently absorbed?</p>
+        <ol data-quiz-options>
+          <li>A valid missing-mapping sale</li>
+          <li>The expected duplicate-open conflict</li>
+          <li data-quiz-correct>An unrelated review kind on the local drawer</li>
+          <li>A mobile-money payment</li>
+        </ol>
+        <p data-quiz-explanation>Manager approval is scoped narrowly; unrelated review work must be handled separately.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which authority counter is incremented when ownership moves?</p>
+        <ol data-quiz-options>
+          <li>Opening float</li>
+          <li data-quiz-correct>Lifecycle authority revision</li>
+          <li>Operating date</li>
+          <li>Register number</li>
+        </ol>
+        <p data-quiz-explanation>The centralized transfer writer changes terminal ownership and increments the lifecycle authority revision.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>When is an inline approval proof consumed?</p>
+        <ol data-quiz-options>
+          <li>Before any handoff validation</li>
+          <li data-quiz-correct>After handoff preflight succeeds and before the first write</li>
+          <li>After production deployment</li>
+          <li>Only after every later upload completes</li>
+        </ol>
+        <p data-quiz-explanation>Validation happens early, but delayed consumption lets a failed preflight leave the proof and all drawer state unchanged.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>session context</dt><dd>Reconstructed the prior incident investigation, the final accounting decisions, and the still-pending deploy finish line.</dd>
+      <dt>delivered diff</dt><dd>Mapped the before/after flow, late-sale handling, unchanged boundaries, validation evidence, and residual risks from the staged code.</dd>
+      <dt>quiz and report reviewer</dt><dd>Corrected expected-cash wording, narrowed identity claims to manager attestation plus stored evidence, added caps and proof-consumption boundaries, and strengthened quiz questions.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

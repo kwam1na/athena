@@ -34,8 +34,14 @@ import {
   rejectRegisterSessionCloseoutWithCtx,
 } from "../operations/registerSessions";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
-import { patchRegisterSessionWithAuthority } from "../operations/registerSessionAuthorityRevision";
-import { consumeApprovalProofWithCtx } from "../operations/approvalProofs";
+import {
+  patchRegisterSessionWithAuthority,
+  transferRegisterSessionTerminalAuthority,
+} from "../operations/registerSessionAuthorityRevision";
+import {
+  consumeApprovalProofWithCtx,
+  validateApprovalProofWithCtx,
+} from "../operations/approvalProofs";
 import { toPesewas } from "../lib/currency";
 import {
   listCompletedTransactions,
@@ -49,6 +55,8 @@ import {
   type RegisterSessionSyncConflict,
 } from "../pos/application/sync/registerSessionSyncReview";
 import { createConvexLocalSyncRepository } from "../pos/infrastructure/repositories/localSyncRepository";
+import { createTerminalRecoveryCommandRepository } from "../pos/infrastructure/repositories/terminalRecoveryRepository";
+import { issueTerminalRecoveryCommand } from "../pos/application/terminalRecovery/terminalCommandService";
 import { parseStoredLocalSyncEvent } from "../pos/application/sync/ingestLocalEvents";
 import {
   createOrReuseRegisterSessionRepairMapping,
@@ -69,6 +77,11 @@ import {
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
+import {
+  buildPosTerminalIdentityHandoffApprovalSubjectId,
+  POS_TERMINAL_IDENTITY_HANDOFF_APPROVAL_ACTION_KEY,
+  POS_TERMINAL_IDENTITY_HANDOFF_APPROVAL_SUBJECT_TYPE,
+} from "../../shared/posLocalSyncContract";
 import { isRegisterSessionSaleUsable } from "../../shared/registerSessionLifecyclePolicy";
 import { formatStaffDisplayName } from "../../shared/staffDisplayName";
 import { buildPaymentTotals } from "../operations/paymentTotals";
@@ -87,6 +100,8 @@ const RECENT_DEPOSIT_LIMIT = 10;
 const SESSION_LIMIT = 100;
 const STAFF_ROLE_LOOKUP_LIMIT = 20;
 const TIMELINE_LIMIT = 200;
+const TERMINAL_IDENTITY_HANDOFF_REPLAY_EVENT_LIMIT = 20;
+const TERMINAL_IDENTITY_HANDOFF_SALE_LINE_LIMIT = 100;
 
 function isDepositAdmissionAuthorizationError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
@@ -1187,21 +1202,24 @@ export const getDashboardSnapshot = query({
     async (ctx, args: { storeId: Id<"store"> }) => {
       await requireCashControlsStoreAccess(ctx, args.storeId);
 
-      const [registerSessions, pendingApprovalRequests, syncConflictsBySessionId] =
-        await Promise.all([
-          listRegisterSessionsForDashboard(ctx, args.storeId),
-          ctx.db
-            .query("approvalRequest")
-            .withIndex("by_storeId_status", (q) =>
-              q.eq("storeId", args.storeId).eq("status", "pending"),
-            )
-            .order("desc")
-            .take(SESSION_LIMIT),
-          listRegisterSessionSyncReviewConflicts(ctx, args.storeId, {
-            includeRejectedEvidence: true,
-            limit: DASHBOARD_SYNC_REVIEW_LIMIT,
-          }),
-        ]);
+      const [
+        registerSessions,
+        pendingApprovalRequests,
+        syncConflictsBySessionId,
+      ] = await Promise.all([
+        listRegisterSessionsForDashboard(ctx, args.storeId),
+        ctx.db
+          .query("approvalRequest")
+          .withIndex("by_storeId_status", (q) =>
+            q.eq("storeId", args.storeId).eq("status", "pending"),
+          )
+          .order("desc")
+          .take(SESSION_LIMIT),
+        listRegisterSessionSyncReviewConflicts(ctx, args.storeId, {
+          includeRejectedEvidence: true,
+          limit: DASHBOARD_SYNC_REVIEW_LIMIT,
+        }),
+      ]);
 
       const dashboardRegisterSessions =
         await appendRegisterSessionsForSyncConflicts(
@@ -1734,7 +1752,8 @@ export const recordRegisterSessionDeposit = mutation({
           if (!updatedRegisterSession) {
             return userError({
               code: "unavailable",
-              message: "Register session deposit was recorded without a session.",
+              message:
+                "Register session deposit was recorded without a session.",
             });
           }
 
@@ -1803,6 +1822,14 @@ export const resolveRegisterSessionSyncReview = mutation({
     requestedByStaffProfileId: v.optional(v.id("staffProfile")),
     reviewConflictIds: v.optional(v.array(v.string())),
     storeId: v.id("store"),
+    terminalIdentityHandoff: v.optional(
+      v.object({
+        countedCash: v.number(),
+        expectedPreviousTerminalId: v.id("posTerminal"),
+        localRegisterSessionId: v.string(),
+        replacementTerminalId: v.id("posTerminal"),
+      }),
+    ),
   },
   returns: registerSessionSyncReviewResultValidator,
   handler: admitPublicMutation(
@@ -1837,19 +1864,40 @@ export const resolveRegisterSessionSyncReview = mutation({
             "Automatic sync repair can only apply eligible register activity.",
         });
       }
-      if (args.approvalProofId) {
-        const approvalProof = await consumeApprovalProofWithCtx(ctx, {
-          actionKey: REGISTER_SESSION_SYNC_REVIEW_APPROVAL_ACTION_KEY,
-          approvalProofId: args.approvalProofId,
-          requestedByStaffProfileId: args.requestedByStaffProfileId,
-          requiredRole: "manager",
-          storeId: args.storeId,
-          subject: {
-            id: args.registerSessionId,
-            label: registerSession.registerNumber,
-            type: "register_session",
-          },
-        });
+      const approvalProofArgs = args.approvalProofId
+        ? ({
+            actionKey: args.terminalIdentityHandoff
+              ? POS_TERMINAL_IDENTITY_HANDOFF_APPROVAL_ACTION_KEY
+              : REGISTER_SESSION_SYNC_REVIEW_APPROVAL_ACTION_KEY,
+            approvalProofId: args.approvalProofId,
+            requestedByStaffProfileId: args.requestedByStaffProfileId,
+            requiredRole: "manager",
+            storeId: args.storeId,
+            subject: args.terminalIdentityHandoff
+              ? {
+                  id: buildPosTerminalIdentityHandoffApprovalSubjectId({
+                    expectedPreviousTerminalId:
+                      args.terminalIdentityHandoff.expectedPreviousTerminalId,
+                    localRegisterSessionId:
+                      args.terminalIdentityHandoff.localRegisterSessionId,
+                    registerSessionId: args.registerSessionId,
+                    replacementTerminalId:
+                      args.terminalIdentityHandoff.replacementTerminalId,
+                  }),
+                  label: registerSession.registerNumber,
+                  type: POS_TERMINAL_IDENTITY_HANDOFF_APPROVAL_SUBJECT_TYPE,
+                }
+              : {
+                  id: args.registerSessionId,
+                  label: registerSession.registerNumber,
+                  type: "register_session",
+                },
+          } as const)
+        : null;
+      if (approvalProofArgs) {
+        const approvalProof = args.terminalIdentityHandoff
+          ? await validateApprovalProofWithCtx(ctx, approvalProofArgs)
+          : await consumeApprovalProofWithCtx(ctx, approvalProofArgs);
 
         if (approvalProof.kind !== "ok") {
           return approvalProof;
@@ -1883,6 +1931,403 @@ export const resolveRegisterSessionSyncReview = mutation({
             message: "Only managers can resolve synced register reviews.",
           });
         }
+      }
+
+      if (args.terminalIdentityHandoff) {
+        if (
+          decision !== "approved" ||
+          !reviewActorStaffProfileId ||
+          isAutomaticResolution ||
+          !approvalProofArgs
+        ) {
+          return userError({
+            code: "precondition_failed",
+            message:
+              "A manager approval proof is required before Athena can transfer this drawer to another terminal identity.",
+          });
+        }
+        if (
+          registerSession.status !== "active" &&
+          registerSession.status !== "open"
+        ) {
+          return userError({
+            code: "precondition_failed",
+            message:
+              "Only an active register session can be handed to a replacement terminal.",
+          });
+        }
+
+        const handoff = args.terminalIdentityHandoff;
+        const expectedCashAtHandoff = registerSession.expectedCash;
+        const previousTerminalId = registerSession.terminalId;
+        if (!previousTerminalId) {
+          return userError({
+            code: "precondition_failed",
+            message:
+              "This register session has no terminal authority to transfer.",
+          });
+        }
+        if (previousTerminalId === handoff.replacementTerminalId) {
+          return userError({
+            code: "precondition_failed",
+            message: "The replacement terminal already owns this drawer.",
+          });
+        }
+        if (previousTerminalId !== handoff.expectedPreviousTerminalId) {
+          return userError({
+            code: "precondition_failed",
+            message:
+              "The register session terminal owner changed after this handoff was approved.",
+          });
+        }
+
+        const [previousTerminal, replacementTerminal] = await Promise.all([
+          ctx.db.get("posTerminal", previousTerminalId),
+          ctx.db.get("posTerminal", handoff.replacementTerminalId),
+        ]);
+        if (
+          !previousTerminal ||
+          previousTerminal.storeId !== args.storeId ||
+          previousTerminal.status !== "active" ||
+          !replacementTerminal ||
+          replacementTerminal.storeId !== args.storeId ||
+          replacementTerminal.status !== "active" ||
+          replacementTerminal.registerNumber !== registerSession.registerNumber
+        ) {
+          return userError({
+            code: "precondition_failed",
+            message:
+              "The terminal identities no longer match this active register session.",
+          });
+        }
+
+        // Re-read the replacement drawer at execution time. Caller review ids do
+        // not select handoff work because more offline sales may have uploaded
+        // since the UI snapshot that initiated this command.
+        const [targetConflictsPage, targetEventsPage] = await Promise.all([
+          ctx.db
+            .query("posLocalSyncConflict")
+            .withIndex("by_store_terminal_register_status_type", (q) =>
+              q
+                .eq("storeId", args.storeId)
+                .eq("terminalId", handoff.replacementTerminalId)
+                .eq("localRegisterSessionId", handoff.localRegisterSessionId)
+                .eq("status", "needs_review"),
+            )
+            .take(501),
+          ctx.db
+            .query("posLocalSyncEvent")
+            .withIndex("by_store_terminal_register_sequence", (q) =>
+              q
+                .eq("storeId", args.storeId)
+                .eq("terminalId", handoff.replacementTerminalId)
+                .eq("localRegisterSessionId", handoff.localRegisterSessionId),
+            )
+            .take(501),
+        ]);
+        if (targetConflictsPage.length > 500 || targetEventsPage.length > 500) {
+          return userError({
+            code: "precondition_failed",
+            message:
+              "This replacement drawer has too much pending history for a safe terminal handoff.",
+          });
+        }
+
+        const targetEvents = [...targetEventsPage].sort(
+          (left, right) => left.sequence - right.sequence,
+        );
+        const openEvents = targetEvents.filter(
+          (event) => event.eventType === "register_opened",
+        );
+        const openEvent = openEvents.length === 1 ? openEvents[0] : null;
+        const openingPayload = recordDetail(openEvent?.payload);
+        const duplicateOpenConflict = targetConflictsPage.find(
+          (conflict) =>
+            openEvent &&
+            conflict.localEventId === openEvent.localEventId &&
+            classifyRegisterSessionSyncReview(conflict).reviewKind ===
+              "duplicate_register_open" &&
+            conflict.details?.blockingRegisterSessionId ===
+              args.registerSessionId,
+        );
+        if (
+          !openEvent ||
+          openEvent.status !== "conflicted" ||
+          openingPayload?.openingFloat !== handoff.countedCash ||
+          openingPayload?.registerNumber !== registerSession.registerNumber ||
+          !duplicateOpenConflict
+        ) {
+          return userError({
+            code: "precondition_failed",
+            message:
+              "The replacement drawer opening no longer matches this terminal handoff.",
+          });
+        }
+
+        const replayEvents = targetEvents.filter(
+          (event) =>
+            (event.eventType === "sale_completed" ||
+              event.eventType === "sale_cleared") &&
+            event.status === "conflicted",
+        );
+        const replayEventIds = new Set(
+          replayEvents.map((event) => event.localEventId),
+        );
+        const unsupportedConflict = targetConflictsPage.find((conflict) => {
+          const reviewKind =
+            classifyRegisterSessionSyncReview(conflict).reviewKind;
+          return !(
+            conflict._id === duplicateOpenConflict._id ||
+            (replayEventIds.has(conflict.localEventId) &&
+              reviewKind === "missing_register_session_mapping")
+          );
+        });
+        const eventWithoutMappingConflict = replayEvents.find(
+          (event) =>
+            !targetConflictsPage.some(
+              (conflict) =>
+                conflict.localEventId === event.localEventId &&
+                classifyRegisterSessionSyncReview(conflict).reviewKind ===
+                  "missing_register_session_mapping",
+            ),
+        );
+        if (unsupportedConflict || eventWithoutMappingConflict) {
+          return userError({
+            code: "precondition_failed",
+            message:
+              "This replacement drawer has review items that need separate attention before its terminal identity can be handed off.",
+          });
+        }
+
+        const localSyncRepository = createConvexLocalSyncRepository(ctx);
+        const existingRegisterMapping = await localSyncRepository.findMapping({
+          storeId: args.storeId,
+          terminalId: handoff.replacementTerminalId,
+          localRegisterSessionId: handoff.localRegisterSessionId,
+          localIdKind: "registerSession",
+          localId: handoff.localRegisterSessionId,
+        });
+        if (
+          existingRegisterMapping &&
+          (existingRegisterMapping.cloudTable !== "registerSession" ||
+            existingRegisterMapping.cloudId !== args.registerSessionId)
+        ) {
+          return userError({
+            code: "precondition_failed",
+            message:
+              "The replacement drawer is already mapped to another register session.",
+          });
+        }
+
+        const parsedReplayEvents = replayEvents.map((syncEvent) => ({
+          parsed: parseStoredLocalSyncEvent(localSyncRepository, syncEvent),
+          syncEvent,
+        }));
+        if (
+          parsedReplayEvents.some(
+            ({ parsed }) =>
+              !parsed.ok ||
+              (parsed.event.eventType !== "sale_completed" &&
+                parsed.event.eventType !== "sale_cleared"),
+          )
+        ) {
+          return userError({
+            code: "precondition_failed",
+            message:
+              "One or more replacement-drawer events have incomplete sync evidence.",
+          });
+        }
+        const totalSaleLineCount = parsedReplayEvents.reduce(
+          (total, { parsed }) =>
+            parsed.ok && parsed.event.eventType === "sale_completed"
+              ? total +
+                parsed.event.payload.items.length +
+                (parsed.event.payload.serviceLines?.length ?? 0)
+              : total,
+          0,
+        );
+        if (
+          parsedReplayEvents.length >
+            TERMINAL_IDENTITY_HANDOFF_REPLAY_EVENT_LIMIT ||
+          totalSaleLineCount > TERMINAL_IDENTITY_HANDOFF_SALE_LINE_LIMIT
+        ) {
+          return userError({
+            code: "precondition_failed",
+            message:
+              "This replacement drawer has too much pending sale history for one safe terminal handoff.",
+          });
+        }
+
+        if (approvalProofArgs) {
+          const consumedApprovalProof = await consumeApprovalProofWithCtx(
+            ctx,
+            approvalProofArgs,
+          );
+          if (consumedApprovalProof.kind !== "ok") {
+            return consumedApprovalProof;
+          }
+        }
+
+        const resolvedAt = Date.now();
+        const mappingResult = await createOrReuseRegisterSessionRepairMapping(
+          localSyncRepository,
+          {
+            localEventId: openEvent.localEventId,
+            localRegisterSessionId: handoff.localRegisterSessionId,
+            now: resolvedAt,
+            registerSessionId: args.registerSessionId,
+            storeId: args.storeId,
+            terminalId: handoff.replacementTerminalId,
+          },
+        );
+        if ("status" in mappingResult && mappingResult.status === "conflict") {
+          throw new Error(
+            "Terminal identity handoff mapping changed after preflight.",
+          );
+        }
+
+        await localSyncRepository.patchEvent(openEvent._id, {
+          rejectionCode: "terminal_identity_handoff",
+          rejectionMessage:
+            "Drawer opening retained as a physical count during terminal identity handoff.",
+          status: "rejected",
+        });
+
+        const projectedTransactionIds: string[] = [];
+        const projectedLocalEventIds: string[] = [];
+        for (const { parsed, syncEvent } of parsedReplayEvents) {
+          if (
+            !parsed.ok ||
+            (parsed.event.eventType !== "sale_completed" &&
+              parsed.event.eventType !== "sale_cleared")
+          ) {
+            throw new Error("Terminal identity handoff preflight drifted.");
+          }
+          const projection = await projectLocalSyncEvent(localSyncRepository, {
+            storeId: args.storeId,
+            terminalId: handoff.replacementTerminalId,
+            event: parsed.event,
+            syncEventId: syncEvent._id,
+            submittedByUserId: athenaUser._id,
+            now: resolvedAt,
+            options: {
+              allowClosedRegisterSaleProjection: true,
+              reviewedConflictIds: targetConflictsPage.map(
+                (conflict) => conflict._id,
+              ),
+              reviewActorStaffProfileId,
+              trustStoredStaffProof: true,
+            },
+          });
+          if (projection.status !== "projected") {
+            // Throwing (instead of returning a command error) rolls the entire
+            // Convex transaction back, including the new authority mapping.
+            throw new Error(
+              `Terminal identity handoff history projection failed: ${projection.conflicts
+                .map((conflict) => conflict.summary)
+                .join("; ")}`,
+            );
+          }
+          await localSyncRepository.patchEvent(syncEvent._id, {
+            projectedAt: resolvedAt,
+            status: "projected",
+          });
+          projectedLocalEventIds.push(syncEvent.localEventId);
+          projectedTransactionIds.push(
+            ...projection.mappings
+              .filter(
+                (mapping) =>
+                  mapping.localIdKind === "transaction" &&
+                  mapping.cloudTable === "posTransaction",
+              )
+              .map((mapping) => mapping.cloudId),
+          );
+        }
+
+        await Promise.all(
+          targetConflictsPage.map((conflict) =>
+            ctx.db.patch("posLocalSyncConflict", conflict._id, {
+              resolvedAt,
+              resolvedByStaffProfileId: reviewActorStaffProfileId,
+              status: "resolved",
+            }),
+          ),
+        );
+        await transferRegisterSessionTerminalAuthority(
+          ctx,
+          args.registerSessionId,
+          handoff.replacementTerminalId,
+        );
+        await ctx.db.patch("posTerminal", previousTerminalId, {
+          status: "lost",
+        });
+        const localReviewEventIds = Array.from(
+          new Set(targetConflictsPage.map((conflict) => conflict.localEventId)),
+        );
+        const localReviewClearCommand = await issueTerminalRecoveryCommand(
+          createTerminalRecoveryCommandRepository(ctx),
+          {
+            commandContext: {
+              localReviewEventIds,
+              reason: "Cloud review settled during terminal identity handoff.",
+            },
+            commandType: "clear_local_review_items",
+            expectedEvidence: {
+              localReviewClearedEventIds: localReviewEventIds,
+              localReviewEventCount: 0,
+            },
+            issuedAt: resolvedAt,
+            issuedByUserId: athenaUser._id,
+            storeId: args.storeId,
+            terminalId: handoff.replacementTerminalId,
+          },
+        );
+        if (localReviewClearCommand.kind !== "ok") {
+          throw new Error(
+            `Terminal identity handoff could not queue local review convergence: ${localReviewClearCommand.error.message}`,
+          );
+        }
+        await recordOperationalEventWithCtx(ctx, {
+          actorStaffProfileId: reviewActorStaffProfileId,
+          actorUserId: athenaUser._id,
+          eventType: "register_session_terminal_identity_handed_off",
+          localEventId: openEvent.localEventId,
+          message: registerSession.registerNumber
+            ? `Handed Register ${registerSession.registerNumber} to its replacement terminal identity.`
+            : "Handed register session to its replacement terminal identity.",
+          metadata: {
+            approvalProofId: approvalProofArgs.approvalProofId,
+            countedCashAtHandoff: handoff.countedCash,
+            decisionApprovedByStaffProfileId: reviewActorStaffProfileId,
+            duplicateOpenConflictId: duplicateOpenConflict._id,
+            expectedCashAtHandoff,
+            handoffVariance: handoff.countedCash - expectedCashAtHandoff,
+            localRegisterSessionId: handoff.localRegisterSessionId,
+            localReviewClearCommandId: localReviewClearCommand.data._id,
+            localReviewEventIds,
+            previousTerminalId,
+            projectedTransactionIds,
+            projectedLocalEventIds,
+            replacementTerminalId: handoff.replacementTerminalId,
+          },
+          organizationId: store.organizationId,
+          registerSessionId: args.registerSessionId,
+          storeId: args.storeId,
+          subjectId: args.registerSessionId,
+          subjectLabel: registerSession.registerNumber,
+          subjectType: "register_session",
+          terminalId: handoff.replacementTerminalId,
+        });
+
+        return ok({
+          action: "resolved",
+          registerSession: await ctx.db.get(
+            "registerSession",
+            args.registerSessionId,
+          ),
+          projectedCount: projectedTransactionIds.length,
+          resolvedCount: targetConflictsPage.length,
+        });
       }
 
       const conflictsBySessionId = await listRegisterSessionSyncReviewConflicts(

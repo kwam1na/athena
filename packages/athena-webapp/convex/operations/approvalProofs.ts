@@ -46,6 +46,60 @@ type ConsumeApprovalProofArgs = {
   subject: ApprovalSubjectIdentity;
 };
 
+async function getValidApprovalProof(
+  ctx: MutationCtx,
+  args: ConsumeApprovalProofArgs,
+) {
+  const proof = await ctx.db.get("approvalProof", args.approvalProofId);
+
+  if (!proof) {
+    return invalidApprovalProofResult("Approval proof was not found.");
+  }
+
+  if (
+    proof.storeId !== args.storeId ||
+    proof.actionKey !== args.actionKey ||
+    proof.subjectType !== args.subject.type ||
+    proof.subjectId !== args.subject.id ||
+    proof.requiredRole !== args.requiredRole
+  ) {
+    return invalidApprovalProofResult(
+      "Approval proof does not match this command.",
+    );
+  }
+
+  if (proof.consumedAt !== undefined) {
+    return invalidApprovalProofResult("Approval proof has already been used.");
+  }
+
+  if (proof.requestedByStaffProfileId !== args.requestedByStaffProfileId) {
+    return invalidApprovalProofResult(
+      "Approval proof requester does not match this command.",
+    );
+  }
+
+  if (proof.expiresAt <= Date.now()) {
+    return invalidApprovalProofResult("Approval proof has expired.");
+  }
+
+  return ok(proof);
+}
+
+export async function validateApprovalProofWithCtx(
+  ctx: MutationCtx,
+  args: ConsumeApprovalProofArgs,
+): Promise<CommandResult<ApprovalProofResult>> {
+  const result = await getValidApprovalProof(ctx, args);
+  if (result.kind !== "ok") return result;
+
+  return ok({
+    approvalProofId: args.approvalProofId,
+    approvedByStaffProfileId: result.data.approvedByStaffProfileId,
+    expiresAt: result.data.expiresAt,
+    requestedByStaffProfileId: result.data.requestedByStaffProfileId,
+  });
+}
+
 function invalidApprovalProofResult(message: string) {
   return userError({
     code: "precondition_failed",
@@ -99,39 +153,10 @@ export async function consumeApprovalProofWithCtx(
   ctx: MutationCtx,
   args: ConsumeApprovalProofArgs,
 ): Promise<CommandResult<ConsumedApprovalProofResult>> {
-  const proof = await ctx.db.get("approvalProof", args.approvalProofId);
-
-  if (!proof) {
-    return invalidApprovalProofResult("Approval proof was not found.");
-  }
-
-  if (
-    proof.storeId !== args.storeId ||
-    proof.actionKey !== args.actionKey ||
-    proof.subjectType !== args.subject.type ||
-    proof.subjectId !== args.subject.id ||
-    proof.requiredRole !== args.requiredRole
-  ) {
-    return invalidApprovalProofResult(
-      "Approval proof does not match this command.",
-    );
-  }
-
-  if (proof.consumedAt !== undefined) {
-    return invalidApprovalProofResult("Approval proof has already been used.");
-  }
-
-  if (proof.requestedByStaffProfileId !== args.requestedByStaffProfileId) {
-    return invalidApprovalProofResult(
-      "Approval proof requester does not match this command.",
-    );
-  }
-
+  const validation = await getValidApprovalProof(ctx, args);
+  if (validation.kind !== "ok") return validation;
+  const proof = validation.data;
   const now = Date.now();
-
-  if (proof.expiresAt <= now) {
-    return invalidApprovalProofResult("Approval proof has expired.");
-  }
 
   await ctx.db.patch("approvalProof", args.approvalProofId, {
     consumedAt: now,

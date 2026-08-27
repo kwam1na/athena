@@ -31,10 +31,7 @@ export type TerminalSyncReviewSummaryGroup = {
   latestCreatedAt: number;
   latestSequence: number;
   owner:
-    | "cash_controls"
-    | "diagnostic"
-    | "manual_review"
-    | "operations_open_work";
+    "cash_controls" | "diagnostic" | "manual_review" | "operations_open_work";
   reviewTarget?: TerminalSyncReviewTarget;
 };
 
@@ -49,6 +46,13 @@ export type TerminalSyncReviewSummary = {
 };
 
 export type TerminalSyncEvidence = {
+  terminalIdentityHandoffCandidate?: {
+    canonicalRegisterSessionId: Id<"registerSession">;
+    countedCash: number;
+    previousTerminalId: Id<"posTerminal">;
+    localRegisterSessionId: string;
+    replacementTerminalId: Id<"posTerminal">;
+  };
   latestEvent: {
     localEventId: string;
     localRegisterSessionId: string;

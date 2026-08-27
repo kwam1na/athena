@@ -49,19 +49,16 @@ export const POS_LOCAL_SYNC_EVENT_CONTRACT = [
   },
 ] as const;
 
-type PosLocalSyncContractEventTypes<
-  Contract extends readonly unknown[],
-> = Contract extends readonly [infer First, ...infer Rest]
-  ? First extends { readonly eventType: infer EventType }
-    ? readonly [EventType, ...PosLocalSyncContractEventTypes<Rest>]
-    : PosLocalSyncContractEventTypes<Rest>
-  : readonly [];
+type PosLocalSyncContractEventTypes<Contract extends readonly unknown[]> =
+  Contract extends readonly [infer First, ...infer Rest]
+    ? First extends { readonly eventType: infer EventType }
+      ? readonly [EventType, ...PosLocalSyncContractEventTypes<Rest>]
+      : PosLocalSyncContractEventTypes<Rest>
+    : readonly [];
 
 function eventTypesFromContract<
   const Contract extends readonly { readonly eventType: string }[],
->(
-  contract: Contract,
-): PosLocalSyncContractEventTypes<Contract> {
+>(contract: Contract): PosLocalSyncContractEventTypes<Contract> {
   return contract.map(
     (entry) => entry.eventType,
   ) as unknown as PosLocalSyncContractEventTypes<Contract>;
@@ -79,8 +76,40 @@ export const POS_LOCAL_SYNC_EVENT_STATUSES = [
   "rejected",
 ] as const;
 
-export type PosLocalSyncEventType =
-  (typeof POS_LOCAL_SYNC_EVENT_TYPES)[number];
+/** Rejected cloud events that are settled evidence, not actionable review work. */
+export const POS_LOCAL_SYNC_SETTLED_REJECTION_CODES = [
+  "manager_rejected",
+  "terminal_identity_handoff",
+] as const;
+
+export function isSettledPosLocalSyncRejectionCode(
+  rejectionCode: string | undefined,
+) {
+  return POS_LOCAL_SYNC_SETTLED_REJECTION_CODES.some(
+    (settledCode) => settledCode === rejectionCode,
+  );
+}
+
+export const POS_TERMINAL_IDENTITY_HANDOFF_APPROVAL_ACTION_KEY =
+  "cash_controls.register_session.terminal_identity_handoff";
+export const POS_TERMINAL_IDENTITY_HANDOFF_APPROVAL_SUBJECT_TYPE =
+  "register_session_terminal_identity_handoff";
+
+export function buildPosTerminalIdentityHandoffApprovalSubjectId(input: {
+  expectedPreviousTerminalId: string;
+  localRegisterSessionId: string;
+  registerSessionId: string;
+  replacementTerminalId: string;
+}) {
+  return JSON.stringify([
+    input.registerSessionId,
+    input.expectedPreviousTerminalId,
+    input.replacementTerminalId,
+    input.localRegisterSessionId,
+  ]);
+}
+
+export type PosLocalSyncEventType = (typeof POS_LOCAL_SYNC_EVENT_TYPES)[number];
 
 export type PosLocalSyncEventStatus =
   (typeof POS_LOCAL_SYNC_EVENT_STATUSES)[number];
@@ -136,8 +165,10 @@ export function getPosLocalSyncEventContractForLocalEventType(
 export function getPosLocalSyncEventTypeForLocalEventType(
   localEventType: string,
 ): PosLocalSyncEventType | null {
-  return getPosLocalSyncEventContractForLocalEventType(localEventType)
-    ?.eventType ?? null;
+  return (
+    getPosLocalSyncEventContractForLocalEventType(localEventType)?.eventType ??
+    null
+  );
 }
 
 export function canUploadPosLocalSyncLocalEventType(
@@ -306,8 +337,9 @@ export type PosLocalSyncUploadEventBase<
 };
 
 export type PosLocalSyncPosUploadEvent = {
-  [EventType in Exclude<PosLocalSyncEventType, "expense_recorded">]:
-    PosLocalSyncUploadEventBase<EventType>;
+  [
+    EventType in Exclude<PosLocalSyncEventType, "expense_recorded">
+  ]: PosLocalSyncUploadEventBase<EventType>;
 }[Exclude<PosLocalSyncEventType, "expense_recorded">];
 
 export type PosLocalSyncExpenseUploadEvent = Omit<
@@ -319,5 +351,4 @@ export type PosLocalSyncExpenseUploadEvent = Omit<
 };
 
 export type PosLocalSyncUploadEvent =
-  | PosLocalSyncPosUploadEvent
-  | PosLocalSyncExpenseUploadEvent;
+  PosLocalSyncPosUploadEvent | PosLocalSyncExpenseUploadEvent;
