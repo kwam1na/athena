@@ -5,7 +5,7 @@
   <title>[V26-1354]: Install a shrink-only backend dependency guard</title>
 </head>
 <body>
-<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="799ee0df1e662a658e5bdfbbbc743f35cd825edcb28f286ed72fdc87f4965e1e">
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="TO_BE_SET">
   <header data-report-section="header">
     <h1>[V26-1354]: Install a shrink-only backend dependency guard</h1>
     <p>U1 of Backend Reliability &amp; Maintainability epic — structural sensor to protect inventoryLedger and agentHarness kernels</p>
@@ -17,60 +17,63 @@
     </ul>
     <dl data-report-meta>
       <dt>Base</dt><dd>origin/main (8f162730)</dd>
-      <dt>Head</dt><dd>codex/V26-1354-backend-maintainability-u1-dependency-guard (9f91a97c)</dd>
-      <dt>Diff fingerprint</dt><dd>799ee0df1e662a658e5bdfbbbc743f35cd825edcb28f286ed72fdc87f4965e1e</dd>
-      <dt>Source lines changed</dt><dd>576</dd>
+      <dt>Head</dt><dd>codex/V26-1354-backend-maintainability-u1-dependency-guard</dd>
+      <dt>Diff fingerprint</dt><dd>TO_BE_SET</dd>
+      <dt>Source lines changed</dt><dd>782</dd>
       <dt>Solution note</dt><dd>docs/solutions/architecture-patterns/athena-shrink-only-backend-dependency-guard-2026-08-27.md</dd>
     </dl>
   </header>
   <section data-report-section="summary">
     <h2>Executive summary</h2>
-      <p>This delivery installs a shrink-only backend dependency guard (U1) that snapshots current Convex backend dependency cycles and fails only on new violations while protecting the inventoryLedger and agentHarness kernels from importing product domains.</p>
-      <p>The guard uses a committed baseline of exact violating edges/SCC identities. Baseline drift fails until regeneration contracts it; a removed edge cannot pay for a new cycle elsewhere. Legitimate same-transaction domain helper imports (leaf helpers) remain legal via an explicit allowlist.</p>
-      <p>The check runs as `bun run dependency:check:backend`, is harness-owned, deterministic, and blocks only new violations. All 1504 harness tests pass, architecture boundary checks pass, graphify check passes, and typecheck passes.</p>
+      <p>This delivery installs a shrink-only backend dependency guard (U1) that snapshots the current Convex backend dependency graph and fails only on new violations while protecting the inventoryLedger and agentHarness kernels from importing product domains.</p>
+      <p>The guard resolves imports to the real files the runtime loads, finds dependency cycles via Tarjan's algorithm, and compares cycles and kernel-boundary edges against a committed baseline of exact identities. Baseline drift fails until regeneration contracts it; a removed edge can never pay for a new violation elsewhere. The check refuses to pass an empty scan and refuses to absorb a new violation into the baseline.</p>
+      <p>The check runs as `bun run dependency:check:backend`, is wired into the harness `convex-backend-adjacent` validation surface, and is deterministic. All harness tests pass, the mechanical gate (lint + typecheck) passes, and the change is sensor/guardrail only — no runtime behavior changed.</p>
   </section>
   <section data-report-section="problem">
     <h2>Problem</h2>
       <p>Athena&#x27;s Convex backend has grown to ~245K lines across 199 tables and 617 admitted operations. Over time, implicit dependency cycles formed between modules, making changes risky and harder to reason about.</p>
-      <p>The inventoryLedger kernel (which owns all inventory valuation, costing, and stock movement logic) was importing product domains like operations, reports, cashControls, and stockOps. The agentHarness kernel (which owns agent lifecycle, completion, evidence, and runtime contracts) had similar unwanted coupling.</p>
+      <p>The inventoryLedger kernel (which owns inventory valuation, costing, and stock movement logic) imports product domains like operations, reports, cashControls, and storeTime. The agentHarness kernel (which owns agent lifecycle, completion, evidence, and runtime contracts) has similar unwanted coupling.</p>
       <p>Without a structural guardrail, new cycles could form silently, and product-domain churn could destabilize the core transaction kernels that encode Athena&#x27;s strongest business invariants.</p>
+      <p>A first implementation attempt shipped a baseline claiming 0 cycles, but that was a false snapshot: imports were resolved to extensionless paths while graph nodes carried `.ts`/`.tsx` extensions, so no edges ever formed and cycle detection was inert. This delivery corrects the graph identity so the guard sees the real runtime graph.</p>
   </section>
   <section data-report-section="mental-model">
     <h2>Mental model</h2>
       <p>Think of the backend as a directed graph of imports. Some modules are kernels — they encode core invariants and must remain stable. Other modules are product domains — they implement features and churn more rapidly.</p>
-      <p>The guard draws a line: kernels may import platform primitives (convex/values, convex/server, generated types) and their own leaf helpers, but NOT product domains. Product domains may import kernels (that&#x27;s the normal dependency direction).</p>
-      <p>A baseline captures today&#x27;s cycles. The rule is shrink-only: the baseline can only contract over time as we refactor cycles away. New cycles are blocked. This is not a layering rewrite — it&#x27;s a ratchet that prevents regression while allowing intentional improvement.</p>
+      <p>The guard draws a line: every file inside a kernel may import platform primitives (convex/values, convex/server, generated schemas) and its own kernel-internal helpers, but NOT product domains. Product domains may import kernels (that&#x27;s the normal dependency direction).</p>
+      <p>A baseline captures today&#x27;s cycles and grandfathered violations. The rule is shrink-only: the baseline can only contract over time as we refactor cycles away, and any removal from the baseline is drift until it is explicitly regenerated. This is not a layering rewrite — it&#x27;s a ratchet that prevents regression while allowing intentional improvement.</p>
   </section>
   <section data-report-section="before-after">
     <h2>Before vs after</h2>
-      <p>Before: No structural guard existed. inventoryLedger/effects.ts imported convex/operations/inventoryMovements and convex/operations/skuActivity. inventoryLedger/corrections.ts imported convex/operationAdmission, convex/platform/operationAdmission, convex/reports/access, and convex/storeTime/operatingPeriods. These were grandfathered as known violations in the baseline.</p>
-      <p>After: A deterministic check (`scripts/convex-backend-dependency-check.ts`) scans all 737 Convex source files, builds a dependency graph, finds SCCs via Tarjan&#x27;s algorithm, and compares against the committed baseline (`scripts/convex-backend-dependency-baseline.json`). The check runs in CI and blocks on: (1) new dependency cycles, (2) new kernel violations (forbidden or not-allowed imports), (3) baseline drift (removed cycles without regeneration).</p>
-      <p>The 7 existing kernel violations in inventoryLedger are grandfathered in the baseline. They will be addressed by downstream units (U18 schema composition, U20 POS projector split, U21 catalog import split) that extract the offending logic into leaf helpers or platform modules.</p>
+      <p>Before: No structural guard existed. inventoryLedger/effects.ts imported convex/operations/inventoryMovements and convex/operations/skuActivity; inventoryLedger/corrections.ts imported convex/operationAdmission, convex/platform/operationAdmission, convex/reports/access, and convex/storeTime/operatingPeriods; inventoryLedger/commerceEffects.ts imported convex/storeTime/operatingPeriods. These 7 edges are grandfathered as known violations in the baseline.</p>
+      <p>After: A deterministic check (`scripts/convex-backend-dependency-check.ts`) scans the Convex source tree, resolves imports to concrete files (including extensionless specifiers), builds the graph, finds SCCs via Tarjan&#x27;s algorithm, detects kernel-boundary violations, and compares against the committed baseline (`scripts/convex-backend-dependency-baseline.json`). It blocks on: (1) new dependency cycles, (2) new kernel violations (forbidden or not-allowed imports), (3) baseline drift (removed cycles or removed kernel edges without regeneration), and (4) empty scans (cannot prove green).</p>
+      <p>The baseline now captures the 4 real cycles and the 7 grandfathered inventoryLedger kernel violations. The violations will be addressed by downstream units (U18 schema composition, U20 POS projector split, U21 catalog import split, U22 cash-controls consolidation) that extract the offending logic into leaf helpers or platform modules.</p>
   </section>
   <section data-report-section="changes">
     <h2>What changed</h2>
-      <p>Created: scripts/convex-backend-dependency-check.ts — Main dependency guard implementation with CLI (--update-baseline, --json, silent mode)</p>
-      <p>Created: scripts/convex-backend-dependency-check.test.ts — 6 test scenarios covering happy path, new kernel violation detection, cycle detection, baseline drift, and integration</p>
-      <p>Created: scripts/convex-backend-dependency-baseline.json — Committed baseline with 0 cycles and 7 grandfathered kernel violations</p>
-      <p>Modified: package.json — Added dependency:check:backend script</p>
-      <p>Added: docs/solutions/architecture-patterns/athena-shrink-only-backend-dependency-guard-2026-08-27.md — Solution note documenting the pattern</p>
+      <p>Created: scripts/convex-backend-dependency-check.ts — Main dependency guard implementation: comment/string-aware import extraction, real-file resolution, Tarjan SCC detection, kernel boundary checks, shrink-only baseline management, and a CLI (--update-baseline, --json, --convex-dir, --package-dir, --baseline, --help).</p>
+      <p>Created: scripts/convex-backend-dependency-check.test.ts — 9 sandbox-based tests (mkdtemp fixtures) covering every contract scenario plus a real-tree characterization test.</p>
+      <p>Created: scripts/convex-backend-dependency-baseline.json — Committed baseline: 4 real cycles and 7 grandfathered kernel violations.</p>
+      <p>Modified: package.json (root) and packages/athena-webapp/package.json — Added dependency:check:backend scripts (webapp delegates with `cd ../..`, matching the agent-sdk:check precedent).</p>
+      <p>Modified: scripts/harness-app-registry.ts — The `athena.convex-backend-adjacent` scenario now runs the guard and covers the guard&#x27;s own files; harness docs regenerated.</p>
+      <p>Added: docs/solutions/architecture-patterns/athena-shrink-only-backend-dependency-guard-2026-08-27.md — Solution note documenting the pattern.</p>
       <p>All changes are sensor/guardrail additions; no runtime behavior changed.</p>
   </section>
   <section data-report-section="validation">
     <h2>Validation and review evidence</h2>
-      <p>Mechanical checks: All harness tests pass (1504 tests). Architecture boundary checks pass for both webapp and storefront. Graphify check passes (artifacts fresh). Typecheck passes. pr:athena:prepare passes.</p>
-      <p>Test suite: All 6 new tests pass — happy path, new kernel violation detection (fixture adds product-domain import into inventoryLedger), cycle detection, baseline drift, and facade-preserving helper imports accepted.</p>
-      <p>Review evidence: Approved — execute provider review completed with 0 findings. Recorded as obligation record fd5647ba6dca05c6728f60bad849c8a6beb3548c692616ec0ded6bcd873030db.</p>
-      <p>Landed-change report: This report satisfies the compound-solution-check for &gt;300 source lines changed.</p>
-      <p>Deployment: Not applicable — sensor/guardrail only, no runtime behavior change. No production deploy needed.</p>
+      <p>Test suite: All 9 sandbox-based tests pass — real-tree characterization, empty-scan rejection, extensionless cycle detection with exact members, cycle-swap rejection (new-cycle + baseline-drift), kernel-edge drift + regenerated contraction + reintroduction failure, shrink-only update refusal, leaf-to-facade rejection with facade-preserving legal imports, comment/string-quoted import tolerance, and exact-edge kernel violation reporting.</p>
+      <p>Mechanical checks: pr:athena:prepare (per-package lint + project typecheck) passes on the prepared candidate.</p>
+      <p>Review evidence: execute-provider review will be recorded against the final prepared candidate before merge.</p>
+      <p>Landed-change report: This report satisfies the landed-change-report check for &gt;300 source lines changed and carries the current deliverable diff fingerprint.</p>
+      <p>Deployment: Not applicable — sensor/guardrail only, no runtime behavior change.</p>
       <p>Root alignment: Pending — will fast-forward to origin/main after merge.</p>
   </section>
   <section data-report-section="guidance">
     <h2>Next-time workflow</h2>
-      <p>To add a new protected kernel: add an entry to PROTECTED_KERNELS in convex-backend-dependency-check.ts with root, allowedImports, forbiddenImports, leafHelpers, and excludedPaths.</p>
+      <p>To add a new protected kernel: add an entry to PROTECTED_KERNELS in convex-backend-dependency-check.ts with root, allowedImports, forbiddenImports, and excludedPaths. Every file under the root is checked — no name-based exemption.</p>
       <p>If a new cycle is detected: refactor to break it (move shared logic to a leaf helper or platform module) rather than updating the baseline. Use --update-baseline only after intentional cycle removal.</p>
-      <p>If a kernel violation is detected: the imported logic likely belongs in a leaf helper (only generated types + convex/values) or a shared platform module. Do not add product domains to allowedImports.</p>
-      <p>Downstream units that will reduce baseline violations: U18 (schema composition), U20 (POS projector split), U21 (catalog import split), U22 (cash-controls consolidation). These will extract the offending logic into proper leaf helpers.</p>
+      <p>If a kernel violation is detected: the imported logic belongs in a leaf helper (legal imports only) or a shared platform module. Do not add product domains to allowedImports — forbidden prefixes take precedence over allowed entries by design.</p>
+      <p>Removed cycle or kernel edge without regeneration is baseline drift and fails the check; regeneration is the only way the baseline changes, and it only ever contracts it.</p>
+      <p>Downstream units that will reduce baseline violations: U18 (schema composition), U20 (POS projector split), U21 (catalog import split), U22 (cash-controls consolidation).</p>
       <p>The baseline file (scripts/convex-backend-dependency-baseline.json) is the contract — it should only shrink over time.</p>
   </section>
   <section data-report-section="key-files">
@@ -78,11 +81,12 @@
     <table>
       <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
       <tbody>
-        <tr><td><code>scripts/convex-backend-dependency-check.ts</code></td><td>Main dependency guard implementation — scans Convex source, builds graph, finds SCCs, checks kernels, compares baseline, emits violations</td></tr>
-        <tr><td><code>scripts/convex-backend-dependency-check.test.ts</code></td><td>Test suite — 6 scenarios covering happy path, new violation detection, cycle detection, baseline drift, and integration</td></tr>
-        <tr><td><code>scripts/convex-backend-dependency-baseline.json</code></td><td>Committed baseline — 0 cycles, 7 grandfathered kernel violations in inventoryLedger (to be addressed by U18/U20/U21/U22)</td></tr>
-        <tr><td><code>package.json</code></td><td>Added dependency:check:backend script for CLI access</td></tr>
-        <tr><td><code>docs/solutions/architecture-patterns/athena-shrink-only-backend-dependency-guard-2026-08-27.md</code></td><td>Solution note documenting the shrink-only baseline pattern, kernel protection rules, and prevention strategies</td></tr>
+        <tr><td><code>scripts/convex-backend-dependency-check.ts</code></td><td>Main dependency guard implementation — comment/string-aware extraction, real-file resolution, Tarjan SCCs, kernel checks, shrink-only baseline, CLI</td></tr>
+        <tr><td><code>scripts/convex-backend-dependency-check.test.ts</code></td><td>Test suite — 9 sandbox-based scenarios + real-tree characterization, run by harness:test</td></tr>
+        <tr><td><code>scripts/convex-backend-dependency-baseline.json</code></td><td>Committed baseline — 4 real cycles and 7 grandfathered inventoryLedger kernel violations</td></tr>
+        <tr><td><code>scripts/harness-app-registry.ts</code></td><td>Wired the guard into the convex-backend-adjacent validation surface (runs when Convex or guard files change)</td></tr>
+        <tr><td><code>package.json</code> / <code>packages/athena-webapp/package.json</code></td><td>Added dependency:check:backend scripts</td></tr>
+        <tr><td><code>docs/solutions/architecture-patterns/athena-shrink-only-backend-dependency-guard-2026-08-27.md</code></td><td>Solution note documenting the shrink-only baseline pattern and kernel protection rules</td></tr>
       </tbody>
     </table>
   </section>
@@ -94,11 +98,11 @@
         <p data-quiz-prompt>What is the &#x27;shrink-only&#x27; property of the dependency baseline?</p>
         <ol data-quiz-options>
           <li>The baseline can only grow over time as new cycles are discovered</li>
-          <li data-quiz-correct>The baseline can only shrink — removed edges cannot pay for new cycles elsewhere</li>
+          <li data-quiz-correct>The baseline can only shrink — removed edges cannot pay for new cycles elsewhere, and regeneration refuses to absorb new violations</li>
           <li>The baseline is regenerated on every CI run</li>
           <li>The baseline tracks only cycle counts, not exact edges</li>
         </ol>
-        <p data-quiz-explanation>The baseline captures exact violating edges/SCC identities. When a cycle is removed, the baseline contracts and that edge cannot be reused to justify a different new cycle. This prevents regression while allowing intentional improvement.</p>
+        <p data-quiz-explanation>The baseline captures exact cycle identities and exact kernel-violation edges. Removals are drift until regenerated, and --update-baseline refuses to persist any new cycle or kernel violation. This prevents regression while allowing intentional improvement.</p>
       </li>
       <li data-quiz-question>
         <p data-quiz-prompt>Which two kernels are protected by U1?</p>
@@ -111,6 +115,16 @@
         <p data-quiz-explanation>U1 protects inventoryLedger (inventory valuation, costing, stock movements) and agentHarness (agent lifecycle, completion, evidence, runtime contracts) — the two most critical transaction kernels encoding Athena&#x27;s core business invariants.</p>
       </li>
       <li data-quiz-question>
+        <p data-quiz-prompt>Why did the first implementation falsely report 0 cycles?</p>
+        <ol data-quiz-options>
+          <li>The scan skipped most Convex source files</li>
+          <li data-quiz-correct>Imports were resolved to extensionless paths while graph nodes carried .ts/.tsx extensions, so no edges ever formed and cycle detection was inert</li>
+          <li>Tarjan&#x27;s algorithm was not implemented</li>
+          <li>The baseline was regenerated before each run</li>
+        </ol>
+        <p data-quiz-explanation>Graph node identity and resolved import targets must use the same form (real file extensions). The fix resolves every relative specifier to the concrete file the runtime loads, so edges — and therefore SCCs — reflect the real graph.</p>
+      </li>
+      <li data-quiz-question>
         <p data-quiz-prompt>What happens when a kernel violation is detected in CI?</p>
         <ol data-quiz-options>
           <li>The build passes with a warning</li>
@@ -118,27 +132,27 @@
           <li>The violation is auto-fixed by moving code to a leaf helper</li>
           <li>The baseline is automatically updated</li>
         </ol>
-        <p data-quiz-explanation>The guard is deterministic and harness-owned — it fails on new kernel violations (forbidden imports or not-allowed imports) and blocks the push. The baseline must be regenerated with --update-baseline only after intentional refactoring.</p>
+        <p data-quiz-explanation>The guard is deterministic and harness-owned — it fails on new kernel violations (forbidden or not-allowed imports) and blocks the push. The baseline must be regenerated with --update-baseline only after intentional refactoring, and only for shrink-only changes.</p>
       </li>
       <li data-quiz-question>
-        <p data-quiz-prompt>Why are leaf helpers explicitly allowed for kernel modules?</p>
+        <p data-quiz-prompt>Are kernel helper files exempt from the boundary check?</p>
         <ol data-quiz-options>
-          <li>They are test files that don&#x27;t affect runtime</li>
-          <li data-quiz-correct>They only import generated types and convex/values, so they cannot create cycles back into the kernel</li>
-          <li>They are part of the product domain layer</li>
-          <li>They are excluded from the scan entirely</li>
+          <li>Yes — helpers are trusted by definition</li>
+          <li data-quiz-correct>No — every file under a kernel root is checked; helpers pass only because their imports are legal, never because they are exempted</li>
+          <li>Only .tsx helpers are exempt</li>
+          <li>Only files matching *.kernel.ts are checked</li>
         </ol>
-        <p data-quiz-explanation>Leaf helpers (like convex/inventoryLedger/valuation, convex/agentHarness/provisionalNarrative) only import generated server/data-model types and convex/values. They never import sibling kernel modules, so they cannot create cycles. This preserves legitimate same-transaction composition.</p>
+        <p data-quiz-explanation>There is no name-based exemption. A helper that reaches into a product facade is a leaf-to-facade violation and is flagged exactly like a kernel root import would be. Only excluded subdirectories (profiles/, evals/, agentRuntime/, programRuntime/, _generated/) and test files fall outside the kernel surface.</p>
       </li>
       <li data-quiz-question>
-        <p data-quiz-prompt>What command regenerates the baseline after intentional cycle removal?</p>
+        <p data-quiz-prompt>What command regenerates the baseline after an intentional shrink?</p>
         <ol data-quiz-options>
           <li>bun run dependency:check:backend --regenerate</li>
           <li data-quiz-correct>bun run dependency:check:backend --update-baseline</li>
           <li>bun run graphify:rebuild</li>
           <li>bun run pr:athena:prepare</li>
         </ol>
-        <p data-quiz-explanation>The --update-baseline flag regenerates the baseline JSON with the current cycles and kernel violations. This should only be used after intentional refactoring that removes cycles, not to paper over new violations.</p>
+        <p data-quiz-explanation>The --update-baseline flag regenerates the baseline JSON from the current graph, but only when every difference is a removal. On an empty scan, or when new cycles or kernel violations appear, it refuses to write.</p>
       </li>
       <li data-quiz-question>
         <p data-quiz-prompt>Which downstream units will address the 7 grandfathered inventoryLedger violations?</p>
@@ -153,51 +167,41 @@
       <li data-quiz-question>
         <p data-quiz-prompt>What validation runs as part of the harness test suite for this change?</p>
         <ol data-quiz-options>
-          <li>Only the 6 new unit tests</li>
-          <li data-quiz-correct>All 1504 harness tests including the 6 new ones</li>
+          <li>Only the new unit tests</li>
+          <li data-quiz-correct>All harness tests including the new dependency-check tests (the file is auto-discovered by harness:test over scripts/*.test.ts)</li>
           <li>Only architecture boundary checks</li>
           <li>Only the dependency check itself</li>
         </ol>
-        <p data-quiz-explanation>The new test file is automatically picked up by harness:test (which runs all scripts/*.test.ts). All 1504 tests pass, including the 6 new dependency check tests.</p>
+        <p data-quiz-explanation>The new test file is automatically picked up by harness:test, which runs every scripts/*.test.ts file. The dependency check is also wired into the convex-backend-adjacent scenario so Convex or guard-file edits trigger it.</p>
       </li>
       <li data-quiz-question>
-        <p data-quiz-prompt>What is the delivery status of this change?</p>
-        <ol data-quiz-options>
-          <li>Merged and deployed</li>
-          <li data-quiz-correct>Delivery candidate — awaiting review evidence and landed-change report (this report)</li>
-          <li>Blocked by failing tests</li>
-          <li>Ready for production deploy</li>
-        </ol>
-        <p data-quiz-explanation>This is a delivery candidate. The pr:athena gate is currently blocked on review.green (no review evidence yet) and this landed-change report. The change is sensor/guardrail only — no runtime behavior change, no production deploy needed.</p>
-      </li>
-      <li data-quiz-question>
-        <p data-quiz-prompt>How does the guard distinguish between kernel modules and non-kernel modules in agentHarness?</p>
+        <p data-quiz-prompt>How does the guard distinguish kernel modules from non-kernel modules in agentHarness?</p>
         <ol data-quiz-options>
           <li>By file naming convention (.kernel.ts suffix)</li>
-          <li data-quiz-correct>By directory path and exclusion rules (profiles/, evals/, agentRuntime/, _generated/, test files)</li>
+          <li data-quiz-correct>By directory path and explicit exclusion rules (profiles/, evals/, agentRuntime/, programRuntime/, _generated/) plus test-file detection</li>
           <li>By a special JSDoc annotation</li>
           <li>By checking if they import convex/server</li>
         </ol>
-        <p data-quiz-explanation>The isKernelModule function checks: path starts with convex/agentHarness/, not in excluded paths (profiles/, evals/, agentRuntime/, _generated/), not a test file (*.test.ts, *.testPorts.ts). This mirrors the pattern from importBoundary.test.ts.</p>
+        <p data-quiz-explanation>The isKernelModule check matches the kernel root prefix, subtracts the named excluded subdirectories, and excludes test files. Everything else under the root is a kernel module and is checked.</p>
       </li>
       <li data-quiz-question>
         <p data-quiz-prompt>What happens if a developer removes one known cycle but adds a different one?</p>
         <ol data-quiz-options>
           <li>The check passes because the cycle count is the same</li>
-          <li data-quiz-correct>The check fails because the baseline tracks exact edge identities, not counts</li>
+          <li data-quiz-correct>The check fails — the new cycle is reported and the removed cycle is baseline drift</li>
           <li>The baseline is silently updated</li>
           <li>Only a warning is emitted</li>
         </ol>
-        <p data-quiz-explanation>The baseline stores exact violating edges/SCC identities (not counts). Removing one cycle and adding another produces a new cycle not in the baseline, which fails the check. This prevents cycle swapping.</p>
+        <p data-quiz-explanation>The baseline stores exact cycle identities, not counts. A new cycle not in the baseline fails as new-cycle, and the removed cycle fails as baseline-drift until regenerated. Cycle swapping is impossible.</p>
       </li>
     </ol>
   </section>
   <section data-report-section="subagent-evidence">
     <h2>Subagent evidence</h2>
     <dl>
-      <dt>Session context (ce-session-historian)</dt><dd>Identified V26-1353 epic context, U1 scope from plan, and prior Linear issues. No prior sessions on this specific branch — this is the first implementation of the dependency guard.</dd>
-      <dt>Delivered diff (explorer)</dt><dd>Analyzed 4 new files (check script, test, baseline, solution note) and 1 modified file (package.json). Confirmed 576 source lines changed, all sensor/guardrail additions with no runtime behavior change. Verified test suite passes and mechanical checks pass.</dd>
-      <dt>Quiz/report reviewer (ce-coherence-reviewer)</dt><dd>Reviewed report for comprehension quality. Verified all claims trace to git diff and source files. Quiz questions test mental model, failure boundaries, validation, and next-time guidance. Pass threshold 8/10 is appropriate for a structural sensor addition.</dd>
+      <dt>Session context (ce-session-historian)</dt><dd>Identified V26-1353 epic context, U1 scope from the plan, and the delivery state: an earlier implementation commit shipped a false 0-cycle baseline (extensionless vs .ts path identity mismatch), which a corrective rewrite in the working tree addresses. No prior merged PR exists for this branch.</dd>
+      <dt>Delivered diff (explorer)</dt><dd>Analyzed the corrected check script (838 lines), 9 sandbox-based tests plus real-tree characterization, the regenerated baseline (4 cycles, 7 kernel violations), registry wiring, and both package.json script additions. Confirmed 782 source lines changed, sensor/guardrail only.</dd>
+      <dt>Quiz/report reviewer (ce-coherence-reviewer)</dt><dd>Reviewed report for comprehension quality. Verified claims trace to git diff and source files. Quiz questions test mental model, failure boundaries, validation, and next-time guidance; the cycle-swap and leaf-to-facade questions lock in the corrected graph identity that the first draft missed.</dd>
     </dl>
   </section>
 </article>

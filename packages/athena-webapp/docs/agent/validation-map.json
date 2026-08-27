@@ -926,12 +926,19 @@
         "packages/athena-webapp/scripts/convex-audit.sh",
         "packages/athena-webapp/scripts/convex-lint-changed.sh",
         "packages/athena-webapp/scripts/convexPaginationAntiPatternCheck.py",
+        "packages/athena-webapp/scripts/convex-backend-dependency-check.ts",
+        "packages/athena-webapp/scripts/convex-backend-dependency-check.test.ts",
+        "packages/athena-webapp/scripts/convex-backend-dependency-baseline.json",
         "packages/athena-webapp/scripts/empty-table.json",
         "packages/athena-webapp/scripts/purge-reporting-dev.sh",
         "packages/athena-webapp/src/routes/_authed",
         "packages/athena-webapp/src/main.tsx"
       ],
       "commands": [
+        {
+          "kind": "script",
+          "script": "dependency:check:backend"
+        },
         {
           "kind": "script",
           "script": "test"
