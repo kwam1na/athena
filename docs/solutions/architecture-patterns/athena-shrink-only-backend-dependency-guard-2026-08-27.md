@@ -95,8 +95,8 @@ Key decisions baked into the kernel check:
 
 ### 4. Integration
 
-- Added `dependency:check:backend` to the root `package.json` and to `packages/athena-webapp/package.json` (delegating with `cd ../.. && bun scripts/...`), matching the `agent-sdk:check` precedent.
-- Wired the guard into the `athena.convex-backend-adjacent` harness scenario: the check runs whenever Convex sources **or the guard's own files** change, and the scenario note explains the shrink-only contract.
+- Added `dependency:check:backend` to the root `package.json`.
+- Wired the guard into the `athena.convex-backend-adjacent` harness scenario as a raw repo-root command (`bun run dependency:check:backend`, the same pattern `agent-sdk:check` uses): the check runs whenever Convex sources change. The scenario note states the shrink-only contract. A `script`-kind command was rejected because scenario `script` commands resolve against the webapp package manifest while the guard is a repo-root script, and the harness contract fixtures validate exactly that boundary.
 - The test file (`scripts/convex-backend-dependency-check.test.ts`) runs in the `harness:test` suite.
 - No runtime behavior changed — sensor/guardrail only.
 
@@ -136,8 +136,8 @@ Tests build ephemeral graphs under `mkdtemp` so error-path scenarios are exercis
 - `scripts/convex-backend-dependency-check.ts` — Main check script with CLI (defaults for convex dir and baseline path; `--update-baseline`, `--json`, `--convex-dir`, `--package-dir`, `--baseline`, `--help`)
 - `scripts/convex-backend-dependency-check.test.ts` — Test suite (9 sandbox-based scenarios + real-tree characterization)
 - `scripts/convex-backend-dependency-baseline.json` — Committed baseline (4 real cycles, 7 grandfathered kernel violations)
-- `package.json` + `packages/athena-webapp/package.json` — `dependency:check:backend` scripts
-- `scripts/harness-app-registry.ts` — `athena.convex-backend-adjacent` scenario now includes the guard command and its files
+- `package.json` — `dependency:check:backend` script
+- `scripts/harness-app-registry.ts` — `athena.convex-backend-adjacent` scenario now includes the guard command and document the shrink-only contract
 
 ## Usage
 

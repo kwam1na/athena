@@ -19,7 +19,6 @@
     "lint:frontend:changed": "bash ./scripts/frontend-lint-changed.sh",
     "lint:convex": "eslint convex && python3 scripts/convexPaginationAntiPatternCheck.py .",
     "lint:convex:changed": "bash ./scripts/convex-lint-changed.sh",
-    "dependency:check:backend": "cd ../.. && bun scripts/convex-backend-dependency-check.ts",
     "audit:convex": "bash ./scripts/convex-audit.sh",
     "test": "vitest run --maxWorkers=4",
     "test:watch": "vitest",

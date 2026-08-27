@@ -53,8 +53,8 @@
       <p>Created: scripts/convex-backend-dependency-check.ts — Main dependency guard implementation: comment/string-aware import extraction, real-file resolution, Tarjan SCC detection, kernel boundary checks, shrink-only baseline management, and a CLI (--update-baseline, --json, --convex-dir, --package-dir, --baseline, --help).</p>
       <p>Created: scripts/convex-backend-dependency-check.test.ts — 9 sandbox-based tests (mkdtemp fixtures) covering every contract scenario plus a real-tree characterization test.</p>
       <p>Created: scripts/convex-backend-dependency-baseline.json — Committed baseline: 4 real cycles and 7 grandfathered kernel violations.</p>
-      <p>Modified: package.json (root) and packages/athena-webapp/package.json — Added dependency:check:backend scripts (webapp delegates with `cd ../..`, matching the agent-sdk:check precedent).</p>
-      <p>Modified: scripts/harness-app-registry.ts — The `athena.convex-backend-adjacent` scenario now runs the guard and covers the guard&#x27;s own files; harness docs regenerated.</p>
+      <p>Modified: package.json (root) — Added the dependency:check:backend script.</p>
+      <p>Modified: scripts/harness-app-registry.ts — The `athena.convex-backend-adjacent` scenario now runs the guard (raw repo-root command, the same pattern `agent-sdk:check` uses) whenever Convex sources change; harness docs regenerated.</p>
       <p>Added: docs/solutions/architecture-patterns/athena-shrink-only-backend-dependency-guard-2026-08-27.md — Solution note documenting the pattern.</p>
       <p>All changes are sensor/guardrail additions; no runtime behavior changed.</p>
   </section>
@@ -85,7 +85,7 @@
         <tr><td><code>scripts/convex-backend-dependency-check.test.ts</code></td><td>Test suite — 9 sandbox-based scenarios + real-tree characterization, run by harness:test</td></tr>
         <tr><td><code>scripts/convex-backend-dependency-baseline.json</code></td><td>Committed baseline — 4 real cycles and 7 grandfathered inventoryLedger kernel violations</td></tr>
         <tr><td><code>scripts/harness-app-registry.ts</code></td><td>Wired the guard into the convex-backend-adjacent validation surface (runs when Convex or guard files change)</td></tr>
-        <tr><td><code>package.json</code> / <code>packages/athena-webapp/package.json</code></td><td>Added dependency:check:backend scripts</td></tr>
+        <tr><td><code>package.json</code></td><td>Added the dependency:check:backend script</td></tr>
         <tr><td><code>docs/solutions/architecture-patterns/athena-shrink-only-backend-dependency-guard-2026-08-27.md</code></td><td>Solution note documenting the shrink-only baseline pattern and kernel protection rules</td></tr>
       </tbody>
     </table>

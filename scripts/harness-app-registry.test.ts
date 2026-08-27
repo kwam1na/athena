@@ -362,6 +362,7 @@ describe("HARNESS_APP_REGISTRY", () => {
         "src/main.tsx",
       ],
       commands: [
+        { kind: "raw", command: "bun run dependency:check:backend" },
         { kind: "script", script: "test" },
         { kind: "script", script: "audit:convex" },
         { kind: "script", script: "lint:convex:changed" },
@@ -372,6 +373,10 @@ describe("HARNESS_APP_REGISTRY", () => {
       ],
     });
     expect(backendScenario?.note).toContain("Convex audit pair");
+    expect(backendScenario?.note).toContain(
+      "bun run dependency:check:backend",
+    );
+    expect(backendScenario?.note).toContain("shrink-only");
     expect(backendScenario?.note).toContain("assertConformsToExportedReturns");
     expect(backendScenario?.note).toContain(
       "loose `exportReturns()` string checks do not prove the production return contract",
