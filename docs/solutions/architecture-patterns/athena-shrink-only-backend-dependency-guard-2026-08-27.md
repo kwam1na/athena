@@ -21,7 +21,7 @@ related_components:
   - "inventoryLedger"
   - "agentHarness"
   - "operationAdmission"
-delivery_diff_fingerprint: "31f6298fb7822258122c0429432589086c7c878a62b5b8e42f076f09d3c439a4"
+delivery_diff_fingerprint: "21f6fa1173c6c9c5efaa220aede09460a2129f35fdfd2c49ce5e92d32d964dd7"
 ---
 
 ## Problem
