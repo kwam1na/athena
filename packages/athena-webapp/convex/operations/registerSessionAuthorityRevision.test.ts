@@ -7,6 +7,7 @@ import {
   insertRegisterSessionWithAuthority,
   patchRegisterSessionWithAuthority,
   replaceRegisterSessionWithAuthority,
+  transferRegisterSessionTerminalAuthority,
 } from "./registerSessionAuthorityRevision";
 
 describe("register session lifecycle authority revision", () => {
@@ -139,9 +140,12 @@ describe("register session lifecycle authority revision", () => {
       },
     };
 
-    await insertRegisterSessionWithAuthority(ctx as never, {
-      status: "open",
-    } as never);
+    await insertRegisterSessionWithAuthority(
+      ctx as never,
+      {
+        status: "open",
+      } as never,
+    );
     await patchRegisterSessionWithAuthority(
       ctx as never,
       "register-session-1" as never,
@@ -149,8 +153,45 @@ describe("register session lifecycle authority revision", () => {
     );
 
     expect(writes).toEqual([
-      expect.objectContaining({ lifecycleAuthorityRevision: 1, status: "open" }),
-      expect.objectContaining({ lifecycleAuthorityRevision: 5, status: "closing" }),
+      expect.objectContaining({
+        lifecycleAuthorityRevision: 1,
+        status: "open",
+      }),
+      expect.objectContaining({
+        lifecycleAuthorityRevision: 5,
+        status: "closing",
+      }),
+    ]);
+  });
+
+  it("advances authority when an active session moves to a replacement terminal", async () => {
+    const patches: unknown[] = [];
+    const ctx = {
+      db: {
+        async get() {
+          return {
+            lifecycleAuthorityRevision: 4,
+            status: "active",
+            terminalId: "terminal-old",
+          };
+        },
+        async patch(_table: string, _id: string, value: unknown) {
+          patches.push(value);
+        },
+      },
+    };
+
+    await transferRegisterSessionTerminalAuthority(
+      ctx as never,
+      "register-session-1" as never,
+      "terminal-new" as never,
+    );
+
+    expect(patches).toEqual([
+      {
+        lifecycleAuthorityRevision: 5,
+        terminalId: "terminal-new",
+      },
     ]);
   });
 });

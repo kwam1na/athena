@@ -394,6 +394,15 @@ const terminalSyncReviewSummaryReturnValidator = v.object({
 });
 
 const terminalSyncEvidenceReturnValidator = v.object({
+  terminalIdentityHandoffCandidate: v.optional(
+    v.object({
+      canonicalRegisterSessionId: v.id("registerSession"),
+      countedCash: v.number(),
+      localRegisterSessionId: v.string(),
+      previousTerminalId: v.id("posTerminal"),
+      replacementTerminalId: v.id("posTerminal"),
+    }),
+  ),
   latestEvent: v.union(
     v.object({
       localEventId: v.string(),

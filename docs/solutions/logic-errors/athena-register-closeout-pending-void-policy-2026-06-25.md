@@ -23,6 +23,7 @@ related:
   - docs/solutions/logic-errors/athena-pos-completed-transaction-void-reversal-2026-05-21.md
   - docs/solutions/logic-errors/athena-pos-closeout-review-only-lifecycle-2026-06-25.md
   - docs/solutions/architecture/athena-pos-register-lifecycle-policy-2026-06-23.md
+delivery_diff_fingerprint: 01f8e2b27da7a99cd65ee7111ab6ea4301fd61406e21cdff7636194077623cda
 ---
 
 # Athena Register Closeout Pending Void Policy
@@ -48,6 +49,8 @@ closeout:
 - Sales require an `open` or `active` drawer.
 - Approved completed-sale void application allows `open`, `active`, and
   `closing`.
+- Completed-sale void request initiation uses that same void-applicable policy,
+  so a reopened closeout can create the manager approval request before replay.
 - `closed`, `closeout_rejected`, wrong-store, wrong-terminal, and missing
   session states still block void application.
 - Pending `pos_transaction_void` approvals are a final-close blocker, not a
@@ -76,6 +79,9 @@ or reviewer ids in the cash-controls register summary.
   finalization.
 - Keep approved void application policy in shared lifecycle helpers rather than
   reusing sale usability in command branches.
+- Apply the shared void-applicable policy at both request initiation and
+  approval replay, and derive transaction-detail eligibility from the same
+  contract instead of adding a separate `closing` veto in the UI.
 - Recompute closeout review at finalization after pending void approvals settle,
   because approved voids can change expected cash after the original count.
 - Add stale-client tests for UI lockouts that also need server enforcement, such

@@ -218,6 +218,13 @@ export type TerminalSyncConflict = {
 };
 
 export type TerminalSyncEvidence = {
+  terminalIdentityHandoffCandidate?: {
+    canonicalRegisterSessionId: Id<"registerSession"> | string;
+    countedCash: number;
+    previousTerminalId: Id<"posTerminal"> | string;
+    localRegisterSessionId: string;
+    replacementTerminalId: Id<"posTerminal"> | string;
+  } | null;
   acceptedCount?: number;
   acceptedThroughSequence?: number | null;
   conflictedCount?: number;

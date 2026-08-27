@@ -77,6 +77,7 @@ export type RegisterSessionVoidApplicationStatus =
     };
 
 export function getRegisterSessionVoidApplicationStatus(input: {
+  previousTerminalIds?: readonly string[];
   registerSession?: RegisterSessionLifecycleScopedSession | null;
   storeId: string;
   terminalId: string;
@@ -91,7 +92,11 @@ export function getRegisterSessionVoidApplicationStatus(input: {
     return { allowed: false, reason: "wrong_store" };
   }
 
-  if (!registerSession.terminalId || registerSession.terminalId !== input.terminalId) {
+  if (
+    !registerSession.terminalId ||
+    (registerSession.terminalId !== input.terminalId &&
+      !input.previousTerminalIds?.includes(input.terminalId))
+  ) {
     return { allowed: false, reason: "wrong_terminal" };
   }
 

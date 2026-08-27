@@ -22,10 +22,8 @@ export function buildRegisterSessionAuthorityPatch<
   >,
   patch: T,
 ): T & { lifecycleAuthorityRevision?: number } {
-  const {
-    lifecycleAuthorityRevision: _callerRevision,
-    ...safePatch
-  } = patch as T & { lifecycleAuthorityRevision?: number };
+  const { lifecycleAuthorityRevision: _callerRevision, ...safePatch } =
+    patch as T & { lifecycleAuthorityRevision?: number };
   if (safePatch.status === undefined || safePatch.status === current.status) {
     return safePatch as T;
   }
@@ -63,6 +61,23 @@ export async function patchRegisterSessionWithAuthority(
   );
 }
 
+export async function transferRegisterSessionTerminalAuthority(
+  ctx: MutationCtx,
+  registerSessionId: Id<"registerSession">,
+  terminalId: Id<"posTerminal">,
+) {
+  const current = await ctx.db.get("registerSession", registerSessionId);
+  if (!current) {
+    throw new Error("Register session not found.");
+  }
+  if (current.terminalId === terminalId) return;
+
+  await ctx.db.patch("registerSession", registerSessionId, {
+    terminalId,
+    lifecycleAuthorityRevision: (current.lifecycleAuthorityRevision ?? 0) + 1,
+  });
+}
+
 export async function deleteRegisterSessionWithAuthority(
   ctx: MutationCtx,
   registerSessionId: Id<"registerSession">,
@@ -81,10 +96,7 @@ export async function replaceRegisterSessionWithAuthority(
   if (!current) {
     throw new Error("Register session not found.");
   }
-  const {
-    lifecycleAuthorityRevision: _capturedRevision,
-    ...safeValue
-  } = value;
+  const { lifecycleAuthorityRevision: _capturedRevision, ...safeValue } = value;
   const lifecycleAuthorityRevision =
     safeValue.status === current.status
       ? (current.lifecycleAuthorityRevision ?? 0)

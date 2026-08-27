@@ -4,9 +4,9 @@ import {
   isRegisterCloseoutReviewConflict,
   REGISTER_CLOSEOUT_VARIANCE_SYNC_REVIEW_SUMMARY,
 } from "../../../../shared/registerSessionLifecyclePolicy";
+import { isSettledPosLocalSyncRejectionCode } from "../../../../shared/posLocalSyncContract";
 
 const SYNC_CONFLICT_LIMIT = 500;
-const MANAGER_REJECTED_SYNC_REVIEW_CODE = "manager_rejected";
 const SYNCED_SALE_INVENTORY_REVIEW_WORK_ITEM_TYPE =
   "synced_sale_inventory_review";
 export const REGISTER_NOT_OPEN_SYNC_REVIEW_SUMMARY =
@@ -990,7 +990,7 @@ export async function listOpenLocalSyncConflictsByRegisterSessionWithCompletenes
       if (
         options.includeRejectedEvidence &&
         syncEvent?.status === "rejected" &&
-        syncEvent.rejectionCode !== MANAGER_REJECTED_SYNC_REVIEW_CODE
+        !isSettledPosLocalSyncRejectionCode(syncEvent.rejectionCode)
       ) {
         return {
           ...conflict,
@@ -1048,7 +1048,7 @@ export async function listOpenLocalSyncConflictsByRegisterSessionWithCompletenes
   );
   if (options.includeRejectedEvidence) {
     for (const event of rejectedEvents) {
-      if (event.rejectionCode === MANAGER_REJECTED_SYNC_REVIEW_CODE) continue;
+      if (isSettledPosLocalSyncRejectionCode(event.rejectionCode)) continue;
 
       const key = [event.terminalId, event.localEventId].join(":");
       if (includedConflictKeys.has(key)) continue;

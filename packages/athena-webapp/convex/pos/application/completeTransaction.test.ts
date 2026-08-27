@@ -221,6 +221,7 @@ function createVoidCtx(overrides?: {
   completedDailyCloses?: unknown[];
   inventoryMovements?: unknown[];
   insert?: ReturnType<typeof vi.fn>;
+  operationalEvents?: unknown[];
   patch?: ReturnType<typeof vi.fn>;
   paymentAllocations?: unknown[];
   pendingCheckoutItems?: unknown[];
@@ -250,7 +251,9 @@ function createVoidCtx(overrides?: {
       insert:
         overrides?.insert ??
         vi.fn(async (tableName: string) =>
-          tableName === "approvalRequest" ? "approval-request-1" : `${tableName}-1`,
+          tableName === "approvalRequest"
+            ? "approval-request-1"
+            : `${tableName}-1`,
         ),
       patch: overrides?.patch ?? vi.fn(),
       query: vi.fn((tableName: string) => ({
@@ -263,11 +266,13 @@ function createVoidCtx(overrides?: {
                 ? (overrides?.completedDailyCloses ?? [])
                 : tableName === "approvalRequest"
                   ? approvalRequests
-                : tableName === "inventoryMovement"
-                  ? (overrides?.inventoryMovements ?? [])
-                : tableName === "paymentAllocation"
-                  ? (overrides?.paymentAllocations ?? [])
-                : [],
+                  : tableName === "inventoryMovement"
+                    ? (overrides?.inventoryMovements ?? [])
+                    : tableName === "paymentAllocation"
+                      ? (overrides?.paymentAllocations ?? [])
+                      : tableName === "operationalEvent"
+                        ? (overrides?.operationalEvents ?? [])
+                        : [],
             ),
           take: vi
             .fn()
@@ -276,11 +281,13 @@ function createVoidCtx(overrides?: {
                 ? (overrides?.completedDailyCloses ?? [])
                 : tableName === "approvalRequest"
                   ? approvalRequests
-                : tableName === "inventoryMovement"
-                  ? (overrides?.inventoryMovements ?? [])
-                : tableName === "paymentAllocation"
-                  ? (overrides?.paymentAllocations ?? [])
-                : [],
+                  : tableName === "inventoryMovement"
+                    ? (overrides?.inventoryMovements ?? [])
+                    : tableName === "paymentAllocation"
+                      ? (overrides?.paymentAllocations ?? [])
+                      : tableName === "operationalEvent"
+                        ? (overrides?.operationalEvents ?? [])
+                        : [],
             ),
         })),
       })),
@@ -410,11 +417,11 @@ describe("voidTransaction", () => {
     const ctx = createVoidCtx({
       pendingCheckoutItems: [
         {
-	          _id: "pending-1",
-	          evidence: {
-	            totalQuantitySold: 4,
-	            transactionCount: 1,
-	          },
+          _id: "pending-1",
+          evidence: {
+            totalQuantitySold: 4,
+            transactionCount: 1,
+          },
           status: "pending_review",
           storeId: "store-1",
         },
@@ -478,6 +485,51 @@ describe("voidTransaction", () => {
           label: "Transaction #POS-0001",
           type: "pos_transaction",
         },
+      }),
+    );
+    expectNoVoidBusinessSideEffects();
+    expect(ctx.runMutation).not.toHaveBeenCalled();
+  });
+
+  it("creates a void approval request while the register closeout is open for correction", async () => {
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-1",
+      status: "closing",
+      storeId: "store-1",
+      terminalId: "terminal-2",
+    } as never);
+    const ctx = createVoidCtx({
+      operationalEvents: [
+        {
+          eventType: "register_session_terminal_identity_handed_off",
+          metadata: { previousTerminalId: "terminal-1" },
+        },
+      ],
+    });
+
+    await expect(
+      voidTransaction(ctx as never, {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        reason: "Duplicate sale",
+        transactionId: "txn-1" as Id<"posTransaction">,
+      }),
+    ).resolves.toMatchObject({
+      kind: "approval_required",
+      approval: {
+        action: { key: "pos.transaction.void" },
+        requiredRole: "manager",
+        subject: {
+          id: "txn-1",
+          type: "pos_transaction",
+        },
+      },
+    });
+    expect(ctx.db.insert).toHaveBeenCalledWith(
+      "approvalRequest",
+      expect.objectContaining({
+        registerSessionId: "register-1",
+        requestType: "pos_transaction_void",
+        subjectId: "txn-1",
       }),
     );
     expectNoVoidBusinessSideEffects();
@@ -707,10 +759,10 @@ describe("voidTransaction", () => {
       expect.objectContaining({
         changeGiven: 2,
         organizationId: "org-1",
-          posTransactionId: "txn-1",
-          registerSessionId: "register-1",
-        }),
-      );
+        posTransactionId: "txn-1",
+        registerSessionId: "register-1",
+      }),
+    );
     expect(applyCommerceInventoryEffectWithCtx).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -720,6 +772,15 @@ describe("voidTransaction", () => {
         reasonCode: "pos_transaction_void",
         sourceId: "txn-1",
         sourceType: "posTransaction",
+      }),
+    );
+    expect(ctx.runMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        adjustmentKind: "void",
+        registerSessionId: "register-1",
+        terminalId: "terminal-1",
+        transactionId: "txn-1",
       }),
     );
     expect(recordFacts).toHaveBeenCalledWith(
@@ -785,24 +846,24 @@ describe("voidTransaction", () => {
         productSku: "SKU-1",
         quantity: 1,
       },
-	      {
-	        _id: "txn-item-pending",
-	        pendingCheckoutItemId: "pending-1",
+      {
+        _id: "txn-item-pending",
+        pendingCheckoutItemId: "pending-1",
         productId: "product-pending-1",
         productSkuId: "sku-pending-1",
         productName: "Missing bundle",
         productSku: "PENDING-1",
-	        quantity: 3,
-	      },
-	      {
-	        _id: "txn-item-pending-duplicate",
-	        pendingCheckoutItemId: "pending-1",
-	        productId: "product-pending-1",
-	        productSkuId: "sku-pending-1",
-	        productName: "Missing bundle",
-	        productSku: "PENDING-1",
-	        quantity: 1,
-	      },
+        quantity: 3,
+      },
+      {
+        _id: "txn-item-pending-duplicate",
+        pendingCheckoutItemId: "pending-1",
+        productId: "product-pending-1",
+        productSkuId: "sku-pending-1",
+        productName: "Missing bundle",
+        productSku: "PENDING-1",
+        quantity: 1,
+      },
       {
         _id: "txn-item-provisional-import",
         inventoryImportProvisionalSkuId: "provisional-import-sku-1",
@@ -812,7 +873,7 @@ describe("voidTransaction", () => {
         productSku: "IMPORT-1",
         quantity: 2,
       },
-	    ] as never);
+    ] as never);
     vi.mocked(getProductSkuById).mockImplementation(async (_ctx, skuId) => {
       if (skuId === "sku-pending-1") {
         return {
@@ -880,22 +941,22 @@ describe("voidTransaction", () => {
     expect(ctx.db.patch).toHaveBeenCalledWith(
       "posPendingCheckoutItem",
       "pending-1",
-	      expect.objectContaining({
-	        evidence: expect.objectContaining({
-	          totalQuantitySold: 0,
-	          transactionCount: 0,
+      expect.objectContaining({
+        evidence: expect.objectContaining({
+          totalQuantitySold: 0,
+          transactionCount: 0,
         }),
       }),
     );
     expect(recordOperationalEventWithCtx).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-	        eventType: "pos_pending_checkout_item_evidence_corrected",
-	        metadata: expect.objectContaining({
-	          quantityDelta: -4,
-	          reason: "transaction_void",
-	          transactionCountDelta: -1,
-	        }),
+        eventType: "pos_pending_checkout_item_evidence_corrected",
+        metadata: expect.objectContaining({
+          quantityDelta: -4,
+          reason: "transaction_void",
+          transactionCountDelta: -1,
+        }),
       }),
     );
   });
@@ -1046,75 +1107,100 @@ describe("voidTransaction", () => {
     );
   });
 
-  it("applies a queued completed-sale void when the original drawer is closing", async () => {
-    vi.mocked(getRegisterSessionById).mockResolvedValue({
-      _id: "register-1",
-      status: "closing",
-      storeId: "store-1",
-      terminalId: "terminal-1",
-    } as never);
-    const ctx = createVoidCtx({
-      approvalRequests: [
+  it.each([
+    ["current", "terminal-1", []],
+    [
+      "previous",
+      "terminal-2",
+      [
         {
-          _id: "approval-request-1",
-          posTransactionId: "txn-1",
-          requestType: "pos_transaction_void",
-          requestedByStaffProfileId: "staff-1",
-          requestedByUserId: "cashier-user-1",
-          status: "pending",
-          storeId: "store-1",
-          subjectId: "txn-1",
-          subjectType: "pos_transaction",
+          eventType: "register_session_terminal_identity_handed_off",
+          metadata: { previousTerminalId: "terminal-1" },
         },
       ],
-    });
+    ],
+  ] as const)(
+    "applies a queued completed-sale void for the %s terminal when the drawer is closing",
+    async (_label, terminalId, operationalEvents) => {
+      vi.mocked(getRegisterSessionById).mockResolvedValue({
+        _id: "register-1",
+        status: "closing",
+        storeId: "store-1",
+        terminalId,
+      } as never);
+      const ctx = createVoidCtx({
+        approvalRequests: [
+          {
+            _id: "approval-request-1",
+            posTransactionId: "txn-1",
+            requestType: "pos_transaction_void",
+            requestedByStaffProfileId: "staff-1",
+            requestedByUserId: "cashier-user-1",
+            status: "pending",
+            storeId: "store-1",
+            subjectId: "txn-1",
+            subjectType: "pos_transaction",
+          },
+        ],
+        operationalEvents: [...operationalEvents],
+      });
 
-    await expect(
-      resolveTransactionVoidApprovalDecisionWithCtx(ctx as never, {
-        approvalProofId: "decision-proof-1" as Id<"approvalProof">,
-        approvalRequestId: "approval-request-1" as Id<"approvalRequest">,
-        decision: "approved",
-        decisionNotes: "Duplicate sale",
-        reviewedByStaffProfileId: "manager-1" as Id<"staffProfile">,
-        reviewedByUserId: "manager-user-1" as Id<"athenaUser">,
-      }),
-    ).resolves.toMatchObject({
-      approvalRequestId: "approval-request-1",
-      approverStaffProfileId: "manager-1",
-      decisionApprovalProofId: "decision-proof-1",
-      transactionId: "txn-1",
-    });
-    expect(recordRetailVoidPaymentAllocations).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        posTransactionId: "txn-1",
-        registerSessionId: "register-1",
-      }),
-    );
-    expect(recordOperationalEventWithCtx).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        actorStaffProfileId: "manager-1",
-        actorUserId: "manager-user-1",
-        eventType: "pos_transaction_void_approval_proof_consumed",
-      }),
-    );
-    expect(patchPosTransaction).toHaveBeenCalledWith(
-      expect.anything(),
-      "txn-1",
-      expect.objectContaining({
-        status: "void",
-        voidApprovalRequestId: "approval-request-1",
-        voidApprovedByStaffProfileId: "manager-1",
-        voidDecisionApprovalProofId: "decision-proof-1",
-      }),
-    );
-    expect(ctx.db.patch).not.toHaveBeenCalledWith(
-      "approvalRequest",
-      "approval-request-1",
-      expect.any(Object),
-    );
-  });
+      await expect(
+        resolveTransactionVoidApprovalDecisionWithCtx(ctx as never, {
+          approvalProofId: "decision-proof-1" as Id<"approvalProof">,
+          approvalRequestId: "approval-request-1" as Id<"approvalRequest">,
+          decision: "approved",
+          decisionNotes: "Duplicate sale",
+          reviewedByStaffProfileId: "manager-1" as Id<"staffProfile">,
+          reviewedByUserId: "manager-user-1" as Id<"athenaUser">,
+        }),
+      ).resolves.toMatchObject({
+        approvalRequestId: "approval-request-1",
+        approverStaffProfileId: "manager-1",
+        decisionApprovalProofId: "decision-proof-1",
+        transactionId: "txn-1",
+      });
+      expect(recordRetailVoidPaymentAllocations).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          posTransactionId: "txn-1",
+          registerSessionId: "register-1",
+        }),
+      );
+      expect(ctx.runMutation).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          adjustmentKind: "void",
+          registerSessionId: "register-1",
+          terminalId,
+          transactionId: "txn-1",
+        }),
+      );
+      expect(recordOperationalEventWithCtx).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          actorStaffProfileId: "manager-1",
+          actorUserId: "manager-user-1",
+          eventType: "pos_transaction_void_approval_proof_consumed",
+        }),
+      );
+      expect(patchPosTransaction).toHaveBeenCalledWith(
+        expect.anything(),
+        "txn-1",
+        expect.objectContaining({
+          status: "void",
+          voidApprovalRequestId: "approval-request-1",
+          voidApprovedByStaffProfileId: "manager-1",
+          voidDecisionApprovalProofId: "decision-proof-1",
+        }),
+      );
+      expect(ctx.db.patch).not.toHaveBeenCalledWith(
+        "approvalRequest",
+        "approval-request-1",
+        expect.any(Object),
+      );
+    },
+  );
 
   it("blocks a queued completed-sale void when the original drawer is closed", async () => {
     vi.mocked(getRegisterSessionById).mockResolvedValue({
@@ -1148,7 +1234,9 @@ describe("voidTransaction", () => {
         reviewedByStaffProfileId: "manager-1" as Id<"staffProfile">,
         reviewedByUserId: "manager-user-1" as Id<"athenaUser">,
       }),
-    ).rejects.toThrow("Drawer closed. Open the drawer before voiding this sale.");
+    ).rejects.toThrow(
+      "Drawer closed. Open the drawer before voiding this sale.",
+    );
     expectNoVoidBusinessSideEffects();
   });
 
@@ -1198,33 +1286,36 @@ describe("voidTransaction", () => {
       },
       "Manager approval is required to void a completed sale.",
     ],
-  ])("rejects queued void approval with %s", async (_label, overrides, message) => {
-    const ctx = createVoidCtx({
-      approvalRequests: [
-        {
-          _id: "approval-request-1",
-          posTransactionId: "txn-1",
-          requestType: "pos_transaction_void",
-          requestedByStaffProfileId: "staff-1",
-          status: "pending",
-          storeId: "store-1",
-          subjectId: "txn-1",
-          subjectType: "pos_transaction",
-        },
-      ],
-    });
+  ])(
+    "rejects queued void approval with %s",
+    async (_label, overrides, message) => {
+      const ctx = createVoidCtx({
+        approvalRequests: [
+          {
+            _id: "approval-request-1",
+            posTransactionId: "txn-1",
+            requestType: "pos_transaction_void",
+            requestedByStaffProfileId: "staff-1",
+            status: "pending",
+            storeId: "store-1",
+            subjectId: "txn-1",
+            subjectType: "pos_transaction",
+          },
+        ],
+      });
 
-    await expect(
-      resolveTransactionVoidApprovalDecisionWithCtx(ctx as never, {
-        approvalRequestId: "approval-request-1" as Id<"approvalRequest">,
-        decision: "approved",
-        reviewedByUserId: "manager-user-1" as Id<"athenaUser">,
-        ...overrides,
-      }),
-    ).rejects.toThrow(message);
+      await expect(
+        resolveTransactionVoidApprovalDecisionWithCtx(ctx as never, {
+          approvalRequestId: "approval-request-1" as Id<"approvalRequest">,
+          decision: "approved",
+          reviewedByUserId: "manager-user-1" as Id<"athenaUser">,
+          ...overrides,
+        }),
+      ).rejects.toThrow(message);
 
-    expectNoVoidBusinessSideEffects();
-  });
+      expectNoVoidBusinessSideEffects();
+    },
+  );
 
   it("rejects queued void approvals missing transaction details", async () => {
     const ctx = createVoidCtx({
@@ -1386,7 +1477,9 @@ describe("voidTransaction", () => {
   it("does not restore SKU quantities again when void inventory movement already exists", async () => {
     vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValueOnce({
       disposition: "existing",
-      movement: { _id: "inventory-movement-existing" as Id<"inventoryMovement"> },
+      movement: {
+        _id: "inventory-movement-existing" as Id<"inventoryMovement">,
+      },
     } as never);
 
     await expect(
@@ -1407,22 +1500,94 @@ describe("voidTransaction", () => {
   });
 
   it.each([
-    ["missing", null],
-    ["closed", { _id: "register-1", status: "closed", storeId: "store-1", terminalId: "terminal-1" }],
-    ["wrong-store", { _id: "register-1", status: "open", storeId: "store-other", terminalId: "terminal-1" }],
-    ["wrong-terminal", { _id: "register-1", status: "open", storeId: "store-1", terminalId: "terminal-other" }],
+    ["missing", null, []],
+    [
+      "closed",
+      {
+        _id: "register-1",
+        status: "closed",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+      [],
+    ],
+    [
+      "closeout-rejected",
+      {
+        _id: "register-1",
+        status: "closeout_rejected",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+      [],
+    ],
+    [
+      "wrong-store",
+      {
+        _id: "register-1",
+        status: "open",
+        storeId: "store-other",
+        terminalId: "terminal-1",
+      },
+      [],
+    ],
+    [
+      "wrong-terminal",
+      {
+        _id: "register-1",
+        status: "open",
+        storeId: "store-1",
+        terminalId: "terminal-other",
+      },
+      [],
+    ],
+    [
+      "historical-terminal-closed",
+      {
+        _id: "register-1",
+        status: "closed",
+        storeId: "store-1",
+        terminalId: "terminal-2",
+      },
+      [{ metadata: { previousTerminalId: "terminal-1" } }],
+    ],
+    [
+      "historical-terminal-closeout-rejected",
+      {
+        _id: "register-1",
+        status: "closeout_rejected",
+        storeId: "store-1",
+        terminalId: "terminal-2",
+      },
+      [{ metadata: { previousTerminalId: "terminal-1" } }],
+    ],
+    [
+      "unrelated historical terminal",
+      {
+        _id: "register-1",
+        status: "open",
+        storeId: "store-1",
+        terminalId: "terminal-2",
+      },
+      [{ metadata: { previousTerminalId: "terminal-other" } }],
+    ],
   ] as const)(
     "blocks completed-sale voids with a %s register session before approval consumption",
-    async (_label, registerSession) => {
-      vi.mocked(getRegisterSessionById).mockResolvedValue(registerSession as never);
+    async (_label, registerSession, operationalEvents) => {
+      vi.mocked(getRegisterSessionById).mockResolvedValue(
+        registerSession as never,
+      );
 
       await expect(
-        voidTransaction(createVoidCtx() as never, {
-          actorStaffProfileId: "staff-1" as Id<"staffProfile">,
-          approvalProofId: "approval-proof-1" as Id<"approvalProof">,
-          reason: "Duplicate sale",
-          transactionId: "txn-1" as Id<"posTransaction">,
-        }),
+        voidTransaction(
+          createVoidCtx({ operationalEvents: [...operationalEvents] }) as never,
+          {
+            actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+            approvalProofId: "approval-proof-1" as Id<"approvalProof">,
+            reason: "Duplicate sale",
+            transactionId: "txn-1" as Id<"posTransaction">,
+          },
+        ),
       ).resolves.toMatchObject({
         kind: "user_error",
         error: {
@@ -1569,7 +1734,9 @@ describe("completeTransaction checkout side effects", () => {
     vi.mocked(createPosTransactionItem).mockResolvedValue(
       "txn-item-1" as never,
     );
-    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(undefined as never);
+    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(
+      undefined as never,
+    );
 
     await expect(
       completeTransaction(ctx, {
@@ -1864,9 +2031,11 @@ describe("completeTransaction checkout side effects", () => {
         },
       ].map((sku) => [sku._id, sku]),
     );
-    const dbPatch = vi.fn(async (_tableName: string, id: string, patch: object) => {
-      Object.assign(provisionalImportSkus.get(id)!, patch);
-    });
+    const dbPatch = vi.fn(
+      async (_tableName: string, id: string, patch: object) => {
+        Object.assign(provisionalImportSkus.get(id)!, patch);
+      },
+    );
     const ctx = {
       db: {
         get: vi.fn(async (tableName: string, id: string) => {
@@ -2637,7 +2806,9 @@ describe("completeTransaction trace ordering", () => {
     vi.mocked(createPosTransactionItem).mockResolvedValue(
       "txn-item-1" as never,
     );
-    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(undefined as never);
+    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(
+      undefined as never,
+    );
     vi.mocked(patchPosSession).mockRejectedValue(
       new Error("session patch unavailable"),
     );
@@ -2739,7 +2910,9 @@ describe("completeTransaction trace ordering", () => {
     vi.mocked(createPosTransactionItem).mockResolvedValue(
       "txn-item-1" as never,
     );
-    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(undefined as never);
+    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(
+      undefined as never,
+    );
     vi.mocked(patchPosSession).mockResolvedValue(undefined as never);
     vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue("trace-1" as never);
     vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(
@@ -2843,156 +3016,163 @@ describe("completeTransaction trace ordering", () => {
   it.each(["pending_review", "flagged"] as const)(
     "completes session checkout with %s pending items without trusted stock mutation",
     async (pendingStatus) => {
-    const runMutation = vi.fn().mockResolvedValue(undefined);
-    const pendingCheckoutItem = {
-      _id: "pending-item-1",
-      evidence: {
-        firstSeenAt: 1,
-        lastSeenAt: 1,
-        observedLookupCodes: [],
-        observedPrices: [15],
-        offlineSaleCount: 0,
-        totalQuantitySold: 0,
-        transactionCount: 0,
-      },
-      storeId: "store-1",
-      status: pendingStatus,
-      provisionalProductId: "product-pending-1",
-      provisionalProductSkuId: "sku-pending-1",
-    };
-    const ctx = {
-      db: {
-        get: vi.fn(async (tableName: string, id: string) => {
-          if (tableName === "posPendingCheckoutItem" && id === "pending-item-1") {
-            return pendingCheckoutItem;
-          }
-
-          return null;
-        }),
-        patch: vi.fn(async (_tableName: string, _id: string, patch: object) => {
-          Object.assign(pendingCheckoutItem, patch);
-        }),
-      },
-      runMutation,
-    } as never;
-
-    vi.mocked(getStoreById).mockResolvedValue({
-      _id: "store-1",
-      organizationId: "org-1",
-    } as never);
-    vi.mocked(getPosSessionById).mockResolvedValue({
-      _id: "session-1",
-      storeId: "store-1",
-      customerId: undefined,
-      customerProfileId: "profile-1",
-      staffProfileId: "staff-1",
-      registerNumber: "1",
-      registerSessionId: "register-1",
-      subtotal: 30,
-      tax: 0,
-      total: 30,
-      terminalId: "terminal-1",
-      customerInfo: undefined,
-    } as never);
-    vi.mocked(getRegisterSessionById).mockResolvedValue({
-      _id: "register-1",
-      storeId: "store-1",
-      status: "open",
-      terminalId: "terminal-1",
-      registerNumber: "1",
-    } as never);
-    vi.mocked(listSessionItems).mockResolvedValue([
-      {
-        _id: "session-item-1",
-        sessionId: "session-1",
-        storeId: "store-1",
-        productId: "product-pending-1",
-        productSkuId: "sku-pending-1",
-        pendingCheckoutItemId: "pending-item-1",
-        productSku: "PENDING-1",
-        productName: "Missing bundle",
-        price: 15,
-        quantity: 2,
-        image: undefined,
-      },
-    ] as never);
-    vi.mocked(getProductSkuById).mockResolvedValue({
-      _id: "sku-pending-1",
-      images: [],
-      inventoryCount: 0,
-      productId: "product-pending-1",
-      quantityAvailable: 0,
-      sku: "PENDING-1",
-    } as never);
-    vi.mocked(createPosTransaction).mockResolvedValue("txn-1" as never);
-    vi.mocked(recordRetailSalePaymentAllocations).mockResolvedValue(true);
-    vi.mocked(createPosTransactionItem).mockResolvedValue(
-      "txn-item-1" as never,
-    );
-    vi.mocked(patchPosSession).mockResolvedValue(undefined as never);
-
-    await expect(
-      createTransactionFromSessionHandler(ctx, {
-        sessionId: "session-1" as Id<"posSession">,
-        staffProfileId: "staff-1" as Id<"staffProfile">,
-        payments: [{ method: "cash", amount: 30, timestamp: 1 }],
-      }),
-    ).resolves.toEqual(
-      expect.objectContaining({
-        kind: "ok",
-        data: expect.objectContaining({
-          transactionId: "txn-1",
-        }),
-      }),
-    );
-
-    expect(validateInventoryAvailability).not.toHaveBeenCalled();
-    expect(consumeInventoryHoldsForSession).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        sessionId: "session-1",
-        items: [],
-      }),
-    );
-    expect(createPosTransactionItem).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        pendingCheckoutItemId: "pending-item-1",
-        productId: "product-pending-1",
-        productSkuId: "sku-pending-1",
-        quantity: 2,
-        totalPrice: 30,
-      }),
-    );
-    expect(
-      (ctx as unknown as { db: { patch: ReturnType<typeof vi.fn> } }).db.patch,
-    ).toHaveBeenCalledWith(
-      "posPendingCheckoutItem",
-      "pending-item-1",
-      expect.objectContaining({
-        evidence: expect.objectContaining({
-          lastPosTransactionId: "txn-1",
+      const runMutation = vi.fn().mockResolvedValue(undefined);
+      const pendingCheckoutItem = {
+        _id: "pending-item-1",
+        evidence: {
+          firstSeenAt: 1,
+          lastSeenAt: 1,
+          observedLookupCodes: [],
           observedPrices: [15],
-          totalQuantitySold: 2,
-          transactionCount: 1,
+          offlineSaleCount: 0,
+          totalQuantitySold: 0,
+          transactionCount: 0,
+        },
+        storeId: "store-1",
+        status: pendingStatus,
+        provisionalProductId: "product-pending-1",
+        provisionalProductSkuId: "sku-pending-1",
+      };
+      const ctx = {
+        db: {
+          get: vi.fn(async (tableName: string, id: string) => {
+            if (
+              tableName === "posPendingCheckoutItem" &&
+              id === "pending-item-1"
+            ) {
+              return pendingCheckoutItem;
+            }
+
+            return null;
+          }),
+          patch: vi.fn(
+            async (_tableName: string, _id: string, patch: object) => {
+              Object.assign(pendingCheckoutItem, patch);
+            },
+          ),
+        },
+        runMutation,
+      } as never;
+
+      vi.mocked(getStoreById).mockResolvedValue({
+        _id: "store-1",
+        organizationId: "org-1",
+      } as never);
+      vi.mocked(getPosSessionById).mockResolvedValue({
+        _id: "session-1",
+        storeId: "store-1",
+        customerId: undefined,
+        customerProfileId: "profile-1",
+        staffProfileId: "staff-1",
+        registerNumber: "1",
+        registerSessionId: "register-1",
+        subtotal: 30,
+        tax: 0,
+        total: 30,
+        terminalId: "terminal-1",
+        customerInfo: undefined,
+      } as never);
+      vi.mocked(getRegisterSessionById).mockResolvedValue({
+        _id: "register-1",
+        storeId: "store-1",
+        status: "open",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+      } as never);
+      vi.mocked(listSessionItems).mockResolvedValue([
+        {
+          _id: "session-item-1",
+          sessionId: "session-1",
+          storeId: "store-1",
+          productId: "product-pending-1",
+          productSkuId: "sku-pending-1",
+          pendingCheckoutItemId: "pending-item-1",
+          productSku: "PENDING-1",
+          productName: "Missing bundle",
+          price: 15,
+          quantity: 2,
+          image: undefined,
+        },
+      ] as never);
+      vi.mocked(getProductSkuById).mockResolvedValue({
+        _id: "sku-pending-1",
+        images: [],
+        inventoryCount: 0,
+        productId: "product-pending-1",
+        quantityAvailable: 0,
+        sku: "PENDING-1",
+      } as never);
+      vi.mocked(createPosTransaction).mockResolvedValue("txn-1" as never);
+      vi.mocked(recordRetailSalePaymentAllocations).mockResolvedValue(true);
+      vi.mocked(createPosTransactionItem).mockResolvedValue(
+        "txn-item-1" as never,
+      );
+      vi.mocked(patchPosSession).mockResolvedValue(undefined as never);
+
+      await expect(
+        createTransactionFromSessionHandler(ctx, {
+          sessionId: "session-1" as Id<"posSession">,
+          staffProfileId: "staff-1" as Id<"staffProfile">,
+          payments: [{ method: "cash", amount: 30, timestamp: 1 }],
         }),
-        reviewPriority: "normal",
-      }),
-    );
-    expect(recordOperationalEventWithCtx).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        eventType: "pos_pending_checkout_item_reused",
-        metadata: expect.objectContaining({
-          quantitySold: 2,
-          totalQuantitySold: 2,
-          transactionCount: 1,
+      ).resolves.toEqual(
+        expect.objectContaining({
+          kind: "ok",
+          data: expect.objectContaining({
+            transactionId: "txn-1",
+          }),
         }),
-      }),
-    );
-    expect(applyCommerceInventoryEffectWithCtx).not.toHaveBeenCalled();
-    expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
-  });
+      );
+
+      expect(validateInventoryAvailability).not.toHaveBeenCalled();
+      expect(consumeInventoryHoldsForSession).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          sessionId: "session-1",
+          items: [],
+        }),
+      );
+      expect(createPosTransactionItem).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          pendingCheckoutItemId: "pending-item-1",
+          productId: "product-pending-1",
+          productSkuId: "sku-pending-1",
+          quantity: 2,
+          totalPrice: 30,
+        }),
+      );
+      expect(
+        (ctx as unknown as { db: { patch: ReturnType<typeof vi.fn> } }).db
+          .patch,
+      ).toHaveBeenCalledWith(
+        "posPendingCheckoutItem",
+        "pending-item-1",
+        expect.objectContaining({
+          evidence: expect.objectContaining({
+            lastPosTransactionId: "txn-1",
+            observedPrices: [15],
+            totalQuantitySold: 2,
+            transactionCount: 1,
+          }),
+          reviewPriority: "normal",
+        }),
+      );
+      expect(recordOperationalEventWithCtx).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          eventType: "pos_pending_checkout_item_reused",
+          metadata: expect.objectContaining({
+            quantitySold: 2,
+            totalQuantitySold: 2,
+            transactionCount: 1,
+          }),
+        }),
+      );
+      expect(applyCommerceInventoryEffectWithCtx).not.toHaveBeenCalled();
+      expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
+    },
+  );
 
   it("completes linked pending checkout aliases as trusted SKU sales", async () => {
     const runMutation = vi.fn().mockResolvedValue(undefined);
@@ -3017,7 +3197,10 @@ describe("completeTransaction trace ordering", () => {
     const ctx = {
       db: {
         get: vi.fn(async (tableName: string, id: string) => {
-          if (tableName === "posPendingCheckoutItem" && id === "pending-item-1") {
+          if (
+            tableName === "posPendingCheckoutItem" &&
+            id === "pending-item-1"
+          ) {
             return linkedPendingCheckoutItem;
           }
 
@@ -3085,7 +3268,9 @@ describe("completeTransaction trace ordering", () => {
     vi.mocked(createPosTransactionItem).mockResolvedValue(
       "txn-item-1" as never,
     );
-    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(undefined as never);
+    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(
+      undefined as never,
+    );
     vi.mocked(patchPosSession).mockResolvedValue(undefined as never);
     vi.mocked(consumeInventoryHoldsForSession).mockResolvedValue(
       new Map([["sku-1" as Id<"productSku">, 2]]),
@@ -3725,71 +3910,77 @@ describe("completeTransaction trace ordering", () => {
         provisionalProductSkuId: "sku-other",
       },
     ],
-  ])("rejects session checkout with %s before durable sale writes", async (_label, pendingCheckoutItem) => {
-    const ctx = {
-      db: {
-        get: vi.fn(async (tableName: string, id: string) => {
-          if (tableName === "posPendingCheckoutItem" && id === "pending-item-1") {
-            return pendingCheckoutItem;
-          }
+  ])(
+    "rejects session checkout with %s before durable sale writes",
+    async (_label, pendingCheckoutItem) => {
+      const ctx = {
+        db: {
+          get: vi.fn(async (tableName: string, id: string) => {
+            if (
+              tableName === "posPendingCheckoutItem" &&
+              id === "pending-item-1"
+            ) {
+              return pendingCheckoutItem;
+            }
 
-          return null;
-        }),
-        patch: vi.fn(),
-      },
-      runMutation: vi.fn(),
-    } as never;
+            return null;
+          }),
+          patch: vi.fn(),
+        },
+        runMutation: vi.fn(),
+      } as never;
 
-    vi.mocked(getPosSessionById).mockResolvedValue({
-      _id: "session-1",
-      staffProfileId: "staff-1",
-      storeId: "store-1",
-      terminalId: "terminal-1",
-      registerNumber: "1",
-      registerSessionId: "register-1",
-    } as never);
-    vi.mocked(listSessionItems).mockResolvedValue([
-      {
-        _id: "session-item-1",
-        sessionId: "session-1",
+      vi.mocked(getPosSessionById).mockResolvedValue({
+        _id: "session-1",
+        staffProfileId: "staff-1",
         storeId: "store-1",
-        productId: "product-pending-1",
-        productSkuId: "sku-pending-1",
-        pendingCheckoutItemId: "pending-item-1",
-        productSku: "PENDING-1",
-        productName: "Missing bundle",
-        price: 15,
-        quantity: 2,
-      },
-    ] as never);
-    vi.mocked(getRegisterSessionById).mockResolvedValue({
-      _id: "register-1",
-      registerNumber: "1",
-      status: "open",
-      storeId: "store-1",
-      terminalId: "terminal-1",
-    } as never);
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        registerSessionId: "register-1",
+      } as never);
+      vi.mocked(listSessionItems).mockResolvedValue([
+        {
+          _id: "session-item-1",
+          sessionId: "session-1",
+          storeId: "store-1",
+          productId: "product-pending-1",
+          productSkuId: "sku-pending-1",
+          pendingCheckoutItemId: "pending-item-1",
+          productSku: "PENDING-1",
+          productName: "Missing bundle",
+          price: 15,
+          quantity: 2,
+        },
+      ] as never);
+      vi.mocked(getRegisterSessionById).mockResolvedValue({
+        _id: "register-1",
+        registerNumber: "1",
+        status: "open",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      } as never);
 
-    await expect(
-      createTransactionFromSessionHandler(ctx, {
-        sessionId: "session-1" as Id<"posSession">,
-        staffProfileId: "staff-1" as Id<"staffProfile">,
-        payments: [{ method: "cash", amount: 30, timestamp: 1 }],
-      }),
-    ).resolves.toMatchObject({
-      kind: "user_error",
-      error: {
-        code: "conflict",
-      },
-    });
+      await expect(
+        createTransactionFromSessionHandler(ctx, {
+          sessionId: "session-1" as Id<"posSession">,
+          staffProfileId: "staff-1" as Id<"staffProfile">,
+          payments: [{ method: "cash", amount: 30, timestamp: 1 }],
+        }),
+      ).resolves.toMatchObject({
+        kind: "user_error",
+        error: {
+          code: "conflict",
+        },
+      });
 
-    expect(createPosTransaction).not.toHaveBeenCalled();
-    expect(createPosTransactionItem).not.toHaveBeenCalled();
-    expect(recordRetailSalePaymentAllocations).not.toHaveBeenCalled();
-    expect(recordOperationalEventWithCtx).not.toHaveBeenCalled();
-    expect(applyCommerceInventoryEffectWithCtx).not.toHaveBeenCalled();
-    expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
-  });
+      expect(createPosTransaction).not.toHaveBeenCalled();
+      expect(createPosTransactionItem).not.toHaveBeenCalled();
+      expect(recordRetailSalePaymentAllocations).not.toHaveBeenCalled();
+      expect(recordOperationalEventWithCtx).not.toHaveBeenCalled();
+      expect(applyCommerceInventoryEffectWithCtx).not.toHaveBeenCalled();
+      expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
+    },
+  );
 
   it("rejects session checkout when submitted totals no longer match persisted items", async () => {
     vi.mocked(getPosSessionById).mockResolvedValue({
@@ -3966,25 +4157,26 @@ describe("completeTransaction trace ordering", () => {
       "sku-3": 50_000,
       "sku-4": 2_400,
     };
-    vi.mocked(getProductSkuById).mockImplementation((async (
-      _ctx: unknown,
-      skuId: string,
-    ) =>
-      ({
-        _id: skuId,
-        images: [],
-        inventoryCount: 10,
-        price: canonicalSkuPrices[skuId] ?? 0,
-        productId: `product-${String(skuId).split("-")[1]}`,
-        quantityAvailable: 10,
-        sku: String(skuId).toUpperCase(),
-      }) as never) as never);
+    vi.mocked(getProductSkuById).mockImplementation(
+      (async (_ctx: unknown, skuId: string) =>
+        ({
+          _id: skuId,
+          images: [],
+          inventoryCount: 10,
+          price: canonicalSkuPrices[skuId] ?? 0,
+          productId: `product-${String(skuId).split("-")[1]}`,
+          quantityAvailable: 10,
+          sku: String(skuId).toUpperCase(),
+        }) as never) as never,
+    );
     vi.mocked(createPosTransaction).mockResolvedValue("txn-1" as never);
     vi.mocked(recordRetailSalePaymentAllocations).mockResolvedValue(true);
     vi.mocked(createPosTransactionItem).mockResolvedValue(
       "txn-item-1" as never,
     );
-    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(undefined as never);
+    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(
+      undefined as never,
+    );
     vi.mocked(patchPosSession).mockResolvedValue(undefined as never);
 
     const result = await createTransactionFromSessionHandler(ctx, {
@@ -4075,7 +4267,9 @@ describe("completeTransaction trace ordering", () => {
     vi.mocked(createPosTransactionItem).mockResolvedValue(
       "txn-item-1" as never,
     );
-    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(undefined as never);
+    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(
+      undefined as never,
+    );
     vi.mocked(patchPosSession).mockResolvedValue(undefined as never);
     vi.mocked(patchPosTransaction).mockResolvedValue(undefined as never);
     vi.mocked(consumeInventoryHoldsForSession).mockResolvedValue(new Map());
@@ -4252,8 +4446,7 @@ describe("completeTransaction trace ordering", () => {
         }),
       }),
     );
-    },
-  );
+  });
 
   it("fails safely when a session sale is bound to a closed drawer", async () => {
     vi.mocked(getPosSessionById).mockResolvedValue({
@@ -4313,64 +4506,64 @@ describe("completeTransaction trace ordering", () => {
   it.each(["closing", "closeout_rejected"] as const)(
     "fails safely when a session sale is bound to a %s drawer",
     async (status) => {
-    const runMutation = vi.fn().mockResolvedValue(undefined);
-    const ctx = {
-      runMutation,
-    } as never;
+      const runMutation = vi.fn().mockResolvedValue(undefined);
+      const ctx = {
+        runMutation,
+      } as never;
 
-    vi.mocked(getPosSessionById).mockResolvedValue({
-      _id: "session-1",
-      storeId: "store-1",
-      customerId: undefined,
-      staffProfileId: "staff-1",
-      registerNumber: "1",
-      registerSessionId: "register-1",
-      subtotal: 10,
-      tax: 0,
-      total: 10,
-      terminalId: "terminal-1",
-      customerInfo: undefined,
-    } as never);
-    vi.mocked(getRegisterSessionById).mockResolvedValue({
-      _id: "register-1",
-      storeId: "store-1",
-      status,
-      terminalId: "terminal-1",
-      registerNumber: "1",
-    } as never);
-    vi.mocked(listSessionItems).mockResolvedValue([
-      {
-        _id: "session-item-1",
-        sessionId: "session-1",
+      vi.mocked(getPosSessionById).mockResolvedValue({
+        _id: "session-1",
         storeId: "store-1",
-        productId: "product-1",
-        productSkuId: "sku-1",
-        productSku: "SKU-1",
-        productName: "Sneaker",
-        price: 10,
-        quantity: 1,
-        image: undefined,
-      },
-    ] as never);
+        customerId: undefined,
+        staffProfileId: "staff-1",
+        registerNumber: "1",
+        registerSessionId: "register-1",
+        subtotal: 10,
+        tax: 0,
+        total: 10,
+        terminalId: "terminal-1",
+        customerInfo: undefined,
+      } as never);
+      vi.mocked(getRegisterSessionById).mockResolvedValue({
+        _id: "register-1",
+        storeId: "store-1",
+        status,
+        terminalId: "terminal-1",
+        registerNumber: "1",
+      } as never);
+      vi.mocked(listSessionItems).mockResolvedValue([
+        {
+          _id: "session-item-1",
+          sessionId: "session-1",
+          storeId: "store-1",
+          productId: "product-1",
+          productSkuId: "sku-1",
+          productSku: "SKU-1",
+          productName: "Sneaker",
+          price: 10,
+          quantity: 1,
+          image: undefined,
+        },
+      ] as never);
 
-    await expect(
-      createTransactionFromSessionHandler(ctx, {
-        sessionId: "session-1" as Id<"posSession">,
-        staffProfileId: "staff-1" as Id<"staffProfile">,
-        payments: [{ method: "cash", amount: 10, timestamp: 1 }],
-      }),
-    ).resolves.toEqual(
-      expect.objectContaining({
-        kind: "user_error",
-        error: expect.objectContaining({
-          code: "precondition_failed",
-          message: "Open the cash drawer before completing this sale.",
+      await expect(
+        createTransactionFromSessionHandler(ctx, {
+          sessionId: "session-1" as Id<"posSession">,
+          staffProfileId: "staff-1" as Id<"staffProfile">,
+          payments: [{ method: "cash", amount: 10, timestamp: 1 }],
         }),
-      }),
-    );
+      ).resolves.toEqual(
+        expect.objectContaining({
+          kind: "user_error",
+          error: expect.objectContaining({
+            code: "precondition_failed",
+            message: "Open the cash drawer before completing this sale.",
+          }),
+        }),
+      );
 
-    expect(runMutation).not.toHaveBeenCalled();
-    expectNoCompletionSideEffects();
+      expect(runMutation).not.toHaveBeenCalled();
+      expectNoCompletionSideEffects();
     },
   );
 
@@ -4565,7 +4758,9 @@ describe("completeTransaction trace ordering", () => {
     vi.mocked(createPosTransactionItem).mockResolvedValue(
       "txn-item-1" as never,
     );
-    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(undefined as never);
+    vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(
+      undefined as never,
+    );
     vi.mocked(updateCustomerStats).mockResolvedValue(undefined as never);
     vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue("trace-1" as never);
     vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(
@@ -4644,7 +4839,9 @@ describe("completeTransaction idempotency (U8)", () => {
     } as never);
     vi.mocked(createPosTransaction).mockResolvedValue("txn-1" as never);
     vi.mocked(recordRetailSalePaymentAllocations).mockResolvedValue(true);
-    vi.mocked(createPosTransactionItem).mockResolvedValue("txn-item-1" as never);
+    vi.mocked(createPosTransactionItem).mockResolvedValue(
+      "txn-item-1" as never,
+    );
     vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(
       undefined as never,
     );
@@ -4654,7 +4851,9 @@ describe("completeTransaction idempotency (U8)", () => {
     const runMutation = vi.fn().mockResolvedValue(undefined);
     const ctx = { runMutation } as never;
     seedDirectHappyPath();
-    vi.mocked(getPosTransactionByIdempotencyKey).mockResolvedValue(null as never);
+    vi.mocked(getPosTransactionByIdempotencyKey).mockResolvedValue(
+      null as never,
+    );
 
     const result = await completeTransaction(ctx, {
       ...directArgs,
@@ -4795,10 +4994,14 @@ describe("completeTransaction re-pricing (U7)", () => {
       sku: "SKU-1",
       ...sku,
     } as never);
-    vi.mocked(getPosTransactionByIdempotencyKey).mockResolvedValue(null as never);
+    vi.mocked(getPosTransactionByIdempotencyKey).mockResolvedValue(
+      null as never,
+    );
     vi.mocked(createPosTransaction).mockResolvedValue("txn-1" as never);
     vi.mocked(recordRetailSalePaymentAllocations).mockResolvedValue(true);
-    vi.mocked(createPosTransactionItem).mockResolvedValue("txn-item-1" as never);
+    vi.mocked(createPosTransactionItem).mockResolvedValue(
+      "txn-item-1" as never,
+    );
     vi.mocked(applyCommerceInventoryEffectWithCtx).mockResolvedValue(
       undefined as never,
     );
@@ -4806,12 +5009,16 @@ describe("completeTransaction re-pricing (U7)", () => {
 
   it("hard-rejects a client price that deviates from the catalog basis without override authority", async () => {
     seedDirect({ price: 20 });
-    const result = await completeTransaction({ runMutation: vi.fn() } as never, {
-      ...directArgs,
-    });
+    const result = await completeTransaction(
+      { runMutation: vi.fn() } as never,
+      {
+        ...directArgs,
+      },
+    );
 
     expect(result.kind).toBe("approval_required");
-    if (result.kind !== "approval_required") throw new Error("expected approval");
+    if (result.kind !== "approval_required")
+      throw new Error("expected approval");
     expect(result.approval.action.key).toBe("pos.sale.price_override");
     expect(result.approval.requiredRole).toBe("manager");
     expect(result.approval.subject.type).toBe("pos_price_override");
@@ -4972,7 +5179,9 @@ describe("completeTransaction re-pricing (U7)", () => {
       terminalId: "terminal-1",
       registerNumber: "1",
     } as never);
-    vi.mocked(getPosTransactionByIdempotencyKey).mockResolvedValue(null as never);
+    vi.mocked(getPosTransactionByIdempotencyKey).mockResolvedValue(
+      null as never,
+    );
     vi.mocked(listSessionItems).mockResolvedValue([
       {
         _id: "session-item-1",
@@ -5053,7 +5262,9 @@ describe("completeTransaction re-pricing (U7)", () => {
       terminalId: "terminal-1",
       registerNumber: "1",
     } as never);
-    vi.mocked(getPosTransactionByIdempotencyKey).mockResolvedValue(null as never);
+    vi.mocked(getPosTransactionByIdempotencyKey).mockResolvedValue(
+      null as never,
+    );
     vi.mocked(listSessionItems).mockResolvedValue([
       {
         _id: "session-item-1",

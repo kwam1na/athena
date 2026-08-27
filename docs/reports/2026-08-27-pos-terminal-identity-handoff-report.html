@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>POS Terminal Identity Handoff and Historical-Sale Voids</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="01f8e2b27da7a99cd65ee7111ab6ea4301fd61406e21cdff7636194077623cda">
+  <header data-report-section="header">
+    <h1>POS Terminal Identity Handoff and Historical-Sale Voids</h1>
+    <p>One physical drawer, one canonical session, and explicit current-versus-historical terminal authority</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch codex/pos-terminal-identity-handoff</li>
+      <li>Production deploy pending</li>
+      <li>13 final reviewer lenses green</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Source</dt><dd>codex/pos-terminal-identity-handoff</dd>
+      <dt>Base</dt><dd>origin/main at 8f162730</dd>
+      <dt>Status</dt><dd>Delivery candidate</dd>
+      <dt>Deploy</dt><dd>Pending; production unchanged</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+      <p>This candidate repairs a replacement POS browser by keeping the original cloud register session canonical, replaying every eligible event found at execution time, transferring terminal authority, and queuing exact local review cleanup.</p>
+      <p>It also closes the follow-on void gap: a reopened closeout can accept a void for a sale created on the retired terminal, while authentication and drawer cash mutation use the replacement terminal that currently owns the session.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Why this was needed</h2>
+      <p>Clearing browser identity created a replacement terminal and duplicate local drawer. Cross-terminal inference correctly stopped, leaving sales in sync review. The GHS638 value was a physical cash count, not another opening float.</p>
+      <p>After the handoff fixed sync review, completed-sale voids still failed because closing sessions were treated like new-sale sessions and the sale&#x27;s immutable historical terminal was incorrectly reused as current authentication and cash authority.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model: ledger, provenance, and current key</h2>
+      <p>The cloud register session is the ledger for one physical drawer. A transaction&#x27;s terminal id is immutable provenance: it says which browser recorded the sale. The register session&#x27;s terminal id is the current key allowed to authenticate and mutate drawer cash.</p>
+      <p>A handoff changes the current key and records the old key in append-only lineage. It does not rewrite sales, create another float, or discard the physical count.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+      <p>Before: replacement identity → duplicate open and unmapped sales → sync review. After handoff: execution-time reread → durable mapping → supported replay → conflict settlement → authority transfer → local cleanup command.</p>
+      <p>Before void fix: closing session blocked the action, and old-sale terminal identity could not authenticate or record cash. After: a void-specific lifecycle policy allows open, active, or closing; exact-session lineage validates historical provenance; current session terminal authenticates and records the cash reversal.</p>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed and what did not</h2>
+      <p>The handoff mutation does not trust caller-selected review ids. It rereads the exact replacement drawer, applies completeness sentinels, consumes approval only after preflight, and rolls back the whole Convex transaction on projection drift.</p>
+      <p>The transaction read model now exposes the current register-session terminal for void authentication. The public mutation independently verifies handoff lineage and rejects proof from the retired terminal. The approved void passes the current terminal into the real register-session cash handler.</p>
+      <ul>
+        <li>Historical transaction terminal attribution remains unchanged.</li>
+        <li>GHS638 remains physical-count evidence and never becomes a second opening float.</li>
+        <li>Payment-method correction remains unavailable while the drawer is closing; the new authority selection is void-only.</li>
+        <li>Closed, closeout-rejected, wrong-store, unrelated-lineage, incomplete-history, and stale-authority cases fail closed.</li>
+        <li>Brush-roller net price remains GHS30; catalog or pricing policy is not relaxed.</li>
+      </ul>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+      <p>Handoff evidence reads stop at 501 rows and replay stops above 20 events or 100 sale/service lines. Historical-terminal lineage lookup fails closed beyond 20 handoffs; a sale on the current terminal does not consult that history. A concurrent authority change makes the real cash handler reject the stale terminal and Convex rolls back.</p>
+      <p>Cloud settlement is not browser convergence. Production completion still requires the replacement browser to acknowledge clear_local_review_items and then report a fresh zero-review heartbeat.</p>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and delivery status</h2>
+      <p>Focused final proof passed: 270 tests across void command, public boundary, UI, lifecycle policy, and real register-session cash recording, plus a 166-test backend rerun after the final index-name and retired-proof fixes. TypeScript, Convex audit, changed-file lint, operation admission, and Graphify passed.</p>
+      <p>The exact staged candidate received green review from correctness, adversarial, performance, maintainability, reliability, testing, security, API contract, data migrations, frontend races, project standards, agent-native, and TypeScript reviewers. The authoritative gate admitted that evidence and stopped before expensive validation only because this report and two solution fingerprints were stale; this regenerated report closes that documentation blocker.</p>
+      <p>This remains a delivery candidate: not merged, root-aligned, or deployed. Commit and production deployment happen only after the authoritative gate passes on the regenerated documentation.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>How to extend or operate this safely</h2>
+      <ul>
+        <li>Keep historical provenance separate from current session authority.</li>
+        <li>Reread exact-session pending evidence inside the mutation; UI snapshots are hints, not repair scope.</li>
+        <li>Require current-terminal staff proof even when lineage authorizes an old sale.</li>
+        <li>Pass the same authoritative current terminal to drawer cash recording.</li>
+        <li>After production repair, verify session owner, unchanged opening float, expected cash, resolved conflicts, retired old terminal, cleanup acknowledgement, and a fresh zero-review heartbeat.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>packages/athena-webapp/convex/cashControls/deposits.ts</code></td><td>Performs the bounded, atomic terminal handoff and execution-time event replay.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts</code></td><td>Separates historical transaction lineage from current terminal cash authority for voids.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/pos/public/transactions.ts</code></td><td>Authenticates void staff proof against the current terminal after server-side lineage validation.</td></tr>
+        <tr><td><code>packages/athena-webapp/shared/registerSessionLifecyclePolicy.ts</code></td><td>Defines the void-specific open, active, and closing lifecycle policy.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/pos/transactions/TransactionView.tsx</code></td><td>Keeps void available during reopened closeout and authenticates on current session authority.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/operations/registerSessions.trace.test.ts</code></td><td>Exercises the real cash recorder with replacement-terminal authority.</td></tr>
+        <tr><td><code>docs/solutions/logic-errors/athena-pos-terminal-identity-handoff-2026-08-27.md</code></td><td>Captures the reusable terminal handoff pattern.</td></tr>
+        <tr><td><code>docs/solutions/logic-errors/athena-register-closeout-pending-void-policy-2026-06-25.md</code></td><td>Captures the distinct void-versus-new-sale lifecycle policy.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What remains canonical after browser identity replacement?</p>
+        <ol data-quiz-options>
+          <li>The replacement local open</li>
+          <li data-quiz-correct>The original cloud register session</li>
+          <li>A new cloud session</li>
+          <li>The retired terminal record</li>
+        </ol>
+        <p data-quiz-explanation>One physical drawer keeps one canonical cloud ledger; terminal authority moves.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How is GHS638 treated?</p>
+        <ol data-quiz-options>
+          <li>A second opening float</li>
+          <li>A sale</li>
+          <li data-quiz-correct>A physical cash-count observation</li>
+          <li>A cash adjustment</li>
+        </ol>
+        <p data-quiz-explanation>The count is evidence for reconciliation and does not alter the original opening float.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does the handoff reread events during execution?</p>
+        <ol data-quiz-options>
+          <li>To trust the UI selection</li>
+          <li data-quiz-correct>To include sales uploaded after the initial query</li>
+          <li>To remove inventory checks</li>
+          <li>To avoid manager approval</li>
+        </ol>
+        <p data-quiz-explanation>The execution-time snapshot prevents late eligible sales from being stranded.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does a transaction terminal id represent after handoff?</p>
+        <ol data-quiz-options>
+          <li>Current drawer authority</li>
+          <li data-quiz-correct>Immutable sale provenance</li>
+          <li>Manager identity</li>
+          <li>Register number</li>
+        </ol>
+        <p data-quiz-explanation>Historical attribution stays unchanged even when session authority transfers.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which terminal must authenticate a historical-sale void?</p>
+        <ol data-quiz-options>
+          <li>The retired sale terminal</li>
+          <li data-quiz-correct>The register session&#x27;s current terminal</li>
+          <li>Any store terminal</li>
+          <li>No terminal</li>
+        </ol>
+        <p data-quiz-explanation>Lineage authorizes the sale, but active staff proof remains bound to current authority.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which session statuses allow void application?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Open, active, and closing</li>
+          <li>Closed only</li>
+          <li>Closing and closed</li>
+          <li>Every status</li>
+        </ol>
+        <p data-quiz-explanation>Voids have a distinct policy; finalized and rejected closeouts still fail closed.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which terminal reaches drawer cash recording?</p>
+        <ol data-quiz-options>
+          <li>The historical transaction terminal</li>
+          <li data-quiz-correct>The current register-session terminal</li>
+          <li>The caller&#x27;s chosen terminal</li>
+          <li>Both terminals</li>
+        </ol>
+        <p data-quiz-explanation>The real cash handler enforces the session&#x27;s current identity.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens when historical-terminal lineage exceeds its bound?</p>
+        <ol data-quiz-options>
+          <li>The oldest terminal is trusted</li>
+          <li data-quiz-correct>The check fails closed</li>
+          <li>All terminals become valid</li>
+          <li>The sale is rewritten</li>
+        </ol>
+        <p data-quiz-explanation>Incomplete historical lineage is never treated as authority; current-terminal sales do not need that lookup.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What remains intentionally unavailable while closing?</p>
+        <ol data-quiz-options>
+          <li>Sale void</li>
+          <li data-quiz-correct>Payment-method correction</li>
+          <li>Transaction detail</li>
+          <li>Receipt printing</li>
+        </ol>
+        <p data-quiz-explanation>Only the void lifecycle gap is closed; unrelated correction policy is unchanged.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What proves production convergence after cloud repair?</p>
+        <ol data-quiz-options>
+          <li>Deployment alone</li>
+          <li>A successful mutation response</li>
+          <li data-quiz-correct>Cleanup acknowledgement plus a fresh zero-review heartbeat</li>
+          <li>Changing the register number</li>
+        </ol>
+        <p data-quiz-explanation>Browser-local review state must also converge before the incident is operationally complete.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>session context</dt><dd>Reconstructed the production diagnosis, prior convergence work, review-loop corrections, exact finish line, and stale-evidence warning.</dd>
+      <dt>delivered diff</dt><dd>Mapped handoff and void flows, immutable versus current authority, failure boundaries, tests, generated artifacts, and unchanged pricing behavior.</dd>
+      <dt>quiz and report reviewer</dt><dd>Reviewed the regenerated report for unsupported claims, missing failure boundaries, and quiz comprehension quality.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

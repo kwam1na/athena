@@ -285,6 +285,13 @@ function buildTerminalHealthSummaryResult() {
       status: "open",
     },
     syncEvidence: {
+      terminalIdentityHandoffCandidate: {
+        canonicalRegisterSessionId: "register-session-1",
+        countedCash: 63800,
+        localRegisterSessionId: "local-register-1",
+        previousTerminalId: "terminal-old",
+        replacementTerminalId: "terminal-1",
+      },
       latestEvent: {
         localEventId: "event-1",
         localRegisterSessionId: "local-register-1",

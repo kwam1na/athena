@@ -1,7 +1,10 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../../_generated/server";
 
-import type { PosLocalSyncEventStatus } from "../../../../shared/posLocalSyncContract";
+import {
+  isSettledPosLocalSyncRejectionCode,
+  type PosLocalSyncEventStatus,
+} from "../../../../shared/posLocalSyncContract";
 import { getTerminalRuntimeMaterialSignature } from "../../../../shared/pos/terminalRuntimeMaterial";
 import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
 import type {
@@ -17,12 +20,19 @@ import {
   resolveTerminalRegisterSessionConflict,
 } from "./terminalRegisterConflictResolution";
 
-const MANAGER_REJECTED_SYNC_REVIEW_CODE = "manager_rejected";
 export const TERMINAL_SYNC_REVIEW_SUMMARY_CAP = 50;
-const TERMINAL_SYNC_REVIEW_SOURCE_LOOKUP_CAP =
-  TERMINAL_SYNC_REVIEW_SUMMARY_CAP;
+const TERMINAL_SYNC_REVIEW_SOURCE_LOOKUP_CAP = TERMINAL_SYNC_REVIEW_SUMMARY_CAP;
 export const TERMINAL_SYNC_REVIEW_TARGET_LOOKUP_CAP = 200;
 const TERMINAL_SYNC_UNRESOLVED_CONFLICT_EXAMPLE_CAP = 20;
+const TERMINAL_IDENTITY_HANDOFF_REPLAY_EVENT_LIMIT = 20;
+const TERMINAL_IDENTITY_HANDOFF_SALE_LINE_LIMIT = 100;
+const DUPLICATE_REGISTER_OPEN_SUMMARIES = new Set([
+  "A register session is already open for this terminal.",
+  "A register session is already open for this register number.",
+  "Local register session id was reused by a different synced register open.",
+]);
+const MISSING_REGISTER_SESSION_MAPPING_SUMMARY =
+  "Register session mapping is missing for synced POS history.";
 const TERMINAL_SYNC_REVIEW_CONFLICT_TYPES = [
   "duplicate_local_id",
   "inventory",
@@ -352,6 +362,12 @@ export async function getTerminalSyncEvidence(
   const unresolvedConflicts = conflictSummary.conflicts
     .slice(0, TERMINAL_SYNC_UNRESOLVED_CONFLICT_EXAMPLE_CAP)
     .map(toTerminalSyncConflictExample);
+  const terminalIdentityHandoffCandidate =
+    await buildTerminalIdentityHandoffCandidate(ctx, {
+      conflicts: conflictSources.conflicts,
+      storeId: args.storeId,
+      terminalId: args.terminalId,
+    });
 
   const latestCursor = cursors.reduce<Doc<"posLocalSyncCursor"> | null>(
     (latest, cursor) =>
@@ -367,6 +383,9 @@ export async function getTerminalSyncEvidence(
       unresolvedConflictCount: conflictSummary.reviewSummary.meta.sampledCount,
       unresolvedConflicts,
       reviewSummary: conflictSummary.reviewSummary,
+      ...(terminalIdentityHandoffCandidate
+        ? { terminalIdentityHandoffCandidate }
+        : {}),
     };
   }
 
@@ -414,8 +433,178 @@ export async function getTerminalSyncEvidence(
     unresolvedConflictCount: conflictSummary.reviewSummary.meta.sampledCount,
     unresolvedConflicts,
     reviewSummary: conflictSummary.reviewSummary,
+    ...(terminalIdentityHandoffCandidate
+      ? { terminalIdentityHandoffCandidate }
+      : {}),
     acceptedThroughSequence: latestCursor?.acceptedThroughSequence,
     cursorUpdatedAt: latestCursor?.updatedAt,
+  };
+}
+
+async function buildTerminalIdentityHandoffCandidate(
+  ctx: QueryCtx | MutationCtx,
+  args: {
+    conflicts: Array<Doc<"posLocalSyncConflict">>;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+): Promise<NonNullable<
+  TerminalSyncEvidence["terminalIdentityHandoffCandidate"]
+> | null> {
+  const duplicateOpenConflicts = args.conflicts.filter((conflict) => {
+    const blockingRegisterSessionId =
+      conflict.details?.blockingRegisterSessionId;
+    return (
+      DUPLICATE_REGISTER_OPEN_SUMMARIES.has(conflict.summary) &&
+      typeof blockingRegisterSessionId === "string" &&
+      blockingRegisterSessionId.length > 0
+    );
+  });
+  if (duplicateOpenConflicts.length !== 1) {
+    return null;
+  }
+  const duplicateOpenConflict = duplicateOpenConflicts[0];
+  const [scopedConflictsPage, scopedEventsPage] = await Promise.all([
+    ctx.db
+      .query("posLocalSyncConflict")
+      .withIndex("by_store_terminal_register_status_type", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("terminalId", args.terminalId)
+          .eq(
+            "localRegisterSessionId",
+            duplicateOpenConflict.localRegisterSessionId,
+          )
+          .eq("status", "needs_review"),
+      )
+      .take(501),
+    ctx.db
+      .query("posLocalSyncEvent")
+      .withIndex("by_store_terminal_register_sequence", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("terminalId", args.terminalId)
+          .eq(
+            "localRegisterSessionId",
+            duplicateOpenConflict.localRegisterSessionId,
+          ),
+      )
+      .take(501),
+  ]);
+  if (scopedConflictsPage.length > 500 || scopedEventsPage.length > 500) {
+    return null;
+  }
+  const blockingRegisterSessionId = duplicateOpenConflict.details
+    ?.blockingRegisterSessionId as Id<"registerSession">;
+  const openEvent = scopedEventsPage.find(
+    (event) =>
+      event.eventType === "register_opened" &&
+      event.localEventId === duplicateOpenConflict.localEventId &&
+      event.localRegisterSessionId ===
+        duplicateOpenConflict.localRegisterSessionId,
+  );
+  const openingFloat = openEvent?.payload.openingFloat;
+  if (
+    !openEvent ||
+    openEvent.status !== "conflicted" ||
+    typeof openingFloat !== "number"
+  ) {
+    return null;
+  }
+
+  const scopedConflicts = scopedConflictsPage;
+  const replayEvents = scopedEventsPage.filter(
+    (event) =>
+      event.localRegisterSessionId === openEvent.localRegisterSessionId &&
+      event.status === "conflicted" &&
+      (event.eventType === "sale_completed" ||
+        event.eventType === "sale_cleared"),
+  );
+  const replayEventIds = new Set(
+    replayEvents.map((event) => event.localEventId),
+  );
+  const hasOnlyHandoffConflicts = scopedConflicts.every(
+    (conflict) =>
+      conflict._id === duplicateOpenConflict._id ||
+      (conflict.summary === MISSING_REGISTER_SESSION_MAPPING_SUMMARY &&
+        replayEventIds.has(conflict.localEventId)),
+  );
+  const everyReplayEventHasConflict = replayEvents.every((event) =>
+    scopedConflicts.some(
+      (conflict) =>
+        conflict.localEventId === event.localEventId &&
+        conflict.summary === MISSING_REGISTER_SESSION_MAPPING_SUMMARY,
+    ),
+  );
+  const totalSaleLineCount = replayEvents.reduce(
+    (total, event) =>
+      event.eventType === "sale_completed"
+        ? total +
+          (Array.isArray(event.payload?.items)
+            ? event.payload.items.length
+            : 0) +
+          (Array.isArray(event.payload?.serviceLines)
+            ? event.payload.serviceLines.length
+            : 0)
+        : total,
+    0,
+  );
+  if (
+    !hasOnlyHandoffConflicts ||
+    !everyReplayEventHasConflict ||
+    replayEvents.length > TERMINAL_IDENTITY_HANDOFF_REPLAY_EVENT_LIMIT ||
+    totalSaleLineCount > TERMINAL_IDENTITY_HANDOFF_SALE_LINE_LIMIT
+  ) {
+    return null;
+  }
+
+  const [canonicalSession, replacementTerminal, existingRegisterMapping] =
+    await Promise.all([
+    ctx.db.get("registerSession", blockingRegisterSessionId),
+    ctx.db.get("posTerminal", args.terminalId),
+    ctx.db
+      .query("posLocalSyncMapping")
+      .withIndex("by_store_terminal_local", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("terminalId", args.terminalId)
+          .eq("localRegisterSessionId", openEvent.localRegisterSessionId)
+          .eq("localIdKind", "registerSession")
+          .eq("localId", openEvent.localRegisterSessionId),
+      )
+      .unique(),
+  ]);
+  const previousTerminal = canonicalSession?.terminalId
+    ? await ctx.db.get("posTerminal", canonicalSession.terminalId)
+    : null;
+  if (
+    !canonicalSession ||
+    canonicalSession.storeId !== args.storeId ||
+    (canonicalSession.status !== "active" &&
+      canonicalSession.status !== "open") ||
+    !canonicalSession.terminalId ||
+    openEvent.payload.registerNumber !== canonicalSession.registerNumber ||
+    canonicalSession.terminalId === args.terminalId ||
+    !previousTerminal ||
+    previousTerminal.storeId !== args.storeId ||
+    previousTerminal.status !== "active" ||
+    !replacementTerminal ||
+    replacementTerminal.storeId !== args.storeId ||
+    replacementTerminal.status !== "active" ||
+    replacementTerminal.registerNumber !== canonicalSession.registerNumber ||
+    (existingRegisterMapping &&
+      (existingRegisterMapping.cloudTable !== "registerSession" ||
+        existingRegisterMapping.cloudId !== canonicalSession._id))
+  ) {
+    return null;
+  }
+
+  return {
+    canonicalRegisterSessionId: canonicalSession._id,
+    countedCash: openingFloat,
+    localRegisterSessionId: openEvent.localRegisterSessionId,
+    previousTerminalId: canonicalSession.terminalId,
+    replacementTerminalId: args.terminalId,
   };
 }
 
@@ -426,7 +615,10 @@ export async function getTerminalSyncReviewSummaryEvidence(
     terminalId: Id<"posTerminal">;
   },
 ): Promise<TerminalSyncEvidence> {
-  const conflictSources = await listTerminalSyncReviewSourceConflicts(ctx, args);
+  const conflictSources = await listTerminalSyncReviewSourceConflicts(
+    ctx,
+    args,
+  );
   const conflictSummary = await buildTerminalSyncReviewSummary(ctx, {
     conflicts: conflictSources.conflicts,
     hasMore: conflictSources.hasMore,
@@ -480,9 +672,9 @@ async function listTerminalSyncReviewSourceConflicts(
   };
 }
 
-function dedupeConflictsById<T extends Pick<Doc<"posLocalSyncConflict">, "_id">>(
-  conflicts: T[],
-) {
+function dedupeConflictsById<
+  T extends Pick<Doc<"posLocalSyncConflict">, "_id">,
+>(conflicts: T[]) {
   const seenConflictIds = new Set<Id<"posLocalSyncConflict">>();
   return conflicts.filter((conflict) => {
     if (seenConflictIds.has(conflict._id)) {
@@ -550,8 +742,7 @@ async function buildTerminalSyncReviewSummary(
     const groupInput = await classifyTerminalSyncReviewConflict(ctx, {
       conflict,
       storeId: args.storeId,
-      targetResolutionIncomplete:
-        openWorkTargets.targetResolutionIncomplete,
+      targetResolutionIncomplete: openWorkTargets.targetResolutionIncomplete,
       terminalId: args.terminalId,
     });
     if (!groupInput) {
@@ -746,7 +937,10 @@ async function classifyTerminalSyncReviewConflict(
     };
   }
 
-  if (args.conflict.conflictType === "inventory" && args.targetResolutionIncomplete) {
+  if (
+    args.conflict.conflictType === "inventory" &&
+    args.targetResolutionIncomplete
+  ) {
     return {
       actionability: "diagnostic_only",
       conflictType: args.conflict.conflictType,
@@ -1008,7 +1202,7 @@ function isActionableTerminalReviewSyncEvent(event: Doc<"posLocalSyncEvent">) {
 function isActionableRejectedSyncEvent(event: Doc<"posLocalSyncEvent">) {
   return (
     event.status === "rejected" &&
-    event.rejectionCode !== MANAGER_REJECTED_SYNC_REVIEW_CODE
+    !isSettledPosLocalSyncRejectionCode(event.rejectionCode)
   );
 }
 
@@ -1038,9 +1232,7 @@ export async function resolveTerminalRegisterSessionActionTarget(
     return null;
   }
   const resolution = await resolveTerminalRegisterSessionConflict(ctx, args);
-  return resolution.status === "current"
-    ? resolution.registerSessionId
-    : null;
+  return resolution.status === "current" ? resolution.registerSessionId : null;
 }
 
 export async function getTerminalByFingerprint(

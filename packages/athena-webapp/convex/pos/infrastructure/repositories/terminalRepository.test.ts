@@ -945,22 +945,20 @@ describe("terminalRepository sync evidence", () => {
   });
 
   it("finds actionable inventory conflicts behind newer settled register conflicts", async () => {
-    const settledRegisterConflicts = Array.from(
-      { length: 5_010 },
-      (_, index) =>
-        buildSyncConflict({
-          _id: `conflict-settled-${index}` as Id<"posLocalSyncConflict">,
-          conflictType: "permission",
-          details: {
-            blockingRegisterSessionId: "register-session-closed",
-            localRegisterSessionId: `local-register-${index}`,
-            registerNumber: "1",
-          },
-          localEventId: `event-register-open-${index}`,
+    const settledRegisterConflicts = Array.from({ length: 5_010 }, (_, index) =>
+      buildSyncConflict({
+        _id: `conflict-settled-${index}` as Id<"posLocalSyncConflict">,
+        conflictType: "permission",
+        details: {
+          blockingRegisterSessionId: "register-session-closed",
           localRegisterSessionId: `local-register-${index}`,
-          sequence: 1_000 + index,
-          summary: "A register session is already open for this terminal.",
-        }),
+          registerNumber: "1",
+        },
+        localEventId: `event-register-open-${index}`,
+        localRegisterSessionId: `local-register-${index}`,
+        sequence: 1_000 + index,
+        summary: "A register session is already open for this terminal.",
+      }),
     );
     const ctx = buildCtx({
       posLocalSyncConflict: [
@@ -1186,9 +1184,15 @@ describe("terminalRepository sync evidence", () => {
     );
   });
 
-  it("excludes manager-rejected sync reviews from actionable terminal evidence", async () => {
+  it("excludes settled rejected sync events from actionable terminal evidence", async () => {
     const ctx = buildCtx({
       posLocalSyncEvent: [
+        buildSyncEvent({
+          localEventId: "event-terminal-handoff",
+          rejectionCode: "terminal_identity_handoff",
+          sequence: 7,
+          status: "rejected",
+        }),
         buildSyncEvent({
           localEventId: "event-manager-rejected",
           rejectionCode: "manager_rejected",
@@ -1215,7 +1219,7 @@ describe("terminalRepository sync evidence", () => {
 
     expect(result).toMatchObject({
       latestEvent: expect.objectContaining({
-        localEventId: "event-manager-rejected",
+        localEventId: "event-terminal-handoff",
         status: "rejected",
       }),
       latestReviewEvent: expect.objectContaining({
@@ -1232,6 +1236,151 @@ describe("terminalRepository sync evidence", () => {
       },
       rejectedCount: 1,
     });
+  });
+
+  it("surfaces an exact terminal-identity handoff candidate for the replacement terminal", async () => {
+    const seed: NonNullable<Parameters<typeof buildCtx>[0]> = {
+      posLocalSyncConflict: [
+        buildSyncConflict({
+          _id: "conflict-open" as Id<"posLocalSyncConflict">,
+          details: { blockingRegisterSessionId: "register-session-old" },
+          localEventId: "event-open",
+          localRegisterSessionId: "local-register-new",
+          sequence: 1,
+          summary:
+            "A register session is already open for this register number.",
+        }),
+        buildSyncConflict({
+          _id: "conflict-sale" as Id<"posLocalSyncConflict">,
+          details: { localTransactionId: "transaction-local-1" },
+          localEventId: "event-sale",
+          localRegisterSessionId: "local-register-new",
+          sequence: 2,
+          summary:
+            "Register session mapping is missing for synced POS history.",
+        }),
+        buildSyncConflict({
+          _id: "conflict-clear" as Id<"posLocalSyncConflict">,
+          details: { localPosSessionId: "local-pos-cleared" },
+          localEventId: "event-clear",
+          localRegisterSessionId: "local-register-new",
+          sequence: 3,
+          summary:
+            "Register session mapping is missing for synced POS history.",
+        }),
+      ],
+      posLocalSyncEvent: [
+        buildSyncEvent({
+          eventType: "register_opened",
+          localEventId: "event-open",
+          localRegisterSessionId: "local-register-new",
+          payload: { openingFloat: 63800, registerNumber: "1" },
+          sequence: 1,
+          status: "conflicted",
+        }),
+        buildSyncEvent({
+          eventType: "sale_cleared",
+          localEventId: "event-clear",
+          localRegisterSessionId: "local-register-new",
+          payload: { localPosSessionId: "local-pos-cleared" },
+          sequence: 3,
+          status: "conflicted",
+        }),
+        buildSyncEvent({
+          eventType: "sale_completed",
+          localEventId: "event-sale",
+          localRegisterSessionId: "local-register-new",
+          sequence: 2,
+          status: "conflicted",
+        }),
+      ],
+      posTerminal: [
+        {
+          _creationTime: 1,
+          _id: "terminal-1" as Id<"posTerminal">,
+          browserInfo: { userAgent: "test" },
+          displayName: "Replacement terminal",
+          fingerprintHash: "replacement",
+          loginMode: "pos_only",
+          registerNumber: "1",
+          registeredAt: 1,
+          registeredByUserId: "user-1" as Id<"athenaUser">,
+          status: "active",
+          storeId: "store-1" as Id<"store">,
+          transactionCapability: "products_and_services",
+        },
+        {
+          _creationTime: 1,
+          _id: "terminal-old" as Id<"posTerminal">,
+          browserInfo: { userAgent: "test" },
+          displayName: "Original terminal",
+          fingerprintHash: "original",
+          loginMode: "pos_only",
+          registerNumber: "0",
+          registeredAt: 1,
+          registeredByUserId: "user-1" as Id<"athenaUser">,
+          status: "active",
+          storeId: "store-1" as Id<"store">,
+          transactionCapability: "products_and_services",
+        },
+      ],
+      registerSession: [
+        {
+          _creationTime: 1,
+          _id: "register-session-old" as Id<"registerSession">,
+          expectedCash: 44300,
+          openedAt: 1,
+          openingFloat: 4800,
+          registerNumber: "1",
+          status: "active",
+          storeId: "store-1" as Id<"store">,
+          terminalId: "terminal-old" as Id<"posTerminal">,
+        },
+      ],
+    };
+    seed.posLocalSyncEvent!.push(
+      ...Array.from({ length: 100 }, (_, index) =>
+        buildSyncEvent({
+          localEventId: `unrelated-event-${index}`,
+          localRegisterSessionId: "unrelated-drawer",
+          sequence: 100 + index,
+          status: "projected",
+        }),
+      ),
+    );
+    const ctx = buildCtx(seed);
+
+    const result = await getTerminalSyncEvidence(ctx as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    expect(result.terminalIdentityHandoffCandidate).toEqual({
+      canonicalRegisterSessionId: "register-session-old",
+      countedCash: 63800,
+      localRegisterSessionId: "local-register-new",
+      previousTerminalId: "terminal-old",
+      replacementTerminalId: "terminal-1",
+    });
+
+    seed.posLocalSyncConflict!.push(
+      buildSyncConflict({
+        _id: "conflict-inventory" as Id<"posLocalSyncConflict">,
+        conflictType: "inventory",
+        localEventId: "event-sale",
+        localRegisterSessionId: "local-register-new",
+        sequence: 2,
+        summary: "Inventory needs manager review for a synced offline sale.",
+      }),
+    );
+    const blockedResult = await getTerminalSyncEvidence(
+      buildCtx(seed) as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+      },
+    );
+    expect(blockedResult.terminalIdentityHandoffCandidate).toBeUndefined();
   });
 
   it("does not report terminal review evidence for fully manager-rejected sync history", async () => {
@@ -1441,6 +1590,7 @@ function buildCtx(
     posLocalSyncConflict?: Array<Doc<"posLocalSyncConflict">>;
     posLocalSyncEvent?: Array<Doc<"posLocalSyncEvent">>;
     posLocalSyncMapping?: Array<Doc<"posLocalSyncMapping">>;
+    posTerminal?: Array<Doc<"posTerminal">>;
     posTerminalRuntimeStatus?: Array<Doc<"posTerminalRuntimeStatus">>;
     registerSession?: Array<Doc<"registerSession">>;
   } = {},

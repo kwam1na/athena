@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-27T18:02:05.260Z",
+  "branch": "codex/pos-terminal-identity-handoff",
+  "headSha": "8b4d528c1bd25b88af8e5aa4a11401a60c7897e0",
+  "deliverableDiffFingerprint": "fee36cfe46f71e7b88010ae263f371c4b6aae33e5d50523d7ad4e67da751631c",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 7,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 989506.8231660001
+  },
+  "reviewLoop": {
+    "providerId": "ce-code-review",
+    "runId": "20260827-terminal-handoff-final",
+    "finalPassId": "pass-final",
+    "recordedAt": "2026-08-27T17:45:31.705Z",
+    "iterationCount": 4,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 0,
+      "P3": 0
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}
