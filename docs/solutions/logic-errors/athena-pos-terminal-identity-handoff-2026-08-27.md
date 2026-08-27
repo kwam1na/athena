@@ -19,7 +19,7 @@ tags:
   - register-session
   - terminal-identity
   - authority
-delivery_diff_fingerprint: fee36cfe46f71e7b88010ae263f371c4b6aae33e5d50523d7ad4e67da751631c
+delivery_diff_fingerprint: 01f8e2b27da7a99cd65ee7111ab6ea4301fd61406e21cdff7636194077623cda
 ---
 
 # Athena POS Terminal Identity Handoff
@@ -62,6 +62,9 @@ transaction:
 - Transfer the canonical session's terminal authority with a revision bump,
   mark the old identity lost, and record the count, pre-replay expected cash,
   and handoff variance in the operational ledger.
+- Preserve the previous terminal id in the append-only handoff event and use
+  that indexed lineage when validating later corrections against historical
+  transactions; do not rewrite their original terminal attribution.
 - Queue an exact, idempotent terminal recovery command for the repaired local
   event ids. The replacement browser round-trips server resolution before it
   marks those IndexedDB rows locally resolved, and its next runtime heartbeat
@@ -83,6 +86,9 @@ repair.
   closed when the pending drawer exceeds it.
 - Keep terminal ownership changes on the centralized register-session authority
   writer and increment the lifecycle authority revision.
+- After transferring terminal ownership, test void request initiation and
+  approved application for sales recorded by both the previous and replacement
+  identities.
 - Test at least one sale absent from the caller's review-id snapshot and verify
   cash and non-cash payment effects separately.
 - Test the real mixed history shape: completed sales plus a non-financial clear

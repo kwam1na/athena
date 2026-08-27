@@ -611,6 +611,7 @@ export async function getTransactionById(
     registerNumber,
     registerSessionId,
     registerSessionStatus: registerSession?.status,
+    registerSessionTerminalId: registerSession?.terminalId,
     terminalId,
     terminalName: terminal?.displayName,
     paymentMethod: transaction.paymentMethod,

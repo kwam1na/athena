@@ -43,6 +43,21 @@ describe("registerSessionLifecyclePolicy", () => {
     }
   });
 
+  it("allows void application for a terminal that previously owned the same register session", () => {
+    expect(
+      getRegisterSessionVoidApplicationStatus({
+        previousTerminalIds: ["terminal-1"],
+        registerSession: {
+          status: "closing",
+          storeId: "store-1",
+          terminalId: "terminal-2",
+        },
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).toEqual({ allowed: true });
+  });
+
   it("blocks void application for closed and rejected closeout sessions", () => {
     for (const status of ["closeout_rejected", "closed"] as const) {
       expect(

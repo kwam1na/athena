@@ -63,12 +63,22 @@ vi.mock("../application/commands/correctTransaction", () => ({
   correctTransactionPaymentMethod: vi.fn(),
 }));
 
-vi.mock("../application/commands/completeTransaction", () => ({
-  completeTransaction: vi.fn(),
-  createTransactionFromSessionHandler: vi.fn(),
-  updateInventory: vi.fn(),
-  voidTransaction: vi.fn(),
-}));
+vi.mock(
+  "../application/commands/completeTransaction",
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import("../application/commands/completeTransaction")
+      >();
+    return {
+      ...actual,
+      completeTransaction: vi.fn(),
+      createTransactionFromSessionHandler: vi.fn(),
+      updateInventory: vi.fn(),
+      voidTransaction: vi.fn(),
+    };
+  },
+);
 
 type SerializedValidator = {
   type: string;
@@ -1353,7 +1363,9 @@ describe("voidTransaction public mutation", () => {
   function createAuthorizedVoidCtx(overrides?: {
     credential?: Record<string, unknown> | null;
     proof?: Record<string, unknown> | null;
+    registerSession?: Record<string, unknown> | null;
     staffProfile?: Record<string, unknown> | null;
+    transaction?: Record<string, unknown>;
   }) {
     const staffProof = {
       _id: "proof-row-1",
@@ -1383,8 +1395,10 @@ describe("voidTransaction public mutation", () => {
 
     vi.mocked(transactionQueries.getTransaction).mockResolvedValue({
       _id: "txn-1",
+      registerSessionId: "register-session-1",
       storeId: "store-1",
       terminalId: "terminal-1",
+      ...overrides?.transaction,
     } as never);
     mockAdmissionAwareAuth();
 
@@ -1403,11 +1417,33 @@ describe("voidTransaction public mutation", () => {
           if (tableName === "staffCredential" && id === "credential-1") {
             return credential;
           }
+          if (tableName === "registerSession" && id === "register-session-1") {
+            return overrides?.registerSession === null
+              ? null
+              : {
+                  _id: "register-session-1",
+                  status: "closing",
+                  storeId: "store-1",
+                  terminalId: "terminal-1",
+                  ...overrides?.registerSession,
+                };
+          }
           return null;
         }),
         patch: vi.fn(),
-        query: vi.fn(() => ({
+        query: vi.fn((tableName: string) => ({
           withIndex: vi.fn(() => ({
+            take: vi.fn(async () =>
+              tableName === "operationalEvent"
+                ? [
+                    {
+                      eventType:
+                        "register_session_terminal_identity_handed_off",
+                      metadata: { previousTerminalId: "terminal-1" },
+                    },
+                  ]
+                : [],
+            ),
             unique: vi.fn(async () =>
               overrides?.proof === null ? null : staffProof,
             ),
@@ -1416,6 +1452,59 @@ describe("voidTransaction public mutation", () => {
       },
     };
   }
+
+  it("authenticates a handed-off sale on the register session's current terminal", async () => {
+    vi.mocked(completeTransactionCommands.voidTransaction).mockResolvedValue({
+      kind: "approval_required",
+      approval: {
+        action: { key: "pos.transaction.void" },
+        copy: { message: "Review void.", title: "Approval required" },
+        reason: "Manager approval is required.",
+        requiredRole: "manager",
+        resolutionModes: [{ kind: "inline_manager_proof" }],
+        subject: { id: "txn-1", type: "pos_transaction" },
+      },
+    } as never);
+    const ctx = createAuthorizedVoidCtx({
+      proof: { terminalId: "terminal-2" },
+      registerSession: { terminalId: "terminal-2" },
+      transaction: { terminalId: "terminal-1" },
+    });
+
+    await expect(
+      getHandler(voidTransaction)(ctx as never, {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        reason: "Duplicate sale",
+        staffProofToken: "proof-token-1",
+        transactionId: "txn-1" as Id<"posTransaction">,
+      }),
+    ).resolves.toMatchObject({ kind: "approval_required" });
+
+    expect(completeTransactionCommands.voidTransaction).toHaveBeenCalled();
+  });
+
+  it("rejects a retired-terminal proof for a handed-off sale", async () => {
+    const ctx = createAuthorizedVoidCtx({
+      proof: { terminalId: "terminal-1" },
+      registerSession: { terminalId: "terminal-2" },
+      transaction: { terminalId: "terminal-1" },
+    });
+
+    await expect(
+      getHandler(voidTransaction)(ctx as never, {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        reason: "Duplicate sale",
+        staffProofToken: "proof-token-1",
+        transactionId: "txn-1" as Id<"posTransaction">,
+      }),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: { code: "authentication_failed" },
+    });
+
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(completeTransactionCommands.voidTransaction).not.toHaveBeenCalled();
+  });
 
   it("requires a signed-in staff actor before voiding a completed transaction", async () => {
     await expect(

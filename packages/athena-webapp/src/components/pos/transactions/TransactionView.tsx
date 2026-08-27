@@ -951,19 +951,10 @@ export function TransactionView() {
   const readModelAllowsVoid =
     transactionRecord.canVoid !== false &&
     transactionRecord.voidEligibility?.eligible !== false;
-  const registerAllowsVoid = !registerSessionIsClosing;
-  const voidUnavailableMessage = registerSessionIsClosing
-    ? formatRegisterReopenActionMessage({
-        action: "void this sale",
-        registerNumber: transaction.registerNumber,
-      })
-    : null;
   const transactionCanRequestVoid =
     isCompletedTransaction && !isVoidedTransaction && readModelAllowsVoid;
   const canVoidTransaction =
-    transactionCanRequestVoid &&
-    registerAllowsVoid &&
-    !hasPendingVoidApprovalRequest;
+    transactionCanRequestVoid && !hasPendingVoidApprovalRequest;
   const transactionStatusLabel = isVoidedTransaction ? "Voided" : "Completed";
   const transactionStatusAt = transactionVoidedAt ?? transaction.completedAt;
 
@@ -986,7 +977,11 @@ export function TransactionView() {
       pendingCorrection === "line_items" ||
       pendingCorrection === "void"
     ) {
-      if (!transaction?.terminalId) {
+      const authenticationTerminalId =
+        pendingCorrection === "void"
+          ? (transaction?.registerSessionTerminalId ?? transaction?.terminalId)
+          : transaction?.terminalId;
+      if (!authenticationTerminalId) {
         return {
           kind: "user_error" as const,
           error: {
@@ -996,15 +991,13 @@ export function TransactionView() {
           },
         };
       }
-      const transactionTerminalId = transaction.terminalId;
-
       return runCommand(() =>
         correctTerminalAuth({
           allowedRoles: ["cashier", "manager"],
           allowActiveSessionsOnOtherTerminals: true,
           pinHash: args.pinHash,
           storeId: activeStore._id,
-          terminalId: transactionTerminalId,
+          terminalId: authenticationTerminalId,
           username: args.username,
         }),
       );
@@ -1673,15 +1666,9 @@ export function TransactionView() {
                         hasPendingVoidApprovalRequest ? (
                           <Button
                             className="w-full"
-                            disabled={
-                              hasPendingVoidApprovalRequest ||
-                              !registerAllowsVoid
-                            }
+                            disabled={hasPendingVoidApprovalRequest}
                             onClick={() => {
-                              if (
-                                hasPendingVoidApprovalRequest ||
-                                !registerAllowsVoid
-                              ) {
+                              if (hasPendingVoidApprovalRequest) {
                                 return;
                               }
 
@@ -1701,11 +1688,6 @@ export function TransactionView() {
                               ? "Void requested"
                               : "Void sale"}
                           </Button>
-                        ) : null}
-                        {voidUnavailableMessage ? (
-                          <ActionUnavailableNotice>
-                            {voidUnavailableMessage}
-                          </ActionUnavailableNotice>
                         ) : null}
                         {voidApprovalLinkParams ? (
                           <div className="rounded-[calc(var(--radius)*0.85)] border border-border bg-background p-3">
