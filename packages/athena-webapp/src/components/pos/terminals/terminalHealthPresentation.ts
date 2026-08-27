@@ -88,9 +88,7 @@ export type TerminalAppUpdatePresentation = {
  *   operational blockers.
  */
 export type TerminalOperationalExplanationSource =
-  | "inventory_scoped"
-  | "missing_aggregate"
-  | "server_aggregate";
+  "inventory_scoped" | "missing_aggregate" | "server_aggregate";
 
 export type TerminalOperationalExplanationPresentation = {
   detail: string;
@@ -146,7 +144,7 @@ const MANUAL_REVIEW_EVENT_PATTERN =
   /\b(sale|payment|inventory|closeout|variance|transaction|cart|item)_?|\bpayment\b|\binventory\b|\bcloseout\b|\bvariance\b/i;
 
 export function formatTerminalTimestamp(timestamp?: number | null) {
-  if (!timestamp) {
+  if (!timestamp || !Number.isFinite(timestamp)) {
     return "Not recorded";
   }
 

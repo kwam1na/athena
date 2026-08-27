@@ -5,7 +5,6 @@ import { AthenaUnauthenticatedError } from "../../lib/athenaUnauthenticated";
 import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";
 import {
   POS_CLIENT_EVENT_MAX_BATCH,
-  POS_CLIENT_EVENT_MAX_MESSAGE_LENGTH,
   listClientEvents,
   recordClientEvents,
   sanitizeClientEventMetadata,
@@ -47,6 +46,7 @@ function createCtx(options?: {
       : options.terminal;
   const rows: StoredEvent[] = [...(options?.existingEvents ?? [])];
   const inserted: Array<Record<string, unknown>> = [];
+  const indexNames: string[] = [];
 
   const db = {
     get: vi.fn(async (table: string, id: string) => {
@@ -69,11 +69,12 @@ function createCtx(options?: {
       let filtered = rows;
       const builder = {
         withIndex: (
-          _name: string,
+          name: string,
           cb: (q: {
             eq: (field: string, value: unknown) => unknown;
           }) => unknown,
         ) => {
+          indexNames.push(name);
           const constraints: Array<[string, unknown]> = [];
           const q = {
             eq(field: string, value: unknown) {
@@ -101,7 +102,7 @@ function createCtx(options?: {
     }),
   };
 
-  return { ctx: { db }, inserted };
+  return { ctx: { db }, indexNames, inserted };
 }
 
 function baseEvent(overrides: Partial<Record<string, unknown>> = {}) {
@@ -112,6 +113,31 @@ function baseEvent(overrides: Partial<Record<string, unknown>> = {}) {
     message: "Checkout failed",
     occurredAt: 1000,
     metadata: {},
+    ...overrides,
+  };
+}
+
+function v2Event(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    version: 2 as const,
+    clientEventId: "client-event-v2-1",
+    level: "error" as const,
+    flow: "register" as const,
+    classification: "local_storage_transaction_failed" as const,
+    occurredAt: 1000,
+    routeId: "register" as const,
+    online: false,
+    operation: "openDrawer" as const,
+    errorName: "AbortError" as const,
+    source: { asset: "index-abc123.js", line: 12, column: 34 },
+    appVersion: "athena-webapp-1",
+    buildSha: "abc123",
+    localRegisterSessionId: "local-session-1",
+    metadata: {
+      storageEngine: "indexeddb",
+      accessMode: "readwrite",
+      storageCode: "transaction_aborted",
+    },
     ...overrides,
   };
 }
@@ -150,7 +176,7 @@ describe("recordClientEvents", () => {
       storeId: Id<"store">;
       terminalId?: Id<"posTerminal">;
       terminalFingerprint?: string;
-      events: Array<ReturnType<typeof baseEvent>>;
+      events: Array<Record<string, unknown>>;
     },
     Promise<{ kind: string; data?: { accepted: number; duplicates: number } }>
   >(recordClientEvents);
@@ -180,12 +206,112 @@ describe("recordClientEvents", () => {
       clientEventId: "client-event-1",
       level: "error",
       flow: "checkout",
-      message: "Checkout failed",
+      classification: "legacy_client_event",
+      message: "Legacy client event",
       occurredAt: 1000,
     });
     expect(typeof (inserted[0] as { receivedAt: number }).receivedAt).toBe(
       "number",
     );
+  });
+
+  it("persists a finite v2 envelope with server-derived copy", async () => {
+    const { ctx, inserted } = createCtx();
+
+    const result = await handler(ctx, {
+      storeId: STORE_ID,
+      terminalId: TERMINAL_ID,
+      terminalFingerprint: "fp-hash",
+      events: [v2Event()],
+    });
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: { accepted: 1, duplicates: 0 },
+    });
+    expect(inserted[0]).toMatchObject({
+      version: 2,
+      classification: "local_storage_transaction_failed",
+      message: "A local POS storage operation failed.",
+      routeId: "register",
+      operation: "openDrawer",
+      online: false,
+      errorName: "AbortError",
+      source: { asset: "index-abc123.js", line: 12, column: 34 },
+      buildSha: "abc123",
+    });
+    expect(inserted[0]).not.toHaveProperty("errorMessage");
+    expect(inserted[0]).not.toHaveProperty("errorStack");
+  });
+
+  it("rejects non-finite occurrence time and an unsafe v2 fingerprint", async () => {
+    const first = createCtx();
+    const invalidTime = await handler(first.ctx, {
+      storeId: STORE_ID,
+      terminalFingerprint: "fp-hash",
+      events: [v2Event({ occurredAt: Number.POSITIVE_INFINITY })],
+    });
+    expect(invalidTime).toMatchObject({
+      kind: "user_error",
+      error: { code: "validation_failed" },
+    });
+    expect(first.inserted).toHaveLength(0);
+
+    const second = createCtx();
+    const unsafeFingerprint = await handler(second.ctx, {
+      storeId: STORE_ID,
+      terminalFingerprint: "customer@example.com bearer secret",
+      events: [v2Event()],
+    });
+    expect(unsafeFingerprint).toMatchObject({
+      kind: "user_error",
+      error: { code: "validation_failed" },
+    });
+    expect(second.inserted).toHaveLength(0);
+  });
+
+  it("omits unsafe legacy correlation strings at ingest", async () => {
+    const { ctx, inserted } = createCtx();
+    await handler(ctx, {
+      storeId: STORE_ID,
+      terminalFingerprint: "unsafe fingerprint with spaces",
+      events: [
+        baseEvent({
+          localRegisterSessionId: "customer@example.com secret session",
+        }),
+      ],
+    });
+
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0].terminalFingerprint).toBeUndefined();
+    expect(inserted[0].localRegisterSessionId).toBeUndefined();
+  });
+
+  it("accepts legacy wire rows but discards every unsafe text field", async () => {
+    const { ctx, inserted } = createCtx();
+    await handler(ctx, {
+      storeId: STORE_ID,
+      events: [
+        baseEvent({
+          message: "customer@example.com receipt SECRET",
+          errorName: "CustomerNamedError",
+          errorMessage: "Bearer token-secret",
+          errorStack: "Error: staffProofToken=secret",
+          metadata: { customer: "customer@example.com" },
+        }),
+      ],
+    });
+
+    expect(inserted[0]).toMatchObject({
+      classification: "legacy_client_event",
+      message: "Legacy client event",
+      metadata: {},
+    });
+    expect(inserted[0]).not.toHaveProperty("errorName");
+    expect(inserted[0]).not.toHaveProperty("errorMessage");
+    expect(inserted[0]).not.toHaveProperty("errorStack");
+    expect(JSON.stringify(inserted[0])).not.toContain("customer@example.com");
+    expect(JSON.stringify(inserted[0])).not.toContain("token-secret");
   });
 
   it("dedupes events already stored for the same clientEventId", async () => {
@@ -277,7 +403,7 @@ describe("recordClientEvents", () => {
     expect(inserted).toHaveLength(POS_CLIENT_EVENT_MAX_BATCH);
   });
 
-  it("redacts secrets and PII from message, error detail, and metadata", async () => {
+  it("suppresses secrets and PII from legacy message, error detail, and metadata", async () => {
     const { ctx, inserted } = createCtx();
 
     await handler(ctx, {
@@ -294,15 +420,13 @@ describe("recordClientEvents", () => {
     });
 
     const [row] = inserted as Array<Record<string, string>>;
-    expect(row.message).toBe("Checkout failed for [redacted]");
-    expect(row.errorMessage).not.toContain("abc.def.ghi");
-    expect(row.errorStack).not.toContain("deadbeef1234");
-    expect(
-      (row.metadata as unknown as Record<string, string>).detail,
-    ).not.toContain("123 4567");
+    expect(row.message).toBe("Legacy client event");
+    expect(row.errorMessage).toBeUndefined();
+    expect(row.errorStack).toBeUndefined();
+    expect(row.metadata).toEqual({});
   });
 
-  it("truncates oversized messages", async () => {
+  it("never persists an oversized legacy message", async () => {
     const { ctx, inserted } = createCtx();
 
     await handler(ctx, {
@@ -310,8 +434,8 @@ describe("recordClientEvents", () => {
       events: [baseEvent({ message: "x".repeat(2000) })],
     });
 
-    expect((inserted[0] as { message: string }).message).toHaveLength(
-      POS_CLIENT_EVENT_MAX_MESSAGE_LENGTH,
+    expect((inserted[0] as { message: string }).message).toBe(
+      "Legacy client event",
     );
   });
 
@@ -359,6 +483,18 @@ describe("recordClientEvents", () => {
     expect(inserted).toHaveLength(0);
   });
 
+  it("propagates an unexpected authorization dependency failure", async () => {
+    authMocks.requireOrganizationMemberRoleWithCtx.mockRejectedValue(
+      new Error("membership database unavailable"),
+    );
+    const { ctx, inserted } = createCtx();
+
+    await expect(
+      handler(ctx, { storeId: STORE_ID, events: [baseEvent()] }),
+    ).rejects.toThrow("membership database unavailable");
+    expect(inserted).toHaveLength(0);
+  });
+
   it("rejects a terminal that belongs to another store", async () => {
     const { ctx, inserted } = createCtx({
       terminal: { _id: TERMINAL_ID, storeId: "store-2" as Id<"store"> },
@@ -380,7 +516,12 @@ describe("recordClientEvents", () => {
 
 describe("listClientEvents", () => {
   const handler = getHandler<
-    { storeId: Id<"store">; level?: "warn" | "error"; limit?: number },
+    {
+      storeId: Id<"store">;
+      terminalId?: Id<"posTerminal">;
+      level?: "warn" | "error";
+      limit?: number;
+    },
     Promise<StoredEvent[]>
   >(listClientEvents);
 
@@ -406,7 +547,37 @@ describe("listClientEvents", () => {
     const result = await handler(ctx, { storeId: STORE_ID });
 
     expect(result).toHaveLength(1);
-    expect(result[0].message).toBe("Sync failed");
+    expect(result[0].message).toBe("Legacy client event");
+  });
+
+  it("suppresses raw fields from classification-less stored legacy rows", async () => {
+    const { ctx } = createCtx({
+      existingEvents: [
+        storedEvent({
+          message: "customer@example.com receipt SECRET",
+          errorName: "CustomCustomerError",
+          errorMessage: "Bearer token-secret",
+          errorStack: "Error: staffProofToken=secret",
+          metadata: { customer: "customer@example.com" },
+          appVersion: "Bearer secret app version",
+          terminalFingerprint: "customer@example.com fingerprint",
+          localRegisterSessionId: "private register session value",
+        }),
+      ],
+    });
+
+    const [row] = await handler(ctx, { storeId: STORE_ID });
+    expect(row).toMatchObject({
+      classification: "legacy_client_event",
+      message: "Legacy client event",
+      metadata: {},
+    });
+    expect(row.errorName).toBeUndefined();
+    expect(row.errorMessage).toBeUndefined();
+    expect(row.errorStack).toBeUndefined();
+    expect(row.appVersion).toBeUndefined();
+    expect(row.terminalFingerprint).toBeUndefined();
+    expect(row.localRegisterSessionId).toBeUndefined();
   });
 
   it("filters by level via the level index", async () => {
@@ -425,6 +596,55 @@ describe("listClientEvents", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0].level).toBe("warn");
+  });
+
+  it("isolates one terminal and level through the compound index", async () => {
+    const otherTerminalId = "terminal-2" as Id<"posTerminal">;
+    const { ctx, indexNames } = createCtx({
+      existingEvents: [
+        storedEvent({ terminalId: TERMINAL_ID }),
+        storedEvent({
+          _id: "evt-b" as Id<"posClientEvent">,
+          clientEventId: "client-event-b",
+          terminalId: otherTerminalId,
+        }),
+        storedEvent({
+          _id: "evt-c" as Id<"posClientEvent">,
+          clientEventId: "client-event-c",
+          level: "warn",
+          terminalId: TERMINAL_ID,
+        }),
+      ],
+    });
+
+    const result = await handler(ctx, {
+      storeId: STORE_ID,
+      terminalId: TERMINAL_ID,
+      level: "error",
+    });
+
+    expect(result.map((row) => row.clientEventId)).toEqual(["client-event-a"]);
+    expect(indexNames).toContain(
+      "by_storeId_and_terminalId_and_level_and_receivedAt",
+    );
+  });
+
+  it("returns no evidence for a terminal outside the selected store", async () => {
+    const { ctx } = createCtx({
+      existingEvents: [storedEvent({ terminalId: TERMINAL_ID })],
+      terminal: {
+        _id: TERMINAL_ID,
+        storeId: "store-2" as Id<"store">,
+      },
+    });
+
+    const result = await handler(ctx, {
+      storeId: STORE_ID,
+      terminalId: TERMINAL_ID,
+      level: "error",
+    });
+
+    expect(result).toEqual([]);
   });
 
   it("requires admission before listing client events", async () => {
@@ -525,10 +745,8 @@ describe("return contracts", () => {
         clientEventId: "client-event-1",
         level: "error",
         flow: "checkout",
-        message: "Checkout failed",
-        errorName: "Error",
-        errorMessage: "boom",
-        errorStack: "Error: boom",
+        classification: "legacy_client_event",
+        message: "Legacy client event",
         appVersion: "1.2.3",
         metadata: { attempt: 2, offline: true },
         occurredAt: 900,

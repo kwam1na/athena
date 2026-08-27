@@ -114,10 +114,12 @@ describe("createLocalCommandGateway", () => {
         status: "started",
       },
     });
-    await expect(store.readStoreDayReadiness({
-      operatingDate: "2026-07-13",
-      storeId: "store-1",
-    })).resolves.toEqual({
+    await expect(
+      store.readStoreDayReadiness({
+        operatingDate: "2026-07-13",
+        storeId: "store-1",
+      }),
+    ).resolves.toEqual({
       ok: true,
       value: {
         operatingDate: "2026-07-13",
@@ -2281,6 +2283,7 @@ describe("createLocalCommandGateway", () => {
       store,
       createLocalId: () => "local-register-session-1",
     });
+    const appendEvent = vi.spyOn(store, "appendEvent");
 
     const result = await gateway.openDrawer({
       storeId: "store-1" as never,
@@ -2297,6 +2300,18 @@ describe("createLocalCommandGateway", () => {
         retryable: true,
       }),
     });
+    expect(appendEvent).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        diagnosticContext: expect.anything(),
+        flow: expect.anything(),
+        operation: expect.anything(),
+      }),
+      {
+        flow: "register",
+        localRegisterSessionId: "local-register-session-1",
+        operation: "openDrawer",
+      },
+    );
     await expect(store.listEvents()).resolves.toEqual({ ok: true, value: [] });
   });
 });

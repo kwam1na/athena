@@ -16,7 +16,10 @@ import {
 import userEvent from "@testing-library/user-event";
 
 const mocks = vi.hoisted(() => ({
+  beginPosTerminalIdentityTransition: vi.fn(),
   generateBrowserFingerprint: vi.fn(),
+  markPosTerminalIdentityUncoordinated: vi.fn(),
+  settlePosTerminalIdentityTransition: vi.fn(),
   registerTerminalMutation: vi.fn(),
   rotateRecoveryCode: vi.fn(),
   revokeRecoveryCode: vi.fn(),
@@ -234,6 +237,15 @@ vi.mock("@/lib/browserFingerprint", () => ({
   generateBrowserFingerprint: mocks.generateBrowserFingerprint,
 }));
 
+vi.mock("@/lib/pos/infrastructure/telemetry/telemetryContext", () => ({
+  beginPosTerminalIdentityTransition:
+    mocks.beginPosTerminalIdentityTransition,
+  markPosTerminalIdentityUncoordinated:
+    mocks.markPosTerminalIdentityUncoordinated,
+  settlePosTerminalIdentityTransition:
+    mocks.settlePosTerminalIdentityTransition,
+}));
+
 vi.mock("../../common/FadeIn", () => ({
   FadeIn: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
@@ -284,6 +296,17 @@ describe("registerAndProvisionPosTerminal", () => {
       "/acme/store/downtown/pos/settings?o=%2Facme%2Fstore%2Fdowntown%2Fpos",
     );
     window.localStorage.clear();
+    mocks.beginPosTerminalIdentityTransition.mockReset();
+    mocks.beginPosTerminalIdentityTransition.mockReturnValue({
+      generation: "pos-identity-test-lease",
+      ownerDocumentId: "pos-bootstrap-test-document",
+      phase: "changing",
+      revision: 1,
+      startedAt: 1,
+      updatedAt: 1,
+    });
+    mocks.markPosTerminalIdentityUncoordinated.mockClear();
+    mocks.settlePosTerminalIdentityTransition.mockClear();
     mocks.rotateRecoveryCode.mockResolvedValue({
       code: "abc123-def456",
       credential: { status: "active" },
@@ -443,6 +466,18 @@ describe("registerAndProvisionPosTerminal", () => {
       "getRecoveryCodeStatus",
       expect.anything(),
     );
+  });
+
+  it("fences same-document telemetry while creating a fingerprint", async () => {
+    mocks.useSharedDemoContext.mockReturnValue({ storeId: "store-1" });
+
+    await renderPOSSettingsView();
+
+    expect(mocks.beginPosTerminalIdentityTransition).toHaveBeenCalledOnce();
+    expect(mocks.settlePosTerminalIdentityTransition).toHaveBeenCalledWith(
+      expect.objectContaining({ generation: "pos-identity-test-lease" }),
+    );
+    expect(mocks.markPosTerminalIdentityUncoordinated).not.toHaveBeenCalled();
   });
 
   it("registers a typed terminal setup from the browser form", async () => {

@@ -35,11 +35,19 @@ import type {
   PosRegisterCatalogRowDto,
   PosServiceCatalogRowDto,
 } from "./dto";
+import type { PosErrorTelemetryFlow } from "./errorTelemetry";
+import type { PosDiagnosticOperation } from "~/shared/posDiagnosticRedaction";
+
+export type PosLocalStoreDiagnosticContext = {
+  flow: PosErrorTelemetryFlow;
+  localRegisterSessionId?: string;
+  operation: PosDiagnosticOperation;
+};
 
 export interface PosLocalSeedReaderPort {
-  readProvisionedTerminalSeed(): Promise<
-    PosLocalStoreResult<PosProvisionedTerminalSeed | null>
-  >;
+  readProvisionedTerminalSeed(options?: {
+    reportFailure?: boolean;
+  }): Promise<PosLocalStoreResult<PosProvisionedTerminalSeed | null>>;
 }
 export interface PosLocalSeedPort extends PosLocalSeedReaderPort {
   writeProvisionedTerminalSeed(
@@ -242,6 +250,7 @@ export interface PosLocalCatalogPort {
 export interface PosLocalEventPort {
   appendEvent(
     input: PosLocalAppendEventInput,
+    diagnosticContext?: PosLocalStoreDiagnosticContext,
   ): Promise<PosLocalStoreResult<PosLocalEventRecord>>;
   attachStaffProofTokenToPendingEvents(input: {
     staffProfileId: string;

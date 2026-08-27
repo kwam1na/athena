@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-27T18:50:39.536Z",
+  "branch": "codex/pos-frontend-telemetry-plan",
+  "headSha": "a2089633f675fdd53675b1dd0709619f22f9683d",
+  "deliverableDiffFingerprint": "ca49f1ddc505ff28777eb56623a3bafdee210f6980456051d2d1aa185a47450b",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 12,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 1177389.299293
+  },
+  "reviewLoop": {
+    "providerId": "ce-code-review",
+    "runId": "20260827-v26-1403-1EWmP6",
+    "finalPassId": "final-frozen-3688d2b0",
+    "recordedAt": "2026-08-27T18:24:25.466Z",
+    "iterationCount": 1,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 0,
+      "P3": 0
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}

@@ -919,6 +919,27 @@ describe("POS local-store application port conformance", () => {
     await expect(engine.listEvents()).resolves.toEqual({ ok: true, value: [] });
   });
 
+  it("keeps diagnostic context outside the durable event contract", async () => {
+    const engine = createSemanticMemoryEngine();
+    const input = eventInput();
+
+    await expect(
+      engine.appendEvent(input, {
+        flow: "register",
+        operation: "openDrawer",
+      }),
+    ).resolves.toMatchObject({ ok: true });
+
+    const stored = await engine.listEvents();
+    expect(stored).toMatchObject({ ok: true });
+    if (stored.ok) {
+      expect(stored.value).toHaveLength(1);
+      expect(stored.value[0]).not.toHaveProperty("diagnosticContext");
+      expect(stored.value[0]).not.toHaveProperty("flow");
+      expect(stored.value[0]).not.toHaveProperty("operation");
+    }
+  });
+
   it("supports event history, upload selection, and event lifecycle outcomes", async () => {
     const engine = createSemanticMemoryEngine();
     await engine.appendEvent(eventInput());

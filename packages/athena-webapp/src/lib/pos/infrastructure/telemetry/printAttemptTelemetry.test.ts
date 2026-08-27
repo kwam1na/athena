@@ -65,27 +65,21 @@ describe("printAttemptTelemetry", () => {
     expect(mocks.enqueue).toHaveBeenCalledWith(
       expect.objectContaining({
         level: "warn",
-        flow: "runtime",
-        message: "POS print lifecycle diagnostic",
+        flow: "printing",
+        classification: "continuity_warning",
+        operation: "recordReceiptPrint",
         metadata: expect.objectContaining({
           printAttemptId: attemptId,
-          printInvocationSource: "load",
-          printReadyState: "complete",
-          printInvoked: true,
-          printReturned: true,
-          printReturnType: "undefined",
-          printReturnThenable: "no",
-          printCompletionReason: "afterprint",
-          printWindowClosed: false,
+          printCorrelation: "afterprint",
         }),
       }),
     );
 
     const metadata = mocks.enqueue.mock.calls[0][0].metadata;
-    expect(Object.keys(metadata).length).toBeLessThanOrEqual(20);
-    expect(metadata.printEvents.length).toBeLessThanOrEqual(300);
-    expect(metadata.printEvents).toContain("beforeprint");
-    expect(metadata.printEvents).toContain("afterprint");
+    expect(metadata).toEqual({
+      printAttemptId: attemptId,
+      printCorrelation: "afterprint",
+    });
     expect(JSON.stringify(metadata)).not.toContain("receipt");
 
     const rejectionMetadata = getPrintRejectionMetadata(PRINT_REJECTION);
@@ -119,10 +113,8 @@ describe("printAttemptTelemetry", () => {
 
     expect(then).not.toHaveBeenCalled();
     expect(mocks.enqueue.mock.calls[0][0].metadata).toMatchObject({
-      printInvocationSource: "1s-fallback",
-      printReadyState: "loading",
-      printReturnType: "object",
-      printReturnThenable: "not_inspected",
+      printAttemptId: attemptId,
+      printCorrelation: "fallback_cleanup",
     });
   });
 
@@ -196,14 +188,14 @@ describe("printAttemptTelemetry", () => {
     expect(mocks.enqueue).toHaveBeenCalledTimes(1);
     expect(mocks.enqueue.mock.calls[0][0].metadata).toMatchObject({
       printAttemptId: firstAttemptId,
-      printCompletionReason: "superseded",
+      printCorrelation: "superseded",
     });
 
     vi.advanceTimersByTime(65_000);
     expect(mocks.enqueue).toHaveBeenCalledTimes(2);
     expect(mocks.enqueue.mock.calls[1][0].metadata).toMatchObject({
       printAttemptId: secondAttemptId,
-      printCompletionReason: "observation_expired",
+      printCorrelation: "observation_expired",
     });
   });
 

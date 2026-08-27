@@ -76,6 +76,13 @@ crons.interval("landing-funnel-retention-cleanup", { hours: 24 }, internal.marke
 crons.interval("walkthrough-notification-recovery", { minutes: 10 }, internal.marketing.walkthroughRequestNotifications.scheduleEligibleBatch, {});
 
 crons.interval(
+  "pos-client-event-retention-cleanup",
+  { hours: 24 },
+  internal.pos.application.clientEventRetention.cleanupBatch,
+  {},
+);
+
+crons.interval(
   "release-checkout-items",
   { minutes: process.env.STAGE == "prod" ? 10 : 1440 },
   internal.storeFront.checkoutSession.releaseCheckoutItems,

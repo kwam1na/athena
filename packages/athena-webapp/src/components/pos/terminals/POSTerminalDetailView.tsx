@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ArrowRight,
   CheckCircle2,
+  CircleAlert,
   Clock3,
   Heart,
   MonitorUp,
@@ -78,6 +79,10 @@ import type {
   TerminalSyncEvidence,
 } from "./terminalHealthTypes";
 import { DemoNotice } from "../../shared-demo/DemoNotice";
+import {
+  PosClientErrorsMetricTile,
+  type DiagnosticRailHealth,
+} from "./PosClientErrorsPanel";
 
 const posTerminalApi = api.inventory.posTerminal as unknown as {
   getTerminalHealthDetail: FunctionReference<
@@ -93,10 +98,7 @@ const TERMINAL_DETAIL_LIST_VISIBLE_LIMIT = 5;
 type RemoteAssistClientSummary = {
   _id: Id<"remoteAssistClient"> | string;
   accessPolicy:
-  | "attended_required"
-  | "disabled"
-  | "unattended_allowed"
-  | string;
+    "attended_required" | "disabled" | "unattended_allowed" | string;
   displayName: string;
   enrollmentStatus: "active" | "disabled" | "revoked" | string;
   lastPresenceAt?: number;
@@ -105,24 +107,24 @@ type RemoteAssistClientSummary = {
 
 type RemoteAssistStartResult =
   | {
-    kind: "ok";
-    data: {
-      _id: Id<"remoteAssistSession"> | string;
-      effectiveMode: "attended" | "unattended" | string;
-      status: string;
-    };
-  }
+      kind: "ok";
+      data: {
+        _id: Id<"remoteAssistSession"> | string;
+        effectiveMode: "attended" | "unattended" | string;
+        status: string;
+      };
+    }
   | {
-    kind: "user_error";
-    error: {
-      code?: string;
-      message: string;
-    };
-  }
+      kind: "user_error";
+      error: {
+        code?: string;
+        message: string;
+      };
+    }
   | {
-    kind: "approval_required";
-    approval: ApprovalRequirement;
-  };
+      kind: "approval_required";
+      approval: ApprovalRequirement;
+    };
 
 type RemoteAssistSessionSummary = {
   _id: Id<"remoteAssistSession"> | string;
@@ -138,16 +140,16 @@ type RemoteAssistSessionSummary = {
 
 type RemoteAssistEndResult =
   | {
-    kind: "ok";
-    data: RemoteAssistSessionSummary;
-  }
+      kind: "ok";
+      data: RemoteAssistSessionSummary;
+    }
   | {
-    kind: "user_error";
-    error: {
-      code?: string;
-      message: string;
+      kind: "user_error";
+      error: {
+        code?: string;
+        message: string;
+      };
     };
-  };
 
 const remoteAssistApi = api.remoteAssist.public;
 
@@ -184,49 +186,51 @@ type POSTerminalDetailViewContentProps = {
   queryUnavailable?: boolean;
   remoteAssistClient?: RemoteAssistClientSummary | null;
   remoteAssistSession?: RemoteAssistSessionSummary | null;
+  storeId?: Id<"store">;
+  terminalId?: Id<"posTerminal">;
   storeUrlSlug?: string;
   isSharedDemo?: boolean;
 };
 
 type TerminalRegisterSessionReviewResult =
   | {
-    kind: "ok";
-    data?: {
-      action?: "already_resolved" | "resolved" | string;
-      projectedCount?: number;
-      resolvedCount?: number;
-    };
-  }
+      kind: "ok";
+      data?: {
+        action?: "already_resolved" | "resolved" | string;
+        projectedCount?: number;
+        resolvedCount?: number;
+      };
+    }
   | {
-    kind: "user_error";
-    error: {
-      message: string;
-    };
-  }
+      kind: "user_error";
+      error: {
+        message: string;
+      };
+    }
   | {
-    kind: "unexpected_error";
-    error: {
-      message: string;
+      kind: "unexpected_error";
+      error: {
+        message: string;
+      };
     };
-  };
 
 type TerminalRecoveryMutationResult =
   | {
-    kind: "ok";
-    data?: unknown;
-  }
+      kind: "ok";
+      data?: unknown;
+    }
   | {
-    kind: "user_error";
-    error: {
-      message: string;
-    };
-  }
+      kind: "user_error";
+      error: {
+        message: string;
+      };
+    }
   | {
-    kind: "unexpected_error";
-    error: {
-      message: string;
+      kind: "unexpected_error";
+      error: {
+        message: string;
+      };
     };
-  };
 
 function DetailPanel({
   children,
@@ -499,7 +503,7 @@ function RuntimeReportGroup({
           value={formatOldestUnsynced(runtimeStatus)}
         />
         {runtimeStatus?.sync.heldWithoutProgress ||
-          typeof runtimeStatus?.sync.backoffUntil === "number" ? (
+        typeof runtimeStatus?.sync.backoffUntil === "number" ? (
           <RailSignalRow
             label="Sync retry"
             tone="warning"
@@ -546,8 +550,8 @@ function getRuntimeSyncTone(status?: TerminalRuntimeStatus["sync"]["status"]) {
 function getRuntimeAppUpdateTone(
   status?: TerminalRuntimeStatus["appUpdate"] extends infer AppUpdate
     ? AppUpdate extends { status?: infer Status }
-    ? Status
-    : never
+      ? Status
+      : never
     : never,
 ) {
   switch (status) {
@@ -628,7 +632,10 @@ function formatSyncRetryState(runtimeStatus: TerminalRuntimeStatus) {
   }
   const backoffUntil = runtimeStatus.sync.backoffUntil;
   if (typeof backoffUntil === "number" && backoffUntil > Date.now()) {
-    const minutes = Math.max(1, Math.round((backoffUntil - Date.now()) / 60_000));
+    const minutes = Math.max(
+      1,
+      Math.round((backoffUntil - Date.now()) / 60_000),
+    );
     return `Backing off, next retry in ${minutes} minute${minutes === 1 ? "" : "s"}`;
   }
   return "Retrying";
@@ -728,7 +735,10 @@ function TerminalHealthBadge({
               label="Browser storage status"
               value={formatStatusLabel(localStore.pressure ?? "unknown")}
             />
-            <StorageDiagnosticRow label="Local event ledger" value={eventCount} />
+            <StorageDiagnosticRow
+              label="Local event ledger"
+              value={eventCount}
+            />
             <StorageDiagnosticRow
               label="Ledger maintenance"
               value={formatStatusLabel(localStore.ledgerPressure ?? "unknown")}
@@ -760,7 +770,9 @@ function StorageDiagnosticRow({
   return (
     <div className="flex items-center justify-between gap-layout-sm py-layout-2xs">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className="text-right font-medium text-popover-foreground">{value}</dd>
+      <dd className="text-right font-medium text-popover-foreground">
+        {value}
+      </dd>
     </div>
   );
 }
@@ -981,7 +993,10 @@ function TerminalHeartbeatRailControl({
     <div className="rounded-md border border-border bg-background px-layout-sm py-layout-sm">
       <div className="flex items-center justify-between gap-layout-sm">
         <div className="flex min-w-0 items-center gap-layout-xs">
-          <Heart aria-hidden="true" className="h-3.5 w-3.5 text-muted-foreground" />
+          <Heart
+            aria-hidden="true"
+            className="h-3.5 w-3.5 text-muted-foreground"
+          />
           <div className="min-w-0">
             <p className="text-xs font-medium uppercase text-muted-foreground">
               Heartbeat
@@ -1047,7 +1062,7 @@ function RuntimeBuildVersionStatus({
               presentation.status === "stale" && "text-warning",
               (presentation.status === "checking" ||
                 presentation.status === "unknown") &&
-              "text-foreground",
+                "text-foreground",
             )}
             aria-label={`Athena webapp ${presentation.label}. Version details.`}
           >
@@ -1249,7 +1264,7 @@ function ConflictSection({
   const recoveryPreview = detail?.recoveryPreview ?? detail?.recovery;
   const collectedLocalReviewEvents =
     recoveryPreview?.commandStatus?.commandType === "collect_local_review" &&
-      recoveryPreview.commandStatus.verificationStatus === "verified"
+    recoveryPreview.commandStatus.verificationStatus === "verified"
       ? (recoveryPreview.commandStatus.localReviewEvents ?? [])
       : [];
   const runtimeReviewCount = runtimeStatus?.sync.reviewEventCount ?? 0;
@@ -1278,11 +1293,12 @@ function ConflictSection({
     localReviewEvents.length - TERMINAL_DETAIL_LIST_VISIBLE_LIMIT,
     0,
   );
-  const reviewCount = detail && hasOnlyInventoryReviewEvidence(detail)
-    ? 0
-    : syncEvidence.unresolvedConflicts
-      ? unresolvedConflicts.length
-      : getReviewEvidenceCount(syncEvidence);
+  const reviewCount =
+    detail && hasOnlyInventoryReviewEvidence(detail)
+      ? 0
+      : syncEvidence.unresolvedConflicts
+        ? unresolvedConflicts.length
+        : getReviewEvidenceCount(syncEvidence);
   const localReviewActionReason = {
     actionTarget: { type: "pos_register" },
     count: runtimeReviewCount,
@@ -2620,10 +2636,10 @@ function RecoveryPanel({
   const supportReadiness = hasCurrentRecoveryWork
     ? recovery.readiness
     : {
-      description:
-        "Current terminal evidence has no repair or review blockers.",
-      label: "No support action needed",
-    };
+        description:
+          "Current terminal evidence has no repair or review blockers.",
+        label: "No support action needed",
+      };
 
   return (
     <DetailPanel
@@ -2809,7 +2825,7 @@ function RemoteAssistPanel({
       } else if (result.kind === "approval_required") {
         toast.error(
           result.approval.copy.message ||
-          "Local approval is required before Remote Assist can continue.",
+            "Local approval is required before Remote Assist can continue.",
         );
       } else {
         toast.error(result.error.message);
@@ -3045,6 +3061,52 @@ function SupportNotesSection({
   );
 }
 
+export function getDiagnosticRailHealth(
+  runtimeStatus: TerminalRuntimeStatus | null,
+): DiagnosticRailHealth {
+  const counters = runtimeStatus?.runtimeCounters;
+  if (!counters || (counters["telemetry.railInitialized"] ?? 0) !== 1) {
+    return "not_reported";
+  }
+  if (
+    (counters["telemetry.storageFallbackCount"] ?? 0) > 0 ||
+    (counters["telemetry.uploadFailureCount"] ?? 0) > 0 ||
+    (counters["telemetry.identityRefreshFailureCount"] ?? 0) > 0
+  ) {
+    return "degraded";
+  }
+  return (counters["telemetry.pendingScopeCount"] ?? 0) > 0
+    ? "pending"
+    : "healthy";
+}
+
+function ClientDiagnosticsSection({
+  runtimeStatus,
+  storeId,
+  terminalId,
+}: {
+  storeId?: Id<"store">;
+  terminalId?: Id<"posTerminal">;
+  runtimeStatus: TerminalRuntimeStatus | null;
+}) {
+  if (!storeId || !terminalId) return null;
+
+  return (
+    <DetailPanel
+      icon={<CircleAlert className="h-4 w-4 text-muted-foreground" />}
+      title="Client diagnostics"
+    >
+      <div className="grid max-w-sm">
+        <PosClientErrorsMetricTile
+          railHealth={getDiagnosticRailHealth(runtimeStatus)}
+          storeId={storeId}
+          terminalId={terminalId}
+        />
+      </div>
+    </DetailPanel>
+  );
+}
+
 function getRemoteAssistAvailabilityCopy(
   client?: RemoteAssistClientSummary | null,
   presenceFresh = false,
@@ -3169,6 +3231,8 @@ export function POSTerminalDetailViewContent({
   queryUnavailable = false,
   remoteAssistClient,
   remoteAssistSession,
+  storeId,
+  terminalId,
   storeUrlSlug,
   isSharedDemo,
 }: POSTerminalDetailViewContentProps) {
@@ -3218,7 +3282,9 @@ export function POSTerminalDetailViewContent({
             description="Inspect the latest terminal check-in, support recovery evidence, and support notes."
           />
 
-          {isSharedDemo && <DemoNotice text="POS Terminal Overview is view-only in the demo" />}
+          {isSharedDemo && (
+            <DemoNotice text="POS Terminal Overview is view-only in the demo" />
+          )}
 
           <div className="grid gap-layout-xl xl:grid-cols-[20rem_minmax(0,1fr)]">
             <TerminalContextRail
@@ -3263,6 +3329,11 @@ export function POSTerminalDetailViewContent({
                 runtimeStatus={detail.runtimeStatus}
                 syncEvidence={detail.syncEvidence}
               />
+              <ClientDiagnosticsSection
+                runtimeStatus={detail.runtimeStatus}
+                storeId={storeId}
+                terminalId={terminalId}
+              />
               <SupportNotesSection runtimeStatus={runtimeStatus} />
             </main>
           </div>
@@ -3283,10 +3354,10 @@ export function POSTerminalDetailView() {
   const demoContext = useSharedDemoContext();
   const params = useParams({ strict: false }) as
     | {
-      orgUrlSlug?: string;
-      storeUrlSlug?: string;
-      terminalId?: string;
-    }
+        orgUrlSlug?: string;
+        storeUrlSlug?: string;
+        terminalId?: string;
+      }
     | undefined;
   const isLoadingAccess =
     isLoadingUser || isLoadingStores || isLoadingPermissions;
@@ -3295,31 +3366,32 @@ export function POSTerminalDetailView() {
   const canQuery = Boolean(
     activeStore?._id && user && canViewHealth && params?.terminalId,
   );
+  const terminalId = params?.terminalId as Id<"posTerminal"> | undefined;
   const detail = useQuery(
     posTerminalApi.getTerminalHealthDetail,
     canQuery
       ? {
-        storeId: activeStore!._id,
-        terminalId: params!.terminalId as Id<"posTerminal">,
-      }
+          storeId: activeStore!._id,
+          terminalId: terminalId!,
+        }
       : "skip",
   ) as TerminalHealthDetail | null | undefined;
   const remoteAssistClient = useQuery(
     remoteAssistApi.getClientByRuntime,
     canQuery && !demoContext && activeStore?.organizationId
       ? {
-        organizationId: activeStore.organizationId as Id<"organization">,
-        runtimeIdentity: params!.terminalId as string,
-        runtimeType: "pos_terminal",
-      }
+          organizationId: activeStore.organizationId as Id<"organization">,
+          runtimeIdentity: params!.terminalId as string,
+          runtimeType: "pos_terminal",
+        }
       : "skip",
   ) as RemoteAssistClientSummary | null | undefined;
   const remoteAssistSession = useQuery(
     remoteAssistApi.getCurrentSessionByClient,
     canManageTerminalHealth && remoteAssistClient?._id
       ? {
-        clientId: remoteAssistClient._id as Id<"remoteAssistClient">,
-      }
+          clientId: remoteAssistClient._id as Id<"remoteAssistClient">,
+        }
       : "skip",
   ) as RemoteAssistSessionSummary | null | undefined;
   const resolveRegisterSessionSyncReview = useMutation(
@@ -3515,6 +3587,8 @@ export function POSTerminalDetailView() {
       queryUnavailable={detail === null && !params.terminalId}
       remoteAssistClient={remoteAssistClient ?? null}
       remoteAssistSession={remoteAssistSession ?? null}
+      storeId={activeStore._id}
+      terminalId={terminalId}
       storeUrlSlug={params.storeUrlSlug}
       isSharedDemo={Boolean(demoContext)}
     />

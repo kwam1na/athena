@@ -46,6 +46,13 @@ describe("Convex cron registration", () => {
     expect(source).toContain('"walkthrough-notification-recovery"');
     expect(source).toContain("internal.marketing.walkthroughRequestNotifications.scheduleEligibleBatch");
   });
+  it("registers POS client-event retention once on the shared cron rail", () => {
+    const source = readFileSync("convex/crons.ts", "utf8");
+    expect(source.match(/"pos-client-event-retention-cleanup"/g)).toHaveLength(
+      1,
+    );
+    expect(source).toContain("pos.application.clientEventRetention.cleanupBatch");
+  });
   it("registers the guarded Daily Operations automation runner", () => {
     const source = readFileSync("convex/crons.ts", "utf8");
 

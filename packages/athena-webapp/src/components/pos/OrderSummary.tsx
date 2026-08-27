@@ -1,4 +1,4 @@
-import { logger } from "@/lib/logger";
+import { reportPosHandledException } from "@/lib/pos/infrastructure/telemetry/loggerGateway";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { render } from "@react-email/components";
 import {
@@ -729,17 +729,24 @@ export function OrderSummary({
       const transactionId = receiptPrintTransactionId;
       if (transactionId && onReceiptPrinted) {
         void Promise.resolve(onReceiptPrinted(transactionId)).catch((error) => {
-          logger.warn("Failed to record receipt print", {
-            error: String(error),
+          reportPosHandledException({
+            classification: "continuity_warning",
+            error,
+            flow: "printing",
+            level: "warn",
+            localMessage: "Failed to record receipt print",
+            operation: "recordReceiptPrint",
           });
         });
       }
       return true;
     } catch (error) {
-      logger.error(
-        "Error in handlePrintReceipt",
-        error instanceof Error ? error : { error: String(error) },
-      );
+      reportPosHandledException({
+        error,
+        flow: "printing",
+        localMessage: "Error in handlePrintReceipt",
+        operation: "printReceipt",
+      });
       return false;
     }
   }, [
