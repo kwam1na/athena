@@ -5,7 +5,7 @@
   <title>[V26-1354]: Install a shrink-only backend dependency guard</title>
 </head>
 <body>
-<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="dedeeed9073527275a911d6ccdb4d9405f41023bde5ae9158a5a4e087f915bfa">
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="3c4b2e07ec04b9056147ae0c639e9b248fc0396e4b7a47769a4c586dd58d60cd">
   <header data-report-section="header">
     <h1>[V26-1354]: Install a shrink-only backend dependency guard</h1>
     <p>U1 of Backend Reliability &amp; Maintainability epic — structural sensor to protect inventoryLedger and agentHarness kernels</p>
@@ -17,8 +17,8 @@
     </ul>
     <dl data-report-meta>
       <dt>Base</dt><dd>origin/main (8b4d528c)</dd>
-      <dt>Head</dt><dd>codex/V26-1354-backend-maintainability-u1-dependency-guard (0dabeaa1)</dd>
-      <dt>Diff fingerprint</dt><dd>8e9f006e6c65ec75caa7fb8c952e46b0377646c80d3b75c174d567d45c2d253c</dd>
+      <dt>Head</dt><dd>codex/V26-1354-backend-maintainability-u1-dependency-guard (ab9ed4cb)</dd>
+      <dt>Diff fingerprint</dt><dd>3c4b2e07ec04b9056147ae0c639e9b248fc0396e4b7a47769a4c586dd58d60cd</dd>
       <dt>Source lines changed</dt><dd>576</dd>
       <dt>Solution note</dt><dd>docs/solutions/architecture-patterns/athena-shrink-only-backend-dependency-guard-2026-08-27.md</dd>
     </dl>
@@ -49,7 +49,7 @@
   </section>
   <section data-report-section="changes">
     <h2>What changed</h2>
-      <p>Created: scripts/convex-backend-dependency-check.ts — Main check script with CLI (--update-baseline, --json, silent mode)</p>
+      <p>Created: scripts/convex-backend-dependency-check.ts — Main dependency guard implementation with CLI (--update-baseline, --json, silent mode)</p>
       <p>Created: scripts/convex-backend-dependency-check.test.ts — 6 test scenarios covering happy path, new kernel violation detection, cycle detection, baseline drift, and integration</p>
       <p>Created: scripts/convex-backend-dependency-baseline.json — Committed baseline with 0 cycles and 7 grandfathered kernel violations</p>
       <p>Modified: package.json — Added dependency:check:backend script</p>
@@ -60,7 +60,7 @@
     <h2>Validation and review evidence</h2>
       <p>Mechanical checks: All harness tests pass (1504 tests). Architecture boundary checks pass for both webapp and storefront. Graphify check passes (artifacts fresh). Typecheck passes. pr:athena:prepare passes.</p>
       <p>Test suite: All 6 new tests pass — happy path, new kernel violation detection (fixture adds product-domain import into inventoryLedger), cycle detection, baseline drift, and facade-preserving helper imports accepted.</p>
-      <p>Review evidence: Pending — requires review workflow dispatch (review.green obligation). The gate is currently blocked awaiting final-green review.</p>
+      <p>Review evidence: Approved — execute provider review completed with 0 findings. Recorded as obligation record fd5647ba6dca05c6728f60bad849c8a6beb3548c692616ec0ded6bcd873030db.</p>
       <p>Landed-change report: This report satisfies the compound-solution-check for &gt;300 source lines changed.</p>
       <p>Deployment: Not applicable — sensor/guardrail only, no runtime behavior change. No production deploy needed.</p>
       <p>Root alignment: Pending — will fast-forward to origin/main after merge.</p>

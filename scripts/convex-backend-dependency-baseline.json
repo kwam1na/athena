@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-27T05:35:19.343Z",
+  "timestamp": "2026-08-27T10:17:31.572Z",
   "cycles": [],
   "kernelViolations": [
     "convex/inventoryLedger/corrections.ts|../operationAdmission/domains/operations_definitions|convex/operationAdmission/domains/operations_definitions|kernel-not-allowed",
