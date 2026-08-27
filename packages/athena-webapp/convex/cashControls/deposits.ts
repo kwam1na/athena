@@ -2212,6 +2212,7 @@ export const resolveRegisterSessionSyncReview = mutation({
             now: resolvedAt,
             options: {
               allowClosedRegisterSaleProjection: true,
+              allowReviewedInventorySaleProjection: true,
               reviewedConflictIds: targetConflictsPage.map(
                 (conflict) => conflict._id,
               ),

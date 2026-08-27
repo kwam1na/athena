@@ -2158,6 +2158,75 @@ describe("cash control deposits", () => {
       beforeUnsupportedHandoff,
     );
 
+    const inventoryShortfallSeed = structuredClone(seed);
+    inventoryShortfallSeed.productSku =
+      inventoryShortfallSeed.productSku.map((sku) => ({
+        ...sku,
+        inventoryCount: 0,
+        quantityAvailable: 0,
+      }));
+    const inventoryShortfallCtx = createAuthorizedRegisterDepositCtx(
+      inventoryShortfallSeed,
+    );
+    await expect(
+      getHandler(resolveRegisterSessionSyncReview)(
+        inventoryShortfallCtx as never,
+        {
+          approvalProofId: "approval_proof_handoff" as Id<"approvalProof">,
+          registerSessionId: "session_open" as Id<"registerSession">,
+          requestedByStaffProfileId: "staff_1" as Id<"staffProfile">,
+          storeId: "store_1" as Id<"store">,
+          terminalIdentityHandoff: {
+            countedCash: 63800,
+            expectedPreviousTerminalId: "terminal_old" as Id<"posTerminal">,
+            localRegisterSessionId: "local-register-1",
+            replacementTerminalId: "terminal_1" as Id<"posTerminal">,
+          },
+        },
+      ),
+    ).resolves.toEqual(
+      ok({
+        action: "resolved",
+        projectedCount: 2,
+        registerSession: expect.objectContaining({
+          _id: "session_open",
+          expectedCash: 59300,
+          terminalId: "terminal_1",
+        }),
+        resolvedCount: 4,
+      }),
+    );
+    expect(inventoryShortfallCtx.tables.get("operationalWorkItem")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            localEventId: "event_sale_1",
+            skippedMutationItems: expect.arrayContaining([
+              expect.objectContaining({
+                productSkuId: "product_sku_1",
+                reason: "stock_shortfall",
+              }),
+            ]),
+          }),
+          status: "open",
+          type: "synced_sale_inventory_review",
+        }),
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            localEventId: "event_sale_2",
+            skippedMutationItems: expect.arrayContaining([
+              expect.objectContaining({
+                productSkuId: "product_sku_1",
+                reason: "stock_shortfall",
+              }),
+            ]),
+          }),
+          status: "open",
+          type: "synced_sale_inventory_review",
+        }),
+      ]),
+    );
+
     const projectionDriftSeed = structuredClone(seed);
     const driftingSale = projectionDriftSeed.posLocalSyncEvent.find(
       (event) => event._id === "sync_event_sale_2",
