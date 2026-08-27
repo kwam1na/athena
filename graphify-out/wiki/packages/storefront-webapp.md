@@ -21,7 +21,7 @@ Landing page for packages/storefront-webapp. Use this page to orient around grap
 - `createJourneyEvent()` (40 edges, Community 15) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
 - `getStoreConfigV2()` (17 edges, Community 93) - [`packages/storefront-webapp/src/lib/storeConfig.ts`](../../../packages/storefront-webapp/src/lib/storeConfig.ts)
 - `storefrontContextEvents.ts` (17 edges, Community 138) - [`packages/storefront-webapp/src/lib/storefrontContextEvents.ts`](../../../packages/storefront-webapp/src/lib/storefrontContextEvents.ts)
-- `checkoutSession.ts` (14 edges, Community 178) - [`packages/storefront-webapp/src/api/checkoutSession.ts`](../../../packages/storefront-webapp/src/api/checkoutSession.ts)
+- `checkoutSession.ts` (14 edges, Community 179) - [`packages/storefront-webapp/src/api/checkoutSession.ts`](../../../packages/storefront-webapp/src/api/checkoutSession.ts)
 
 ## Navigation
 - [wiki index](../index.md) - back to the wiki index

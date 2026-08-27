@@ -1,0 +1,13 @@
+{
+  "timestamp": "2026-08-27T05:35:19.343Z",
+  "cycles": [],
+  "kernelViolations": [
+    "convex/inventoryLedger/corrections.ts|../operationAdmission/domains/operations_definitions|convex/operationAdmission/domains/operations_definitions|kernel-not-allowed",
+    "convex/inventoryLedger/corrections.ts|../platform/operationAdmission|convex/platform/operationAdmission|kernel-not-allowed",
+    "convex/inventoryLedger/corrections.ts|../reports/access|convex/reports/access|kernel-forbidden",
+    "convex/inventoryLedger/corrections.ts|../storeTime/operatingPeriods|convex/storeTime/operatingPeriods|kernel-forbidden",
+    "convex/inventoryLedger/commerceEffects.ts|../storeTime/operatingPeriods|convex/storeTime/operatingPeriods|kernel-forbidden",
+    "convex/inventoryLedger/effects.ts|../operations/inventoryMovements|convex/operations/inventoryMovements|kernel-forbidden",
+    "convex/inventoryLedger/effects.ts|../operations/skuActivity|convex/operations/skuActivity|kernel-forbidden"
+  ]
+}
