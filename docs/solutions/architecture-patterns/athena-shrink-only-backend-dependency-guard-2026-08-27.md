@@ -21,7 +21,7 @@ related_components:
   - "inventoryLedger"
   - "agentHarness"
   - "operationAdmission"
-delivery_diff_fingerprint: "21f6fa1173c6c9c5efaa220aede09460a2129f35fdfd2c49ce5e92d32d964dd7"
+delivery_diff_fingerprint: "801818723a81920e9c0fa312d13b28ee8e87a12a7c6cdb55783701ef7e928d7c"
 ---
 
 ## Problem
@@ -129,6 +129,17 @@ The first delivery was reviewed by nine specialized agents (correctness, adversa
 - **Reparability output.** Kernel violations carry a 1-based `line`, and every failure emits a `repairHint` (drift-only → regenerate; new violation → fix first) in both human and `--json` output.
 - **Semantics pinned for excluded subtrees.** Boundary tests prove a cycle *through* an excluded subtree (`profiles/`) is still detected while a forbidden import *inside* it is deliberately not a kernel violation, and self-loops are reported as single-node cycles.
 
+### 7. Round-2 hardening pass (re-review)
+
+A second nine-agent review verified every round-1 finding closed and surfaced four high-confidence gaps, all fixed **without changing the committed baseline** (the real tree still reports exactly 4 cycles and 7 grandfathered kernel violations):
+
+- **`src/`- and `shared/`-scoped aliases are now kernel-surface too.** Round 1 covered aliases expanding into `convex/`; reviewers proved `@/*` → `src/*` and `~/*` → `./*` were still invisible, so a kernel importing `@/lib/hot` bypassed the fence entirely. `importsOf` now classifies any alias that expands into `convex/`, `src/`, or `shared/` (the package-local dependency surfaces a kernel may address), and `addressesBackend` matches those prefixes. Both `@/*`→`src/*` (forbidden) and `~/*`→`shared/agentHarness/*` (allowed for agentHarness, not-allowed for inventoryLedger) directions are pinned by tests.
+- **Real tsconfigs are JSONC — the guard now parses them.** The real `packages/athena-webapp/tsconfig.json` carries `//` comments, so the previous `JSON.parse` silently disabled alias expansion on the very tree the guard protects. `loadTsconfigAliases` now strips comments string-aware (a `//` inside a string value is never consumed) and tolerates trailing commas; a genuinely unreadable tsconfig still degrades to no-aliases with a warning on stderr. Verified the real tree resolves its true aliases and still matches the committed baseline.
+- **A scan that cannot see a protected kernel root refuses loudly.** `--convex-dir` pointed at any non-empty foreign tree used to pass green (0 cycles, 0 kernel modules) and `--update-baseline` would even erase the baseline. The guard now requires every protected kernel root to appear in the scan and fails with a `scanError` otherwise; sandbox fixtures seed import-free kernel files to stay full-backend scans. A corrupt baseline now surfaces even on an empty scan instead of being masked by the "no files" error.
+- **Allowed-prefix matching is boundary-honest.** A non-slash allowed module like `convex/values` previously prefix-matched a smuggler like `convex/valuesBridge.ts`: a kernel could import a bridge that itself imports product domains with zero findings. Non-slash allowed prefixes now match exactly, or as `prefix/…` (directory) or `prefix.…` (module extension) children only — the bridge is flagged `kernel-not-allowed`. Slash-suffixed (directory) prefixes keep `startsWith` semantics.
+- **Cycle contraction is typed and hinted, not misreported.** The surviving strict subset of a baselined cycle is reported as `cycle-contraction` (never the unabsorbable `new-cycle`), the drift/regen `repairHint` is computed from the same subset-aware `unabsorbableCycles` the update path uses (so the hint never tells an agent to regenerate in a state the update would refuse, nor to "fix first" when a contraction would be accepted), a missing baseline hints at creation rather than a blocked fix, and a successful `--update-baseline` returns `baselineUpdated: true` in the JSON. Removed kernel edges keep their real specifier in `imports` instead of a generic marker.
+- **Reliability hardening:** baseline writes are atomic (`write` to temp + `rename`), filesystem probes are try/catch (races resynthesize to "not found"), scanning skips unreadable files, and `--help` documents exit codes 0/1/2.
+
 ## Why This Works
 
 1. **Characterization-first**: Captures today's graph exactly (4 real cycles + 7 grandfathered inventoryLedger kernel violations) before enforcing.
@@ -151,7 +162,7 @@ The first delivery was reviewed by nine specialized agents (correctness, adversa
 ## Files Created / Modified
 
 - `scripts/convex-backend-dependency-check.ts` — Main check script with CLI (defaults for convex dir and baseline path; `--update-baseline`, `--json`, `--convex-dir`, `--package-dir`, `--baseline`, `--help`)
-- `scripts/convex-backend-dependency-check.test.ts` — Test suite (21 sandbox-based scenarios + real-tree characterization)
+- `scripts/convex-backend-dependency-check.test.ts` — Test suite (28 sandbox-based scenarios + real-tree characterization)
 - `scripts/convex-backend-dependency-baseline.json` — Committed baseline (4 real cycles, 7 grandfathered kernel violations)
 - `package.json` — `dependency:check:backend` script
 - `scripts/harness-app-registry.ts` — `athena.convex-backend-adjacent` scenario now includes the guard command and document the shrink-only contract

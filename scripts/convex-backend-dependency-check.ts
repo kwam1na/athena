@@ -21,8 +21,9 @@
  *    interpolation (not statically resolvable).
  *  - Kernel checks classify every import that addresses the Convex backend:
  *    `.`-relative specifiers, bare `convex/...` specifiers, and tsconfig-path
- *    aliases that expand into `convex/...` or `src/...`. External packages are
- *    never kernel-surface.
+ *    aliases that expand into `convex/...`, `src/...`, or `shared/...` (the
+ *    package-local dependency surfaces a kernel may legitimately address).
+ *    External packages are never kernel-surface.
  *
  * Shrink-only contract:
  *  - The committed baseline freezes exact cycle memberships and exact kernel
@@ -36,13 +37,17 @@
  *    an empty scan or a corrupt baseline.
  *  - Regeneration is the ONLY way the baseline changes, and it is only allowed
  *    from a state where every difference from the baseline is a removal (or a
- *    strict contraction of a baselined cycle).
+ *    strict contraction of a baselined cycle). The normal check types the
+ *    surviving subset of a baselined cycle as `cycle-contraction` (safe to
+ *    regenerate) rather than `new-cycle` (blocked), so an agent can tell drift
+ *    from growth purely from the JSON.
  */
 
 import {
   existsSync,
   readdirSync,
   readFileSync,
+  renameSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -188,12 +193,18 @@ type AliasMap = Map<string, string>;
 
 interface Violation {
   file: string;
+  /**
+   * Depending on `type`: the import specifier (kernel types), the member list
+   * joined by " -> " (cycle types), or describes the drift on a removed edge.
+   * Consumers that need the exact edge rely on `resolved` + `cycle` instead.
+   */
   imports: string;
   resolved: string;
   type:
     | "kernel-forbidden"
     | "kernel-not-allowed"
     | "new-cycle"
+    | "cycle-contraction"
     | "cycle-not-in-baseline"
     | "baseline-drift";
   cycle?: string[];
@@ -217,6 +228,8 @@ interface CheckResult {
   scanError?: string;
   /** Actionable next step emitted whenever the check is not clean. */
   repairHint?: string;
+  /** Set to true when --update-baseline persisted a new baseline. */
+  baselineUpdated?: boolean;
 }
 
 /**
@@ -238,6 +251,16 @@ function compareByBytes(left: string, right: string): number {
  * literals. Import specifiers must only be collected from real code: a
  * commented-out import, prose that quotes an import, or a regex literal that
  * happens to contain `from "..."` must never produce a guard finding.
+ *
+ * This is a heuristic, not a parser: a `/` only starts a regex in an expression
+ * position (previous significant token is an operator/symbol or a
+ * control-flow keyword), which is the standard tradeoff that keeps
+ * `(a + b) / 2` (division after a value) out of the regex branch. Constructed
+ * counterexamples on either side (e.g. a division chain that reaches an
+ * operator boundary, or a regex after a closer such as `)`) are therefore not
+ * discriminated — the practical impact is bounded because a phantom specifier
+ * either fails to resolve to a real module (dropped at the graph/kernel-gate
+ * step) or resolves to a kernel-internal path that the gate still classifies.
  */
 function collectNonCodeRanges(source: string): Array<[number, number]> {
   const ranges: Array<[number, number]> = [];
@@ -420,7 +443,14 @@ function walkCollect(
     const relative = path.relative(packageDir, absolute).split(path.sep).join("/");
     // Test files are not runtime modules and do not participate in cycles.
     if (/\.test\.(ts|tsx)$/.test(relative)) continue;
-    collector.files.push({ path: relative, source: readFileSync(absolute, "utf8") });
+    let source: string;
+    try {
+      source = readFileSync(absolute, "utf8");
+    } catch {
+      // Unreadable or deleted mid-scan: skip rather than fail the whole check.
+      continue;
+    }
+    collector.files.push({ path: relative, source });
   }
 }
 
@@ -459,6 +489,23 @@ function undeclaredNestedGeneratedDirs(nested: string[]): string[] {
 }
 
 /**
+ * True when `fileCandidate` exists and is a regular file, returned as the
+ * package-relative slash path. Wrapped in try/catch so a race between scanning
+ * and probing (file deleted mid-run) resynthesizes to "not found" instead of
+ * crashing the whole check.
+ */
+function probeCandidateFile(packageDir: string, fileCandidate: string): string | null {
+  try {
+    if (statSync(fileCandidate).isFile()) {
+      return path.relative(packageDir, fileCandidate).split(path.sep).join("/");
+    }
+  } catch {
+    // File vanished between readdir and probe: treat as not found.
+  }
+  return null;
+}
+
+/**
  * Resolve a relative specifier to the concrete file that the runtime would
  * load. Graph nodes and violation "resolved" fields carry the file extension
  * (`.ts`/`.tsx`), matching the identifiers `collectSources` registers.
@@ -482,9 +529,8 @@ function resolveLocalImportTarget(
   for (const fileCandidate of candidates) {
     if (seen.has(fileCandidate)) continue;
     seen.add(fileCandidate);
-    if (existsSync(fileCandidate) && statSync(fileCandidate).isFile()) {
-      return path.relative(packageDir, fileCandidate).split(path.sep).join("/");
-    }
+    const resolved = probeCandidateFile(packageDir, fileCandidate);
+    if (resolved !== null) return resolved;
   }
   return null;
 }
@@ -500,9 +546,8 @@ function resolveConvexModule(packageDir: string, convexRel: string): string | nu
     path.join(base, "index.tsx"),
   ];
   for (const fileCandidate of candidates) {
-    if (existsSync(fileCandidate) && statSync(fileCandidate).isFile()) {
-      return path.relative(packageDir, fileCandidate).split(path.sep).join("/");
-    }
+    const resolved = probeCandidateFile(packageDir, fileCandidate);
+    if (resolved !== null) return resolved;
   }
   return null;
 }
@@ -513,10 +558,18 @@ function loadTsconfigAliases(packageDir: string): AliasMap {
   const tsconfigPath = path.join(packageDir, "tsconfig.json");
   if (!existsSync(tsconfigPath)) return aliases;
   try {
-    const raw = JSON.parse(readFileSync(tsconfigPath, "utf8")) as {
+    // Real tsconfigs are JSONC (JSON with // and /* */ comments, trailing
+    // commas). Straight JSON.parse rejects the whole file, which would silently
+    // disable alias coverage on the real tree. Strip comments string-aware so
+    // a `//` inside a string value is never mistaken for a comment.
+    const raw = stripJsoncComments(readFileSync(tsconfigPath, "utf8")).replace(
+      /,\s*([}\]])/g,
+      "$1",
+    );
+    const parsed = JSON.parse(raw) as {
       compilerOptions?: { paths?: Record<string, string[]> };
     };
-    const paths = raw?.compilerOptions?.paths;
+    const paths = parsed?.compilerOptions?.paths;
     if (!paths) return aliases;
     for (const [alias, targets] of Object.entries(paths)) {
       const target = targets?.[0];
@@ -529,8 +582,58 @@ function loadTsconfigAliases(packageDir: string): AliasMap {
     }
   } catch {
     // Unreadable tsconfig: treat as no aliases rather than failing the scan.
+    // Warn (to stderr, so --json on stdout stays parseable) so the silent
+    // loss of alias coverage is never invisible to the person running the check.
+    console.warn(
+      `Warning: could not parse tsconfig.json at ${tsconfigPath}; ` +
+        `path aliases will not be expanded by the dependency guard.`,
+    );
   }
   return aliases;
+}
+
+/**
+ * Remove `//` and `/* ... *\/` comments from a JSONC document without touching
+ * comment-like sequences inside string literals.
+ */
+function stripJsoncComments(raw: string): string {
+  let out = "";
+  let inString: "'" | '"' | null = null;
+  let i = 0;
+  while (i < raw.length) {
+    const ch = raw[i];
+    const next = raw[i + 1] ?? "";
+    if (inString !== null) {
+      out += ch;
+      if (ch === "\\") {
+        out += next;
+        i += 2;
+        continue;
+      }
+      if (ch === inString) inString = null;
+      i += 1;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      inString = ch;
+      out += ch;
+      i += 1;
+      continue;
+    }
+    if (ch === "/" && next === "/") {
+      while (i < raw.length && raw[i] !== "\n") i += 1;
+      continue;
+    }
+    if (ch === "/" && next === "*") {
+      i += 2;
+      while (i < raw.length && !(raw[i] === "*" && raw[i + 1] === "/")) i += 1;
+      i += 2;
+      continue;
+    }
+    out += ch;
+    i += 1;
+  }
+  return out;
 }
 
 function expandAlias(specifier: string, aliases: AliasMap): string | null {
@@ -569,18 +672,20 @@ function importsOf(
       continue;
     }
     const expanded = expandAlias(specifier, aliases);
-    if (
-      specifier.startsWith("convex/") ||
-      (expanded !== null && expanded.startsWith("convex/"))
-    ) {
+    const backendExpanded =
+      expanded !== null &&
+      (expanded.startsWith("convex/") ||
+        expanded.startsWith("src/") ||
+        expanded.startsWith("shared/"));
+    if (specifier.startsWith("convex/") || backendExpanded) {
       const convexRel = specifier.startsWith("convex/") ? specifier : expanded;
       const resolved = resolveConvexModule(packageDir, convexRel) ?? convexRel;
       out.push({ specifier, resolved, line });
       continue;
     }
-    // External or bare package import (e.g. "react", "convex/values") that
-    // resolves to a file outside convex, or a src/-scoped alias: not a cycle
-    // participant; the specifier itself is the identity.
+    // External package or unexpanded bare specifier (e.g. "react"): never
+    // kernel-surface and never a cycle participant; the specifier itself is
+    // the identity.
     out.push({ specifier, resolved: specifier, line });
   }
   return out;
@@ -721,9 +826,13 @@ function checkKernelViolations(
       const isRelative = specifier.startsWith(".");
       // Classification surface: relative imports inside the package, plus any
       // bare `convex/...` specifier or tsconfig alias that addresses the
-      // backend (convex/ or src/). External packages are not kernel-surface.
+      // backend (convex/, src/, or the package-local shared/ dependency root).
+      // External packages are not kernel-surface.
       const addressesBackend =
-        isRelative || resolved.startsWith("convex/") || resolved.startsWith("src/");
+        isRelative ||
+        resolved.startsWith("convex/") ||
+        resolved.startsWith("src/") ||
+        resolved.startsWith("shared/");
       if (!addressesBackend) continue;
 
       // Forbidden prefixes take precedence over allowed entries by design: a
@@ -743,8 +852,17 @@ function checkKernelViolations(
         continue;
       }
 
+      // A slash-suffixed allowed prefix is a directory (startsWith is exact).
+      // A non-slash allowed prefix is a single module: it must match exactly,
+      // or as a directory/dotted child (`convex/values/...`, `convex/values.ts`),
+      // so a lookalike like `convex/valuesBridge.ts` can never ride an allowed
+      // prefix and smuggle product-domain imports into a kernel (leaf-to-facade).
       const allowed = kernel.allowedImports.some((prefix) =>
-        resolved.startsWith(prefix),
+        prefix.endsWith("/")
+          ? resolved.startsWith(prefix)
+          : resolved === prefix ||
+            resolved.startsWith(`${prefix}/`) ||
+            resolved.startsWith(`${prefix}.`),
       );
       if (!allowed) {
         violations.push({
@@ -806,7 +924,12 @@ function loadBaseline(baselinePath: string): BaselineLoad {
 }
 
 function saveBaseline(baselinePath: string, baseline: BaselineData): void {
-  writeFileSync(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`);
+  // Write to a temp file then rename so a crash mid-write can never leave a
+  // truncated baseline behind (which would read back as corrupt on the next run).
+  const content = `${JSON.stringify(baseline, null, 2)}\n`;
+  const tmpPath = `${baselinePath}.tmp`;
+  writeFileSync(tmpPath, content);
+  renameSync(tmpPath, baselinePath);
 }
 
 function violationKey(v: Violation): string {
@@ -903,12 +1026,31 @@ export function runDependencyCheck(options: {
 
   // A guard that cannot see its protected surface must fail loudly, never pass.
   if (files.length === 0) {
+    const earlyBaseline = loadBaseline(baselinePath);
+    if (earlyBaseline.status === "corrupt") {
+      // A corrupt baseline must surface even on an empty scan, so an empty
+      // scan can never mask a corrupt baseline into a plain "no files" error.
+      const message =
+        `Baseline file exists but is corrupt at ${baselinePath}: ${earlyBaseline.reason}. ` +
+        `It will not be treated as missing, and --update-baseline will refuse to ` +
+        `regenerate it — restore or repair the baseline file.`;
+      if (!silent) console.error(message);
+      return {
+        violations: [],
+        cycles: [],
+        baseline: null,
+        isClean: false,
+        scanError: message,
+        repairHint:
+          "Restore or repair the corrupt baseline file; it is never regenerated from scratch.",
+      };
+    }
     const message = `No Convex backend source files found at ${convexDir}. The dependency guard cannot evaluate an empty scan; refusing to pass.`;
     if (!silent) console.error(message);
     return {
       violations: [],
       cycles: [],
-      baseline: loadBaseline(baselinePath).status === "valid" ? loadBaseline(baselinePath).baseline : null,
+      baseline: earlyBaseline.baseline,
       isClean: false,
       scanError: message,
       repairHint: "Restore the convex source tree; an empty scan is never passable.",
@@ -932,6 +1074,36 @@ export function runDependencyCheck(options: {
       isClean: false,
       scanError: message,
       repairHint: "Declare the nested _generated directory in PROTECTED_KERNELS.excludedPaths or remove it.",
+    };
+  }
+
+  // The guard only ever evaluates the full backend. If the scan cannot see a
+  // protected kernel root at all, it is pointing at the wrong tree (e.g. a
+  // foreign --convex-dir) or the kernel tree is gone — either way passing green
+  // would silently disable the fence. Refuse loudly instead.
+  const missingKernelRoots = (
+    Object.keys(PROTECTED_KERNELS) as Array<keyof typeof PROTECTED_KERNELS>
+  )
+    .filter(
+      (name) =>
+        !files.some((f) => f.path.startsWith(`${PROTECTED_KERNELS[name].root}/`)),
+    )
+    .map((name) => PROTECTED_KERNELS[name].root);
+  if (missingKernelRoots.length > 0) {
+    const message =
+      `Protected kernel surface not found in the scan; missing root` +
+      `${missingKernelRoots.length === 1 ? "" : "s"}: ${missingKernelRoots.join(", ")}. ` +
+      `The dependency guard only evaluates the full backend and refuses a scan that ` +
+      `cannot see every protected kernel (is --convex-dir correct?).`;
+    if (!silent) console.error(message);
+    return {
+      violations: [],
+      cycles: [],
+      baseline: loadBaseline(baselinePath).status === "valid" ? loadBaseline(baselinePath).baseline : null,
+      isClean: false,
+      scanError: message,
+      repairHint:
+        "Point the check at the real backend (default convex/ under packages/athena-webapp).",
     };
   }
 
@@ -980,13 +1152,29 @@ export function runDependencyCheck(options: {
   }
   const baseline = baselineLoad.baseline;
 
+  // Cycles that `--update-baseline` would refuse to absorb: any current cycle
+  // that is not an exact member or a strict subset of a baselined cycle. When
+  // there is no baseline, every cycle is unabsorbable (creation is a separate,
+  // explicit first-run path below).
+  const unabsorbableCycles = baseline
+    ? cycles.filter((cycle) => !cycleCoveredByBaseline(cycle, baseline))
+    : cycles;
+
   const { newCycles, removedCycles } = findNewCycles(cycles, baseline);
 
   const cycleViolations: Violation[] = newCycles.map((cycle) => ({
     file: cycle[0],
     imports: cycle.slice(1).join(" -> "),
     resolved: cycle.join(" -> "),
-    type: baseline ? "new-cycle" : "cycle-not-in-baseline",
+    // A surviving strict subset of a baselined cycle is a contraction (safe to
+    // regenerate), not a new cycle: `cycle-contraction` is what an agent relies
+    // on to distinguish drift from blocked growth in the JSON.
+    type:
+      baseline === null
+        ? "cycle-not-in-baseline"
+        : cycleCoveredByBaseline(cycle, baseline)
+          ? "cycle-contraction"
+          : "new-cycle",
     cycle,
   }));
 
@@ -1009,10 +1197,12 @@ export function runDependencyCheck(options: {
   // Removed kernel violations are baseline drift exactly like removed cycles:
   // fixing a grandfathered edge is a shrink that must be persisted by
   // regeneration, otherwise the same edge could be reintroduced and
-  // misread as already-baselined.
+  // misread as already-baselined. The baseline stores the original specifier,
+  // so it is reproduced here instead of a generic marker: an agent can see
+  // exactly which edge was removed without re-reading the baseline file.
   const kernelDriftViolations: Violation[] = removedKernelViolations.map((v) => ({
     file: v.file,
-    imports: "BASELINE DRIFT",
+    imports: v.imports,
     resolved: v.resolved,
     type: "baseline-drift",
   }));
@@ -1027,25 +1217,32 @@ export function runDependencyCheck(options: {
 
   let repairHint: string | undefined;
   if (!isClean) {
+    // Aligned with --update-baseline: regeneration is unblocked when nothing
+    // unabsorbable exists, so the hint never tells an agent "regenerate shrink-only"
+    // in a state the update would refuse, nor "fix it first" when a pure
+    // contraction would be accepted.
     const driftOnly =
-      newCycles.length === 0 &&
-      newKernelViolations.length === 0 &&
-      (cycleDriftViolations.length > 0 || kernelDriftViolations.length > 0);
-    repairHint = driftOnly
-      ? "Only baseline drift was detected (removed cycles or kernel edges), or a baselined cycle contracted. " +
+      unabsorbableCycles.length === 0 && newKernelViolations.length === 0;
+    if (baseline === null) {
+      repairHint =
+        "No baseline exists yet; after reviewing the current graph, create it with " +
+        "--update-baseline (records the snapshot; all later updates are shrink-only).";
+    } else if (driftOnly) {
+      repairHint =
+        "Only baseline drift was detected (removed cycles or kernel edges), or a baselined cycle contracted. " +
         "Regenerate with --update-baseline after review confirms the removals are intentional; the update " +
-        "is shrink-only and refuses new cycles and new kernel violations."
-      : "New cycles or kernel violations were detected. Fix them in the backend graph — --update-baseline " +
+        "is shrink-only and refuses new cycles and new kernel violations.";
+    } else {
+      repairHint =
+        "New cycles or kernel violations were detected. Fix them in the backend graph — --update-baseline " +
         "refuses to absorb new violations or growth of baselined cycles.";
+    }
   }
 
   // --update-baseline: persist ONLY shrink-only changes. New cycles (or growth
   // of a baselined cycle) and new kernel violations must never be absorbed.
   if (updateBaseline) {
     const hasBaseline = baseline !== null;
-    const unabsorbableCycles = hasBaseline
-      ? cycles.filter((cycle) => !cycleCoveredByBaseline(cycle, baseline))
-      : cycles;
     if (hasBaseline && (unabsorbableCycles.length > 0 || newKernelViolations.length > 0)) {
       const message =
         "Refusing to update baseline: the current graph introduces new cycles (or grows baselined ones) " +
@@ -1079,6 +1276,7 @@ export function runDependencyCheck(options: {
       cycles: sortCycles(cycles),
       baseline: newBaseline,
       isClean: true,
+      baselineUpdated: true,
     };
   }
 
@@ -1108,6 +1306,11 @@ function usage(): string {
     "",
     "Value flags require a value; flags with a missing value or unknown flags",
     "exit with status 2.",
+    "",
+    "Exit codes:",
+    "  0  Clean — no new cycles or kernel violations, or --update-baseline persisted.",
+    "  1  Violations, scan errors, or a refused --update-baseline.",
+    "  2  CLI misuse (missing value for a value flag, or an unknown flag).",
   ].join("\n");
 }
 
@@ -1194,8 +1397,6 @@ function main() {
     console.log("\n❌ Dependency check FAILED");
     if (result.repairHint) {
       console.log(`\nNext step: ${result.repairHint}`);
-    } else if (!updateBaseline && result.baseline) {
-      console.log("Run with --update-baseline to regenerate baseline after intentional changes.");
     }
     process.exit(1);
   } else {

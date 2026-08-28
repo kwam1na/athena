@@ -43,11 +43,40 @@ function createSandbox(): Sandbox {
   const convexDir = path.join(packageDir, "convex");
   const baselinePath = path.join(rootDir, "baseline.json");
   mkdirSync(convexDir, { recursive: true });
+  // Every protected kernel root must be present in a scan or the guard refuses
+  // loudly (it only ever evaluates the full backend). Seed both so every test
+  // sandbox is a legitimate full-backend scan; the seeds are import-free.
+  for (const kernelRoot of ["inventoryLedger", "agentHarness"]) {
+    const seedPath = path.join(convexDir, kernelRoot, "seed.ts");
+    mkdirSync(path.dirname(seedPath), { recursive: true });
+    writeFileSync(
+      seedPath,
+      "/* depguard seed */\nexport const __depguardSeed = true;\n",
+    );
+  }
   return { rootDir, packageDir, convexDir, baselinePath };
+}
+
+function wipeKernels(sandbox: Sandbox) {
+  rmSync(path.join(sandbox.convexDir, "inventoryLedger"), {
+    recursive: true,
+    force: true,
+  });
+  rmSync(path.join(sandbox.convexDir, "agentHarness"), {
+    recursive: true,
+    force: true,
+  });
 }
 
 function writeConvex(sandbox: Sandbox, convexRelativePath: string, source: string) {
   const filePath = path.join(sandbox.convexDir, convexRelativePath);
+  mkdirSync(path.dirname(filePath), { recursive: true });
+  writeFileSync(filePath, source);
+}
+
+/** Write a file at the package root (not under convex), e.g. src/ or shared/. */
+function writePackageFile(sandbox: Sandbox, relativePath: string, source: string) {
+  const filePath = path.join(sandbox.packageDir, relativePath);
   mkdirSync(path.dirname(filePath), { recursive: true });
   writeFileSync(filePath, source);
 }
@@ -115,6 +144,9 @@ describe("convex backend dependency check", () => {
   it("rejects an empty scan loudly instead of passing green", () => {
     const sandbox = createSandbox();
     writeBaseline(sandbox, [], []);
+    // createSandbox seeds both protected kernel roots; wipe them so the scan
+    // is genuinely empty rather than a seeded full backend.
+    wipeKernels(sandbox);
     const result = runCheck(sandbox, ["--json"]);
     expect(result.status).toBe(1);
     const output = jsonOf(result);
@@ -123,6 +155,15 @@ describe("convex backend dependency check", () => {
     // Regeneration on an empty scan must also refuse.
     const update = runCheck(sandbox, ["--update-baseline", "--json"]);
     expect(update.status).toBe(1);
+  });
+
+  it("surfaces a corrupt baseline even when the scan is empty", () => {
+    const sandbox = createSandbox();
+    wipeKernels(sandbox);
+    writeFileSync(sandbox.baselinePath, "{ not json");
+    const result = runCheck(sandbox, ["--json"]);
+    expect(result.status).toBe(1);
+    expect(jsonOf(result).scanError).toMatch(/corrupt/);
   });
 
   it("detects a new dependency cycle between extensionless modules and reports the exact members", () => {
@@ -572,20 +613,26 @@ describe("convex backend dependency check", () => {
     writeConvex(sandbox, "scaleB/b.ts", 'import { a } from "../scaleA/a";');
     writeConvex(sandbox, "scaleC/c.ts", "export const orphan = true;\n");
 
-    // The normal check reports the contraction as drift (new [a,b] + removed [a,b,c]).
+    // The normal check reports the surviving subset as a CONTRACTION (safe to
+    // regenerate), never as an unabsorbable new-cycle, plus the removed member
+    // as baseline drift. The repairHint must point at shrink-only regeneration,
+    // matching what --update-baseline would actually accept.
     const drifted = runCheck(sandbox, ["--json"]);
     expect(drifted.status).toBe(1);
     const driftedOutput = jsonOf(drifted);
     expect(
-      driftedOutput.violations.some((v: any) => v.type === "new-cycle"),
+      driftedOutput.violations.some((v: any) => v.type === "cycle-contraction"),
     ).toBe(true);
     expect(
       driftedOutput.violations.some((v: any) => v.type === "baseline-drift"),
     ).toBe(true);
+    expect(driftedOutput.repairHint).toMatch(/Regenerate with --update-baseline/);
 
-    // Regeneration accepts the strict contraction of a baselined cycle.
+    // Regeneration accepts the strict contraction of a baselined cycle and
+    // marks the persisted baseline explicitly for JSON consumers.
     const contracted = runCheck(sandbox, ["--update-baseline", "--json"]);
     expect(contracted.status).toBe(0);
+    expect(jsonOf(contracted).baselineUpdated).toBe(true);
 
     // Reintroducing the removed member grows the cycle again: not baselined.
     writeConvex(
@@ -631,5 +678,192 @@ describe("convex backend dependency check", () => {
           v.type === "kernel-forbidden" && v.file.includes("profiles/offKernel"),
       ),
     ).toBe(false);
+  });
+
+  it("types cycles as cycle-not-in-baseline when no baseline exists yet", () => {
+    const sandbox = createSandbox();
+    // Deliberately NO writeBaseline: a missing baseline is not corrupt, and a
+    // normal run must type every cycle as not-in-baseline and hint at creation.
+    writeConvex(sandbox, "scaleA/a.ts", 'import { b } from "../scaleB/b";');
+    writeConvex(sandbox, "scaleB/b.ts", 'import { a } from "../scaleA/a";');
+    const result = runCheck(sandbox, ["--json"]);
+    expect(result.status).toBe(1);
+    const output = jsonOf(result);
+    const cycle = output.violations.find(
+      (v: any) => v.type === "cycle-not-in-baseline",
+    );
+    expect(cycle).toBeDefined();
+    expect(cycle.cycle).toContain("convex/scaleA/a.ts");
+    expect(cycle.cycle).toContain("convex/scaleB/b.ts");
+    expect(output.repairHint).toMatch(/create it with --update-baseline/);
+  });
+
+  it("flags a bare convex/<domain> import that is not a runtime facade", () => {
+    const sandbox = createSandbox();
+    writeBaseline(sandbox, [], []);
+    writeConvex(
+      sandbox,
+      "operations/inventoryMovements.ts",
+      "export const applyInventoryEffectWithCtx = () => {};\n",
+    );
+    writeConvex(
+      sandbox,
+      "inventoryLedger/bareHot.ts",
+      'import { applyInventoryEffectWithCtx } from "convex/operations/inventoryMovements";\n',
+    );
+    const result = runCheck(sandbox, ["--json"]);
+    expect(result.status).toBe(1);
+    const output = jsonOf(result);
+    const violation = output.violations.find(
+      (v: any) => v.type === "kernel-forbidden" && v.file.endsWith("bareHot.ts"),
+    );
+    expect(violation).toBeDefined();
+    expect(violation.resolved).toBe("convex/operations/inventoryMovements.ts");
+  });
+
+  it("classifies a src/-scoped tsconfig alias as backend surface, so a kernel cannot import product code through it", () => {
+    const sandbox = createSandbox();
+    writeBaseline(sandbox, [], []);
+    writePackageFile(
+      sandbox,
+      "tsconfig.json",
+      JSON.stringify({ compilerOptions: { paths: { "@/*": ["./src/*"] } } }),
+    );
+    // src/ lives at the package root, outside the convex scan.
+    writePackageFile(sandbox, "src/lib/hot.ts", "export const hot = 1;\n");
+    writeConvex(
+      sandbox,
+      "inventoryLedger/srcAliasHot.ts",
+      'import { hot } from "@/lib/hot";\nexport const ok = hot;\n',
+    );
+    const result = runCheck(sandbox, ["--json"]);
+    expect(result.status).toBe(1);
+    const output = jsonOf(result);
+    const violation = output.violations.find(
+      (v: any) => v.type === "kernel-forbidden" && v.file.endsWith("srcAliasHot.ts"),
+    );
+    expect(violation).toBeDefined();
+    expect(violation.resolved).toBe("src/lib/hot.ts");
+  });
+
+  it("classifies a shared/-scoped tsconfig alias and respects kernel allowed domains", () => {
+    const sandbox = createSandbox();
+    writeBaseline(sandbox, [], []);
+    writePackageFile(
+      sandbox,
+      "tsconfig.json",
+      JSON.stringify({ compilerOptions: { paths: { "~/*": ["./*"] } } }),
+    );
+    writePackageFile(
+      sandbox,
+      "shared/agentHarness/util.ts",
+      "export const util = 1;\n",
+    );
+    // agentHarness may import its shared/agentHarness dependency via the alias.
+    writeConvex(
+      sandbox,
+      "agentHarness/viaTilde.ts",
+      'import { util } from "~/shared/agentHarness/util";\nexport const ok = util;\n',
+    );
+    const allowed = runCheck(sandbox, ["--json"]);
+    expect(allowed.status).toBe(0);
+    expect(jsonOf(allowed).isClean).toBe(true);
+
+    // inventoryLedger has no shared/ allowance — the same alias is not allowed there.
+    writeConvex(
+      sandbox,
+      "inventoryLedger/viaTilde.ts",
+      'import { util } from "~/shared/agentHarness/util";\nexport const ok = util;\n',
+    );
+    const blocked = runCheck(sandbox, ["--json"]);
+    expect(blocked.status).toBe(1);
+    const output = jsonOf(blocked);
+    const violation = output.violations.find(
+      (v: any) => v.type === "kernel-not-allowed" && v.file.endsWith("viaTilde.ts"),
+    );
+    expect(violation).toBeDefined();
+    expect(violation.resolved).toBe("shared/agentHarness/util.ts");
+  });
+
+  it("refuses a scan that cannot see every protected kernel root (wrong --convex-dir)", () => {
+    const sandbox = createSandbox();
+    writeBaseline(sandbox, [], []);
+    const foreignDir = path.join(sandbox.rootDir, "notconvex");
+    mkdirSync(foreignDir, { recursive: true });
+    writeFileSync(path.join(foreignDir, "stray.ts"), "const x = 1;\n");
+    const result = spawnSync(
+      "bun",
+      [
+        SCRIPT_PATH,
+        "--convex-dir",
+        foreignDir,
+        "--package-dir",
+        sandbox.packageDir,
+        "--baseline",
+        sandbox.baselinePath,
+        "--json",
+      ],
+      { cwd: REPO_ROOT, encoding: "utf8", timeout: 60000 },
+    );
+    expect(result.status).toBe(1);
+    const output = JSON.parse(result.stdout || "{}");
+    expect(output.scanError).toMatch(/Protected kernel surface not found/);
+  });
+
+  it("does not let an allowed-prefix lookalike smuggle product imports into a kernel", () => {
+    const sandbox = createSandbox();
+    writeBaseline(sandbox, [], []);
+    writeConvex(sandbox, "reports/access.ts", "export const access = 1;\n");
+    // `convex/valuesBridge.ts` is one character past the allowed `convex/values`
+    // runtime module; it is NOT the facade and must not inherit its allowance.
+    writeConvex(
+      sandbox,
+      "valuesBridge.ts",
+      'import { access } from "./reports/access";\nexport const bridge = access;\n',
+    );
+    writeConvex(
+      sandbox,
+      "inventoryLedger/viaBridge.ts",
+      'import { bridge } from "../valuesBridge";\nexport const ok = bridge;\n',
+    );
+    const result = runCheck(sandbox, ["--json"]);
+    expect(result.status).toBe(1);
+    const output = jsonOf(result);
+    const violation = output.violations.find(
+      (v: any) => v.type === "kernel-not-allowed" && v.file.endsWith("viaBridge.ts"),
+    );
+    expect(violation).toBeDefined();
+    expect(violation.resolved).toBe("convex/valuesBridge.ts");
+  });
+
+  it("parses comment-bearing (JSONC) tsconfig files so aliases are never silently lost", () => {
+    const sandbox = createSandbox();
+    writeBaseline(sandbox, [], []);
+    writePackageFile(
+      sandbox,
+      "tsconfig.json",
+      [
+        "{",
+        '  "compilerOptions": {',
+        '    // Real tsconfigs carry comments; JSON.parse alone would reject this.',
+        '    "paths": { "@cvx/*": ["./convex/*"] },',
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+    writeConvex(sandbox, "reports/access.ts", "export const access = 1;\n");
+    writeConvex(
+      sandbox,
+      "inventoryLedger/aliasHot.ts",
+      'import { access } from "@cvx/reports/access";\n',
+    );
+    const result = runCheck(sandbox, ["--json"]);
+    expect(result.status).toBe(1);
+    const output = jsonOf(result);
+    const violation = output.violations.find(
+      (v: any) => v.type === "kernel-forbidden" && v.file.endsWith("aliasHot.ts"),
+    );
+    expect(violation).toBeDefined();
+    expect(violation.resolved).toBe("convex/reports/access.ts");
   });
 });
