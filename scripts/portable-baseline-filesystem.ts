@@ -41,6 +41,10 @@ function assertContained(
   }
 }
 
+function repositoryRelativeIdentity(rootPath: string, candidatePath: string) {
+  return path.relative(rootPath, candidatePath).split(path.sep).join("/");
+}
+
 async function nearestExistingAncestor(absolutePath: string, rootPath: string) {
   let candidate = absolutePath;
   while (isContainedBy(rootPath, candidate)) {
@@ -61,6 +65,7 @@ export async function resolveContainedPath(
   options: { allowExternalLeafSymlinkMetadata?: boolean } = {},
 ): Promise<{
   absolutePath: string;
+  identityPath: string | null;
   realRoot: string;
   state: ContainedPathState;
 }> {
@@ -78,31 +83,39 @@ export async function resolveContainedPath(
       realRoot,
     );
     assertContained(realRoot, ancestor, relativePath);
-    return { absolutePath, realRoot, state: "absent" };
+    return { absolutePath, identityPath: null, realRoot, state: "absent" };
   }
 
   if (stat.isSymbolicLink()) {
     const realParent = await realpath(path.dirname(absolutePath));
     assertContained(realRoot, realParent, relativePath);
+    // A leaf symlink's identity canonicalizes its contained real parent but
+    // deliberately retains the authored leaf name. This keeps external link
+    // targets metadata-only rather than dereferencing them for identity.
+    const identityPath = repositoryRelativeIdentity(
+      realRoot,
+      path.join(realParent, path.basename(absolutePath)),
+    );
     if (!options.allowExternalLeafSymlinkMetadata) {
       let realTarget: string;
       try {
         realTarget = await realpath(absolutePath);
       } catch (error: unknown) {
         if (isMissingPathError(error)) {
-          return { absolutePath, realRoot, state: "symlink" };
+          return { absolutePath, identityPath, realRoot, state: "symlink" };
         }
         throw error;
       }
       assertContained(realRoot, realTarget, relativePath);
     }
-    return { absolutePath, realRoot, state: "symlink" };
+    return { absolutePath, identityPath, realRoot, state: "symlink" };
   }
 
   const realTarget = await realpath(absolutePath);
   assertContained(realRoot, realTarget, relativePath);
   return {
     absolutePath,
+    identityPath: repositoryRelativeIdentity(realRoot, realTarget),
     realRoot,
     state: stat.isDirectory() ? "directory" : "file",
   };

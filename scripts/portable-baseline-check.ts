@@ -352,6 +352,11 @@ type TreeEntry = {
   kind: "file" | "symlink";
 };
 
+type ResolvedMemberIdentity = {
+  member: BoundedClosureMember;
+  identityPath: string;
+};
+
 type SourceDependencyReference = {
   fromMemberId: string;
   reference: string;
@@ -1039,7 +1044,6 @@ export async function auditPortableWorkflowBaseline(
 
   const members = overlayMap.boundedClosure.members;
   const rejectedMemberIds = new Set<string>();
-  const canonicalMembers: BoundedClosureMember[] = [];
   for (const member of members) {
     if (!isSafeRelativePath(member.path)) {
       findings.push({
@@ -1059,7 +1063,6 @@ export async function auditPortableWorkflowBaseline(
       rejectedMemberIds.add(member.id);
       continue;
     }
-    canonicalMembers.push(member);
   }
   const memberById = new Map(members.map((member) => [member.id, member]));
   pushDuplicateFindings(
@@ -1068,28 +1071,8 @@ export async function auditPortableWorkflowBaseline(
     "bounded-member-duplicate",
     "Bounded member id",
   );
-  pushDuplicateFindings(
-    findings,
-    canonicalMembers.map((member) => member.path),
-    "bounded-member-duplicate",
-    "Bounded member path",
-  );
-  for (const [index, member] of canonicalMembers.entries()) {
-    const memberPath = member.path;
-    for (const other of canonicalMembers.slice(index + 1)) {
-      const otherPath = other.path;
-      if (
-        memberPath.startsWith(`${otherPath}/`) ||
-        otherPath.startsWith(`${memberPath}/`)
-      ) {
-        findings.push({
-          code: "bounded-member-overlap",
-          message: `Bounded members ${member.id} and ${other.id} overlap, so files would have more than one classification.`,
-        });
-      }
-    }
-  }
   const memberEntriesById = new Map<string, TreeEntry[]>();
+  const resolvedMemberIdentities: ResolvedMemberIdentity[] = [];
   for (const member of members) {
     if (!hasClassification(member.classification)) {
       findings.push({
@@ -1113,6 +1096,30 @@ export async function auditPortableWorkflowBaseline(
         });
         rejectedMemberIds.add(member.id);
         continue;
+      }
+      const identityPath = containedMemberRoot.identityPath;
+      if (identityPath === null) {
+        findings.push({
+          code: "bounded-member-filesystem-identity-missing",
+          message: `Bounded member ${member.id} has no repository-relative filesystem identity.`,
+          path: member.path,
+        });
+        rejectedMemberIds.add(member.id);
+        continue;
+      }
+      resolvedMemberIdentities.push({
+        member,
+        identityPath,
+      });
+      if (
+        containedMemberRoot.state !== "symlink" &&
+        identityPath !== member.path
+      ) {
+        findings.push({
+          code: "bounded-member-path-filesystem-noncanonical",
+          message: `Bounded member ${member.id} must use filesystem-canonical path ${identityPath}.`,
+          path: member.path,
+        });
       }
       entries = await collectTreeEntries(rootDir, member.path);
       if (containedMemberRoot.state === "directory" && entries.length === 0) {
@@ -1150,6 +1157,25 @@ export async function auditPortableWorkflowBaseline(
         message: `Bounded member ${member.id} no longer matches its tree digest.`,
         path: member.path,
       });
+    }
+  }
+  pushDuplicateFindings(
+    findings,
+    resolvedMemberIdentities.map((resolved) => resolved.identityPath),
+    "bounded-member-duplicate",
+    "Bounded member filesystem identity",
+  );
+  for (const [index, resolved] of resolvedMemberIdentities.entries()) {
+    for (const other of resolvedMemberIdentities.slice(index + 1)) {
+      if (
+        resolved.identityPath.startsWith(`${other.identityPath}/`) ||
+        other.identityPath.startsWith(`${resolved.identityPath}/`)
+      ) {
+        findings.push({
+          code: "bounded-member-overlap",
+          message: `Bounded members ${resolved.member.id} and ${other.member.id} overlap, so files would have more than one classification.`,
+        });
+      }
     }
   }
 
@@ -1535,7 +1561,9 @@ export async function auditPortableWorkflowBaseline(
         "Residual inventory must scan every recorded workflow discovery root.",
     });
   }
-  const classifiedPaths = canonicalMembers.map((member) => member.path);
+  const classifiedPaths = resolvedMemberIdentities.map(
+    (resolved) => resolved.identityPath,
+  );
   const safeInventoryRoots = overlayMap.outOfScopeInventory.scanRoots.filter(
     (scanRoot) => {
       if (isSafeRelativePath(scanRoot)) return true;

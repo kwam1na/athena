@@ -2,6 +2,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  realpath,
   rm,
   symlink,
   writeFile,
@@ -19,6 +20,23 @@ import {
 } from "./portable-baseline-check";
 
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
+const CASE_ALIAS_MEMBER_PATH = ".agents/skills/deliver-work/agents/OPENAI.yaml";
+const CASE_ALIAS_MEMBER_CANONICAL_PATH =
+  ".agents/skills/deliver-work/agents/openai.yaml";
+
+async function canResolveCaseInsensitiveMemberAlias() {
+  try {
+    return (
+      (await realpath(path.join(REPO_ROOT, CASE_ALIAS_MEMBER_PATH))) ===
+      (await realpath(path.join(REPO_ROOT, CASE_ALIAS_MEMBER_CANONICAL_PATH)))
+    );
+  } catch {
+    return false;
+  }
+}
+
+const CASE_INSENSITIVE_MEMBER_ALIAS_SUPPORTED =
+  await canResolveCaseInsensitiveMemberAlias();
 
 describe("portable workflow characterization baseline", () => {
   it("validates the current source-backed baseline, classifications, scenarios, and inventory", async () => {
@@ -244,6 +262,7 @@ describe("portable workflow characterization baseline", () => {
     ".agents/skills/compound-delivery-kernel/./",
     ".agents//skills/compound-delivery-kernel",
     ".agents/skills/compound-delivery-kernel/",
+    ".agents\\skills\\compound-delivery-kernel",
   ])("rejects noncanonical bounded member path %s", async (aliasedPath) => {
     const documents = await loadPortableBaselineDocuments(REPO_ROOT);
     const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
@@ -268,6 +287,137 @@ describe("portable workflow characterization baseline", () => {
       "bounded-member-path-noncanonical",
     );
   });
+
+  it.skipIf(!CASE_INSENSITIVE_MEMBER_ALIAS_SUPPORTED)(
+    "rejects a case-only alias of an existing bounded member filesystem identity",
+    async () => {
+      const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+      const canonicalMember = documents.overlayMap.boundedClosure.members.find(
+        (member) => member.id === "deliver-work-codex-metadata",
+      )!;
+      const aliasEntries = await collectTreeEntries(
+        REPO_ROOT,
+        CASE_ALIAS_MEMBER_PATH,
+      );
+      const aliasMember = {
+        ...canonicalMember,
+        id: "deliver-work-codex-metadata-case-alias",
+        path: CASE_ALIAS_MEMBER_PATH,
+        fileCount: aliasEntries.length,
+        treeDigest: digestTreeEntries(aliasEntries),
+      };
+      const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+        documents: {
+          ...documents,
+          overlayMap: {
+            ...documents.overlayMap,
+            boundedClosure: {
+              ...documents.overlayMap.boundedClosure,
+              members: [
+                ...documents.overlayMap.boundedClosure.members,
+                aliasMember,
+              ],
+              auditedMemberIds: [
+                ...documents.overlayMap.boundedClosure.auditedMemberIds,
+                aliasMember.id,
+              ],
+            },
+          },
+        },
+      });
+
+      expect(result.findings.map((finding) => finding.code)).toEqual(
+        expect.arrayContaining([
+          "bounded-member-duplicate",
+          "bounded-member-path-filesystem-noncanonical",
+        ]),
+      );
+    },
+  );
+
+  it.skipIf(!CASE_INSENSITIVE_MEMBER_ALIAS_SUPPORTED)(
+    "uses filesystem identity for case-aliased member overlap and residual filtering",
+    async () => {
+      const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+      const canonicalMember = documents.overlayMap.boundedClosure.members.find(
+        (member) => member.id === "deliver-work-codex-metadata",
+      )!;
+      const aliasEntries = await collectTreeEntries(
+        REPO_ROOT,
+        CASE_ALIAS_MEMBER_PATH,
+      );
+      const aliasMember = {
+        ...canonicalMember,
+        path: CASE_ALIAS_MEMBER_PATH,
+        fileCount: aliasEntries.length,
+        treeDigest: digestTreeEntries(aliasEntries),
+      };
+      const replacementResult = await auditPortableWorkflowBaseline(REPO_ROOT, {
+        documents: {
+          ...documents,
+          overlayMap: {
+            ...documents.overlayMap,
+            boundedClosure: {
+              ...documents.overlayMap.boundedClosure,
+              members: documents.overlayMap.boundedClosure.members.map(
+                (member) =>
+                  member.id === canonicalMember.id ? aliasMember : member,
+              ),
+            },
+          },
+        },
+      });
+
+      expect(
+        replacementResult.findings.map((finding) => finding.code),
+      ).toContain("bounded-member-path-filesystem-noncanonical");
+      expect(
+        replacementResult.findings.map((finding) => finding.code),
+      ).not.toEqual(
+        expect.arrayContaining([
+          "inventory-count-drift",
+          "inventory-digest-drift",
+        ]),
+      );
+
+      const overlapPath = ".AGENTS/skills/deliver-work";
+      const overlapEntries = await collectTreeEntries(REPO_ROOT, overlapPath);
+      const overlapMember = {
+        ...canonicalMember,
+        id: "deliver-work-case-alias-overlap",
+        kind: "skill-bundle" as const,
+        path: overlapPath,
+        fileCount: overlapEntries.length,
+        treeDigest: digestTreeEntries(overlapEntries),
+      };
+      const overlapResult = await auditPortableWorkflowBaseline(REPO_ROOT, {
+        documents: {
+          ...documents,
+          overlayMap: {
+            ...documents.overlayMap,
+            boundedClosure: {
+              ...documents.overlayMap.boundedClosure,
+              members: [
+                ...documents.overlayMap.boundedClosure.members,
+                overlapMember,
+              ],
+              auditedMemberIds: [
+                ...documents.overlayMap.boundedClosure.auditedMemberIds,
+                overlapMember.id,
+              ],
+            },
+          },
+        },
+      });
+
+      expect(overlapResult.findings.map((finding) => finding.code)).toEqual(
+        expect.arrayContaining([
+          "bounded-member-overlap",
+          "bounded-member-path-filesystem-noncanonical",
+        ]),
+      );
+    },
+  );
 
   it("keeps tracker-neutral and Linear behavior in separate classifications", async () => {
     const documents = await loadPortableBaselineDocuments(REPO_ROOT);
