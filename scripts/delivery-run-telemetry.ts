@@ -2,7 +2,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { collectDeliverableDiffFingerprint } from "./delivery-diff-fingerprint";
+import {
+  collectChangedPathsForDiff,
+  collectDeliverableDiffFingerprint,
+} from "./delivery-diff-fingerprint";
+export { collectChangedPathsForDiff } from "./delivery-diff-fingerprint";
 import {
   collectSourceLineChanges,
   DEFAULT_SOURCE_LINE_THRESHOLD,
@@ -23,6 +27,13 @@ import {
   type CommandArguments,
   type HarnessBlockerSource,
 } from "./harness-blockers";
+import {
+  DEFAULT_PORTABLE_SHADOW_PATH,
+  isPortableShadowComparison,
+  isPortableShadowComparisonRecord,
+  readPortableShadowComparison,
+  type PortableShadowComparison,
+} from "./portable-shadow-observation";
 
 export const DELIVERY_RUN_TELEMETRY_SCHEMA_VERSION = 1 as const;
 export const DELIVERY_RUN_TELEMETRY_DIR = "telemetry/delivery-runs";
@@ -66,6 +77,7 @@ export type DeliveryRunTelemetryRecord = {
   proofState: DeliveryRunProofState;
   summary: DeliveryRunLedger["summary"];
   reviewLoop?: DeliveryRunReviewLoopSummary;
+  shadowComparison?: PortableShadowComparison;
 };
 
 export function buildDeliveryRunTelemetryRecord(
@@ -74,8 +86,24 @@ export function buildDeliveryRunTelemetryRecord(
     branch: string;
     headSha: string;
     deliverableDiffFingerprint: string;
+    shadowComparison?: PortableShadowComparison;
   },
 ): DeliveryRunTelemetryRecord {
+  if (
+    context.shadowComparison &&
+    !isPortableShadowComparison(context.shadowComparison)
+  ) {
+    throw new Error("Portable shadow comparison is not valid for telemetry.");
+  }
+  if (
+    context.shadowComparison &&
+    context.shadowComparison.candidateFingerprint !==
+      context.deliverableDiffFingerprint
+  ) {
+    throw new Error(
+      "The portable shadow comparison describes a different deliverable.",
+    );
+  }
   return {
     schemaVersion: DELIVERY_RUN_TELEMETRY_SCHEMA_VERSION,
     generatedAt: ledger.generatedAt,
@@ -86,6 +114,11 @@ export function buildDeliveryRunTelemetryRecord(
     proofState: ledger.proofState,
     summary: ledger.summary,
     ...(ledger.reviewLoop ? { reviewLoop: ledger.reviewLoop } : {}),
+    ...(context.shadowComparison
+      ? {
+          shadowComparison: structuredClone(context.shadowComparison),
+        }
+      : {}),
   };
 }
 
@@ -144,14 +177,15 @@ const SUMMARY_NUMERIC_FIELDS = [
   "gateDecisionCount",
   "totalDurationMs",
 ] as const;
-
 /**
  * Validated strictly because these records are read back from the tracked tree
  * and rendered into the run summary that delivery handoffs relay verbatim. A
  * loose predicate here turns a hand-authored file into printed output and into
  * the cross-delivery baseline.
  */
-function isTelemetryRecord(value: unknown): value is DeliveryRunTelemetryRecord {
+function isTelemetryRecord(
+  value: unknown,
+): value is DeliveryRunTelemetryRecord {
   if (!value || typeof value !== "object") return false;
   const record = value as Partial<DeliveryRunTelemetryRecord>;
   const summary = record.summary as Record<string, unknown> | undefined;
@@ -170,13 +204,18 @@ function isTelemetryRecord(value: unknown): value is DeliveryRunTelemetryRecord 
     Boolean(summary) &&
     typeof summary === "object" &&
     SUMMARY_NUMERIC_FIELDS.every(
-      (field) => typeof summary[field] === "number" &&
+      (field) =>
+        typeof summary[field] === "number" &&
         Number.isFinite(summary[field] as number),
     ) &&
     // reviewLoop is rendered into the summary, so an unvalidated one from a
     // committed record would reach string operations expecting strings.
     (record.reviewLoop === undefined ||
-      isValidReviewLoopTelemetry(record.reviewLoop))
+      isValidReviewLoopTelemetry(record.reviewLoop)) &&
+    (record.shadowComparison === undefined ||
+      (isPortableShadowComparisonRecord(record.shadowComparison) &&
+        record.shadowComparison.candidateFingerprint ===
+          record.deliverableDiffFingerprint))
   );
 }
 
@@ -272,6 +311,7 @@ export async function recordDeliveryRunTelemetry(
   rootDir: string,
   options: {
     ledgerPath?: string;
+    shadowPath?: string;
     telemetryDir?: string;
     baseRef?: string;
   } = {},
@@ -310,14 +350,27 @@ export async function recordDeliveryRunTelemetry(
         "that actually passed.",
     );
   }
-  const [branch, headSha] = await Promise.all([
+  const [branch, headSha, shadowComparison] = await Promise.all([
     gitStdout(rootDir, ["branch", "--show-current"]),
     gitStdout(rootDir, ["rev-parse", "HEAD"]),
+    readPortableShadowComparison(
+      rootDir,
+      options.shadowPath ?? DEFAULT_PORTABLE_SHADOW_PATH,
+    ),
   ]);
+  if (
+    shadowComparison &&
+    shadowComparison.candidateFingerprint !== currentFingerprint
+  ) {
+    throw new Error(
+      "The portable shadow artifact describes a different deliverable than the current passing gate.",
+    );
+  }
   const record = buildDeliveryRunTelemetryRecord(ledger, {
     branch: branch || "detached-head",
     headSha,
     deliverableDiffFingerprint: currentFingerprint,
+    ...(shadowComparison ? { shadowComparison } : {}),
   });
   const written = await writeDeliveryRunTelemetryRecord(
     rootDir,
@@ -338,8 +391,7 @@ export const DELIVERY_RUN_TELEMETRY_LINE_THRESHOLD =
   DEFAULT_SOURCE_LINE_THRESHOLD;
 
 export type DeliveryRunTelemetryFindingCode =
-  | "telemetry_record_missing"
-  | "telemetry_record_malformed";
+  "telemetry_record_missing" | "telemetry_record_malformed";
 
 export type DeliveryRunTelemetryFinding = {
   code: DeliveryRunTelemetryFindingCode;
@@ -442,18 +494,26 @@ export function collectDeliveryRunTelemetryFindings(
 
   findings.push({
     code: "telemetry_record_missing",
-    message: records.length > 0
-      ? `Substantial delivery detected (${input.sourceLineTotal} changed source lines, threshold ` +
-        `${threshold}) but every ${DELIVERY_RUN_TELEMETRY_DIR}/ record on this branch describes an ` +
-        `older deliverable diff. Re-run \`bun run pr:athena\`, then \`bun run delivery:telemetry-record\`, ` +
-        `and commit the refreshed record so the telemetry describes what actually merges.`
-      : `Substantial delivery detected (${input.sourceLineTotal} changed source lines, threshold ` +
-        `${threshold}) without a ${DELIVERY_RUN_TELEMETRY_DIR}/ record on this branch. After a passing ` +
-        `\`bun run pr:athena\`, run \`bun run delivery:telemetry-record\` and commit the record ` +
-        `so the run's telemetry survives this worktree.`,
+    message:
+      records.length > 0
+        ? `Substantial delivery detected (${input.sourceLineTotal} changed source lines, threshold ` +
+          `${threshold}) but every ${DELIVERY_RUN_TELEMETRY_DIR}/ record on this branch describes an ` +
+          `older deliverable diff. Re-run \`bun run pr:athena\`, then \`bun run delivery:telemetry-record\`, ` +
+          `and commit the refreshed record so the telemetry describes what actually merges.`
+        : `Substantial delivery detected (${input.sourceLineTotal} changed source lines, threshold ` +
+          `${threshold}) without a ${DELIVERY_RUN_TELEMETRY_DIR}/ record on this branch. After a passing ` +
+          `\`bun run pr:athena\`, run \`bun run delivery:telemetry-record\` and commit the record ` +
+          `so the run's telemetry survives this worktree.`,
   });
   return findings;
 }
+
+export type DeliveryRunTelemetryCheckOptions = {
+  baseRef?: string;
+  ciMode?: boolean;
+  ledgerPath?: string;
+  threshold?: number;
+};
 
 function gitLines(rootDir: string, args: string[]) {
   const result = Bun.spawnSync(["git", ...args], {
@@ -471,32 +531,6 @@ function gitLines(rootDir: string, args: string[]) {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
-}
-
-export type DeliveryRunTelemetryCheckOptions = {
-  baseRef?: string;
-  ciMode?: boolean;
-  ledgerPath?: string;
-  threshold?: number;
-};
-
-/**
- * Shared by the sensor and by the ledger's fingerprint stamp: those two must
- * agree, or a run would stamp a fingerprint the sensor can never match and the
- * demand would be permanently unsatisfiable. `delivery-documentation-check.ts`
- * and `compound-solution-check.ts` still carry their own copies for the
- * documentation policies; they are tolerated because nothing cross-checks their
- * output against this one, and consolidating them belongs with that policy.
- */
-export function collectChangedPathsForDiff(rootDir: string, baseRef: string) {
-  return [
-    ...new Set([
-      ...gitLines(rootDir, ["diff", "--name-only", `${baseRef}...HEAD`]),
-      ...gitLines(rootDir, ["diff", "--name-only"]),
-      ...gitLines(rootDir, ["diff", "--cached", "--name-only"]),
-      ...gitLines(rootDir, ["ls-files", "--others", "--exclude-standard"]),
-    ]),
-  ].sort();
 }
 
 /**
@@ -564,7 +598,9 @@ export function evaluateDeliveryRunTelemetryCheck(
       options.ledgerPath ?? DEFAULT_DELIVERY_RUN_LATEST_PATH,
     ),
     ciMode: options.ciMode ?? Boolean(process.env.CI),
-    ...(options.threshold === undefined ? {} : { threshold: options.threshold }),
+    ...(options.threshold === undefined
+      ? {}
+      : { threshold: options.threshold }),
   });
 
   return {

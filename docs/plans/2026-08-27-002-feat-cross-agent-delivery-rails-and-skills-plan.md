@@ -771,7 +771,7 @@ Define digest scope explicitly: workflow body/resources match the canonical dige
 - The Linear adapter passes the same fake-port contract suite defined by U7; substituting another conforming fake adapter does not change core planning/execution output categories.
 - Auth denial, rate limit, connector outage, and partial mutation retain reconciliation identifiers and prevent duplicate creation.
 - No secret, workspace ID, project URL, or Athena team key enters core or receipts.
-- A controlled authenticated qualification fixture uses an idempotency/reconciliation key and retained redacted audit record so Codex and Claude each prove the configured AE4 path without duplicate creation.
+- A controlled authenticated qualification fixture uses an idempotency/reconciliation key and retained redacted audit record so Codex and Claude each prove the configured AE4 path without duplicate creation. That fixture may create at most two clearly marked disposable issues after reconcile-first search solely to avoid workspace pollution. This is not a runtime, adapter, workflow, or production capability limit: the shipped Linear path retains create, read, update, search, relations, and reconciliation, with real execution governed by repository policy and user authority.
 
 **Verification:** Fake-port CI proves state/error semantics; U14L's controlled authenticated scenario proves the configured cross-host AE4 path; leakage check proves core is tracker-neutral.
 

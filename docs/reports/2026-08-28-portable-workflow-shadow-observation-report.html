@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Portable Workflow Shadow Observation</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="0ae212f9ade0057aef541d9babe00445098690fe8d7177da8cd21dbd4b7d4e52">
+  <header data-report-section="header">
+    <h1>Portable Workflow Shadow Observation</h1>
+    <p>How Athena compares an extracted delivery core without giving it authority</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>V26-1429</li>
+      <li>Athena remains authoritative</li>
+      <li>1,624 harness tests green</li>
+      <li>No deployment</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Issue</dt><dd>V26-1429</dd>
+      <dt>Branch</dt><dd>codex/V26-1429-shadow-canary</dd>
+      <dt>Candidate</dt><dd>f4a34be23f08e9716432b73d5663f186cbab7c90</dd>
+      <dt>Base</dt><dd>c46ae8b30ccbc2d78feadf30ab8d309c3212a5d9</dd>
+      <dt>Status</dt><dd>Delivery candidate; merge and root alignment pending</dd>
+      <dt>Deployment</dt><dd>Not applicable for infrastructure-only work</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+      <p>This candidate adds a read-only comparison boundary between Athena&#x27;s existing delivery workflow and one exact, qualified portable core release. Both paths receive the same frozen input, but Athena remains the only authority.</p>
+      <p>The portable path can report routing, posture, gate, evidence, and attempted mutations. It cannot mutate Linear, change status, merge, deploy, authorize a canary switch, or influence Athena&#x27;s result. The comparison is stored beside the existing ignored delivery ledger and can later be carried by the existing tracked delivery telemetry.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Why this boundary is needed</h2>
+      <p>Replacing Athena&#x27;s local workflow body immediately would confuse parity evidence with authority. A portable core can look equivalent while still carrying a stale release, evaluating a different candidate, attempting a forbidden mutation, or losing history when release pins advance.</p>
+      <p>The delivery therefore needs an observable intermediate state: compare the two paths first, disposition any mismatch against the characterized Athena baseline, and only then consider a separately reversible canary switch.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model: a sealed witness beside the judge</h2>
+      <p>Athena is the judge: it runs the authoritative gate and owns the outcome. The portable core is a sealed witness: it sees the same evidence and reports what it would decide, but it has no controls connected to tickets, status, merge, deployment, or authority.</p>
+      <p>The comparison record is the transcript. Its digest binds when the observation happened, which candidate and frozen input were used, the exact baseline and release identities, both decision sets, mismatches, mutation attempts, and the authority boundary.</p>
+      <ul>
+        <li>Judge: Athena&#x27;s existing baseline and delivery gate.</li>
+        <li>Witness: the exact qualified portable archive in an isolated temporary directory.</li>
+        <li>Transcript: a closed-schema, candidate-bound comparison artifact.</li>
+        <li>Archive: the existing tracked delivery telemetry, which retains valid older transcripts after pins advance.</li>
+      </ul>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+      <p>Before: pr:athena produced the authoritative ledger and delivery:telemetry-record preserved run and review-loop data, but Athena had no same-input portable comparison or durable shadow evidence.</p>
+      <p>After: a passing ledger must still describe the current deliverable. The runner verifies the frozen input, Athena baseline, portable archive, and release metadata; evaluates both paths; recomputes mismatches; writes a sibling artifact without changing the ledger; and lets the existing telemetry recorder attach the validated comparison.</p>
+      <ul>
+        <li>No new orchestration service or telemetry plane.</li>
+        <li>No change to host discovery roots or workflow authority.</li>
+        <li>No application-package behavior change.</li>
+        <li>No runtime limit on Linear capability.</li>
+      </ul>
+  </section>
+  <section data-report-section="mechanics">
+    <h2>How the evidence flows</h2>
+      <p>First, the runner reads a passing Athena delivery ledger and recomputes the current deliverable fingerprint with the same changed-path rules used by telemetry. A moved candidate is rejected before evaluation.</p>
+      <p>Second, the same frozen request is evaluated by the source-backed Athena characterization and the exact portable release. The release is copied into an isolated temporary directory, verified by digest and metadata, and evaluated with tracking disabled.</p>
+      <p>Third, the runner compares routing, posture, gate, evidence, and reported mutation attempts. A difference produces an unresolved mismatch. An unavailable release produces an unavailable observation. Neither outcome changes Athena&#x27;s authoritative result.</p>
+      <p>Finally, the sibling artifact is validated against exact current pins and a closed redacted schema. The ordinary telemetry recorder requires the nested and outer candidate fingerprints to match, then persists one validated copy. Historical readers check structural integrity without applying today&#x27;s pins to yesterday&#x27;s record.</p>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+      <ul>
+        <li>Missing, blocked, or fingerprint-less ledger: stop before evaluation or artifact creation.</li>
+        <li>Candidate changed after the gate: reject the stale ledger before evaluating.</li>
+        <li>Wrong archive, metadata, baseline, or frozen input: fail exact verification; Athena remains authoritative.</li>
+        <li>Decision drift or a reported mutation attempt: record an unresolved mismatch; switching authority remains prohibited.</li>
+        <li>Tampered digest, forged status, unknown field, or mismatched outer fingerprint: reject the artifact before tracked persistence.</li>
+        <li>Later release pins differ from an older valid record: retain the historical record through structural self-consistency validation.</li>
+      </ul>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed and what intentionally did not</h2>
+      <p>Changed: Athena now vendors one exact portable core release outside discovery roots, owns a frozen comparison input, can produce a read-only shadow artifact after a current passing gate, and can include that evidence in existing delivery telemetry.</p>
+      <p>Unchanged: Athena remains authoritative; the delivery ledger is not rewritten; the portable path has no mutation or delivery capabilities; no canary switch or batch migration occurs here; deployment is not applicable; and Linear keeps its full policy-authorized create, read, update, search, relations, and reconciliation surface. The two-disposable-issue ceiling applies only to authenticated qualification-fixture hygiene.</p>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and delivery status</h2>
+      <p>Focused shadow, telemetry, and delivery-run coverage passed 80 tests. The complete repository harness passed 1,624 tests. The portable baseline validated 31 source-backed assertions, 24 bounded-closure members, 7 scenarios, and 145 out-of-scope discovery files. Direct changed-source TypeScript diagnostics were clear.</p>
+      <p>The independent review loop took five exact-candidate iterations. It resolved four P1 and five P2 findings, with no deferred expansions; final correctness, maintainability, and project-standards reviews returned zero findings.</p>
+      <p>At report creation time, pr:athena preparation and review evidence passed. The authoritative gate stopped only to require this report, so the real shadow artifact and its tracked telemetry record are still pending. No PR exists yet, merge and root alignment are pending, and production deployment is not applicable.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>How to extend this safely</h2>
+      <ul>
+        <li>Run the authoritative gate first, then observe; never use a stale passing ledger.</li>
+        <li>Treat match, mismatch, and unavailable as evidence only. Keep mismatch disposition and authority switching separate.</li>
+        <li>When changing release or baseline pins, refresh exact-current evidence but preserve older structurally valid telemetry.</li>
+        <li>Keep the comparison schema closed and redacted before using the single-copy persistence path.</li>
+        <li>Reuse Athena&#x27;s ledger, candidate fingerprint, review evidence, and telemetry instead of adding parallel control planes.</li>
+        <li>Do not begin a batch migration until the shadow comparison is accepted and the reversible canary succeeds.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>scripts/portable-shadow-observation.ts</code></td><td>Owns exact release verification, same-input comparison, the read-only authority boundary, closed-schema validation, and the fresh-ledger guard.</td></tr>
+        <tr><td><code>scripts/delivery-run-telemetry.ts</code></td><td>Carries validated shadow evidence through Athena&#x27;s existing tracked telemetry while preserving historical records.</td></tr>
+        <tr><td><code>scripts/delivery-diff-fingerprint.ts</code></td><td>Provides one shared candidate identity and changed-path calculation for the gate, telemetry, and shadow runner.</td></tr>
+        <tr><td><code>scripts/portable-shadow-fixtures/compound-delivery-kernel.json</code></td><td>Defines the frozen request and repository-sensor input supplied to both evaluators.</td></tr>
+        <tr><td><code>.agents/portable/releases/core-v1.release.json</code></td><td>Pins the exact qualified portable release identity and archive digest.</td></tr>
+        <tr><td><code>scripts/portable-shadow-observation.test.ts</code></td><td>Proves parity, mismatches, mutation-attempt handling, tamper rejection, ledger immutability, and stale-candidate refusal.</td></tr>
+        <tr><td><code>scripts/delivery-run-telemetry.test.ts</code></td><td>Proves candidate binding, closed redacted persistence, and durable historical reads across pin changes.</td></tr>
+        <tr><td><code>docs/solutions/harness/portable-workflow-shadow-evidence-remains-observational-2026-08-28.md</code></td><td>Captures the reusable shadow-evidence architecture and prevention rules.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which path remains authoritative during shadow observation?</p>
+        <ol data-quiz-options>
+          <li>The portable core</li>
+          <li data-quiz-correct>Athena&#x27;s existing delivery path</li>
+          <li>Whichever path reports fewer blockers</li>
+          <li>The tracked telemetry record</li>
+        </ol>
+        <p data-quiz-explanation>Shadow mode compares decisions without transferring authority; Athena continues to own the result.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why must the runner recompute the current deliverable fingerprint?</p>
+        <ol data-quiz-options>
+          <li>To shorten the archive name</li>
+          <li data-quiz-correct>To prove the passing ledger still describes the candidate being observed</li>
+          <li>To authorize a canary automatically</li>
+          <li>To count Linear issues</li>
+        </ol>
+        <p data-quiz-explanation>A passing ledger from an older tree cannot safely label an observation of a newer tree.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What may the portable path record?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Routing, posture, gate, evidence, and mutation attempts</li>
+          <li>Ticket updates and status transitions</li>
+          <li>Merge and deployment outcomes</li>
+          <li>Authority-switch approval</li>
+        </ol>
+        <p data-quiz-explanation>The portable evaluator receives an intentionally narrow observation surface and no delivery authority.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does a matching comparison authorize by itself?</p>
+        <ol data-quiz-options>
+          <li>Immediate batch migration</li>
+          <li>A production deployment</li>
+          <li data-quiz-correct>Nothing; mismatch disposition and canary authorization remain separate</li>
+          <li>Deletion of Athena&#x27;s local workflow</li>
+        </ol>
+        <p data-quiz-explanation>A match is evidence, not permission to switch authority or migrate more workflows.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why are current and historical comparison validators separate?</p>
+        <ol data-quiz-options>
+          <li>Historical evidence should be deleted after every release</li>
+          <li data-quiz-correct>Older valid evidence must remain readable when current release pins change</li>
+          <li>Current evidence does not need exact pins</li>
+          <li>The portable archive is mutable</li>
+        </ol>
+        <p data-quiz-explanation>Current consumption requires exact qualified pins, while historical reads preserve self-consistent records from earlier qualified releases.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens when the portable evaluator reports a mutation attempt?</p>
+        <ol data-quiz-options>
+          <li>Athena repeats the mutation</li>
+          <li>The attempt is ignored and the comparison still matches</li>
+          <li data-quiz-correct>The comparison becomes an unresolved mismatch and switching remains prohibited</li>
+          <li>Linear capability is disabled globally</li>
+        </ol>
+        <p data-quiz-explanation>Mutation attempts are evidence of authority-boundary drift and must block progression without changing Athena&#x27;s result.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is the persisted comparison schema closed to unknown fields?</p>
+        <ol data-quiz-options>
+          <li>To make JSON smaller only</li>
+          <li data-quiz-correct>To keep unvalidated or unredacted data from entering tracked telemetry</li>
+          <li>To prevent historical reads</li>
+          <li>To limit Linear operations</li>
+        </ol>
+        <p data-quiz-explanation>The telemetry path can safely clone one validated comparison only when extra fields are rejected at every defined object boundary.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which existing system stores durable shadow evidence?</p>
+        <ol data-quiz-options>
+          <li>A new shadow database</li>
+          <li>A new orchestration service</li>
+          <li data-quiz-correct>Athena&#x27;s existing delivery-run telemetry</li>
+          <li>Linear issue descriptions</li>
+        </ol>
+        <p data-quiz-explanation>The delivery deliberately reuses Athena&#x27;s existing ledger, fingerprint, and tracked telemetry lifecycle.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How does this delivery affect real Linear capability?</p>
+        <ol data-quiz-options>
+          <li>It caps all runs at two issues</li>
+          <li>It removes relations and reconciliation</li>
+          <li data-quiz-correct>It preserves create, read, update, search, relations, and reconciliation</li>
+          <li>It allows Linear only during shadow mode</li>
+        </ol>
+        <p data-quiz-explanation>The two-issue ceiling is only authenticated qualification-fixture hygiene, not a runtime capability limit.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the finish-line status documented by this candidate report?</p>
+        <ol data-quiz-options>
+          <li>Merged, deployed, and batch-migrated</li>
+          <li data-quiz-correct>Delivery candidate; real observation, merge, and root alignment remain pending, and deployment is not applicable</li>
+          <li>Canary authority already switched</li>
+          <li>V26-1430 is unblocked</li>
+        </ol>
+        <p data-quiz-explanation>The report is generated before the gate can pass; it must not predict the later observation, merge, or root-alignment outcomes.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>Session context — Pascal</dt><dd>Reconstructed the shadow-first finish line, review iterations, Linear dependencies, no-deploy decision, and pending merge/root-alignment status from the exact candidate and delivery record.</dd>
+      <dt>Delivered diff — Kierkegaard</dt><dd>Mapped the changed files, before/after evidence flow, failure boundaries, generated artifacts, validations, and intentionally unchanged application and Linear behavior.</dd>
+      <dt>Quiz and report review — Euclid</dt><dd>Verified the draft&#x27;s comprehension flow, delivery-candidate status, failure boundaries, Linear capability posture, and ten-question quiz; the only finding was this evidence entry&#x27;s stale pending label.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

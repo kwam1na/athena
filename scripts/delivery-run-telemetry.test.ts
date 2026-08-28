@@ -22,8 +22,14 @@ import {
   collectDeliverableDiffFingerprint,
   isDeliverableFingerprintPath,
 } from "./delivery-diff-fingerprint";
+import {
+  observePortableShadow,
+  portableShadowComparisonSha256,
+  type PortableShadowComparison,
+} from "./portable-shadow-observation";
 
 const roots: string[] = [];
+const ROOT = path.resolve(import.meta.dirname, "..");
 
 async function createTempRoot() {
   const rootDir = await mkdtemp(path.join(tmpdir(), "athena-delivery-tel-"));
@@ -70,21 +76,79 @@ function ledger(
   });
 }
 
+function shadowComparisonFixture(): PortableShadowComparison {
+  const comparison: Omit<PortableShadowComparison, "comparisonSha256"> = {
+    schemaVersion: "athena-portable-shadow-comparison/1",
+    observedAt: "2026-06-18T12:00:01.000Z",
+    workflow: "compound-delivery-kernel",
+    inputSha256:
+      "54b1e4afe4731d335afaf47602dbf6ae4089f9a1d0e36af7939d39c054dda22b",
+    candidateFingerprint: "7".repeat(64),
+    status: "match",
+    baseline: {
+      baselineId: "athena-portable-workflows-v1-2026-08-27",
+      sha256:
+        "d0f66ad0a48745d86f8cdb4d7c76bf4a644f074cfa7b5dfebcfbf5ccf9b09613",
+    },
+    source: {
+      releaseId: "core-v1",
+      profile: "core",
+      sourceCommitSha: "ddd04495d4fd5d8bac214cb4b81f9dd985d8dd0d",
+      archiveSha256:
+        "004bfcf1c8d245a75d9f696d9f1ac83af4b0e6f2c90a48e3927a916a5b8c5ef8",
+      metadataSha256:
+        "20b0194b082510d1cb2b7bbbe217888eac444fa28f4610819c76f194493d5e81",
+      workflowSha256:
+        "d7a651c9392a36f923784771f24a532acca81fa223b865be46cba842c061e706",
+    },
+    athena: {
+      routing: { entryPoint: "deliver-work", workflow: "implement" },
+      posture: "characterization-first",
+      gate: { status: "blocked", blockers: ["gate failed"] },
+      evidence: ["focused sensor passed"],
+    },
+    portable: {
+      routing: { entryPoint: "deliver-work", workflow: "implement" },
+      posture: "characterization-first",
+      gate: { status: "blocked", blockers: ["gate failed"] },
+      evidence: ["focused sensor passed"],
+    },
+    portableMutationAttempts: [],
+    mismatches: [],
+    authority: {
+      authoritativePath: "athena",
+      influencedAuthoritativeResult: false,
+      authoritySwitchAllowed: false,
+      portableCapabilities: {
+        trackerMutation: false,
+        merge: false,
+        deploy: false,
+        statusMutation: false,
+      },
+    },
+  };
+  return {
+    ...comparison,
+    comparisonSha256: portableShadowComparisonSha256(comparison),
+  };
+}
+
 describe("delivery run telemetry", () => {
   it("builds a durable record carrying run outcome, branch identity, and review telemetry", () => {
-    const record = buildDeliveryRunTelemetryRecord(
-      ledger("2026-06-18T12:00:00.000Z", "pass", {
-        unit: "tokens",
-        total: 512_345,
-        reportedBy: "claude-code",
-      }),
-      {
-        branch: "codex/v26-1300-thing",
-        headSha: "abc123",
-        deliverableDiffFingerprint: "fingerprint-a",
-      },
-    );
+    const sourceLedger = ledger("2026-06-18T12:00:00.000Z", "pass", {
+      unit: "tokens",
+      total: 512_345,
+      reportedBy: "claude-code",
+    });
+    const shadowComparison = shadowComparisonFixture();
+    const record = buildDeliveryRunTelemetryRecord(sourceLedger, {
+      branch: "codex/v26-1300-thing",
+      headSha: "abc123",
+      deliverableDiffFingerprint: shadowComparison.candidateFingerprint,
+      shadowComparison,
+    });
 
+    expect(record.shadowComparison).toEqual(shadowComparison);
     expect(record).toMatchObject({
       schemaVersion: 1,
       generatedAt: "2026-06-18T12:00:00.000Z",
@@ -97,7 +161,62 @@ describe("delivery run telemetry", () => {
         iterationCount: 2,
         reviewCost: { unit: "tokens", total: 512_345 },
       },
+      shadowComparison: {
+        schemaVersion: "athena-portable-shadow-comparison/1",
+        status: "match",
+        workflow: "compound-delivery-kernel",
+        athena: shadowComparison.athena,
+        portable: shadowComparison.portable,
+        portableMutationAttempts: [],
+        mismatches: [],
+        authority: {
+          authoritativePath: "athena",
+          influencedAuthoritativeResult: false,
+          authoritySwitchAllowed: false,
+          portableCapabilities: {
+            trackerMutation: false,
+            merge: false,
+            deploy: false,
+            statusMutation: false,
+          },
+        },
+      },
     });
+  });
+
+  it("refuses to build telemetry from a shadow comparison for another candidate", () => {
+    const shadowComparison = shadowComparisonFixture();
+
+    expect(() =>
+      buildDeliveryRunTelemetryRecord(
+        ledger("2026-06-18T12:00:00.000Z", "pass"),
+        {
+          branch: "codex/v26-1300-thing",
+          headSha: "abc123",
+          deliverableDiffFingerprint: "8".repeat(64),
+          shadowComparison,
+        },
+      ),
+    ).toThrow("different deliverable");
+  });
+
+  it("refuses fields outside the redacted shadow schema before persistence", () => {
+    const shadowComparison = {
+      ...shadowComparisonFixture(),
+      unredactedSecret: "leak-me",
+    };
+
+    expect(() =>
+      buildDeliveryRunTelemetryRecord(
+        ledger("2026-06-18T12:00:00.000Z", "pass"),
+        {
+          branch: "codex/v26-1300-thing",
+          headSha: "abc123",
+          deliverableDiffFingerprint: shadowComparison.candidateFingerprint,
+          shadowComparison,
+        },
+      ),
+    ).toThrow("not valid for telemetry");
   });
 
   it("names files by timestamp and branch so parallel ticket worktrees never collide", () => {
@@ -140,6 +259,40 @@ describe("delivery run telemetry", () => {
       "2026-06-18T12:00:00.000Z",
       "2026-06-19T12:00:00.000Z",
       "2026-06-20T12:00:00.000Z",
+    ]);
+  });
+
+  it("retains structurally valid historical shadow evidence after release pins advance", async () => {
+    const rootDir = await createTempRoot();
+    const current = shadowComparisonFixture();
+    const historical = {
+      ...current,
+      inputSha256: "1".repeat(64),
+      baseline: {
+        baselineId: "athena-portable-workflows-v1-older",
+        sha256: "2".repeat(64),
+      },
+      source: {
+        ...current.source,
+        sourceCommitSha: "3".repeat(40),
+        archiveSha256: "4".repeat(64),
+        metadataSha256: "5".repeat(64),
+        workflowSha256: "6".repeat(64),
+      },
+    };
+    historical.comparisonSha256 = portableShadowComparisonSha256(historical);
+    const record: DeliveryRunTelemetryRecord = {
+      ...buildDeliveryRunTelemetryRecord(ledger("2026-06-18T12:00:00.000Z"), {
+        branch: "codex/historical-shadow",
+        headSha: "abc123",
+        deliverableDiffFingerprint: historical.candidateFingerprint,
+      }),
+      shadowComparison: historical,
+    };
+    await writeDeliveryRunTelemetryRecord(rootDir, record);
+
+    await expect(readDeliveryRunTelemetryRecords(rootDir)).resolves.toEqual([
+      record,
     ]);
   });
 
@@ -216,10 +369,7 @@ describe("delivery run telemetry", () => {
       },
     );
     const written = await writeDeliveryRunTelemetryRecord(rootDir, record);
-    const onDisk = await readFile(
-      path.join(rootDir, written.path),
-      "utf8",
-    );
+    const onDisk = await readFile(path.join(rootDir, written.path), "utf8");
 
     expect(onDisk.endsWith("\n")).toBe(true);
     expect(JSON.parse(onDisk) as DeliveryRunTelemetryRecord).toEqual(record);
@@ -310,7 +460,9 @@ describe("delivery run telemetry", () => {
       // A run happened, but the deliverable has moved since — the only record
       // producible now would describe a different tree, so stay quiet locally
       // and let the next run re-establish currency.
-      expect(check({ localLedgerFingerprint: "fingerprint-older" })).toEqual([]);
+      expect(check({ localLedgerFingerprint: "fingerprint-older" })).toEqual(
+        [],
+      );
       // CI is the merge authority: no bootstrap leniency.
       expect(
         check({ localLedgerFingerprint: null, ciMode: true }),
@@ -365,9 +517,9 @@ describe("delivery run telemetry", () => {
           [recordPath, { ...validRecord, ...override }],
         ]),
       });
-      expect(findings.some((f) => f.code === "telemetry_record_malformed")).toBe(
-        true,
-      );
+      expect(
+        findings.some((f) => f.code === "telemetry_record_malformed"),
+      ).toBe(true);
     });
 
     it("rejects a record whose review telemetry is structurally invalid", () => {
@@ -386,9 +538,68 @@ describe("delivery run telemetry", () => {
         changedPaths: ["scripts/some-change.ts", recordPath],
         changedRecordContents: new Map([[recordPath, poisoned]]),
       });
-      expect(findings.some((f) => f.code === "telemetry_record_malformed")).toBe(
-        true,
-      );
+      expect(
+        findings.some((f) => f.code === "telemetry_record_malformed"),
+      ).toBe(true);
+    });
+
+    it("rejects shadow telemetry that claims authority to switch", () => {
+      const validShadow = shadowComparisonFixture();
+      const poisoned = {
+        ...validRecord,
+        shadowComparison: {
+          ...validShadow,
+          authority: {
+            ...validShadow.authority,
+            authoritySwitchAllowed: true,
+          },
+        },
+      };
+      const findings = check({
+        changedPaths: ["scripts/some-change.ts", recordPath],
+        changedRecordContents: new Map([[recordPath, poisoned]]),
+      });
+
+      expect(
+        findings.some((f) => f.code === "telemetry_record_malformed"),
+      ).toBe(true);
+    });
+
+    it("rejects tracked shadow telemetry when comparison content no longer matches its hash", () => {
+      const validShadow = shadowComparisonFixture();
+      const poisoned = {
+        ...validRecord,
+        shadowComparison: {
+          ...validShadow,
+          portable: {
+            ...validShadow.portable!,
+            evidence: ["tampered evidence"],
+          },
+        },
+      };
+      const findings = check({
+        changedPaths: ["scripts/some-change.ts", recordPath],
+        changedRecordContents: new Map([[recordPath, poisoned]]),
+      });
+
+      expect(
+        findings.some((f) => f.code === "telemetry_record_malformed"),
+      ).toBe(true);
+    });
+
+    it("rejects tracked shadow telemetry for another delivery fingerprint", () => {
+      const poisoned = {
+        ...validRecord,
+        shadowComparison: shadowComparisonFixture(),
+      };
+      const findings = check({
+        changedPaths: ["scripts/some-change.ts", recordPath],
+        changedRecordContents: new Map([[recordPath, poisoned]]),
+      });
+
+      expect(
+        findings.some((f) => f.code === "telemetry_record_malformed"),
+      ).toBe(true);
     });
 
     it("flags a hand-edited or malformed record even when another valid one exists", () => {
@@ -477,6 +688,24 @@ describe("delivery run telemetry against a real repository", () => {
     await writeFile(path.join(rootDir, "src.ts"), "export const a = 1;\n");
     git(rootDir, ["add", "."]);
     git(rootDir, ["commit", "-m", "work"]);
+    const shadowComparison = await observePortableShadow(ROOT, {
+      observedAt: "2026-06-18T12:00:01.000Z",
+      candidateFingerprint: collectDeliverableDiffFingerprint(
+        rootDir,
+        "base-ref",
+        changedPathsForFixture(rootDir),
+      ),
+    });
+    await mkdir(path.join(rootDir, "artifacts/harness-delivery-runs"), {
+      recursive: true,
+    });
+    await writeFile(
+      path.join(
+        rootDir,
+        "artifacts/harness-delivery-runs/shadow-comparison.json",
+      ),
+      `${JSON.stringify(shadowComparison, null, 2)}\n`,
+    );
     await writeLedger(
       rootDir,
       "pass",
@@ -494,6 +723,16 @@ describe("delivery run telemetry against a real repository", () => {
     expect(written.record.branch).toBe("codex/delivery");
     expect(written.record.headSha).toBe(git(rootDir, ["rev-parse", "HEAD"]));
     expect(written.record.deliverableDiffFingerprint).toMatch(/^[a-f0-9]{64}$/);
+    expect(written.record.shadowComparison).toMatchObject({
+      status: "match",
+      comparisonSha256: shadowComparison.comparisonSha256,
+      baseline: shadowComparison.baseline,
+      source: {
+        workflowSha256: shadowComparison.source.workflowSha256,
+      },
+      mismatches: [],
+      authority: { authoritySwitchAllowed: false },
+    });
     expect(written.path).toContain("telemetry/delivery-runs/");
     expect(
       JSON.parse(await readFile(path.join(rootDir, written.path), "utf8")),
@@ -512,6 +751,40 @@ describe("delivery run telemetry against a real repository", () => {
     await expect(
       recordDeliveryRunTelemetry(rootDir, { baseRef: "base-ref" }),
     ).rejects.toThrow(/measured a different deliverable/);
+  });
+
+  it("refuses to join a stale shadow artifact to a current passing run", async () => {
+    const rootDir = await repoFixture();
+    await writeFile(path.join(rootDir, "src.ts"), "export const a = 1;\n");
+    git(rootDir, ["add", "."]);
+    git(rootDir, ["commit", "-m", "work"]);
+    const shadowComparison = await observePortableShadow(ROOT, {
+      observedAt: "2026-06-18T12:00:01.000Z",
+      candidateFingerprint: "a".repeat(64),
+    });
+    await mkdir(path.join(rootDir, "artifacts/harness-delivery-runs"), {
+      recursive: true,
+    });
+    await writeFile(
+      path.join(
+        rootDir,
+        "artifacts/harness-delivery-runs/shadow-comparison.json",
+      ),
+      `${JSON.stringify(shadowComparison, null, 2)}\n`,
+    );
+    await writeLedger(
+      rootDir,
+      "pass",
+      collectDeliverableDiffFingerprint(
+        rootDir,
+        "base-ref",
+        changedPathsForFixture(rootDir),
+      ),
+    );
+
+    await expect(
+      recordDeliveryRunTelemetry(rootDir, { baseRef: "base-ref" }),
+    ).rejects.toThrow(/shadow artifact describes a different deliverable/);
   });
 
   it("refuses to record a run that did not pass", async () => {
@@ -601,7 +874,9 @@ describe("delivery run telemetry against a real repository", () => {
     return [
       ...new Set([
         ...git(rootDir, ["diff", "--name-only", "base-ref...HEAD"]).split("\n"),
-        ...git(rootDir, ["ls-files", "--others", "--exclude-standard"]).split("\n"),
+        ...git(rootDir, ["ls-files", "--others", "--exclude-standard"]).split(
+          "\n",
+        ),
       ]),
     ]
       .map((line) => line.trim())

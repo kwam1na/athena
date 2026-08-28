@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "athena-portable-shadow-input/1",
+  "workflow": "compound-delivery-kernel",
+  "request": {
+    "intent": "Implement the smallest safe migration",
+    "outcome": "observe the portable delivery posture without changing Athena authority",
+    "scope": [
+      "read-only shadow observation"
+    ],
+    "finishLine": [
+      "focused sensor passes",
+      "merge-ready authority passes"
+    ],
+    "testScenarios": [
+      "the existing delivery posture remains authoritative"
+    ],
+    "existingBehavior": true,
+    "behaviorChange": true,
+    "repositorySensors": [
+      {
+        "name": "focused sensor",
+        "required": true,
+        "available": true,
+        "passed": true
+      },
+      {
+        "name": "merge-ready authority",
+        "required": true,
+        "available": true,
+        "passed": false
+      }
+    ],
+    "completedWork": [
+      "read-only shadow observation"
+    ],
+    "completedFinishLine": [
+      "focused sensor passes",
+      "merge-ready authority passes"
+    ],
+    "evidence": [
+      "focused sensor passed"
+    ]
+  }
+}
