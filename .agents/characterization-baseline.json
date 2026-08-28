@@ -119,6 +119,38 @@
       ]
     },
     {
+      "id": "route-approved-ticket-creation-to-track",
+      "area": "routing",
+      "statement": "Approved work that needs tickets routes to the repository tracking workflow before implementation.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "deliver-work-skill",
+          "selector": "If approved work needs tickets, use `$track`."
+        },
+        {
+          "sourceId": "track-skill",
+          "selector": "If the user is mixing planning, ticket creation, and implementation, finish ticket creation first"
+        }
+      ]
+    },
+    {
+      "id": "route-fuzzy-requirements-to-brainstorm",
+      "area": "routing",
+      "statement": "Fuzzy requirements or unresolved product shape route to the available brainstorming workflow before implementation planning.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "deliver-work-skill",
+          "selector": "If requirements are fuzzy or product shape is unresolved, use `compound-engineering:ce-brainstorm` when available."
+        }
+      ]
+    },
+    {
       "id": "route-approved-planning-to-plan-workflow",
       "area": "routing",
       "statement": "Implementation planning or unclear multi-step sequencing routes to the planning workflow before execution.",
@@ -133,6 +165,62 @@
         {
           "sourceId": "track-skill",
           "selector": "Prefer `$ce-plan`."
+        }
+      ]
+    },
+    {
+      "id": "route-unknown-root-cause-to-debugging",
+      "area": "routing",
+      "statement": "A bug with an unknown root cause routes through systematic diagnosis before planning a fix.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "deliver-work-skill",
+          "selector": "If the request is a bug with unknown root cause, use a systematic debugging skill before planning the fix."
+        }
+      ]
+    },
+    {
+      "id": "route-review-only-to-code-review",
+      "area": "routing",
+      "statement": "A review-only request routes to the available code-review workflow without implementation.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "deliver-work-skill",
+          "selector": "If the task is purely a review, use the available code-review skill instead of implementing."
+        }
+      ]
+    },
+    {
+      "id": "route-explicit-skill-as-requested",
+      "area": "routing",
+      "statement": "An explicitly named skill or workflow takes precedence over the default delivery route.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "deliver-work-skill",
+          "selector": "If the user explicitly names a different skill or workflow, honor that routing."
+        }
+      ]
+    },
+    {
+      "id": "route-default-implementation-through-deliver-work",
+      "area": "routing",
+      "statement": "An ordinary implementation request with no better specialized route continues through the default delivery workflow.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "deliver-work-skill",
+          "selector": "When none of those routes is a better fit, continue here."
         }
       ]
     },
@@ -418,9 +506,9 @@
       "id": "configured-harness-blockers-cannot-degrade-away",
       "area": "harness-evidence",
       "statement": "Once Athena declares a configured delivery gate, its blockers and remediation remain mandatory and cannot be degraded away by a workflow.",
-      "authority": "source-backed",
+      "authority": "explicitly-approved",
       "parity": "blocking",
-      "adjudication": "policy-backed",
+      "adjudication": "approved",
       "citations": [
         {
           "sourceId": "approved-delivery-plan",
@@ -454,9 +542,9 @@
       "id": "operator-and-provider-proof-lanes-stay-separated",
       "area": "harness-evidence",
       "statement": "Preparation and admission stay operator-owned while review execution and evidence assembly stay provider-owned; agents do not waive either lane.",
-      "authority": "source-backed",
+      "authority": "explicitly-approved",
       "parity": "blocking",
-      "adjudication": "policy-backed",
+      "adjudication": "approved",
       "citations": [
         {
           "sourceId": "approved-delivery-plan",
@@ -622,6 +710,7 @@
     "scripts/portable-baseline-fixtures/configured-harness-blocker.json",
     "scripts/portable-baseline-fixtures/linear-tracking.json",
     "scripts/portable-baseline-fixtures/planning.json",
-    "scripts/portable-baseline-fixtures/review.json"
+    "scripts/portable-baseline-fixtures/review.json",
+    "scripts/portable-baseline-fixtures/routing.json"
   ]
 }

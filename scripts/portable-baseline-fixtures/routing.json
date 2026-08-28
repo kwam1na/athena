@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "athena-portable-characterization-scenario/1",
+  "id": "routing",
+  "requestKind": "routing",
+  "expectedAssertionIds": [
+    "route-tracked-implementation-to-execute",
+    "route-approved-ticket-creation-to-track",
+    "route-fuzzy-requirements-to-brainstorm",
+    "route-approved-planning-to-plan-workflow",
+    "route-unknown-root-cause-to-debugging",
+    "route-review-only-to-code-review",
+    "route-explicit-skill-as-requested",
+    "route-default-implementation-through-deliver-work",
+    "repository-policy-precedes-workflow-examples"
+  ],
+  "expectedClassificationIds": [
+    "routing-and-repository-discovery"
+  ]
+}

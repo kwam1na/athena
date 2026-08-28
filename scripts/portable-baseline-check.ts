@@ -32,7 +32,18 @@ const REQUIRED_SCENARIOS = [
   "linear-tracking",
   "planning",
   "review",
+  "routing",
 ] as const;
+
+const REQUEST_KINDS = new Set([
+  "compounding",
+  "configured-enforcement",
+  "implementation",
+  "planning",
+  "review",
+  "routing",
+  "tracking",
+]);
 
 const REQUIRED_ATHENA_OVERLAYS = [
   "athena-deployment-handoff",
@@ -60,7 +71,7 @@ export type PortableBaselineAssertion = {
   id: string;
   area: string;
   statement: string;
-  authority: "source-backed" | "observed-only";
+  authority: "source-backed" | "explicitly-approved" | "observed-only";
   parity: "blocking" | "non-blocking";
   adjudication: "policy-backed" | "approved" | "unadjudicated";
   citations: PortableBaselineCitation[];
@@ -97,6 +108,14 @@ export type PortableOverlayMap = {
   classifications: PortableOverlayClassification[];
   boundedClosure: {
     members: BoundedClosureMember[];
+    auditedMemberIds: string[];
+    directDependencies: Array<{
+      fromMemberId: string;
+      toMemberId: string;
+      selector: string;
+      requirement: "required" | "conditional" | "routing" | "host-alias";
+      parity: "blocking" | "non-blocking";
+    }>;
   };
   outOfScopeInventory: {
     scanRoots: string[];
@@ -337,6 +356,16 @@ export async function auditPortableWorkflowBaseline(
       if (assertion.adjudication !== "policy-backed" || assertion.citations.length === 0) {
         findings.push({ code: "source-backed-assertion-uncited", message: `Assertion ${assertion.id} is source-backed but lacks policy-backed citations.` });
       }
+    } else if (assertion.authority === "explicitly-approved") {
+      if (assertion.adjudication !== "approved" || assertion.citations.length === 0) {
+        findings.push({ code: "explicitly-approved-assertion-uncited", message: `Assertion ${assertion.id} is explicitly approved but lacks an approved decision citation.` });
+      }
+      for (const citation of assertion.citations) {
+        const sourceKind = sourceById.get(citation.sourceId)?.kind;
+        if (sourceKind !== "approved-requirements" && sourceKind !== "approved-plan") {
+          findings.push({ code: "explicitly-approved-citation-invalid", message: `Assertion ${assertion.id} cites ${citation.sourceId}, which is not an approved requirements or plan source.` });
+        }
+      }
     } else if (
       assertion.authority === "observed-only" &&
       assertion.parity === "blocking" &&
@@ -384,6 +413,7 @@ export async function auditPortableWorkflowBaseline(
   }
 
   const members = overlayMap.boundedClosure.members;
+  const memberById = new Map(members.map((member) => [member.id, member]));
   pushDuplicateFindings(findings, members.map((member) => member.id), "bounded-member-duplicate", "Bounded member id");
   pushDuplicateFindings(findings, members.map((member) => member.path), "bounded-member-duplicate", "Bounded member path");
   for (const [index, member] of members.entries()) {
@@ -415,6 +445,65 @@ export async function auditPortableWorkflowBaseline(
     }
     if (digestTreeEntries(entries) !== member.treeDigest) {
       findings.push({ code: "bounded-member-digest-drift", message: `Bounded member ${member.id} no longer matches its tree digest.`, path: member.path });
+    }
+  }
+
+  const directDependencies = overlayMap.boundedClosure.directDependencies ?? [];
+  const auditedMemberIds = overlayMap.boundedClosure.auditedMemberIds ?? [];
+  pushDuplicateFindings(
+    findings,
+    auditedMemberIds,
+    "bounded-member-dependency-audit-duplicate",
+    "Dependency-audited member id",
+  );
+  const auditedMemberIdSet = new Set(auditedMemberIds);
+  for (const member of members) {
+    if (!auditedMemberIdSet.has(member.id)) {
+      findings.push({ code: "bounded-member-dependency-audit-missing", message: `Bounded member ${member.id} has not had its direct dependencies audited.` });
+    }
+  }
+  for (const auditedMemberId of auditedMemberIds) {
+    if (!memberById.has(auditedMemberId)) {
+      findings.push({ code: "bounded-member-dependency-audit-unknown", message: `Dependency audit cites unknown bounded member ${auditedMemberId}.` });
+    }
+  }
+  pushDuplicateFindings(
+    findings,
+    directDependencies.map(
+      (dependency) =>
+        `${dependency.fromMemberId}\0${dependency.toMemberId}\0${dependency.selector}`,
+    ),
+    "direct-dependency-duplicate",
+    "Direct dependency",
+  );
+  for (const dependency of directDependencies) {
+    const fromMember = memberById.get(dependency.fromMemberId);
+    if (!fromMember) {
+      findings.push({ code: "direct-dependency-source-missing", message: `Direct dependency source ${dependency.fromMemberId} is not in the bounded closure.` });
+    }
+    if (!memberById.has(dependency.toMemberId)) {
+      findings.push({ code: "direct-dependency-target-missing", message: `Direct dependency target ${dependency.toMemberId} is not in the bounded closure.` });
+    }
+    if (dependency.selector.length === 0) {
+      findings.push({ code: "direct-dependency-selector-empty", message: `Direct dependency ${dependency.fromMemberId} -> ${dependency.toMemberId} has no source selector.` });
+    } else if (fromMember) {
+      const entries = await collectTreeEntries(rootDir, fromMember.path);
+      const selectorFound = (
+        await Promise.all(
+          entries.map(async (entry) => {
+            try {
+              return (await readFile(path.join(rootDir, entry.path), "utf8")).includes(
+                dependency.selector,
+              );
+            } catch {
+              return false;
+            }
+          }),
+        )
+      ).some(Boolean);
+      if (!selectorFound) {
+        findings.push({ code: "direct-dependency-selector-drift", message: `Direct dependency selector for ${dependency.fromMemberId} -> ${dependency.toMemberId} is absent from the source bundle.`, path: fromMember.path });
+      }
     }
   }
 
@@ -469,6 +558,15 @@ export async function auditPortableWorkflowBaseline(
     if (scenario.schemaVersion !== SCENARIO_SCHEMA_VERSION) {
       findings.push({ code: "scenario-schema-unsupported", message: `Scenario ${scenario.id} has unsupported schema ${scenario.schemaVersion}.` });
     }
+    if (!REQUEST_KINDS.has(scenario.requestKind)) {
+      findings.push({ code: "scenario-request-kind-invalid", message: `Scenario ${scenario.id} has unsupported requestKind ${JSON.stringify(scenario.requestKind)}.` });
+    }
+    if (scenario.expectedAssertionIds.length === 0) {
+      findings.push({ code: "scenario-assertions-empty", message: `Scenario ${scenario.id} must expect at least one assertion.` });
+    }
+    if (scenario.expectedClassificationIds.length === 0) {
+      findings.push({ code: "scenario-classifications-empty", message: `Scenario ${scenario.id} must expect at least one classification.` });
+    }
     for (const assertionId of scenario.expectedAssertionIds) {
       if (!assertionIds.has(assertionId)) {
         findings.push({ code: "scenario-assertion-missing", message: `Scenario ${scenario.id} cites unknown assertion ${assertionId}.` });
@@ -477,6 +575,17 @@ export async function auditPortableWorkflowBaseline(
     for (const classificationId of scenario.expectedClassificationIds) {
       if (!classificationById.has(classificationId)) {
         findings.push({ code: "scenario-classification-missing", message: `Scenario ${scenario.id} cites unknown classification ${classificationId}.` });
+      }
+    }
+    const scenarioClassificationAssertionIds = new Set(
+      scenario.expectedClassificationIds.flatMap(
+        (classificationId) =>
+          classificationById.get(classificationId)?.assertionIds ?? [],
+      ),
+    );
+    for (const assertionId of scenario.expectedAssertionIds) {
+      if (!scenarioClassificationAssertionIds.has(assertionId)) {
+        findings.push({ code: "scenario-assertion-classification-mismatch", message: `Scenario ${scenario.id} expects assertion ${assertionId}, but none of its expected classifications covers that assertion.` });
       }
     }
   }

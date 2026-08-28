@@ -14,7 +14,13 @@
       "rationale": "Request routing and repository-policy discovery are reusable only when repository authority wins.",
       "assertionIds": [
         "route-tracked-implementation-to-execute",
+        "route-approved-ticket-creation-to-track",
+        "route-fuzzy-requirements-to-brainstorm",
         "route-approved-planning-to-plan-workflow",
+        "route-unknown-root-cause-to-debugging",
+        "route-review-only-to-code-review",
+        "route-explicit-skill-as-requested",
+        "route-default-implementation-through-deliver-work",
         "repository-policy-precedes-workflow-examples"
       ]
     },
@@ -253,6 +259,438 @@
         "fileCount": 3,
         "treeDigest": "7e943e641b301b09b0574f2f17e36b95a9ac2496bc87f282aa4a117d9bdb87d9",
         "note": "Athena's end-to-end execution source stays local; only classified rule slices may feed downstream core or Linear adapter work."
+      },
+      {
+        "id": "ce-brainstorm-source-bundle",
+        "kind": "skill-bundle",
+        "path": ".agents/skills/ce-brainstorm",
+        "classification": "portable-candidate",
+        "fileCount": 6,
+        "treeDigest": "acff143a85d98bd3c1d5d274901b8bde7fbcbcb69870e877a5a4da7af82135a9",
+        "note": "Research source for fuzzy-requirements routing and a smaller portable requirements workflow."
+      },
+      {
+        "id": "ce-debug-source-bundle",
+        "kind": "skill-bundle",
+        "path": ".agents/skills/ce-debug",
+        "classification": "portable-candidate",
+        "fileCount": 4,
+        "treeDigest": "633bb767fa79588657bcd354cd65d9aab5f5cbc793c472ab35c42a62980251ce",
+        "note": "Research source for diagnosis-first routing; its shipping and tracker mechanics are not portable core."
+      },
+      {
+        "id": "ce-doc-review-source-bundle",
+        "kind": "dependency-bundle",
+        "path": ".agents/skills/ce-doc-review",
+        "classification": "portable-candidate",
+        "fileCount": 8,
+        "treeDigest": "bc0db6f6a8645111eb3939dc466ba10d18d3b6733d5f840f23980fd26bad48bf",
+        "note": "Mandatory planning/requirements review dependency and research source; the full persona workflow is not a wholesale export."
+      },
+      {
+        "id": "ce-proof-source-bundle",
+        "kind": "dependency-bundle",
+        "path": ".agents/skills/ce-proof",
+        "classification": "optional-adapter",
+        "fileCount": 2,
+        "treeDigest": "9f56cecd6e265faca1560fa008421ffe3d3f1cbb17f1259eed8fd018c61ad424",
+        "note": "Optional Proof-specific human review transport, not a core planning dependency."
+      },
+      {
+        "id": "ce-commit-source-bundle",
+        "kind": "dependency-bundle",
+        "path": ".agents/skills/ce-commit",
+        "classification": "optional-adapter",
+        "fileCount": 1,
+        "treeDigest": "9ea46dfdeda81201c2af2520e3da3214df54db8ddc0952370f0e51b8758cbec9",
+        "note": "Optional Git handoff adapter invoked by execution and diagnosis workflows."
+      },
+      {
+        "id": "ce-commit-push-pr-source-bundle",
+        "kind": "dependency-bundle",
+        "path": ".agents/skills/ce-commit-push-pr",
+        "classification": "optional-adapter",
+        "fileCount": 3,
+        "treeDigest": "3167938b50496f8570ca4ea3114c0c25889690f0fa499d5f3751416977e8be96",
+        "note": "Optional GitHub/Git delivery adapter; Athena's PR rules remain a retained overlay."
+      },
+      {
+        "id": "ce-compound-refresh-source-bundle",
+        "kind": "dependency-bundle",
+        "path": ".agents/skills/ce-compound-refresh",
+        "classification": "excluded",
+        "fileCount": 5,
+        "treeDigest": "0ce9ce7f5520483ecbe751f0bd4a276a23d66f637aacfb810340d04c40b6c6cc",
+        "note": "Conditional learning-maintenance follow-up outside the bounded portable v1 workflow."
+      },
+      {
+        "id": "ce-landed-change-report-source-bundle",
+        "kind": "dependency-bundle",
+        "path": ".agents/skills/ce-landed-change-report",
+        "classification": "retained-overlay",
+        "fileCount": 6,
+        "treeDigest": "3bd4af5d170d083066235780166cd1063b7ea4604f1fbc2d0ca9d0952aafe5a4",
+        "note": "Required Athena reporting dependency invoked by execute; it remains repository-owned overlay policy."
+      },
+      {
+        "id": "ce-frontend-design-source-bundle",
+        "kind": "dependency-bundle",
+        "path": ".agents/skills/ce-frontend-design",
+        "classification": "optional-adapter",
+        "fileCount": 1,
+        "treeDigest": "04149a7d479e080b56bb5f0e8e15053de532d4706b3c69a79b1f02bd2e62dda5",
+        "note": "Closest repository-local implementation of execute's frontend-skill aliases; alias mapping is observed-only and non-blocking."
+      },
+      {
+        "id": "ce-demo-reel-source-bundle",
+        "kind": "dependency-bundle",
+        "path": ".agents/skills/ce-demo-reel",
+        "classification": "optional-adapter",
+        "fileCount": 7,
+        "treeDigest": "6f4052f6426114f1d254a35a04a2b7d6adc6765c813c84da8a068179a296214e",
+        "note": "Conditional PR evidence adapter invoked by the commit/push/PR dependency."
+      },
+      {
+        "id": "ce-setup-source-bundle",
+        "kind": "dependency-bundle",
+        "path": ".agents/skills/ce-setup",
+        "classification": "excluded",
+        "fileCount": 3,
+        "treeDigest": "62b65bc63247547c5386384b92739f0ee3513010078e18172c4d99ef5b9a8428",
+        "note": "Tool installation fallback referenced by optional visual adapters; not delivery workflow parity."
+      }
+    ],
+    "auditedMemberIds": [
+      "deliver-work-body",
+      "deliver-work-codex-metadata",
+      "compound-delivery-kernel",
+      "ce-plan-source-bundle",
+      "ce-work-source-bundle",
+      "ce-code-review-source-bundle",
+      "compound-reviewer-prompts",
+      "ce-compound-source-bundle",
+      "linear-track-source-bundle",
+      "athena-execute-source-bundle",
+      "ce-brainstorm-source-bundle",
+      "ce-debug-source-bundle",
+      "ce-doc-review-source-bundle",
+      "ce-proof-source-bundle",
+      "ce-commit-source-bundle",
+      "ce-commit-push-pr-source-bundle",
+      "ce-compound-refresh-source-bundle",
+      "ce-landed-change-report-source-bundle",
+      "ce-frontend-design-source-bundle",
+      "ce-demo-reel-source-bundle",
+      "ce-setup-source-bundle"
+    ],
+    "directDependencies": [
+      {
+        "fromMemberId": "deliver-work-body",
+        "toMemberId": "compound-delivery-kernel",
+        "selector": "Always apply `$compound-delivery-kernel`.",
+        "requirement": "required",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "deliver-work-body",
+        "toMemberId": "athena-execute-source-bundle",
+        "selector": "If the work is already tracked in Linear, use `$execute`.",
+        "requirement": "routing",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "deliver-work-body",
+        "toMemberId": "linear-track-source-bundle",
+        "selector": "If approved work needs tickets, use `$track`.",
+        "requirement": "routing",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "deliver-work-body",
+        "toMemberId": "ce-brainstorm-source-bundle",
+        "selector": "compound-engineering:ce-brainstorm",
+        "requirement": "routing",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "deliver-work-body",
+        "toMemberId": "ce-plan-source-bundle",
+        "selector": "compound-engineering:ce-plan",
+        "requirement": "routing",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "deliver-work-body",
+        "toMemberId": "ce-debug-source-bundle",
+        "selector": "systematic debugging skill",
+        "requirement": "host-alias",
+        "parity": "non-blocking"
+      },
+      {
+        "fromMemberId": "deliver-work-body",
+        "toMemberId": "ce-code-review-source-bundle",
+        "selector": "available code-review skill",
+        "requirement": "host-alias",
+        "parity": "non-blocking"
+      },
+      {
+        "fromMemberId": "ce-plan-source-bundle",
+        "toMemberId": "ce-brainstorm-source-bundle",
+        "selector": "`ce-brainstorm` defines **WHAT** to build.",
+        "requirement": "conditional",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "ce-plan-source-bundle",
+        "toMemberId": "ce-debug-source-bundle",
+        "selector": "Surface `ce-debug` as a route-out option",
+        "requirement": "conditional",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "ce-plan-source-bundle",
+        "toMemberId": "ce-work-source-bundle",
+        "selector": "`ce-work` executes the plan.",
+        "requirement": "conditional",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "ce-plan-source-bundle",
+        "toMemberId": "ce-doc-review-source-bundle",
+        "selector": "run the `ce-doc-review` skill on the plan file",
+        "requirement": "required",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "ce-plan-source-bundle",
+        "toMemberId": "ce-proof-source-bundle",
+        "selector": "Load the `ce-proof` skill in HITL-review mode",
+        "requirement": "conditional",
+        "parity": "non-blocking"
+      },
+      {
+        "fromMemberId": "ce-work-source-bundle",
+        "toMemberId": "ce-code-review-source-bundle",
+        "selector": "Invoke the `ce-code-review` skill",
+        "requirement": "required",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "ce-work-source-bundle",
+        "toMemberId": "ce-commit-push-pr-source-bundle",
+        "selector": "Load the `ce-commit-push-pr` skill",
+        "requirement": "conditional",
+        "parity": "non-blocking"
+      },
+      {
+        "fromMemberId": "ce-work-source-bundle",
+        "toMemberId": "ce-commit-source-bundle",
+        "selector": "load the `ce-commit` skill instead",
+        "requirement": "conditional",
+        "parity": "non-blocking"
+      },
+      {
+        "fromMemberId": "ce-brainstorm-source-bundle",
+        "toMemberId": "ce-plan-source-bundle",
+        "selector": "Immediately load the `ce-plan` skill",
+        "requirement": "conditional",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "ce-brainstorm-source-bundle",
+        "toMemberId": "ce-doc-review-source-bundle",
+        "selector": "Load the `ce-doc-review` skill",
+        "requirement": "conditional",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "ce-brainstorm-source-bundle",
+        "toMemberId": "ce-work-source-bundle",
+        "selector": "Immediately load the `ce-work` skill",
+        "requirement": "conditional",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "ce-brainstorm-source-bundle",
+        "toMemberId": "ce-proof-source-bundle",
+        "selector": "Load the `ce-proof` skill in HITL-review mode",
+        "requirement": "conditional",
+        "parity": "non-blocking"
+      },
+      {
+        "fromMemberId": "ce-debug-source-bundle",
+        "toMemberId": "ce-brainstorm-source-bundle",
+        "selector": "control has transferred to `/ce-brainstorm`",
+        "requirement": "conditional",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "ce-debug-source-bundle",
+        "toMemberId": "ce-commit-push-pr-source-bundle",
+        "selector": "Run `/ce-commit-push-pr`.",
+        "requirement": "conditional",
+        "parity": "non-blocking"
+      },
+      {
+        "fromMemberId": "ce-debug-source-bundle",
+        "toMemberId": "ce-commit-source-bundle",
+        "selector": "Commit the fix (`/ce-commit`)",
+        "requirement": "conditional",
+        "parity": "non-blocking"
+      },
+      {
+        "fromMemberId": "ce-debug-source-bundle",
+        "toMemberId": "ce-compound-source-bundle",
+        "selector": "run `/ce-compound`",
+        "requirement": "conditional",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "ce-compound-source-bundle",
+        "toMemberId": "ce-compound-refresh-source-bundle",
+        "selector": "invoke `ce-compound-refresh` with a narrow scope hint",
+        "requirement": "conditional",
+        "parity": "non-blocking"
+      },
+      {
+        "fromMemberId": "athena-execute-source-bundle",
+        "toMemberId": "ce-landed-change-report-source-bundle",
+        "selector": "run repo-local `$ce-landed-change-report`",
+        "requirement": "required",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "athena-execute-source-bundle",
+        "toMemberId": "ce-code-review-source-bundle",
+        "selector": "Run `$requesting-code-review`",
+        "requirement": "host-alias",
+        "parity": "non-blocking"
+      },
+      {
+        "fromMemberId": "athena-execute-source-bundle",
+        "toMemberId": "ce-frontend-design-source-bundle",
+        "selector": "invoke `$designing-frontends`",
+        "requirement": "host-alias",
+        "parity": "non-blocking"
+      },
+      {
+        "fromMemberId": "ce-commit-push-pr-source-bundle",
+        "toMemberId": "ce-demo-reel-source-bundle",
+        "selector": "invoke `ce-demo-reel` separately to capture",
+        "requirement": "conditional",
+        "parity": "non-blocking"
+      },
+      {
+        "fromMemberId": "ce-demo-reel-source-bundle",
+        "toMemberId": "ce-setup-source-bundle",
+        "selector": "Run `/ce-setup` to install required dependencies.",
+        "requirement": "conditional",
+        "parity": "non-blocking"
+      },
+      {
+        "fromMemberId": "ce-frontend-design-source-bundle",
+        "toMemberId": "ce-setup-source-bundle",
+        "selector": "Run `/ce-setup` to install required dependencies.",
+        "requirement": "conditional",
+        "parity": "non-blocking"
+      },
+      {
+        "fromMemberId": "compound-delivery-kernel",
+        "toMemberId": "linear-track-source-bundle",
+        "selector": "Use `$track` so the repo",
+        "requirement": "conditional",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "linear-track-source-bundle",
+        "toMemberId": "compound-delivery-kernel",
+        "selector": "Apply `$compound-delivery-kernel` when shaping tickets.",
+        "requirement": "required",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "linear-track-source-bundle",
+        "toMemberId": "athena-execute-source-bundle",
+        "selector": "stop and use `$execute`",
+        "requirement": "routing",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "linear-track-source-bundle",
+        "toMemberId": "ce-plan-source-bundle",
+        "selector": "Prefer `$ce-plan`.",
+        "requirement": "conditional",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "athena-execute-source-bundle",
+        "toMemberId": "linear-track-source-bundle",
+        "selector": "Use `$track` first if the work is not yet ticketed",
+        "requirement": "routing",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "athena-execute-source-bundle",
+        "toMemberId": "compound-delivery-kernel",
+        "selector": "Apply `$compound-delivery-kernel` throughout execution.",
+        "requirement": "required",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "athena-execute-source-bundle",
+        "toMemberId": "ce-compound-source-bundle",
+        "selector": "Use the repo-local `$ce-compound` skill",
+        "requirement": "conditional",
+        "parity": "blocking"
+      },
+      {
+        "fromMemberId": "athena-execute-source-bundle",
+        "toMemberId": "ce-frontend-design-source-bundle",
+        "selector": "invoke `$frontend-skill`",
+        "requirement": "host-alias",
+        "parity": "non-blocking"
+      },
+      {
+        "fromMemberId": "ce-commit-source-bundle",
+        "toMemberId": "compound-delivery-kernel",
+        "selector": "Classify the block using `$compound-delivery-kernel`",
+        "requirement": "conditional",
+        "parity": "non-blocking"
+      },
+      {
+        "fromMemberId": "ce-commit-source-bundle",
+        "toMemberId": "linear-track-source-bundle",
+        "selector": "proactively create a follow-up with `$track`",
+        "requirement": "conditional",
+        "parity": "non-blocking"
+      },
+      {
+        "fromMemberId": "ce-commit-push-pr-source-bundle",
+        "toMemberId": "compound-delivery-kernel",
+        "selector": "Classify the block using `$compound-delivery-kernel`",
+        "requirement": "conditional",
+        "parity": "non-blocking"
+      },
+      {
+        "fromMemberId": "ce-commit-push-pr-source-bundle",
+        "toMemberId": "linear-track-source-bundle",
+        "selector": "proactively create a follow-up with `$track`",
+        "requirement": "conditional",
+        "parity": "non-blocking"
+      },
+      {
+        "fromMemberId": "ce-compound-refresh-source-bundle",
+        "toMemberId": "ce-compound-source-bundle",
+        "selector": "Recommend the user run `ce-compound`",
+        "requirement": "conditional",
+        "parity": "non-blocking"
+      },
+      {
+        "fromMemberId": "ce-brainstorm-source-bundle",
+        "toMemberId": "ce-debug-source-bundle",
+        "selector": "Suggest the alternative skill the user appears to want",
+        "requirement": "conditional",
+        "parity": "blocking"
       }
     ]
   },
@@ -261,8 +699,8 @@
       ".agents/skills",
       ".claude/skills"
     ],
-    "fileCount": 199,
-    "treeDigest": "c85a1c86f32bce3ef71d6c63bdb8abbbbd86ca72d5b1cd00e451259d414280e6",
+    "fileCount": 153,
+    "treeDigest": "1f85a4aec2ee460657eb0b52117c208a7368d8549a4f94ace99c53adab1113d7",
     "noMigrationCommitment": true,
     "description": "Stable residual discovery inventory only. No member is a migration candidate unless a later approved unit adds it to the bounded closure and classifies it."
   }
