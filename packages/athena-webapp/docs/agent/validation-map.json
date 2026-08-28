@@ -933,6 +933,10 @@
       ],
       "commands": [
         {
+          "kind": "raw",
+          "command": "bun run dependency:check:backend"
+        },
+        {
           "kind": "script",
           "script": "test"
         },

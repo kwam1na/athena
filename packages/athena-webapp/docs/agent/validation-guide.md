@@ -359,6 +359,7 @@ Touched surfaces: `convex`, `scripts/convex-audit.sh`, `scripts/convex-lint-chan
 
 Run:
 
+- `bun run dependency:check:backend`
 - `bun run --filter '@athena/webapp' test`
 - `bun run --filter '@athena/webapp' audit:convex`
 - `bun run --filter '@athena/webapp' lint:convex:changed`
@@ -368,7 +369,7 @@ Behavior scenarios:
 - `athena-convex-storefront-composition`
 - `athena-convex-storefront-failure-visibility`
 
-Any change that can affect Convex HTTP wiring, serviceOps schemas and workflows, shared operational rails, reporting maintenance scripts, or route-to-backend composition should include the Convex audit pair. When a public Convex function with an explicit `returns` validator changes, add executable return-contract proof with `assertConformsToExportedReturns`; loose `exportReturns()` string checks do not prove the production return contract. Convex query handlers must not reach mutation-only DB APIs directly or through write-capable repositories/services; split read factories from `MutationCtx`-only write factories when shared code crosses query and mutation boundaries.
+Any change that can affect Convex HTTP wiring, serviceOps schemas and workflows, shared operational rails, reporting maintenance scripts, or route-to-backend composition should include the Convex audit pair. The shrink-only backend dependency guard runs (`bun run dependency:check:backend`) whenever Convex sources change: it snapshots backend import cycles and kernel-boundary violations against a committed baseline, blocks new cycles/violations, and treats baseline removals as drift until the baseline is regenerated (`--update-baseline` is shrink-only, so it cannot absorb new violations). When a public Convex function with an explicit `returns` validator changes, add executable return-contract proof with `assertConformsToExportedReturns`; loose `exportReturns()` string checks do not prove the production return contract. Convex query handlers must not reach mutation-only DB APIs directly or through write-capable repositories/services; split read factories from `MutationCtx`-only write factories when shared code crosses query and mutation boundaries.
 
 ## Route runtime or build-pipeline edits
 

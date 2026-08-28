@@ -7,6 +7,7 @@
     "docs:diagrams": "bun scripts/export-architecture-diagrams.ts",
     "docs:fingerprint": "bun scripts/compound-solution-check.ts --base origin/main --print-fingerprint",
     "architecture:check": "bun scripts/architecture-boundary-check.ts",
+    "dependency:check:backend": "bun scripts/convex-backend-dependency-check.ts",
     "compound:check": "bun scripts/compound-solution-check.ts --base origin/main",
     "landed-report:check": "bun scripts/landed-change-report-check.ts --base origin/main",
     "reports:presentation:check": "bun scripts/report-presentation-check.ts",

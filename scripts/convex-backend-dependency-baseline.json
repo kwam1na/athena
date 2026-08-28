@@ -1,0 +1,40 @@
+{
+  "timestamp": "2026-08-27T20:42:55.363Z",
+  "cycles": [
+    [
+      "convex/agentHarness/manifestRegistrations.ts",
+      "convex/agentHarness/profiles/syntheticSecondSurfaceConformance.ts"
+    ],
+    [
+      "convex/agentHarness/retention.ts",
+      "convex/agentHarness/runtimeRetention.ts"
+    ],
+    [
+      "convex/cashControls/deposits.ts",
+      "convex/operations/dailyClose.ts",
+      "convex/operations/dailyOpening.ts",
+      "convex/operations/dailyOperationsAutomation.ts",
+      "convex/operations/operationalWorkItems.ts",
+      "convex/pos/application/commands/createOrReusePendingCheckoutItem.ts",
+      "convex/pos/application/commands/pendingCheckoutReviewWorkLifecycle.ts",
+      "convex/pos/application/sync/ingestLocalEvents.ts",
+      "convex/pos/infrastructure/repositories/localSyncRepository.ts",
+      "convex/serviceOps/serviceCases.ts"
+    ],
+    [
+      "convex/reports/rangeSnapshotLifecycle.ts",
+      "convex/reports/skuMixRange.ts",
+      "convex/reports/skuMovementRange.ts",
+      "convex/reports/sweeper.ts"
+    ]
+  ],
+  "kernelViolations": [
+    "convex/inventoryLedger/commerceEffects.ts|../storeTime/operatingPeriods|convex/storeTime/operatingPeriods.ts|kernel-forbidden",
+    "convex/inventoryLedger/corrections.ts|../operationAdmission/domains/operations_definitions|convex/operationAdmission/domains/operations_definitions.ts|kernel-not-allowed",
+    "convex/inventoryLedger/corrections.ts|../platform/operationAdmission|convex/platform/operationAdmission.ts|kernel-not-allowed",
+    "convex/inventoryLedger/corrections.ts|../reports/access|convex/reports/access.ts|kernel-forbidden",
+    "convex/inventoryLedger/corrections.ts|../storeTime/operatingPeriods|convex/storeTime/operatingPeriods.ts|kernel-forbidden",
+    "convex/inventoryLedger/effects.ts|../operations/inventoryMovements|convex/operations/inventoryMovements.ts|kernel-forbidden",
+    "convex/inventoryLedger/effects.ts|../operations/skuActivity|convex/operations/skuActivity.ts|kernel-forbidden"
+  ]
+}

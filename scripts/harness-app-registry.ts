@@ -1082,6 +1082,7 @@ export const HARNESS_APP_REGISTRY = [
           "src/main.tsx",
         ],
         commands: [
+          { kind: "raw", command: "bun run dependency:check:backend" },
           { kind: "script", script: "test" },
           { kind: "script", script: "audit:convex" },
           { kind: "script", script: "lint:convex:changed" },
@@ -1090,7 +1091,7 @@ export const HARNESS_APP_REGISTRY = [
           "athena-convex-storefront-composition",
           "athena-convex-storefront-failure-visibility",
         ],
-        note: "Any change that can affect Convex HTTP wiring, serviceOps schemas and workflows, shared operational rails, reporting maintenance scripts, or route-to-backend composition should include the Convex audit pair. When a public Convex function with an explicit `returns` validator changes, add executable return-contract proof with `assertConformsToExportedReturns`; loose `exportReturns()` string checks do not prove the production return contract. Convex query handlers must not reach mutation-only DB APIs directly or through write-capable repositories/services; split read factories from `MutationCtx`-only write factories when shared code crosses query and mutation boundaries.",
+        note: "Any change that can affect Convex HTTP wiring, serviceOps schemas and workflows, shared operational rails, reporting maintenance scripts, or route-to-backend composition should include the Convex audit pair. The shrink-only backend dependency guard runs (`bun run dependency:check:backend`) whenever Convex sources change: it snapshots backend import cycles and kernel-boundary violations against a committed baseline, blocks new cycles/violations, and treats baseline removals as drift until the baseline is regenerated (`--update-baseline` is shrink-only, so it cannot absorb new violations). When a public Convex function with an explicit `returns` validator changes, add executable return-contract proof with `assertConformsToExportedReturns`; loose `exportReturns()` string checks do not prove the production return contract. Convex query handlers must not reach mutation-only DB APIs directly or through write-capable repositories/services; split read factories from `MutationCtx`-only write factories when shared code crosses query and mutation boundaries.",
       },
       {
         id: "athena.route-runtime-build",
