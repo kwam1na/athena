@@ -1,0 +1,716 @@
+{
+  "schemaVersion": "athena-portable-characterization-baseline/1",
+  "baselineId": "athena-portable-workflows-v1-2026-08-27",
+  "capturedFor": "V26-1413",
+  "readOnly": true,
+  "discoveryRoots": [
+    {
+      "path": ".agents/skills",
+      "state": "present"
+    },
+    {
+      "path": ".claude/skills",
+      "state": "absent"
+    }
+  ],
+  "sources": [
+    {
+      "id": "root-agent-guide",
+      "path": "AGENTS.md",
+      "kind": "repository-policy",
+      "sha256": "fcf48a2a204edeba0063c59e8fb15053c89db01a965e85cae1c88a93266a306a"
+    },
+    {
+      "id": "packages-agent-guide",
+      "path": "packages/AGENTS.md",
+      "kind": "repository-policy",
+      "sha256": "fad5965aa60fe5a6664ff4db2ef16bd7bf87c7ba30f29b7ba65c4990eea41f80"
+    },
+    {
+      "id": "local-skill-policy",
+      "path": ".agents/README.md",
+      "kind": "repository-policy",
+      "sha256": "d73d457c57724912d71354145a3374f59c0959b2a51dd8b34116bc8c565158ef"
+    },
+    {
+      "id": "deliver-work-skill",
+      "path": ".agents/skills/deliver-work/SKILL.md",
+      "kind": "workflow-policy",
+      "sha256": "8e4f79aa196e549fbd039a6bbeca9106c1d5e50e607df59c3ae753b380f4371c"
+    },
+    {
+      "id": "delivery-kernel-skill",
+      "path": ".agents/skills/compound-delivery-kernel/SKILL.md",
+      "kind": "workflow-policy",
+      "sha256": "30d72ae4d855b508b7ab59720874e8e76091885992a712d3bd5ccb6e510d451e"
+    },
+    {
+      "id": "plan-skill",
+      "path": ".agents/skills/ce-plan/SKILL.md",
+      "kind": "workflow-policy",
+      "sha256": "6d94660370a33a15fa11b9c811aad90d3c1a5ee647c651dc1c98dfdcf80fb0d2"
+    },
+    {
+      "id": "work-skill",
+      "path": ".agents/skills/ce-work/SKILL.md",
+      "kind": "workflow-policy",
+      "sha256": "78fb01e3c851f47ad6006396ef5a410788fd3f5f9b58e64b09c76b684264ccc2"
+    },
+    {
+      "id": "review-skill",
+      "path": ".agents/skills/ce-code-review/SKILL.md",
+      "kind": "workflow-policy",
+      "sha256": "406df6d375d2772deddbee96817f8c24983a5cbfefff839a54c33667014e44f0"
+    },
+    {
+      "id": "compound-skill",
+      "path": ".agents/skills/ce-compound/SKILL.md",
+      "kind": "workflow-policy",
+      "sha256": "3e552b0f081054dcd70c95060baac93cea502b01ce107d195b33058993561758"
+    },
+    {
+      "id": "track-skill",
+      "path": ".agents/skills/track/SKILL.md",
+      "kind": "workflow-policy",
+      "sha256": "5dceb25e88ce29110a3f872be0ea644256aa00b58a5a8a172a05575c8770b6a8"
+    },
+    {
+      "id": "execute-skill",
+      "path": ".agents/skills/execute/SKILL.md",
+      "kind": "workflow-policy",
+      "sha256": "91b9ecc7ccea3d748a0a770afbd10fdd44b551894e2aaeb56cacee21b6b1234b"
+    },
+    {
+      "id": "approved-requirements",
+      "path": "docs/brainstorms/2026-08-27-cross-agent-delivery-skills-requirements.md",
+      "kind": "approved-requirements",
+      "sha256": "bc9da1eac866a86764d64ec873c8b7c3740287886e8baf3a21a7f68e3ec85a17"
+    },
+    {
+      "id": "approved-delivery-plan",
+      "path": "docs/plans/2026-08-27-002-feat-cross-agent-delivery-rails-and-skills-plan.md",
+      "kind": "approved-plan",
+      "sha256": "d87cbc52bdcd8fc9266cde0daa56c5b18cdae3ed2709e3bf31ac39bcf653f11c"
+    },
+    {
+      "id": "typed-harness-blockers",
+      "path": "scripts/harness-blockers.ts",
+      "kind": "enforcement-policy",
+      "sha256": "8dd443a5a78ed381275cb6c7b429ee23b02348c3ef3035951c2bcf9a40107a99"
+    }
+  ],
+  "assertions": [
+    {
+      "id": "route-tracked-implementation-to-execute",
+      "area": "routing",
+      "statement": "An implementation request already tracked in Linear routes through the repo-local execute workflow.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "deliver-work-skill",
+          "selector": "If the work is already tracked in Linear, use `$execute`."
+        },
+        {
+          "sourceId": "local-skill-policy",
+          "selector": "Linear planning and ticket execution use the repo-local `track` and `execute` skills."
+        }
+      ]
+    },
+    {
+      "id": "route-approved-ticket-creation-to-track",
+      "area": "routing",
+      "statement": "Approved work that needs tickets routes to the repository tracking workflow before implementation.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "deliver-work-skill",
+          "selector": "If approved work needs tickets, use `$track`."
+        },
+        {
+          "sourceId": "track-skill",
+          "selector": "If the user is mixing planning, ticket creation, and implementation, finish ticket creation first"
+        }
+      ]
+    },
+    {
+      "id": "route-fuzzy-requirements-to-brainstorm",
+      "area": "routing",
+      "statement": "Fuzzy requirements or unresolved product shape route to the available brainstorming workflow before implementation planning.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "deliver-work-skill",
+          "selector": "If requirements are fuzzy or product shape is unresolved, use `compound-engineering:ce-brainstorm` when available."
+        }
+      ]
+    },
+    {
+      "id": "route-approved-planning-to-plan-workflow",
+      "area": "routing",
+      "statement": "Implementation planning or unclear multi-step sequencing routes to the planning workflow before execution.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "deliver-work-skill",
+          "selector": "If the user asks for an implementation plan or the work is multi-step with unclear sequencing"
+        },
+        {
+          "sourceId": "track-skill",
+          "selector": "Prefer `$ce-plan`."
+        }
+      ]
+    },
+    {
+      "id": "route-unknown-root-cause-to-debugging",
+      "area": "routing",
+      "statement": "A bug with an unknown root cause routes through systematic diagnosis before planning a fix.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "deliver-work-skill",
+          "selector": "If the request is a bug with unknown root cause, use a systematic debugging skill before planning the fix."
+        }
+      ]
+    },
+    {
+      "id": "route-review-only-to-code-review",
+      "area": "routing",
+      "statement": "A review-only request routes to the available code-review workflow without implementation.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "deliver-work-skill",
+          "selector": "If the task is purely a review, use the available code-review skill instead of implementing."
+        }
+      ]
+    },
+    {
+      "id": "route-explicit-skill-as-requested",
+      "area": "routing",
+      "statement": "An explicitly named skill or workflow takes precedence over the default delivery route.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "deliver-work-skill",
+          "selector": "If the user explicitly names a different skill or workflow, honor that routing."
+        }
+      ]
+    },
+    {
+      "id": "route-default-implementation-through-deliver-work",
+      "area": "routing",
+      "statement": "An ordinary implementation request with no better specialized route continues through the default delivery workflow.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "deliver-work-skill",
+          "selector": "When none of those routes is a better fit, continue here."
+        }
+      ]
+    },
+    {
+      "id": "repository-policy-precedes-workflow-examples",
+      "area": "repository-instruction-precedence",
+      "statement": "Workflows inspect and obey repository and package instructions, architecture constraints, commands, and sensors before applying generic examples.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "deliver-work-skill",
+          "selector": "Inspect repo instructions and sensors before editing"
+        },
+        {
+          "sourceId": "root-agent-guide",
+          "selector": "Route work through them:"
+        },
+        {
+          "sourceId": "approved-requirements",
+          "selector": "Reusable skills must discover and respect the adopting repository's instructions"
+        }
+      ]
+    },
+    {
+      "id": "implementation-selects-explicit-test-posture",
+      "area": "test-posture",
+      "statement": "Implementation declares test-first, characterization-first, or sensor-only posture before changing behavior.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "deliver-work-skill",
+          "selector": "Choose execution posture:"
+        },
+        {
+          "sourceId": "delivery-kernel-skill",
+          "selector": "`characterization-first` for legacy, unclear, or fragile behavior"
+        }
+      ]
+    },
+    {
+      "id": "smallest-honest-sensors-run-before-merge-gate",
+      "area": "test-posture",
+      "statement": "The smallest honest targeted sensors run first and broader repository gates follow at the merge-ready boundary.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "delivery-kernel-skill",
+          "selector": "Identify the smallest repo sensor set likely to prove the change"
+        },
+        {
+          "sourceId": "root-agent-guide",
+          "selector": "While iterating: focused sensors per surface"
+        }
+      ]
+    },
+    {
+      "id": "planning-captures-test-posture-and-sensors",
+      "area": "planning",
+      "statement": "Plans and tracked units preserve execution posture, test scenarios, expected sensors, and scope boundaries.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "track-skill",
+          "selector": "Capture outcomes, tests, sensors, posture, and boundaries"
+        },
+        {
+          "sourceId": "plan-skill",
+          "selector": "Carry execution posture lightly when it matters"
+        },
+        {
+          "sourceId": "delivery-kernel-skill",
+          "selector": "execution posture (`test-first`, `characterization-first`, or `sensor-only`)"
+        }
+      ]
+    },
+    {
+      "id": "planning-does-not-mutate-runtime-behavior",
+      "area": "planning",
+      "statement": "Plan-only work does not mutate implementation behavior.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "approved-delivery-plan",
+          "selector": "plan-only does not mutate code"
+        },
+        {
+          "sourceId": "work-skill",
+          "selector": "Do not edit the plan body during execution."
+        }
+      ]
+    },
+    {
+      "id": "review-selects-core-and-risk-lenses",
+      "area": "reviewer-selection",
+      "statement": "Review always covers correctness, testing, maintainability, repository standards, agent access, and learnings, then adds risk-specific lenses from the diff.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "review-skill",
+          "selector": "**Always-on (every review):**"
+        },
+        {
+          "sourceId": "review-skill",
+          "selector": "**Cross-cutting conditional (selected per diff):**"
+        }
+      ]
+    },
+    {
+      "id": "review-is-independent-of-implementation",
+      "area": "reviewer-selection",
+      "statement": "A passing implementation sensor cannot self-certify; required review is an independent evidence-bearing checkpoint.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "execute-skill",
+          "selector": "run one independent evidence-bearing review checkpoint before `bun run pr:athena`"
+        },
+        {
+          "sourceId": "deliver-work-skill",
+          "selector": "Review the diff against acceptance criteria, tests, repo sensors, and project standards."
+        }
+      ]
+    },
+    {
+      "id": "actionable-findings-loop-to-resolution",
+      "area": "reviewer-selection",
+      "statement": "Actionable in-scope findings are fixed and re-reviewed until approval or an honest blocker remains.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "execute-skill",
+          "selector": "Keep looping relevant reviewer subagents until unanimous approval on in-scope work"
+        },
+        {
+          "sourceId": "review-skill",
+          "selector": "If any fix changes the candidate, prepare again and rerun the complete required reviewer set"
+        }
+      ]
+    },
+    {
+      "id": "tracker-neutral-workflow-has-actionable-no-tracker-handoff",
+      "area": "tracker-neutral-behavior",
+      "statement": "Missing tracker capability yields an actionable handoff without breaking the core delivery workflow.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "approved-requirements",
+          "selector": "missing or unavailable tracker capabilities degrade to an explicit handoff rather than breaking core delivery"
+        },
+        {
+          "sourceId": "delivery-kernel-skill",
+          "selector": "If a tracker is unavailable, record the same follow-up in the handoff"
+        }
+      ]
+    },
+    {
+      "id": "linear-context-resolution-is-adapter-behavior",
+      "area": "linear-behavior",
+      "statement": "Linear team and project resolution happens before Linear mutation and remains outside tracker-neutral behavior.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "track-skill",
+          "selector": "Apply `references/linear-project-resolution.md` before any Linear mutation."
+        },
+        {
+          "sourceId": "approved-delivery-plan",
+          "selector": "Implement Linear as an optional tracker adapter"
+        }
+      ]
+    },
+    {
+      "id": "linear-work-is-atomic-and-dependency-aware",
+      "area": "linear-behavior",
+      "statement": "Configured Linear planning creates atomic, dependency-aware work without changing the neutral core.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "approved-requirements",
+          "selector": "the tracking workflow can create atomic, dependency-aware work items"
+        },
+        {
+          "sourceId": "track-skill",
+          "selector": "Optimize for minimum dependency chains and maximum parallel execution."
+        }
+      ]
+    },
+    {
+      "id": "linear-execution-keeps-ticket-state-current",
+      "area": "linear-behavior",
+      "statement": "Tracked execution keeps Linear status, progress evidence, and PR linkage current throughout delivery.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "execute-skill",
+          "selector": "### 5. Keep Linear Current"
+        },
+        {
+          "sourceId": "execute-skill",
+          "selector": "Add comments when there is meaningful progress"
+        }
+      ]
+    },
+    {
+      "id": "compounding-requires-a-reusable-learning",
+      "area": "compounding",
+      "statement": "Durable knowledge is created only for reusable lessons; otherwise the handoff records no durable learning.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "delivery-kernel-skill",
+          "selector": "Create or update durable knowledge when at least one is true:"
+        },
+        {
+          "sourceId": "execute-skill",
+          "selector": "Record `No durable learning` only when the change is local, obvious, and unlikely to recur."
+        }
+      ]
+    },
+    {
+      "id": "athena-solution-format-remains-repository-owned",
+      "area": "compounding",
+      "statement": "Athena solution-note structure and docs/solutions policy remain repository-owned overlay behavior.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "execute-skill",
+          "selector": "Use the repo-local `$ce-compound` skill when the repo has a `docs/solutions/` knowledge base"
+        },
+        {
+          "sourceId": "compound-skill",
+          "selector": "creating structured documentation in `docs/solutions/`"
+        }
+      ]
+    },
+    {
+      "id": "landed-report-does-not-replace-durable-learning",
+      "area": "reporting",
+      "statement": "The landed-change report is a required human handoff when applicable, but it does not replace a durable solution or skill learning.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "execute-skill",
+          "selector": "Treat a `$ce-landed-change-report` as delivery handoff for human comprehension, not as a replacement for durable solution notes or skill updates."
+        },
+        {
+          "sourceId": "execute-skill",
+          "selector": "For substantial or behavior-bearing work, the delivery PR includes a digestible landed-change report"
+        }
+      ]
+    },
+    {
+      "id": "configured-harness-blockers-cannot-degrade-away",
+      "area": "harness-evidence",
+      "statement": "Once Athena declares a configured delivery gate, its blockers and remediation remain mandatory and cannot be degraded away by a workflow.",
+      "authority": "explicitly-approved",
+      "parity": "blocking",
+      "adjudication": "approved",
+      "citations": [
+        {
+          "sourceId": "approved-delivery-plan",
+          "selector": "its typed blockers and remediation become mandatory and cannot be degraded away by a skill"
+        },
+        {
+          "sourceId": "approved-requirements",
+          "selector": "deterministic enforcement belong to repository instructions, overlays, scripts, tests, and CI"
+        }
+      ]
+    },
+    {
+      "id": "harness-blockers-use-typed-sources-and-remediations",
+      "area": "harness-evidence",
+      "statement": "Harness blockers use registered typed sources and at least one typed remediation rather than free-form failure prose.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "typed-harness-blockers",
+          "selector": "source: HarnessBlockerSource;"
+        },
+        {
+          "sourceId": "typed-harness-blockers",
+          "selector": "remediations: NonEmptyTuple<HarnessRemediation>;"
+        }
+      ]
+    },
+    {
+      "id": "operator-and-provider-proof-lanes-stay-separated",
+      "area": "harness-evidence",
+      "statement": "Preparation and admission stay operator-owned while review execution and evidence assembly stay provider-owned; agents do not waive either lane.",
+      "authority": "explicitly-approved",
+      "parity": "blocking",
+      "adjudication": "approved",
+      "citations": [
+        {
+          "sourceId": "approved-delivery-plan",
+          "selector": "Preparation and final admission remain operator/enforcement operations; review execution and evidence assembly remain provider operations."
+        },
+        {
+          "sourceId": "approved-delivery-plan",
+          "selector": "Agent contexts never waive."
+        }
+      ]
+    },
+    {
+      "id": "athena-review-evidence-binds-the-candidate",
+      "area": "harness-evidence",
+      "statement": "Athena review evidence authorizes the exact prepared candidate and is invalidated by later deliverable edits outside the documented neutral artifacts.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "execute-skill",
+          "selector": "Review evidence binds to the candidate's deliverable identity, not its raw tree."
+        },
+        {
+          "sourceId": "execute-skill",
+          "selector": "Any other edit — including a comment-only change or a regenerated artifact — does invalidate it"
+        }
+      ]
+    },
+    {
+      "id": "pr-athena-remains-merge-ready-authority",
+      "area": "merge-ready-gates",
+      "statement": "The repository-owned pr:athena command remains the merge-ready authority and cannot be replaced by an independently assembled suite.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "root-agent-guide",
+          "selector": "Merge-ready: `bun run pr:athena` from repo root is the authority."
+        },
+        {
+          "sourceId": "root-agent-guide",
+          "selector": "Never assemble your own broad suite as a substitute final gate."
+        }
+      ]
+    },
+    {
+      "id": "generated-artifact-obligations-remain-mandatory",
+      "area": "generated-artifacts",
+      "statement": "Graphify rebuild/check, public Convex operation admission, and generated-artifact refresh remain mandatory when their repository-defined change conditions apply.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "root-agent-guide",
+          "selector": "After modifying code files: `bun run graphify:rebuild`"
+        },
+        {
+          "sourceId": "root-agent-guide",
+          "selector": "Added/removed/re-wrapped a public Convex function or Hono route"
+        },
+        {
+          "sourceId": "execute-skill",
+          "selector": "bun run pre-commit:generated-artifacts"
+        }
+      ]
+    },
+    {
+      "id": "athena-pr-contract-remains-mandatory",
+      "area": "pr-policy",
+      "statement": "Athena branches, PR titles, body sections, and Linear links retain their repository-defined contract.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "root-agent-guide",
+          "selector": "Branches use the `codex/` prefix"
+        },
+        {
+          "sourceId": "root-agent-guide",
+          "selector": "PR titles: `[V26-123]: title`."
+        },
+        {
+          "sourceId": "packages-agent-guide",
+          "selector": "Every PR body must include these sections:"
+        }
+      ]
+    },
+    {
+      "id": "delivery-telemetry-recorded-after-final-gate",
+      "area": "telemetry",
+      "statement": "Qualifying substantial deliveries record current telemetry only after the final merge-ready gate and commit that evidence with the delivery.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "execute-skill",
+          "selector": "After the final `bun run pr:athena` passes, run `bun run delivery:telemetry-record`"
+        },
+        {
+          "sourceId": "execute-skill",
+          "selector": "Record after the gate, never mid-run"
+        }
+      ]
+    },
+    {
+      "id": "deployment-handoff-runs-from-clean-merged-main",
+      "area": "deployment-handoff",
+      "statement": "Post-merge deployment selection runs from the clean, aligned root checkout and follows Athena's diff-to-deploy mapping or records an explicit no-deploy result.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "execute-skill",
+          "selector": "### 10. Post-Merge: Align Root + Run Non-Deferred Production Deploys"
+        },
+        {
+          "sourceId": "delivery-kernel-skill",
+          "selector": "Do not run local production deploy from a feature branch, dirty checkout, or temporary worktree."
+        }
+      ]
+    },
+    {
+      "id": "athena-domain-architecture-is-not-portable-workflow",
+      "area": "excluded-domain-policy",
+      "statement": "Athena transaction, inventory, reporting, approval, and POS domain rules remain repository policy and are excluded from the portable delivery workflow.",
+      "authority": "source-backed",
+      "parity": "blocking",
+      "adjudication": "policy-backed",
+      "citations": [
+        {
+          "sourceId": "root-agent-guide",
+          "selector": "One business action commits everything about itself in **one Convex transaction**."
+        },
+        {
+          "sourceId": "root-agent-guide",
+          "selector": "Reporting is an append-only fact ledger"
+        },
+        {
+          "sourceId": "approved-requirements",
+          "selector": "it remains in the Athena overlay unless a repository-neutral contract"
+        }
+      ]
+    },
+    {
+      "id": "host-tool-call-sequence-is-observed-only",
+      "area": "observed-host-mechanics",
+      "statement": "Exact host tool-call sequencing is not repository policy and is not a parity blocker.",
+      "authority": "observed-only",
+      "parity": "non-blocking",
+      "adjudication": "unadjudicated",
+      "citations": []
+    }
+  ],
+  "scenarioFixtures": [
+    "scripts/portable-baseline-fixtures/bounded-implementation.json",
+    "scripts/portable-baseline-fixtures/compounding.json",
+    "scripts/portable-baseline-fixtures/configured-harness-blocker.json",
+    "scripts/portable-baseline-fixtures/linear-tracking.json",
+    "scripts/portable-baseline-fixtures/planning.json",
+    "scripts/portable-baseline-fixtures/review.json",
+    "scripts/portable-baseline-fixtures/routing.json"
+  ]
+}

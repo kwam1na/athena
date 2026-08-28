@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-28T07:14:15.778Z",
+  "branch": "codex/V26-1413-portable-baseline",
+  "headSha": "ad639de8c2c45abd383c118ce53b421a5d2f04b3",
+  "deliverableDiffFingerprint": "6d000ac634d032e72eaf2f94c33f62ad9c42482b9f0b76f29a69917ad4737c29",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 0,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 669655.8958749998
+  },
+  "reviewLoop": {
+    "providerId": "execute",
+    "runId": "20260828-063138-v26-1413-final-pass4",
+    "finalPassId": "pass-4",
+    "recordedAt": "2026-08-28T06:47:27.566Z",
+    "iterationCount": 4,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 8,
+      "P2": 6,
+      "P3": 0
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "athena-portable-characterization-scenario/1",
+  "readOnly": true,
+  "id": "planning",
+  "requestKind": "planning",
+  "expectedAssertionIds": [
+    "route-approved-planning-to-plan-workflow",
+    "repository-policy-precedes-workflow-examples",
+    "planning-captures-test-posture-and-sensors",
+    "planning-does-not-mutate-runtime-behavior"
+  ],
+  "expectedClassificationIds": [
+    "routing-and-repository-discovery",
+    "planning-workflow",
+    "test-and-handoff-posture"
+  ]
+}

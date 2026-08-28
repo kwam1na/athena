@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Athena Portable Workflow Baseline</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="6d000ac634d032e72eaf2f94c33f62ad9c42482b9f0b76f29a69917ad4737c29" data-athena-report-base="a92ae65336eb48eb0e05b451a309ffb56f546c0c" data-athena-report-head="0494c36d780e5ef7bda728612ecfdf022873ec07">
+  <header data-report-section="header">
+    <h1>Athena Portable Workflow Baseline</h1>
+    <p>A read-only, reviewed boundary for later delivery-workflow extraction</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Linear V26-1413</li>
+      <li>Branch codex/V26-1413-portable-baseline</li>
+      <li>58 focused tests green</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Issue</dt><dd>V26-1413</dd>
+      <dt>Parent</dt><dd>V26-1412</dd>
+      <dt>PR</dt><dd>Pending</dd>
+      <dt>Status</dt><dd>Delivery candidate</dd>
+      <dt>Deploy</dt><dd>Pending</dd>
+      <dt>Root alignment</dt><dd>Pending</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+      <p>V26-1413 gives later extraction work a reviewed source of truth for Athena&#x27;s current delivery workflow. It records 14 normative sources, 34 assertions (31 source-backed, 2 explicitly approved, and 1 observed-only), 24 bounded members, 84 direct dependencies, 18 classifications, 13 reference dispositions, 7 representative scenarios, and 145 deliberately out-of-scope files.</p>
+      <p>The delivery is characterization only. It does not move skills, change discovery roots, implement a tracker adapter, or replace Athena&#x27;s repository-specific gates.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Why this baseline was needed</h2>
+      <p>Athena&#x27;s reusable delivery behavior was spread across skill bodies, repository policy, references, and harness obligations. Extracting from that moving surface without an approved boundary could silently omit required behavior or export Athena-only rules as portable policy.</p>
+      <p>A structural inventory alone was insufficient. Two records could be edited together and remain internally consistent while changing the meaning later tickets would treat as approved.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model: a certified survey map</h2>
+      <p>Think of the baseline as a survey completed before construction. The JSON artifacts mark the approved boundaries. The checker compares those boundaries with the current repository. The fixtures prove representative routes through the map.</p>
+      <p>Workflow rules may be portable candidate, optional adapter, retained Athena overlay, or excluded. Bounded closure members use the narrower U11 taxonomy of portable candidate, retained overlay, or excluded. These labels guide later work; they are not migration actions in this ticket.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+      <p>Before: an agent had to reconstruct the portable boundary from many live files, and coherent edits could change semantics without a single parity sensor noticing.</p>
+      <p>After: committed artifacts describe the approved boundary, small declarative contracts pin exact meaning, mutation tests demonstrate known false-green cases, and one read-only command reports drift without rewriting files.</p>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed and what did not</h2>
+      <ul>
+        <li>Added a versioned characterization baseline and overlay map with exact classifications, bounded closure, dependencies, and residual inventory.</li>
+        <li>Added a read-only portable-baseline checker, strict document validation, filesystem containment helpers, and exact semantic contracts.</li>
+        <li>Added 7 representative fixtures and mutation-heavy focused coverage for malformed, missing, rebound, broadened, and filesystem-drift cases.</li>
+        <li>Moved the approved brainstorm and Markdown/HTML plan into the delivery branch so the implementation evidence travels with the ticket.</li>
+        <li>Captured the reusable lesson that authoritative characterization must bind exact meaning while rejecting review-driven scope growth.</li>
+        <li>Did not modify .agents/skills, create .claude/skills, change active discovery, extract portable skills, implement Linear behavior, or replace Athena&#x27;s merge, telemetry, reporting, and deployment overlays.</li>
+      </ul>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+      <ul>
+        <li>Schema-invalid or unexpectedly shaped JSON fails validation instead of being trusted through unchecked casts.</li>
+        <li>Missing, noncanonical, escaping, or prohibited symlink identities fail the bounded characterization checks.</li>
+        <li>Schema-valid rebinding of sources, members, rules, dependencies, citations, notes, or scenarios fails exact semantic comparison.</li>
+        <li>Residual discovery drift, including executable-mode and symlink changes, changes the certified tree identity.</li>
+        <li>The checker intentionally does not become a universal filesystem validator; a proposed hardening idea was excluded when it could not demonstrate a concrete V26-1413 outcome failure.</li>
+      </ul>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and delivery status</h2>
+      <p>The focused suite passes 58 tests. The baseline command validates 31 source-backed assertions, 24 bounded members, 7 scenarios, and 145 residual files. The script harness passed 1,601 tests, and TypeScript, formatting, plan HTML, Graphify, and diff checks were green on the reviewed source candidate.</p>
+      <p>The evidence-bearing review finished with 13 of 13 final reviewers green, 8 P1 and 6 P2 findings resolved, zero deferred expansion, and zero unresolved actionable findings. Record: cfd237c1a29f9af51d9981db151e52dd073dc1ceb65daeaadc92bbc010a08c27.</p>
+      <p>At report creation, the PR, full pr:athena gate, delivery telemetry, merge, root alignment, and athena-local deployment are pending. This report does not claim those later finish-line events.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>How later tickets should use it</h2>
+      <ul>
+        <li>Run bun run portable-baseline:check before relying on this snapshot for extraction work.</li>
+        <li>Treat portable-candidate as material eligible for later implementation, not permission to copy every source bundle wholesale.</li>
+        <li>Keep tracker-neutral core behavior separate from the optional Linear adapter lane.</li>
+        <li>When approved meaning changes, update the smallest declarative contract and add a mutation that demonstrates the intended boundary.</li>
+        <li>Require review findings to name a concrete wrong certification or ticket-outcome failure; defer adjacent hardening and generalization.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>.agents/characterization-baseline.json</code></td><td>Records normative sources, source-backed assertions, discovery roots, and scenario references.</td></tr>
+        <tr><td><code>.agents/portable-overlay-map.json</code></td><td>Classifies workflow behavior and records the bounded closure, dependencies, references, and residual inventory.</td></tr>
+        <tr><td><code>scripts/portable-baseline-check.ts</code></td><td>Runs the read-only drift and parity audit and reports typed findings.</td></tr>
+        <tr><td><code>scripts/portable-baseline-contracts.ts</code></td><td>Pins the approved semantic tuples that cannot be safely inferred from structure alone.</td></tr>
+        <tr><td><code>scripts/portable-baseline-schema.ts</code></td><td>Rejects malformed or unknown document shapes before the checker reasons about them.</td></tr>
+        <tr><td><code>scripts/portable-baseline-filesystem.ts</code></td><td>Resolves canonical contained identities for the bounded repository surface.</td></tr>
+        <tr><td><code>scripts/portable-baseline-check.test.ts</code></td><td>Exercises representative success paths and demonstrated false-green mutations.</td></tr>
+        <tr><td><code>scripts/portable-baseline-fixtures/</code></td><td>Defines the exact approved membership of 7 representative delivery scenarios.</td></tr>
+        <tr><td><code>docs/solutions/architecture-patterns/authoritative-characterization-requires-exact-semantics-2026-08-28.md</code></td><td>Preserves the exact-semantics and simplicity lesson for later delivery units.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the primary outcome of V26-1413?</p>
+        <ol data-quiz-options>
+          <li>Extract every Athena skill into the portable repository</li>
+          <li data-quiz-correct>Capture and verify a read-only portable-workflow baseline and Athena overlay boundary</li>
+          <li>Replace Athena&#x27;s merge gate with a portable command</li>
+          <li>Implement the Linear adapter</li>
+        </ol>
+        <p data-quiz-explanation>This ticket characterizes the current boundary so later units can extract safely; it does not perform the extraction.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why are exact semantic contracts needed in addition to schema validation?</p>
+        <ol data-quiz-options>
+          <li>They make JSON smaller</li>
+          <li>They allow the checker to rewrite drift automatically</li>
+          <li data-quiz-correct>Schema-valid records can be rebound together and remain internally consistent while changing approved meaning</li>
+          <li>They remove the need for source citations</li>
+        </ol>
+        <p data-quiz-explanation>Shape validation cannot detect a coordinated semantic rebind; exact tuples pin the approved interpretation.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does portable-candidate mean in this report?</p>
+        <ol data-quiz-options>
+          <li>The material was already migrated</li>
+          <li data-quiz-correct>The material is eligible for later extraction under an approved ticket</li>
+          <li>The material must run in every host without changes today</li>
+          <li>The material replaces Athena&#x27;s local overlay</li>
+        </ol>
+        <p data-quiz-explanation>Classification describes a later-work boundary; it is not itself a migration action.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which behavior remains an Athena-owned overlay?</p>
+        <ol data-quiz-options>
+          <li>Tracker-neutral workflow completion</li>
+          <li>Plain planning posture</li>
+          <li data-quiz-correct>Athena&#x27;s pr:athena, telemetry, reporting, and deployment obligations</li>
+          <li>A generic no-tracker handoff</li>
+        </ol>
+        <p data-quiz-explanation>Repository-specific merge and operational policy remains layered over the reusable core.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What should happen when a required source or bounded member drifts?</p>
+        <ol data-quiz-options>
+          <li>The checker should silently update the baseline</li>
+          <li data-quiz-correct>The checker should fail with a finding while leaving files unchanged</li>
+          <li>The checker should delete the changed member</li>
+          <li>The checker should migrate it to the optional adapter</li>
+        </ol>
+        <p data-quiz-explanation>The sensor is intentionally read-only and fail-closed; reviewed changes update the artifacts separately.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does each scenario use exact approved membership?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>To reject extra valid items that would silently broaden the workflow contract</li>
+          <li>To make scenario files executable</li>
+          <li>To avoid running focused tests</li>
+          <li>To make Linear mandatory</li>
+        </ol>
+        <p data-quiz-explanation>An inclusion-only check can pass after unapproved behavior is added; exact membership preserves scope.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What must happen before observed-only host behavior can become parity-blocking?</p>
+        <ol data-quiz-options>
+          <li>Nothing; observed behavior is automatically authoritative</li>
+          <li data-quiz-correct>It must be explicitly adjudicated and approved by a later delivery unit</li>
+          <li>It must appear in two fixture files</li>
+          <li>It must be implemented by the Linear adapter</li>
+        </ol>
+        <p data-quiz-explanation>The current host tool-call sequence remains unadjudicated, non-blocking, and excluded so observation cannot silently become parity policy.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What should a later extraction ticket do before relying on this characterization?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Run bun run portable-baseline:check</li>
+          <li>Delete the Athena overlay map</li>
+          <li>Enable .claude/skills discovery</li>
+          <li>Mark V26-1412 complete</li>
+        </ol>
+        <p data-quiz-explanation>The read-only audit confirms the recorded snapshot still matches the repository and approved meaning.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How is Linear positioned in the delivery architecture?</p>
+        <ol data-quiz-options>
+          <li>It is mandatory inside the portable core</li>
+          <li>It replaces repository-local work tracking</li>
+          <li data-quiz-correct>It is an optional adapter after the tracker-neutral core qualifies</li>
+          <li>It is implemented by V26-1413</li>
+        </ol>
+        <p data-quiz-explanation>The portable core must remain useful without a tracker; Linear is a later optional lane.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which finish-line statement is accurate when this report was created?</p>
+        <ol data-quiz-options>
+          <li>The branch was merged, deployed, and root-aligned</li>
+          <li data-quiz-correct>The PR and remaining delivery gates were pending</li>
+          <li>Linear V26-1413 was Done</li>
+          <li>No further delivery evidence was required</li>
+        </ol>
+        <p data-quiz-explanation>The report is a delivery-candidate artifact; PR creation, full gate, telemetry, merge, root alignment, and deployment still follow.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>V26-1413 report context (session historian)</dt><dd>Reconstructed the approved simplification decisions, review history, current Linear state, finish-line obligations, and durable lesson from session, ticket, plan, and repository evidence.</dd>
+      <dt>V26-1413 report diff (repository explorer)</dt><dd>Mapped the branch by behavior layer, verified that no skill discovery or product packages changed, confirmed the exact before/after boundary and failure modes, and reran the baseline and 58 focused tests.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>
