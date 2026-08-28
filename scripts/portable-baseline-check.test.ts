@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 import {
   auditPortableWorkflowBaseline,
   collectTreeEntries,
+  digestTreeEntries,
   loadPortableBaselineDocuments,
 } from "./portable-baseline-check";
 
@@ -479,6 +480,73 @@ describe("portable workflow characterization baseline", () => {
     );
   });
 
+  it("binds reference-free session selectors to their intended targets", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const swappedTargets = new Map([
+      [
+        "ce-session-extract-source-bundle",
+        "ce-session-inventory-source-bundle",
+      ],
+      [
+        "ce-session-inventory-source-bundle",
+        "ce-session-extract-source-bundle",
+      ],
+    ]);
+    const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        overlayMap: {
+          ...documents.overlayMap,
+          boundedClosure: {
+            ...documents.overlayMap.boundedClosure,
+            directDependencies:
+              documents.overlayMap.boundedClosure.directDependencies.map(
+                (dependency) =>
+                  dependency.fromMemberId === "compound-reviewer-prompts" &&
+                  swappedTargets.has(dependency.toMemberId)
+                    ? {
+                        ...dependency,
+                        toMemberId: swappedTargets.get(dependency.toMemberId)!,
+                      }
+                    : dependency,
+              ),
+          },
+        },
+      },
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toContain(
+      "reference-free-dependency-binding-mismatch",
+    );
+  });
+
+  it("binds the reference-free brainstorm debug tuple through requirement and parity", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        overlayMap: {
+          ...documents.overlayMap,
+          boundedClosure: {
+            ...documents.overlayMap.boundedClosure,
+            directDependencies:
+              documents.overlayMap.boundedClosure.directDependencies.map(
+                (dependency) =>
+                  dependency.fromMemberId === "ce-brainstorm-source-bundle" &&
+                  dependency.toMemberId === "ce-debug-source-bundle"
+                    ? { ...dependency, requirement: "contextual" as const }
+                    : dependency,
+              ),
+          },
+        },
+      },
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toContain(
+      "reference-free-dependency-binding-mismatch",
+    );
+  });
+
   it("scans dependencies of selected excluded resources", async () => {
     const documents = await loadPortableBaselineDocuments(REPO_ROOT);
     const omittedMemberId = "ce-session-inventory-source-bundle";
@@ -590,6 +658,40 @@ describe("portable workflow characterization baseline", () => {
 
     expect(result.findings.map((finding) => finding.code)).toContain(
       "baseline-document-shape-invalid",
+    );
+  });
+
+  it("fails closed when documents are explicitly null", async () => {
+    const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: null,
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toContain(
+      "baseline-document-shape-invalid",
+    );
+  });
+
+  it("requires the authoritative discovery roots even when inventory is self-consistent", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        baseline: { ...documents.baseline, discoveryRoots: [] },
+        overlayMap: {
+          ...documents.overlayMap,
+          outOfScopeInventory: {
+            ...documents.overlayMap.outOfScopeInventory,
+            scanRoots: [],
+            fileCount: 0,
+            treeDigest:
+              "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          },
+        },
+      },
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toContain(
+      "discovery-root-required-missing",
     );
   });
 
@@ -756,5 +858,17 @@ describe("portable workflow characterization baseline", () => {
     } finally {
       await rm(temporaryRoot, { recursive: true, force: true });
     }
+  });
+
+  it("binds tree digests to whether an entry is a file or symlink", () => {
+    const digest = "0".repeat(64);
+    const fileTreeDigest = digestTreeEntries([
+      { path: "same-path", digest, kind: "file" },
+    ]);
+    const symlinkTreeDigest = digestTreeEntries([
+      { path: "same-path", digest, kind: "symlink" },
+    ]);
+
+    expect(fileTreeDigest).not.toBe(symlinkTreeDigest);
   });
 });

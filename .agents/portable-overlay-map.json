@@ -180,7 +180,7 @@
         "path": ".agents/skills/deliver-work/SKILL.md",
         "classification": "portable-candidate",
         "fileCount": 1,
-        "treeDigest": "5ed3467684bb290051452902beb2c1b75e69402a179f91b0179deacbafd5ac35",
+        "treeDigest": "7892da6e00bf40ec9d0fd917c63c63a82f7a63a69d3dfdba88ef035fca0ffbdf",
         "note": "Router source only; downstream extraction remains rule-level."
       },
       {
@@ -189,7 +189,7 @@
         "path": ".agents/skills/deliver-work/agents/openai.yaml",
         "classification": "optional-adapter",
         "fileCount": 1,
-        "treeDigest": "4ea15e42c6ec90abd296e4d0dcf641a29a58ef6c99c8c25b9c8e9e95a0ff7676"
+        "treeDigest": "eac2623935fadfb3b182c4f36ef0d10070e667c381e4d15b34c5b52582a98e71"
       },
       {
         "id": "compound-delivery-kernel",
@@ -197,7 +197,7 @@
         "path": ".agents/skills/compound-delivery-kernel",
         "classification": "portable-candidate",
         "fileCount": 1,
-        "treeDigest": "227c58f23ef18e4ce075d06092b9a6d620bc8d7abb9ea40f9c333ea844d883fa"
+        "treeDigest": "e60c79e2a3027cd4b26ae37d36b49f2d28f509381ba9934e0f6360807786aa41"
       },
       {
         "id": "ce-plan-source-bundle",
@@ -205,7 +205,7 @@
         "path": ".agents/skills/ce-plan",
         "classification": "portable-candidate",
         "fileCount": 6,
-        "treeDigest": "de2a8d1e3c8aa9b91ce3e32a417edee1be49d946f48ceefda5e9c46179bab85d",
+        "treeDigest": "e7a2d5943b840c6437f146984098d0d3837deaa379280fb0ce2442a9d96a8ad4",
         "note": "Research source for a smaller self-contained planning workflow, not a wholesale export."
       },
       {
@@ -214,7 +214,7 @@
         "path": ".agents/skills/ce-work",
         "classification": "portable-candidate",
         "fileCount": 3,
-        "treeDigest": "a2b3212c77f9ca189d75f6cbef464c64d4e8ee9bd7466064c3e3e7df4b3a498c",
+        "treeDigest": "bed8953468bdefa6388226aba893726cfe7e879469dd1d3d63d91e6eb53ecd79",
         "note": "Research source for portable execution posture and handoff categories."
       },
       {
@@ -223,7 +223,7 @@
         "path": ".agents/skills/ce-code-review",
         "classification": "portable-candidate",
         "fileCount": 11,
-        "treeDigest": "158884ecccd0e3a2ab383eb5495c43d6b086730d15825dd64834b917046f1f64",
+        "treeDigest": "6ea7b433a68c372b54fa917435d422fcbccba35ecf732fd594901f36d45258cc",
         "note": "Research source for a bounded reviewer contract; persona-specific execution is not portable core."
       },
       {
@@ -232,7 +232,7 @@
         "path": ".agents/agents",
         "classification": "excluded",
         "fileCount": 51,
-        "treeDigest": "22de6a2a3876679008e155730ebcf20d35f25ea633913a96d36db79dc26daa30"
+        "treeDigest": "b3288535c0f23d6abf9c0a59dc300ead05a309680ef05c75b13322779bf610b2"
       },
       {
         "id": "ce-compound-source-bundle",
@@ -240,7 +240,7 @@
         "path": ".agents/skills/ce-compound",
         "classification": "portable-candidate",
         "fileCount": 5,
-        "treeDigest": "0af59ce3520520e320f7c3973cb91746fae4e4f95ca0d48485da845144122988",
+        "treeDigest": "979c48b6ef99fa0311171bd22131c2000f5283ecac954edff8f082ed1542b612",
         "note": "Reusable compounding threshold is a candidate; Athena solution schema remains overlay."
       },
       {
@@ -249,7 +249,7 @@
         "path": ".agents/skills/track",
         "classification": "optional-adapter",
         "fileCount": 6,
-        "treeDigest": "381de2086bf6f938873b3fba861a5789bdaece8fcdbd96f618b30e8da148f37f"
+        "treeDigest": "48bda9cb255fe8f262fd06ab5f6ae3573668ab42510dae77d4d3401b3ef4776b"
       },
       {
         "id": "athena-execute-source-bundle",
@@ -257,7 +257,7 @@
         "path": ".agents/skills/execute",
         "classification": "retained-overlay",
         "fileCount": 3,
-        "treeDigest": "7e943e641b301b09b0574f2f17e36b95a9ac2496bc87f282aa4a117d9bdb87d9",
+        "treeDigest": "c28244f5d1219a7962262efbfb6d8823c7843442dcb0f340a75f497fff4d93b0",
         "note": "Athena's end-to-end execution source stays local; only classified rule slices may feed downstream core or Linear adapter work."
       },
       {
@@ -266,7 +266,7 @@
         "path": ".agents/skills/ce-brainstorm",
         "classification": "portable-candidate",
         "fileCount": 6,
-        "treeDigest": "acff143a85d98bd3c1d5d274901b8bde7fbcbcb69870e877a5a4da7af82135a9",
+        "treeDigest": "30e133f83d5105a36c48129cc7c9b1f923e2b1447ab042ef3d8b9251de1c5132",
         "note": "Research source for fuzzy-requirements routing and a smaller portable requirements workflow."
       },
       {
@@ -275,7 +275,7 @@
         "path": ".agents/skills/ce-debug",
         "classification": "portable-candidate",
         "fileCount": 4,
-        "treeDigest": "633bb767fa79588657bcd354cd65d9aab5f5cbc793c472ab35c42a62980251ce",
+        "treeDigest": "eccdb83fb8831bd7520af707ede553528c74f591fbcfa757ecc549ea867e2efa",
         "note": "Research source for diagnosis-first routing; its shipping and tracker mechanics are not portable core."
       },
       {
@@ -284,7 +284,7 @@
         "path": ".agents/skills/ce-doc-review",
         "classification": "portable-candidate",
         "fileCount": 8,
-        "treeDigest": "bc0db6f6a8645111eb3939dc466ba10d18d3b6733d5f840f23980fd26bad48bf",
+        "treeDigest": "643193bb164ea585bb14d3419c7b4a232699a98abef68186ba35f15be28f8d01",
         "note": "Mandatory planning/requirements review dependency and research source; the full persona workflow is not a wholesale export."
       },
       {
@@ -293,7 +293,7 @@
         "path": ".agents/skills/ce-proof",
         "classification": "optional-adapter",
         "fileCount": 2,
-        "treeDigest": "9f56cecd6e265faca1560fa008421ffe3d3f1cbb17f1259eed8fd018c61ad424",
+        "treeDigest": "6f3a012a6e33b49f671863fa2a13ee43f34d6d72c19128302c2a7bfda7f1ea41",
         "note": "Optional Proof-specific human review transport, not a core planning dependency."
       },
       {
@@ -302,7 +302,7 @@
         "path": ".agents/skills/ce-commit",
         "classification": "optional-adapter",
         "fileCount": 1,
-        "treeDigest": "9ea46dfdeda81201c2af2520e3da3214df54db8ddc0952370f0e51b8758cbec9",
+        "treeDigest": "01cfa10eed93de4fc5f89307792bb32aa19e3812f6534068b853a6df80bb1dfa",
         "note": "Optional Git handoff adapter invoked by execution and diagnosis workflows."
       },
       {
@@ -311,7 +311,7 @@
         "path": ".agents/skills/ce-commit-push-pr",
         "classification": "optional-adapter",
         "fileCount": 3,
-        "treeDigest": "3167938b50496f8570ca4ea3114c0c25889690f0fa499d5f3751416977e8be96",
+        "treeDigest": "300c9852b8a70616af664aac7722692db2339f84e6d4339b9c49ea7638eb0501",
         "note": "Optional GitHub/Git delivery adapter; Athena's PR rules remain a retained overlay."
       },
       {
@@ -320,7 +320,7 @@
         "path": ".agents/skills/ce-compound-refresh",
         "classification": "excluded",
         "fileCount": 5,
-        "treeDigest": "0ce9ce7f5520483ecbe751f0bd4a276a23d66f637aacfb810340d04c40b6c6cc",
+        "treeDigest": "edfabb145322c61cb2c25089e0f40fb35646016c5b94fa1257cb1f738338a32e",
         "note": "Conditional learning-maintenance follow-up outside the bounded portable v1 workflow."
       },
       {
@@ -329,7 +329,7 @@
         "path": ".agents/skills/ce-landed-change-report",
         "classification": "retained-overlay",
         "fileCount": 6,
-        "treeDigest": "3bd4af5d170d083066235780166cd1063b7ea4604f1fbc2d0ca9d0952aafe5a4",
+        "treeDigest": "9bcf72597f82da4784afbd5c8ba19aaae7ec9cbf12709f3f2cf1a2e6f7f34d1c",
         "note": "Required Athena reporting dependency invoked by execute; it remains repository-owned overlay policy."
       },
       {
@@ -338,7 +338,7 @@
         "path": ".agents/skills/ce-frontend-design",
         "classification": "optional-adapter",
         "fileCount": 1,
-        "treeDigest": "04149a7d479e080b56bb5f0e8e15053de532d4706b3c69a79b1f02bd2e62dda5",
+        "treeDigest": "15ee2f293e6195d2a60c9a220dff78b26e63d0b9f65c54a3d873f7ed60d13656",
         "note": "Closest repository-local implementation of execute's frontend-skill aliases; alias mapping is observed-only and non-blocking."
       },
       {
@@ -347,7 +347,7 @@
         "path": ".agents/skills/ce-demo-reel",
         "classification": "optional-adapter",
         "fileCount": 7,
-        "treeDigest": "6f4052f6426114f1d254a35a04a2b7d6adc6765c813c84da8a068179a296214e",
+        "treeDigest": "9b519cb0e72666a174a0106744e1f6297821951379b2ae6450805612fa9c9669",
         "note": "Conditional PR evidence adapter invoked by the commit/push/PR dependency."
       },
       {
@@ -356,7 +356,7 @@
         "path": ".agents/skills/ce-setup",
         "classification": "excluded",
         "fileCount": 3,
-        "treeDigest": "62b65bc63247547c5386384b92739f0ee3513010078e18172c4d99ef5b9a8428",
+        "treeDigest": "0b528dda764592da7b3267dd1c91252b2cbbb547753083aa4a11cf1a11e5cdbb",
         "note": "Tool installation fallback referenced by optional visual adapters; not delivery workflow parity."
       },
       {
@@ -365,7 +365,7 @@
         "path": ".agents/skills/ce-worktree",
         "classification": "optional-adapter",
         "fileCount": 2,
-        "treeDigest": "33e191501624c60c50be498516f395530db66ba632fea390b4a135382e53b1e7",
+        "treeDigest": "f0abc1f427380df2d993da97f99667326ca11b07723ceb79afa4eddbe4cba02b",
         "note": "Optional Git worktree isolation adapter invoked by ce-work; repository branch policy remains authoritative."
       },
       {
@@ -374,7 +374,7 @@
         "path": ".agents/skills/ce-session-inventory",
         "classification": "excluded",
         "fileCount": 3,
-        "treeDigest": "d5663bdb2ae782329126f8c09e4de108e8e08bcd45faa9b57cc4bf45176157eb",
+        "treeDigest": "8dd50899834c0dcbfa8b341b583704ce7fe67ef08d51b4fc9d7d2633f0cb3ad0",
         "note": "Required dependency of the selected excluded session-historian prompt; session mining is outside portable delivery v1."
       },
       {
@@ -383,7 +383,7 @@
         "path": ".agents/skills/ce-session-extract",
         "classification": "excluded",
         "fileCount": 3,
-        "treeDigest": "9a3b47c91bec26ca17b3d0dd5f3b4c91ec2a33b4b6f239ff151b2863979a2446",
+        "treeDigest": "b45969d610e3c1139d40954f3cc606477b37ece4844c4ce1cdf8765d86bf78e8",
         "note": "Required dependency of the selected excluded session-historian prompt; transcript extraction is outside portable delivery v1."
       }
     ],
@@ -1106,7 +1106,7 @@
       ".claude/skills"
     ],
     "fileCount": 145,
-    "treeDigest": "b23e8093a70a040ce9c833b3ca98b742be6b0bf39b7179a537652ba82d27f733",
+    "treeDigest": "c5a5e0c75367c8a632ffdb57d2c44f4df7188e73e8adb01d4b14bca9b2cad30f",
     "noMigrationCommitment": true,
     "description": "Stable residual discovery inventory only. No member is a migration candidate unless a later approved unit adds it to the bounded closure and classifies it."
   }

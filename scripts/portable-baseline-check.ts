@@ -144,13 +144,23 @@ const HOST_ALIAS_REFERENCE_NAMES = new Set([
   "requesting-code-review",
 ]);
 
-const SOURCE_BOUND_GENERIC_ROUTER_BINDINGS = [
+const REQUIRED_DISCOVERY_ROOTS = new Map<
+  string,
+  PortableCharacterizationBaseline["discoveryRoots"][number]["state"]
+>([
+  [".agents/skills", "present"],
+  [".claude/skills", "absent"],
+]);
+
+const SOURCE_BOUND_REFERENCE_FREE_DEPENDENCY_BINDINGS = [
   {
     fromMemberId: "deliver-work-body",
     selector:
       "If the request is a bug with unknown root cause, use a systematic debugging skill before planning the fix.",
     reference: "ce-debug",
     toMemberId: "ce-debug-source-bundle",
+    requirement: "routing",
+    parity: "blocking",
   },
   {
     fromMemberId: "deliver-work-body",
@@ -158,6 +168,32 @@ const SOURCE_BOUND_GENERIC_ROUTER_BINDINGS = [
       "If the task is purely a review, use the available code-review skill instead of implementing.",
     reference: "ce-code-review",
     toMemberId: "ce-code-review-source-bundle",
+    requirement: "routing",
+    parity: "blocking",
+  },
+  {
+    fromMemberId: "ce-brainstorm-source-bundle",
+    selector: "Suggest the alternative skill the user appears to want",
+    reference: "ce-debug",
+    toMemberId: "ce-debug-source-bundle",
+    requirement: "conditional",
+    parity: "blocking",
+  },
+  {
+    fromMemberId: "compound-reviewer-prompts",
+    selector: "Invoke them through the Skill tool",
+    reference: "ce-session-extract",
+    toMemberId: "ce-session-extract-source-bundle",
+    requirement: "required",
+    parity: "blocking",
+  },
+  {
+    fromMemberId: "compound-reviewer-prompts",
+    selector: "Extraction is delegated to two agent-facing skills.",
+    reference: "ce-session-inventory",
+    toMemberId: "ce-session-inventory-source-bundle",
+    requirement: "required",
+    parity: "blocking",
   },
 ] as const;
 
@@ -383,7 +419,7 @@ export async function collectTreeEntries(
 export function digestTreeEntries(entries: readonly TreeEntry[]) {
   const manifest = [...entries]
     .sort((left, right) => compareUtf8Bytes(left.path, right.path))
-    .map((entry) => `${entry.path}\0${entry.digest}`)
+    .map((entry) => `${entry.path}\0${entry.kind}\0${entry.digest}`)
     .join("\n");
   return sha256(manifest.length === 0 ? "" : `${manifest}\n`);
 }
@@ -583,8 +619,9 @@ export async function auditPortableWorkflowBaseline(
   const findings: PortableBaselineFinding[] = [];
   let rawDocuments: unknown;
   try {
-    rawDocuments =
-      options.documents ?? (await loadPortableBaselineDocuments(rootDir));
+    rawDocuments = Object.prototype.hasOwnProperty.call(options, "documents")
+      ? options.documents
+      : await loadPortableBaselineDocuments(rootDir);
   } catch (error: unknown) {
     if (error instanceof PortableBaselineDocumentValidationError) {
       return {
@@ -679,6 +716,48 @@ export async function auditPortableWorkflowBaseline(
     "assertion-id-duplicate",
     "Assertion id",
   );
+  pushDuplicateFindings(
+    findings,
+    baseline.discoveryRoots.map((discoveryRoot) => discoveryRoot.path),
+    "discovery-root-duplicate",
+    "Discovery root path",
+  );
+  for (const [requiredPath, requiredState] of REQUIRED_DISCOVERY_ROOTS) {
+    const matchingRoots = baseline.discoveryRoots.filter(
+      (discoveryRoot) => discoveryRoot.path === requiredPath,
+    );
+    if (matchingRoots.length === 0) {
+      findings.push({
+        code: "discovery-root-required-missing",
+        message: `Required discovery root ${requiredPath} is missing from the baseline.`,
+        path: requiredPath,
+      });
+      continue;
+    }
+    if (matchingRoots.length !== 1) {
+      findings.push({
+        code: "discovery-root-required-duplicate",
+        message: `Required discovery root ${requiredPath} must appear exactly once.`,
+        path: requiredPath,
+      });
+    }
+    if (matchingRoots.some((root) => root.state !== requiredState)) {
+      findings.push({
+        code: "discovery-root-required-state-mismatch",
+        message: `Required discovery root ${requiredPath} must record state ${requiredState}.`,
+        path: requiredPath,
+      });
+    }
+  }
+  for (const discoveryRoot of baseline.discoveryRoots) {
+    if (!REQUIRED_DISCOVERY_ROOTS.has(discoveryRoot.path)) {
+      findings.push({
+        code: "discovery-root-unexpected",
+        message: `Discovery root ${discoveryRoot.path} is outside the authoritative baseline root set.`,
+        path: discoveryRoot.path,
+      });
+    }
+  }
 
   const sourceById = new Map(
     baseline.sources.map((source) => [source.id, source]),
@@ -1049,20 +1128,47 @@ export async function auditPortableWorkflowBaseline(
       }
     }
   }
-  for (const binding of SOURCE_BOUND_GENERIC_ROUTER_BINDINGS) {
+  const referenceFreeDependencies = directDependencies.filter(
+    (dependency) =>
+      extractExplicitSelectorReferences(dependency.selector).length === 0,
+  );
+  for (const dependency of referenceFreeDependencies) {
+    const matchingBindings =
+      SOURCE_BOUND_REFERENCE_FREE_DEPENDENCY_BINDINGS.filter(
+        (binding) =>
+          binding.fromMemberId === dependency.fromMemberId &&
+          binding.selector === dependency.selector &&
+          binding.toMemberId === dependency.toMemberId &&
+          binding.requirement === dependency.requirement &&
+          binding.parity === dependency.parity,
+      );
+    if (matchingBindings.length !== 1) {
+      findings.push({
+        code: "reference-free-dependency-binding-mismatch",
+        message: `Reference-free dependency ${dependency.fromMemberId} -> ${dependency.toMemberId} must have exactly one exact source-bound tuple.`,
+      });
+    }
+  }
+  for (const binding of SOURCE_BOUND_REFERENCE_FREE_DEPENDENCY_BINDINGS) {
     const matchingEdges = directDependencies.filter(
       (dependency) =>
         dependency.fromMemberId === binding.fromMemberId &&
         dependency.selector === binding.selector &&
         dependency.toMemberId === binding.toMemberId &&
-        dependency.requirement === "routing" &&
-        dependency.parity === "blocking",
+        dependency.requirement === binding.requirement &&
+        dependency.parity === binding.parity,
     );
     if (matchingEdges.length !== 1) {
       findings.push({
-        code: "source-routing-binding-mismatch",
-        message: `Generic router binding ${binding.fromMemberId} -> ${binding.toMemberId} must preserve its exact selector and blocking routing edge.`,
+        code: "reference-free-dependency-binding-mismatch",
+        message: `Source-bound tuple ${binding.fromMemberId} -> ${binding.toMemberId} must preserve its exact selector, reference, requirement, and parity.`,
       });
+      if (binding.fromMemberId === "deliver-work-body") {
+        findings.push({
+          code: "source-routing-binding-mismatch",
+          message: `Generic router binding ${binding.fromMemberId} -> ${binding.toMemberId} must preserve its exact selector and blocking routing edge.`,
+        });
+      }
     }
   }
 
@@ -1169,7 +1275,7 @@ export async function auditPortableWorkflowBaseline(
       path: error.relativePath,
     });
   }
-  for (const mapping of SOURCE_BOUND_GENERIC_ROUTER_BINDINGS) {
+  for (const mapping of SOURCE_BOUND_REFERENCE_FREE_DEPENDENCY_BINDINGS) {
     const sourceMember = memberById.get(mapping.fromMemberId);
     if (!sourceMember) {
       findings.push({
