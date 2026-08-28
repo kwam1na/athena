@@ -152,6 +152,29 @@ const REQUIRED_DISCOVERY_ROOTS = new Map<
   [".claude/skills", "absent"],
 ]);
 
+const APPROVAL_SOURCE_CONTRACTS = new Map<
+  string,
+  {
+    path: string;
+    kind: "approved-requirements" | "approved-plan";
+  }
+>([
+  [
+    "approved-requirements",
+    {
+      path: "docs/brainstorms/2026-08-27-cross-agent-delivery-skills-requirements.md",
+      kind: "approved-requirements",
+    },
+  ],
+  [
+    "approved-delivery-plan",
+    {
+      path: "docs/plans/2026-08-27-002-feat-cross-agent-delivery-rails-and-skills-plan.md",
+      kind: "approved-plan",
+    },
+  ],
+]);
+
 const SOURCE_BOUND_REFERENCE_FREE_DEPENDENCY_BINDINGS = [
   {
     fromMemberId: "deliver-work-body",
@@ -353,6 +376,15 @@ function isSafeRelativePath(value: string) {
   );
 }
 
+function isCanonicalRepoRelativePath(value: string) {
+  return (
+    isSafeRelativePath(value) &&
+    !value.includes("\\") &&
+    value.split("/").every((segment) => segment !== "" && segment !== ".") &&
+    path.posix.normalize(value) === value
+  );
+}
+
 function relativePosix(rootDir: string, absolutePath: string) {
   return path.relative(rootDir, absolutePath).split(path.sep).join("/");
 }
@@ -505,10 +537,16 @@ function invalidApprovalCitationSourceIds(
   sourceById: ReadonlyMap<string, PortableBaselineSource>,
 ) {
   return assertion.citations
-    .filter(
-      (citation) =>
-        !isApprovalSourceKind(sourceById.get(citation.sourceId)?.kind),
-    )
+    .filter((citation) => {
+      const source = sourceById.get(citation.sourceId);
+      const contract = APPROVAL_SOURCE_CONTRACTS.get(citation.sourceId);
+      return (
+        !source ||
+        !contract ||
+        source.path !== contract.path ||
+        source.kind !== contract.kind
+      );
+    })
     .map((citation) => citation.sourceId);
 }
 
@@ -762,6 +800,35 @@ export async function auditPortableWorkflowBaseline(
   const sourceById = new Map(
     baseline.sources.map((source) => [source.id, source]),
   );
+  for (const [sourceId, contract] of APPROVAL_SOURCE_CONTRACTS) {
+    const source = sourceById.get(sourceId);
+    if (!source) {
+      findings.push({
+        code: "approval-source-contract-missing",
+        message: `Required approval source ${sourceId} is missing.`,
+      });
+      continue;
+    }
+    if (source.path !== contract.path || source.kind !== contract.kind) {
+      findings.push({
+        code: "approval-source-contract-mismatch",
+        message: `Approval source ${sourceId} must remain ${contract.kind} at ${contract.path}.`,
+        path: source.path,
+      });
+    }
+  }
+  for (const source of baseline.sources) {
+    if (
+      isApprovalSourceKind(source.kind) &&
+      !APPROVAL_SOURCE_CONTRACTS.has(source.id)
+    ) {
+      findings.push({
+        code: "approval-source-contract-unexpected",
+        message: `Source ${source.id} is not authorized to represent explicit approval.`,
+        path: source.path,
+      });
+    }
+  }
   const sourceTextById = new Map<string, string>();
   for (const source of baseline.sources) {
     if (!isSafeRelativePath(source.path)) {
@@ -971,6 +1038,29 @@ export async function auditPortableWorkflowBaseline(
   }
 
   const members = overlayMap.boundedClosure.members;
+  const rejectedMemberIds = new Set<string>();
+  const canonicalMembers: BoundedClosureMember[] = [];
+  for (const member of members) {
+    if (!isSafeRelativePath(member.path)) {
+      findings.push({
+        code: "bounded-member-path-unsafe",
+        message: `Bounded member ${member.id} has unsafe path ${member.path}.`,
+        path: member.path,
+      });
+      rejectedMemberIds.add(member.id);
+      continue;
+    }
+    if (!isCanonicalRepoRelativePath(member.path)) {
+      findings.push({
+        code: "bounded-member-path-noncanonical",
+        message: `Bounded member ${member.id} must use a canonical slash-separated repository path.`,
+        path: member.path,
+      });
+      rejectedMemberIds.add(member.id);
+      continue;
+    }
+    canonicalMembers.push(member);
+  }
   const memberById = new Map(members.map((member) => [member.id, member]));
   pushDuplicateFindings(
     findings,
@@ -980,14 +1070,14 @@ export async function auditPortableWorkflowBaseline(
   );
   pushDuplicateFindings(
     findings,
-    members.map((member) => member.path),
+    canonicalMembers.map((member) => member.path),
     "bounded-member-duplicate",
     "Bounded member path",
   );
-  for (const [index, member] of members.entries()) {
-    const memberPath = member.path.replace(/\/$/, "");
-    for (const other of members.slice(index + 1)) {
-      const otherPath = other.path.replace(/\/$/, "");
+  for (const [index, member] of canonicalMembers.entries()) {
+    const memberPath = member.path;
+    for (const other of canonicalMembers.slice(index + 1)) {
+      const otherPath = other.path;
       if (
         memberPath.startsWith(`${otherPath}/`) ||
         otherPath.startsWith(`${memberPath}/`)
@@ -1000,7 +1090,6 @@ export async function auditPortableWorkflowBaseline(
     }
   }
   const memberEntriesById = new Map<string, TreeEntry[]>();
-  const rejectedMemberIds = new Set<string>();
   for (const member of members) {
     if (!hasClassification(member.classification)) {
       findings.push({
@@ -1008,17 +1097,33 @@ export async function auditPortableWorkflowBaseline(
         message: `Bounded member ${member.id} has no valid classification.`,
       });
     }
-    if (!isSafeRelativePath(member.path)) {
-      findings.push({
-        code: "bounded-member-path-unsafe",
-        message: `Bounded member ${member.id} has unsafe path ${member.path}.`,
-        path: member.path,
-      });
-      continue;
-    }
+    if (rejectedMemberIds.has(member.id)) continue;
     let entries: TreeEntry[];
     try {
+      const containedMemberRoot = await resolveContainedPath(
+        rootDir,
+        member.path,
+        { allowExternalLeafSymlinkMetadata: true },
+      );
+      if (containedMemberRoot.state === "absent") {
+        findings.push({
+          code: "bounded-member-missing",
+          message: `Bounded member ${member.id} does not exist.`,
+          path: member.path,
+        });
+        rejectedMemberIds.add(member.id);
+        continue;
+      }
       entries = await collectTreeEntries(rootDir, member.path);
+      if (containedMemberRoot.state === "directory" && entries.length === 0) {
+        findings.push({
+          code: "bounded-member-empty-directory-unapproved",
+          message: `Bounded member ${member.id} is an empty directory; empty-directory members require an explicit future baseline policy.`,
+          path: member.path,
+        });
+        rejectedMemberIds.add(member.id);
+        continue;
+      }
     } catch (error: unknown) {
       if (error instanceof PortableBaselinePathContainmentError) {
         findings.push({
@@ -1430,9 +1535,7 @@ export async function auditPortableWorkflowBaseline(
         "Residual inventory must scan every recorded workflow discovery root.",
     });
   }
-  const classifiedPaths = members.map((member) =>
-    member.path.replace(/\/$/, ""),
-  );
+  const classifiedPaths = canonicalMembers.map((member) => member.path);
   const safeInventoryRoots = overlayMap.outOfScopeInventory.scanRoots.filter(
     (scanRoot) => {
       if (isSafeRelativePath(scanRoot)) return true;

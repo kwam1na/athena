@@ -104,6 +104,48 @@ describe("portable workflow characterization baseline", () => {
     );
   });
 
+  it("rejects counterfeited approval provenance from a relabeled repository source", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const firstAssertion = documents.baseline.assertions[0];
+    const rootGuide = documents.baseline.sources.find(
+      (source) => source.id === "root-agent-guide",
+    )!;
+    const rootGuideText = await readFile(
+      path.join(REPO_ROOT, rootGuide.path),
+      "utf8",
+    );
+    const selector = rootGuideText
+      .split("\n")
+      .find((line) => line.trim().length > 20)!;
+    const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        baseline: {
+          ...documents.baseline,
+          sources: documents.baseline.sources.map((source) =>
+            source.id === rootGuide.id
+              ? { ...source, kind: "approved-plan" as const }
+              : source,
+          ),
+          assertions: [
+            {
+              ...firstAssertion,
+              authority: "observed-only",
+              parity: "blocking",
+              adjudication: "approved",
+              citations: [{ sourceId: rootGuide.id, selector }],
+            },
+            ...documents.baseline.assertions.slice(1),
+          ],
+        },
+      },
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toContain(
+      "observed-only-approval-citation-invalid",
+    );
+  });
+
   it("detects drift in a selected source instead of recapturing it silently", async () => {
     const documents = await loadPortableBaselineDocuments(REPO_ROOT);
     const [firstSource, ...remainingSources] = documents.baseline.sources;
@@ -159,6 +201,71 @@ describe("portable workflow characterization baseline", () => {
         "bounded-member-overlap",
         "inventory-count-drift",
       ]),
+    );
+  });
+
+  it("rejects a phantom bounded member even when its empty count and digest agree", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const templateMember = documents.overlayMap.boundedClosure.members[0];
+    const phantomMember = {
+      ...templateMember,
+      id: "phantom-source-bundle",
+      path: ".agents/skills/nonexistent-portable-baseline-member",
+      fileCount: 0,
+      treeDigest:
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    };
+    const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        overlayMap: {
+          ...documents.overlayMap,
+          boundedClosure: {
+            ...documents.overlayMap.boundedClosure,
+            members: [
+              ...documents.overlayMap.boundedClosure.members,
+              phantomMember,
+            ],
+            auditedMemberIds: [
+              ...documents.overlayMap.boundedClosure.auditedMemberIds,
+              phantomMember.id,
+            ],
+          },
+        },
+      },
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toContain(
+      "bounded-member-missing",
+    );
+  });
+
+  it.each([
+    ".agents/skills/compound-delivery-kernel/./",
+    ".agents//skills/compound-delivery-kernel",
+    ".agents/skills/compound-delivery-kernel/",
+  ])("rejects noncanonical bounded member path %s", async (aliasedPath) => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        overlayMap: {
+          ...documents.overlayMap,
+          boundedClosure: {
+            ...documents.overlayMap.boundedClosure,
+            members: documents.overlayMap.boundedClosure.members.map(
+              (member) =>
+                member.id === "compound-delivery-kernel"
+                  ? { ...member, path: aliasedPath }
+                  : member,
+            ),
+          },
+        },
+      },
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toContain(
+      "bounded-member-path-noncanonical",
     );
   });
 
