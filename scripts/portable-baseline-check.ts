@@ -45,6 +45,12 @@ const REQUEST_KINDS = new Set([
   "tracking",
 ]);
 
+const HOST_ALIAS_REFERENCE_NAMES = new Set([
+  "designing-frontends",
+  "frontend-skill",
+  "requesting-code-review",
+]);
+
 const REQUIRED_ATHENA_OVERLAYS = [
   "athena-deployment-handoff",
   "athena-generated-artifacts",
@@ -113,8 +119,24 @@ export type PortableOverlayMap = {
       fromMemberId: string;
       toMemberId: string;
       selector: string;
-      requirement: "required" | "conditional" | "routing" | "host-alias";
+      requirement:
+        | "required"
+        | "conditional"
+        | "routing"
+        | "host-alias"
+        | "contextual";
       parity: "blocking" | "non-blocking";
+    }>;
+    referenceDispositions: Array<{
+      fromMemberId: string;
+      reference: string;
+      resolution:
+        | "external-capability"
+        | "host-alias"
+        | "lexical-non-dependency";
+      parity: "non-blocking";
+      mappedMemberId?: string;
+      rationale: string;
     }>;
   };
   outOfScopeInventory: {
@@ -159,6 +181,12 @@ export type PortableBaselineAuditOptions = {
 type TreeEntry = {
   path: string;
   digest: string;
+};
+
+type SourceDependencyReference = {
+  fromMemberId: string;
+  reference: string;
+  path: string;
 };
 
 function sha256(value: string | Buffer) {
@@ -289,6 +317,91 @@ function pushDuplicateFindings(
 
 function hasClassification(value: unknown): value is string {
   return typeof value === "string" && CLASSIFICATIONS.has(value);
+}
+
+function memberOwnsPath(memberPath: string, targetPath: string) {
+  const normalizedMemberPath = memberPath.replace(/\/$/, "");
+  const normalizedTargetPath = targetPath.replace(/\/$/, "");
+  return (
+    normalizedTargetPath === normalizedMemberPath ||
+    normalizedTargetPath.startsWith(`${normalizedMemberPath}/`)
+  );
+}
+
+async function resolveReferenceTargetPath(rootDir: string, reference: string) {
+  const skillPath = `.agents/skills/${reference}`;
+  if ((await pathState(path.join(rootDir, skillPath))) !== "absent") {
+    return skillPath;
+  }
+  const agentPath = `.agents/agents/${reference}.agent.md`;
+  if ((await pathState(path.join(rootDir, agentPath))) !== "absent") {
+    return agentPath;
+  }
+  return undefined;
+}
+
+function findReferenceTargetMember(
+  members: readonly BoundedClosureMember[],
+  sourceMember: BoundedClosureMember,
+  targetPath: string,
+) {
+  if (
+    sourceMember.path === targetPath ||
+    sourceMember.path.startsWith(`${targetPath.replace(/\/$/, "")}/`)
+  ) {
+    return sourceMember;
+  }
+  return (
+    members.find((member) => memberOwnsPath(member.path, targetPath)) ??
+    members.find((member) => member.path === `${targetPath}/SKILL.md`)
+  );
+}
+
+async function collectSourceDependencyReferences(
+  rootDir: string,
+  members: readonly BoundedClosureMember[],
+) {
+  const skillRoot = path.join(rootDir, ".agents/skills");
+  const skillNames = new Set(
+    (await readdir(skillRoot, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name),
+  );
+  const references = new Map<string, SourceDependencyReference>();
+  for (const member of members) {
+    const entries = await collectTreeEntries(rootDir, member.path);
+    for (const entry of entries) {
+      let sourceText: string;
+      try {
+        sourceText = await readFile(path.join(rootDir, entry.path), "utf8");
+      } catch {
+        continue;
+      }
+      const names = new Set<string>();
+      for (const match of sourceText.matchAll(/\bce-[a-z0-9]+(?:-[a-z0-9]+)*\b/g)) {
+        names.add(match[0]);
+      }
+      for (const match of sourceText.matchAll(/\$([a-z][a-z0-9-]*)\b/g)) {
+        if (
+          skillNames.has(match[1]) ||
+          HOST_ALIAS_REFERENCE_NAMES.has(match[1])
+        ) {
+          names.add(match[1]);
+        }
+      }
+      for (const reference of names) {
+        const key = `${member.id}\0${reference}`;
+        if (!references.has(key)) {
+          references.set(key, {
+            fromMemberId: member.id,
+            reference,
+            path: entry.path,
+          });
+        }
+      }
+    }
+  }
+  return [...references.values()];
 }
 
 export async function auditPortableWorkflowBaseline(
@@ -449,6 +562,8 @@ export async function auditPortableWorkflowBaseline(
   }
 
   const directDependencies = overlayMap.boundedClosure.directDependencies ?? [];
+  const referenceDispositions =
+    overlayMap.boundedClosure.referenceDispositions ?? [];
   const auditedMemberIds = overlayMap.boundedClosure.auditedMemberIds ?? [];
   pushDuplicateFindings(
     findings,
@@ -504,6 +619,122 @@ export async function auditPortableWorkflowBaseline(
       if (!selectorFound) {
         findings.push({ code: "direct-dependency-selector-drift", message: `Direct dependency selector for ${dependency.fromMemberId} -> ${dependency.toMemberId} is absent from the source bundle.`, path: fromMember.path });
       }
+    }
+  }
+
+  pushDuplicateFindings(
+    findings,
+    referenceDispositions.map(
+      (disposition) =>
+        `${disposition.fromMemberId}\0${disposition.reference}`,
+    ),
+    "source-reference-disposition-duplicate",
+    "Source reference disposition",
+  );
+  const dispositionByReference = new Map(
+    referenceDispositions.map((disposition) => [
+      `${disposition.fromMemberId}\0${disposition.reference}`,
+      disposition,
+    ]),
+  );
+  for (const disposition of referenceDispositions) {
+    if (!memberById.has(disposition.fromMemberId)) {
+      findings.push({ code: "source-reference-disposition-source-missing", message: `Reference disposition source ${disposition.fromMemberId} is not in the bounded closure.` });
+    }
+    if (disposition.parity !== "non-blocking") {
+      findings.push({ code: "source-reference-disposition-blocking", message: `Reference disposition ${disposition.fromMemberId} -> ${disposition.reference} must remain non-blocking.` });
+    }
+    if (disposition.rationale.trim().length === 0) {
+      findings.push({ code: "source-reference-disposition-rationale-missing", message: `Reference disposition ${disposition.fromMemberId} -> ${disposition.reference} has no rationale.` });
+    }
+    if (
+      disposition.resolution === "host-alias" &&
+      (!disposition.mappedMemberId ||
+        !memberById.has(disposition.mappedMemberId))
+    ) {
+      findings.push({ code: "source-reference-host-alias-target-missing", message: `Host alias ${disposition.reference} does not map to a classified bounded member.` });
+    }
+  }
+
+  const sourceReferences = await collectSourceDependencyReferences(
+    rootDir,
+    members,
+  );
+  const directDependencyPairs = new Set(
+    directDependencies.map(
+      (dependency) =>
+        `${dependency.fromMemberId}\0${dependency.toMemberId}`,
+    ),
+  );
+  const discoveredReferenceKeys = new Set(
+    sourceReferences.map(
+      (reference) =>
+        `${reference.fromMemberId}\0${reference.reference}`,
+    ),
+  );
+  for (const reference of sourceReferences) {
+    const sourceMember = memberById.get(reference.fromMemberId);
+    if (!sourceMember) continue;
+    const targetPath = await resolveReferenceTargetPath(
+      rootDir,
+      reference.reference,
+    );
+    const disposition = dispositionByReference.get(
+      `${reference.fromMemberId}\0${reference.reference}`,
+    );
+    if (!targetPath) {
+      if (
+        !disposition ||
+        (disposition.resolution !== "host-alias" &&
+          disposition.resolution !== "lexical-non-dependency")
+      ) {
+        findings.push({ code: "source-reference-unclassified", message: `Source member ${reference.fromMemberId} references ${reference.reference}, which is neither a repository skill/agent nor an explicit non-blocking alias or lexical exclusion.`, path: reference.path });
+      }
+      continue;
+    }
+    const targetMember = findReferenceTargetMember(
+      members,
+      sourceMember,
+      targetPath,
+    );
+    if (!targetMember) {
+      if (
+        !disposition ||
+        disposition.resolution !== "external-capability"
+      ) {
+        findings.push({ code: "source-dependency-member-missing", message: `Source member ${reference.fromMemberId} references ${reference.reference} at ${targetPath}, but that dependency has no classified bounded member or explicit non-blocking external-capability disposition.`, path: reference.path });
+      }
+      continue;
+    }
+    if (
+      targetMember.id !== sourceMember.id &&
+      !directDependencyPairs.has(
+        `${sourceMember.id}\0${targetMember.id}`,
+      )
+    ) {
+      findings.push({ code: "source-dependency-edge-missing", message: `Source member ${sourceMember.id} references classified dependency ${targetMember.id} via ${reference.reference}, but the source-derived edge is missing.`, path: reference.path });
+    }
+  }
+  for (const disposition of referenceDispositions) {
+    const key = `${disposition.fromMemberId}\0${disposition.reference}`;
+    if (!discoveredReferenceKeys.has(key)) {
+      findings.push({ code: "source-reference-disposition-stale", message: `Reference disposition ${disposition.fromMemberId} -> ${disposition.reference} no longer matches selected source content.` });
+    }
+    const targetPath = await resolveReferenceTargetPath(
+      rootDir,
+      disposition.reference,
+    );
+    if (
+      disposition.resolution === "lexical-non-dependency" &&
+      targetPath
+    ) {
+      findings.push({ code: "source-reference-lexical-exclusion-invalid", message: `Reference ${disposition.reference} resolves to ${targetPath} and cannot be excluded as lexical-only.` });
+    }
+    if (
+      disposition.resolution === "external-capability" &&
+      !targetPath
+    ) {
+      findings.push({ code: "source-reference-external-capability-missing", message: `External capability ${disposition.reference} no longer resolves to a repository skill or agent source.` });
     }
   }
 

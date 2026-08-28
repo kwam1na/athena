@@ -22,6 +22,7 @@ describe("portable workflow characterization baseline", () => {
       "review",
       "routing",
     ]);
+    expect(result.summary).toContain("24 bounded-closure members");
     expect(result.summary).toContain("7 characterization scenarios");
   });
 
@@ -168,6 +169,9 @@ describe("portable workflow characterization baseline", () => {
         ".agents/skills/ce-frontend-design",
         ".agents/skills/ce-demo-reel",
         ".agents/skills/ce-setup",
+        ".agents/skills/ce-worktree",
+        ".agents/skills/ce-session-inventory",
+        ".agents/skills/ce-session-extract",
       ]),
     );
     expect(new Set(documents.overlayMap.boundedClosure.auditedMemberIds)).toEqual(
@@ -195,6 +199,64 @@ describe("portable workflow characterization baseline", () => {
 
     expect(result.findings.map((finding) => finding.code)).toContain(
       "bounded-member-dependency-audit-missing",
+    );
+  });
+
+  it("derives required dependency edges from selected source contents", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        overlayMap: {
+          ...documents.overlayMap,
+          boundedClosure: {
+            ...documents.overlayMap.boundedClosure,
+            directDependencies:
+              documents.overlayMap.boundedClosure.directDependencies.filter(
+                (dependency) =>
+                  dependency.fromMemberId !== "deliver-work-body" ||
+                  dependency.toMemberId !== "compound-delivery-kernel",
+              ),
+          },
+        },
+      },
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toContain(
+      "source-dependency-edge-missing",
+    );
+  });
+
+  it("scans dependencies of selected excluded resources", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const omittedMemberId = "ce-session-inventory-source-bundle";
+    const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        overlayMap: {
+          ...documents.overlayMap,
+          boundedClosure: {
+            ...documents.overlayMap.boundedClosure,
+            members: documents.overlayMap.boundedClosure.members.filter(
+              (member) => member.id !== omittedMemberId,
+            ),
+            auditedMemberIds:
+              documents.overlayMap.boundedClosure.auditedMemberIds.filter(
+                (memberId) => memberId !== omittedMemberId,
+              ),
+            directDependencies:
+              documents.overlayMap.boundedClosure.directDependencies.filter(
+                (dependency) =>
+                  dependency.fromMemberId !== omittedMemberId &&
+                  dependency.toMemberId !== omittedMemberId,
+              ),
+          },
+        },
+      },
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toContain(
+      "source-dependency-member-missing",
     );
   });
 
