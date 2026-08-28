@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "athena-portable-characterization-scenario/1",
+  "id": "linear-tracking",
+  "requestKind": "tracking",
+  "expectedAssertionIds": [
+    "tracker-neutral-workflow-has-actionable-no-tracker-handoff",
+    "linear-context-resolution-is-adapter-behavior",
+    "linear-work-is-atomic-and-dependency-aware",
+    "linear-execution-keeps-ticket-state-current"
+  ],
+  "expectedClassificationIds": [
+    "tracker-neutral-capability-contract",
+    "linear-tracker-adapter"
+  ]
+}

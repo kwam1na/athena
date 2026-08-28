@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "athena-portable-characterization-scenario/1",
+  "id": "review",
+  "requestKind": "review",
+  "expectedAssertionIds": [
+    "review-selects-core-and-risk-lenses",
+    "review-is-independent-of-implementation",
+    "actionable-findings-loop-to-resolution",
+    "athena-review-evidence-binds-the-candidate"
+  ],
+  "expectedClassificationIds": [
+    "review-workflow",
+    "athena-harness-evidence"
+  ]
+}

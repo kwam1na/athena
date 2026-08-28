@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "athena-portable-characterization-scenario/1",
+  "id": "configured-harness-blocker",
+  "requestKind": "configured-enforcement",
+  "expectedAssertionIds": [
+    "configured-harness-blockers-cannot-degrade-away",
+    "harness-blockers-use-typed-sources-and-remediations",
+    "operator-and-provider-proof-lanes-stay-separated"
+  ],
+  "expectedClassificationIds": [
+    "athena-harness-evidence",
+    "athena-merge-ready-gates"
+  ]
+}

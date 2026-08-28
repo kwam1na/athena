@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Cross-agent delivery rails and portable skills</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f6f8;
+      --surface: #ffffff;
+      --text: #18202d;
+      --muted: #667085;
+      --line: #dfe3e8;
+      --accent: #3157a4;
+      --soft: #edf2ff;
+      --good: #eaf7ef;
+      --good-line: #24864c;
+      --warn: #fff7e8;
+      --warn-line: #c77a0a;
+      --rail: #f2efff;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.58 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { width: min(1120px, calc(100% - 32px)); margin: 32px auto 64px; }
+    header, section {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+    h1 { margin: 0 0 10px; font-size: clamp(2rem, 5vw, 3rem); line-height: 1.08; letter-spacing: -.03em; }
+    h2 { margin: 0 0 14px; font-size: 1.35rem; }
+    h3 { margin: 18px 0 6px; font-size: 1rem; }
+    p, ul, ol { margin: 8px 0 0; }
+    a { color: var(--accent); }
+    code { background: var(--soft); border-radius: 4px; padding: 1px 5px; font-size: .92em; }
+    .meta { color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px 18px; }
+    nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+    nav a { background: var(--soft); border-radius: 999px; padding: 6px 11px; text-decoration: none; font-size: .9rem; }
+    .lede { max-width: 920px; font-size: 1.08rem; }
+    .callout { background: var(--good); border-left: 4px solid var(--good-line); border-radius: 8px; padding: 13px 15px; margin-top: 14px; }
+    .warn { background: var(--warn); border-left-color: var(--warn-line); }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 10px; margin-top: 16px; }
+    .stats div { border: 1px solid var(--line); border-radius: 10px; padding: 13px; }
+    .stats b { display: block; font-size: 1.6rem; line-height: 1.1; }
+    .stats span { color: var(--muted); font-size: .9rem; }
+    .flow { display: grid; grid-template-columns: repeat(5, minmax(145px, 1fr)); gap: 24px; margin-top: 16px; }
+    .stage { position: relative; border: 1px solid var(--line); border-radius: 11px; padding: 14px; background: var(--soft); min-height: 128px; }
+    .stage.rails { background: var(--rail); }
+    .stage:not(:last-child)::after { content: "→"; position: absolute; right: -20px; top: 42%; color: var(--muted); font-weight: 700; }
+    .stage b { display: block; margin-bottom: 5px; }
+    .stage small { color: var(--muted); }
+    .overflow { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: .94rem; }
+    th, td { border: 1px solid var(--line); padding: 9px 11px; text-align: left; vertical-align: top; }
+    th { background: var(--soft); }
+    .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .card { border: 1px solid var(--line); border-radius: 11px; padding: 15px; }
+    .card h3 { margin-top: 0; }
+    .tag { display: inline-block; background: var(--soft); border-radius: 999px; padding: 2px 8px; margin: 2px 4px 2px 0; font-size: .83rem; }
+    @media (max-width: 900px) {
+      .flow { grid-template-columns: 1fr; gap: 10px; }
+      .stage { min-height: 0; }
+      .stage:not(:last-child)::after { content: "↓"; right: auto; left: 50%; top: auto; bottom: -18px; }
+      .two { grid-template-columns: 1fr; }
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #11151c;
+        --surface: #191f29;
+        --text: #e7eaf0;
+        --muted: #9ca6b6;
+        --line: #2d3543;
+        --accent: #9eb9ff;
+        --soft: #222b3e;
+        --good: #193326;
+        --warn: #392c14;
+        --rail: #29243d;
+      }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Cross-agent delivery rails and portable skills</h1>
+    <div class="meta">
+      <span>Created 2026-08-27</span>
+      <span>Type: feat</span>
+      <span>Status: active</span>
+      <span>Review: unanimous</span>
+      <span>Source: <a href="2026-08-27-002-feat-cross-agent-delivery-rails-and-skills-plan.md">canonical Markdown plan</a></span>
+    </div>
+    <p class="lede">Productize Athena's reusable delivery workflows as a safe, cloneable <code>agent-skills</code> distribution. Prove that tracker-neutral core first. Only then add the smallest neutral provider contract needed to connect independently released skills and enforcement products.</p>
+    <div class="callout"><strong>Primary product gate:</strong> no rails implementation work begins until the packed portable core beats a no-skill control and a non-Athena maintainer completes an unaided install, delivery task, update, and rollback.</div>
+    <nav>
+      <a href="#frame">Frame</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#sequence">Sequence</a>
+      <a href="#decisions">Decisions</a>
+      <a href="#units">Units</a>
+      <a href="#safety">Safety</a>
+      <a href="#verification">Verification</a>
+      <a href="#risks">Risks</a>
+    </nav>
+  </header>
+
+  <section id="frame">
+    <h2>What this plan delivers</h2>
+    <div class="stats">
+      <div><b>3</b><span>independent product/adopter surfaces</span></div>
+      <div><b>18</b><span>dependency-linked implementation units</span></div>
+      <div><b>4</b><span>independent qualification lanes</span></div>
+      <div><b>2</b><span>supported agent hosts in v1</span></div>
+      <div><b>6</b><span>review lenses aligned</span></div>
+    </div>
+    <div class="two" style="margin-top:14px">
+      <article class="card">
+        <h3>Included</h3>
+        <ul>
+          <li>Focused planning, execution, review, and compounding workflows.</li>
+          <li>Transactional install, update, rollback, and owned-only removal.</li>
+          <li>One canonical body exposed to Codex and Claude Code.</li>
+          <li>A tracker-neutral core contract with an MCP-first Linear adapter and an optional delivery-rails provider profile.</li>
+          <li>Athena adoption through a local policy overlay, canary, and reversible batches.</li>
+        </ul>
+      </article>
+      <article class="card">
+        <h3>Deliberately deferred</h3>
+        <ul>
+          <li>A third rails product, service, repository, or release train.</li>
+          <li>A permanent cross-product support matrix or self-dogfood gate.</li>
+          <li>Remote transports, signed attestations, hosted control plane, and fleet rollout.</li>
+          <li>Hosts beyond Codex and Claude; trackers beyond Linear; direct tracker API/SDK transports.</li>
+          <li>Automated force-release or TTL reclaimer for provider claims.</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section id="architecture">
+    <h2>One contract below two independent products</h2>
+    <div class="overflow">
+      <table>
+        <thead><tr><th>Layer</th><th>Owns</th><th>Must not own</th></tr></thead>
+        <tbody>
+          <tr><td>Neutral provider rails</td><td>Exact tokens, schemas, lifecycle prose, fixtures, outcome classes</td><td>Prompts, repository policy, enforcement implementation, separate release train</td></tr>
+          <tr><td><code>agent-skills</code></td><td>Workflow method, routing, host exposure, reviewers, optional tracker/provider behavior</td><td>Candidate identity, admission authority, harness configuration, CI verification</td></tr>
+          <tr><td><code>agent-delivery-harness</code></td><td>Candidate capture, evidence validation, admission, records, waivers, Action verification</td><td>Skill installation, prompts, reviewer selection, tracker behavior</td></tr>
+          <tr><td>Adopting repository</td><td>Architecture facts, commands, sensors, enabled profiles, trusted named adapters</td><td>Hidden global workflow policy</td></tr>
+          <tr><td>Athena overlay</td><td>Athena gates, Linear configuration, deployment, telemetry, reporting, generated artifacts</td><td>Forked copies of reusable workflow bodies</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout warn"><strong>Decoupling rule:</strong> neither product imports, installs, configures, or owns the other. Both may consume the packed neutral protocol bytes; a disposable adopter fixture proves one exact-version interoperability point.</div>
+  </section>
+
+  <section id="sequence">
+    <h2>Delivery sequence</h2>
+    <div class="flow" aria-label="Five delivery stages">
+      <div class="stage"><b>1 · Prove core value</b><small>U11, U3–U7, U12, U13, U9</small><br>Bounded extraction, safe distribution, both hosts, no-skill control, external pilot.</div>
+      <div class="stage"><b>2 · Add Linear MCP adapter</b><small>U8, U14L</small><br>Map the core tracker contract to host-native MCP tools and qualify it independently.</div>
+      <div class="stage rails"><b>3 · Build the seam</b><small>U1, U2, U10</small><br>Small packed contract plus independent harness/provider implementations.</div>
+      <div class="stage rails"><b>4 · Prove interop</b><small>U14P, U14H</small><br>Provider conformance, then one exact packed-artifact harness run.</div>
+      <div class="stage"><b>5 · Adopt in Athena</b><small>U16, U17</small><br>One canary, rollback rehearsal, reversible migration batches.</div>
+    </div>
+  </section>
+
+  <section id="decisions">
+    <h2>Decisions that keep the system small</h2>
+    <div class="overflow">
+      <table>
+        <thead><tr><th>Decision</th><th>Chosen approach</th><th>Why it matters</th></tr></thead>
+        <tbody>
+          <tr><td>Core before rails</td><td>U9 gates U1</td><td>Cross-product machinery is earned by demonstrated adopter value.</td></tr>
+          <tr><td>Rails custody</td><td>Pack neutral bytes inside the existing harness conformance package</td><td>No third product or governance program in v1.</td></tr>
+          <tr><td>Registration</td><td>Repository selects an exact token and host-preconfigured named adapter</td><td>Candidate files cannot introduce executable transport commands.</td></tr>
+          <tr><td>Corpus</td><td>Bounded candidate closure in one provenance registry</td><td>No audit or migration project across Athena's full skill graph.</td></tr>
+          <tr><td>Tracker foundation</td><td>Core owns neutral tracker operations and states; profiles supply adapters</td><td>Linear vocabulary, identity, auth, and failure handling cannot leak into planning or execution.</td></tr>
+          <tr><td>Linear transport</td><td>MCP-first through host-native Linear tools</td><td>No shipped HTTP client, SDK, OAuth flow, credentials, subprocess, or implicit fallback.</td></tr>
+          <tr><td>Compatibility</td><td>Manifest-computed lane digests; whole archive retained as provenance</td><td>An optional change invalidates only the lane it affects.</td></tr>
+          <tr><td>Interoperability</td><td>One exact-version disposable fixture</td><td>No N/N−1 promise or permanent support matrix before demand.</td></tr>
+          <tr><td>Provider state</td><td>One crash-atomic claim per provider/workspace/candidate</td><td>No run database, force-release API, lease manager, or timeout reclaimer.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="units">
+    <h2>Implementation-unit digest</h2>
+    <div class="overflow">
+      <table>
+        <thead><tr><th>Units</th><th>Outcome</th><th>Gate / dependency</th></tr></thead>
+        <tbody>
+          <tr><td>U11</td><td>Policy-backed Athena baseline and bounded overlay map</td><td>Precedes classification and workflow extraction</td></tr>
+          <tr><td>U3–U6</td><td>Registry, validators, authenticated archive, transactional lifecycle, dual-host exposure</td><td>Produces the installable core substrate</td></tr>
+          <tr><td>U7, U12, U13</td><td>Router, tracker-neutral capability foundation, plan/execute, independent review/compound workflows</td><td>Core never imports or branches on a concrete tracker</td></tr>
+          <tr><td>U9</td><td>Precommitted scorecard, both-host core qualification, no-skill control, non-Athena pilot</td><td>Blocks all rails work when value/adoption is not proven</td></tr>
+          <tr><td>U8, U14L</td><td>Optional Linear MCP adapter and fresh qualification record</td><td>Conforms to U7's contract and never blocks core or provider release</td></tr>
+          <tr><td>U1</td><td>Packed normative rails prose, schemas, vectors, compatibility manifest</td><td>Depends on U9</td></tr>
+          <tr><td>U2</td><td>Harness machine payload, crash-atomic claim, CLI/MCP parity</td><td>Extends existing command/artifact/record primitives</td></tr>
+          <tr><td>U10, U14P, U14H</td><td>Transport-pure provider helpers, provider qualification, one harness interop proof</td><td>No harness import or human-output parser</td></tr>
+          <tr><td>U16, U17</td><td>Athena canary and reversible migration</td><td>Selected qualified lanes plus <code>pr:athena</code> remain authoritative</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="safety">
+    <h2>Safety boundaries</h2>
+    <div class="two">
+      <article class="card">
+        <h3>Repository lifecycle</h3>
+        <ul>
+          <li>Verify publisher-declared SHA-256 before parsing or extraction.</li>
+          <li>Stream one archive format under entry, size, depth, ratio, and time quotas.</li>
+          <li>Keep active and one prior content-addressed generation.</li>
+          <li>Use a phased git-private journal; <code>marker-committed</code> is the success boundary.</li>
+          <li>Mutate only from explicit maintainer context; fixed roots plus ownership marker and digest govern deletion.</li>
+          <li>Reconcile Git-driven external transitions without hidden hooks.</li>
+        </ul>
+      </article>
+      <article class="card">
+        <h3>Provider run</h3>
+        <ul>
+          <li>Persist the client key before begin; only that key can resume.</li>
+          <li>Publish a complete claim through fsynced temp plus atomic no-replace hard-link.</li>
+          <li>Different or lost keys block without returning a sink or context secret.</li>
+          <li>Allow one active allocation per provider/workspace/candidate with byte/count quotas.</li>
+          <li>Delete terminal roots synchronously; defer force release and TTL reclamation.</li>
+          <li>Persist only redacted, allowlisted, bounded evidence under owner-only roots.</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section id="verification">
+    <h2>Verification and qualification</h2>
+    <div class="overflow">
+      <table>
+        <thead><tr><th>Lane</th><th>Bound inputs</th><th>Proof</th></tr></thead>
+        <tbody>
+          <tr><td>Core</td><td>Core path-group, profile, host set, scorecard/scenarios, mutable-host freshness</td><td>No-secret structure CI plus protected fresh Codex/Claude qualification and no-skill control</td></tr>
+          <tr><td>Linear</td><td>Qualified core + Linear path group/profile/scenario + MCP capability freshness</td><td>Controlled idempotent MCP creation with redacted reconciliation evidence; no direct API client</td></tr>
+          <tr><td>Provider</td><td>Qualified core + provider group + exact rail/evidence tokens</td><td>Native Python helpers against packed vectors and an independent fixture port</td></tr>
+          <tr><td>Harness interoperability</td><td>Provider record + exact harness release + candidate/scenario</td><td>Fresh packed install through prepare → begin → submit → gate → record → verify</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><span class="tag">security</span><span class="tag">scope</span><span class="tag">product</span><span class="tag">feasibility</span><span class="tag">coherence</span><span class="tag">adversarial</span></p>
+    <div class="callout"><strong>Review result:</strong> all six lenses returned zero unresolved findings after iterative correction. The remaining notes are explicit v1 tradeoffs, chiefly L0 evidence limits and blocked recovery when a persisted run key is lost.</div>
+  </section>
+
+  <section id="risks">
+    <h2>Key risks and mitigations</h2>
+    <div class="overflow">
+      <table>
+        <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+        <tbody>
+          <tr><td>Portable workflows do not improve delivery</td><td>Core-first no-skill scorecard and external pilot; stop rails expansion on failure.</td></tr>
+          <tr><td>Installer damages adopter state</td><td>Authenticated bounded archive, immutable generations, journal, ownership checks, dirty-tree fixtures, rollback.</td></tr>
+          <tr><td>Rails become a third product</td><td>Harness-packaged neutral bytes only; extract governance after a second real product demands it.</td></tr>
+          <tr><td>Qualification becomes stale or self-invalidating</td><td>Lane digests, whole-archive provenance, immutable snapshots where possible, <code>qualified_at</code> and maximum age.</td></tr>
+          <tr><td>Candidate-controlled transport executes code</td><td>Host-native three-operation adapter; no repository-declared executable, argv, or ambient credentials.</td></tr>
+          <tr><td>Provider key is lost</td><td>Owner-only pre-begin persistence; fail closed without sink exposure; defer recovery machinery until observed need.</td></tr>
+          <tr><td>Athena loses policy during deduplication</td><td>Policy-backed baseline, overlay ownership, canary, rollback rehearsal, reversible batches, existing merge-ready gate.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="callout warn">This HTML is a review digest. The <a href="2026-08-27-002-feat-cross-agent-delivery-rails-and-skills-plan.md">Markdown plan</a> is canonical for implementation details, traceability, and tests. Origin: <a href="../brainstorms/2026-08-27-cross-agent-delivery-skills-requirements.md">approved requirements brainstorm</a>.</p>
+  </section>
+</main>
+</body>
+</html>

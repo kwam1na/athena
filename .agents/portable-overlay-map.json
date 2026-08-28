@@ -1,0 +1,269 @@
+{
+  "schemaVersion": "athena-portable-overlay-map/1",
+  "baselineId": "athena-portable-workflows-v1-2026-08-27",
+  "classificationSemantics": {
+    "portable-candidate": "A digest-bound source or rule slice for downstream extraction and cross-host proof; this does not authorize wholesale migration.",
+    "retained-overlay": "Athena-owned policy or enforcement that remains mandatory locally.",
+    "optional-adapter": "Tracker or host-specific behavior that may implement a neutral capability without entering the core.",
+    "excluded": "Domain or dependency material outside the bounded portable v1 corpus."
+  },
+  "classifications": [
+    {
+      "id": "routing-and-repository-discovery",
+      "classification": "portable-candidate",
+      "rationale": "Request routing and repository-policy discovery are reusable only when repository authority wins.",
+      "assertionIds": [
+        "route-tracked-implementation-to-execute",
+        "route-approved-planning-to-plan-workflow",
+        "repository-policy-precedes-workflow-examples"
+      ]
+    },
+    {
+      "id": "planning-workflow",
+      "classification": "portable-candidate",
+      "rationale": "Scope, assumptions, posture, and non-mutating plan behavior are reusable delivery behavior.",
+      "assertionIds": [
+        "planning-captures-test-posture-and-sensors",
+        "planning-does-not-mutate-runtime-behavior"
+      ]
+    },
+    {
+      "id": "test-and-handoff-posture",
+      "classification": "portable-candidate",
+      "rationale": "Explicit posture and smallest-honest-sensor sequencing are repository-neutral when commands stay discovered inputs.",
+      "assertionIds": [
+        "implementation-selects-explicit-test-posture",
+        "smallest-honest-sensors-run-before-merge-gate"
+      ]
+    },
+    {
+      "id": "review-workflow",
+      "classification": "portable-candidate",
+      "rationale": "Independent, risk-proportional review and loop-to-resolution are reusable; Athena persona names are not.",
+      "assertionIds": [
+        "review-selects-core-and-risk-lenses",
+        "review-is-independent-of-implementation",
+        "actionable-findings-loop-to-resolution"
+      ]
+    },
+    {
+      "id": "tracker-neutral-capability-contract",
+      "classification": "portable-candidate",
+      "rationale": "Core delivery remains complete when no tracker is configured.",
+      "assertionIds": [
+        "tracker-neutral-workflow-has-actionable-no-tracker-handoff"
+      ]
+    },
+    {
+      "id": "linear-tracker-adapter",
+      "classification": "optional-adapter",
+      "rationale": "Linear context, atomic issue creation, dependency links, and status mutation implement optional tracker operations.",
+      "assertionIds": [
+        "linear-context-resolution-is-adapter-behavior",
+        "linear-work-is-atomic-and-dependency-aware",
+        "linear-execution-keeps-ticket-state-current"
+      ]
+    },
+    {
+      "id": "compound-workflow",
+      "classification": "portable-candidate",
+      "rationale": "The threshold for capturing reusable learning is portable; repository-specific document shape is not.",
+      "assertionIds": [
+        "compounding-requires-a-reusable-learning"
+      ]
+    },
+    {
+      "id": "athena-harness-evidence",
+      "classification": "retained-overlay",
+      "rationale": "Athena's configured gate, typed blocker contract, proof lanes, and candidate-bound evidence remain repository enforcement.",
+      "assertionIds": [
+        "configured-harness-blockers-cannot-degrade-away",
+        "harness-blockers-use-typed-sources-and-remediations",
+        "operator-and-provider-proof-lanes-stay-separated",
+        "athena-review-evidence-binds-the-candidate"
+      ]
+    },
+    {
+      "id": "athena-merge-ready-gates",
+      "classification": "retained-overlay",
+      "rationale": "pr:athena and its exact preparation/admission topology remain Athena-owned authority.",
+      "assertionIds": [
+        "pr-athena-remains-merge-ready-authority",
+        "operator-and-provider-proof-lanes-stay-separated"
+      ]
+    },
+    {
+      "id": "athena-reporting-policy",
+      "classification": "retained-overlay",
+      "rationale": "Athena's landed report and solution-note format remain local obligations layered over reusable compounding behavior.",
+      "assertionIds": [
+        "athena-solution-format-remains-repository-owned",
+        "landed-report-does-not-replace-durable-learning"
+      ]
+    },
+    {
+      "id": "athena-telemetry-policy",
+      "classification": "retained-overlay",
+      "rationale": "The telemetry threshold, timing, storage path, and merge obligation are Athena-specific.",
+      "assertionIds": [
+        "delivery-telemetry-recorded-after-final-gate"
+      ]
+    },
+    {
+      "id": "athena-deployment-handoff",
+      "classification": "retained-overlay",
+      "rationale": "Athena's clean-main deployment mapping and production topology are not a portable deployment system.",
+      "assertionIds": [
+        "deployment-handoff-runs-from-clean-merged-main"
+      ]
+    },
+    {
+      "id": "athena-generated-artifacts",
+      "classification": "retained-overlay",
+      "rationale": "Graphify, Convex admission, and generated-artifact refresh are repository-owned deterministic gates.",
+      "assertionIds": [
+        "generated-artifact-obligations-remain-mandatory"
+      ]
+    },
+    {
+      "id": "athena-pr-policy",
+      "classification": "retained-overlay",
+      "rationale": "Branch naming, PR structure, ticket linkage, and merge mechanics remain Athena policy.",
+      "assertionIds": [
+        "athena-pr-contract-remains-mandatory"
+      ]
+    },
+    {
+      "id": "athena-domain-rules",
+      "classification": "excluded",
+      "rationale": "Athena business transaction, inventory, reporting, approval, and POS rules are not delivery workflow behavior.",
+      "assertionIds": [
+        "athena-domain-architecture-is-not-portable-workflow"
+      ]
+    },
+    {
+      "id": "compound-reviewer-prompt-graph",
+      "classification": "excluded",
+      "rationale": "The full Athena persona graph remains a research source; U13 must bundle a smaller host-neutral reviewer contract.",
+      "assertionIds": [
+        "review-selects-core-and-risk-lenses"
+      ]
+    },
+    {
+      "id": "codex-host-exposure-metadata",
+      "classification": "optional-adapter",
+      "rationale": "Codex presentation metadata exposes a workflow to one host without owning the workflow body.",
+      "assertionIds": [
+        "repository-policy-precedes-workflow-examples"
+      ]
+    },
+    {
+      "id": "host-tool-sequence",
+      "classification": "excluded",
+      "rationale": "Unadjudicated host mechanics cannot become parity policy.",
+      "assertionIds": [
+        "host-tool-call-sequence-is-observed-only"
+      ]
+    }
+  ],
+  "boundedClosure": {
+    "members": [
+      {
+        "id": "deliver-work-body",
+        "kind": "skill-bundle",
+        "path": ".agents/skills/deliver-work/SKILL.md",
+        "classification": "portable-candidate",
+        "fileCount": 1,
+        "treeDigest": "5ed3467684bb290051452902beb2c1b75e69402a179f91b0179deacbafd5ac35",
+        "note": "Router source only; downstream extraction remains rule-level."
+      },
+      {
+        "id": "deliver-work-codex-metadata",
+        "kind": "dependency-bundle",
+        "path": ".agents/skills/deliver-work/agents/openai.yaml",
+        "classification": "optional-adapter",
+        "fileCount": 1,
+        "treeDigest": "4ea15e42c6ec90abd296e4d0dcf641a29a58ef6c99c8c25b9c8e9e95a0ff7676"
+      },
+      {
+        "id": "compound-delivery-kernel",
+        "kind": "skill-bundle",
+        "path": ".agents/skills/compound-delivery-kernel",
+        "classification": "portable-candidate",
+        "fileCount": 1,
+        "treeDigest": "227c58f23ef18e4ce075d06092b9a6d620bc8d7abb9ea40f9c333ea844d883fa"
+      },
+      {
+        "id": "ce-plan-source-bundle",
+        "kind": "skill-bundle",
+        "path": ".agents/skills/ce-plan",
+        "classification": "portable-candidate",
+        "fileCount": 6,
+        "treeDigest": "de2a8d1e3c8aa9b91ce3e32a417edee1be49d946f48ceefda5e9c46179bab85d",
+        "note": "Research source for a smaller self-contained planning workflow, not a wholesale export."
+      },
+      {
+        "id": "ce-work-source-bundle",
+        "kind": "skill-bundle",
+        "path": ".agents/skills/ce-work",
+        "classification": "portable-candidate",
+        "fileCount": 3,
+        "treeDigest": "a2b3212c77f9ca189d75f6cbef464c64d4e8ee9bd7466064c3e3e7df4b3a498c",
+        "note": "Research source for portable execution posture and handoff categories."
+      },
+      {
+        "id": "ce-code-review-source-bundle",
+        "kind": "skill-bundle",
+        "path": ".agents/skills/ce-code-review",
+        "classification": "portable-candidate",
+        "fileCount": 11,
+        "treeDigest": "158884ecccd0e3a2ab383eb5495c43d6b086730d15825dd64834b917046f1f64",
+        "note": "Research source for a bounded reviewer contract; persona-specific execution is not portable core."
+      },
+      {
+        "id": "compound-reviewer-prompts",
+        "kind": "dependency-bundle",
+        "path": ".agents/agents",
+        "classification": "excluded",
+        "fileCount": 51,
+        "treeDigest": "22de6a2a3876679008e155730ebcf20d35f25ea633913a96d36db79dc26daa30"
+      },
+      {
+        "id": "ce-compound-source-bundle",
+        "kind": "skill-bundle",
+        "path": ".agents/skills/ce-compound",
+        "classification": "portable-candidate",
+        "fileCount": 5,
+        "treeDigest": "0af59ce3520520e320f7c3973cb91746fae4e4f95ca0d48485da845144122988",
+        "note": "Reusable compounding threshold is a candidate; Athena solution schema remains overlay."
+      },
+      {
+        "id": "linear-track-source-bundle",
+        "kind": "skill-bundle",
+        "path": ".agents/skills/track",
+        "classification": "optional-adapter",
+        "fileCount": 6,
+        "treeDigest": "381de2086bf6f938873b3fba861a5789bdaece8fcdbd96f618b30e8da148f37f"
+      },
+      {
+        "id": "athena-execute-source-bundle",
+        "kind": "skill-bundle",
+        "path": ".agents/skills/execute",
+        "classification": "retained-overlay",
+        "fileCount": 3,
+        "treeDigest": "7e943e641b301b09b0574f2f17e36b95a9ac2496bc87f282aa4a117d9bdb87d9",
+        "note": "Athena's end-to-end execution source stays local; only classified rule slices may feed downstream core or Linear adapter work."
+      }
+    ]
+  },
+  "outOfScopeInventory": {
+    "scanRoots": [
+      ".agents/skills",
+      ".claude/skills"
+    ],
+    "fileCount": 199,
+    "treeDigest": "c85a1c86f32bce3ef71d6c63bdb8abbbbd86ca72d5b1cd00e451259d414280e6",
+    "noMigrationCommitment": true,
+    "description": "Stable residual discovery inventory only. No member is a migration candidate unless a later approved unit adds it to the bounded closure and classifies it."
+  }
+}
