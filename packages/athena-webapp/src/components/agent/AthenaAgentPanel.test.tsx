@@ -259,18 +259,21 @@ function PanelHarness({
   presentation = storePresentation,
   layout = "docked",
   onClose = () => {},
+  answerRevealKey,
   scrollTop,
 }: {
   run: AthenaAgentRun;
   presentation?: typeof storePresentation;
   layout?: "docked" | "fullscreen";
   onClose?: () => void;
+  answerRevealKey?: string | null;
   scrollTop?: number;
 }) {
   const [draft, setDraft] = useState("");
   const [width, setWidth] = useState(420);
   return (
     <AthenaAgentPanel
+      answerRevealKey={answerRevealKey}
       draft={draft}
       layout={layout}
       onClose={onClose}
@@ -375,7 +378,6 @@ describe("the Ask Athena entry", () => {
     expect(entry).toHaveAccessibleName("Ask Athena");
     expect(entry).toHaveAttribute("data-expanded", "false");
   });
-
 });
 
 describe("the authenticated-shell host", () => {
@@ -778,7 +780,7 @@ describe("full-screen focus and motion", () => {
     const panel = await screen.findByTestId("athena-agent-panel");
     expect(panel).toHaveAttribute("data-motion", "reduced");
     expect(panel.className).toContain("animate-none");
-    expect(screen.getByTestId("athena-agent-status")).toBeInTheDocument();
+    expect(screen.queryByTestId("athena-agent-status")).not.toBeInTheDocument();
   });
 });
 
@@ -793,6 +795,8 @@ describe("layout", () => {
     expect(panel).toHaveStyle({ width: "420px" });
     expect(panel.getAttribute("role")).toBe("complementary");
     expect(panel.className).toContain("rounded-xl");
+    expect(panel).toHaveClass("shadow-surface");
+    expect(panel).not.toHaveClass("shadow-overlay");
     expect(panel.className).toContain("h-[60dvh]");
     expect(panel.className).not.toContain("top-layout-md");
     expect(panel.className).toContain(
@@ -1527,7 +1531,8 @@ describe("accessibility", () => {
           status: { headline: "Answered", tone: "neutral" },
           answer: {
             outcome: "needs_clarification",
-            narrative: "Which Wednesday did you mean — this week's or last week's?",
+            narrative:
+              "Which Wednesday did you mean — this week's or last week's?",
             egressClass: "operational",
             committedAt: 5,
             citations: [],
@@ -3322,10 +3327,11 @@ describe("composer", () => {
     screen.getByTestId("athena-agent-prompt") as HTMLTextAreaElement;
   const send = () => screen.getByTestId("athena-agent-submit");
 
-  it("keeps a deliberate inset above the bottom of the panel", () => {
+  it("keeps a balanced inset from the sides and bottom of the panel", () => {
     render(<PanelHarness run={baseRun()} />);
 
     expect(screen.getByTestId("athena-agent-composer")).toHaveClass(
+      "mx-layout-sm",
       "mb-layout-sm",
     );
   });
@@ -3360,9 +3366,55 @@ describe("composer", () => {
   it("a starter-intent tap sends immediately with its id (starter-intents plan U3)", async () => {
     const submit = vi.fn(async () => {});
     render(<PanelHarness run={baseRun({ submit })} />);
-    fireEvent.click(screen.getByRole("button", { name: "What is holding up the close?" }));
+
+    expect(
+      screen.getByRole("button", { name: "What is holding up the close?" }),
+    ).not.toBeVisible();
+
+    fireEvent.click(
+      screen.getByText("Suggested questions", { selector: "summary" }),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "What is holding up the close?" }),
+    );
     await waitFor(() =>
-      expect(submit).toHaveBeenCalledWith("What is blocking the end-of-day close?", { starterIntentId: "close_readiness" }),
+      expect(submit).toHaveBeenCalledWith(
+        "What is blocking the end-of-day close?",
+        { starterIntentId: "close_readiness" },
+      ),
+    );
+  });
+
+  it("reveals suggested questions while the operator hovers over the disclosure", () => {
+    render(<PanelHarness run={baseRun()} />);
+    const starters = screen.getByTestId(
+      "athena-agent-starters",
+    ) as HTMLDetailsElement;
+    const reservedHeight = starters.style.minHeight;
+
+    expect(starters.open).toBe(false);
+    expect(reservedHeight).toContain("var(--control-height-standard)");
+    expect(screen.queryByTestId("athena-agent-status")).not.toBeInTheDocument();
+
+    fireEvent.mouseEnter(starters);
+    expect(starters.open).toBe(true);
+    expect(starters.style.minHeight).toBe(reservedHeight);
+
+    fireEvent.mouseLeave(starters);
+    expect(starters.open).toBe(false);
+  });
+
+  it("centers suggested questions in a genuinely empty transcript", () => {
+    render(<PanelHarness run={baseRun()} />);
+
+    expect(screen.getByTestId("athena-agent-transcript")).toHaveClass(
+      "min-h-full",
+      "items-center",
+      "justify-center",
+    );
+    expect(screen.getByTestId("athena-agent-starters")).toHaveClass(
+      "max-w-xs",
     );
   });
 
@@ -3386,7 +3438,7 @@ describe("composer", () => {
 
   it("asks for a follow-up once the thread has an answer", () => {
     const { rerender } = render(<PanelHarness run={baseRun()} />);
-    expect(prompt()).toHaveAttribute("placeholder", "Ask about this context");
+    expect(prompt()).toHaveAttribute("placeholder", "Ask Athena a question...");
     rerender(
       <PanelHarness
         run={baseRun({
@@ -3775,6 +3827,31 @@ describe("stream reveal of the committed answer", () => {
       );
       rerender(<PanelHarness run={answered()} />);
       expect(paintedAnswer()).toBe(answerText);
+      expect(wipedWords()).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not replay a commit the persistent shell has already seen", () => {
+    fakeFrames();
+    try {
+      const { rerender } = render(
+        <PanelHarness
+          answerRevealKey={null}
+          run={draftRun("streaming")}
+        />,
+      );
+
+      // Reactivating a subscription may replay running before returning the
+      // same committed answer. The shell's null reveal key is authoritative.
+      rerender(<PanelHarness answerRevealKey={null} run={answered()} />);
+
+      expect(paintedAnswer()).toBe(answerText);
+      expect(screen.getByTestId("athena-agent-answer-text")).toHaveAttribute(
+        "data-reveal",
+        "settled",
+      );
       expect(wipedWords()).toHaveLength(0);
     } finally {
       vi.useRealTimers();
