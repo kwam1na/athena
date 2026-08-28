@@ -141,15 +141,12 @@ describe("delivery run telemetry", () => {
       reportedBy: "claude-code",
     });
     const shadowComparison = shadowComparisonFixture();
-    const record = buildDeliveryRunTelemetryRecord(
-      sourceLedger,
-      {
-        branch: "codex/v26-1300-thing",
-        headSha: "abc123",
-        deliverableDiffFingerprint: shadowComparison.candidateFingerprint,
-        shadowComparison,
-      },
-    );
+    const record = buildDeliveryRunTelemetryRecord(sourceLedger, {
+      branch: "codex/v26-1300-thing",
+      headSha: "abc123",
+      deliverableDiffFingerprint: shadowComparison.candidateFingerprint,
+      shadowComparison,
+    });
 
     expect(record.shadowComparison).toEqual(shadowComparison);
     expect(record).toMatchObject({
@@ -199,7 +196,7 @@ describe("delivery run telemetry", () => {
           deliverableDiffFingerprint: "8".repeat(64),
           shadowComparison,
         },
-      )
+      ),
     ).toThrow("different deliverable");
   });
 
@@ -243,6 +240,40 @@ describe("delivery run telemetry", () => {
       "2026-06-18T12:00:00.000Z",
       "2026-06-19T12:00:00.000Z",
       "2026-06-20T12:00:00.000Z",
+    ]);
+  });
+
+  it("retains structurally valid historical shadow evidence after release pins advance", async () => {
+    const rootDir = await createTempRoot();
+    const current = shadowComparisonFixture();
+    const historical = {
+      ...current,
+      inputSha256: "1".repeat(64),
+      baseline: {
+        baselineId: "athena-portable-workflows-v1-older",
+        sha256: "2".repeat(64),
+      },
+      source: {
+        ...current.source,
+        sourceCommitSha: "3".repeat(40),
+        archiveSha256: "4".repeat(64),
+        metadataSha256: "5".repeat(64),
+        workflowSha256: "6".repeat(64),
+      },
+    };
+    historical.comparisonSha256 = portableShadowComparisonSha256(historical);
+    const record: DeliveryRunTelemetryRecord = {
+      ...buildDeliveryRunTelemetryRecord(ledger("2026-06-18T12:00:00.000Z"), {
+        branch: "codex/historical-shadow",
+        headSha: "abc123",
+        deliverableDiffFingerprint: historical.candidateFingerprint,
+      }),
+      shadowComparison: historical,
+    };
+    await writeDeliveryRunTelemetryRecord(rootDir, record);
+
+    await expect(readDeliveryRunTelemetryRecords(rootDir)).resolves.toEqual([
+      record,
     ]);
   });
 
@@ -319,10 +350,7 @@ describe("delivery run telemetry", () => {
       },
     );
     const written = await writeDeliveryRunTelemetryRecord(rootDir, record);
-    const onDisk = await readFile(
-      path.join(rootDir, written.path),
-      "utf8",
-    );
+    const onDisk = await readFile(path.join(rootDir, written.path), "utf8");
 
     expect(onDisk.endsWith("\n")).toBe(true);
     expect(JSON.parse(onDisk) as DeliveryRunTelemetryRecord).toEqual(record);
@@ -413,7 +441,9 @@ describe("delivery run telemetry", () => {
       // A run happened, but the deliverable has moved since — the only record
       // producible now would describe a different tree, so stay quiet locally
       // and let the next run re-establish currency.
-      expect(check({ localLedgerFingerprint: "fingerprint-older" })).toEqual([]);
+      expect(check({ localLedgerFingerprint: "fingerprint-older" })).toEqual(
+        [],
+      );
       // CI is the merge authority: no bootstrap leniency.
       expect(
         check({ localLedgerFingerprint: null, ciMode: true }),
@@ -468,9 +498,9 @@ describe("delivery run telemetry", () => {
           [recordPath, { ...validRecord, ...override }],
         ]),
       });
-      expect(findings.some((f) => f.code === "telemetry_record_malformed")).toBe(
-        true,
-      );
+      expect(
+        findings.some((f) => f.code === "telemetry_record_malformed"),
+      ).toBe(true);
     });
 
     it("rejects a record whose review telemetry is structurally invalid", () => {
@@ -489,9 +519,9 @@ describe("delivery run telemetry", () => {
         changedPaths: ["scripts/some-change.ts", recordPath],
         changedRecordContents: new Map([[recordPath, poisoned]]),
       });
-      expect(findings.some((f) => f.code === "telemetry_record_malformed")).toBe(
-        true,
-      );
+      expect(
+        findings.some((f) => f.code === "telemetry_record_malformed"),
+      ).toBe(true);
     });
 
     it("rejects shadow telemetry that claims authority to switch", () => {
@@ -511,9 +541,9 @@ describe("delivery run telemetry", () => {
         changedRecordContents: new Map([[recordPath, poisoned]]),
       });
 
-      expect(findings.some((f) => f.code === "telemetry_record_malformed")).toBe(
-        true,
-      );
+      expect(
+        findings.some((f) => f.code === "telemetry_record_malformed"),
+      ).toBe(true);
     });
 
     it("rejects tracked shadow telemetry when comparison content no longer matches its hash", () => {
@@ -533,9 +563,9 @@ describe("delivery run telemetry", () => {
         changedRecordContents: new Map([[recordPath, poisoned]]),
       });
 
-      expect(findings.some((f) => f.code === "telemetry_record_malformed")).toBe(
-        true,
-      );
+      expect(
+        findings.some((f) => f.code === "telemetry_record_malformed"),
+      ).toBe(true);
     });
 
     it("rejects tracked shadow telemetry for another delivery fingerprint", () => {
@@ -548,9 +578,9 @@ describe("delivery run telemetry", () => {
         changedRecordContents: new Map([[recordPath, poisoned]]),
       });
 
-      expect(findings.some((f) => f.code === "telemetry_record_malformed")).toBe(
-        true,
-      );
+      expect(
+        findings.some((f) => f.code === "telemetry_record_malformed"),
+      ).toBe(true);
     });
 
     it("flags a hand-edited or malformed record even when another valid one exists", () => {
@@ -825,7 +855,9 @@ describe("delivery run telemetry against a real repository", () => {
     return [
       ...new Set([
         ...git(rootDir, ["diff", "--name-only", "base-ref...HEAD"]).split("\n"),
-        ...git(rootDir, ["ls-files", "--others", "--exclude-standard"]).split("\n"),
+        ...git(rootDir, ["ls-files", "--others", "--exclude-standard"]).split(
+          "\n",
+        ),
       ]),
     ]
       .map((line) => line.trim())

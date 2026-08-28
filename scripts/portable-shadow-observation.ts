@@ -34,8 +34,7 @@ const DEFAULT_INPUT_PATH =
   "scripts/portable-shadow-fixtures/compound-delivery-kernel.json";
 const DEFAULT_BASELINE_PATH = ".agents/characterization-baseline.json";
 const DEFAULT_ARCHIVE_PATH = ".agents/portable/releases/core-v1.zip";
-const DEFAULT_METADATA_PATH =
-  ".agents/portable/releases/core-v1.release.json";
+const DEFAULT_METADATA_PATH = ".agents/portable/releases/core-v1.release.json";
 export const DEFAULT_PORTABLE_SHADOW_PATH =
   "artifacts/harness-delivery-runs/shadow-comparison.json";
 
@@ -55,12 +54,12 @@ export type PortableShadowComparison = {
   comparisonSha256: string;
   status: "match" | "mismatch" | "unavailable";
   baseline: {
-    baselineId: typeof BASELINE_ID;
+    baselineId: string;
     sha256: string;
   };
   source: {
-    releaseId: "core-v1";
-    profile: "core";
+    releaseId: string;
+    profile: string;
     sourceCommitSha: string;
     archiveSha256: string;
     metadataSha256: string;
@@ -113,9 +112,27 @@ function decisions(value: unknown): value is PortableShadowDecisions {
 export function isPortableShadowComparison(
   value: unknown,
 ): value is PortableShadowComparison {
+  if (!isPortableShadowComparisonRecord(value)) return false;
+  return (
+    value.inputSha256 === SOURCE_INPUT_SHA256 &&
+    value.baseline.baselineId === BASELINE_ID &&
+    value.baseline.sha256 === BASELINE_SHA256 &&
+    value.source.releaseId === RELEASE_ID &&
+    value.source.profile === RELEASE_PROFILE &&
+    value.source.sourceCommitSha === SOURCE_COMMIT_SHA &&
+    value.source.archiveSha256 === ARCHIVE_SHA256 &&
+    value.source.metadataSha256 === METADATA_SHA256 &&
+    value.source.workflowSha256 === SOURCE_WORKFLOW_SHA256
+  );
+}
+
+export function isPortableShadowComparisonRecord(
+  value: unknown,
+): value is PortableShadowComparison {
   if (!value || typeof value !== "object") return false;
   const comparison = value as Partial<PortableShadowComparison>;
   const digest = /^[0-9a-f]{64}$/;
+  const commit = /^[0-9a-f]{40}$/;
   const isoTimestamp = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
   const expectedMismatches = recomputeMismatches(comparison);
   return (
@@ -123,23 +140,31 @@ export function isPortableShadowComparison(
     typeof comparison.observedAt === "string" &&
     isoTimestamp.test(comparison.observedAt) &&
     comparison.workflow === WORKFLOW &&
-    comparison.inputSha256 === SOURCE_INPUT_SHA256 &&
+    typeof comparison.inputSha256 === "string" &&
+    digest.test(comparison.inputSha256) &&
     typeof comparison.candidateFingerprint === "string" &&
     digest.test(comparison.candidateFingerprint) &&
     typeof comparison.comparisonSha256 === "string" &&
     digest.test(comparison.comparisonSha256) &&
-    comparison.comparisonSha256 === portableShadowComparisonSha256(
-      comparison as PortableShadowComparison,
-    ) &&
+    comparison.comparisonSha256 ===
+      portableShadowComparisonSha256(comparison as PortableShadowComparison) &&
     ["match", "mismatch", "unavailable"].includes(comparison.status ?? "") &&
-    comparison.baseline?.baselineId === BASELINE_ID &&
-    comparison.baseline.sha256 === BASELINE_SHA256 &&
-    comparison.source?.releaseId === RELEASE_ID &&
-    comparison.source.profile === RELEASE_PROFILE &&
-    comparison.source.sourceCommitSha === SOURCE_COMMIT_SHA &&
-    comparison.source.archiveSha256 === ARCHIVE_SHA256 &&
-    comparison.source.metadataSha256 === METADATA_SHA256 &&
-    comparison.source.workflowSha256 === SOURCE_WORKFLOW_SHA256 &&
+    typeof comparison.baseline?.baselineId === "string" &&
+    comparison.baseline.baselineId.length > 0 &&
+    typeof comparison.baseline.sha256 === "string" &&
+    digest.test(comparison.baseline.sha256) &&
+    typeof comparison.source?.releaseId === "string" &&
+    comparison.source.releaseId.length > 0 &&
+    typeof comparison.source.profile === "string" &&
+    comparison.source.profile.length > 0 &&
+    typeof comparison.source.sourceCommitSha === "string" &&
+    commit.test(comparison.source.sourceCommitSha) &&
+    typeof comparison.source.archiveSha256 === "string" &&
+    digest.test(comparison.source.archiveSha256) &&
+    typeof comparison.source.metadataSha256 === "string" &&
+    digest.test(comparison.source.metadataSha256) &&
+    typeof comparison.source.workflowSha256 === "string" &&
+    digest.test(comparison.source.workflowSha256) &&
     decisions(comparison.athena) &&
     (comparison.portable === undefined || decisions(comparison.portable)) &&
     stringArray(comparison.portableMutationAttempts) &&
@@ -161,9 +186,11 @@ export function isPortableShadowComparison(
     comparison.authority.portableCapabilities.deploy === false &&
     comparison.authority.portableCapabilities.statusMutation === false &&
     (comparison.status !== "match" ||
-      (comparison.portable !== undefined && comparison.mismatches.length === 0)) &&
+      (comparison.portable !== undefined &&
+        comparison.mismatches.length === 0)) &&
     (comparison.status !== "mismatch" ||
-      (comparison.portable !== undefined && comparison.mismatches.length > 0)) &&
+      (comparison.portable !== undefined &&
+        comparison.mismatches.length > 0)) &&
     (comparison.status !== "unavailable" ||
       (comparison.portable === undefined &&
         comparison.portableMutationAttempts.length === 0 &&
@@ -204,6 +231,7 @@ export function portableShadowComparisonSha256(
   return sha256(
     semanticJson({
       schemaVersion: comparison.schemaVersion,
+      observedAt: comparison.observedAt,
       workflow: comparison.workflow,
       inputSha256: comparison.inputSha256,
       candidateFingerprint: comparison.candidateFingerprint,
@@ -364,8 +392,7 @@ function evaluateAthenaBaseline(
     (baseline.assertions ?? []).map((assertion) => assertion.id),
   );
   if (
-    baseline.schemaVersion !==
-      "athena-portable-characterization-baseline/1" ||
+    baseline.schemaVersion !== "athena-portable-characterization-baseline/1" ||
     baseline.baselineId !== BASELINE_ID ||
     baseline.readOnly !== true ||
     requiredAssertions.some((assertion) => !assertionIds.has(assertion))
@@ -374,7 +401,9 @@ function evaluateAthenaBaseline(
   }
 
   const blockers = input.request.repositorySensors
-    .filter((sensor) => sensor.required && (!sensor.available || !sensor.passed))
+    .filter(
+      (sensor) => sensor.required && (!sensor.available || !sensor.passed),
+    )
     .map((sensor) =>
       sensor.available
         ? `required sensor failed: ${sensor.name}`
@@ -385,8 +414,8 @@ function evaluateAthenaBaseline(
     posture: input.request.existingBehavior
       ? "characterization-first"
       : input.request.behaviorChange
-      ? "test-first"
-      : "sensor-only",
+        ? "test-first"
+        : "sensor-only",
     gate: {
       status: blockers.length > 0 ? "blocked" : "complete",
       blockers,
@@ -473,7 +502,9 @@ async function evaluateExactPortableRelease(
     sha256(archiveBytes) !== ARCHIVE_SHA256 ||
     sha256(metadataBytes) !== METADATA_SHA256
   ) {
-    throw new Error("exact portable release digest does not match qualification");
+    throw new Error(
+      "exact portable release digest does not match qualification",
+    );
   }
   const metadata = JSON.parse(metadataBytes.toString("utf8")) as Record<
     string,
@@ -488,7 +519,9 @@ async function evaluateExactPortableRelease(
     throw new Error("exact portable release metadata is malformed");
   }
 
-  const isolatedRoot = await mkdtemp(path.join(tmpdir(), "athena-shadow-core-"));
+  const isolatedRoot = await mkdtemp(
+    path.join(tmpdir(), "athena-shadow-core-"),
+  );
   try {
     const isolatedArchive = path.join(isolatedRoot, "core-v1.zip");
     const isolatedMetadata = path.join(isolatedRoot, "core-v1.release.json");
@@ -563,12 +596,14 @@ function comparedFields(
   return fields.flatMap((field) =>
     semanticJson(athena[field]) === semanticJson(portable[field])
       ? []
-      : [{
-          field,
-          athena: athena[field],
-          portable: portable[field],
-          disposition: "unresolved" as const,
-        }],
+      : [
+          {
+            field,
+            athena: athena[field],
+            portable: portable[field],
+            disposition: "unresolved" as const,
+          },
+        ],
   );
 }
 
@@ -616,7 +651,9 @@ export async function observePortableShadow(
   ]);
   const input = parseInput(inputContents);
   if (sha256(inputContents) !== SOURCE_INPUT_SHA256) {
-    throw new Error("portable shadow input digest does not match qualification");
+    throw new Error(
+      "portable shadow input digest does not match qualification",
+    );
   }
   const athena = evaluateAthenaBaseline(input, baselineContents);
   if (sha256(baselineContents) !== BASELINE_SHA256) {

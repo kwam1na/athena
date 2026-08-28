@@ -17,7 +17,7 @@ tags:
   - delivery-telemetry
   - candidate-identity
   - authority-boundary
-delivery_diff_fingerprint: 6b08367d7934b032518d6122194cac7bf2d578f72eaa6c04fff5fbc2c2fea01a
+delivery_diff_fingerprint: 165035993f4514ca9219c8f7cc1edd08999591f415aa74ae78c55ece9cebcb45
 ---
 
 # Portable Workflow Shadow Evidence Remains Observational
@@ -41,16 +41,19 @@ the portable side receives no ticket mutation, status, merge, deployment, or
 authority-switch capability. It may return only routing, posture, gate, evidence,
 and mutation-attempt observations.
 
-The comparison validator pins the release archive, release metadata, source
-commit, Athena baseline, and frozen input. It recomputes decision parity and the
-mismatch list instead of trusting the stored verdict. The detailed artifact is a
-sibling of the existing delivery ledger, so observation cannot rewrite the gate
-result.
+The current-candidate validator pins the release archive, release metadata,
+source commit, Athena baseline, and frozen input. It recomputes decision parity
+and the mismatch list instead of trusting the stored verdict, and its digest
+binds the claimed observation time. The detailed artifact is a sibling of the
+existing delivery ledger, so observation cannot rewrite the gate result.
 
 The existing delivery telemetry command projects the complete redacted
-comparison into the tracked corpus. It validates the comparison hash and requires
-the nested candidate fingerprint to equal the containing delivery record's
-fingerprint. A stale comparison therefore cannot ride inside a current record.
+comparison into the tracked corpus. It validates the comparison hash and
+requires the nested candidate fingerprint to equal the containing delivery
+record's fingerprint. Historical reads validate this durable structure and its
+self-consistency without comparing old evidence to today's release pins. A
+stale comparison therefore cannot ride inside a current record, while a valid
+older comparison remains readable after later releases.
 
 ## Prevention
 
@@ -58,6 +61,8 @@ fingerprint. A stale comparison therefore cannot ride inside a current record.
 - Recompute semantic parity from decisions; never accept a stored `match` label.
 - Bind every evidence layer to the same candidate identity, including nested
   telemetry projections.
+- Keep exact-current release validation separate from durable historical-record
+  validation so advancing a pin cannot erase older evidence from reads.
 - Keep mismatch disposition separate from observation. A match does not itself
   authorize a canary switch, and an unresolved mismatch blocks one.
 - Reuse the existing delivery ledger and telemetry lifecycle instead of adding a

@@ -28,7 +28,9 @@ async function tempRoot() {
 
 afterEach(async () => {
   await Promise.all(
-    tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
+    tempRoots
+      .splice(0)
+      .map((root) => rm(root, { recursive: true, force: true })),
   );
 });
 
@@ -97,13 +99,14 @@ describe("portable workflow shadow observation", () => {
       const evaluator: PortableShadowEvaluator = async () => ({
         decisions: {
           ...reference.portable!,
-          [field]: field === "posture"
-            ? "test-first"
-            : field === "evidence"
-            ? ["different evidence"]
-            : field === "routing"
-            ? { entryPoint: "plan-work", workflow: "plan" }
-            : { status: "complete", blockers: [] },
+          [field]:
+            field === "posture"
+              ? "test-first"
+              : field === "evidence"
+                ? ["different evidence"]
+                : field === "routing"
+                  ? { entryPoint: "plan-work", workflow: "plan" }
+                  : { status: "complete", blockers: [] },
         },
         mutationAttempts: [],
       });
@@ -162,6 +165,22 @@ describe("portable workflow shadow observation", () => {
     tampered.comparisonSha256 = portableShadowComparisonSha256(tampered);
 
     expect(isPortableShadowComparison(tampered)).toBe(false);
+  });
+
+  it("binds the claimed observation timestamp into the comparison digest", async () => {
+    const result = await observePortableShadow(ROOT, {
+      observedAt: "2026-08-28T18:00:00.000Z",
+      candidateFingerprint: CANDIDATE_FINGERPRINT,
+    });
+    const changedTimestamp = {
+      ...result,
+      observedAt: "2099-08-28T18:00:00.000Z",
+    };
+
+    expect(portableShadowComparisonSha256(changedTimestamp)).not.toBe(
+      result.comparisonSha256,
+    );
+    expect(isPortableShadowComparison(changedTimestamp)).toBe(false);
   });
 
   it("rejects a comparison whose pinned Athena baseline was replaced", async () => {
@@ -298,9 +317,9 @@ describe("portable workflow shadow observation", () => {
     expect(after?.commandSpans).toEqual(ledger.commandSpans);
     expect(after?.gateDecisionEvents).toEqual(ledger.gateDecisionEvents);
     expect(await readFile(path.join(root, ledgerPath), "utf8")).toBe(before);
-    expect(JSON.parse(await readFile(path.join(root, shadowPath), "utf8"))).toEqual(
-      comparison,
-    );
+    expect(
+      JSON.parse(await readFile(path.join(root, shadowPath), "utf8")),
+    ).toEqual(comparison);
     expect(await readFile(sentinelPath, "utf8")).toBe(sentinelBefore);
   });
 
@@ -328,6 +347,8 @@ describe("portable workflow shadow observation", () => {
       }),
     ).rejects.toThrow("authoritative gate has not passed");
     expect(await readFile(path.join(root, ledgerPath), "utf8")).toBe(before);
-    await expect(readFile(path.join(root, shadowPath), "utf8")).rejects.toThrow();
+    await expect(
+      readFile(path.join(root, shadowPath), "utf8"),
+    ).rejects.toThrow();
   });
 });

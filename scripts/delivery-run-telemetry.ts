@@ -26,6 +26,7 @@ import {
 import {
   DEFAULT_PORTABLE_SHADOW_PATH,
   isPortableShadowComparison,
+  isPortableShadowComparisonRecord,
   readPortableShadowComparison,
   type PortableShadowComparison,
 } from "./portable-shadow-observation";
@@ -111,59 +112,7 @@ export function buildDeliveryRunTelemetryRecord(
     ...(ledger.reviewLoop ? { reviewLoop: ledger.reviewLoop } : {}),
     ...(context.shadowComparison
       ? {
-          shadowComparison: {
-            schemaVersion: context.shadowComparison.schemaVersion,
-            observedAt: context.shadowComparison.observedAt,
-            workflow: context.shadowComparison.workflow,
-            inputSha256: context.shadowComparison.inputSha256,
-            candidateFingerprint:
-              context.shadowComparison.candidateFingerprint,
-            comparisonSha256: context.shadowComparison.comparisonSha256,
-            status: context.shadowComparison.status,
-            baseline: { ...context.shadowComparison.baseline },
-            source: {
-              releaseId: context.shadowComparison.source.releaseId,
-              profile: context.shadowComparison.source.profile,
-              sourceCommitSha:
-                context.shadowComparison.source.sourceCommitSha,
-              archiveSha256: context.shadowComparison.source.archiveSha256,
-              metadataSha256:
-                context.shadowComparison.source.metadataSha256,
-              workflowSha256:
-                context.shadowComparison.source.workflowSha256,
-            },
-            athena: context.shadowComparison.athena,
-            ...(context.shadowComparison.portable
-              ? { portable: context.shadowComparison.portable }
-              : {}),
-            portableMutationAttempts: [
-              ...context.shadowComparison.portableMutationAttempts,
-            ],
-            mismatches: context.shadowComparison.mismatches.map((mismatch) => ({
-              field: mismatch.field,
-              athena: mismatch.athena,
-              portable: mismatch.portable,
-              disposition: mismatch.disposition,
-            })),
-            ...(context.shadowComparison.unavailableReason
-              ? {
-                  unavailableReason:
-                    context.shadowComparison.unavailableReason,
-                }
-              : {}),
-            authority: {
-              authoritativePath:
-                context.shadowComparison.authority.authoritativePath,
-              influencedAuthoritativeResult:
-                context.shadowComparison.authority
-                  .influencedAuthoritativeResult,
-              authoritySwitchAllowed:
-                context.shadowComparison.authority.authoritySwitchAllowed,
-              portableCapabilities: {
-                ...context.shadowComparison.authority.portableCapabilities,
-              },
-            },
-          },
+          shadowComparison: structuredClone(context.shadowComparison),
         }
       : {}),
   };
@@ -230,7 +179,9 @@ const SUMMARY_NUMERIC_FIELDS = [
  * loose predicate here turns a hand-authored file into printed output and into
  * the cross-delivery baseline.
  */
-function isTelemetryRecord(value: unknown): value is DeliveryRunTelemetryRecord {
+function isTelemetryRecord(
+  value: unknown,
+): value is DeliveryRunTelemetryRecord {
   if (!value || typeof value !== "object") return false;
   const record = value as Partial<DeliveryRunTelemetryRecord>;
   const summary = record.summary as Record<string, unknown> | undefined;
@@ -249,7 +200,8 @@ function isTelemetryRecord(value: unknown): value is DeliveryRunTelemetryRecord 
     Boolean(summary) &&
     typeof summary === "object" &&
     SUMMARY_NUMERIC_FIELDS.every(
-      (field) => typeof summary[field] === "number" &&
+      (field) =>
+        typeof summary[field] === "number" &&
         Number.isFinite(summary[field] as number),
     ) &&
     // reviewLoop is rendered into the summary, so an unvalidated one from a
@@ -257,7 +209,7 @@ function isTelemetryRecord(value: unknown): value is DeliveryRunTelemetryRecord 
     (record.reviewLoop === undefined ||
       isValidReviewLoopTelemetry(record.reviewLoop)) &&
     (record.shadowComparison === undefined ||
-      (isPortableShadowComparison(record.shadowComparison) &&
+      (isPortableShadowComparisonRecord(record.shadowComparison) &&
         record.shadowComparison.candidateFingerprint ===
           record.deliverableDiffFingerprint))
   );
@@ -435,8 +387,7 @@ export const DELIVERY_RUN_TELEMETRY_LINE_THRESHOLD =
   DEFAULT_SOURCE_LINE_THRESHOLD;
 
 export type DeliveryRunTelemetryFindingCode =
-  | "telemetry_record_missing"
-  | "telemetry_record_malformed";
+  "telemetry_record_missing" | "telemetry_record_malformed";
 
 export type DeliveryRunTelemetryFinding = {
   code: DeliveryRunTelemetryFindingCode;
@@ -539,15 +490,16 @@ export function collectDeliveryRunTelemetryFindings(
 
   findings.push({
     code: "telemetry_record_missing",
-    message: records.length > 0
-      ? `Substantial delivery detected (${input.sourceLineTotal} changed source lines, threshold ` +
-        `${threshold}) but every ${DELIVERY_RUN_TELEMETRY_DIR}/ record on this branch describes an ` +
-        `older deliverable diff. Re-run \`bun run pr:athena\`, then \`bun run delivery:telemetry-record\`, ` +
-        `and commit the refreshed record so the telemetry describes what actually merges.`
-      : `Substantial delivery detected (${input.sourceLineTotal} changed source lines, threshold ` +
-        `${threshold}) without a ${DELIVERY_RUN_TELEMETRY_DIR}/ record on this branch. After a passing ` +
-        `\`bun run pr:athena\`, run \`bun run delivery:telemetry-record\` and commit the record ` +
-        `so the run's telemetry survives this worktree.`,
+    message:
+      records.length > 0
+        ? `Substantial delivery detected (${input.sourceLineTotal} changed source lines, threshold ` +
+          `${threshold}) but every ${DELIVERY_RUN_TELEMETRY_DIR}/ record on this branch describes an ` +
+          `older deliverable diff. Re-run \`bun run pr:athena\`, then \`bun run delivery:telemetry-record\`, ` +
+          `and commit the refreshed record so the telemetry describes what actually merges.`
+        : `Substantial delivery detected (${input.sourceLineTotal} changed source lines, threshold ` +
+          `${threshold}) without a ${DELIVERY_RUN_TELEMETRY_DIR}/ record on this branch. After a passing ` +
+          `\`bun run pr:athena\`, run \`bun run delivery:telemetry-record\` and commit the record ` +
+          `so the run's telemetry survives this worktree.`,
   });
   return findings;
 }
@@ -661,7 +613,9 @@ export function evaluateDeliveryRunTelemetryCheck(
       options.ledgerPath ?? DEFAULT_DELIVERY_RUN_LATEST_PATH,
     ),
     ciMode: options.ciMode ?? Boolean(process.env.CI),
-    ...(options.threshold === undefined ? {} : { threshold: options.threshold }),
+    ...(options.threshold === undefined
+      ? {}
+      : { threshold: options.threshold }),
   });
 
   return {
