@@ -267,6 +267,32 @@ describe("portable workflow characterization baseline", () => {
     ).toEqual([true, true, true, true]);
   });
 
+  it("binds the observed-only assertion to its exact non-blocking semantics", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const targetId = "host-tool-call-sequence-is-observed-only";
+    const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        baseline: {
+          ...documents.baseline,
+          assertions: documents.baseline.assertions.map((assertion) =>
+            assertion.id === targetId
+              ? {
+                  ...assertion,
+                  statement:
+                    "Exact host tool-call sequencing is mandatory portable parity policy.",
+                }
+              : assertion,
+          ),
+        },
+      },
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toContain(
+      "required-assertion-contract-mismatch",
+    );
+  });
+
   it("rejects lexical, case-only, and duplicate normative source aliases", async () => {
     const documents = await loadPortableBaselineDocuments(REPO_ROOT);
     const rootGuide = documents.baseline.sources.find(
@@ -981,6 +1007,45 @@ describe("portable workflow characterization baseline", () => {
       await rm(temporaryRoot, { recursive: true, force: true });
     }
   });
+
+  it.each(["remove", "rewrite"] as const)(
+    "pins bounded-member note semantics when notes are %s",
+    async (mutation) => {
+      const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+      const targetId = "deliver-work-body";
+      const members = documents.overlayMap.boundedClosure.members.map(
+        (member) => {
+          if (member.id !== targetId) return member;
+          if (mutation === "rewrite") {
+            return {
+              ...member,
+              note: "The entire router bundle is approved for migration.",
+            };
+          }
+          const { note: _note, ...withoutNote } = member as typeof member & {
+            note?: string;
+          };
+          return withoutNote;
+        },
+      );
+      const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+        documents: {
+          ...documents,
+          overlayMap: {
+            ...documents.overlayMap,
+            boundedClosure: {
+              ...documents.overlayMap.boundedClosure,
+              members,
+            },
+          },
+        },
+      });
+
+      expect(result.findings.map((finding) => finding.code)).toContain(
+        "bounded-member-contract-mismatch",
+      );
+    },
+  );
 
   it("pins every rule id to its exact classification and assertion membership", async () => {
     const documents = await loadPortableBaselineDocuments(REPO_ROOT);

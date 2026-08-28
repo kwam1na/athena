@@ -10,9 +10,7 @@ type AssertionContractInput = {
   citations: Array<{ sourceId: string; selector: string }>;
 };
 
-export function blockingAssertionSemanticDigest(
-  assertion: AssertionContractInput,
-) {
+export function assertionSemanticDigest(assertion: AssertionContractInput) {
   return createHash("sha256")
     .update(
       JSON.stringify({
@@ -31,7 +29,7 @@ export function blockingAssertionSemanticDigest(
     .digest("hex");
 }
 
-export const REQUIRED_BLOCKING_ASSERTION_DIGESTS = new Map([
+export const REQUIRED_ASSERTION_SEMANTIC_DIGESTS = new Map([
   [
     "route-tracked-implementation-to-execute",
     "6d30e2621e8c1b3060e578746d2ed4d9641cdd618c503e2c1732aec95243fa78",
@@ -163,6 +161,10 @@ export const REQUIRED_BLOCKING_ASSERTION_DIGESTS = new Map([
   [
     "athena-domain-architecture-is-not-portable-workflow",
     "cd4043ac98d015eef078743b0ea0dcf829e3fab8517a49f0780c03906ff8dfd4",
+  ],
+  [
+    "host-tool-call-sequence-is-observed-only",
+    "1adfb9d25fd46f60ef3dc4ccf192a7d8b1164302f5471559e1e0eb0b95d7beee",
   ],
 ]);
 
@@ -670,6 +672,7 @@ type BoundedMemberContract = {
   path: string;
   kind: "skill-bundle" | "dependency-bundle";
   classification: "portable-candidate" | "retained-overlay" | "excluded";
+  note?: string;
 };
 
 type RuleIdentityContract = {
@@ -763,6 +766,7 @@ export const BOUNDED_MEMBER_CONTRACTS = new Map<string, BoundedMemberContract>([
       path: ".agents/skills/deliver-work/SKILL.md",
       kind: "skill-bundle",
       classification: "portable-candidate",
+      note: "Router source only; downstream extraction remains rule-level.",
     },
   ],
   [
@@ -787,6 +791,7 @@ export const BOUNDED_MEMBER_CONTRACTS = new Map<string, BoundedMemberContract>([
       path: ".agents/skills/ce-plan",
       kind: "skill-bundle",
       classification: "portable-candidate",
+      note: "Research source for a smaller self-contained planning workflow, not a wholesale export.",
     },
   ],
   [
@@ -795,6 +800,7 @@ export const BOUNDED_MEMBER_CONTRACTS = new Map<string, BoundedMemberContract>([
       path: ".agents/skills/ce-work",
       kind: "skill-bundle",
       classification: "portable-candidate",
+      note: "Research source for portable execution posture and handoff categories.",
     },
   ],
   [
@@ -803,6 +809,7 @@ export const BOUNDED_MEMBER_CONTRACTS = new Map<string, BoundedMemberContract>([
       path: ".agents/skills/ce-code-review",
       kind: "skill-bundle",
       classification: "portable-candidate",
+      note: "Research source for a bounded reviewer contract; persona-specific execution is not portable core.",
     },
   ],
   [
@@ -819,6 +826,7 @@ export const BOUNDED_MEMBER_CONTRACTS = new Map<string, BoundedMemberContract>([
       path: ".agents/skills/ce-compound",
       kind: "skill-bundle",
       classification: "portable-candidate",
+      note: "Reusable compounding threshold is a candidate; Athena solution schema remains overlay.",
     },
   ],
   [
@@ -835,6 +843,7 @@ export const BOUNDED_MEMBER_CONTRACTS = new Map<string, BoundedMemberContract>([
       path: ".agents/skills/execute",
       kind: "skill-bundle",
       classification: "retained-overlay",
+      note: "Athena's end-to-end execution source stays local; only classified rule slices may feed downstream core or Linear adapter work.",
     },
   ],
   [
@@ -843,6 +852,7 @@ export const BOUNDED_MEMBER_CONTRACTS = new Map<string, BoundedMemberContract>([
       path: ".agents/skills/ce-brainstorm",
       kind: "skill-bundle",
       classification: "portable-candidate",
+      note: "Research source for fuzzy-requirements routing and a smaller portable requirements workflow.",
     },
   ],
   [
@@ -851,6 +861,7 @@ export const BOUNDED_MEMBER_CONTRACTS = new Map<string, BoundedMemberContract>([
       path: ".agents/skills/ce-debug",
       kind: "skill-bundle",
       classification: "portable-candidate",
+      note: "Research source for diagnosis-first routing; its shipping and tracker mechanics are not portable core.",
     },
   ],
   [
@@ -859,6 +870,7 @@ export const BOUNDED_MEMBER_CONTRACTS = new Map<string, BoundedMemberContract>([
       path: ".agents/skills/ce-doc-review",
       kind: "dependency-bundle",
       classification: "portable-candidate",
+      note: "Mandatory planning/requirements review dependency and research source; the full persona workflow is not a wholesale export.",
     },
   ],
   [
@@ -867,6 +879,7 @@ export const BOUNDED_MEMBER_CONTRACTS = new Map<string, BoundedMemberContract>([
       path: ".agents/skills/ce-proof",
       kind: "dependency-bundle",
       classification: "excluded",
+      note: "Optional Proof-specific human review transport, not a core planning dependency.",
     },
   ],
   [
@@ -875,6 +888,7 @@ export const BOUNDED_MEMBER_CONTRACTS = new Map<string, BoundedMemberContract>([
       path: ".agents/skills/ce-commit",
       kind: "dependency-bundle",
       classification: "excluded",
+      note: "Optional Git handoff adapter invoked by execution and diagnosis workflows.",
     },
   ],
   [
@@ -883,6 +897,7 @@ export const BOUNDED_MEMBER_CONTRACTS = new Map<string, BoundedMemberContract>([
       path: ".agents/skills/ce-commit-push-pr",
       kind: "dependency-bundle",
       classification: "excluded",
+      note: "Optional GitHub/Git delivery adapter; Athena's PR rules remain a retained overlay.",
     },
   ],
   [
@@ -891,6 +906,7 @@ export const BOUNDED_MEMBER_CONTRACTS = new Map<string, BoundedMemberContract>([
       path: ".agents/skills/ce-compound-refresh",
       kind: "dependency-bundle",
       classification: "excluded",
+      note: "Conditional learning-maintenance follow-up outside the bounded portable v1 workflow.",
     },
   ],
   [
@@ -899,6 +915,7 @@ export const BOUNDED_MEMBER_CONTRACTS = new Map<string, BoundedMemberContract>([
       path: ".agents/skills/ce-landed-change-report",
       kind: "dependency-bundle",
       classification: "retained-overlay",
+      note: "Required Athena reporting dependency invoked by execute; it remains repository-owned overlay policy.",
     },
   ],
   [
@@ -907,6 +924,7 @@ export const BOUNDED_MEMBER_CONTRACTS = new Map<string, BoundedMemberContract>([
       path: ".agents/skills/ce-frontend-design",
       kind: "dependency-bundle",
       classification: "excluded",
+      note: "Closest repository-local implementation of execute's frontend-skill aliases; alias mapping is observed-only and non-blocking.",
     },
   ],
   [
@@ -915,6 +933,7 @@ export const BOUNDED_MEMBER_CONTRACTS = new Map<string, BoundedMemberContract>([
       path: ".agents/skills/ce-demo-reel",
       kind: "dependency-bundle",
       classification: "excluded",
+      note: "Conditional PR evidence adapter invoked by the commit/push/PR dependency.",
     },
   ],
   [
@@ -923,6 +942,7 @@ export const BOUNDED_MEMBER_CONTRACTS = new Map<string, BoundedMemberContract>([
       path: ".agents/skills/ce-setup",
       kind: "dependency-bundle",
       classification: "excluded",
+      note: "Tool installation fallback referenced by optional visual adapters; not delivery workflow parity.",
     },
   ],
   [
@@ -931,6 +951,7 @@ export const BOUNDED_MEMBER_CONTRACTS = new Map<string, BoundedMemberContract>([
       path: ".agents/skills/ce-worktree",
       kind: "dependency-bundle",
       classification: "excluded",
+      note: "Optional Git worktree isolation adapter invoked by ce-work; repository branch policy remains authoritative.",
     },
   ],
   [
@@ -939,6 +960,7 @@ export const BOUNDED_MEMBER_CONTRACTS = new Map<string, BoundedMemberContract>([
       path: ".agents/skills/ce-session-inventory",
       kind: "dependency-bundle",
       classification: "excluded",
+      note: "Required dependency of the selected excluded session-historian prompt; session mining is outside portable delivery v1.",
     },
   ],
   [
@@ -947,6 +969,7 @@ export const BOUNDED_MEMBER_CONTRACTS = new Map<string, BoundedMemberContract>([
       path: ".agents/skills/ce-session-extract",
       kind: "dependency-bundle",
       classification: "excluded",
+      note: "Required dependency of the selected excluded session-historian prompt; transcript extraction is outside portable delivery v1.",
     },
   ],
 ] as const);

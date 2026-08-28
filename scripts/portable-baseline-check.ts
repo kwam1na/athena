@@ -12,9 +12,9 @@ import path from "node:path";
 
 import {
   BOUNDED_MEMBER_CONTRACTS,
-  blockingAssertionSemanticDigest,
+  assertionSemanticDigest,
   NORMATIVE_SOURCE_CONTRACTS,
-  REQUIRED_BLOCKING_ASSERTION_DIGESTS,
+  REQUIRED_ASSERTION_SEMANTIC_DIGESTS,
   REQUIRED_BLOCKING_DEPENDENCY_CONTRACTS,
   REQUIRED_NON_BLOCKING_DEPENDENCY_TUPLES,
   REQUIRED_REFERENCE_DISPOSITION_CONTRACTS,
@@ -39,6 +39,7 @@ const FIXTURE_DIRECTORY = "scripts/portable-baseline-fixtures";
 const BASELINE_SCHEMA_VERSION = "athena-portable-characterization-baseline/1";
 const OVERLAY_SCHEMA_VERSION = "athena-portable-overlay-map/1";
 const SCENARIO_SCHEMA_VERSION = "athena-portable-characterization-scenario/1";
+const OBSERVED_ONLY_ASSERTION_ID = "host-tool-call-sequence-is-observed-only";
 
 const RULE_CLASSIFICATIONS = new Set([
   "portable-candidate",
@@ -298,6 +299,7 @@ export type BoundedClosureMember = {
   classification: "portable-candidate" | "retained-overlay" | "excluded";
   fileCount: number;
   treeDigest: string;
+  note?: string;
 };
 
 export type PortableOverlayMap = {
@@ -1093,26 +1095,31 @@ export async function auditPortableWorkflowBaseline(
   for (const [
     assertionId,
     semanticDigest,
-  ] of REQUIRED_BLOCKING_ASSERTION_DIGESTS) {
+  ] of REQUIRED_ASSERTION_SEMANTIC_DIGESTS) {
     const assertion = assertionById.get(assertionId);
+    const isObservedOnlyContract = assertionId === OBSERVED_ONLY_ASSERTION_ID;
     if (!assertion) {
       findings.push({
-        code: "required-blocking-assertion-contract-missing",
-        message: `Required blocking assertion ${assertionId} is missing.`,
+        code: isObservedOnlyContract
+          ? "required-assertion-contract-missing"
+          : "required-blocking-assertion-contract-missing",
+        message: `Required assertion ${assertionId} is missing.`,
       });
       continue;
     }
-    if (blockingAssertionSemanticDigest(assertion) !== semanticDigest) {
+    if (assertionSemanticDigest(assertion) !== semanticDigest) {
       findings.push({
-        code: "required-blocking-assertion-contract-mismatch",
-        message: `Required blocking assertion ${assertionId} no longer matches its exact approved semantics and citation provenance.`,
+        code: isObservedOnlyContract
+          ? "required-assertion-contract-mismatch"
+          : "required-blocking-assertion-contract-mismatch",
+        message: `Required assertion ${assertionId} no longer matches its exact approved semantics and citation provenance.`,
       });
     }
   }
   for (const assertion of baseline.assertions) {
     if (
       assertion.parity === "blocking" &&
-      !REQUIRED_BLOCKING_ASSERTION_DIGESTS.has(assertion.id)
+      !REQUIRED_ASSERTION_SEMANTIC_DIGESTS.has(assertion.id)
     ) {
       findings.push({
         code: "blocking-assertion-contract-unexpected",
@@ -1326,11 +1333,12 @@ export async function auditPortableWorkflowBaseline(
     if (
       member.path !== contract.path ||
       member.kind !== contract.kind ||
-      member.classification !== contract.classification
+      member.classification !== contract.classification ||
+      member.note !== contract.note
     ) {
       findings.push({
         code: "bounded-member-contract-mismatch",
-        message: `Bounded member ${memberId} must preserve its exact canonical path, kind, and classification.`,
+        message: `Bounded member ${memberId} must preserve its exact canonical path, kind, classification, and optional note semantics.`,
       });
     }
   }
