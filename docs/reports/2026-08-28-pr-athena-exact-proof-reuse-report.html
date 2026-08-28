@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Exact Proof Reuse for pr:athena</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="2a7a6ea7d2b63a3a50e6a178578c8b044a4e60ccb237604c6485e61c63491373">
+  <header data-report-section="header">
+    <h1>Exact Proof Reuse for pr:athena</h1>
+    <p>How the authoritative delivery gate skips repeated work without weakening admission</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>V26-1438</li>
+      <li>pr:athena remains authoritative</li>
+      <li>1,679 harness tests green</li>
+      <li>No deployment</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Issue</dt><dd>V26-1438</dd>
+      <dt>Parent</dt><dd>V26-1412</dd>
+      <dt>Branch</dt><dd>codex/V26-1438-pr-athena-proof-reuse</dd>
+      <dt>Candidate</dt><dd>1844b65107f45ecb8e397b3655ddd33f9a5e41f7</dd>
+      <dt>Base</dt><dd>e538cbf6ef44b845d9a1daa1ccca2926f0669b53</dd>
+      <dt>Status</dt><dd>Delivery candidate; PR, merge, and root alignment pending</dd>
+      <dt>Deployment</dt><dd>Not applicable for infrastructure-only work</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+      <p>This candidate lets a repeated bun run pr:athena invocation reuse the repository&#x27;s existing validation proof only when the exact staged delivery identity and every observed authority input still agree. The command remains the final authority; reuse is an admission result of that command, not a shortcut around it.</p>
+      <p>A reusable result skips the five merge-grade phases and reports proof_reused in memory. It does not overwrite the authoritative full-run latest or history ledgers. Every missing, stale, malformed, contradictory, unreadable, or changed input names the reason and runs the normal full gate.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Why repeated validation needed a safe fast path</h2>
+      <p>Athena already records a Git-private proof after a successful full delivery gate, and pre-push can reuse it. Running pr:athena again on the same prepared candidate nevertheless repeated the expensive phases because the proof evaluator&#x27;s default clean-worktree posture did not admit the staged-index state that pr:athena itself validates.</p>
+      <p>The useful outcome is not generic caching. It is narrowly avoiding duplicated work when the repository can prove that the candidate, base, validation wiring, proof bytes, and authoritative ledger still describe the same accepted delivery.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model: a boarding pass checked against the manifest</h2>
+      <p>The stored proof is a boarding pass, not permission to fly. pr:athena is the gate agent. Before admitting reuse, it checks the pass against the current passenger identity and the authoritative flight manifest: the exact tree and base, validation wiring, proof bytes, five-phase delivery ledger, and gate decisions.</p>
+      <p>If every observed identity agrees, the gate agent records that the current admission reused an already completed inspection. If any identity is absent or disagrees, the boarding pass is not trusted and the full inspection runs.</p>
+      <ul>
+        <li>Proof evaluator: verifies the current candidate and stored proof contract.</li>
+        <li>Authoritative ledger: proves the complete gate actually ran and passed.</li>
+        <li>pr:athena wrapper: owns the reuse or full-run admission decision.</li>
+        <li>Existing telemetry: distinguishes proof reuse without creating another evidence plane.</li>
+      </ul>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+      <p>Before: pre-push could reuse a valid clean-worktree proof, but a repeated pr:athena invocation always ran prepare, preflight, validate, record-proof, and scorecard again.</p>
+      <p>After: pr:athena calls the same evaluator in an explicit staged-index mode. It independently corroborates the reusable proof against one canonical completed ledger. A match skips the phases; every other status falls through to the unchanged full gate. Pre-push keeps its clean-only default.</p>
+  </section>
+  <section data-report-section="mechanics">
+    <h2>How reuse is admitted</h2>
+      <p>First, the wrapper reads the current deliverable fingerprint and authoritative latest-ledger bytes. The shared evaluator then checks the staged candidate, base, Bun version, command wiring, validation fingerprint, and stored proof shape. Review-loop evidence remains best-effort telemetry and does not authorize reuse.</p>
+      <p>Second, the evaluator makes one final concurrent observation of candidate identity, exact proof bytes, and ledger stability. It performs no later awaited work before returning. This closes the earlier serial race windows without claiming an atomic filesystem snapshot.</p>
+      <p>Third, the wrapper requires a canonical passing ledger with the exact ordered prepare, preflight, validate, record-proof, and scorecard spans; recomputed summary and duplicate metadata; and matching admitted gate events. Only then does it return proof_reused and skip commands.</p>
+      <p>If full fallback runs, failed phases clear the old proof. Prior malformed latest or baseline files cannot strand recovery, and only a complete five-phase pass can become the next scorecard baseline.</p>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+      <ul>
+        <li>Missing or unsupported proof: run the full gate and report why reuse was unavailable.</li>
+        <li>Tree, base, Bun, command, or validation-wiring drift: reject reuse and run the full gate.</li>
+        <li>Incomplete, contradictory, stale, or unreadable authoritative ledger: reject reuse and run the full gate.</li>
+        <li>Candidate, proof, or ledger change visible during the final observation: return stale and run the full gate.</li>
+        <li>Fallback phase failure: clear stored proof so a later retry cannot reuse evidence for a failed run.</li>
+        <li>Malformed latest content is non-authoritative and can be overwritten by a successful full run. A malformed baseline reads as missing on that run; on the following full run, the prior healthy latest ledger can be promoted as the baseline.</li>
+        <li>Concurrent filesystem observation is not atomic; eliminating the remaining external-writer boundary would require locking or a new atomic authority source, intentionally outside this delivery.</li>
+      </ul>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed and what intentionally did not</h2>
+      <p>Changed: pr:athena can admit exact staged proof reuse; proof_reused is accepted by delivery telemetry; authoritative-ledger corroboration and baseline recovery are stricter; and operator output names reuse or the fallback reason.</p>
+      <p>Unchanged: pr:athena remains the final authority; the full phase order and commands are unchanged; pre-push stays clean-only by default; no reusable result overwrites full-run latest/history evidence; no new cache, receipt, proof format, telemetry plane, deployment behavior, or Linear capability constraint was introduced.</p>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and delivery status</h2>
+      <p>The final repository harness passed 1,679 tests with zero failures. Focused suites exercised exact reuse, staged versus clean-only behavior, all fallback states, evaluator failures, proof/candidate/ledger races, authoritative-ledger preservation, proof clearing, telemetry acceptance, provisional-ledger rejection, and corrupt baseline recovery.</p>
+      <p>The review loop took nine passes, each bound to its then-current prepared candidate; the final pass was bound to tree 1844b65107f45ecb8e397b3655ddd33f9a5e41f7. Eleven final reviewers completed with zero unresolved actionable or blocking findings. Nineteen actionable findings were resolved, one non-actionable filesystem-atomicity advisory was retained, and no expansion work was deferred. Strict review evidence was recorded for the bound candidate.</p>
+      <p>At report creation time, preparation and review evidence are complete. The authoritative pr:athena run, proof-reuse demonstration, tracked delivery telemetry, PR, merge, and root alignment remain pending. Production deployment is not applicable to this infrastructure-only delivery.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>How to extend or debug this safely</h2>
+      <ul>
+        <li>Keep one shared proof evaluator; add new invalidation inputs there instead of creating another cache contract.</li>
+        <li>Treat reusable as an admission result only after corroborating the complete authoritative ledger.</li>
+        <li>Keep pre-push&#x27;s clean-only default distinct from pr:athena&#x27;s explicit staged-index mode.</li>
+        <li>When fallback behaves unexpectedly, inspect the named proof status, latest ledger, baseline, and final candidate identity before changing policy.</li>
+        <li>Preserve the last complete full-run ledger when reuse succeeds; a zero-command reuse result is not replacement evidence.</li>
+        <li>Prefer fail-closed fallback over locks, new orchestration, or generalized cache infrastructure unless a future measured need changes the contract.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>scripts/pre-push-validation-proof.ts</code></td><td>Owns the shared proof evaluator, explicit staged-index mode, and final candidate/proof/ledger observation.</td></tr>
+        <tr><td><code>scripts/pr-athena-delivery-run.ts</code></td><td>Corroborates reusable proof against the authoritative five-phase ledger and owns reuse versus full fallback.</td></tr>
+        <tr><td><code>scripts/harness-delivery-run-ledger.ts</code></td><td>Validates complete passing baselines, shares review-loop invariants, and degrades malformed baseline state to missing.</td></tr>
+        <tr><td><code>scripts/delivery-run-telemetry.ts</code></td><td>Accepts proof_reused in the existing delivery telemetry contract without adding another plane.</td></tr>
+        <tr><td><code>scripts/pre-push-validation-proof.test.ts</code></td><td>Proves staged and clean-only modes plus candidate, proof-byte, and ledger stability boundaries.</td></tr>
+        <tr><td><code>scripts/pr-athena-delivery-run.test.ts</code></td><td>Proves command skipping, every fallback class, authoritative artifact preservation, and recovery behavior.</td></tr>
+        <tr><td><code>scripts/harness-delivery-run-ledger.test.ts</code></td><td>Proves complete five-phase promotion and malformed, partial, or invalid-review-loop baseline rejection.</td></tr>
+        <tr><td><code>docs/solutions/harness/proof-aware-delivery-run-metrics-2026-06-18.md</code></td><td>Captures the reusable proof-admission and baseline-recovery guidance without overstating atomicity.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What remains the final authority when a proof is reused?</p>
+        <ol data-quiz-options>
+          <li>The stored proof file</li>
+          <li>The pre-push hook</li>
+          <li data-quiz-correct>bun run pr:athena</li>
+          <li>The telemetry recorder</li>
+        </ol>
+        <p data-quiz-explanation>The command evaluates whether reuse is admissible; the proof is evidence, not an independent authority.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does pr:athena use an explicit staged-index evaluator mode?</p>
+        <ol data-quiz-options>
+          <li>To accept any dirty worktree</li>
+          <li data-quiz-correct>To evaluate the exact staged candidate that the gate validates</li>
+          <li>To bypass the base check</li>
+          <li>To change pre-push behavior</li>
+        </ol>
+        <p data-quiz-explanation>The merge candidate lives in the staged index during preparation, while pre-push still retains its clean-only default.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which evidence is required in addition to a reusable proof?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>A complete matching five-phase authoritative ledger</li>
+          <li>An open Linear issue only</li>
+          <li>A previous console transcript</li>
+          <li>A synthetic zero-command ledger</li>
+        </ol>
+        <p data-quiz-explanation>The ledger proves that the full authoritative gate actually completed for the same delivery identity.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens when proof evaluation is uncertain or stale?</p>
+        <ol data-quiz-options>
+          <li>Reuse proceeds with a warning</li>
+          <li>Only scorecard runs</li>
+          <li data-quiz-correct>The normal full gate runs with a named reason</li>
+          <li>The proof becomes authoritative</li>
+        </ol>
+        <p data-quiz-explanation>Every non-reusable state fails closed into the existing full delivery gate.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens to latest and history ledgers after successful reuse?</p>
+        <ol data-quiz-options>
+          <li>They are replaced by a zero-command ledger</li>
+          <li>They are deleted</li>
+          <li data-quiz-correct>The prior full-run authority evidence is preserved</li>
+          <li>Only history is rewritten</li>
+        </ol>
+        <p data-quiz-explanation>Reuse is an in-memory admission result and must not replace the complete run that authorized it.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which ordered phases make a ledger eligible as a completed baseline?</p>
+        <ol data-quiz-options>
+          <li>Prepare and validate only</li>
+          <li>Preflight, validate, and scorecard</li>
+          <li data-quiz-correct>Prepare, preflight, validate, record-proof, and scorecard</li>
+          <li>Any five passing commands</li>
+        </ol>
+        <p data-quiz-explanation>A provisional four-phase ledger is not complete until the scorecard span has passed.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is proof_reused added to existing telemetry?</p>
+        <ol data-quiz-options>
+          <li>To create a new cache plane</li>
+          <li data-quiz-correct>To distinguish current-gate reuse from a full rerun without changing authority</li>
+          <li>To replace proof_recorded</li>
+          <li>To limit later Linear operations</li>
+        </ol>
+        <p data-quiz-explanation>The additive state makes the admission path observable while retaining the existing ledger and telemetry system.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How does the gate handle a malformed existing baseline?</p>
+        <ol data-quiz-options>
+          <li>It remains a permanent blocker</li>
+          <li data-quiz-correct>It is treated as missing so a full fallback can recover</li>
+          <li>It is accepted when status says pass</li>
+          <li>It is uploaded to Linear</li>
+        </ol>
+        <p data-quiz-explanation>Invalid baseline content is not authoritative and must not strand the run that can replace it.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What guarantee does the final concurrent evidence observation intentionally not claim?</p>
+        <ol data-quiz-options>
+          <li>No later awaited work before admission</li>
+          <li>Exact proof-byte comparison</li>
+          <li data-quiz-correct>An atomic filesystem snapshot against unconstrained external writers</li>
+          <li>Candidate identity comparison</li>
+        </ol>
+        <p data-quiz-explanation>Atomicity would require locking or one atomic authority source, which is outside this delivery&#x27;s simplicity contract.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the delivery status when this report is created?</p>
+        <ol data-quiz-options>
+          <li>Merged and deployed</li>
+          <li data-quiz-correct>Delivery candidate; gate demonstration, PR, merge, and root alignment pending; deployment not applicable</li>
+          <li>Batch migration complete</li>
+          <li>Linear capability restricted</li>
+        </ol>
+        <p data-quiz-explanation>The report is authored before the final gate and PR, and this infrastructure-only change does not require deployment.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>Session context researcher</dt><dd>Reconstructed the outcome, scope decisions, review history, Linear progress posture, no-deploy finish line, and durable lessons.</dd>
+      <dt>Delivered diff researcher</dt><dd>Mapped proof evaluation, admission, ledger, telemetry, tests, generated artifacts, authority boundaries, and intentionally unchanged behavior.</dd>
+      <dt>Quiz and report reviewer</dt><dd>Checked authority inputs, two-step baseline recovery, review-pass wording, delivery-candidate status, and all ten quiz answers; flagged factual corrections that were applied before the final recheck.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

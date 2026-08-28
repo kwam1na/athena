@@ -76,6 +76,14 @@ type ProofRuntimeOptions = {
 
 type ProofSnapshotMode = "evaluate" | "record";
 
+export type PrePushValidationProofEvaluationMode =
+  "clean-only" | "allow-staged-index";
+
+export type PrePushValidationProofEvaluationOptions = {
+  evaluationMode?: PrePushValidationProofEvaluationMode;
+  verifyStability?: () => boolean | Promise<boolean>;
+};
+
 type DeliveryTelemetryCheck = (
   rootDir: string,
   options?: DeliveryRunTelemetryCheckOptions,
@@ -384,6 +392,7 @@ async function collectProofSnapshot(
   rootDir: string,
   options: ProofRuntimeOptions = {},
   mode: ProofSnapshotMode = "evaluate",
+  evaluationMode: PrePushValidationProofEvaluationMode = "clean-only",
 ): Promise<ProofSnapshot> {
   const spawn = options.spawn ?? Bun.spawn;
   const [proofPath, bunVersion, prAthenaScript, validationFingerprint] =
@@ -412,7 +421,11 @@ async function collectProofSnapshot(
     }
     throw new Error(capture.reason);
   }
-  if (mode !== "record" && capture.candidate.mode !== "clean") {
+  if (
+    mode !== "record" &&
+    capture.candidate.mode !== "clean" &&
+    evaluationMode !== "allow-staged-index"
+  ) {
     throw new Error("working tree is not clean");
   }
 
@@ -463,22 +476,42 @@ function classifySnapshotError(
   return "proof_not_recorded";
 }
 
+function sameProofSnapshot(left: ProofSnapshot, right: ProofSnapshot) {
+  return (
+    left.proofPath === right.proofPath &&
+    left.recordedHeadSha === right.recordedHeadSha &&
+    left.validatedTreeSha === right.validatedTreeSha &&
+    left.recordedStatusMode === right.recordedStatusMode &&
+    left.baseSha === right.baseSha &&
+    left.bunVersion === right.bunVersion &&
+    left.prAthenaScript === right.prAthenaScript &&
+    left.validationFingerprint === right.validationFingerprint
+  );
+}
+
 export async function evaluatePrePushValidationProof(
   rootDir: string,
-  options: ProofRuntimeOptions = {},
+  options: ProofRuntimeOptions & PrePushValidationProofEvaluationOptions = {},
 ): Promise<PrePushValidationProofEvaluation> {
   let snapshot: ProofSnapshot;
   try {
-    snapshot = await collectProofSnapshot(rootDir, options);
+    snapshot = await collectProofSnapshot(
+      rootDir,
+      options,
+      "evaluate",
+      options.evaluationMode,
+    );
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     return { reusable: false, status: classifySnapshotError(reason), reason };
   }
 
   const fsReadFile = options.readFile ?? readFile;
+  let proofBytes: string;
   let proof: unknown;
   try {
-    proof = JSON.parse(await fsReadFile(snapshot.proofPath, "utf8"));
+    proofBytes = await fsReadFile(snapshot.proofPath, "utf8");
+    proof = JSON.parse(proofBytes);
   } catch {
     return {
       reusable: false,
@@ -584,6 +617,75 @@ export async function evaluatePrePushValidationProof(
         proofPath: snapshot.proofPath,
       };
     }
+  }
+
+  // Start one final observation bracket for every reusable input. After it
+  // resolves, admission only compares the captures synchronously and returns,
+  // leaving no later awaited operation that can reopen a serial race window.
+  const [finalSnapshotResult, proofBytesResult, stabilityResult] =
+    await Promise.allSettled([
+      collectProofSnapshot(
+        rootDir,
+        options,
+        "evaluate",
+        options.evaluationMode,
+      ),
+      fsReadFile(snapshot.proofPath, "utf8"),
+      Promise.resolve().then(() => options.verifyStability?.() ?? true),
+    ]);
+
+  if (
+    proofBytesResult.status === "rejected" ||
+    proofBytesResult.value !== proofBytes
+  ) {
+    return {
+      reusable: false,
+      status: "stale",
+      reason: "stored pr:athena proof changed during proof evaluation",
+      proofPath: snapshot.proofPath,
+    };
+  }
+
+  if (finalSnapshotResult.status === "rejected") {
+    const error = finalSnapshotResult.reason;
+    return {
+      reusable: false,
+      status: "stale",
+      reason: `candidate or validation inputs changed during proof evaluation: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      proofPath: snapshot.proofPath,
+    };
+  }
+
+  if (!sameProofSnapshot(snapshot, finalSnapshotResult.value)) {
+    return {
+      reusable: false,
+      status: "stale",
+      reason: "candidate or validation inputs changed during proof evaluation",
+      proofPath: snapshot.proofPath,
+    };
+  }
+
+  if (stabilityResult.status === "rejected") {
+    const error = stabilityResult.reason;
+    return {
+      reusable: false,
+      status: "stale",
+      reason: `corroborating evidence changed during proof evaluation: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      proofPath: snapshot.proofPath,
+    };
+  }
+
+  if (!stabilityResult.value) {
+    return {
+      reusable: false,
+      status: "stale",
+      reason: "corroborating evidence changed during proof evaluation",
+      proofPath: snapshot.proofPath,
+    };
   }
 
   return {

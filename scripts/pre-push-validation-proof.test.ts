@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -272,6 +272,198 @@ describe("pre-push validation proof", () => {
     });
   });
 
+  it("fails closed when the candidate changes during proof evaluation", async () => {
+    const rootDir = await createFixtureRoot();
+    await recordPrePushValidationProof(rootDir, {
+      spawn: createSpawn({}),
+      logger: { log() {}, warn() {} },
+    });
+    let proofPathReads = 0;
+    let currentTreeSha = "tree-a";
+    const stableSpawn = createSpawn({});
+    const racingSpawn = (command: string[]) => {
+      if (
+        command.join(" ") ===
+        "git rev-parse --git-path codex/pre-push-pr-athena-proof.json"
+      ) {
+        proofPathReads += 1;
+        if (proofPathReads === 2) currentTreeSha = "tree-b";
+      }
+      if (
+        command.join(" ") === "git rev-parse --verify HEAD^{tree}" ||
+        command.join(" ") === "git write-tree"
+      ) {
+        return {
+          exited: Promise.resolve(0),
+          stdout: new Response(`${currentTreeSha}\n`).body,
+          stderr: new Response("").body,
+        };
+      }
+      return stableSpawn(command);
+    };
+
+    await expect(
+      evaluatePrePushValidationProof(rootDir, { spawn: racingSpawn }),
+    ).resolves.toMatchObject({
+      reusable: false,
+      status: "stale",
+      reason: "candidate or validation inputs changed during proof evaluation",
+    });
+    expect(proofPathReads).toBe(2);
+  });
+
+  it("fails closed when the exact proof bytes are revoked during evaluation", async () => {
+    const rootDir = await createFixtureRoot();
+    const spawn = createSpawn({});
+    await recordPrePushValidationProof(rootDir, {
+      spawn,
+      logger: { log() {}, warn() {} },
+    });
+    const proofPath = path.join(rootDir, "proof.json");
+    let proofReads = 0;
+    const racingReadFile = (async (
+      filePath: Parameters<typeof readFile>[0],
+      options?: Parameters<typeof readFile>[1],
+    ) => {
+      if (path.resolve(String(filePath)) === proofPath) {
+        proofReads += 1;
+        if (proofReads === 2) {
+          throw Object.assign(new Error("proof removed"), { code: "ENOENT" });
+        }
+      }
+      return readFile(filePath, options as never);
+    }) as typeof readFile;
+
+    await expect(
+      evaluatePrePushValidationProof(rootDir, {
+        spawn,
+        readFile: racingReadFile,
+      }),
+    ).resolves.toMatchObject({
+      reusable: false,
+      status: "stale",
+      reason: "stored pr:athena proof changed during proof evaluation",
+    });
+    expect(proofReads).toBe(2);
+  });
+
+  it("fails closed when proof bytes change after the former final proof read", async () => {
+    const rootDir = await createFixtureRoot();
+    const stableSpawn = createSpawn({});
+    await recordPrePushValidationProof(rootDir, {
+      spawn: stableSpawn,
+      logger: { log() {}, warn() {} },
+    });
+    const proofPath = path.join(rootDir, "proof.json");
+    let finalCaptureStarted = false;
+    let proofPathReads = 0;
+    let proofReads = 0;
+    const racingSpawn = (command: string[]) => {
+      if (
+        command.join(" ") ===
+        "git rev-parse --git-path codex/pre-push-pr-athena-proof.json"
+      ) {
+        proofPathReads += 1;
+        if (proofPathReads === 2) finalCaptureStarted = true;
+      }
+      return stableSpawn(command);
+    };
+    const racingReadFile = (async (
+      filePath: Parameters<typeof readFile>[0],
+      options?: Parameters<typeof readFile>[1],
+    ) => {
+      if (path.resolve(String(filePath)) === proofPath) {
+        proofReads += 1;
+        if (proofReads === 2 && finalCaptureStarted) {
+          return `${await readFile(filePath, options as never)} `;
+        }
+      }
+      return readFile(filePath, options as never);
+    }) as typeof readFile;
+
+    await expect(
+      evaluatePrePushValidationProof(rootDir, {
+        spawn: racingSpawn,
+        readFile: racingReadFile,
+      }),
+    ).resolves.toMatchObject({
+      reusable: false,
+      status: "stale",
+      reason: "stored pr:athena proof changed during proof evaluation",
+    });
+    expect(proofReads).toBe(2);
+  });
+
+  it("fails closed when the candidate changes during the former final ledger check", async () => {
+    const rootDir = await createFixtureRoot();
+    const stableSpawn = createSpawn({});
+    await recordPrePushValidationProof(rootDir, {
+      spawn: stableSpawn,
+      logger: { log() {}, warn() {} },
+    });
+    let currentTreeSha = "tree-a";
+    const racingSpawn = (command: string[]) => {
+      if (
+        command.join(" ") === "git rev-parse --verify HEAD^{tree}" ||
+        command.join(" ") === "git write-tree"
+      ) {
+        return {
+          exited: Promise.resolve(0),
+          stdout: new Response(`${currentTreeSha}\n`).body,
+          stderr: new Response("").body,
+        };
+      }
+      return stableSpawn(command);
+    };
+
+    await expect(
+      evaluatePrePushValidationProof(rootDir, {
+        spawn: racingSpawn,
+        verifyStability: () => {
+          currentTreeSha = "tree-b";
+          return true;
+        },
+      }),
+    ).resolves.toMatchObject({
+      reusable: false,
+      status: "stale",
+      reason: "candidate or validation inputs changed during proof evaluation",
+    });
+  });
+
+  it("fails closed when corroborating evidence changes during the final candidate capture", async () => {
+    const rootDir = await createFixtureRoot();
+    const stableSpawn = createSpawn({});
+    await recordPrePushValidationProof(rootDir, {
+      spawn: stableSpawn,
+      logger: { log() {}, warn() {} },
+    });
+    let proofPathReads = 0;
+    let evidenceStable = true;
+    const racingSpawn = (command: string[]) => {
+      if (
+        command.join(" ") ===
+        "git rev-parse --git-path codex/pre-push-pr-athena-proof.json"
+      ) {
+        proofPathReads += 1;
+        if (proofPathReads === 2) evidenceStable = false;
+      }
+      return stableSpawn(command);
+    };
+
+    await expect(
+      evaluatePrePushValidationProof(rootDir, {
+        spawn: racingSpawn,
+        verifyStability: () => evidenceStable,
+      }),
+    ).resolves.toMatchObject({
+      reusable: false,
+      status: "stale",
+      reason: "corroborating evidence changed during proof evaluation",
+    });
+    expect(proofPathReads).toBe(2);
+  });
+
   it("records staged-only pr:athena proof and reuses it after commit creates the same tree", async () => {
     const rootDir = await createFixtureRoot();
     const recorded = await recordPrePushValidationProof(rootDir, {
@@ -305,6 +497,42 @@ describe("pre-push validation proof", () => {
       status: "reusable",
       proof: {
         recordedHeadSha: "head-before",
+        validatedTreeSha: "tree-after",
+        recordedStatusMode: "staged-index",
+      },
+    });
+  });
+
+  it("lets pr:athena reuse an unchanged staged proof while pre-push remains clean-only", async () => {
+    const rootDir = await createFixtureRoot();
+    const stagedSpawn = createSpawn({
+      headSha: "head-before",
+      headTreeSha: "tree-before",
+      indexTreeSha: "tree-after",
+      status: "M  scripts/pre-push-review.ts",
+    });
+    await recordPrePushValidationProof(rootDir, {
+      spawn: stagedSpawn,
+      logger: { log() {}, warn() {} },
+    });
+
+    await expect(
+      evaluatePrePushValidationProof(rootDir, { spawn: stagedSpawn }),
+    ).resolves.toMatchObject({
+      reusable: false,
+      status: "dirty",
+      reason: "working tree is not clean",
+    });
+
+    await expect(
+      evaluatePrePushValidationProof(rootDir, {
+        spawn: stagedSpawn,
+        evaluationMode: "allow-staged-index",
+      }),
+    ).resolves.toMatchObject({
+      reusable: true,
+      status: "reusable",
+      proof: {
         validatedTreeSha: "tree-after",
         recordedStatusMode: "staged-index",
       },

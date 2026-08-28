@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-28T23:46:46.462Z",
+  "branch": "codex/V26-1438-pr-athena-proof-reuse",
+  "headSha": "e538cbf6ef44b845d9a1daa1ccca2926f0669b53",
+  "deliverableDiffFingerprint": "2a7a6ea7d2b63a3a50e6a178578c8b044a4e60ccb237604c6485e61c63491373",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 0,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 652774.208542
+  },
+  "reviewLoop": {
+    "providerId": "execute",
+    "runId": "v26-1438-final-20260828T2225Z",
+    "finalPassId": "pass-9",
+    "recordedAt": "2026-08-28T23:21:30.267Z",
+    "iterationCount": 9,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 10,
+      "P2": 10,
+      "P3": 0
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}

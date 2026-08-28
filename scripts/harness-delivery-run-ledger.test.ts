@@ -16,6 +16,33 @@ import {
 
 const tempRoots: string[] = [];
 
+const completedCommandSpans = [
+  "prepare",
+  "preflight",
+  "validate",
+  "record-proof",
+  "scorecard",
+].map((phase, index) => ({
+  phase,
+  command: `bun run pr:athena:${phase}`,
+  startedAt: `2026-06-18T12:00:0${index}.000Z`,
+  endedAt: `2026-06-18T12:00:0${index + 1}.000Z`,
+  durationMs: 1000,
+  status: "pass" as const,
+  exitCode: 0,
+}));
+
+const validReviewLoop = {
+  providerId: "execute",
+  runId: "run-a",
+  finalPassId: "pass-a",
+  recordedAt: "2026-06-18T11:59:00.000Z",
+  iterationCount: 2,
+  findingCounts: { P0: 0, P1: 1, P2: 0, P3: 0 },
+  deferredExpansionCount: 1,
+  deferredIssueIds: ["V26-1300"],
+};
+
 async function createTempRoot() {
   const rootDir = await mkdtemp(
     path.join(tmpdir(), "athena-delivery-run-ledger-"),
@@ -33,6 +60,31 @@ afterEach(async () => {
 });
 
 describe("delivery run ledger", () => {
+  it("represents exact proof reuse without inventing validation commands", () => {
+    const ledger = createDeliveryRunLedger({
+      generatedAt: "2026-08-28T21:00:00.000Z",
+      status: "pass",
+      proofState: "proof_reused",
+      commandSpans: [],
+    });
+
+    expect(ledger).toMatchObject({
+      status: "pass",
+      proofState: "proof_reused",
+      commandSpans: [],
+      summary: {
+        commandCount: 0,
+        failedCommandCount: 0,
+        totalDurationMs: 0,
+      },
+    });
+    expect(formatDeliveryRunSummary(ledger, null)).toEqual([
+      "[pr:athena] run summary: status=pass proof=proof_reused durationMs=0 commands=0 failed=0 duplicates=0",
+      "[pr:athena] baseline: none recorded yet",
+      "[pr:athena] review loop: no telemetry recorded",
+    ]);
+  });
+
   it("summarizes command spans, duplicate commands, package-suite duplicates, provider skips, and proof state", async () => {
     const ledger = createDeliveryRunLedger({
       generatedAt: "2026-06-18T12:00:00.000Z",
@@ -176,10 +228,14 @@ describe("delivery run ledger", () => {
     ).toMatchObject({
       status: "blocked",
     });
-    expect(await readDeliveryRunBaseline(rootDir)).toMatchObject({
-      status: "blocked",
-      proofState: "proof_not_recorded",
-    });
+    expect(
+      JSON.parse(
+        await readFile(
+          path.join(rootDir, "artifacts/harness-delivery-runs/baseline.json"),
+          "utf8",
+        ),
+      ),
+    ).toMatchObject({ status: "blocked", proofState: "proof_not_recorded" });
   });
 
   it("builds partial baselines that tolerate missing prior artifacts", async () => {
@@ -197,6 +253,68 @@ describe("delivery run ledger", () => {
     });
   });
 
+  it.each([
+    ["malformed JSON", "{ malformed\n"],
+    ["an invalid schema", `${JSON.stringify({ status: "pass" })}\n`],
+  ])("treats %s in the baseline as missing", async (_label, contents) => {
+    const rootDir = await createTempRoot();
+    const baselinePath = path.join(
+      rootDir,
+      "artifacts/harness-delivery-runs/baseline.json",
+    );
+    await Bun.write(baselinePath, contents);
+
+    await expect(readDeliveryRunBaseline(rootDir)).resolves.toBeNull();
+    await expect(buildPartialDeliveryRunBaseline(rootDir)).resolves.toEqual({
+      present: false,
+      status: "missing",
+      generatedAt: null,
+      proofState: null,
+      commandCount: 0,
+      duplicateCommandCount: 0,
+      duplicatePackageSuiteCount: 0,
+      providerSkippedCount: 0,
+      totalDurationMs: 0,
+    });
+  });
+
+  it.each([
+    [
+      "fractional review-loop counts",
+      { ...validReviewLoop, iterationCount: 1.5 },
+    ],
+    [
+      "deferred IDs that disagree with their count",
+      { ...validReviewLoop, deferredExpansionCount: 2 },
+    ],
+    [
+      "reviewer costs that exceed the reported total",
+      {
+        ...validReviewLoop,
+        reviewCost: {
+          unit: "tokens",
+          total: 10,
+          byReviewer: { correctness: 11 },
+        },
+      },
+    ],
+    ["an empty ledger review provider", { ...validReviewLoop, providerId: "" }],
+  ])("treats %s as an invalid baseline", async (_label, reviewLoop) => {
+    const rootDir = await createTempRoot();
+    const ledger = createDeliveryRunLedger({
+      generatedAt: "2026-06-18T12:00:00.000Z",
+      status: "pass",
+      proofState: "proof_recorded",
+      commandSpans: completedCommandSpans,
+      reviewLoop,
+    });
+    await writeDeliveryRunLedger(rootDir, ledger, {
+      baselinePath: "artifacts/harness-delivery-runs/baseline.json",
+    });
+
+    await expect(readDeliveryRunBaseline(rootDir)).resolves.toBeNull();
+  });
+
   it("derives sortable history paths from the ledger timestamp", () => {
     expect(deliveryRunHistoryPath("2026-06-18T12:00:00.000Z")).toBe(
       "artifacts/harness-delivery-runs/history/2026-06-18T12-00-00-000Z.json",
@@ -209,7 +327,7 @@ describe("delivery run ledger", () => {
       generatedAt: "2026-06-18T12:00:00.000Z",
       status: "pass",
       proofState: "proof_recorded",
-      commandSpans: [],
+      commandSpans: completedCommandSpans,
     });
     const blocked = createDeliveryRunLedger({
       generatedAt: "2026-06-19T12:00:00.000Z",
@@ -240,6 +358,22 @@ describe("delivery run ledger", () => {
     await expect(readDeliveryRunBaseline(rootDir)).resolves.toMatchObject({
       generatedAt: "2026-06-18T12:00:00.000Z",
     });
+  });
+
+  it("does not promote a canonical provisional four-phase ledger", async () => {
+    const rootDir = await createTempRoot();
+    const provisional = createDeliveryRunLedger({
+      generatedAt: "2026-06-18T12:00:00.000Z",
+      status: "pass",
+      proofState: "proof_recorded",
+      commandSpans: completedCommandSpans.slice(0, 4),
+    });
+    await writeDeliveryRunLedger(rootDir, provisional);
+
+    await expect(promotePassingLatestToBaseline(rootDir)).resolves.toEqual({
+      promoted: false,
+    });
+    await expect(readDeliveryRunBaseline(rootDir)).resolves.toBeNull();
   });
 
   it("prunes history beyond the retention limit, oldest first", async () => {

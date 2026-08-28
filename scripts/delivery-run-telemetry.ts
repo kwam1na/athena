@@ -165,6 +165,7 @@ const RUN_STATUSES: readonly DeliveryRunStatus[] = [
 const PROOF_STATES: readonly DeliveryRunProofState[] = [
   "proof_recorded",
   "proof_not_recorded",
+  "proof_reused",
   "prepush_reused",
 ];
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;

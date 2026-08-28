@@ -4,6 +4,8 @@ import path from "node:path";
 
 import {
   createDeliveryRunLedger,
+  DEFAULT_DELIVERY_RUN_LATEST_PATH,
+  DELIVERY_RUN_LEDGER_VERSION,
   deliveryRunHistoryPath,
   formatDeliveryRunSummary,
   promotePassingLatestToBaseline,
@@ -40,6 +42,11 @@ import {
   resolveHarnessObligationStorageContext,
 } from "./harness-obligation-records";
 import { evaluatePrAthenaPreparationReceipt } from "./pr-athena-prepare";
+import {
+  evaluatePrePushValidationProof,
+  type PrePushValidationProofEvaluation,
+  type PrePushValidationProofEvaluationOptions,
+} from "./pre-push-validation-proof";
 
 const DEFAULT_PROVIDER_EVIDENCE_PATH =
   "artifacts/harness-delivery-runs/provider-evidence.json";
@@ -87,6 +94,15 @@ type PrAthenaDeliveryRunOptions = {
     rootDir: string,
   ) => Promise<DeliveryRunReviewLoopSummary | undefined>;
   resolveDeliverableFingerprint?: (rootDir: string) => string | undefined;
+  evaluateValidationProof?: (
+    rootDir: string,
+    options?: PrePushValidationProofEvaluationOptions,
+  ) => Promise<PrePushValidationProofEvaluation>;
+  readAuthoritativeLedger?: (
+    rootDir: string,
+  ) => Promise<DeliveryRunLedger | null>;
+  readAuthoritativeLedgerBytes?: (rootDir: string) => Promise<string | null>;
+  logger?: Pick<Console, "log">;
 };
 
 type PrAthenaPhase = {
@@ -107,6 +123,260 @@ const PR_ATHENA_SCORECARD_PHASE: PrAthenaPhase = {
 
 const PROVIDER_EVIDENCE_COMMAND = "write-provider-evidence";
 const PROOF_GIT_PATH = "codex/pre-push-pr-athena-proof.json";
+const PASSING_GATE_RESOLUTION_KINDS = new Set([
+  "satisfied_live_fact",
+  "satisfied_evidence",
+  "waived",
+  "not_applicable",
+]);
+
+function exactJson(left: unknown, right: unknown) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function validIsoTimestamp(value: unknown): value is string {
+  return typeof value === "string" && Number.isFinite(Date.parse(value));
+}
+
+function corroborateReusableProof(
+  proof: Extract<PrePushValidationProofEvaluation, { reusable: true }>["proof"],
+  ledger: DeliveryRunLedger | null,
+  deliverableDiffFingerprint: string | undefined,
+):
+  | { corroborated: true }
+  | {
+      corroborated: false;
+      status: "proof_not_recorded" | "stale";
+      reason: string;
+    } {
+  if (!deliverableDiffFingerprint) {
+    return {
+      corroborated: false,
+      status: "proof_not_recorded",
+      reason: "current deliverable fingerprint could not be resolved",
+    };
+  }
+  if (!ledger || typeof ledger !== "object") {
+    return {
+      corroborated: false,
+      status: "proof_not_recorded",
+      reason: "authoritative full delivery ledger is missing",
+    };
+  }
+  if (
+    ledger.version !== DELIVERY_RUN_LEDGER_VERSION ||
+    !validIsoTimestamp(ledger.generatedAt) ||
+    ledger.status !== "pass" ||
+    ledger.proofState !== "proof_recorded" ||
+    ledger.blockedReason !== undefined ||
+    ledger.interruptedReason !== undefined ||
+    ledger.deliverableDiffFingerprint !== deliverableDiffFingerprint ||
+    !Array.isArray(ledger.commandSpans) ||
+    !Array.isArray(ledger.gateDecisionEvents) ||
+    !Array.isArray(ledger.providerSkippedEvents) ||
+    !Array.isArray(ledger.duplicateCommands) ||
+    !Array.isArray(ledger.duplicatePackageSuites) ||
+    !ledger.summary ||
+    typeof ledger.summary !== "object"
+  ) {
+    return {
+      corroborated: false,
+      status: "stale",
+      reason:
+        "authoritative full delivery ledger does not match the current deliverable",
+    };
+  }
+
+  const expectedPhases = [...PR_ATHENA_PHASES, PR_ATHENA_SCORECARD_PHASE];
+  const hasExactPassingPhases =
+    ledger.commandSpans.length === expectedPhases.length &&
+    expectedPhases.every(
+      (expected, index) =>
+        ledger.commandSpans[index]?.phase === expected.phase &&
+        ledger.commandSpans[index]?.command ===
+          formatHarnessCommand(expected.command) &&
+        validIsoTimestamp(ledger.commandSpans[index]?.startedAt) &&
+        validIsoTimestamp(ledger.commandSpans[index]?.endedAt) &&
+        Date.parse(ledger.commandSpans[index]!.endedAt) >=
+          Date.parse(ledger.commandSpans[index]!.startedAt) &&
+        Number.isFinite(ledger.commandSpans[index]?.durationMs) &&
+        ledger.commandSpans[index]!.durationMs >= 0 &&
+        ledger.commandSpans[index]?.status === "pass" &&
+        ledger.commandSpans[index]?.exitCode === 0,
+    );
+  if (!hasExactPassingPhases) {
+    return {
+      corroborated: false,
+      status: "stale",
+      reason:
+        "authoritative full delivery ledger does not contain the exact passing phase sequence",
+    };
+  }
+
+  const hasCompleteProviderEvents = ledger.providerSkippedEvents.every(
+    (event) =>
+      event !== null &&
+      typeof event === "object" &&
+      event.status === "covered_by_provider" &&
+      nonEmpty(event.providerName) &&
+      nonEmpty(event.coveredBy) &&
+      nonEmpty(event.reason),
+  );
+  if (!hasCompleteProviderEvents) {
+    return {
+      corroborated: false,
+      status: "stale",
+      reason:
+        "authoritative full delivery ledger metadata is incomplete or contradictory",
+    };
+  }
+
+  const canonical = createDeliveryRunLedger({
+    generatedAt: ledger.generatedAt,
+    status: ledger.status,
+    proofState: ledger.proofState,
+    deliverableDiffFingerprint: ledger.deliverableDiffFingerprint,
+    commandSpans: ledger.commandSpans,
+    providerSkippedEvents: ledger.providerSkippedEvents.map((event) => ({
+      providerName: event.providerName,
+      coveredBy: event.coveredBy,
+      reason: event.reason,
+    })),
+    gateDecisionEvents: ledger.gateDecisionEvents,
+    reviewLoop: ledger.reviewLoop,
+  });
+  const hasCanonicalMetadata =
+    exactJson(ledger.providerSkippedEvents, canonical.providerSkippedEvents) &&
+    exactJson(ledger.duplicateCommands, canonical.duplicateCommands) &&
+    exactJson(
+      ledger.duplicatePackageSuites,
+      canonical.duplicatePackageSuites,
+    ) &&
+    exactJson(ledger.summary, canonical.summary);
+  if (!hasCanonicalMetadata) {
+    return {
+      corroborated: false,
+      status: "stale",
+      reason:
+        "authoritative full delivery ledger metadata is incomplete or contradictory",
+    };
+  }
+
+  const hasCompleteGateEvents = ledger.gateDecisionEvents.every(
+    (event) =>
+      event !== null &&
+      typeof event === "object" &&
+      Array.isArray(event.resolutionKinds) &&
+      Array.isArray(event.blockerCodes),
+  );
+  if (!hasCompleteGateEvents) {
+    return {
+      corroborated: false,
+      status: "stale",
+      reason:
+        "authoritative full delivery ledger does not contain complete gate decisions",
+    };
+  }
+
+  try {
+    assertAllowedGateEventSequence(ledger.gateDecisionEvents, 0);
+  } catch {
+    return {
+      corroborated: false,
+      status: "stale",
+      reason:
+        "authoritative full delivery ledger does not contain the exact admitted gate sequence",
+    };
+  }
+
+  const [evaluated, completed] = ledger.gateDecisionEvents;
+  const nonBlockingResolutionKinds = (event: DeliveryRunGateDecisionEvent) =>
+    event.resolutionKinds.length > 0 &&
+    event.resolutionKinds.every((kind) =>
+      PASSING_GATE_RESOLUTION_KINDS.has(kind),
+    ) &&
+    event.blockerCodes.length === 0;
+  const matchingAdmission =
+    evaluated.invocationMode === "outer" &&
+    evaluated.gateId === ATHENA_PR_VALIDATION_GATE_ID &&
+    evaluated.parentIdentity === "pr:athena:delivery-run" &&
+    nonEmpty(evaluated.invocationId) &&
+    nonEmpty(evaluated.parentStartToken) &&
+    evaluated.treeSha === proof.validatedTreeSha &&
+    evaluated.baseRef === proof.baseRef &&
+    evaluated.baseTipSha === proof.baseSha &&
+    nonEmpty(evaluated.diffBaseSha) &&
+    nonEmpty(evaluated.worktreeId) &&
+    nonEmpty(evaluated.context) &&
+    nonEmpty(evaluated.preventedCostClass) &&
+    validIsoTimestamp(evaluated.timestamp) &&
+    validIsoTimestamp(completed.timestamp) &&
+    Date.parse(completed.timestamp) >= Date.parse(evaluated.timestamp) &&
+    nonBlockingResolutionKinds(evaluated) &&
+    nonBlockingResolutionKinds(completed) &&
+    completed.invocationId === evaluated.invocationId &&
+    completed.invocationMode === evaluated.invocationMode &&
+    completed.parentIdentity === evaluated.parentIdentity &&
+    completed.parentStartToken === evaluated.parentStartToken &&
+    completed.gateId === evaluated.gateId &&
+    completed.treeSha === evaluated.treeSha &&
+    completed.baseRef === evaluated.baseRef &&
+    completed.baseTipSha === evaluated.baseTipSha &&
+    completed.diffBaseSha === evaluated.diffBaseSha &&
+    completed.worktreeId === evaluated.worktreeId &&
+    completed.context === evaluated.context &&
+    completed.preventedCostClass === evaluated.preventedCostClass;
+  if (!matchingAdmission) {
+    return {
+      corroborated: false,
+      status: "stale",
+      reason:
+        "authoritative full delivery ledger gate sequence does not match the validated candidate",
+    };
+  }
+
+  return { corroborated: true };
+}
+
+type AuthoritativeLedgerSnapshot = {
+  ledger: DeliveryRunLedger | null;
+  bytes: string | null;
+};
+
+async function readAuthoritativeLedgerSnapshot(
+  rootDir: string,
+  options: PrAthenaDeliveryRunOptions,
+): Promise<AuthoritativeLedgerSnapshot> {
+  if (options.readAuthoritativeLedgerBytes) {
+    const bytes = await options.readAuthoritativeLedgerBytes(rootDir);
+    return { ledger: bytes === null ? null : JSON.parse(bytes), bytes };
+  }
+  if (options.readAuthoritativeLedger) {
+    const ledger = await options.readAuthoritativeLedger(rootDir);
+    return {
+      ledger,
+      bytes: ledger === null ? null : JSON.stringify(ledger),
+    };
+  }
+
+  try {
+    const bytes = await readFile(
+      path.join(rootDir, DEFAULT_DELIVERY_RUN_LATEST_PATH),
+      "utf8",
+    );
+    return { ledger: JSON.parse(bytes), bytes };
+  } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return { ledger: null, bytes: null };
+    }
+    throw error;
+  }
+}
 
 async function runProcess(
   command: string[],
@@ -621,6 +891,7 @@ export async function runPrAthenaDeliveryRun(
   const monotonicMs = options.monotonicMs ?? (() => performance.now());
   const runCommand = options.runCommand ?? runProcess;
   const shouldWriteLedger = options.writeLedger ?? true;
+  const logger = options.logger ?? console;
   const commandSpans: DeliveryRunCommandSpan[] = [];
 
   // Captured before the phases run: this names the tree the gate is about to
@@ -629,6 +900,106 @@ export async function runPrAthenaDeliveryRun(
   const deliverableDiffFingerprint = (
     options.resolveDeliverableFingerprint ?? defaultDeliverableFingerprint
   )(rootDir);
+
+  let authoritativeLedgerSnapshot: AuthoritativeLedgerSnapshot = {
+    ledger: null,
+    bytes: null,
+  };
+  let authoritativeLedgerReadFailure: string | undefined;
+  try {
+    authoritativeLedgerSnapshot = await readAuthoritativeLedgerSnapshot(
+      rootDir,
+      options,
+    );
+  } catch (error) {
+    authoritativeLedgerReadFailure =
+      error instanceof Error ? error.message : String(error);
+  }
+
+  let reusableReviewLoop: DeliveryRunReviewLoopSummary | undefined;
+  let reusableReviewLoopReadFailure: string | undefined;
+  try {
+    reusableReviewLoop = await (
+      options.resolveReviewLoopSummary ?? resolveReviewLoopSummaryFromRecords
+    )(rootDir);
+  } catch (error) {
+    reusableReviewLoopReadFailure =
+      error instanceof Error ? error.message : String(error);
+  }
+
+  const verifyAuthoritativeLedgerStability = async () => {
+    const current = await readAuthoritativeLedgerSnapshot(rootDir, options);
+    return current.bytes === authoritativeLedgerSnapshot.bytes;
+  };
+
+  let proofEvaluation: PrePushValidationProofEvaluation;
+  try {
+    proofEvaluation = await (
+      options.evaluateValidationProof ?? evaluatePrePushValidationProof
+    )(rootDir, {
+      evaluationMode: "allow-staged-index",
+      verifyStability: verifyAuthoritativeLedgerStability,
+    });
+  } catch (error) {
+    proofEvaluation = {
+      reusable: false,
+      status: "proof_not_recorded",
+      reason: `proof evaluation failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    };
+  }
+
+  if (proofEvaluation.reusable) {
+    if (authoritativeLedgerReadFailure !== undefined) {
+      proofEvaluation = {
+        reusable: false,
+        status: "proof_not_recorded",
+        reason: `authoritative full delivery ledger could not be read: ${authoritativeLedgerReadFailure}`,
+      };
+    } else if (reusableReviewLoopReadFailure !== undefined) {
+      proofEvaluation = {
+        reusable: false,
+        status: "proof_not_recorded",
+        reason: `review-loop evidence could not be read: ${reusableReviewLoopReadFailure}`,
+      };
+    } else {
+      const corroboration = corroborateReusableProof(
+        proofEvaluation.proof,
+        authoritativeLedgerSnapshot.ledger,
+        deliverableDiffFingerprint,
+      );
+      if (!corroboration.corroborated) {
+        proofEvaluation = {
+          reusable: false,
+          status: corroboration.status,
+          reason: corroboration.reason,
+        };
+      }
+    }
+  }
+
+  if (proofEvaluation.reusable) {
+    logger.log(
+      `[pr:athena] Reusing current validation proof for tree ${proofEvaluation.proof.validatedTreeSha}. Merge-grade phases skipped.`,
+    );
+    const ledger = createDeliveryRunLedger({
+      generatedAt: nowIso(),
+      status: "pass",
+      proofState: "proof_reused",
+      commandSpans,
+      reviewLoop: reusableReviewLoop,
+      ...(deliverableDiffFingerprint ? { deliverableDiffFingerprint } : {}),
+    });
+
+    // Keep the full authoritative run in latest/history. Reusing its proof is
+    // an admission decision, not a replacement zero-command validation run.
+    return { exitCode: 0, ledger };
+  }
+
+  logger.log(
+    `[pr:athena] Current validation proof not reusable (${proofEvaluation.status}): ${proofEvaluation.reason}. Running full delivery gate.`,
+  );
 
   let status: DeliveryRunStatus = "pass";
   let proofState: DeliveryRunProofState = "proof_not_recorded";
@@ -709,11 +1080,7 @@ export async function runPrAthenaDeliveryRun(
       proofState = "proof_recorded";
     }
 
-    if (
-      step.phase !== "record-proof" &&
-      commandStatus !== "pass" &&
-      proofState === "proof_recorded"
-    ) {
+    if (commandStatus !== "pass") {
       await clearRecordedProof(rootDir);
       proofState = "proof_not_recorded";
     }
@@ -749,7 +1116,13 @@ export async function runPrAthenaDeliveryRun(
   if (shouldWriteLedger) {
     // Preserve the previous passing run as the scorecard's comparison point
     // before this run overwrites latest.json.
-    await promotePassingLatestToBaseline(rootDir);
+    try {
+      await promotePassingLatestToBaseline(rootDir);
+    } catch (error) {
+      // A malformed old latest ledger is not a valid baseline. It must not
+      // prevent a successful authoritative gate from replacing that artifact.
+      if (!(error instanceof SyntaxError)) throw error;
+    }
     await writeDeliveryRunLedger(rootDir, ledger);
   }
 
