@@ -9083,7 +9083,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_importsof",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L735",
+      "source_location": "L785",
       "target": "convex_backend_dependency_check_builddependencygraph",
       "weight": 1
     },
@@ -9095,19 +9095,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_importsof",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L846",
-      "target": "convex_backend_dependency_check_checkkernelviolations",
-      "weight": 1
-    },
-    {
-      "_src": "convex_backend_dependency_check_checkkernelviolations",
-      "_tgt": "convex_backend_dependency_check_isbackendsurface",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1,
-      "relation": "calls",
-      "source": "convex_backend_dependency_check_isbackendsurface",
-      "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L856",
+      "source_location": "L910",
       "target": "convex_backend_dependency_check_checkkernelviolations",
       "weight": 1
     },
@@ -9119,7 +9107,19 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_iskernelmodule",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L844",
+      "source_location": "L908",
+      "target": "convex_backend_dependency_check_checkkernelviolations",
+      "weight": 1
+    },
+    {
+      "_src": "convex_backend_dependency_check_checkkernelviolations",
+      "_tgt": "convex_backend_dependency_check_istestsupportmodule",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "relation": "calls",
+      "source": "convex_backend_dependency_check_istestsupportmodule",
+      "source_file": "scripts/convex-backend-dependency-check.ts",
+      "source_location": "L926",
       "target": "convex_backend_dependency_check_checkkernelviolations",
       "weight": 1
     },
@@ -9131,7 +9131,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_walkcollect",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L462",
+      "source_location": "L489",
       "target": "convex_backend_dependency_check_collectsources",
       "weight": 1
     },
@@ -9143,7 +9143,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_collectnoncoderanges",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L384",
+      "source_location": "L401",
       "target": "convex_backend_dependency_check_extractimportspecifiers",
       "weight": 1
     },
@@ -9155,7 +9155,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_lineat",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L396",
+      "source_location": "L413",
       "target": "convex_backend_dependency_check_extractimportspecifiers",
       "weight": 1
     },
@@ -9167,7 +9167,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_findsccs",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L800",
+      "source_location": "L850",
       "target": "convex_backend_dependency_check_sortcycles",
       "weight": 1
     },
@@ -9179,7 +9179,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_expandalias",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L703",
+      "source_location": "L741",
       "target": "convex_backend_dependency_check_importsof",
       "weight": 1
     },
@@ -9191,19 +9191,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_extractimportspecifiers",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L686",
-      "target": "convex_backend_dependency_check_importsof",
-      "weight": 1
-    },
-    {
-      "_src": "convex_backend_dependency_check_importsof",
-      "_tgt": "convex_backend_dependency_check_isbackendsurface",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1,
-      "relation": "calls",
-      "source": "convex_backend_dependency_check_isbackendsurface",
-      "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L704",
+      "source_location": "L717",
       "target": "convex_backend_dependency_check_importsof",
       "weight": 1
     },
@@ -9215,7 +9203,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_resolveconvexmodule",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L707",
+      "source_location": "L743",
       "target": "convex_backend_dependency_check_importsof",
       "weight": 1
     },
@@ -9227,8 +9215,20 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_resolvelocalimporttarget",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L689",
+      "source_location": "L720",
       "target": "convex_backend_dependency_check_importsof",
+      "weight": 1
+    },
+    {
+      "_src": "convex_backend_dependency_check_iskernelmodule",
+      "_tgt": "convex_backend_dependency_check_istestsupportmodule",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "relation": "calls",
+      "source": "convex_backend_dependency_check_istestsupportmodule",
+      "source_file": "scripts/convex-backend-dependency-check.ts",
+      "source_location": "L892",
+      "target": "convex_backend_dependency_check_iskernelmodule",
       "weight": 1
     },
     {
@@ -9239,7 +9239,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_loadtsconfigaliases",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L565",
+      "source_location": "L601",
       "target": "convex_backend_dependency_check_stripjsonccomments",
       "weight": 1
     },
@@ -9251,7 +9251,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_rundependencycheck",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1386",
+      "source_location": "L1515",
       "target": "convex_backend_dependency_check_main",
       "weight": 1
     },
@@ -9263,7 +9263,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_usage",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1350",
+      "source_location": "L1479",
       "target": "convex_backend_dependency_check_main",
       "weight": 1
     },
@@ -9275,7 +9275,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_probecandidatefile",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L549",
+      "source_location": "L576",
       "target": "convex_backend_dependency_check_resolveconvexmodule",
       "weight": 1
     },
@@ -9287,7 +9287,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_probecandidatefile",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L532",
+      "source_location": "L559",
       "target": "convex_backend_dependency_check_resolvelocalimporttarget",
       "weight": 1
     },
@@ -9299,7 +9299,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_builddependencygraph",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1140",
+      "source_location": "L1247",
       "target": "convex_backend_dependency_check_rundependencycheck",
       "weight": 1
     },
@@ -9311,7 +9311,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_collectsources",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1048",
+      "source_location": "L1126",
       "target": "convex_backend_dependency_check_rundependencycheck",
       "weight": 1
     },
@@ -9323,7 +9323,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_findnewcycles",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1192",
+      "source_location": "L1299",
       "target": "convex_backend_dependency_check_rundependencycheck",
       "weight": 1
     },
@@ -9335,7 +9335,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_findnewkernelviolations",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1220",
+      "source_location": "L1327",
       "target": "convex_backend_dependency_check_rundependencycheck",
       "weight": 1
     },
@@ -9347,7 +9347,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_findremovedkernelviolations",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1221",
+      "source_location": "L1328",
       "target": "convex_backend_dependency_check_rundependencycheck",
       "weight": 1
     },
@@ -9359,7 +9359,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_findsccs",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1141",
+      "source_location": "L1248",
       "target": "convex_backend_dependency_check_rundependencycheck",
       "weight": 1
     },
@@ -9371,7 +9371,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_loadbaseline",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1054",
+      "source_location": "L1140",
       "target": "convex_backend_dependency_check_rundependencycheck",
       "weight": 1
     },
@@ -9383,7 +9383,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_loadtsconfigaliases",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1139",
+      "source_location": "L1225",
       "target": "convex_backend_dependency_check_rundependencycheck",
       "weight": 1
     },
@@ -9395,7 +9395,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_savebaseline",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1298",
+      "source_location": "L1409",
       "target": "convex_backend_dependency_check_rundependencycheck",
       "weight": 1
     },
@@ -9407,7 +9407,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_sortcycles",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1293",
+      "source_location": "L1402",
       "target": "convex_backend_dependency_check_rundependencycheck",
       "weight": 1
     },
@@ -9419,7 +9419,7 @@
       "relation": "calls",
       "source": "convex_backend_dependency_check_undeclarednestedgenerateddirs",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1087",
+      "source_location": "L1173",
       "target": "convex_backend_dependency_check_rundependencycheck",
       "weight": 1
     },
@@ -181331,7 +181331,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L723",
+      "source_location": "L773",
       "target": "convex_backend_dependency_check_builddependencygraph",
       "weight": 1
     },
@@ -181343,7 +181343,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L832",
+      "source_location": "L896",
       "target": "convex_backend_dependency_check_checkkernelviolations",
       "weight": 1
     },
@@ -181355,7 +181355,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L265",
+      "source_location": "L282",
       "target": "convex_backend_dependency_check_collectnoncoderanges",
       "weight": 1
     },
@@ -181367,7 +181367,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L457",
+      "source_location": "L480",
       "target": "convex_backend_dependency_check_collectsources",
       "weight": 1
     },
@@ -181379,7 +181379,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L239",
+      "source_location": "L256",
       "target": "convex_backend_dependency_check_comparebybytes",
       "weight": 1
     },
@@ -181391,7 +181391,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1000",
+      "source_location": "L1078",
       "target": "convex_backend_dependency_check_cyclecoveredbybaseline",
       "weight": 1
     },
@@ -181403,7 +181403,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L656",
+      "source_location": "L672",
       "target": "convex_backend_dependency_check_expandalias",
       "weight": 1
     },
@@ -181415,7 +181415,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L381",
+      "source_location": "L398",
       "target": "convex_backend_dependency_check_extractimportspecifiers",
       "weight": 1
     },
@@ -181427,7 +181427,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L978",
+      "source_location": "L1056",
       "target": "convex_backend_dependency_check_findnewcycles",
       "weight": 1
     },
@@ -181439,7 +181439,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1011",
+      "source_location": "L1089",
       "target": "convex_backend_dependency_check_findnewkernelviolations",
       "weight": 1
     },
@@ -181451,7 +181451,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1020",
+      "source_location": "L1098",
       "target": "convex_backend_dependency_check_findremovedkernelviolations",
       "weight": 1
     },
@@ -181463,7 +181463,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L751",
+      "source_location": "L801",
       "target": "convex_backend_dependency_check_findsccs",
       "weight": 1
     },
@@ -181475,20 +181475,8 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L680",
+      "source_location": "L711",
       "target": "convex_backend_dependency_check_importsof",
-      "weight": 1
-    },
-    {
-      "_src": "scripts_convex_backend_dependency_check_ts",
-      "_tgt": "convex_backend_dependency_check_isbackendsurface",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1,
-      "relation": "contains",
-      "source": "scripts_convex_backend_dependency_check_ts",
-      "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L645",
-      "target": "convex_backend_dependency_check_isbackendsurface",
       "weight": 1
     },
     {
@@ -181499,8 +181487,20 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L813",
+      "source_location": "L878",
       "target": "convex_backend_dependency_check_iskernelmodule",
+      "weight": 1
+    },
+    {
+      "_src": "scripts_convex_backend_dependency_check_ts",
+      "_tgt": "convex_backend_dependency_check_istestsupportmodule",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "relation": "contains",
+      "source": "scripts_convex_backend_dependency_check_ts",
+      "source_file": "scripts/convex-backend-dependency-check.ts",
+      "source_location": "L870",
+      "target": "convex_backend_dependency_check_istestsupportmodule",
       "weight": 1
     },
     {
@@ -181511,7 +181511,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L373",
+      "source_location": "L390",
       "target": "convex_backend_dependency_check_lineat",
       "weight": 1
     },
@@ -181523,7 +181523,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L921",
+      "source_location": "L999",
       "target": "convex_backend_dependency_check_loadbaseline",
       "weight": 1
     },
@@ -181535,7 +181535,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L556",
+      "source_location": "L590",
       "target": "convex_backend_dependency_check_loadtsconfigaliases",
       "weight": 1
     },
@@ -181547,7 +181547,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1346",
+      "source_location": "L1475",
       "target": "convex_backend_dependency_check_main",
       "weight": 1
     },
@@ -181559,7 +181559,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L966",
+      "source_location": "L1044",
       "target": "convex_backend_dependency_check_parsebaselineviolation",
       "weight": 1
     },
@@ -181571,7 +181571,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L497",
+      "source_location": "L524",
       "target": "convex_backend_dependency_check_probecandidatefile",
       "weight": 1
     },
@@ -181583,7 +181583,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L539",
+      "source_location": "L566",
       "target": "convex_backend_dependency_check_resolveconvexmodule",
       "weight": 1
     },
@@ -181595,7 +181595,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L514",
+      "source_location": "L541",
       "target": "convex_backend_dependency_check_resolvelocalimporttarget",
       "weight": 1
     },
@@ -181607,7 +181607,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1035",
+      "source_location": "L1113",
       "target": "convex_backend_dependency_check_rundependencycheck",
       "weight": 1
     },
@@ -181619,7 +181619,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L951",
+      "source_location": "L1029",
       "target": "convex_backend_dependency_check_savebaseline",
       "weight": 1
     },
@@ -181631,7 +181631,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L803",
+      "source_location": "L853",
       "target": "convex_backend_dependency_check_sortcycles",
       "weight": 1
     },
@@ -181643,7 +181643,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L599",
+      "source_location": "L632",
       "target": "convex_backend_dependency_check_stripjsonccomments",
       "weight": 1
     },
@@ -181655,7 +181655,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L474",
+      "source_location": "L501",
       "target": "convex_backend_dependency_check_undeclarednestedgenerateddirs",
       "weight": 1
     },
@@ -181667,7 +181667,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1321",
+      "source_location": "L1450",
       "target": "convex_backend_dependency_check_usage",
       "weight": 1
     },
@@ -181679,7 +181679,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L960",
+      "source_location": "L1038",
       "target": "convex_backend_dependency_check_violationkey",
       "weight": 1
     },
@@ -181691,7 +181691,7 @@
       "relation": "contains",
       "source": "scripts_convex_backend_dependency_check_ts",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L411",
+      "source_location": "L430",
       "target": "convex_backend_dependency_check_walkcollect",
       "weight": 1
     },
@@ -305164,7 +305164,7 @@
       "label": "buildDependencyGraph()",
       "norm_label": "builddependencygraph()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L723"
+      "source_location": "L773"
     },
     {
       "community": 45,
@@ -305173,7 +305173,7 @@
       "label": "checkKernelViolations()",
       "norm_label": "checkkernelviolations()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L832"
+      "source_location": "L896"
     },
     {
       "community": 45,
@@ -305182,7 +305182,7 @@
       "label": "collectNonCodeRanges()",
       "norm_label": "collectnoncoderanges()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L265"
+      "source_location": "L282"
     },
     {
       "community": 45,
@@ -305191,7 +305191,7 @@
       "label": "collectSources()",
       "norm_label": "collectsources()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L457"
+      "source_location": "L480"
     },
     {
       "community": 45,
@@ -305200,7 +305200,7 @@
       "label": "compareByBytes()",
       "norm_label": "comparebybytes()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L239"
+      "source_location": "L256"
     },
     {
       "community": 45,
@@ -305209,7 +305209,7 @@
       "label": "cycleCoveredByBaseline()",
       "norm_label": "cyclecoveredbybaseline()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1000"
+      "source_location": "L1078"
     },
     {
       "community": 45,
@@ -305218,7 +305218,7 @@
       "label": "expandAlias()",
       "norm_label": "expandalias()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L656"
+      "source_location": "L672"
     },
     {
       "community": 45,
@@ -305227,7 +305227,7 @@
       "label": "extractImportSpecifiers()",
       "norm_label": "extractimportspecifiers()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L381"
+      "source_location": "L398"
     },
     {
       "community": 45,
@@ -305236,7 +305236,7 @@
       "label": "findNewCycles()",
       "norm_label": "findnewcycles()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L978"
+      "source_location": "L1056"
     },
     {
       "community": 45,
@@ -305245,7 +305245,7 @@
       "label": "findNewKernelViolations()",
       "norm_label": "findnewkernelviolations()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1011"
+      "source_location": "L1089"
     },
     {
       "community": 45,
@@ -305254,7 +305254,7 @@
       "label": "findRemovedKernelViolations()",
       "norm_label": "findremovedkernelviolations()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1020"
+      "source_location": "L1098"
     },
     {
       "community": 45,
@@ -305263,7 +305263,7 @@
       "label": "findSCCs()",
       "norm_label": "findsccs()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L751"
+      "source_location": "L801"
     },
     {
       "community": 45,
@@ -305272,16 +305272,7 @@
       "label": "importsOf()",
       "norm_label": "importsof()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L680"
-    },
-    {
-      "community": 45,
-      "file_type": "code",
-      "id": "convex_backend_dependency_check_isbackendsurface",
-      "label": "isBackendSurface()",
-      "norm_label": "isbackendsurface()",
-      "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L645"
+      "source_location": "L711"
     },
     {
       "community": 45,
@@ -305290,7 +305281,16 @@
       "label": "isKernelModule()",
       "norm_label": "iskernelmodule()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L813"
+      "source_location": "L878"
+    },
+    {
+      "community": 45,
+      "file_type": "code",
+      "id": "convex_backend_dependency_check_istestsupportmodule",
+      "label": "isTestSupportModule()",
+      "norm_label": "istestsupportmodule()",
+      "source_file": "scripts/convex-backend-dependency-check.ts",
+      "source_location": "L870"
     },
     {
       "community": 45,
@@ -305299,7 +305299,7 @@
       "label": "lineAt()",
       "norm_label": "lineat()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L373"
+      "source_location": "L390"
     },
     {
       "community": 45,
@@ -305308,7 +305308,7 @@
       "label": "loadBaseline()",
       "norm_label": "loadbaseline()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L921"
+      "source_location": "L999"
     },
     {
       "community": 45,
@@ -305317,7 +305317,7 @@
       "label": "loadTsconfigAliases()",
       "norm_label": "loadtsconfigaliases()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L556"
+      "source_location": "L590"
     },
     {
       "community": 45,
@@ -305326,7 +305326,7 @@
       "label": "main()",
       "norm_label": "main()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1346"
+      "source_location": "L1475"
     },
     {
       "community": 45,
@@ -305335,7 +305335,7 @@
       "label": "parseBaselineViolation()",
       "norm_label": "parsebaselineviolation()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L966"
+      "source_location": "L1044"
     },
     {
       "community": 45,
@@ -305344,7 +305344,7 @@
       "label": "probeCandidateFile()",
       "norm_label": "probecandidatefile()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L497"
+      "source_location": "L524"
     },
     {
       "community": 45,
@@ -305353,7 +305353,7 @@
       "label": "resolveConvexModule()",
       "norm_label": "resolveconvexmodule()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L539"
+      "source_location": "L566"
     },
     {
       "community": 45,
@@ -305362,7 +305362,7 @@
       "label": "resolveLocalImportTarget()",
       "norm_label": "resolvelocalimporttarget()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L514"
+      "source_location": "L541"
     },
     {
       "community": 45,
@@ -305371,7 +305371,7 @@
       "label": "runDependencyCheck()",
       "norm_label": "rundependencycheck()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1035"
+      "source_location": "L1113"
     },
     {
       "community": 45,
@@ -305380,7 +305380,7 @@
       "label": "saveBaseline()",
       "norm_label": "savebaseline()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L951"
+      "source_location": "L1029"
     },
     {
       "community": 45,
@@ -305389,7 +305389,7 @@
       "label": "sortCycles()",
       "norm_label": "sortcycles()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L803"
+      "source_location": "L853"
     },
     {
       "community": 45,
@@ -305398,7 +305398,7 @@
       "label": "stripJsoncComments()",
       "norm_label": "stripjsonccomments()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L599"
+      "source_location": "L632"
     },
     {
       "community": 45,
@@ -305407,7 +305407,7 @@
       "label": "undeclaredNestedGeneratedDirs()",
       "norm_label": "undeclarednestedgenerateddirs()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L474"
+      "source_location": "L501"
     },
     {
       "community": 45,
@@ -305416,7 +305416,7 @@
       "label": "usage()",
       "norm_label": "usage()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L1321"
+      "source_location": "L1450"
     },
     {
       "community": 45,
@@ -305425,7 +305425,7 @@
       "label": "violationKey()",
       "norm_label": "violationkey()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L960"
+      "source_location": "L1038"
     },
     {
       "community": 45,
@@ -305434,7 +305434,7 @@
       "label": "walkCollect()",
       "norm_label": "walkcollect()",
       "source_file": "scripts/convex-backend-dependency-check.ts",
-      "source_location": "L411"
+      "source_location": "L430"
     },
     {
       "community": 45,

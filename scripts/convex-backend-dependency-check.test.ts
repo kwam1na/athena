@@ -995,4 +995,109 @@ describe("convex backend dependency check", () => {
     expect(violation).toBeDefined();
     expect(violation.resolved).toBe("convex/values.deep.ts");
   });
+
+  it("does not let a kernel module smuggle product imports through a test-support seam", () => {
+    const sandbox = createSandbox();
+    writeBaseline(sandbox, [], []);
+    // A `.testHack`-style file is exempted from the gate so test files can use
+    // seams — but its own product import is exactly what smuggling needs.
+    writeConvex(
+      sandbox,
+      "inventoryLedger/smuggler.testHack.ts",
+      'import { access } from "../../reports/access";\nexport const hacked = access;\n',
+    );
+    writeConvex(sandbox, "reports/access.ts", "export const access = 1;\n");
+    // Runtime kernel code importing the seam opens the channel; must be flagged
+    // even though the seam resolves inside the kernel's own allowed prefix.
+    writeConvex(
+      sandbox,
+      "inventoryLedger/runtime.ts",
+      'import { hacked } from "./smuggler.testHack";\nexport const ok = hacked;\n',
+    );
+    const result = runCheck(sandbox, ["--json"]);
+    const output = jsonOf(result);
+    expect(result.status).toBe(1);
+    const violation = output.violations.find(
+      (v: any) => v.type === "kernel-not-allowed" && v.file.endsWith("runtime.ts"),
+    );
+    expect(violation).toBeDefined();
+    expect(violation.resolved).toBe("convex/inventoryLedger/smuggler.testHack.ts");
+  });
+
+  it("normalizes ..-traversal alias targets so they can neither dodge nor escape the fence", () => {
+    const sandbox = createSandbox();
+    writeBaseline(sandbox, [], []);
+    writePackageFile(
+      sandbox,
+      "tsconfig.json",
+      JSON.stringify({
+        compilerOptions: {
+          paths: {
+            // Normalizes to operations/... — in-package backend code that must
+            // be checked, NOT silently classified as an external package.
+            "@evil/*": ["./convex/../operations/*"],
+            // Normalizes to convex/reports/... — a forbidden product domain.
+            "@evilDodge/*": ["./lib/../convex/reports/*"],
+          },
+        },
+      }),
+    );
+    writePackageFile(sandbox, "operations/access.ts", "export const access = 1;\n");
+    writeConvex(sandbox, "reports/access.ts", "export const access = 1;\n");
+    writeConvex(
+      sandbox,
+      "inventoryLedger/aliasTraversal.ts",
+      'import { access } from "@evil/access";\nexport const ok = access;\n',
+    );
+    writeConvex(
+      sandbox,
+      "inventoryLedger/aliasDodge.ts",
+      'import { access } from "@evilDodge/access";\nexport const ok = access;\n',
+    );
+    const result = runCheck(sandbox, ["--json"]);
+    const output = jsonOf(result);
+    expect(result.status).toBe(1);
+    // In-package target outside the allowed list: kernel-not-allowed, never
+    // silently dropped as "external".
+    const notAllowed = output.violations.find(
+      (v: any) => v.type === "kernel-not-allowed" && v.file.endsWith("aliasTraversal.ts"),
+    );
+    expect(notAllowed).toBeDefined();
+    expect(notAllowed.resolved).toBe("operations/access.ts");
+    // The normalized target lands in a forbidden product domain: kernel-forbidden.
+    const forbidden = output.violations.find(
+      (v: any) => v.type === "kernel-forbidden" && v.file.endsWith("aliasDodge.ts"),
+    );
+    expect(forbidden).toBeDefined();
+    expect(forbidden.resolved).toBe("convex/reports/access.ts");
+  });
+
+  it("refuses a corrupt tsconfig instead of passing green with a disabled alias surface", () => {
+    const sandbox = createSandbox();
+    writeBaseline(sandbox, [], []);
+    writePackageFile(sandbox, "tsconfig.json", "{ broken json\n");
+    writeConvex(
+      sandbox,
+      "inventoryLedger/aliasHot.ts",
+      'import { access } from "@cvx/reports/access";\nexport const ok = access;\n',
+    );
+    const result = runCheck(sandbox, ["--json"]);
+    const output = jsonOf(result);
+    expect(result.status).toBe(1);
+    expect(output.scanError).toMatch(/tsconfig\.json/);
+    expect(output.scanError).toMatch(/refusing/);
+  });
+
+  it("refuses an unwritable baseline path as a scanError, not a crash", () => {
+    const sandbox = createSandbox();
+    writeBaseline(sandbox, [], []);
+    // A path whose parent is a FILE can never be written, deterministically
+    // (no reliance on file permissions or running as root).
+    writePackageFile(sandbox, "not-a-dir", "x");
+    const unwritableBaseline = path.join(sandbox.packageDir, "not-a-dir", "sub", "baseline.json");
+    const result = runCheck(sandbox, ["--update-baseline", "--json", "--baseline", unwritableBaseline]);
+    expect(result.status).toBe(1);
+    const output = jsonOf(result);
+    expect(output.scanError).toMatch(/could not write baseline/);
+  });
 });

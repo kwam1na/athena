@@ -20,10 +20,27 @@
  *    backtick (template-literal) specifiers unless they contain `${`
  *    interpolation (not statically resolvable).
  *  - Kernel checks classify every import that addresses the Convex backend:
- *    `.`-relative specifiers, bare `convex/...` specifiers, and tsconfig-path
- *    aliases that expand into `convex/...`, `src/...`, or `shared/...` (the
- *    package-local dependency surfaces a kernel may legitimately address).
- *    External packages are never kernel-surface.
+ *    any in-package import — `.`-relative specifiers, bare `convex/...`
+ *    specifiers, and tsconfig-path aliases whose NORMALIZED expansion stays in
+ *    the package. External packages are never kernel-surface. Alias targets are
+ *    collapsed (`./lib/../convex/...` == `convex/...`) before classification so
+ *    `..`-traversal aliases can neither dodge a forbidden domain nor smuggle as
+ *    "external".
+ *  - Test files (`*.test.ts`) and narrow test-support modules (`*.testSeams.ts`,
+ *    `*.testPorts.ts`) are not kernel modules, but the exemption is
+ *    ONE-DIRECTIONAL: a runtime kernel module importing test-support code is a
+ *    hard kernel-not-allowed (the seam's own imports are unexempted only
+ *    because they are never reached from runtime code).
+ *
+ * Deliberate trust boundaries (documented, not accidental):
+ *  - `convex/_generated/` (the exact top-level Convex runtime facade) is
+ *    excluded from the scan and freely importable by kernels — generated code is
+ *    trusted Convex output, not hand-authored product code.
+ *  - Extraction is approximation-bounded: `require("x")` and commented dynamic
+ *    `import /* ... \/\/ "x"` forms are not tracked (this codebase is ESM; a
+ *    non-ESM import would be a code smell), while a plain `data.from("x")`
+ *    call may be over-approximated as an import (fail-safe: extra edges can
+ *    only produce noise in the false-positive direction, never hide one).
  *
  * Shrink-only contract:
  *  - The committed baseline freezes exact cycle memberships and exact kernel
@@ -406,6 +423,8 @@ type SourceCollector = {
   files: SourceFile[];
   /** `_generated` directories that are NOT the exact top-level convex one. */
   nestedGeneratedDirs: string[];
+  /** Source files that existed but could not be read and were skipped. */
+  unreadable: number;
 };
 
 function walkCollect(
@@ -447,7 +466,11 @@ function walkCollect(
     try {
       source = readFileSync(absolute, "utf8");
     } catch {
-      // Unreadable or deleted mid-scan: skip rather than fail the whole check.
+      // Unreadable or deleted mid-scan. Count it so the skip is never silent:
+      // an unreadable kernel file could hide forbidden imports, and CI users
+      // must be told coverage was reduced. (Mid-scan deletion races are rare
+      // and resynthesize to "not found" on the re-probe anyway.)
+      collector.unreadable += 1;
       continue;
     }
     collector.files.push({ path: relative, source });
@@ -458,7 +481,11 @@ function collectSources(
   convexDir: string,
   packageDir: string,
 ): SourceCollector {
-  const collector: SourceCollector = { files: [], nestedGeneratedDirs: [] };
+  const collector: SourceCollector = {
+    files: [],
+    nestedGeneratedDirs: [],
+    unreadable: 0,
+  };
   walkCollect(convexDir, convexDir, packageDir, collector);
   // Deterministic traversal so emitted output is stable across machines.
   collector.files.sort((left, right) => compareByBytes(left.path, right.path));
@@ -552,11 +579,20 @@ function resolveConvexModule(packageDir: string, convexRel: string): string | nu
   return null;
 }
 
-/** Read tsconfig `compilerOptions.paths` as an alias prefix -> target map. */
-function loadTsconfigAliases(packageDir: string): AliasMap {
+/**
+ * Read tsconfig `compilerOptions.paths` as an alias prefix -> target map.
+ * Returns `corrupt: true` when the file exists but is not parseable as JSONC.
+ * A corrupt tsconfig must never silently disable alias coverage (the alias
+ * surface is part of the fence), so the caller treats it like any other
+ * front-door degradation (empty scan, corrupt baseline, missing kernel roots)
+ * and refuses instead of passing green.
+ */
+function loadTsconfigAliases(
+  packageDir: string,
+): { aliases: AliasMap; corrupt: boolean } {
   const aliases: AliasMap = new Map();
   const tsconfigPath = path.join(packageDir, "tsconfig.json");
-  if (!existsSync(tsconfigPath)) return aliases;
+  if (!existsSync(tsconfigPath)) return { aliases, corrupt: false };
   try {
     // Real tsconfigs are JSONC (JSON with // and /* */ comments, trailing
     // commas). Straight JSON.parse rejects the whole file, which would silently
@@ -570,7 +606,7 @@ function loadTsconfigAliases(packageDir: string): AliasMap {
       compilerOptions?: { paths?: Record<string, string[]> };
     };
     const paths = parsed?.compilerOptions?.paths;
-    if (!paths) return aliases;
+    if (!paths) return { aliases, corrupt: false };
     for (const [alias, targets] of Object.entries(paths)) {
       const target = targets?.[0];
       if (typeof target !== "string") continue;
@@ -581,15 +617,12 @@ function loadTsconfigAliases(packageDir: string): AliasMap {
       }
     }
   } catch {
-    // Unreadable tsconfig: treat as no aliases rather than failing the scan.
-    // Warn (to stderr, so --json on stdout stays parseable) so the silent
-    // loss of alias coverage is never invisible to the person running the check.
-    console.warn(
-      `Warning: could not parse tsconfig.json at ${tsconfigPath}; ` +
-        `path aliases will not be expanded by the dependency guard.`,
-    );
+    return {
+      aliases,
+      corrupt: true,
+    };
   }
-  return aliases;
+  return { aliases, corrupt: false };
 }
 
 /**
@@ -636,23 +669,6 @@ function stripJsoncComments(raw: string): string {
   return out;
 }
 
-/**
- * True when a resolved/expanded target addresses the Convex backend a kernel
- * may legitimately depend on: the package's convex tree, its src/ directory,
- * or its shared/ dependency root — as a bare root or a subtree. Everything
- * else (external packages) is never kernel-surface.
- */
-function isBackendSurface(target: string): boolean {
-  return (
-    target === "convex" ||
-    target === "src" ||
-    target === "shared" ||
-    target.startsWith("convex/") ||
-    target.startsWith("src/") ||
-    target.startsWith("shared/")
-  );
-}
-
 function expandAlias(specifier: string, aliases: AliasMap): string | null {
   // Mirrors TypeScript's path mapping: when several patterns match, the
   // longest matching prefix wins (not the first one inserted), so overlapping
@@ -675,7 +691,22 @@ function expandAlias(specifier: string, aliases: AliasMap): string | null {
   return best?.expanded ?? null;
 }
 
-type ImportEntry = { specifier: string; resolved: string; line: number };
+type ImportEntry = {
+  specifier: string;
+  resolved: string;
+  line: number;
+  /**
+   * True when the import stays inside the package (a relative path that does
+   * not escape the package root, a bare `convex/...` specifier, or an alias
+   * whose NORMALIZED expansion stays in-package). Only in-package imports are
+   * kernel-surface; external packages are never. This deliberately includes
+   * package code outside convex/src/shared reached via a tsconfig alias: an
+   * alias target like `./convex/../operations/*` normalizes to
+   * `operations/...`, which must be checked exactly like a kernel's relative
+   * `../operations/...` import would be — never silently classified external.
+   */
+  inPackage: boolean;
+};
 
 function importsOf(
   file: SourceFile,
@@ -697,21 +728,40 @@ function importsOf(
           )
           .split(path.sep)
           .join("/");
-      out.push({ specifier, resolved, line });
+      // A relative import that escapes the package root (e.g. into
+      // node_modules) is an external dependency, never kernel-surface.
+      out.push({
+        specifier,
+        resolved,
+        line,
+        inPackage: resolved !== ".." && !resolved.startsWith("../"),
+      });
       continue;
     }
     const expanded = expandAlias(specifier, aliases);
-    const backendExpanded = expanded !== null && isBackendSurface(expanded);
-    if (specifier.startsWith("convex/") || backendExpanded) {
-      const convexRel = specifier.startsWith("convex/") ? specifier : expanded;
-      const resolved = resolveConvexModule(packageDir, convexRel) ?? convexRel;
-      out.push({ specifier, resolved, line });
+    if (specifier.startsWith("convex/")) {
+      const resolved = resolveConvexModule(packageDir, specifier) ?? specifier;
+      out.push({ specifier, resolved, line, inPackage: true });
       continue;
+    }
+    if (expanded !== null) {
+      // Collapse `.`/`..` segments exactly as tsc/esbuild do BEFORE
+      // classifying. A raw `./lib/../convex/...` or `./convex/../operations/...`
+      // must classify on its NORMALIZED identity, never its raw text: the
+      // former must be flagged as the forbidden convex/ domain it actually
+      // reaches, and the latter as in-package (not an external package).
+      const normalized = path.posix.normalize(expanded);
+      const inPackage = normalized !== ".." && !normalized.startsWith("../");
+      if (inPackage) {
+        const resolved = resolveConvexModule(packageDir, normalized) ?? normalized;
+        out.push({ specifier, resolved, line, inPackage: true });
+        continue;
+      }
     }
     // External package or unexpanded bare specifier (e.g. "react"): never
     // kernel-surface and never a cycle participant; the specifier itself is
     // the identity.
-    out.push({ specifier, resolved: specifier, line });
+    out.push({ specifier, resolved: specifier, line, inPackage: false });
   }
   return out;
 }
@@ -810,6 +860,21 @@ function sortCycles(cycles: string[][]): string[][] {
 // Kernel Violation Detection
 // ============================================================================
 
+/**
+ * Test files (`*.test.ts`) and narrow test-support modules (`*.testSeams.ts`,
+ * `*.testPorts.ts`, ...) are not runtime code. The `.test[A-Z]...` carve-out is
+ * deliberately narrow and only applies to genuinely test-support files: a file
+ * named `foo.testHack.ts` that a runtime module imports is exactly the
+ * smuggling shape the gate must catch (see checkKernelViolations).
+ */
+function isTestSupportModule(filePath: string): boolean {
+  return (
+    filePath.endsWith(".test.ts") ||
+    filePath.endsWith(".test.tsx") ||
+    /\.test[A-Z][A-Za-z]*\.tsx?$/.test(filePath)
+  );
+}
+
 function isKernelModule(
   filePath: string,
   kernel: KernelDefinition,
@@ -819,13 +884,12 @@ function isKernelModule(
   for (const excludedPath of excluded) {
     if (filePath.startsWith(excludedPath)) return false;
   }
-  // Test files and test-support modules are not kernel modules. The
-  // `.test[A-Z]...` carve-out is deliberately narrow (e.g. *.testSeams.ts,
-  // *.testPorts.ts) and only applies to genuinely test-support files, verified
-  // by the boundary tests: excluded subtrees still participate in cycle
-  // detection, so hiding a violation inside one does not make it invisible.
-  if (filePath.endsWith(".test.ts") || filePath.endsWith(".test.tsx")) return false;
-  if (/\.test[A-Z][A-Za-z]*\.tsx?$/.test(filePath)) return false;
+  // Test files and test-support modules are not kernel modules themselves,
+  // BUT the exemption is one-directional: they are not gated on their own
+  // imports (they exist so *.test.ts can exercise kernels), and a runtime
+  // kernel module importing one is flagged in checkKernelViolations so
+  // test-support code can never smuggle product-domain imports into a kernel.
+  if (isTestSupportModule(filePath)) return false;
   return true;
 }
 
@@ -843,18 +907,32 @@ function checkKernelViolations(
   for (const file of files) {
     if (!isKernelModule(file.path, kernel)) continue;
 
-    for (const { specifier, resolved, line } of importsOf(
+    for (const { specifier, resolved, line, inPackage } of importsOf(
       file,
       packageDir,
       aliases,
     )) {
-      const isRelative = specifier.startsWith(".");
-      // Classification surface: relative imports inside the package, plus any
-      // bare `convex/...` specifier or tsconfig alias that addresses the
-      // backend (convex/, src/, or the package-local shared/ dependency root).
-      // External packages are not kernel-surface.
-      const addressesBackend = isRelative || isBackendSurface(resolved);
-      if (!addressesBackend) continue;
+      // Classification surface: any in-package import (relative, bare
+      // `convex/...`, or a tsconfig alias whose normalized expansion stays in
+      // the package). External packages are never kernel-surface.
+      if (!inPackage) continue;
+
+      // A runtime kernel module may NEVER import test-support code. The
+      // isKernelModule carve-out exempts *.test[A-Z]* files from being gated on
+      // their OWN imports so test files can use seams — but if a kernel module
+      // could import a seam file directly, the seam's unchecked (and possibly
+      // product-domain) imports would be smuggled into the kernel. This is a
+      // hard kernel-not-allowed regardless of any allowed prefix.
+      if (isTestSupportModule(resolved)) {
+        violations.push({
+          file: file.path,
+          imports: specifier,
+          resolved,
+          type: "kernel-not-allowed",
+          line,
+        });
+        continue;
+      }
 
       // Forbidden prefixes take precedence over allowed entries by design: a
       // product domain named in `forbiddenImports` may never be imported by a
@@ -1048,6 +1126,14 @@ export function runDependencyCheck(options: {
   const collector = collectSources(convexDir, packageDir);
   const files = collector.files;
   if (!silent) console.log(`Found ${files.length} source files`);
+  if (collector.unreadable > 0) {
+    // Never silent: an unreadable kernel file could hide forbidden imports, so
+    // reduced coverage must be visible in the run log even though the scan
+    // continues (races legitimately delete files mid-scan).
+    console.warn(
+      `Warning: ${collector.unreadable} source file(s) could not be read and were skipped.`,
+    );
+  }
 
   // A guard that cannot see its protected surface must fail loudly, never pass.
   if (files.length === 0) {
@@ -1136,7 +1222,28 @@ export function runDependencyCheck(options: {
     };
   }
 
-  const aliases = loadTsconfigAliases(packageDir);
+  const aliasLoad = loadTsconfigAliases(packageDir);
+  if (aliasLoad.corrupt) {
+    const message =
+      `tsconfig.json at ${path.join(packageDir, "tsconfig.json")} is unreadable or not ` +
+      `valid JSONC. Path aliases cannot be trusted and the alias surface would be ` +
+      `silently disabled — refusing to pass instead. Fix or remove the tsconfig, or ` +
+      `point --package-dir at the real package root.`;
+    if (!silent) console.error(message);
+    return {
+      violations: [],
+      cycles: [],
+      baseline:
+        loadBaseline(baselinePath).status === "valid"
+          ? loadBaseline(baselinePath).baseline
+          : null,
+      isClean: false,
+      scanError: message,
+      repairHint:
+        "Repair packages/athena-webapp/tsconfig.json (JSONC); alias coverage is part of the fence.",
+    };
+  }
+  const aliases = aliasLoad.aliases;
   const graph = buildDependencyGraph(files, packageDir, aliases);
   const cycles = findSCCs(graph);
   if (!silent) {
@@ -1276,7 +1383,9 @@ export function runDependencyCheck(options: {
       const message =
         "Refusing to update baseline: the current graph introduces new cycles (or grows baselined ones) " +
         "or new kernel violations that are not already baselined. The baseline is shrink-only — fix the " +
-        "new violations before regenerating; --update-baseline exists only to contract existing entries.";
+        "new violations before regenerating; --update-baseline exists only to contract existing entries. " +
+        "If a baselined file was merely renamed, the baseline freezes exact paths and the rename appears " +
+        "as both a removal and an addition — restore the original path or adjust the baseline deliberately.";
       if (!silent) console.error(message);
       return {
         violations: allViolations,
@@ -1284,7 +1393,7 @@ export function runDependencyCheck(options: {
         baseline,
         isClean: false,
         scanError: message,
-        repairHint: "Fix the new cycles/kernel violations first; --update-baseline is shrink-only.",
+        repairHint: "Fix the new cycles/kernel violations first; --update-baseline is shrink-only (rename-deadlock: restore the original path of a renamed baselined target).",
       };
     }
 
@@ -1295,7 +1404,27 @@ export function runDependencyCheck(options: {
         .map((v) => `${v.file}|${v.imports}|${v.resolved}|${v.type}`)
         .sort((left, right) => compareByBytes(left, right)),
     };
-    saveBaseline(baselinePath, newBaseline);
+    let persisted = false;
+    try {
+      saveBaseline(baselinePath, newBaseline);
+      persisted = true;
+    } catch (error) {
+      // An unwritable baseline path must fail loudly with a parseable result,
+      // never crash mid-run (a stack trace would corrupt the --json contract).
+      const message =
+        `Refusing to report success: could not write baseline to ${baselinePath} ` +
+        `(${error instanceof Error ? error.message : String(error)}). The computed ` +
+        `baseline is not corrupt; the write failed.`;
+      if (!silent) console.error(message);
+      return {
+        violations: [],
+        cycles: sortCycles(cycles),
+        baseline: newBaseline,
+        isClean: false,
+        scanError: message,
+        repairHint: `Make ${baselinePath} writable (or pass a writable --baseline path) and retry --update-baseline.`,
+      };
+    }
     if (!silent) console.log("Baseline updated.");
 
     // After regeneration the current graph IS the baseline, so the contract
