@@ -5,7 +5,7 @@
  * convex tree, so an interrupted run cannot pollute other sensors and the
  * contract's error-path scenarios are exercised against controlled graphs.
  */
-import { describe, expect, it, beforeAll } from "vitest";
+import { describe, expect, it, beforeAll, afterEach } from "vitest";
 import {
   existsSync,
   mkdirSync,
@@ -37,8 +37,11 @@ type Sandbox = {
   baselinePath: string;
 };
 
+const createdSandboxDirs: string[] = [];
+
 function createSandbox(): Sandbox {
   const rootDir = mkdtempSync(path.join(tmpdir(), "athena-depguard-"));
+  createdSandboxDirs.push(rootDir);
   const packageDir = path.join(rootDir, "athena-webapp");
   const convexDir = path.join(packageDir, "convex");
   const baselinePath = path.join(rootDir, "baseline.json");
@@ -125,6 +128,14 @@ function jsonOf(run: CheckRun): any {
 describe("convex backend dependency check", () => {
   beforeAll(() => {
     expect(existsSync(REAL_BASELINE_PATH)).toBe(true);
+  });
+
+  afterEach(() => {
+    // Sandboxes are throwaway fixture trees; remove them so repeated runs and
+    // other suites never accumulate depguard temp dirs under the system tmp.
+    for (const dir of createdSandboxDirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("passes with the committed baseline (no new violations) on the real tree", () => {
@@ -1196,6 +1207,74 @@ describe("convex backend dependency check", () => {
     const output = jsonOf(result);
     expect(result.status).toBe(1);
     expect(output.scanError).toMatch(/tsconfig\.json/);
+  });
+
+  it("treats a tsconfig paths array as corruption (fail closed)", () => {
+    const sandbox = createSandbox();
+    writeBaseline(sandbox, [], []);
+    // `paths` must be an OBJECT keyed by alias prefix; an ARRAY is a shape
+    // violation tsc itself rejects. The guard must fail closed, not quietly
+    // skip it and scan with an accidentally-empty alias surface.
+    writePackageFile(
+      sandbox,
+      "tsconfig.json",
+      JSON.stringify({ compilerOptions: { paths: ["@cvx/*"] } }),
+    );
+    const result = runCheck(sandbox, ["--json"]);
+    const output = jsonOf(result);
+    expect(result.status).toBe(1);
+    expect(output.scanError).toMatch(/tsconfig\.json/);
+    expect(output.scanError).toMatch(/refusing/);
+  });
+
+  it("treats a non-object tsconfig root as corruption (fail closed)", () => {
+    const sandbox = createSandbox();
+    writeBaseline(sandbox, [], []);
+    // A tsconfig whose top-level is valid JSON but not a plain object (e.g. a
+    // bare number) is shape corruption: no alias surface can meaningfully
+    // exist, so scanning with zero aliases would silently widen the fence.
+    writePackageFile(sandbox, "tsconfig.json", "42");
+    const result = runCheck(sandbox, ["--json"]);
+    const output = jsonOf(result);
+    expect(result.status).toBe(1);
+    expect(output.scanError).toMatch(/tsconfig\.json/);
+  });
+
+  it("flags escaped tsconfig alias targets that re-enter a backend namespace (kernel-surface, not external)", () => {
+    const sandbox = createSandbox();
+    writeBaseline(sandbox, [], []);
+    // Same smuggling shape as the escaped-relative case, but through the
+    // alias path: `@ev/...` rewrites to `../convex/...`, escaping the package
+    // into a sibling root-level `convex/` tree. That target must stay
+    // kernel-surface — never silently classified external.
+    const siblingConvex = path.join(sandbox.rootDir, "convex");
+    mkdirSync(path.join(siblingConvex, "reports"), { recursive: true });
+    writeFileSync(
+      path.join(siblingConvex, "reports", "access.ts"),
+      "export const access = 1;\n",
+    );
+    writePackageFile(
+      sandbox,
+      "tsconfig.json",
+      JSON.stringify({
+        compilerOptions: {
+          paths: { "@ev/*": ["../convex/reports/*"] },
+        },
+      }),
+    );
+    writeConvex(
+      sandbox,
+      "inventoryLedger/aliasReentry.ts",
+      'import { access } from "@ev/access";\nexport const ok = access;\n',
+    );
+    const result = runCheck(sandbox, ["--json"]);
+    const output = jsonOf(result);
+    expect(result.status).toBe(1);
+    const violation = output.violations.find(
+      (v: any) => v.type === "kernel-not-allowed" && v.file.endsWith("aliasReentry.ts"),
+    );
+    expect(violation).toBeDefined();
+    expect(violation.resolved).toBe("../convex/reports/access.ts");
   });
 
   it("exposes unreadableFiles on success and scanError results so reduced coverage is never silent", () => {

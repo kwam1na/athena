@@ -508,7 +508,7 @@ function collectSources(
  */
 function undeclaredNestedGeneratedDirs(nested: string[]): string[] {
   const declared: string[] = [];
-  for (const kernel of Object.values(PROTECTED_KERNELS)) {
+  for (const kernel of Object.values(PROTECTED_KERNELS) as KernelDefinition[]) {
     for (const excludedPath of kernel.excludedPaths ?? []) {
       declared.push(excludedPath.endsWith("/") ? excludedPath : `${excludedPath}/`);
     }
@@ -760,6 +760,27 @@ type ImportEntry = {
   inPackage: boolean;
 };
 
+/**
+ * True when a package-relative path that ESCAPES the package root re-enters a
+ * backend namespace (`convex/`, `src/`, or `shared/` at the workspace root —
+ * e.g. `../../../convex/...` or an alias target `../convex/...` addressing a
+ * sibling root-level `convex/` tree). Such an escape is still kernel-surface
+ * product code and must be flagged, never silently dropped as "external".
+ * Genuinely external escapes (node_modules, unrelated dirs) return false.
+ */
+function escapedReentryIsBackendSurface(resolved: string): boolean {
+  if (resolved !== ".." && !resolved.startsWith("../")) return false;
+  const stripped = resolved.replace(/^(?:\.\.\/)+/, "");
+  return (
+    stripped === "convex" ||
+    stripped.startsWith("convex/") ||
+    stripped === "src" ||
+    stripped.startsWith("src/") ||
+    stripped === "shared" ||
+    stripped.startsWith("shared/")
+  );
+}
+
 function importsOf(
   file: SourceFile,
   packageDir: string,
@@ -787,21 +808,13 @@ function importsOf(
       // which resolves into the workspace-root-level sibling `convex/` tree —
       // is still kernel-surface product code and must be flagged, never
       // silently dropped as "external". Off-package escapes into `src/` or
-      // `shared/` are treated the same way.
+      // `shared/` are treated the same way (see escapedReentryIsBackendSurface).
       const escaped = resolved === ".." || resolved.startsWith("../");
-      const stripped = escaped ? resolved.replace(/^(?:\.\.\/)+/, "") : resolved;
-      const reentersBackend =
-        stripped === "convex" ||
-        stripped.startsWith("convex/") ||
-        stripped === "src" ||
-        stripped.startsWith("src/") ||
-        stripped === "shared" ||
-        stripped.startsWith("shared/");
       out.push({
         specifier,
         resolved,
         line,
-        inPackage: !escaped || reentersBackend,
+        inPackage: !escaped || escapedReentryIsBackendSurface(resolved),
       });
       continue;
     }
@@ -826,7 +839,13 @@ function importsOf(
         null;
       for (const expanded of expandedTargets) {
         const normalized = path.posix.normalize(expanded);
-        if (normalized === ".." || normalized.startsWith("../")) continue;
+        const escaped = normalized === ".." || normalized.startsWith("../");
+        // An escaped target is external — UNLESS it re-enters a backend
+        // namespace, exactly like the relative branch above. An alias target
+        // `../convex/reports/*` addressing a sibling root-level `convex/` tree
+        // (or `../src/...` / `../shared/...`) stays kernel-surface so a kernel
+        // can never smuggle a product import past the fence as "external".
+        if (escaped && !escapedReentryIsBackendSurface(normalized)) continue;
         const candidate = resolveConvexModule(packageDir, normalized);
         const entry = { normalized, resolved: candidate ?? normalized };
         if (firstInPackage === null) firstInPackage = entry;
@@ -1282,6 +1301,7 @@ export function runDependencyCheck(options: {
   // inside excluded subtrees (profiles/, _generated/, ...) or that are test
   // files do not count, so a scan of just a kernel's excluded surface cannot
   // satisfy the check and silently fence nothing.
+  const baselineLoad = loadBaseline(baselinePath);
   const missingKernelRoots = (
     Object.keys(PROTECTED_KERNELS) as Array<keyof typeof PROTECTED_KERNELS>
   )
@@ -1300,7 +1320,7 @@ export function runDependencyCheck(options: {
     return {
       violations: [],
       cycles: [],
-      baseline: loadBaseline(baselinePath).status === "valid" ? loadBaseline(baselinePath).baseline : null,
+      baseline: baselineLoad.status === "valid" ? baselineLoad.baseline : null,
       isClean: false,
       scanError: message,
       repairHint:
@@ -1320,10 +1340,7 @@ export function runDependencyCheck(options: {
     return {
       violations: [],
       cycles: [],
-      baseline:
-        loadBaseline(baselinePath).status === "valid"
-          ? loadBaseline(baselinePath).baseline
-          : null,
+      baseline: baselineLoad.status === "valid" ? baselineLoad.baseline : null,
       isClean: false,
       scanError: message,
       repairHint:
@@ -1358,7 +1375,6 @@ export function runDependencyCheck(options: {
     console.log(`Kernel violations (${byKernel})`);
   }
 
-  const baselineLoad = loadBaseline(baselinePath);
   if (baselineLoad.status === "corrupt") {
     const message =
       `Baseline file exists but is corrupt at ${baselinePath}: ${baselineLoad.reason}. ` +
@@ -1491,7 +1507,7 @@ export function runDependencyCheck(options: {
       timestamp: new Date().toISOString(),
       cycles: sortCycles(cycles),
       kernelViolations: kernelViolations
-        .map((v) => `${v.file}|${v.imports}|${v.resolved}|${v.type}`)
+        .map(violationKey)
         .sort((left, right) => compareByBytes(left, right)),
     };
     let persisted = false;
