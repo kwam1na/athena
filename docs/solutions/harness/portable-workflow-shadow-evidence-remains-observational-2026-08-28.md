@@ -17,7 +17,7 @@ tags:
   - delivery-telemetry
   - candidate-identity
   - authority-boundary
-delivery_diff_fingerprint: 2053419630b321f11d0367b86ac0ffebfb1b6b4f6da9a64549c934fd7b7558d1
+delivery_diff_fingerprint: 0391e62acc8607430afa9db3e0aa3860f1b7a12778a2189a85ddc6ca38ee04ce
 ---
 
 # Portable Workflow Shadow Evidence Remains Observational
@@ -44,8 +44,11 @@ and mutation-attempt observations.
 The current-candidate validator pins the release archive, release metadata,
 source commit, Athena baseline, and frozen input. It recomputes decision parity
 and the mismatch list instead of trusting the stored verdict, and its digest
-binds the claimed observation time. The detailed artifact is a sibling of the
-existing delivery ledger, so observation cannot rewrite the gate result.
+binds the claimed observation time. Before evaluation, the runner recomputes
+the current deliverable fingerprint using the delivery telemetry rules and
+requires it to match the passing ledger. The detailed artifact is a sibling of
+the existing delivery ledger, so observation cannot rewrite the gate result or
+mislabel a changed candidate with stale gate identity.
 
 The existing delivery telemetry command projects the complete redacted
 comparison into the tracked corpus. It validates the comparison hash and

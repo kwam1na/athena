@@ -14,6 +14,10 @@ import {
   DEFAULT_DELIVERY_RUN_LATEST_PATH,
   readDeliveryRunLedger,
 } from "./harness-delivery-run-ledger";
+import {
+  collectChangedPathsForDiff,
+  collectDeliverableDiffFingerprint,
+} from "./delivery-diff-fingerprint";
 
 const WORKFLOW = "compound-delivery-kernel" as const;
 const RELEASE_ID = "core-v1" as const;
@@ -782,6 +786,7 @@ function withComparisonSha(
 export async function runPortableShadowObservation(
   rootDir: string,
   options: Omit<ObservationOptions, "candidateFingerprint"> & {
+    baseRef?: string;
     ledgerPath?: string;
     shadowPath?: string;
   } = {},
@@ -798,8 +803,28 @@ export async function runPortableShadowObservation(
       "Portable shadow observation refused: the authoritative gate has not passed.",
     );
   }
+  const baseRef =
+    options.baseRef ??
+    ledger.gateDecisionEvents.at(-1)?.baseRef ??
+    "origin/main";
+  const currentFingerprint = collectDeliverableDiffFingerprint(
+    rootDir,
+    baseRef,
+    collectChangedPathsForDiff(rootDir, baseRef),
+  );
+  if (currentFingerprint !== ledger.deliverableDiffFingerprint) {
+    throw new Error(
+      "Portable shadow observation refused: the authoritative gate describes a different deliverable.",
+    );
+  }
+  const {
+    baseRef: _baseRef,
+    ledgerPath: _ledgerPath,
+    shadowPath: _shadowPath,
+    ...observationOptions
+  } = options;
   const comparison = await observePortableShadow(rootDir, {
-    ...options,
+    ...observationOptions,
     candidateFingerprint: ledger.deliverableDiffFingerprint,
   });
   const absoluteShadowPath = path.join(rootDir, shadowPath);

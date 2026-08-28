@@ -2,7 +2,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { collectDeliverableDiffFingerprint } from "./delivery-diff-fingerprint";
+import {
+  collectChangedPathsForDiff,
+  collectDeliverableDiffFingerprint,
+} from "./delivery-diff-fingerprint";
+export { collectChangedPathsForDiff } from "./delivery-diff-fingerprint";
 import {
   collectSourceLineChanges,
   DEFAULT_SOURCE_LINE_THRESHOLD,
@@ -504,6 +508,13 @@ export function collectDeliveryRunTelemetryFindings(
   return findings;
 }
 
+export type DeliveryRunTelemetryCheckOptions = {
+  baseRef?: string;
+  ciMode?: boolean;
+  ledgerPath?: string;
+  threshold?: number;
+};
+
 function gitLines(rootDir: string, args: string[]) {
   const result = Bun.spawnSync(["git", ...args], {
     cwd: rootDir,
@@ -520,32 +531,6 @@ function gitLines(rootDir: string, args: string[]) {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
-}
-
-export type DeliveryRunTelemetryCheckOptions = {
-  baseRef?: string;
-  ciMode?: boolean;
-  ledgerPath?: string;
-  threshold?: number;
-};
-
-/**
- * Shared by the sensor and by the ledger's fingerprint stamp: those two must
- * agree, or a run would stamp a fingerprint the sensor can never match and the
- * demand would be permanently unsatisfiable. `delivery-documentation-check.ts`
- * and `compound-solution-check.ts` still carry their own copies for the
- * documentation policies; they are tolerated because nothing cross-checks their
- * output against this one, and consolidating them belongs with that policy.
- */
-export function collectChangedPathsForDiff(rootDir: string, baseRef: string) {
-  return [
-    ...new Set([
-      ...gitLines(rootDir, ["diff", "--name-only", `${baseRef}...HEAD`]),
-      ...gitLines(rootDir, ["diff", "--name-only"]),
-      ...gitLines(rootDir, ["diff", "--cached", "--name-only"]),
-      ...gitLines(rootDir, ["ls-files", "--others", "--exclude-standard"]),
-    ]),
-  ].sort();
 }
 
 /**

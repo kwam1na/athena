@@ -7,9 +7,9 @@ export function normalizeRepoPath(repoPath: string) {
 }
 
 export function sortUniquePaths(paths: string[]) {
-  return [...new Set(paths.map((entry) => normalizeRepoPath(entry)).filter(Boolean))].sort(
-    (left, right) => left.localeCompare(right)
-  );
+  return [
+    ...new Set(paths.map((entry) => normalizeRepoPath(entry)).filter(Boolean)),
+  ].sort((left, right) => left.localeCompare(right));
 }
 
 export function isDeliverableFingerprintPath(repoPath: string) {
@@ -42,7 +42,7 @@ function runGit(rootDir: string, args: string[], allowFailure = false) {
 
   if (result.exitCode !== 0 && !allowFailure) {
     throw new Error(
-      `git ${args.join(" ")} failed: ${result.stderr.toString().trim()}`
+      `git ${args.join(" ")} failed: ${result.stderr.toString().trim()}`,
     );
   }
 
@@ -60,13 +60,17 @@ function gitEnv() {
 export function collectDeliverableDiffFingerprint(
   rootDir: string,
   baseRef: string,
-  changedFiles: string[]
+  changedFiles: string[],
 ) {
   const fingerprintFiles = sortUniquePaths(
-    changedFiles.filter((filePath) => isDeliverableFingerprintPath(filePath))
+    changedFiles.filter((filePath) => isDeliverableFingerprintPath(filePath)),
   );
   const hash = createHash("sha256");
-  const mergeBase = runGit(rootDir, ["merge-base", baseRef, "HEAD"], true).trim();
+  const mergeBase = runGit(
+    rootDir,
+    ["merge-base", baseRef, "HEAD"],
+    true,
+  ).trim();
 
   hash.update(`base:${mergeBase || baseRef}\n`);
 
@@ -84,4 +88,21 @@ export function collectDeliverableDiffFingerprint(
   }
 
   return hash.digest("hex");
+}
+
+export function collectChangedPathsForDiff(rootDir: string, baseRef: string) {
+  const gitLines = (args: string[]) =>
+    runGit(rootDir, args)
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+  return [
+    ...new Set([
+      ...gitLines(["diff", "--name-only", `${baseRef}...HEAD`]),
+      ...gitLines(["diff", "--name-only"]),
+      ...gitLines(["diff", "--cached", "--name-only"]),
+      ...gitLines(["ls-files", "--others", "--exclude-standard"]),
+    ]),
+  ].sort();
 }

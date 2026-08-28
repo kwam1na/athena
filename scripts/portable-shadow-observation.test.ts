@@ -15,6 +15,10 @@ import {
   readDeliveryRunLedger,
   writeDeliveryRunLedger,
 } from "./harness-delivery-run-ledger";
+import {
+  collectChangedPathsForDiff,
+  collectDeliverableDiffFingerprint,
+} from "./delivery-diff-fingerprint";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const CANDIDATE_FINGERPRINT = "f".repeat(64);
@@ -24,6 +28,37 @@ async function tempRoot() {
   const root = await mkdtemp(path.join(tmpdir(), "athena-portable-shadow-"));
   tempRoots.push(root);
   return root;
+}
+
+function git(rootDir: string, args: string[]) {
+  const result = Bun.spawnSync(["git", ...args], {
+    cwd: rootDir,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    throw new Error(result.stderr.toString());
+  }
+}
+
+async function initializeFingerprintRoot(rootDir: string) {
+  await writeFile(path.join(rootDir, "candidate.txt"), "gate candidate\n");
+  git(rootDir, ["init", "-q"]);
+  git(rootDir, ["add", "."]);
+  git(rootDir, [
+    "-c",
+    "user.name=Athena Test",
+    "-c",
+    "user.email=athena@example.test",
+    "commit",
+    "-qm",
+    "base",
+  ]);
+  return collectDeliverableDiffFingerprint(
+    rootDir,
+    "HEAD",
+    collectChangedPathsForDiff(rootDir, "HEAD"),
+  );
 }
 
 afterEach(async () => {
@@ -287,6 +322,9 @@ describe("portable workflow shadow observation", () => {
 
   it("writes a sibling shadow artifact without changing the authoritative ledger", async () => {
     const root = await tempRoot();
+    const sentinelPath = path.join(root, "authoritative-result.txt");
+    await writeFile(sentinelPath, "Athena remains authoritative\n");
+    const currentFingerprint = await initializeFingerprintRoot(root);
     const ledgerPath = "artifacts/harness-delivery-runs/latest.json";
     const shadowPath = "artifacts/harness-delivery-runs/shadow-comparison.json";
     const ledger = createDeliveryRunLedger({
@@ -295,16 +333,15 @@ describe("portable workflow shadow observation", () => {
       proofState: "proof_recorded",
       commandSpans: [],
       gateDecisionEvents: [],
-      deliverableDiffFingerprint: CANDIDATE_FINGERPRINT,
+      deliverableDiffFingerprint: currentFingerprint,
     });
     await writeDeliveryRunLedger(root, ledger, { latestPath: ledgerPath });
     const before = await readFile(path.join(root, ledgerPath), "utf8");
-    const sentinelPath = path.join(root, "authoritative-result.txt");
-    await writeFile(sentinelPath, "Athena remains authoritative\n");
     const sentinelBefore = await readFile(sentinelPath, "utf8");
     const comparison = await runPortableShadowObservation(root, {
       ledgerPath,
       shadowPath,
+      baseRef: "HEAD",
       evaluator: async () => ({
         decisions: {
           routing: { entryPoint: "deliver-work", workflow: "implement" },
@@ -336,6 +373,36 @@ describe("portable workflow shadow observation", () => {
       JSON.parse(await readFile(path.join(root, shadowPath), "utf8")),
     ).toEqual(comparison);
     expect(await readFile(sentinelPath, "utf8")).toBe(sentinelBefore);
+  });
+
+  it("refuses to observe after the candidate moves beyond a passing ledger", async () => {
+    const root = await tempRoot();
+    const ledgerPath = "artifacts/harness-delivery-runs/latest.json";
+    const shadowPath = "artifacts/harness-delivery-runs/shadow-comparison.json";
+    const passedFingerprint = await initializeFingerprintRoot(root);
+    await writeDeliveryRunLedger(
+      root,
+      createDeliveryRunLedger({
+        generatedAt: "2026-08-28T18:00:00.000Z",
+        status: "pass",
+        proofState: "proof_recorded",
+        commandSpans: [],
+        deliverableDiffFingerprint: passedFingerprint,
+      }),
+      { latestPath: ledgerPath },
+    );
+    await writeFile(path.join(root, "candidate.txt"), "changed after gate\n");
+
+    await expect(
+      runPortableShadowObservation(root, {
+        baseRef: "HEAD",
+        ledgerPath,
+        shadowPath,
+      }),
+    ).rejects.toThrow("different deliverable");
+    await expect(
+      readFile(path.join(root, shadowPath), "utf8"),
+    ).rejects.toThrow();
   });
 
   it("refuses to record before the authoritative gate passes", async () => {
