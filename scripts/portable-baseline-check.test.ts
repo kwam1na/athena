@@ -1,8 +1,19 @@
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
   auditPortableWorkflowBaseline,
+  collectTreeEntries,
   loadPortableBaselineDocuments,
 } from "./portable-baseline-check";
 
@@ -53,6 +64,43 @@ describe("portable workflow characterization baseline", () => {
         "observed-only-blocker-unadjudicated",
       );
     }
+  });
+
+  it("requires explicit approval provenance for an observed-only parity blocker", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const firstAssertion = documents.baseline.assertions[0];
+    const repositorySource = documents.baseline.sources.find(
+      (source) => source.kind === "repository-policy",
+    )!;
+    const repositoryText = await readFile(
+      path.join(REPO_ROOT, repositorySource.path),
+      "utf8",
+    );
+    const selector = repositoryText
+      .split("\n")
+      .find((line) => line.length > 20)!;
+    const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        baseline: {
+          ...documents.baseline,
+          assertions: [
+            {
+              ...firstAssertion,
+              authority: "observed-only",
+              parity: "blocking",
+              adjudication: "approved",
+              citations: [{ sourceId: repositorySource.id, selector }],
+            },
+            ...documents.baseline.assertions.slice(1),
+          ],
+        },
+      },
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toContain(
+      "observed-only-approval-citation-invalid",
+    );
   });
 
   it("detects drift in a selected source instead of recapturing it silently", async () => {
@@ -187,7 +235,9 @@ describe("portable workflow characterization baseline", () => {
         ".agents/skills/ce-session-extract",
       ]),
     );
-    expect(new Set(documents.overlayMap.boundedClosure.auditedMemberIds)).toEqual(
+    expect(
+      new Set(documents.overlayMap.boundedClosure.auditedMemberIds),
+    ).toEqual(
       new Set(
         documents.overlayMap.boundedClosure.members.map((member) => member.id),
       ),
@@ -277,10 +327,9 @@ describe("portable workflow characterization baseline", () => {
       documents.overlayMap.boundedClosure.directDependencies.filter(
         (dependency) =>
           dependency.fromMemberId === "deliver-work-body" &&
-          [
-            "ce-debug-source-bundle",
-            "ce-code-review-source-bundle",
-          ].includes(dependency.toMemberId),
+          ["ce-debug-source-bundle", "ce-code-review-source-bundle"].includes(
+            dependency.toMemberId,
+          ),
       );
     const selectorByTarget = new Map(
       genericRouterEdges.map((dependency) => [
@@ -298,9 +347,7 @@ describe("portable workflow characterization baseline", () => {
             directDependencies:
               documents.overlayMap.boundedClosure.directDependencies.map(
                 (dependency) => {
-                  if (
-                    dependency.fromMemberId !== "deliver-work-body"
-                  ) {
+                  if (dependency.fromMemberId !== "deliver-work-body") {
                     return dependency;
                   }
                   if (dependency.toMemberId === "ce-debug-source-bundle") {
@@ -316,9 +363,7 @@ describe("portable workflow characterization baseline", () => {
                   ) {
                     return {
                       ...dependency,
-                      selector: selectorByTarget.get(
-                        "ce-debug-source-bundle",
-                      )!,
+                      selector: selectorByTarget.get("ce-debug-source-bundle")!,
                     };
                   }
                   return dependency;
@@ -346,9 +391,7 @@ describe("portable workflow characterization baseline", () => {
             directDependencies:
               documents.overlayMap.boundedClosure.directDependencies.map(
                 (dependency) => {
-                  if (
-                    dependency.fromMemberId !== "deliver-work-body"
-                  ) {
+                  if (dependency.fromMemberId !== "deliver-work-body") {
                     return dependency;
                   }
                   if (dependency.toMemberId === "ce-debug-source-bundle") {
@@ -375,6 +418,64 @@ describe("portable workflow characterization baseline", () => {
 
     expect(result.findings.map((finding) => finding.code)).toContain(
       "source-routing-binding-mismatch",
+    );
+  });
+
+  it("binds explicit execute and track selectors to their resolved targets", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const selectorByTarget = new Map(
+      documents.overlayMap.boundedClosure.directDependencies
+        .filter(
+          (dependency) =>
+            dependency.fromMemberId === "deliver-work-body" &&
+            [
+              "athena-execute-source-bundle",
+              "linear-track-source-bundle",
+            ].includes(dependency.toMemberId),
+        )
+        .map((dependency) => [dependency.toMemberId, dependency.selector]),
+    );
+    const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        overlayMap: {
+          ...documents.overlayMap,
+          boundedClosure: {
+            ...documents.overlayMap.boundedClosure,
+            directDependencies:
+              documents.overlayMap.boundedClosure.directDependencies.map(
+                (dependency) => {
+                  if (dependency.fromMemberId !== "deliver-work-body") {
+                    return dependency;
+                  }
+                  if (
+                    dependency.toMemberId === "athena-execute-source-bundle"
+                  ) {
+                    return {
+                      ...dependency,
+                      selector: selectorByTarget.get(
+                        "linear-track-source-bundle",
+                      )!,
+                    };
+                  }
+                  if (dependency.toMemberId === "linear-track-source-bundle") {
+                    return {
+                      ...dependency,
+                      selector: selectorByTarget.get(
+                        "athena-execute-source-bundle",
+                      )!,
+                    };
+                  }
+                  return dependency;
+                },
+              ),
+          },
+        },
+      },
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toContain(
+      "direct-dependency-reference-target-mismatch",
     );
   });
 
@@ -414,7 +515,10 @@ describe("portable workflow characterization baseline", () => {
   it("models approved delivery decisions separately from current repository policy", async () => {
     const documents = await loadPortableBaselineDocuments(REPO_ROOT);
     const assertions = new Map(
-      documents.baseline.assertions.map((assertion) => [assertion.id, assertion]),
+      documents.baseline.assertions.map((assertion) => [
+        assertion.id,
+        assertion,
+      ]),
     );
 
     for (const assertionId of [
@@ -446,12 +550,8 @@ describe("portable workflow characterization baseline", () => {
       },
     });
 
-    expect(result.findings.map((finding) => finding.code)).toEqual(
-      expect.arrayContaining([
-        "scenario-request-kind-invalid",
-        "scenario-assertions-empty",
-        "scenario-classifications-empty",
-      ]),
+    expect(result.findings.map((finding) => finding.code)).toContain(
+      "scenario-document-shape-invalid",
     );
   });
 
@@ -474,5 +574,187 @@ describe("portable workflow characterization baseline", () => {
     expect(result.findings.map((finding) => finding.code)).toContain(
       "scenario-assertion-classification-mismatch",
     );
+  });
+
+  it("fails closed on a malformed baseline document shape", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        baseline: {
+          ...documents.baseline,
+          sources: null,
+        },
+      } as never,
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toContain(
+      "baseline-document-shape-invalid",
+    );
+  });
+
+  it("fails closed on overlay enums, counts, and digests", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const [firstMember, ...remainingMembers] =
+      documents.overlayMap.boundedClosure.members;
+    const [firstDependency, ...remainingDependencies] =
+      documents.overlayMap.boundedClosure.directDependencies;
+    const [firstDisposition, ...remainingDispositions] =
+      documents.overlayMap.boundedClosure.referenceDispositions;
+    const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        overlayMap: {
+          ...documents.overlayMap,
+          boundedClosure: {
+            ...documents.overlayMap.boundedClosure,
+            members: [
+              {
+                ...firstMember,
+                kind: "unknown-member-kind",
+                classification: "unknown-classification",
+                fileCount: -1,
+                treeDigest: "NOT-A-DIGEST",
+              },
+              ...remainingMembers,
+            ],
+            directDependencies: [
+              {
+                ...firstDependency,
+                requirement: "unknown-requirement",
+                parity: "unknown-parity",
+              },
+              ...remainingDependencies,
+            ],
+            referenceDispositions: [
+              {
+                ...firstDisposition,
+                resolution: "unknown-resolution",
+                parity: "blocking",
+              },
+              ...remainingDispositions,
+            ],
+          },
+        },
+      } as never,
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toContain(
+      "overlay-document-shape-invalid",
+    );
+  });
+
+  it("fails closed on a malformed scenario document shape", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const [firstScenario, ...remainingScenarios] = documents.scenarios;
+    const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        scenarios: [
+          {
+            ...firstScenario,
+            requestKind: "unknown-request-kind",
+            expectedAssertionIds: [42],
+          },
+          ...remainingScenarios,
+        ],
+      } as never,
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toContain(
+      "scenario-document-shape-invalid",
+    );
+  });
+
+  it("binds each required scenario to its request kind", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        scenarios: documents.scenarios.map((scenario) =>
+          scenario.id === "planning"
+            ? { ...scenario, requestKind: "review" }
+            : scenario,
+        ),
+      },
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toContain(
+      "scenario-contract-request-kind-mismatch",
+    );
+  });
+
+  it("rejects non-empty scenarios that shrink required coverage", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        scenarios: documents.scenarios.map((scenario) =>
+          scenario.id === "bounded-implementation"
+            ? {
+                ...scenario,
+                expectedAssertionIds: scenario.expectedAssertionIds.filter(
+                  (id) => id !== "athena-pr-contract-remains-mandatory",
+                ),
+                expectedClassificationIds:
+                  scenario.expectedClassificationIds.filter(
+                    (id) => id !== "athena-pr-policy",
+                  ),
+              }
+            : scenario,
+        ),
+      },
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toEqual(
+      expect.arrayContaining([
+        "scenario-contract-assertion-missing",
+        "scenario-contract-classification-missing",
+      ]),
+    );
+  });
+
+  it("rejects a tree path that escapes through a parent symlink", async () => {
+    const temporaryRoot = await mkdtemp(
+      path.join(tmpdir(), "portable-baseline-containment-"),
+    );
+    try {
+      const repoRoot = path.join(temporaryRoot, "repo");
+      const externalRoot = path.join(temporaryRoot, "external");
+      await mkdir(repoRoot);
+      await mkdir(externalRoot);
+      await writeFile(path.join(externalRoot, "secret.txt"), "outside\n");
+      await symlink(externalRoot, path.join(repoRoot, "escape"));
+
+      await expect(
+        collectTreeEntries(repoRoot, "escape/secret.txt"),
+      ).rejects.toMatchObject({ code: "path-containment-escape" });
+    } finally {
+      await rm(temporaryRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("hashes an external leaf symlink as metadata without reading its target", async () => {
+    const temporaryRoot = await mkdtemp(
+      path.join(tmpdir(), "portable-baseline-leaf-symlink-"),
+    );
+    try {
+      const repoRoot = path.join(temporaryRoot, "repo");
+      const externalFile = path.join(temporaryRoot, "external.txt");
+      await mkdir(path.join(repoRoot, "inventory"), { recursive: true });
+      await writeFile(externalFile, "first target contents\n");
+      await symlink(
+        externalFile,
+        path.join(repoRoot, "inventory", "external-link"),
+      );
+
+      const before = await collectTreeEntries(repoRoot, "inventory");
+      await writeFile(externalFile, "different target contents\n");
+      const after = await collectTreeEntries(repoRoot, "inventory");
+
+      expect(after).toEqual(before);
+    } finally {
+      await rm(temporaryRoot, { recursive: true, force: true });
+    }
   });
 });
