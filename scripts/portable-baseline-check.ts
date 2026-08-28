@@ -11,10 +11,12 @@ import { readFile, readdir, readlink } from "node:fs/promises";
 import path from "node:path";
 
 import {
-  ADJUDICATED_MEMBER_CLASSIFICATIONS,
+  BOUNDED_MEMBER_CONTRACTS,
   blockingAssertionSemanticDigest,
+  NORMATIVE_SOURCE_CONTRACTS,
   REQUIRED_BLOCKING_ASSERTION_DIGESTS,
   REQUIRED_BLOCKING_DEPENDENCY_CONTRACTS,
+  RULE_IDENTITY_CONTRACTS,
 } from "./portable-baseline-contracts";
 import {
   type ContainedPathState,
@@ -853,6 +855,46 @@ export async function auditPortableWorkflowBaseline(
     }
   }
 
+  const rejectedSourceIds = new Set<string>();
+  const sourceIdCounts = new Map<string, number>();
+  for (const source of baseline.sources) {
+    sourceIdCounts.set(source.id, (sourceIdCounts.get(source.id) ?? 0) + 1);
+  }
+  for (const [sourceId, count] of sourceIdCounts) {
+    if (count > 1) rejectedSourceIds.add(sourceId);
+  }
+  for (const [sourceId, contract] of NORMATIVE_SOURCE_CONTRACTS) {
+    if (!baseline.sources.some((source) => source.id === sourceId)) {
+      findings.push({
+        code: "normative-source-contract-missing",
+        message: `Required normative source ${sourceId} is missing.`,
+      });
+      continue;
+    }
+    if (
+      baseline.sources.some(
+        (source) =>
+          source.id === sourceId &&
+          (source.path !== contract.path || source.kind !== contract.kind),
+      )
+    ) {
+      findings.push({
+        code: "normative-source-contract-mismatch",
+        message: `Normative source ${sourceId} must remain ${contract.kind} at ${contract.path}.`,
+      });
+      rejectedSourceIds.add(sourceId);
+    }
+  }
+  for (const source of baseline.sources) {
+    if (!NORMATIVE_SOURCE_CONTRACTS.has(source.id)) {
+      findings.push({
+        code: "normative-source-contract-unexpected",
+        message: `Normative source ${source.id} is outside the complete source identity contract.`,
+        path: source.path,
+      });
+      rejectedSourceIds.add(source.id);
+    }
+  }
   const sourceById = new Map(
     baseline.sources.map((source) => [source.id, source]),
   );
@@ -946,6 +988,7 @@ export async function auditPortableWorkflowBaseline(
           path: source.path,
         });
       }
+      if (rejectedSourceIds.has(source.id)) continue;
       const sourceText = await readFile(containedSource.absolutePath, "utf8");
       sourceTextById.set(source.id, sourceText);
       if (sha256(sourceText) !== source.sha256) {
@@ -1136,6 +1179,36 @@ export async function auditPortableWorkflowBaseline(
     "classification-id-duplicate",
     "Classification id",
   );
+  for (const [ruleId, contract] of RULE_IDENTITY_CONTRACTS) {
+    const rule = overlayMap.classifications.find(
+      (entry) => entry.id === ruleId,
+    );
+    if (!rule) {
+      findings.push({
+        code: "rule-contract-missing",
+        message: `Required rule ${ruleId} is missing.`,
+      });
+      continue;
+    }
+    if (
+      rule.classification !== contract.classification ||
+      JSON.stringify(rule.assertionIds) !==
+        JSON.stringify(contract.assertionIds)
+    ) {
+      findings.push({
+        code: "rule-contract-mismatch",
+        message: `Rule ${ruleId} must preserve its exact classification and assertion membership.`,
+      });
+    }
+  }
+  for (const rule of overlayMap.classifications) {
+    if (!RULE_IDENTITY_CONTRACTS.has(rule.id)) {
+      findings.push({
+        code: "rule-contract-unexpected",
+        message: `Rule ${rule.id} is outside the complete rule identity contract.`,
+      });
+    }
+  }
   const assertionIds = new Set(
     baseline.assertions.map((assertion) => assertion.id),
   );
@@ -1211,15 +1284,32 @@ export async function auditPortableWorkflowBaseline(
     }
   }
   const memberById = new Map(members.map((member) => [member.id, member]));
-  for (const [
-    memberId,
-    expectedClassification,
-  ] of ADJUDICATED_MEMBER_CLASSIFICATIONS) {
+  for (const [memberId, contract] of BOUNDED_MEMBER_CONTRACTS) {
     const member = memberById.get(memberId);
-    if (!member || member.classification !== expectedClassification) {
+    if (!member) {
       findings.push({
-        code: "bounded-member-classification-contract-mismatch",
-        message: `Bounded member ${memberId} must remain classified as ${expectedClassification}.`,
+        code: "bounded-member-contract-missing",
+        message: `Required bounded member ${memberId} is missing.`,
+      });
+      continue;
+    }
+    if (
+      member.path !== contract.path ||
+      member.kind !== contract.kind ||
+      member.classification !== contract.classification
+    ) {
+      findings.push({
+        code: "bounded-member-contract-mismatch",
+        message: `Bounded member ${memberId} must preserve its exact canonical path, kind, and classification.`,
+      });
+    }
+  }
+  for (const member of members) {
+    if (!BOUNDED_MEMBER_CONTRACTS.has(member.id)) {
+      findings.push({
+        code: "bounded-member-contract-unexpected",
+        message: `Bounded member ${member.id} is outside the complete closure identity contract.`,
+        path: member.path,
       });
     }
   }

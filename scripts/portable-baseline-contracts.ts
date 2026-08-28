@@ -435,13 +435,462 @@ export const REQUIRED_BLOCKING_DEPENDENCY_CONTRACTS = [
   }),
 ] as const;
 
-export const ADJUDICATED_MEMBER_CLASSIFICATIONS = new Map([
-  ["deliver-work-codex-metadata", "excluded"],
-  ["linear-track-source-bundle", "retained-overlay"],
-  ["ce-proof-source-bundle", "excluded"],
-  ["ce-commit-source-bundle", "excluded"],
-  ["ce-commit-push-pr-source-bundle", "excluded"],
-  ["ce-frontend-design-source-bundle", "excluded"],
-  ["ce-demo-reel-source-bundle", "excluded"],
-  ["ce-worktree-source-bundle", "excluded"],
+type NormativeSourceContract = {
+  path: string;
+  kind:
+    | "approved-plan"
+    | "approved-requirements"
+    | "enforcement-policy"
+    | "repository-policy"
+    | "workflow-policy";
+};
+
+type BoundedMemberContract = {
+  path: string;
+  kind: "skill-bundle" | "dependency-bundle";
+  classification: "portable-candidate" | "retained-overlay" | "excluded";
+};
+
+type RuleIdentityContract = {
+  classification:
+    "portable-candidate" | "retained-overlay" | "optional-adapter" | "excluded";
+  assertionIds: readonly string[];
+};
+
+export const NORMATIVE_SOURCE_CONTRACTS = new Map<
+  string,
+  NormativeSourceContract
+>([
+  ["root-agent-guide", { path: "AGENTS.md", kind: "repository-policy" }],
+  [
+    "packages-agent-guide",
+    { path: "packages/AGENTS.md", kind: "repository-policy" },
+  ],
+  [
+    "local-skill-policy",
+    { path: ".agents/README.md", kind: "repository-policy" },
+  ],
+  [
+    "deliver-work-skill",
+    {
+      path: ".agents/skills/deliver-work/SKILL.md",
+      kind: "workflow-policy",
+    },
+  ],
+  [
+    "delivery-kernel-skill",
+    {
+      path: ".agents/skills/compound-delivery-kernel/SKILL.md",
+      kind: "workflow-policy",
+    },
+  ],
+  [
+    "plan-skill",
+    { path: ".agents/skills/ce-plan/SKILL.md", kind: "workflow-policy" },
+  ],
+  [
+    "work-skill",
+    { path: ".agents/skills/ce-work/SKILL.md", kind: "workflow-policy" },
+  ],
+  [
+    "review-skill",
+    {
+      path: ".agents/skills/ce-code-review/SKILL.md",
+      kind: "workflow-policy",
+    },
+  ],
+  [
+    "compound-skill",
+    {
+      path: ".agents/skills/ce-compound/SKILL.md",
+      kind: "workflow-policy",
+    },
+  ],
+  [
+    "track-skill",
+    { path: ".agents/skills/track/SKILL.md", kind: "workflow-policy" },
+  ],
+  [
+    "execute-skill",
+    { path: ".agents/skills/execute/SKILL.md", kind: "workflow-policy" },
+  ],
+  [
+    "approved-requirements",
+    {
+      path: "docs/brainstorms/2026-08-27-cross-agent-delivery-skills-requirements.md",
+      kind: "approved-requirements",
+    },
+  ],
+  [
+    "approved-delivery-plan",
+    {
+      path: "docs/plans/2026-08-27-002-feat-cross-agent-delivery-rails-and-skills-plan.md",
+      kind: "approved-plan",
+    },
+  ],
+  [
+    "typed-harness-blockers",
+    { path: "scripts/harness-blockers.ts", kind: "enforcement-policy" },
+  ],
+] as const);
+
+export const BOUNDED_MEMBER_CONTRACTS = new Map<string, BoundedMemberContract>([
+  [
+    "deliver-work-body",
+    {
+      path: ".agents/skills/deliver-work/SKILL.md",
+      kind: "skill-bundle",
+      classification: "portable-candidate",
+    },
+  ],
+  [
+    "deliver-work-codex-metadata",
+    {
+      path: ".agents/skills/deliver-work/agents/openai.yaml",
+      kind: "dependency-bundle",
+      classification: "excluded",
+    },
+  ],
+  [
+    "compound-delivery-kernel",
+    {
+      path: ".agents/skills/compound-delivery-kernel",
+      kind: "skill-bundle",
+      classification: "portable-candidate",
+    },
+  ],
+  [
+    "ce-plan-source-bundle",
+    {
+      path: ".agents/skills/ce-plan",
+      kind: "skill-bundle",
+      classification: "portable-candidate",
+    },
+  ],
+  [
+    "ce-work-source-bundle",
+    {
+      path: ".agents/skills/ce-work",
+      kind: "skill-bundle",
+      classification: "portable-candidate",
+    },
+  ],
+  [
+    "ce-code-review-source-bundle",
+    {
+      path: ".agents/skills/ce-code-review",
+      kind: "skill-bundle",
+      classification: "portable-candidate",
+    },
+  ],
+  [
+    "compound-reviewer-prompts",
+    {
+      path: ".agents/agents",
+      kind: "dependency-bundle",
+      classification: "excluded",
+    },
+  ],
+  [
+    "ce-compound-source-bundle",
+    {
+      path: ".agents/skills/ce-compound",
+      kind: "skill-bundle",
+      classification: "portable-candidate",
+    },
+  ],
+  [
+    "linear-track-source-bundle",
+    {
+      path: ".agents/skills/track",
+      kind: "skill-bundle",
+      classification: "retained-overlay",
+    },
+  ],
+  [
+    "athena-execute-source-bundle",
+    {
+      path: ".agents/skills/execute",
+      kind: "skill-bundle",
+      classification: "retained-overlay",
+    },
+  ],
+  [
+    "ce-brainstorm-source-bundle",
+    {
+      path: ".agents/skills/ce-brainstorm",
+      kind: "skill-bundle",
+      classification: "portable-candidate",
+    },
+  ],
+  [
+    "ce-debug-source-bundle",
+    {
+      path: ".agents/skills/ce-debug",
+      kind: "skill-bundle",
+      classification: "portable-candidate",
+    },
+  ],
+  [
+    "ce-doc-review-source-bundle",
+    {
+      path: ".agents/skills/ce-doc-review",
+      kind: "dependency-bundle",
+      classification: "portable-candidate",
+    },
+  ],
+  [
+    "ce-proof-source-bundle",
+    {
+      path: ".agents/skills/ce-proof",
+      kind: "dependency-bundle",
+      classification: "excluded",
+    },
+  ],
+  [
+    "ce-commit-source-bundle",
+    {
+      path: ".agents/skills/ce-commit",
+      kind: "dependency-bundle",
+      classification: "excluded",
+    },
+  ],
+  [
+    "ce-commit-push-pr-source-bundle",
+    {
+      path: ".agents/skills/ce-commit-push-pr",
+      kind: "dependency-bundle",
+      classification: "excluded",
+    },
+  ],
+  [
+    "ce-compound-refresh-source-bundle",
+    {
+      path: ".agents/skills/ce-compound-refresh",
+      kind: "dependency-bundle",
+      classification: "excluded",
+    },
+  ],
+  [
+    "ce-landed-change-report-source-bundle",
+    {
+      path: ".agents/skills/ce-landed-change-report",
+      kind: "dependency-bundle",
+      classification: "retained-overlay",
+    },
+  ],
+  [
+    "ce-frontend-design-source-bundle",
+    {
+      path: ".agents/skills/ce-frontend-design",
+      kind: "dependency-bundle",
+      classification: "excluded",
+    },
+  ],
+  [
+    "ce-demo-reel-source-bundle",
+    {
+      path: ".agents/skills/ce-demo-reel",
+      kind: "dependency-bundle",
+      classification: "excluded",
+    },
+  ],
+  [
+    "ce-setup-source-bundle",
+    {
+      path: ".agents/skills/ce-setup",
+      kind: "dependency-bundle",
+      classification: "excluded",
+    },
+  ],
+  [
+    "ce-worktree-source-bundle",
+    {
+      path: ".agents/skills/ce-worktree",
+      kind: "dependency-bundle",
+      classification: "excluded",
+    },
+  ],
+  [
+    "ce-session-inventory-source-bundle",
+    {
+      path: ".agents/skills/ce-session-inventory",
+      kind: "dependency-bundle",
+      classification: "excluded",
+    },
+  ],
+  [
+    "ce-session-extract-source-bundle",
+    {
+      path: ".agents/skills/ce-session-extract",
+      kind: "dependency-bundle",
+      classification: "excluded",
+    },
+  ],
+] as const);
+
+export const RULE_IDENTITY_CONTRACTS = new Map<string, RuleIdentityContract>([
+  [
+    "routing-and-repository-discovery",
+    {
+      classification: "portable-candidate",
+      assertionIds: [
+        "route-tracked-implementation-to-execute",
+        "route-approved-ticket-creation-to-track",
+        "route-fuzzy-requirements-to-brainstorm",
+        "route-approved-planning-to-plan-workflow",
+        "route-unknown-root-cause-to-debugging",
+        "route-review-only-to-code-review",
+        "route-explicit-skill-as-requested",
+        "route-default-implementation-through-deliver-work",
+        "repository-policy-precedes-workflow-examples",
+      ],
+    },
+  ],
+  [
+    "planning-workflow",
+    {
+      classification: "portable-candidate",
+      assertionIds: [
+        "planning-captures-test-posture-and-sensors",
+        "planning-does-not-mutate-runtime-behavior",
+      ],
+    },
+  ],
+  [
+    "test-and-handoff-posture",
+    {
+      classification: "portable-candidate",
+      assertionIds: [
+        "implementation-selects-explicit-test-posture",
+        "smallest-honest-sensors-run-before-merge-gate",
+      ],
+    },
+  ],
+  [
+    "review-workflow",
+    {
+      classification: "portable-candidate",
+      assertionIds: [
+        "review-selects-core-and-risk-lenses",
+        "review-is-independent-of-implementation",
+        "actionable-findings-loop-to-resolution",
+      ],
+    },
+  ],
+  [
+    "tracker-neutral-capability-contract",
+    {
+      classification: "portable-candidate",
+      assertionIds: [
+        "tracker-neutral-workflow-has-actionable-no-tracker-handoff",
+      ],
+    },
+  ],
+  [
+    "linear-tracker-adapter",
+    {
+      classification: "optional-adapter",
+      assertionIds: [
+        "linear-context-resolution-is-adapter-behavior",
+        "linear-work-is-atomic-and-dependency-aware",
+        "linear-execution-keeps-ticket-state-current",
+      ],
+    },
+  ],
+  [
+    "compound-workflow",
+    {
+      classification: "portable-candidate",
+      assertionIds: ["compounding-requires-a-reusable-learning"],
+    },
+  ],
+  [
+    "athena-harness-evidence",
+    {
+      classification: "retained-overlay",
+      assertionIds: [
+        "configured-harness-blockers-cannot-degrade-away",
+        "harness-blockers-use-typed-sources-and-remediations",
+        "operator-and-provider-proof-lanes-stay-separated",
+        "athena-review-evidence-binds-the-candidate",
+      ],
+    },
+  ],
+  [
+    "athena-merge-ready-gates",
+    {
+      classification: "retained-overlay",
+      assertionIds: [
+        "pr-athena-remains-merge-ready-authority",
+        "operator-and-provider-proof-lanes-stay-separated",
+      ],
+    },
+  ],
+  [
+    "athena-reporting-policy",
+    {
+      classification: "retained-overlay",
+      assertionIds: [
+        "athena-solution-format-remains-repository-owned",
+        "landed-report-does-not-replace-durable-learning",
+      ],
+    },
+  ],
+  [
+    "athena-telemetry-policy",
+    {
+      classification: "retained-overlay",
+      assertionIds: ["delivery-telemetry-recorded-after-final-gate"],
+    },
+  ],
+  [
+    "athena-deployment-handoff",
+    {
+      classification: "retained-overlay",
+      assertionIds: ["deployment-handoff-runs-from-clean-merged-main"],
+    },
+  ],
+  [
+    "athena-generated-artifacts",
+    {
+      classification: "retained-overlay",
+      assertionIds: ["generated-artifact-obligations-remain-mandatory"],
+    },
+  ],
+  [
+    "athena-pr-policy",
+    {
+      classification: "retained-overlay",
+      assertionIds: ["athena-pr-contract-remains-mandatory"],
+    },
+  ],
+  [
+    "athena-domain-rules",
+    {
+      classification: "excluded",
+      assertionIds: ["athena-domain-architecture-is-not-portable-workflow"],
+    },
+  ],
+  [
+    "compound-reviewer-prompt-graph",
+    {
+      classification: "excluded",
+      assertionIds: ["review-selects-core-and-risk-lenses"],
+    },
+  ],
+  [
+    "codex-host-exposure-metadata",
+    {
+      classification: "optional-adapter",
+      assertionIds: ["repository-policy-precedes-workflow-examples"],
+    },
+  ],
+  [
+    "host-tool-sequence",
+    {
+      classification: "excluded",
+      assertionIds: ["host-tool-call-sequence-is-observed-only"],
+    },
+  ],
 ] as const);

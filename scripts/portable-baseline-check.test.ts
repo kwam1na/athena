@@ -326,6 +326,92 @@ describe("portable workflow characterization baseline", () => {
     );
   });
 
+  it("pins every normative source id to its exact canonical path and kind", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const target = documents.baseline.sources.find(
+      (source) => source.id === "root-agent-guide",
+    )!;
+    const temporaryRoot = await mkdtemp(
+      path.join(REPO_ROOT, ".portable-baseline-source-contract-"),
+    );
+    try {
+      const copiedPath = path.join(temporaryRoot, "AGENTS.md");
+      await writeFile(
+        copiedPath,
+        "Mismatched source content must not be consumed.\n",
+      );
+      const copiedRelativePath = path
+        .relative(REPO_ROOT, copiedPath)
+        .split(path.sep)
+        .join("/");
+      const replaceSources = (
+        sources: typeof documents.baseline.sources,
+      ): typeof documents => ({
+        ...documents,
+        baseline: { ...documents.baseline, sources },
+      });
+      const mutations = [
+        {
+          expectedCode: "normative-source-contract-mismatch",
+          documents: replaceSources(
+            documents.baseline.sources.map((source) =>
+              source.id === target.id
+                ? { ...source, kind: "enforcement-policy" }
+                : source,
+            ),
+          ),
+        },
+        {
+          expectedCode: "normative-source-contract-mismatch",
+          documents: replaceSources(
+            documents.baseline.sources.map((source) =>
+              source.id === target.id
+                ? { ...source, path: copiedRelativePath }
+                : source,
+            ),
+          ),
+        },
+        {
+          expectedCode: "normative-source-contract-missing",
+          documents: replaceSources(
+            documents.baseline.sources.filter(
+              (source) => source.id !== target.id,
+            ),
+          ),
+        },
+        {
+          expectedCode: "normative-source-contract-unexpected",
+          documents: replaceSources([
+            ...documents.baseline.sources,
+            {
+              ...target,
+              id: "unexpected-normative-source",
+              path: copiedRelativePath,
+            },
+          ]),
+        },
+      ];
+      const results = await Promise.all(
+        mutations.map(({ documents: mutation }) =>
+          auditPortableWorkflowBaseline(REPO_ROOT, { documents: mutation }),
+        ),
+      );
+
+      expect(
+        results.map((result, index) =>
+          result.findings.some(
+            (finding) => finding.code === mutations[index].expectedCode,
+          ),
+        ),
+      ).toEqual([true, true, true, true]);
+      expect(results[1].findings.map((finding) => finding.code)).not.toContain(
+        "source-digest-drift",
+      );
+    } finally {
+      await rm(temporaryRoot, { recursive: true, force: true });
+    }
+  });
+
   it("requires one classification per bounded-closure member and a stable residual inventory", async () => {
     const documents = await loadPortableBaselineDocuments(REPO_ROOT);
     const [firstMember] = documents.overlayMap.boundedClosure.members;
@@ -759,6 +845,217 @@ describe("portable workflow characterization baseline", () => {
     expect(mutationResult.findings.map((finding) => finding.code)).toContain(
       "overlay-document-shape-invalid",
     );
+  });
+
+  it("pins every bounded member id to its exact path, kind, and classification", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const target = documents.overlayMap.boundedClosure.members.find(
+      (member) => member.id === "compound-delivery-kernel",
+    )!;
+    const removable = documents.overlayMap.boundedClosure.members.find(
+      (member) => member.id === "deliver-work-codex-metadata",
+    )!;
+    const temporaryRoot = await mkdtemp(
+      path.join(REPO_ROOT, ".portable-baseline-member-contract-"),
+    );
+    try {
+      const copiedSkillPath = path.join(temporaryRoot, "kernel", "SKILL.md");
+      const unexpectedPath = path.join(temporaryRoot, "unexpected.md");
+      await mkdir(path.dirname(copiedSkillPath), { recursive: true });
+      await writeFile(
+        copiedSkillPath,
+        await readFile(path.join(REPO_ROOT, target.path, "SKILL.md"), "utf8"),
+      );
+      await writeFile(unexpectedPath, "Unexpected bounded member.\n");
+      const copiedRelativePath = path
+        .relative(REPO_ROOT, path.dirname(copiedSkillPath))
+        .split(path.sep)
+        .join("/");
+      const unexpectedRelativePath = path
+        .relative(REPO_ROOT, unexpectedPath)
+        .split(path.sep)
+        .join("/");
+      const copiedEntries = await collectTreeEntries(
+        REPO_ROOT,
+        copiedRelativePath,
+      );
+      const unexpectedEntries = await collectTreeEntries(
+        REPO_ROOT,
+        unexpectedRelativePath,
+      );
+      const unexpectedMember = {
+        id: "unexpected-bounded-member",
+        kind: "dependency-bundle" as const,
+        path: unexpectedRelativePath,
+        classification: "excluded" as const,
+        fileCount: unexpectedEntries.length,
+        treeDigest: digestTreeEntries(unexpectedEntries),
+      };
+      const replaceClosure = (
+        members: typeof documents.overlayMap.boundedClosure.members,
+        auditedMemberIds = documents.overlayMap.boundedClosure.auditedMemberIds,
+      ): typeof documents => ({
+        ...documents,
+        overlayMap: {
+          ...documents.overlayMap,
+          boundedClosure: {
+            ...documents.overlayMap.boundedClosure,
+            members,
+            auditedMemberIds,
+          },
+        },
+      });
+      const mutations = [
+        {
+          expectedCode: "bounded-member-contract-mismatch",
+          documents: replaceClosure(
+            documents.overlayMap.boundedClosure.members.map((member) =>
+              member.id === target.id
+                ? { ...member, classification: "retained-overlay" }
+                : member,
+            ),
+          ),
+        },
+        {
+          expectedCode: "bounded-member-contract-mismatch",
+          documents: replaceClosure(
+            documents.overlayMap.boundedClosure.members.map((member) =>
+              member.id === target.id
+                ? { ...member, kind: "dependency-bundle" }
+                : member,
+            ),
+          ),
+        },
+        {
+          expectedCode: "bounded-member-contract-mismatch",
+          documents: replaceClosure(
+            documents.overlayMap.boundedClosure.members.map((member) =>
+              member.id === target.id
+                ? {
+                    ...member,
+                    path: copiedRelativePath,
+                    fileCount: copiedEntries.length,
+                    treeDigest: digestTreeEntries(copiedEntries),
+                  }
+                : member,
+            ),
+          ),
+        },
+        {
+          expectedCode: "bounded-member-contract-missing",
+          documents: replaceClosure(
+            documents.overlayMap.boundedClosure.members.filter(
+              (member) => member.id !== removable.id,
+            ),
+            documents.overlayMap.boundedClosure.auditedMemberIds.filter(
+              (memberId) => memberId !== removable.id,
+            ),
+          ),
+        },
+        {
+          expectedCode: "bounded-member-contract-unexpected",
+          documents: replaceClosure(
+            [...documents.overlayMap.boundedClosure.members, unexpectedMember],
+            [
+              ...documents.overlayMap.boundedClosure.auditedMemberIds,
+              unexpectedMember.id,
+            ],
+          ),
+        },
+      ];
+      const results = await Promise.all(
+        mutations.map(({ documents: mutation }) =>
+          auditPortableWorkflowBaseline(REPO_ROOT, { documents: mutation }),
+        ),
+      );
+
+      expect(
+        results.map((result, index) =>
+          result.findings.some(
+            (finding) => finding.code === mutations[index].expectedCode,
+          ),
+        ),
+      ).toEqual([true, true, true, true, true]);
+    } finally {
+      await rm(temporaryRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("pins every rule id to its exact classification and assertion membership", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const target = documents.overlayMap.classifications.find(
+      (classification) => classification.id === "planning-workflow",
+    )!;
+    const removable = documents.overlayMap.classifications.find(
+      (classification) => classification.id === "codex-host-exposure-metadata",
+    )!;
+    const replaceRules = (
+      classifications: typeof documents.overlayMap.classifications,
+    ): typeof documents => ({
+      ...documents,
+      overlayMap: { ...documents.overlayMap, classifications },
+    });
+    const mutations = [
+      {
+        expectedCode: "rule-contract-mismatch",
+        documents: replaceRules(
+          documents.overlayMap.classifications.map((classification) =>
+            classification.id === target.id
+              ? { ...classification, classification: "excluded" }
+              : classification,
+          ),
+        ),
+      },
+      {
+        expectedCode: "rule-contract-mismatch",
+        documents: replaceRules(
+          documents.overlayMap.classifications.map((classification) =>
+            classification.id === target.id
+              ? {
+                  ...classification,
+                  assertionIds: [
+                    ...classification.assertionIds,
+                    "route-tracked-implementation-to-execute",
+                  ],
+                }
+              : classification,
+          ),
+        ),
+      },
+      {
+        expectedCode: "rule-contract-missing",
+        documents: replaceRules(
+          documents.overlayMap.classifications.filter(
+            (classification) => classification.id !== removable.id,
+          ),
+        ),
+      },
+      {
+        expectedCode: "rule-contract-unexpected",
+        documents: replaceRules([
+          ...documents.overlayMap.classifications,
+          {
+            id: "unexpected-rule",
+            classification: "excluded",
+            rationale: "An unexpected but otherwise valid rule.",
+            assertionIds: ["repository-policy-precedes-workflow-examples"],
+          },
+        ]),
+      },
+    ];
+    const results = await Promise.all(
+      mutations.map(({ documents: mutation }) =>
+        auditPortableWorkflowBaseline(REPO_ROOT, { documents: mutation }),
+      ),
+    );
+
+    expect(
+      results.map((result, index) =>
+        result.findings.some(
+          (finding) => finding.code === mutations[index].expectedCode,
+        ),
+      ),
+    ).toEqual([true, true, true, true]);
   });
 
   it("characterizes every active deliver-work routing branch", async () => {
