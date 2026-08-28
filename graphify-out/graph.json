@@ -3035,7 +3035,7 @@
       "relation": "calls",
       "source": "athenaagentpanel_positionat",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L676",
+      "source_location": "L681",
       "target": "athenaagentpanel_settlequestiontop",
       "weight": 1
     },
@@ -113327,7 +113327,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L2652",
+      "source_location": "L2657",
       "target": "athenaagentpanel_test_anchorfocusoutsidecomposer",
       "weight": 1
     },
@@ -113339,7 +113339,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3651",
+      "source_location": "L3703",
       "target": "athenaagentpanel_test_answered",
       "weight": 1
     },
@@ -113351,7 +113351,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3636",
+      "source_location": "L3688",
       "target": "athenaagentpanel_test_fakeframes",
       "weight": 1
     },
@@ -113363,7 +113363,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L2607",
+      "source_location": "L2612",
       "target": "athenaagentpanel_test_for",
       "weight": 1
     },
@@ -113375,7 +113375,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3673",
+      "source_location": "L3725",
       "target": "athenaagentpanel_test_frames",
       "weight": 1
     },
@@ -113387,7 +113387,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3409",
+      "source_location": "L3461",
       "target": "athenaagentpanel_test_long",
       "weight": 1
     },
@@ -113399,7 +113399,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3667",
+      "source_location": "L3719",
       "target": "athenaagentpanel_test_paintedanswer",
       "weight": 1
     },
@@ -113411,7 +113411,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3424",
+      "source_location": "L3476",
       "target": "athenaagentpanel_test_paintedtext",
       "weight": 1
     },
@@ -113423,7 +113423,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L822",
+      "source_location": "L826",
       "target": "athenaagentpanel_test_pointerevent",
       "weight": 1
     },
@@ -113435,7 +113435,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3321",
+      "source_location": "L3326",
       "target": "athenaagentpanel_test_prompt",
       "weight": 1
     },
@@ -113447,7 +113447,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3323",
+      "source_location": "L3328",
       "target": "athenaagentpanel_test_send",
       "weight": 1
     },
@@ -113459,7 +113459,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_test_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3669",
+      "source_location": "L3721",
       "target": "athenaagentpanel_test_wipedwords",
       "weight": 1
     },
@@ -113495,7 +113495,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L2111",
+      "source_location": "L2174",
       "target": "athenaagentpanel_cn",
       "weight": 1
     },
@@ -113543,7 +113543,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L804",
+      "source_location": "L814",
       "target": "athenaagentpanel_renderprovisionalentries",
       "weight": 1
     },
@@ -113555,7 +113555,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_agent_athenaagentpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L664",
+      "source_location": "L669",
       "target": "athenaagentpanel_settlequestiontop",
       "weight": 1
     },
@@ -264643,7 +264643,7 @@
       "label": "cn()",
       "norm_label": "cn()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L1296"
+      "source_location": "L1314"
     },
     {
       "community": 210,
@@ -264679,7 +264679,7 @@
       "label": "renderProvisionalEntries()",
       "norm_label": "renderprovisionalentries()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L804"
+      "source_location": "L814"
     },
     {
       "community": 210,
@@ -264688,7 +264688,7 @@
       "label": "settleQuestionTop()",
       "norm_label": "settlequestiontop()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx",
-      "source_location": "L664"
+      "source_location": "L669"
     },
     {
       "community": 210,
@@ -270862,7 +270862,7 @@
       "label": "anchorFocusOutsideComposer()",
       "norm_label": "anchorfocusoutsidecomposer()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L2652"
+      "source_location": "L2657"
     },
     {
       "community": 236,
@@ -270871,7 +270871,7 @@
       "label": "answered()",
       "norm_label": "answered()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3651"
+      "source_location": "L3703"
     },
     {
       "community": 236,
@@ -270880,7 +270880,7 @@
       "label": "fakeFrames()",
       "norm_label": "fakeframes()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3413"
+      "source_location": "L3465"
     },
     {
       "community": 236,
@@ -270889,7 +270889,7 @@
       "label": "for()",
       "norm_label": "for()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L2607"
+      "source_location": "L2612"
     },
     {
       "community": 236,
@@ -270898,7 +270898,7 @@
       "label": "frames()",
       "norm_label": "frames()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3430"
+      "source_location": "L3482"
     },
     {
       "community": 236,
@@ -270907,7 +270907,7 @@
       "label": "long()",
       "norm_label": "long()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3409"
+      "source_location": "L3461"
     },
     {
       "community": 236,
@@ -270916,7 +270916,7 @@
       "label": "paintedAnswer()",
       "norm_label": "paintedanswer()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3667"
+      "source_location": "L3719"
     },
     {
       "community": 236,
@@ -270925,7 +270925,7 @@
       "label": "paintedText()",
       "norm_label": "paintedtext()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3424"
+      "source_location": "L3476"
     },
     {
       "community": 236,
@@ -270934,7 +270934,7 @@
       "label": "pointerEvent()",
       "norm_label": "pointerevent()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L822"
+      "source_location": "L826"
     },
     {
       "community": 236,
@@ -270943,7 +270943,7 @@
       "label": "prompt()",
       "norm_label": "prompt()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3321"
+      "source_location": "L3326"
     },
     {
       "community": 236,
@@ -270952,7 +270952,7 @@
       "label": "send()",
       "norm_label": "send()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3323"
+      "source_location": "L3328"
     },
     {
       "community": 236,
@@ -270961,7 +270961,7 @@
       "label": "wipedWords()",
       "norm_label": "wipedwords()",
       "source_file": "packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx",
-      "source_location": "L3426"
+      "source_location": "L3478"
     },
     {
       "community": 236,
