@@ -990,9 +990,10 @@ export const getInternal = internalQuery({
     identifier: v.union(v.id("onlineOrder"), v.string()),
   },
   handler: async (ctx, args) => {
-    let order =
-      (await ctx.db.get("onlineOrder", args.identifier as Id<"onlineOrder">)) ??
-      null;
+    const onlineOrderId = ctx.db.normalizeId("onlineOrder", args.identifier);
+    let order = onlineOrderId
+      ? await ctx.db.get("onlineOrder", onlineOrderId)
+      : null;
 
     if (!order) {
       order = await ctx.db

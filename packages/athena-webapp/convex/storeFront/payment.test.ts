@@ -167,7 +167,7 @@ describe("storefront payment scheduled-run evidence", () => {
   it("records candidate auto-verify evidence for skipped and successful orders", async () => {
     paystackMock.verifyTransaction.mockResolvedValue({
       data: {
-        amount: 11_000,
+        amount: 10_000,
         status: "success",
       },
     });
@@ -181,9 +181,42 @@ describe("storefront payment scheduled-run evidence", () => {
       }
       return undefined;
     });
+    const hydratedOrder = {
+      _id: "order-verified",
+      amount: 10_000,
+      checkoutSessionId: "checkout-verified",
+      customerDetails: {
+        email: "customer@example.test",
+        firstName: "Ama",
+        lastName: "Owusu",
+      },
+      deliveryDetails: "Osu, Accra",
+      deliveryFee: 1_000,
+      deliveryMethod: "delivery",
+      discount: {
+        span: "entire-order",
+        type: "percentage",
+        value: 10,
+      },
+      externalReference: "paystack-reference-1",
+      items: [
+        {
+          price: 10_000,
+          productName: "Hydrated product",
+          productSkuId: "sku-1",
+          quantity: 1,
+        },
+      ],
+      orderNumber: "ORDER-1",
+      storeId: "store-1",
+      transitions: [],
+    };
     const ctx = {
       runMutation,
       runQuery: vi.fn(async (_definition, args?: Record<string, unknown>) => {
+        if (args && "identifier" in args) {
+          return hydratedOrder;
+        }
         if (args && "id" in args) {
           return { _id: args.id, name: "Osu" };
         }
@@ -208,14 +241,12 @@ describe("storefront payment scheduled-run evidence", () => {
             amount: 10_000,
             checkoutSessionId: "checkout-verified",
             deliveryFee: 1_000,
+            discount: {
+              span: "entire-order",
+              type: "percentage",
+              value: 10,
+            },
             externalReference: "paystack-reference-1",
-            items: [
-              {
-                price: 10_000,
-                productSkuId: "sku-1",
-                quantity: 1,
-              },
-            ],
             storeId: "store-1",
             transitions: [],
           },
@@ -229,6 +260,11 @@ describe("storefront payment scheduled-run evidence", () => {
 
     expect(paystackMock.verifyTransaction).toHaveBeenCalledWith(
       "paystack-reference-1",
+    );
+    expect(emailMock.sendPaymentVerificationEmails).toHaveBeenCalledWith(
+      expect.objectContaining({
+        order: hydratedOrder,
+      }),
     );
     expect(runMutation).toHaveBeenCalledWith(
       expect.anything(),
@@ -255,6 +291,43 @@ describe("storefront payment scheduled-run evidence", () => {
         succeededCount: 1,
         failedCount: 0,
         skippedCount: 1,
+      }),
+    );
+  });
+
+  it("records a failed candidate without sending email when the order cannot be hydrated", async () => {
+    paystackMock.verifyTransaction.mockResolvedValueOnce({
+      data: { amount: 11_000, status: "success" },
+    });
+    emailMock.sendPaymentVerificationEmails.mockClear();
+
+    const runMutation = vi.fn(async () => undefined);
+    const runQuery = vi
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          _id: "order-missing",
+          amount: 10_000,
+          checkoutSessionId: "checkout-missing",
+          deliveryFee: 1_000,
+          externalReference: "paystack-reference-missing",
+          storeId: "store-1",
+        },
+      ])
+      .mockResolvedValueOnce(null);
+
+    await expect(
+      getHandler(autoVerifyUnverifiedPayments)({ runMutation, runQuery }, {}),
+    ).resolves.toBeUndefined();
+
+    expect(emailMock.sendPaymentVerificationEmails).not.toHaveBeenCalled();
+    expect(runMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        cronFamily: "auto-verify-payments",
+        failedCount: 1,
+        processedCount: 1,
+        succeededCount: 0,
       }),
     );
   });

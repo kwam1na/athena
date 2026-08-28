@@ -1008,11 +1008,19 @@ export const autoVerifyUnverifiedPayments = internalAction({
 
       try {
         const paystackResponse = await verifyTransaction(reference);
+        const orderWithItems = await ctx.runQuery(
+          internal.storeFront.onlineOrder.getInternal,
+          { identifier: order._id },
+        );
+
+        if (!orderWithItems) {
+          throw new Error(`Order ${order._id} could not be hydrated.`);
+        }
 
         // Calculate expected amount (same logic as verifyPayment)
-        const subtotal = order.amount || 0;
-        const discount = order.discount;
-        const items = (order.items || [])
+        const subtotal = orderWithItems.amount || 0;
+        const discount = orderWithItems.discount;
+        const items = (orderWithItems.items || [])
           .filter(
             (item) =>
               item.productSkuId !== undefined &&
@@ -1028,7 +1036,7 @@ export const autoVerifyUnverifiedPayments = internalAction({
         const orderAmountLessDiscounts = calculateOrderAmount({
           items,
           discount,
-          deliveryFee: order.deliveryFee || 0,
+          deliveryFee: orderWithItems.deliveryFee || 0,
           subtotal,
         });
 
@@ -1055,7 +1063,7 @@ export const autoVerifyUnverifiedPayments = internalAction({
         // Update checkout session
         await ctx.runMutation(
           internal.storeFront.checkoutSession.updateCheckoutSession,
-          { id: order.checkoutSessionId, hasVerifiedPayment: true },
+          { id: orderWithItems.checkoutSessionId, hasVerifiedPayment: true },
         );
 
         // Build order update
@@ -1063,7 +1071,7 @@ export const autoVerifyUnverifiedPayments = internalAction({
           hasVerifiedPayment: true,
           autoVerifiedAt: Date.now(),
           transitions: [
-            ...(order.transitions ?? []),
+            ...(orderWithItems.transitions ?? []),
             {
               status: "payment_auto_verified",
               date: Date.now(),
@@ -1073,16 +1081,18 @@ export const autoVerifyUnverifiedPayments = internalAction({
 
         // Send verification emails (guards against duplicates internally)
         const store = await ctx.runQuery(internal.inventory.stores.findById, {
-          id: order.storeId,
+          id: orderWithItems.storeId,
         });
 
         const emailResults = await sendPaymentVerificationEmails({
-          order,
+          order: orderWithItems,
           store,
           orderAmount: orderAmountLessDiscounts,
           discountValue,
-          didSendNewOrderEmail: order.didSendNewOrderReceivedEmail || false,
-          didSendConfirmationEmail: order.didSendConfirmationEmail || false,
+          didSendNewOrderEmail:
+            orderWithItems.didSendNewOrderReceivedEmail || false,
+          didSendConfirmationEmail:
+            orderWithItems.didSendConfirmationEmail || false,
         });
 
         if (emailResults.confirmationSent) {
@@ -1095,15 +1105,15 @@ export const autoVerifyUnverifiedPayments = internalAction({
         }
 
         // Award loyalty points (idempotent — checks for existing reward by orderId)
-        const points = calculateRewardPoints(order.amount || 0);
+        const points = calculateRewardPoints(orderWithItems.amount || 0);
         const rewardResult = await ctx.runMutation(
           internal.storeFront.rewards.awardOrderPoints,
-          { orderId: order._id, points },
+          { orderId: orderWithItems._id, points },
         );
 
         if (rewardResult.success) {
           console.log(
-            `[AUTO-VERIFY] Awarded ${points} points for order ${order._id}`,
+            `[AUTO-VERIFY] Awarded ${points} points for order ${orderWithItems._id}`,
           );
         }
 
@@ -1121,14 +1131,14 @@ export const autoVerifyUnverifiedPayments = internalAction({
           await ctx.runMutation(
             internal.storeFront.checkoutSession.updateCheckoutSession,
             {
-              id: order.checkoutSessionId,
+              id: orderWithItems.checkoutSessionId,
               hasCompletedCheckoutSession: true,
             },
           ),
         ]);
 
         console.log(
-          `[AUTO-VERIFY] Verified payment | Reference: ${reference} | Order: ${order._id}`,
+          `[AUTO-VERIFY] Verified payment | Reference: ${reference} | Order: ${orderWithItems._id}`,
         );
         succeededCount += 1;
         stats.succeededCount += 1;
