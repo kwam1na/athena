@@ -3,6 +3,12 @@ import type {
   PortableBaselineFinding,
 } from "./portable-baseline-check";
 
+const BASELINE_SCHEMA_VERSION = "athena-portable-characterization-baseline/1";
+const OVERLAY_SCHEMA_VERSION = "athena-portable-overlay-map/1";
+const SCENARIO_SCHEMA_VERSION = "athena-portable-characterization-scenario/1";
+const BASELINE_ID = "athena-portable-workflows-v1-2026-08-27";
+const CAPTURED_FOR = "V26-1413";
+
 const SOURCE_KINDS = new Set([
   "approved-plan",
   "approved-requirements",
@@ -22,12 +28,27 @@ const AUTHORITIES = new Set([
 const PARITIES = new Set(["blocking", "non-blocking"]);
 const ADJUDICATIONS = new Set(["policy-backed", "approved", "unadjudicated"]);
 const DISCOVERY_STATES = new Set(["present", "absent"]);
-const CLASSIFICATIONS = new Set([
+const RULE_CLASSIFICATIONS = new Set([
   "portable-candidate",
   "retained-overlay",
   "optional-adapter",
   "excluded",
 ]);
+const MEMBER_CLASSIFICATIONS = new Set([
+  "portable-candidate",
+  "retained-overlay",
+  "excluded",
+]);
+const CLASSIFICATION_SEMANTICS = {
+  "portable-candidate":
+    "A digest-bound source or rule slice for downstream extraction and cross-host proof; this does not authorize wholesale migration.",
+  "retained-overlay":
+    "Athena-owned policy or enforcement that remains mandatory locally.",
+  "optional-adapter":
+    "Tracker or host-specific behavior that may implement a neutral capability without entering the core.",
+  excluded:
+    "Domain or dependency material outside the bounded portable v1 corpus.",
+} as const;
 const MEMBER_KINDS = new Set(["skill-bundle", "dependency-bundle"]);
 const DEPENDENCY_REQUIREMENTS = new Set([
   "required",
@@ -81,6 +102,20 @@ function expectRecord(
     return undefined;
   }
   return value as Record<string, unknown>;
+}
+
+function expectExactKeys(
+  value: Record<string, unknown>,
+  allowedKeys: readonly string[],
+  context: ShapeContext,
+  fieldPath: string,
+) {
+  const allowed = new Set(allowedKeys);
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) {
+      report(context, `${fieldPath}.${key}`, "is not an allowed field");
+    }
+  }
 }
 
 function expectArray(
@@ -159,16 +194,55 @@ function expectDigest(
   }
 }
 
+function expectLiteral(
+  value: unknown,
+  expected: string | boolean,
+  context: ShapeContext,
+  fieldPath: string,
+) {
+  if (value !== expected) {
+    report(context, fieldPath, `must equal ${JSON.stringify(expected)}`);
+  }
+}
+
 function validateBaseline(value: unknown, findings: PortableBaselineFinding[]) {
   const context: ShapeContext = { family: "baseline", findings };
   const baseline = expectRecord(value, context, "baseline");
   if (!baseline) return;
-  expectNonEmptyString(
+  expectExactKeys(
+    baseline,
+    [
+      "schemaVersion",
+      "baselineId",
+      "capturedFor",
+      "readOnly",
+      "discoveryRoots",
+      "sources",
+      "assertions",
+      "scenarioFixtures",
+    ],
+    context,
+    "baseline",
+  );
+  expectLiteral(
     baseline.schemaVersion,
+    BASELINE_SCHEMA_VERSION,
     context,
     "baseline.schemaVersion",
   );
-  expectNonEmptyString(baseline.baselineId, context, "baseline.baselineId");
+  expectLiteral(
+    baseline.baselineId,
+    BASELINE_ID,
+    context,
+    "baseline.baselineId",
+  );
+  expectLiteral(
+    baseline.capturedFor,
+    CAPTURED_FOR,
+    context,
+    "baseline.capturedFor",
+  );
+  expectLiteral(baseline.readOnly, true, context, "baseline.readOnly");
 
   const discoveryRoots = expectArray(
     baseline.discoveryRoots,
@@ -179,6 +253,7 @@ function validateBaseline(value: unknown, findings: PortableBaselineFinding[]) {
     const fieldPath = `baseline.discoveryRoots[${index}]`;
     const root = expectRecord(entry, context, fieldPath);
     if (!root) return;
+    expectExactKeys(root, ["path", "state"], context, fieldPath);
     expectNonEmptyString(root.path, context, `${fieldPath}.path`);
     expectEnum(root.state, DISCOVERY_STATES, context, `${fieldPath}.state`);
   });
@@ -188,6 +263,12 @@ function validateBaseline(value: unknown, findings: PortableBaselineFinding[]) {
     const fieldPath = `baseline.sources[${index}]`;
     const source = expectRecord(entry, context, fieldPath);
     if (!source) return;
+    expectExactKeys(
+      source,
+      ["id", "path", "kind", "sha256"],
+      context,
+      fieldPath,
+    );
     expectNonEmptyString(source.id, context, `${fieldPath}.id`);
     expectNonEmptyString(source.path, context, `${fieldPath}.path`);
     expectEnum(source.kind, SOURCE_KINDS, context, `${fieldPath}.kind`);
@@ -203,6 +284,20 @@ function validateBaseline(value: unknown, findings: PortableBaselineFinding[]) {
     const fieldPath = `baseline.assertions[${index}]`;
     const assertion = expectRecord(entry, context, fieldPath);
     if (!assertion) return;
+    expectExactKeys(
+      assertion,
+      [
+        "id",
+        "area",
+        "statement",
+        "authority",
+        "parity",
+        "adjudication",
+        "citations",
+      ],
+      context,
+      fieldPath,
+    );
     expectNonEmptyString(assertion.id, context, `${fieldPath}.id`);
     expectNonEmptyString(assertion.area, context, `${fieldPath}.area`);
     expectNonEmptyString(
@@ -232,6 +327,12 @@ function validateBaseline(value: unknown, findings: PortableBaselineFinding[]) {
       const citationPath = `${fieldPath}.citations[${citationIndex}]`;
       const citation = expectRecord(citationEntry, context, citationPath);
       if (!citation) return;
+      expectExactKeys(
+        citation,
+        ["sourceId", "selector"],
+        context,
+        citationPath,
+      );
       expectNonEmptyString(
         citation.sourceId,
         context,
@@ -255,12 +356,57 @@ function validateOverlay(value: unknown, findings: PortableBaselineFinding[]) {
   const context: ShapeContext = { family: "overlay", findings };
   const overlay = expectRecord(value, context, "overlayMap");
   if (!overlay) return;
-  expectNonEmptyString(
+  expectExactKeys(
+    overlay,
+    [
+      "schemaVersion",
+      "baselineId",
+      "readOnly",
+      "classificationSemantics",
+      "classifications",
+      "boundedClosure",
+      "outOfScopeInventory",
+    ],
+    context,
+    "overlayMap",
+  );
+  expectLiteral(
     overlay.schemaVersion,
+    OVERLAY_SCHEMA_VERSION,
     context,
     "overlayMap.schemaVersion",
   );
-  expectNonEmptyString(overlay.baselineId, context, "overlayMap.baselineId");
+  expectLiteral(
+    overlay.baselineId,
+    BASELINE_ID,
+    context,
+    "overlayMap.baselineId",
+  );
+  expectLiteral(overlay.readOnly, true, context, "overlayMap.readOnly");
+
+  const classificationSemantics = expectRecord(
+    overlay.classificationSemantics,
+    context,
+    "overlayMap.classificationSemantics",
+  );
+  if (classificationSemantics) {
+    expectExactKeys(
+      classificationSemantics,
+      Object.keys(CLASSIFICATION_SEMANTICS),
+      context,
+      "overlayMap.classificationSemantics",
+    );
+    for (const [classification, semantics] of Object.entries(
+      CLASSIFICATION_SEMANTICS,
+    )) {
+      expectLiteral(
+        classificationSemantics[classification],
+        semantics,
+        context,
+        `overlayMap.classificationSemantics.${classification}`,
+      );
+    }
+  }
 
   const classifications = expectArray(
     overlay.classifications,
@@ -271,10 +417,16 @@ function validateOverlay(value: unknown, findings: PortableBaselineFinding[]) {
     const fieldPath = `overlayMap.classifications[${index}]`;
     const classification = expectRecord(entry, context, fieldPath);
     if (!classification) return;
+    expectExactKeys(
+      classification,
+      ["id", "classification", "rationale", "assertionIds"],
+      context,
+      fieldPath,
+    );
     expectNonEmptyString(classification.id, context, `${fieldPath}.id`);
     expectEnum(
       classification.classification,
-      CLASSIFICATIONS,
+      RULE_CLASSIFICATIONS,
       context,
       `${fieldPath}.classification`,
     );
@@ -296,6 +448,17 @@ function validateOverlay(value: unknown, findings: PortableBaselineFinding[]) {
     "overlayMap.boundedClosure",
   );
   if (closure) {
+    expectExactKeys(
+      closure,
+      [
+        "members",
+        "auditedMemberIds",
+        "directDependencies",
+        "referenceDispositions",
+      ],
+      context,
+      "overlayMap.boundedClosure",
+    );
     const members = expectArray(
       closure.members,
       context,
@@ -305,12 +468,26 @@ function validateOverlay(value: unknown, findings: PortableBaselineFinding[]) {
       const fieldPath = `overlayMap.boundedClosure.members[${index}]`;
       const member = expectRecord(entry, context, fieldPath);
       if (!member) return;
+      expectExactKeys(
+        member,
+        [
+          "id",
+          "kind",
+          "path",
+          "classification",
+          "fileCount",
+          "treeDigest",
+          "note",
+        ],
+        context,
+        fieldPath,
+      );
       expectNonEmptyString(member.id, context, `${fieldPath}.id`);
       expectEnum(member.kind, MEMBER_KINDS, context, `${fieldPath}.kind`);
       expectNonEmptyString(member.path, context, `${fieldPath}.path`);
       expectEnum(
         member.classification,
-        CLASSIFICATIONS,
+        MEMBER_CLASSIFICATIONS,
         context,
         `${fieldPath}.classification`,
       );
@@ -320,6 +497,9 @@ function validateOverlay(value: unknown, findings: PortableBaselineFinding[]) {
         `${fieldPath}.fileCount`,
       );
       expectDigest(member.treeDigest, context, `${fieldPath}.treeDigest`);
+      if (member.note !== undefined) {
+        expectNonEmptyString(member.note, context, `${fieldPath}.note`);
+      }
     });
     expectStringArray(
       closure.auditedMemberIds,
@@ -336,6 +516,12 @@ function validateOverlay(value: unknown, findings: PortableBaselineFinding[]) {
       const fieldPath = `overlayMap.boundedClosure.directDependencies[${index}]`;
       const dependency = expectRecord(entry, context, fieldPath);
       if (!dependency) return;
+      expectExactKeys(
+        dependency,
+        ["fromMemberId", "toMemberId", "selector", "requirement", "parity"],
+        context,
+        fieldPath,
+      );
       expectNonEmptyString(
         dependency.fromMemberId,
         context,
@@ -369,6 +555,19 @@ function validateOverlay(value: unknown, findings: PortableBaselineFinding[]) {
       const fieldPath = `overlayMap.boundedClosure.referenceDispositions[${index}]`;
       const disposition = expectRecord(entry, context, fieldPath);
       if (!disposition) return;
+      expectExactKeys(
+        disposition,
+        [
+          "fromMemberId",
+          "reference",
+          "resolution",
+          "parity",
+          "mappedMemberId",
+          "rationale",
+        ],
+        context,
+        fieldPath,
+      );
       expectNonEmptyString(
         disposition.fromMemberId,
         context,
@@ -412,6 +611,18 @@ function validateOverlay(value: unknown, findings: PortableBaselineFinding[]) {
     "overlayMap.outOfScopeInventory",
   );
   if (inventory) {
+    expectExactKeys(
+      inventory,
+      [
+        "scanRoots",
+        "fileCount",
+        "treeDigest",
+        "noMigrationCommitment",
+        "description",
+      ],
+      context,
+      "overlayMap.outOfScopeInventory",
+    );
     expectStringArray(
       inventory.scanRoots,
       context,
@@ -427,13 +638,17 @@ function validateOverlay(value: unknown, findings: PortableBaselineFinding[]) {
       context,
       "overlayMap.outOfScopeInventory.treeDigest",
     );
-    if (typeof inventory.noMigrationCommitment !== "boolean") {
-      report(
-        context,
-        "overlayMap.outOfScopeInventory.noMigrationCommitment",
-        "must be a boolean",
-      );
-    }
+    expectLiteral(
+      inventory.noMigrationCommitment,
+      true,
+      context,
+      "overlayMap.outOfScopeInventory.noMigrationCommitment",
+    );
+    expectNonEmptyString(
+      inventory.description,
+      context,
+      "overlayMap.outOfScopeInventory.description",
+    );
   }
 }
 
@@ -447,11 +662,26 @@ function validateScenarios(
     const fieldPath = `scenarios[${index}]`;
     const scenario = expectRecord(entry, context, fieldPath);
     if (!scenario) return;
-    expectNonEmptyString(
+    expectExactKeys(
+      scenario,
+      [
+        "schemaVersion",
+        "readOnly",
+        "id",
+        "requestKind",
+        "expectedAssertionIds",
+        "expectedClassificationIds",
+      ],
+      context,
+      fieldPath,
+    );
+    expectLiteral(
       scenario.schemaVersion,
+      SCENARIO_SCHEMA_VERSION,
       context,
       `${fieldPath}.schemaVersion`,
     );
+    expectLiteral(scenario.readOnly, true, context, `${fieldPath}.readOnly`);
     expectNonEmptyString(scenario.id, context, `${fieldPath}.id`);
     expectEnum(
       scenario.requestKind,
@@ -499,6 +729,12 @@ export function validatePortableBaselineDocuments(value: unknown): {
     return { findings };
   }
   const documents = value as Record<string, unknown>;
+  expectExactKeys(
+    documents,
+    ["baseline", "overlayMap", "scenarios"],
+    { family: "baseline", findings },
+    "documents",
+  );
   validateBaseline(documents.baseline, findings);
   validateOverlay(documents.overlayMap, findings);
   validateScenarios(documents.scenarios, findings);

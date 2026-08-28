@@ -1,5 +1,6 @@
 {
   "schemaVersion": "athena-portable-characterization-scenario/1",
+  "readOnly": true,
   "id": "review",
   "requestKind": "review",
   "expectedAssertionIds": [
@@ -8,8 +9,5 @@
     "actionable-findings-loop-to-resolution",
     "athena-review-evidence-binds-the-candidate"
   ],
-  "expectedClassificationIds": [
-    "review-workflow",
-    "athena-harness-evidence"
-  ]
+  "expectedClassificationIds": ["review-workflow", "athena-harness-evidence"]
 }

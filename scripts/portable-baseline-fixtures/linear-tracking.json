@@ -1,5 +1,6 @@
 {
   "schemaVersion": "athena-portable-characterization-scenario/1",
+  "readOnly": true,
   "id": "linear-tracking",
   "requestKind": "tracking",
   "expectedAssertionIds": [

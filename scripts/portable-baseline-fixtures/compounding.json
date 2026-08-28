@@ -1,5 +1,6 @@
 {
   "schemaVersion": "athena-portable-characterization-scenario/1",
+  "readOnly": true,
   "id": "compounding",
   "requestKind": "compounding",
   "expectedAssertionIds": [
@@ -7,8 +8,5 @@
     "athena-solution-format-remains-repository-owned",
     "landed-report-does-not-replace-durable-learning"
   ],
-  "expectedClassificationIds": [
-    "compound-workflow",
-    "athena-reporting-policy"
-  ]
+  "expectedClassificationIds": ["compound-workflow", "athena-reporting-policy"]
 }

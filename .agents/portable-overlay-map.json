@@ -1,6 +1,7 @@
 {
   "schemaVersion": "athena-portable-overlay-map/1",
   "baselineId": "athena-portable-workflows-v1-2026-08-27",
+  "readOnly": true,
   "classificationSemantics": {
     "portable-candidate": "A digest-bound source or rule slice for downstream extraction and cross-host proof; this does not authorize wholesale migration.",
     "retained-overlay": "Athena-owned policy or enforcement that remains mandatory locally.",
@@ -74,9 +75,7 @@
       "id": "compound-workflow",
       "classification": "portable-candidate",
       "rationale": "The threshold for capturing reusable learning is portable; repository-specific document shape is not.",
-      "assertionIds": [
-        "compounding-requires-a-reusable-learning"
-      ]
+      "assertionIds": ["compounding-requires-a-reusable-learning"]
     },
     {
       "id": "athena-harness-evidence",
@@ -111,65 +110,49 @@
       "id": "athena-telemetry-policy",
       "classification": "retained-overlay",
       "rationale": "The telemetry threshold, timing, storage path, and merge obligation are Athena-specific.",
-      "assertionIds": [
-        "delivery-telemetry-recorded-after-final-gate"
-      ]
+      "assertionIds": ["delivery-telemetry-recorded-after-final-gate"]
     },
     {
       "id": "athena-deployment-handoff",
       "classification": "retained-overlay",
       "rationale": "Athena's clean-main deployment mapping and production topology are not a portable deployment system.",
-      "assertionIds": [
-        "deployment-handoff-runs-from-clean-merged-main"
-      ]
+      "assertionIds": ["deployment-handoff-runs-from-clean-merged-main"]
     },
     {
       "id": "athena-generated-artifacts",
       "classification": "retained-overlay",
       "rationale": "Graphify, Convex admission, and generated-artifact refresh are repository-owned deterministic gates.",
-      "assertionIds": [
-        "generated-artifact-obligations-remain-mandatory"
-      ]
+      "assertionIds": ["generated-artifact-obligations-remain-mandatory"]
     },
     {
       "id": "athena-pr-policy",
       "classification": "retained-overlay",
       "rationale": "Branch naming, PR structure, ticket linkage, and merge mechanics remain Athena policy.",
-      "assertionIds": [
-        "athena-pr-contract-remains-mandatory"
-      ]
+      "assertionIds": ["athena-pr-contract-remains-mandatory"]
     },
     {
       "id": "athena-domain-rules",
       "classification": "excluded",
       "rationale": "Athena business transaction, inventory, reporting, approval, and POS rules are not delivery workflow behavior.",
-      "assertionIds": [
-        "athena-domain-architecture-is-not-portable-workflow"
-      ]
+      "assertionIds": ["athena-domain-architecture-is-not-portable-workflow"]
     },
     {
       "id": "compound-reviewer-prompt-graph",
       "classification": "excluded",
       "rationale": "The full Athena persona graph remains a research source; U13 must bundle a smaller host-neutral reviewer contract.",
-      "assertionIds": [
-        "review-selects-core-and-risk-lenses"
-      ]
+      "assertionIds": ["review-selects-core-and-risk-lenses"]
     },
     {
       "id": "codex-host-exposure-metadata",
       "classification": "optional-adapter",
       "rationale": "Codex presentation metadata exposes a workflow to one host without owning the workflow body.",
-      "assertionIds": [
-        "repository-policy-precedes-workflow-examples"
-      ]
+      "assertionIds": ["repository-policy-precedes-workflow-examples"]
     },
     {
       "id": "host-tool-sequence",
       "classification": "excluded",
       "rationale": "Unadjudicated host mechanics cannot become parity policy.",
-      "assertionIds": [
-        "host-tool-call-sequence-is-observed-only"
-      ]
+      "assertionIds": ["host-tool-call-sequence-is-observed-only"]
     }
   ],
   "boundedClosure": {
@@ -187,7 +170,7 @@
         "id": "deliver-work-codex-metadata",
         "kind": "dependency-bundle",
         "path": ".agents/skills/deliver-work/agents/openai.yaml",
-        "classification": "optional-adapter",
+        "classification": "excluded",
         "fileCount": 1,
         "treeDigest": "eac2623935fadfb3b182c4f36ef0d10070e667c381e4d15b34c5b52582a98e71"
       },
@@ -247,7 +230,7 @@
         "id": "linear-track-source-bundle",
         "kind": "skill-bundle",
         "path": ".agents/skills/track",
-        "classification": "optional-adapter",
+        "classification": "retained-overlay",
         "fileCount": 6,
         "treeDigest": "48bda9cb255fe8f262fd06ab5f6ae3573668ab42510dae77d4d3401b3ef4776b"
       },
@@ -291,7 +274,7 @@
         "id": "ce-proof-source-bundle",
         "kind": "dependency-bundle",
         "path": ".agents/skills/ce-proof",
-        "classification": "optional-adapter",
+        "classification": "excluded",
         "fileCount": 2,
         "treeDigest": "6f3a012a6e33b49f671863fa2a13ee43f34d6d72c19128302c2a7bfda7f1ea41",
         "note": "Optional Proof-specific human review transport, not a core planning dependency."
@@ -300,7 +283,7 @@
         "id": "ce-commit-source-bundle",
         "kind": "dependency-bundle",
         "path": ".agents/skills/ce-commit",
-        "classification": "optional-adapter",
+        "classification": "excluded",
         "fileCount": 1,
         "treeDigest": "01cfa10eed93de4fc5f89307792bb32aa19e3812f6534068b853a6df80bb1dfa",
         "note": "Optional Git handoff adapter invoked by execution and diagnosis workflows."
@@ -309,7 +292,7 @@
         "id": "ce-commit-push-pr-source-bundle",
         "kind": "dependency-bundle",
         "path": ".agents/skills/ce-commit-push-pr",
-        "classification": "optional-adapter",
+        "classification": "excluded",
         "fileCount": 3,
         "treeDigest": "300c9852b8a70616af664aac7722692db2339f84e6d4339b9c49ea7638eb0501",
         "note": "Optional GitHub/Git delivery adapter; Athena's PR rules remain a retained overlay."
@@ -336,7 +319,7 @@
         "id": "ce-frontend-design-source-bundle",
         "kind": "dependency-bundle",
         "path": ".agents/skills/ce-frontend-design",
-        "classification": "optional-adapter",
+        "classification": "excluded",
         "fileCount": 1,
         "treeDigest": "15ee2f293e6195d2a60c9a220dff78b26e63d0b9f65c54a3d873f7ed60d13656",
         "note": "Closest repository-local implementation of execute's frontend-skill aliases; alias mapping is observed-only and non-blocking."
@@ -345,7 +328,7 @@
         "id": "ce-demo-reel-source-bundle",
         "kind": "dependency-bundle",
         "path": ".agents/skills/ce-demo-reel",
-        "classification": "optional-adapter",
+        "classification": "excluded",
         "fileCount": 7,
         "treeDigest": "9b519cb0e72666a174a0106744e1f6297821951379b2ae6450805612fa9c9669",
         "note": "Conditional PR evidence adapter invoked by the commit/push/PR dependency."
@@ -363,7 +346,7 @@
         "id": "ce-worktree-source-bundle",
         "kind": "dependency-bundle",
         "path": ".agents/skills/ce-worktree",
-        "classification": "optional-adapter",
+        "classification": "excluded",
         "fileCount": 2,
         "treeDigest": "f0abc1f427380df2d993da97f99667326ca11b07723ceb79afa4eddbe4cba02b",
         "note": "Optional Git worktree isolation adapter invoked by ce-work; repository branch policy remains authoritative."
@@ -1101,10 +1084,7 @@
     ]
   },
   "outOfScopeInventory": {
-    "scanRoots": [
-      ".agents/skills",
-      ".claude/skills"
-    ],
+    "scanRoots": [".agents/skills", ".claude/skills"],
     "fileCount": 145,
     "treeDigest": "c5a5e0c75367c8a632ffdb57d2c44f4df7188e73e8adb01d4b14bca9b2cad30f",
     "noMigrationCommitment": true,

@@ -11,6 +11,12 @@ import { readFile, readdir, readlink } from "node:fs/promises";
 import path from "node:path";
 
 import {
+  ADJUDICATED_MEMBER_CLASSIFICATIONS,
+  blockingAssertionSemanticDigest,
+  REQUIRED_BLOCKING_ASSERTION_DIGESTS,
+  REQUIRED_BLOCKING_DEPENDENCY_CONTRACTS,
+} from "./portable-baseline-contracts";
+import {
   type ContainedPathState,
   PortableBaselinePathContainmentError,
   resolveContainedPath,
@@ -29,10 +35,15 @@ const BASELINE_SCHEMA_VERSION = "athena-portable-characterization-baseline/1";
 const OVERLAY_SCHEMA_VERSION = "athena-portable-overlay-map/1";
 const SCENARIO_SCHEMA_VERSION = "athena-portable-characterization-scenario/1";
 
-const CLASSIFICATIONS = new Set([
+const RULE_CLASSIFICATIONS = new Set([
   "portable-candidate",
   "retained-overlay",
   "optional-adapter",
+  "excluded",
+]);
+const MEMBER_CLASSIFICATIONS = new Set([
+  "portable-candidate",
+  "retained-overlay",
   "excluded",
 ]);
 
@@ -260,6 +271,8 @@ export type PortableBaselineAssertion = {
 export type PortableCharacterizationBaseline = {
   schemaVersion: string;
   baselineId: string;
+  capturedFor: string;
+  readOnly: true;
   discoveryRoots: Array<{ path: string; state: "present" | "absent" }>;
   sources: PortableBaselineSource[];
   assertions: PortableBaselineAssertion[];
@@ -277,7 +290,7 @@ export type BoundedClosureMember = {
   id: string;
   kind: "skill-bundle" | "dependency-bundle";
   path: string;
-  classification: string;
+  classification: "portable-candidate" | "retained-overlay" | "excluded";
   fileCount: number;
   treeDigest: string;
 };
@@ -285,6 +298,8 @@ export type BoundedClosureMember = {
 export type PortableOverlayMap = {
   schemaVersion: string;
   baselineId: string;
+  readOnly: true;
+  classificationSemantics: Record<string, string>;
   classifications: PortableOverlayClassification[];
   boundedClosure: {
     members: BoundedClosureMember[];
@@ -312,11 +327,13 @@ export type PortableOverlayMap = {
     fileCount: number;
     treeDigest: string;
     noMigrationCommitment: boolean;
+    description: string;
   };
 };
 
 export type PortableBaselineScenario = {
   schemaVersion: string;
+  readOnly: true;
   id: string;
   requestKind: string;
   expectedAssertionIds: string[];
@@ -362,6 +379,13 @@ type SourceDependencyReference = {
   reference: string;
   path: string;
 };
+
+class PortableBaselineReferenceTargetSymlinkError extends Error {
+  constructor(readonly relativePath: string) {
+    super(`Reference target ${relativePath} is a symlink.`);
+    this.name = "PortableBaselineReferenceTargetSymlinkError";
+  }
+}
 
 function sha256(value: string | Buffer) {
   return createHash("sha256").update(value).digest("hex");
@@ -533,8 +557,14 @@ function pushDuplicateFindings(
   }
 }
 
-function hasClassification(value: unknown): value is string {
-  return typeof value === "string" && CLASSIFICATIONS.has(value);
+function hasRuleClassification(value: unknown): value is string {
+  return typeof value === "string" && RULE_CLASSIFICATIONS.has(value);
+}
+
+function hasMemberClassification(
+  value: unknown,
+): value is BoundedClosureMember["classification"] {
+  return typeof value === "string" && MEMBER_CLASSIFICATIONS.has(value);
 }
 
 function invalidApprovalCitationSourceIds(
@@ -566,11 +596,23 @@ function memberOwnsPath(memberPath: string, targetPath: string) {
 
 async function resolveReferenceTargetPath(rootDir: string, reference: string) {
   const skillPath = `.agents/skills/${reference}`;
-  if ((await resolveContainedPath(rootDir, skillPath)).state !== "absent") {
+  const skillTarget = await resolveContainedPath(rootDir, skillPath, {
+    allowExternalLeafSymlinkMetadata: true,
+  });
+  if (skillTarget.state === "symlink") {
+    throw new PortableBaselineReferenceTargetSymlinkError(skillPath);
+  }
+  if (skillTarget.state !== "absent") {
     return skillPath;
   }
   const agentPath = `.agents/agents/${reference}.agent.md`;
-  if ((await resolveContainedPath(rootDir, agentPath)).state !== "absent") {
+  const agentTarget = await resolveContainedPath(rootDir, agentPath, {
+    allowExternalLeafSymlinkMetadata: true,
+  });
+  if (agentTarget.state === "symlink") {
+    throw new PortableBaselineReferenceTargetSymlinkError(agentPath);
+  }
+  if (agentTarget.state !== "absent") {
     return agentPath;
   }
   return undefined;
@@ -711,6 +753,15 @@ export async function auditPortableWorkflowBaseline(
       referenceTargetPathCache.set(reference, targetPath);
       return targetPath;
     } catch (error: unknown) {
+      if (error instanceof PortableBaselineReferenceTargetSymlinkError) {
+        findings.push({
+          code: "source-reference-target-symlink-unsupported",
+          message: `Reference ${reference} resolves to a symlink and cannot certify a required dependency target.`,
+          path: error.relativePath,
+        });
+        referenceTargetPathCache.set(reference, undefined);
+        return undefined;
+      }
       if (!(error instanceof PortableBaselinePathContainmentError)) throw error;
       findings.push({
         code: "source-reference-target-outside-root",
@@ -835,6 +886,10 @@ export async function auditPortableWorkflowBaseline(
     }
   }
   const sourceTextById = new Map<string, string>();
+  const sourceIdentities: Array<{
+    source: PortableBaselineSource;
+    identityPath: string;
+  }> = [];
   for (const source of baseline.sources) {
     if (!isSafeRelativePath(source.path)) {
       findings.push({
@@ -844,8 +899,18 @@ export async function auditPortableWorkflowBaseline(
       });
       continue;
     }
+    if (!isCanonicalRepoRelativePath(source.path)) {
+      findings.push({
+        code: "source-path-noncanonical",
+        message: `Source ${source.id} must use a canonical slash-separated repository path.`,
+        path: source.path,
+      });
+      continue;
+    }
     try {
-      const containedSource = await resolveContainedPath(rootDir, source.path);
+      const containedSource = await resolveContainedPath(rootDir, source.path, {
+        allowExternalLeafSymlinkMetadata: true,
+      });
       if (containedSource.state === "absent") {
         findings.push({
           code: "source-missing",
@@ -853,6 +918,33 @@ export async function auditPortableWorkflowBaseline(
           path: source.path,
         });
         continue;
+      }
+      if (containedSource.state === "symlink") {
+        findings.push({
+          code: "source-symlink-unsupported",
+          message: `Normative source ${source.id} is a symlink and cannot certify policy provenance.`,
+          path: source.path,
+        });
+        continue;
+      }
+      if (containedSource.identityPath === null) {
+        findings.push({
+          code: "source-filesystem-identity-missing",
+          message: `Normative source ${source.id} has no repository-relative filesystem identity.`,
+          path: source.path,
+        });
+        continue;
+      }
+      sourceIdentities.push({
+        source,
+        identityPath: containedSource.identityPath,
+      });
+      if (containedSource.identityPath !== source.path) {
+        findings.push({
+          code: "source-path-filesystem-noncanonical",
+          message: `Normative source ${source.id} must use filesystem-canonical path ${containedSource.identityPath}.`,
+          path: source.path,
+        });
       }
       const sourceText = await readFile(containedSource.absolutePath, "utf8");
       sourceTextById.set(source.id, sourceText);
@@ -879,6 +971,12 @@ export async function auditPortableWorkflowBaseline(
       });
     }
   }
+  pushDuplicateFindings(
+    findings,
+    sourceIdentities.map(({ identityPath }) => identityPath),
+    "source-identity-duplicate",
+    "Normative source filesystem identity",
+  );
 
   for (const discoveryRoot of baseline.discoveryRoots) {
     if (!isSafeRelativePath(discoveryRoot.path)) {
@@ -917,7 +1015,38 @@ export async function auditPortableWorkflowBaseline(
     }
   }
 
+  const assertionById = new Map(
+    baseline.assertions.map((assertion) => [assertion.id, assertion]),
+  );
+  for (const [
+    assertionId,
+    semanticDigest,
+  ] of REQUIRED_BLOCKING_ASSERTION_DIGESTS) {
+    const assertion = assertionById.get(assertionId);
+    if (!assertion) {
+      findings.push({
+        code: "required-blocking-assertion-contract-missing",
+        message: `Required blocking assertion ${assertionId} is missing.`,
+      });
+      continue;
+    }
+    if (blockingAssertionSemanticDigest(assertion) !== semanticDigest) {
+      findings.push({
+        code: "required-blocking-assertion-contract-mismatch",
+        message: `Required blocking assertion ${assertionId} no longer matches its exact approved semantics and citation provenance.`,
+      });
+    }
+  }
   for (const assertion of baseline.assertions) {
+    if (
+      assertion.parity === "blocking" &&
+      !REQUIRED_BLOCKING_ASSERTION_DIGESTS.has(assertion.id)
+    ) {
+      findings.push({
+        code: "blocking-assertion-contract-unexpected",
+        message: `Blocking assertion ${assertion.id} has no approved exact semantic contract.`,
+      });
+    }
     if (assertion.authority === "source-backed") {
       if (
         assertion.adjudication !== "policy-backed" ||
@@ -948,16 +1077,20 @@ export async function auditPortableWorkflowBaseline(
         });
       }
     } else if (assertion.authority === "observed-only") {
+      const approved =
+        assertion.adjudication === "approved" && assertion.citations.length > 0;
       if (assertion.parity === "blocking") {
-        if (
-          assertion.adjudication !== "approved" ||
-          assertion.citations.length === 0
-        ) {
+        if (!approved) {
           findings.push({
             code: "observed-only-blocker-unadjudicated",
             message: `Observed-only assertion ${assertion.id} cannot block parity before explicit approval with a source citation.`,
           });
         }
+      }
+      if (
+        assertion.adjudication === "approved" ||
+        assertion.parity === "blocking"
+      ) {
         for (const sourceId of invalidApprovalCitationSourceIds(
           assertion,
           sourceById,
@@ -1011,7 +1144,7 @@ export async function auditPortableWorkflowBaseline(
   );
   const classifiedAssertionIds = new Set<string>();
   for (const classification of overlayMap.classifications) {
-    if (!hasClassification(classification.classification)) {
+    if (!hasRuleClassification(classification.classification)) {
       findings.push({
         code: "classification-invalid",
         message: `Classification ${classification.id} has unknown value ${classification.classification}.`,
@@ -1025,10 +1158,23 @@ export async function auditPortableWorkflowBaseline(
     }
     for (const assertionId of classification.assertionIds) {
       classifiedAssertionIds.add(assertionId);
+      const assertion = assertionById.get(assertionId);
       if (!assertionIds.has(assertionId)) {
         findings.push({
           code: "classification-assertion-missing",
           message: `Classification ${classification.id} cites unknown assertion ${assertionId}.`,
+        });
+      } else if (
+        assertion?.authority === "observed-only" &&
+        (assertion.adjudication !== "approved" ||
+          assertion.citations.length === 0 ||
+          invalidApprovalCitationSourceIds(assertion, sourceById).length > 0) &&
+        (assertion.parity !== "non-blocking" ||
+          classification.classification !== "excluded")
+      ) {
+        findings.push({
+          code: "observed-only-promotion-unapproved",
+          message: `Unadjudicated observed-only assertion ${assertion.id} may only remain excluded and non-blocking until explicitly approved.`,
         });
       }
     }
@@ -1065,6 +1211,18 @@ export async function auditPortableWorkflowBaseline(
     }
   }
   const memberById = new Map(members.map((member) => [member.id, member]));
+  for (const [
+    memberId,
+    expectedClassification,
+  ] of ADJUDICATED_MEMBER_CLASSIFICATIONS) {
+    const member = memberById.get(memberId);
+    if (!member || member.classification !== expectedClassification) {
+      findings.push({
+        code: "bounded-member-classification-contract-mismatch",
+        message: `Bounded member ${memberId} must remain classified as ${expectedClassification}.`,
+      });
+    }
+  }
   pushDuplicateFindings(
     findings,
     members.map((member) => member.id),
@@ -1074,7 +1232,7 @@ export async function auditPortableWorkflowBaseline(
   const memberEntriesById = new Map<string, TreeEntry[]>();
   const resolvedMemberIdentities: ResolvedMemberIdentity[] = [];
   for (const member of members) {
-    if (!hasClassification(member.classification)) {
+    if (!hasMemberClassification(member.classification)) {
       findings.push({
         code: "bounded-member-unclassified",
         message: `Bounded member ${member.id} has no valid classification.`,
@@ -1097,6 +1255,15 @@ export async function auditPortableWorkflowBaseline(
         rejectedMemberIds.add(member.id);
         continue;
       }
+      if (containedMemberRoot.state === "symlink") {
+        findings.push({
+          code: "bounded-member-symlink-unsupported",
+          message: `Bounded member ${member.id} is a symlink and cannot certify the required closure.`,
+          path: member.path,
+        });
+        rejectedMemberIds.add(member.id);
+        continue;
+      }
       const identityPath = containedMemberRoot.identityPath;
       if (identityPath === null) {
         findings.push({
@@ -1111,10 +1278,7 @@ export async function auditPortableWorkflowBaseline(
         member,
         identityPath,
       });
-      if (
-        containedMemberRoot.state !== "symlink" &&
-        identityPath !== member.path
-      ) {
+      if (identityPath !== member.path) {
         findings.push({
           code: "bounded-member-path-filesystem-noncanonical",
           message: `Bounded member ${member.id} must use filesystem-canonical path ${identityPath}.`,
@@ -1122,6 +1286,15 @@ export async function auditPortableWorkflowBaseline(
         });
       }
       entries = await collectTreeEntries(rootDir, member.path);
+      if (entries.some((entry) => entry.kind === "symlink")) {
+        findings.push({
+          code: "bounded-member-symlink-unsupported",
+          message: `Bounded member ${member.id} contains a symlink and cannot certify the required closure.`,
+          path: member.path,
+        });
+        rejectedMemberIds.add(member.id);
+        continue;
+      }
       if (containedMemberRoot.state === "directory" && entries.length === 0) {
         findings.push({
           code: "bounded-member-empty-directory-unapproved",
@@ -1215,6 +1388,54 @@ export async function auditPortableWorkflowBaseline(
     "direct-dependency-duplicate",
     "Direct dependency",
   );
+  for (const contract of REQUIRED_BLOCKING_DEPENDENCY_CONTRACTS) {
+    const matchingEdges = directDependencies.filter(
+      (dependency) =>
+        dependency.fromMemberId === contract.fromMemberId &&
+        dependency.toMemberId === contract.toMemberId &&
+        dependency.selector === contract.selector &&
+        dependency.requirement === contract.requirement &&
+        dependency.parity === contract.parity,
+    );
+    const referenceMatches =
+      contract.relation === "literal-reference"
+        ? extractExplicitSelectorReferences(contract.selector).includes(
+            contract.reference,
+          )
+        : SOURCE_BOUND_REFERENCE_FREE_DEPENDENCY_BINDINGS.some(
+            (binding) =>
+              binding.fromMemberId === contract.fromMemberId &&
+              binding.toMemberId === contract.toMemberId &&
+              binding.selector === contract.selector &&
+              binding.reference === contract.reference &&
+              binding.requirement === contract.requirement &&
+              binding.parity === contract.parity,
+          );
+    if (matchingEdges.length !== 1 || !referenceMatches) {
+      findings.push({
+        code: "required-blocking-dependency-contract-mismatch",
+        message: `Required blocking dependency ${contract.fromMemberId} -> ${contract.toMemberId} must preserve its exact source selector, target, requirement, parity, and ${contract.relation} provenance.`,
+      });
+    }
+  }
+  for (const dependency of directDependencies) {
+    if (
+      dependency.parity === "blocking" &&
+      !REQUIRED_BLOCKING_DEPENDENCY_CONTRACTS.some(
+        (contract) =>
+          dependency.fromMemberId === contract.fromMemberId &&
+          dependency.toMemberId === contract.toMemberId &&
+          dependency.selector === contract.selector &&
+          dependency.requirement === contract.requirement &&
+          dependency.parity === contract.parity,
+      )
+    ) {
+      findings.push({
+        code: "blocking-dependency-contract-unexpected",
+        message: `Blocking dependency ${dependency.fromMemberId} -> ${dependency.toMemberId} has no exact source-backed contract.`,
+      });
+    }
+  }
   for (const dependency of directDependencies) {
     const fromMember = memberById.get(dependency.fromMemberId);
     if (!fromMember) {

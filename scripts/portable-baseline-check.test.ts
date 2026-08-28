@@ -23,12 +23,17 @@ const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const CASE_ALIAS_MEMBER_PATH = ".agents/skills/deliver-work/agents/OPENAI.yaml";
 const CASE_ALIAS_MEMBER_CANONICAL_PATH =
   ".agents/skills/deliver-work/agents/openai.yaml";
+const CASE_ALIAS_SOURCE_PATH = "agents.md";
+const CASE_ALIAS_SOURCE_CANONICAL_PATH = "AGENTS.md";
 
-async function canResolveCaseInsensitiveMemberAlias() {
+async function canResolveCaseInsensitiveAlias(
+  aliasPath: string,
+  canonicalPath: string,
+) {
   try {
     return (
-      (await realpath(path.join(REPO_ROOT, CASE_ALIAS_MEMBER_PATH))) ===
-      (await realpath(path.join(REPO_ROOT, CASE_ALIAS_MEMBER_CANONICAL_PATH)))
+      (await realpath(path.join(REPO_ROOT, aliasPath))) ===
+      (await realpath(path.join(REPO_ROOT, canonicalPath)))
     );
   } catch {
     return false;
@@ -36,7 +41,15 @@ async function canResolveCaseInsensitiveMemberAlias() {
 }
 
 const CASE_INSENSITIVE_MEMBER_ALIAS_SUPPORTED =
-  await canResolveCaseInsensitiveMemberAlias();
+  await canResolveCaseInsensitiveAlias(
+    CASE_ALIAS_MEMBER_PATH,
+    CASE_ALIAS_MEMBER_CANONICAL_PATH,
+  );
+const CASE_INSENSITIVE_SOURCE_ALIAS_SUPPORTED =
+  await canResolveCaseInsensitiveAlias(
+    CASE_ALIAS_SOURCE_PATH,
+    CASE_ALIAS_SOURCE_CANONICAL_PATH,
+  );
 
 describe("portable workflow characterization baseline", () => {
   it("validates the current source-backed baseline, classifications, scenarios, and inventory", async () => {
@@ -185,6 +198,134 @@ describe("portable workflow characterization baseline", () => {
     );
   });
 
+  it("binds required blocking assertions to exact semantics and citation provenance", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const targetId = "pr-athena-remains-merge-ready-authority";
+    const target = documents.baseline.assertions.find(
+      (assertion) => assertion.id === targetId,
+    )!;
+    const rootGuide = documents.baseline.sources.find(
+      (source) => source.id === "root-agent-guide",
+    )!;
+    const rootGuideText = await readFile(
+      path.join(REPO_ROOT, rootGuide.path),
+      "utf8",
+    );
+    const unrelatedValidSelector = rootGuideText
+      .split("\n")
+      .find(
+        (line) =>
+          line.trim().length > 30 &&
+          !target.citations.some((citation) =>
+            line.includes(citation.selector),
+          ),
+      )!;
+    const replaceTarget = (
+      replacement: typeof target | undefined,
+    ): typeof documents => ({
+      ...documents,
+      baseline: {
+        ...documents.baseline,
+        assertions: replacement
+          ? documents.baseline.assertions.map((assertion) =>
+              assertion.id === targetId ? replacement : assertion,
+            )
+          : documents.baseline.assertions.filter(
+              (assertion) => assertion.id !== targetId,
+            ),
+      },
+    });
+    const mutations = [
+      replaceTarget({
+        ...target,
+        statement: `${target.statement} Rewritten without approval.`,
+      }),
+      replaceTarget({ ...target, parity: "non-blocking" }),
+      replaceTarget({
+        ...target,
+        citations: [
+          { sourceId: rootGuide.id, selector: unrelatedValidSelector },
+        ],
+      }),
+      replaceTarget(undefined),
+    ];
+    const results = await Promise.all(
+      mutations.map((documentsMutation) =>
+        auditPortableWorkflowBaseline(REPO_ROOT, {
+          documents: documentsMutation,
+        }),
+      ),
+    );
+
+    expect(
+      results.map((result) =>
+        result.findings.some((finding) =>
+          finding.code.startsWith("required-blocking-assertion-contract"),
+        ),
+      ),
+    ).toEqual([true, true, true, true]);
+  });
+
+  it("rejects lexical, case-only, and duplicate normative source aliases", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const rootGuide = documents.baseline.sources.find(
+      (source) => source.id === "root-agent-guide",
+    )!;
+    const lexicalResult = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        baseline: {
+          ...documents.baseline,
+          sources: documents.baseline.sources.map((source) =>
+            source.id === rootGuide.id
+              ? { ...source, path: `./${source.path}` }
+              : source,
+          ),
+        },
+      },
+    });
+
+    expect(lexicalResult.findings.map((finding) => finding.code)).toContain(
+      "source-path-noncanonical",
+    );
+
+    if (!CASE_INSENSITIVE_SOURCE_ALIAS_SUPPORTED) return;
+    const aliasSource = {
+      ...rootGuide,
+      id: "root-agent-guide-case-alias",
+      path: CASE_ALIAS_SOURCE_PATH,
+    };
+    const caseResult = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        baseline: {
+          ...documents.baseline,
+          sources: documents.baseline.sources.map((source) =>
+            source.id === rootGuide.id
+              ? { ...source, path: CASE_ALIAS_SOURCE_PATH }
+              : source,
+          ),
+        },
+      },
+    });
+    const duplicateResult = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        baseline: {
+          ...documents.baseline,
+          sources: [...documents.baseline.sources, aliasSource],
+        },
+      },
+    });
+
+    expect(caseResult.findings.map((finding) => finding.code)).toContain(
+      "source-path-filesystem-noncanonical",
+    );
+    expect(duplicateResult.findings.map((finding) => finding.code)).toContain(
+      "source-identity-duplicate",
+    );
+  });
+
   it("requires one classification per bounded-closure member and a stable residual inventory", async () => {
     const documents = await loadPortableBaselineDocuments(REPO_ROOT);
     const [firstMember] = documents.overlayMap.boundedClosure.members;
@@ -256,6 +397,115 @@ describe("portable workflow characterization baseline", () => {
     expect(result.findings.map((finding) => finding.code)).toContain(
       "bounded-member-missing",
     );
+  });
+
+  it("rejects broken and external symlinks in bounded members and dependency targets", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const temporaryRoot = await mkdtemp(
+      path.join(REPO_ROOT, ".portable-baseline-required-symlink-"),
+    );
+    const externalRoot = await mkdtemp(
+      path.join(tmpdir(), "portable-baseline-external-symlink-"),
+    );
+    const skillName = `${path
+      .basename(temporaryRoot)
+      .replace(/[^a-z0-9-]/gi, "")
+      .toLowerCase()}-target`;
+    const dependencyTargetPath = `.agents/skills/${skillName}`;
+    try {
+      const sourcePath = path.join(temporaryRoot, "SKILL.md");
+      const externalFile = path.join(externalRoot, "external.md");
+      const externalLink = path.join(temporaryRoot, "external-link");
+      const brokenTarget = path.join(temporaryRoot, "missing-target");
+      await writeFile(sourcePath, `Use \`$${skillName}\`.\n`);
+      await writeFile(externalFile, "external target\n");
+      await symlink(externalFile, externalLink);
+      await symlink(brokenTarget, path.join(REPO_ROOT, dependencyTargetPath));
+
+      const sourceRelativePath = path
+        .relative(REPO_ROOT, sourcePath)
+        .split(path.sep)
+        .join("/");
+      const externalRelativePath = path
+        .relative(REPO_ROOT, externalLink)
+        .split(path.sep)
+        .join("/");
+      const sourceEntries = await collectTreeEntries(
+        REPO_ROOT,
+        sourceRelativePath,
+      );
+      const externalEntries = await collectTreeEntries(
+        REPO_ROOT,
+        externalRelativePath,
+      );
+      const targetEntries = await collectTreeEntries(
+        REPO_ROOT,
+        dependencyTargetPath,
+      );
+      const sourceMember = {
+        id: "symlink-characterization-source",
+        kind: "dependency-bundle" as const,
+        path: sourceRelativePath,
+        classification: "excluded",
+        fileCount: sourceEntries.length,
+        treeDigest: digestTreeEntries(sourceEntries),
+      };
+      const externalMember = {
+        ...sourceMember,
+        id: "external-symlink-member",
+        path: externalRelativePath,
+        fileCount: externalEntries.length,
+        treeDigest: digestTreeEntries(externalEntries),
+      };
+      const targetMember = {
+        ...sourceMember,
+        id: "broken-symlink-dependency-target",
+        path: dependencyTargetPath,
+        fileCount: targetEntries.length,
+        treeDigest: digestTreeEntries(targetEntries),
+      };
+      const addedMembers = [sourceMember, externalMember, targetMember];
+      const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+        documents: {
+          ...documents,
+          overlayMap: {
+            ...documents.overlayMap,
+            boundedClosure: {
+              ...documents.overlayMap.boundedClosure,
+              members: [
+                ...documents.overlayMap.boundedClosure.members,
+                ...addedMembers,
+              ],
+              auditedMemberIds: [
+                ...documents.overlayMap.boundedClosure.auditedMemberIds,
+                ...addedMembers.map((member) => member.id),
+              ],
+              directDependencies: [
+                ...documents.overlayMap.boundedClosure.directDependencies,
+                {
+                  fromMemberId: sourceMember.id,
+                  toMemberId: targetMember.id,
+                  selector: `$${skillName}`,
+                  requirement: "contextual",
+                  parity: "non-blocking",
+                },
+              ],
+            },
+          },
+        },
+      });
+
+      expect(result.findings.map((finding) => finding.code)).toEqual(
+        expect.arrayContaining([
+          "bounded-member-symlink-unsupported",
+          "source-reference-target-symlink-unsupported",
+        ]),
+      );
+    } finally {
+      await rm(path.join(REPO_ROOT, dependencyTargetPath), { force: true });
+      await rm(temporaryRoot, { recursive: true, force: true });
+      await rm(externalRoot, { recursive: true, force: true });
+    }
   });
 
   it.each([
@@ -433,6 +683,81 @@ describe("portable workflow characterization baseline", () => {
     );
     expect(classifications.get("linear-tracker-adapter")).toBe(
       "optional-adapter",
+    );
+  });
+
+  it("prevents unadjudicated observed-only behavior from becoming portable or retained", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const results = await Promise.all(
+      (["portable-candidate", "retained-overlay"] as const).map(
+        (classification) =>
+          auditPortableWorkflowBaseline(REPO_ROOT, {
+            documents: {
+              ...documents,
+              overlayMap: {
+                ...documents.overlayMap,
+                classifications: documents.overlayMap.classifications.map(
+                  (entry) =>
+                    entry.id === "host-tool-sequence"
+                      ? { ...entry, classification }
+                      : entry,
+                ),
+              },
+            },
+          }),
+      ),
+    );
+
+    expect(
+      results.map((result) =>
+        result.findings.some(
+          (finding) => finding.code === "observed-only-promotion-unapproved",
+        ),
+      ),
+    ).toEqual([true, true]);
+  });
+
+  it("restricts bounded members to the adjudicated U11 taxonomy", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const expectedAdjudications = {
+      "ce-commit-push-pr-source-bundle": "excluded",
+      "ce-commit-source-bundle": "excluded",
+      "ce-demo-reel-source-bundle": "excluded",
+      "ce-frontend-design-source-bundle": "excluded",
+      "ce-proof-source-bundle": "excluded",
+      "ce-worktree-source-bundle": "excluded",
+      "deliver-work-codex-metadata": "excluded",
+      "linear-track-source-bundle": "retained-overlay",
+    } as const;
+    const adjudications = Object.fromEntries(
+      documents.overlayMap.boundedClosure.members
+        .filter((member) => member.id in expectedAdjudications)
+        .map((member) => [member.id, member.classification]),
+    );
+
+    expect(adjudications).toEqual(expectedAdjudications);
+
+    const firstMember = documents.overlayMap.boundedClosure.members[0];
+    const mutationResult = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        overlayMap: {
+          ...documents.overlayMap,
+          boundedClosure: {
+            ...documents.overlayMap.boundedClosure,
+            members: documents.overlayMap.boundedClosure.members.map(
+              (member) =>
+                member.id === firstMember.id
+                  ? { ...member, classification: "optional-adapter" }
+                  : member,
+            ),
+          },
+        },
+      },
+    });
+
+    expect(mutationResult.findings.map((finding) => finding.code)).toContain(
+      "overlay-document-shape-invalid",
     );
   });
 
@@ -737,6 +1062,49 @@ describe("portable workflow characterization baseline", () => {
     );
   });
 
+  it("binds every required blocking dependency to its exact source-backed tuple", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const edge = documents.overlayMap.boundedClosure.directDependencies.find(
+      (dependency) =>
+        dependency.fromMemberId === "deliver-work-body" &&
+        dependency.toMemberId === "compound-delivery-kernel",
+    )!;
+    const replaceEdge = (replacement: typeof edge): typeof documents => ({
+      ...documents,
+      overlayMap: {
+        ...documents.overlayMap,
+        boundedClosure: {
+          ...documents.overlayMap.boundedClosure,
+          directDependencies:
+            documents.overlayMap.boundedClosure.directDependencies.map(
+              (dependency) => (dependency === edge ? replacement : dependency),
+            ),
+        },
+      },
+    });
+    const mutations = [
+      replaceEdge({ ...edge, requirement: "conditional" }),
+      replaceEdge({ ...edge, parity: "non-blocking" }),
+      replaceEdge({ ...edge, selector: "$compound-delivery-kernel" }),
+    ];
+    const results = await Promise.all(
+      mutations.map((documentsMutation) =>
+        auditPortableWorkflowBaseline(REPO_ROOT, {
+          documents: documentsMutation,
+        }),
+      ),
+    );
+
+    expect(
+      results.map((result) =>
+        result.findings.some(
+          (finding) =>
+            finding.code === "required-blocking-dependency-contract-mismatch",
+        ),
+      ),
+    ).toEqual([true, true, true]);
+  });
+
   it("binds reference-free session selectors to their intended targets", async () => {
     const documents = await loadPortableBaselineDocuments(REPO_ROOT);
     const swappedTargets = new Map([
@@ -915,6 +1283,95 @@ describe("portable workflow characterization baseline", () => {
 
     expect(result.findings.map((finding) => finding.code)).toContain(
       "baseline-document-shape-invalid",
+    );
+  });
+
+  it("rejects unknown keys recursively in every committed document family", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const firstAssertion = documents.baseline.assertions[0];
+    const firstMember = documents.overlayMap.boundedClosure.members[0];
+    const firstScenario = documents.scenarios[0];
+    const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        baseline: {
+          ...documents.baseline,
+          unexpectedBaselineKey: true,
+          assertions: [
+            {
+              ...firstAssertion,
+              unexpectedAssertionKey: true,
+              citations: [
+                {
+                  ...firstAssertion.citations[0],
+                  unexpectedCitationKey: true,
+                },
+                ...firstAssertion.citations.slice(1),
+              ],
+            },
+            ...documents.baseline.assertions.slice(1),
+          ],
+        },
+        overlayMap: {
+          ...documents.overlayMap,
+          unexpectedOverlayKey: true,
+          boundedClosure: {
+            ...documents.overlayMap.boundedClosure,
+            members: [
+              { ...firstMember, unexpectedMemberKey: true },
+              ...documents.overlayMap.boundedClosure.members.slice(1),
+            ],
+          },
+        },
+        scenarios: [
+          { ...firstScenario, unexpectedScenarioKey: true },
+          ...documents.scenarios.slice(1),
+        ],
+        unexpectedDocumentsKey: true,
+      },
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toEqual(
+      expect.arrayContaining([
+        "baseline-document-shape-invalid",
+        "overlay-document-shape-invalid",
+        "scenario-document-shape-invalid",
+      ]),
+    );
+  });
+
+  it("requires read-only metadata and the exact classification semantics", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const readOnlyResult = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        baseline: { ...documents.baseline, readOnly: false },
+        overlayMap: { ...documents.overlayMap, readOnly: false },
+        scenarios: documents.scenarios.map((scenario) => ({
+          ...scenario,
+          readOnly: false,
+        })),
+      },
+    });
+    const semanticsResult = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        overlayMap: {
+          ...documents.overlayMap,
+          classificationSemantics: {
+            "portable-candidate": "Rewritten semantics",
+          },
+        },
+      },
+    });
+
+    expect(readOnlyResult.findings.map((finding) => finding.code)).toEqual(
+      expect.arrayContaining([
+        "baseline-document-shape-invalid",
+        "overlay-document-shape-invalid",
+        "scenario-document-shape-invalid",
+      ]),
+    );
+    expect(semanticsResult.findings.map((finding) => finding.code)).toContain(
+      "overlay-document-shape-invalid",
     );
   });
 
