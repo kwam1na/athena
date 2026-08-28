@@ -271,6 +271,113 @@ describe("portable workflow characterization baseline", () => {
     },
   );
 
+  it("rejects swapped generic router selectors", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const genericRouterEdges =
+      documents.overlayMap.boundedClosure.directDependencies.filter(
+        (dependency) =>
+          dependency.fromMemberId === "deliver-work-body" &&
+          [
+            "ce-debug-source-bundle",
+            "ce-code-review-source-bundle",
+          ].includes(dependency.toMemberId),
+      );
+    const selectorByTarget = new Map(
+      genericRouterEdges.map((dependency) => [
+        dependency.toMemberId,
+        dependency.selector,
+      ]),
+    );
+    const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        overlayMap: {
+          ...documents.overlayMap,
+          boundedClosure: {
+            ...documents.overlayMap.boundedClosure,
+            directDependencies:
+              documents.overlayMap.boundedClosure.directDependencies.map(
+                (dependency) => {
+                  if (
+                    dependency.fromMemberId !== "deliver-work-body"
+                  ) {
+                    return dependency;
+                  }
+                  if (dependency.toMemberId === "ce-debug-source-bundle") {
+                    return {
+                      ...dependency,
+                      selector: selectorByTarget.get(
+                        "ce-code-review-source-bundle",
+                      )!,
+                    };
+                  }
+                  if (
+                    dependency.toMemberId === "ce-code-review-source-bundle"
+                  ) {
+                    return {
+                      ...dependency,
+                      selector: selectorByTarget.get(
+                        "ce-debug-source-bundle",
+                      )!,
+                    };
+                  }
+                  return dependency;
+                },
+              ),
+          },
+        },
+      },
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toContain(
+      "source-routing-binding-mismatch",
+    );
+  });
+
+  it("rejects swapped generic router targets", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        overlayMap: {
+          ...documents.overlayMap,
+          boundedClosure: {
+            ...documents.overlayMap.boundedClosure,
+            directDependencies:
+              documents.overlayMap.boundedClosure.directDependencies.map(
+                (dependency) => {
+                  if (
+                    dependency.fromMemberId !== "deliver-work-body"
+                  ) {
+                    return dependency;
+                  }
+                  if (dependency.toMemberId === "ce-debug-source-bundle") {
+                    return {
+                      ...dependency,
+                      toMemberId: "ce-code-review-source-bundle",
+                    };
+                  }
+                  if (
+                    dependency.toMemberId === "ce-code-review-source-bundle"
+                  ) {
+                    return {
+                      ...dependency,
+                      toMemberId: "ce-debug-source-bundle",
+                    };
+                  }
+                  return dependency;
+                },
+              ),
+          },
+        },
+      },
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toContain(
+      "source-routing-binding-mismatch",
+    );
+  });
+
   it("scans dependencies of selected excluded resources", async () => {
     const documents = await loadPortableBaselineDocuments(REPO_ROOT);
     const omittedMemberId = "ce-session-inventory-source-bundle";

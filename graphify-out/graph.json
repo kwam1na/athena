@@ -164819,7 +164819,7 @@
       "relation": "calls",
       "source": "portable_baseline_check_collectsourcedependencyreferences",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L674",
+      "source_location": "L689",
       "target": "portable_baseline_check_auditportableworkflowbaseline",
       "weight": 1
     },
@@ -164831,7 +164831,7 @@
       "relation": "calls",
       "source": "portable_baseline_check_collecttreeentries",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L570",
+      "source_location": "L572",
       "target": "portable_baseline_check_auditportableworkflowbaseline",
       "weight": 1
     },
@@ -164843,7 +164843,7 @@
       "relation": "calls",
       "source": "portable_baseline_check_digesttreeentries",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L574",
+      "source_location": "L576",
       "target": "portable_baseline_check_auditportableworkflowbaseline",
       "weight": 1
     },
@@ -164855,7 +164855,7 @@
       "relation": "calls",
       "source": "portable_baseline_check_findreferencetargetmember",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L750",
+      "source_location": "L765",
       "target": "portable_baseline_check_auditportableworkflowbaseline",
       "weight": 1
     },
@@ -164867,7 +164867,7 @@
       "relation": "calls",
       "source": "portable_baseline_check_hasclassification",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L524",
+      "source_location": "L526",
       "target": "portable_baseline_check_auditportableworkflowbaseline",
       "weight": 1
     },
@@ -164879,7 +164879,7 @@
       "relation": "calls",
       "source": "portable_baseline_check_issaferelativepath",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L447",
+      "source_location": "L449",
       "target": "portable_baseline_check_auditportableworkflowbaseline",
       "weight": 1
     },
@@ -164891,7 +164891,7 @@
       "relation": "calls",
       "source": "portable_baseline_check_loadportablebaselinedocuments",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L427",
+      "source_location": "L429",
       "target": "portable_baseline_check_auditportableworkflowbaseline",
       "weight": 1
     },
@@ -164903,7 +164903,7 @@
       "relation": "calls",
       "source": "portable_baseline_check_loadscenarios",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L879",
+      "source_location": "L894",
       "target": "portable_baseline_check_auditportableworkflowbaseline",
       "weight": 1
     },
@@ -164915,7 +164915,7 @@
       "relation": "calls",
       "source": "portable_baseline_check_pathstate",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L471",
+      "source_location": "L473",
       "target": "portable_baseline_check_auditportableworkflowbaseline",
       "weight": 1
     },
@@ -164927,7 +164927,7 @@
       "relation": "calls",
       "source": "portable_baseline_check_pushduplicatefindings",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L440",
+      "source_location": "L442",
       "target": "portable_baseline_check_auditportableworkflowbaseline",
       "weight": 1
     },
@@ -164939,7 +164939,7 @@
       "relation": "calls",
       "source": "portable_baseline_check_resolvereferencetargetpath",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L733",
+      "source_location": "L748",
       "target": "portable_baseline_check_auditportableworkflowbaseline",
       "weight": 1
     },
@@ -164951,7 +164951,7 @@
       "relation": "calls",
       "source": "portable_baseline_check_sha256",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L454",
+      "source_location": "L456",
       "target": "portable_baseline_check_auditportableworkflowbaseline",
       "weight": 1
     },
@@ -164963,7 +164963,7 @@
       "relation": "calls",
       "source": "portable_baseline_check_collecttreeentries",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L387",
+      "source_location": "L389",
       "target": "portable_baseline_check_collectsourcedependencyreferences",
       "weight": 1
     },
@@ -164975,7 +164975,7 @@
       "relation": "calls",
       "source": "portable_baseline_check_pathstate",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L250",
+      "source_location": "L252",
       "target": "portable_baseline_check_collecttreeentries",
       "weight": 1
     },
@@ -164987,7 +164987,7 @@
       "relation": "calls",
       "source": "portable_baseline_check_sha256",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L253",
+      "source_location": "L255",
       "target": "portable_baseline_check_collecttreeentries",
       "weight": 1
     },
@@ -164999,7 +164999,7 @@
       "relation": "calls",
       "source": "portable_baseline_check_sha256",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L287",
+      "source_location": "L289",
       "target": "portable_baseline_check_digesttreeentries",
       "weight": 1
     },
@@ -165011,7 +165011,7 @@
       "relation": "calls",
       "source": "portable_baseline_check_loadscenarios",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L311",
+      "source_location": "L313",
       "target": "portable_baseline_check_loadportablebaselinedocuments",
       "weight": 1
     },
@@ -165023,7 +165023,7 @@
       "relation": "calls",
       "source": "portable_baseline_check_readjson",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L312",
+      "source_location": "L314",
       "target": "portable_baseline_check_loadportablebaselinedocuments",
       "weight": 1
     },
@@ -165035,7 +165035,7 @@
       "relation": "calls",
       "source": "portable_baseline_check_pathstate",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L348",
+      "source_location": "L350",
       "target": "portable_baseline_check_resolvereferencetargetpath",
       "weight": 1
     },
@@ -193367,7 +193367,7 @@
       "relation": "contains",
       "source": "scripts_portable_baseline_check_ts",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L422",
+      "source_location": "L424",
       "target": "portable_baseline_check_auditportableworkflowbaseline",
       "weight": 1
     },
@@ -193379,7 +193379,7 @@
       "relation": "contains",
       "source": "scripts_portable_baseline_check_ts",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L375",
+      "source_location": "L377",
       "target": "portable_baseline_check_collectsourcedependencyreferences",
       "weight": 1
     },
@@ -193391,7 +193391,7 @@
       "relation": "contains",
       "source": "scripts_portable_baseline_check_ts",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L248",
+      "source_location": "L250",
       "target": "portable_baseline_check_collecttreeentries",
       "weight": 1
     },
@@ -193403,7 +193403,7 @@
       "relation": "contains",
       "source": "scripts_portable_baseline_check_ts",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L211",
+      "source_location": "L213",
       "target": "portable_baseline_check_compareutf8bytes",
       "weight": 1
     },
@@ -193415,7 +193415,7 @@
       "relation": "contains",
       "source": "scripts_portable_baseline_check_ts",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L282",
+      "source_location": "L284",
       "target": "portable_baseline_check_digesttreeentries",
       "weight": 1
     },
@@ -193427,7 +193427,7 @@
       "relation": "contains",
       "source": "scripts_portable_baseline_check_ts",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L358",
+      "source_location": "L360",
       "target": "portable_baseline_check_findreferencetargetmember",
       "weight": 1
     },
@@ -193439,7 +193439,7 @@
       "relation": "contains",
       "source": "scripts_portable_baseline_check_ts",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L333",
+      "source_location": "L335",
       "target": "portable_baseline_check_hasclassification",
       "weight": 1
     },
@@ -193451,7 +193451,7 @@
       "relation": "contains",
       "source": "scripts_portable_baseline_check_ts",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L215",
+      "source_location": "L217",
       "target": "portable_baseline_check_issaferelativepath",
       "weight": 1
     },
@@ -193463,7 +193463,7 @@
       "relation": "contains",
       "source": "scripts_portable_baseline_check_ts",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L307",
+      "source_location": "L309",
       "target": "portable_baseline_check_loadportablebaselinedocuments",
       "weight": 1
     },
@@ -193475,7 +193475,7 @@
       "relation": "contains",
       "source": "scripts_portable_baseline_check_ts",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L294",
+      "source_location": "L296",
       "target": "portable_baseline_check_loadscenarios",
       "weight": 1
     },
@@ -193487,7 +193487,7 @@
       "relation": "contains",
       "source": "scripts_portable_baseline_check_ts",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L337",
+      "source_location": "L339",
       "target": "portable_baseline_check_memberownspath",
       "weight": 1
     },
@@ -193499,7 +193499,7 @@
       "relation": "contains",
       "source": "scripts_portable_baseline_check_ts",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L229",
+      "source_location": "L231",
       "target": "portable_baseline_check_pathstate",
       "weight": 1
     },
@@ -193511,7 +193511,7 @@
       "relation": "contains",
       "source": "scripts_portable_baseline_check_ts",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L318",
+      "source_location": "L320",
       "target": "portable_baseline_check_pushduplicatefindings",
       "weight": 1
     },
@@ -193523,7 +193523,7 @@
       "relation": "contains",
       "source": "scripts_portable_baseline_check_ts",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L290",
+      "source_location": "L292",
       "target": "portable_baseline_check_readjson",
       "weight": 1
     },
@@ -193535,7 +193535,7 @@
       "relation": "contains",
       "source": "scripts_portable_baseline_check_ts",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L225",
+      "source_location": "L227",
       "target": "portable_baseline_check_relativeposix",
       "weight": 1
     },
@@ -193547,7 +193547,7 @@
       "relation": "contains",
       "source": "scripts_portable_baseline_check_ts",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L346",
+      "source_location": "L348",
       "target": "portable_baseline_check_resolvereferencetargetpath",
       "weight": 1
     },
@@ -193559,7 +193559,7 @@
       "relation": "contains",
       "source": "scripts_portable_baseline_check_ts",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L207",
+      "source_location": "L209",
       "target": "portable_baseline_check_sha256",
       "weight": 1
     },
@@ -240802,7 +240802,7 @@
       "label": "auditPortableWorkflowBaseline()",
       "norm_label": "auditportableworkflowbaseline()",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L422"
+      "source_location": "L424"
     },
     {
       "community": 144,
@@ -240811,7 +240811,7 @@
       "label": "collectSourceDependencyReferences()",
       "norm_label": "collectsourcedependencyreferences()",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L375"
+      "source_location": "L377"
     },
     {
       "community": 144,
@@ -240820,7 +240820,7 @@
       "label": "collectTreeEntries()",
       "norm_label": "collecttreeentries()",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L248"
+      "source_location": "L250"
     },
     {
       "community": 144,
@@ -240829,7 +240829,7 @@
       "label": "compareUtf8Bytes()",
       "norm_label": "compareutf8bytes()",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L211"
+      "source_location": "L213"
     },
     {
       "community": 144,
@@ -240838,7 +240838,7 @@
       "label": "digestTreeEntries()",
       "norm_label": "digesttreeentries()",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L282"
+      "source_location": "L284"
     },
     {
       "community": 144,
@@ -240847,7 +240847,7 @@
       "label": "findReferenceTargetMember()",
       "norm_label": "findreferencetargetmember()",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L358"
+      "source_location": "L360"
     },
     {
       "community": 144,
@@ -240856,7 +240856,7 @@
       "label": "hasClassification()",
       "norm_label": "hasclassification()",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L333"
+      "source_location": "L335"
     },
     {
       "community": 144,
@@ -240865,7 +240865,7 @@
       "label": "isSafeRelativePath()",
       "norm_label": "issaferelativepath()",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L215"
+      "source_location": "L217"
     },
     {
       "community": 144,
@@ -240874,7 +240874,7 @@
       "label": "loadPortableBaselineDocuments()",
       "norm_label": "loadportablebaselinedocuments()",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L307"
+      "source_location": "L309"
     },
     {
       "community": 144,
@@ -240883,7 +240883,7 @@
       "label": "loadScenarios()",
       "norm_label": "loadscenarios()",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L294"
+      "source_location": "L296"
     },
     {
       "community": 144,
@@ -240892,7 +240892,7 @@
       "label": "memberOwnsPath()",
       "norm_label": "memberownspath()",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L337"
+      "source_location": "L339"
     },
     {
       "community": 144,
@@ -240901,7 +240901,7 @@
       "label": "pathState()",
       "norm_label": "pathstate()",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L229"
+      "source_location": "L231"
     },
     {
       "community": 144,
@@ -240910,7 +240910,7 @@
       "label": "pushDuplicateFindings()",
       "norm_label": "pushduplicatefindings()",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L318"
+      "source_location": "L320"
     },
     {
       "community": 144,
@@ -240919,7 +240919,7 @@
       "label": "readJson()",
       "norm_label": "readjson()",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L290"
+      "source_location": "L292"
     },
     {
       "community": 144,
@@ -240928,7 +240928,7 @@
       "label": "relativePosix()",
       "norm_label": "relativeposix()",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L225"
+      "source_location": "L227"
     },
     {
       "community": 144,
@@ -240937,7 +240937,7 @@
       "label": "resolveReferenceTargetPath()",
       "norm_label": "resolvereferencetargetpath()",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L346"
+      "source_location": "L348"
     },
     {
       "community": 144,
@@ -240946,7 +240946,7 @@
       "label": "sha256()",
       "norm_label": "sha256()",
       "source_file": "scripts/portable-baseline-check.ts",
-      "source_location": "L207"
+      "source_location": "L209"
     },
     {
       "community": 144,

@@ -51,18 +51,20 @@ const HOST_ALIAS_REFERENCE_NAMES = new Set([
   "requesting-code-review",
 ]);
 
-const SOURCE_BOUND_GENERIC_ROUTER_REFERENCES = [
+const SOURCE_BOUND_GENERIC_ROUTER_BINDINGS = [
   {
     fromMemberId: "deliver-work-body",
     selector:
       "If the request is a bug with unknown root cause, use a systematic debugging skill before planning the fix.",
     reference: "ce-debug",
+    toMemberId: "ce-debug-source-bundle",
   },
   {
     fromMemberId: "deliver-work-body",
     selector:
       "If the task is purely a review, use the available code-review skill instead of implementing.",
     reference: "ce-code-review",
+    toMemberId: "ce-code-review-source-bundle",
   },
 ] as const;
 
@@ -636,6 +638,19 @@ export async function auditPortableWorkflowBaseline(
       }
     }
   }
+  for (const binding of SOURCE_BOUND_GENERIC_ROUTER_BINDINGS) {
+    const matchingEdges = directDependencies.filter(
+      (dependency) =>
+        dependency.fromMemberId === binding.fromMemberId &&
+        dependency.selector === binding.selector &&
+        dependency.toMemberId === binding.toMemberId &&
+        dependency.requirement === "routing" &&
+        dependency.parity === "blocking",
+    );
+    if (matchingEdges.length !== 1) {
+      findings.push({ code: "source-routing-binding-mismatch", message: `Generic router binding ${binding.fromMemberId} -> ${binding.toMemberId} must preserve its exact selector and blocking routing edge.` });
+    }
+  }
 
   pushDuplicateFindings(
     findings,
@@ -675,7 +690,7 @@ export async function auditPortableWorkflowBaseline(
     rootDir,
     members,
   );
-  for (const mapping of SOURCE_BOUND_GENERIC_ROUTER_REFERENCES) {
+  for (const mapping of SOURCE_BOUND_GENERIC_ROUTER_BINDINGS) {
     const sourceMember = memberById.get(mapping.fromMemberId);
     if (!sourceMember) {
       findings.push({ code: "source-routing-mapping-member-missing", message: `Generic router mapping source ${mapping.fromMemberId} is not in the bounded closure.` });

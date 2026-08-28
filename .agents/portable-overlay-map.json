@@ -548,14 +548,14 @@
       {
         "fromMemberId": "deliver-work-body",
         "toMemberId": "ce-debug-source-bundle",
-        "selector": "systematic debugging skill",
+        "selector": "If the request is a bug with unknown root cause, use a systematic debugging skill before planning the fix.",
         "requirement": "routing",
         "parity": "blocking"
       },
       {
         "fromMemberId": "deliver-work-body",
         "toMemberId": "ce-code-review-source-bundle",
-        "selector": "available code-review skill",
+        "selector": "If the task is purely a review, use the available code-review skill instead of implementing.",
         "requirement": "routing",
         "parity": "blocking"
       },
