@@ -23,6 +23,12 @@ import {
   type CommandArguments,
   type HarnessBlockerSource,
 } from "./harness-blockers";
+import {
+  DEFAULT_PORTABLE_SHADOW_PATH,
+  isPortableShadowComparison,
+  readPortableShadowComparison,
+  type PortableShadowComparison,
+} from "./portable-shadow-observation";
 
 export const DELIVERY_RUN_TELEMETRY_SCHEMA_VERSION = 1 as const;
 export const DELIVERY_RUN_TELEMETRY_DIR = "telemetry/delivery-runs";
@@ -66,6 +72,7 @@ export type DeliveryRunTelemetryRecord = {
   proofState: DeliveryRunProofState;
   summary: DeliveryRunLedger["summary"];
   reviewLoop?: DeliveryRunReviewLoopSummary;
+  shadowComparison?: PortableShadowComparison;
 };
 
 export function buildDeliveryRunTelemetryRecord(
@@ -74,8 +81,24 @@ export function buildDeliveryRunTelemetryRecord(
     branch: string;
     headSha: string;
     deliverableDiffFingerprint: string;
+    shadowComparison?: PortableShadowComparison;
   },
 ): DeliveryRunTelemetryRecord {
+  if (
+    context.shadowComparison &&
+    !isPortableShadowComparison(context.shadowComparison)
+  ) {
+    throw new Error("Portable shadow comparison is not valid for telemetry.");
+  }
+  if (
+    context.shadowComparison &&
+    context.shadowComparison.candidateFingerprint !==
+      context.deliverableDiffFingerprint
+  ) {
+    throw new Error(
+      "The portable shadow comparison describes a different deliverable.",
+    );
+  }
   return {
     schemaVersion: DELIVERY_RUN_TELEMETRY_SCHEMA_VERSION,
     generatedAt: ledger.generatedAt,
@@ -86,6 +109,63 @@ export function buildDeliveryRunTelemetryRecord(
     proofState: ledger.proofState,
     summary: ledger.summary,
     ...(ledger.reviewLoop ? { reviewLoop: ledger.reviewLoop } : {}),
+    ...(context.shadowComparison
+      ? {
+          shadowComparison: {
+            schemaVersion: context.shadowComparison.schemaVersion,
+            observedAt: context.shadowComparison.observedAt,
+            workflow: context.shadowComparison.workflow,
+            inputSha256: context.shadowComparison.inputSha256,
+            candidateFingerprint:
+              context.shadowComparison.candidateFingerprint,
+            comparisonSha256: context.shadowComparison.comparisonSha256,
+            status: context.shadowComparison.status,
+            baseline: { ...context.shadowComparison.baseline },
+            source: {
+              releaseId: context.shadowComparison.source.releaseId,
+              profile: context.shadowComparison.source.profile,
+              sourceCommitSha:
+                context.shadowComparison.source.sourceCommitSha,
+              archiveSha256: context.shadowComparison.source.archiveSha256,
+              metadataSha256:
+                context.shadowComparison.source.metadataSha256,
+              workflowSha256:
+                context.shadowComparison.source.workflowSha256,
+            },
+            athena: context.shadowComparison.athena,
+            ...(context.shadowComparison.portable
+              ? { portable: context.shadowComparison.portable }
+              : {}),
+            portableMutationAttempts: [
+              ...context.shadowComparison.portableMutationAttempts,
+            ],
+            mismatches: context.shadowComparison.mismatches.map((mismatch) => ({
+              field: mismatch.field,
+              athena: mismatch.athena,
+              portable: mismatch.portable,
+              disposition: mismatch.disposition,
+            })),
+            ...(context.shadowComparison.unavailableReason
+              ? {
+                  unavailableReason:
+                    context.shadowComparison.unavailableReason,
+                }
+              : {}),
+            authority: {
+              authoritativePath:
+                context.shadowComparison.authority.authoritativePath,
+              influencedAuthoritativeResult:
+                context.shadowComparison.authority
+                  .influencedAuthoritativeResult,
+              authoritySwitchAllowed:
+                context.shadowComparison.authority.authoritySwitchAllowed,
+              portableCapabilities: {
+                ...context.shadowComparison.authority.portableCapabilities,
+              },
+            },
+          },
+        }
+      : {}),
   };
 }
 
@@ -144,7 +224,6 @@ const SUMMARY_NUMERIC_FIELDS = [
   "gateDecisionCount",
   "totalDurationMs",
 ] as const;
-
 /**
  * Validated strictly because these records are read back from the tracked tree
  * and rendered into the run summary that delivery handoffs relay verbatim. A
@@ -176,7 +255,11 @@ function isTelemetryRecord(value: unknown): value is DeliveryRunTelemetryRecord 
     // reviewLoop is rendered into the summary, so an unvalidated one from a
     // committed record would reach string operations expecting strings.
     (record.reviewLoop === undefined ||
-      isValidReviewLoopTelemetry(record.reviewLoop))
+      isValidReviewLoopTelemetry(record.reviewLoop)) &&
+    (record.shadowComparison === undefined ||
+      (isPortableShadowComparison(record.shadowComparison) &&
+        record.shadowComparison.candidateFingerprint ===
+          record.deliverableDiffFingerprint))
   );
 }
 
@@ -272,6 +355,7 @@ export async function recordDeliveryRunTelemetry(
   rootDir: string,
   options: {
     ledgerPath?: string;
+    shadowPath?: string;
     telemetryDir?: string;
     baseRef?: string;
   } = {},
@@ -310,14 +394,27 @@ export async function recordDeliveryRunTelemetry(
         "that actually passed.",
     );
   }
-  const [branch, headSha] = await Promise.all([
+  const [branch, headSha, shadowComparison] = await Promise.all([
     gitStdout(rootDir, ["branch", "--show-current"]),
     gitStdout(rootDir, ["rev-parse", "HEAD"]),
+    readPortableShadowComparison(
+      rootDir,
+      options.shadowPath ?? DEFAULT_PORTABLE_SHADOW_PATH,
+    ),
   ]);
+  if (
+    shadowComparison &&
+    shadowComparison.candidateFingerprint !== currentFingerprint
+  ) {
+    throw new Error(
+      "The portable shadow artifact describes a different deliverable than the current passing gate.",
+    );
+  }
   const record = buildDeliveryRunTelemetryRecord(ledger, {
     branch: branch || "detached-head",
     headSha,
     deliverableDiffFingerprint: currentFingerprint,
+    ...(shadowComparison ? { shadowComparison } : {}),
   });
   const written = await writeDeliveryRunTelemetryRecord(
     rootDir,
