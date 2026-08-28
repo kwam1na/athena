@@ -435,6 +435,227 @@ export const REQUIRED_BLOCKING_DEPENDENCY_CONTRACTS = [
   }),
 ] as const;
 
+export type RequiredNonBlockingDependencyTuple = readonly [
+  fromMemberId: string,
+  toMemberId: string,
+  selector: string,
+  requirement: "conditional" | "host-alias" | "contextual",
+  parity: "non-blocking",
+];
+
+// Keep each identity tuple on one line so the bounded closure is reviewable as
+// a flat contract rather than as fifty visually expanded data structures.
+// prettier-ignore
+export const REQUIRED_NON_BLOCKING_DEPENDENCY_TUPLES = [
+  ["ce-plan-source-bundle", "ce-proof-source-bundle", "Load the `ce-proof` skill in HITL-review mode", "conditional", "non-blocking"],
+  ["ce-work-source-bundle", "ce-commit-push-pr-source-bundle", "Load the `ce-commit-push-pr` skill", "conditional", "non-blocking"],
+  ["ce-work-source-bundle", "ce-commit-source-bundle", "load the `ce-commit` skill instead", "conditional", "non-blocking"],
+  ["ce-brainstorm-source-bundle", "ce-proof-source-bundle", "Load the `ce-proof` skill in HITL-review mode", "conditional", "non-blocking"],
+  ["ce-debug-source-bundle", "ce-commit-push-pr-source-bundle", "Run `/ce-commit-push-pr`.", "conditional", "non-blocking"],
+  ["ce-debug-source-bundle", "ce-commit-source-bundle", "Commit the fix (`/ce-commit`)", "conditional", "non-blocking"],
+  ["ce-compound-source-bundle", "ce-compound-refresh-source-bundle", "invoke `ce-compound-refresh` with a narrow scope hint", "conditional", "non-blocking"],
+  ["athena-execute-source-bundle", "ce-code-review-source-bundle", "Run `$requesting-code-review`", "host-alias", "non-blocking"],
+  ["athena-execute-source-bundle", "ce-frontend-design-source-bundle", "invoke `$designing-frontends`", "host-alias", "non-blocking"],
+  ["ce-commit-push-pr-source-bundle", "ce-demo-reel-source-bundle", "invoke `ce-demo-reel` separately to capture", "conditional", "non-blocking"],
+  ["ce-demo-reel-source-bundle", "ce-setup-source-bundle", "Run `/ce-setup` to install required dependencies.", "conditional", "non-blocking"],
+  ["ce-frontend-design-source-bundle", "ce-setup-source-bundle", "Run `/ce-setup` to install required dependencies.", "conditional", "non-blocking"],
+  ["athena-execute-source-bundle", "ce-frontend-design-source-bundle", "invoke `$frontend-skill`", "host-alias", "non-blocking"],
+  ["ce-commit-source-bundle", "compound-delivery-kernel", "Classify the block using `$compound-delivery-kernel`", "conditional", "non-blocking"],
+  ["ce-commit-source-bundle", "linear-track-source-bundle", "proactively create a follow-up with `$track`", "conditional", "non-blocking"],
+  ["ce-commit-push-pr-source-bundle", "compound-delivery-kernel", "Classify the block using `$compound-delivery-kernel`", "conditional", "non-blocking"],
+  ["ce-commit-push-pr-source-bundle", "linear-track-source-bundle", "proactively create a follow-up with `$track`", "conditional", "non-blocking"],
+  ["ce-compound-refresh-source-bundle", "ce-compound-source-bundle", "Recommend the user run `ce-compound`", "conditional", "non-blocking"],
+  ["ce-plan-source-bundle", "compound-reviewer-prompts", "ce-spec-flow-analyzer", "contextual", "non-blocking"],
+  ["ce-work-source-bundle", "ce-demo-reel-source-bundle", "ce-demo-reel", "contextual", "non-blocking"],
+  ["ce-work-source-bundle", "ce-brainstorm-source-bundle", "ce-brainstorm", "contextual", "non-blocking"],
+  ["ce-work-source-bundle", "ce-plan-source-bundle", "ce-plan", "contextual", "non-blocking"],
+  ["ce-work-source-bundle", "compound-reviewer-prompts", "ce-figma-design-sync", "contextual", "non-blocking"],
+  ["ce-code-review-source-bundle", "ce-brainstorm-source-bundle", "ce-brainstorm", "contextual", "non-blocking"],
+  ["ce-code-review-source-bundle", "ce-plan-source-bundle", "ce-plan", "contextual", "non-blocking"],
+  ["ce-code-review-source-bundle", "ce-work-source-bundle", "ce-work", "contextual", "non-blocking"],
+  ["compound-reviewer-prompts", "ce-plan-source-bundle", "ce-plan", "contextual", "non-blocking"],
+  ["compound-reviewer-prompts", "ce-compound-source-bundle", "ce-compound", "contextual", "non-blocking"],
+  ["compound-reviewer-prompts", "ce-code-review-source-bundle", "ce-code-review", "contextual", "non-blocking"],
+  ["compound-reviewer-prompts", "ce-brainstorm-source-bundle", "ce-brainstorm", "contextual", "non-blocking"],
+  ["compound-reviewer-prompts", "ce-work-source-bundle", "ce-work", "contextual", "non-blocking"],
+  ["compound-reviewer-prompts", "ce-frontend-design-source-bundle", "ce-frontend-design", "contextual", "non-blocking"],
+  ["compound-reviewer-prompts", "ce-worktree-source-bundle", "ce-worktree", "contextual", "non-blocking"],
+  ["ce-compound-source-bundle", "ce-plan-source-bundle", "ce-plan", "contextual", "non-blocking"],
+  ["ce-brainstorm-source-bundle", "compound-reviewer-prompts", "ce-slack-researcher", "conditional", "non-blocking"],
+  ["ce-doc-review-source-bundle", "ce-plan-source-bundle", "ce-plan", "contextual", "non-blocking"],
+  ["ce-doc-review-source-bundle", "ce-brainstorm-source-bundle", "ce-brainstorm", "contextual", "non-blocking"],
+  ["ce-doc-review-source-bundle", "ce-work-source-bundle", "ce-work", "contextual", "non-blocking"],
+  ["ce-doc-review-source-bundle", "ce-code-review-source-bundle", "ce-code-review", "contextual", "non-blocking"],
+  ["ce-proof-source-bundle", "ce-brainstorm-source-bundle", "ce-brainstorm", "contextual", "non-blocking"],
+  ["ce-proof-source-bundle", "ce-plan-source-bundle", "ce-plan", "contextual", "non-blocking"],
+  ["ce-compound-refresh-source-bundle", "ce-brainstorm-source-bundle", "ce-brainstorm", "contextual", "non-blocking"],
+  ["ce-landed-change-report-source-bundle", "athena-execute-source-bundle", "When invoked from `$execute`", "contextual", "non-blocking"],
+  ["ce-frontend-design-source-bundle", "compound-reviewer-prompts", "ce-design-iterator", "conditional", "non-blocking"],
+  ["ce-demo-reel-source-bundle", "ce-commit-push-pr-source-bundle", "ce-commit-push-pr", "contextual", "non-blocking"],
+  ["ce-setup-source-bundle", "ce-code-review-source-bundle", "ce-code-review", "contextual", "non-blocking"],
+  ["ce-worktree-source-bundle", "ce-work-source-bundle", "ce-work", "contextual", "non-blocking"],
+  ["ce-worktree-source-bundle", "ce-code-review-source-bundle", "ce-code-review", "contextual", "non-blocking"],
+  ["ce-session-inventory-source-bundle", "ce-session-extract-source-bundle", "ce-session-extract", "contextual", "non-blocking"],
+  ["ce-session-extract-source-bundle", "ce-session-inventory-source-bundle", "ce-session-inventory", "contextual", "non-blocking"],
+] as const satisfies readonly RequiredNonBlockingDependencyTuple[];
+
+type ReferenceDispositionBase = {
+  fromMemberId: string;
+  reference: string;
+  parity: "non-blocking";
+  rationale: string;
+};
+
+type HostAliasDispositionContract = ReferenceDispositionBase & {
+  resolution: "host-alias";
+  mappedMemberId: string;
+  dependency: {
+    toMemberId: string;
+    selector: string;
+    requirement: "host-alias";
+    parity: "non-blocking";
+  };
+};
+
+type UnmappedDispositionContract = ReferenceDispositionBase & {
+  resolution: "external-capability" | "lexical-non-dependency";
+  mappedMemberId?: never;
+};
+
+export type RequiredReferenceDispositionContract =
+  HostAliasDispositionContract | UnmappedDispositionContract;
+
+export const REQUIRED_REFERENCE_DISPOSITION_CONTRACTS = [
+  {
+    fromMemberId: "athena-execute-source-bundle",
+    reference: "designing-frontends",
+    resolution: "host-alias",
+    parity: "non-blocking",
+    mappedMemberId: "ce-frontend-design-source-bundle",
+    rationale:
+      "Execute names a host alias rather than a repository skill; the local frontend-design bundle is the closest classified capability, but the alias mapping is not parity policy.",
+    dependency: {
+      toMemberId: "ce-frontend-design-source-bundle",
+      selector: "invoke `$designing-frontends`",
+      requirement: "host-alias",
+      parity: "non-blocking",
+    },
+  },
+  {
+    fromMemberId: "athena-execute-source-bundle",
+    reference: "frontend-skill",
+    resolution: "host-alias",
+    parity: "non-blocking",
+    mappedMemberId: "ce-frontend-design-source-bundle",
+    rationale:
+      "Execute names a second unresolved frontend host alias; it remains explicitly non-blocking.",
+    dependency: {
+      toMemberId: "ce-frontend-design-source-bundle",
+      selector: "invoke `$frontend-skill`",
+      requirement: "host-alias",
+      parity: "non-blocking",
+    },
+  },
+  {
+    fromMemberId: "athena-execute-source-bundle",
+    reference: "requesting-code-review",
+    resolution: "host-alias",
+    parity: "non-blocking",
+    mappedMemberId: "ce-code-review-source-bundle",
+    rationale:
+      "Execute's review alias maps semantically to the classified review source without canonizing one host name.",
+    dependency: {
+      toMemberId: "ce-code-review-source-bundle",
+      selector: "Run `$requesting-code-review`",
+      requirement: "host-alias",
+      parity: "non-blocking",
+    },
+  },
+  {
+    fromMemberId: "compound-reviewer-prompts",
+    reference: "ce-agent-native-architecture",
+    resolution: "external-capability",
+    parity: "non-blocking",
+    rationale:
+      "A research prompt lists this optional context skill; it is not invoked by the selected delivery workflow.",
+  },
+  {
+    fromMemberId: "compound-reviewer-prompts",
+    reference: "ce-dhh-rails-style",
+    resolution: "external-capability",
+    parity: "non-blocking",
+    rationale:
+      "A research prompt lists this optional framework context skill; it is not portable delivery parity.",
+  },
+  {
+    fromMemberId: "compound-reviewer-prompts",
+    reference: "ce-gemini-imagegen",
+    resolution: "external-capability",
+    parity: "non-blocking",
+    rationale:
+      "A research prompt lists this optional media capability; it is not a selected delivery dependency.",
+  },
+  {
+    fromMemberId: "compound-reviewer-prompts",
+    reference: "ce-ideate",
+    resolution: "external-capability",
+    parity: "non-blocking",
+    rationale:
+      "Selected agent prompts mention ideation as an adjacent caller/context, not a required portable workflow dependency.",
+  },
+  {
+    fromMemberId: "compound-reviewer-prompts",
+    reference: "ce-optimize",
+    resolution: "external-capability",
+    parity: "non-blocking",
+    rationale:
+      "Selected agent prompts mention optimization as an adjacent caller/context, not a required portable workflow dependency.",
+  },
+  {
+    fromMemberId: "ce-proof-source-bundle",
+    reference: "ce-ideate",
+    resolution: "external-capability",
+    parity: "non-blocking",
+    rationale:
+      "Proof names ideation as an upstream caller; Proof does not invoke or require that workflow.",
+  },
+  {
+    fromMemberId: "ce-code-review-source-bundle",
+    reference: "ce-polish-beta",
+    resolution: "external-capability",
+    parity: "non-blocking",
+    rationale:
+      "Code review names an optional post-review polish workflow; it is not required for bounded review parity.",
+  },
+  {
+    fromMemberId: "ce-setup-source-bundle",
+    reference: "ce-update",
+    resolution: "external-capability",
+    parity: "non-blocking",
+    rationale:
+      "Setup conditionally mentions the update helper; lifecycle/update behavior is outside portable workflow v1.",
+  },
+  {
+    fromMemberId: "ce-plan-source-bundle",
+    reference: "ce-plan-deepen",
+    resolution: "lexical-non-dependency",
+    parity: "non-blocking",
+    rationale:
+      "This token is a temporary artifact/run prefix, not a skill or agent reference.",
+  },
+  {
+    fromMemberId: "ce-commit-push-pr-source-bundle",
+    reference: "ce-pr-body",
+    resolution: "lexical-non-dependency",
+    parity: "non-blocking",
+    rationale:
+      "This token is a temporary PR-body filename prefix, not a skill or agent reference.",
+  },
+] as const satisfies readonly RequiredReferenceDispositionContract[];
+
+export const REQUIRED_RESIDUAL_INVENTORY_DESCRIPTION =
+  "Stable residual discovery inventory only. No member is a migration candidate unless a later approved unit adds it to the bounded closure and classifies it.";
+
 type NormativeSourceContract = {
   path: string;
   kind:
@@ -455,6 +676,7 @@ type RuleIdentityContract = {
   classification:
     "portable-candidate" | "retained-overlay" | "optional-adapter" | "excluded";
   assertionIds: readonly string[];
+  rationale: string;
 };
 
 export const NORMATIVE_SOURCE_CONTRACTS = new Map<
@@ -734,6 +956,8 @@ export const RULE_IDENTITY_CONTRACTS = new Map<string, RuleIdentityContract>([
     "routing-and-repository-discovery",
     {
       classification: "portable-candidate",
+      rationale:
+        "Request routing and repository-policy discovery are reusable only when repository authority wins.",
       assertionIds: [
         "route-tracked-implementation-to-execute",
         "route-approved-ticket-creation-to-track",
@@ -751,6 +975,8 @@ export const RULE_IDENTITY_CONTRACTS = new Map<string, RuleIdentityContract>([
     "planning-workflow",
     {
       classification: "portable-candidate",
+      rationale:
+        "Scope, assumptions, posture, and non-mutating plan behavior are reusable delivery behavior.",
       assertionIds: [
         "planning-captures-test-posture-and-sensors",
         "planning-does-not-mutate-runtime-behavior",
@@ -761,6 +987,8 @@ export const RULE_IDENTITY_CONTRACTS = new Map<string, RuleIdentityContract>([
     "test-and-handoff-posture",
     {
       classification: "portable-candidate",
+      rationale:
+        "Explicit posture and smallest-honest-sensor sequencing are repository-neutral when commands stay discovered inputs.",
       assertionIds: [
         "implementation-selects-explicit-test-posture",
         "smallest-honest-sensors-run-before-merge-gate",
@@ -771,6 +999,8 @@ export const RULE_IDENTITY_CONTRACTS = new Map<string, RuleIdentityContract>([
     "review-workflow",
     {
       classification: "portable-candidate",
+      rationale:
+        "Independent, risk-proportional review and loop-to-resolution are reusable; Athena persona names are not.",
       assertionIds: [
         "review-selects-core-and-risk-lenses",
         "review-is-independent-of-implementation",
@@ -782,6 +1012,8 @@ export const RULE_IDENTITY_CONTRACTS = new Map<string, RuleIdentityContract>([
     "tracker-neutral-capability-contract",
     {
       classification: "portable-candidate",
+      rationale:
+        "Core delivery remains complete when no tracker is configured.",
       assertionIds: [
         "tracker-neutral-workflow-has-actionable-no-tracker-handoff",
       ],
@@ -791,6 +1023,8 @@ export const RULE_IDENTITY_CONTRACTS = new Map<string, RuleIdentityContract>([
     "linear-tracker-adapter",
     {
       classification: "optional-adapter",
+      rationale:
+        "Linear context, atomic issue creation, dependency links, and status mutation implement optional tracker operations.",
       assertionIds: [
         "linear-context-resolution-is-adapter-behavior",
         "linear-work-is-atomic-and-dependency-aware",
@@ -802,6 +1036,8 @@ export const RULE_IDENTITY_CONTRACTS = new Map<string, RuleIdentityContract>([
     "compound-workflow",
     {
       classification: "portable-candidate",
+      rationale:
+        "The threshold for capturing reusable learning is portable; repository-specific document shape is not.",
       assertionIds: ["compounding-requires-a-reusable-learning"],
     },
   ],
@@ -809,6 +1045,8 @@ export const RULE_IDENTITY_CONTRACTS = new Map<string, RuleIdentityContract>([
     "athena-harness-evidence",
     {
       classification: "retained-overlay",
+      rationale:
+        "Athena's configured gate, typed blocker contract, proof lanes, and candidate-bound evidence remain repository enforcement.",
       assertionIds: [
         "configured-harness-blockers-cannot-degrade-away",
         "harness-blockers-use-typed-sources-and-remediations",
@@ -821,6 +1059,8 @@ export const RULE_IDENTITY_CONTRACTS = new Map<string, RuleIdentityContract>([
     "athena-merge-ready-gates",
     {
       classification: "retained-overlay",
+      rationale:
+        "pr:athena and its exact preparation/admission topology remain Athena-owned authority.",
       assertionIds: [
         "pr-athena-remains-merge-ready-authority",
         "operator-and-provider-proof-lanes-stay-separated",
@@ -831,6 +1071,8 @@ export const RULE_IDENTITY_CONTRACTS = new Map<string, RuleIdentityContract>([
     "athena-reporting-policy",
     {
       classification: "retained-overlay",
+      rationale:
+        "Athena's landed report and solution-note format remain local obligations layered over reusable compounding behavior.",
       assertionIds: [
         "athena-solution-format-remains-repository-owned",
         "landed-report-does-not-replace-durable-learning",
@@ -841,6 +1083,8 @@ export const RULE_IDENTITY_CONTRACTS = new Map<string, RuleIdentityContract>([
     "athena-telemetry-policy",
     {
       classification: "retained-overlay",
+      rationale:
+        "The telemetry threshold, timing, storage path, and merge obligation are Athena-specific.",
       assertionIds: ["delivery-telemetry-recorded-after-final-gate"],
     },
   ],
@@ -848,6 +1092,8 @@ export const RULE_IDENTITY_CONTRACTS = new Map<string, RuleIdentityContract>([
     "athena-deployment-handoff",
     {
       classification: "retained-overlay",
+      rationale:
+        "Athena's clean-main deployment mapping and production topology are not a portable deployment system.",
       assertionIds: ["deployment-handoff-runs-from-clean-merged-main"],
     },
   ],
@@ -855,6 +1101,8 @@ export const RULE_IDENTITY_CONTRACTS = new Map<string, RuleIdentityContract>([
     "athena-generated-artifacts",
     {
       classification: "retained-overlay",
+      rationale:
+        "Graphify, Convex admission, and generated-artifact refresh are repository-owned deterministic gates.",
       assertionIds: ["generated-artifact-obligations-remain-mandatory"],
     },
   ],
@@ -862,6 +1110,8 @@ export const RULE_IDENTITY_CONTRACTS = new Map<string, RuleIdentityContract>([
     "athena-pr-policy",
     {
       classification: "retained-overlay",
+      rationale:
+        "Branch naming, PR structure, ticket linkage, and merge mechanics remain Athena policy.",
       assertionIds: ["athena-pr-contract-remains-mandatory"],
     },
   ],
@@ -869,6 +1119,8 @@ export const RULE_IDENTITY_CONTRACTS = new Map<string, RuleIdentityContract>([
     "athena-domain-rules",
     {
       classification: "excluded",
+      rationale:
+        "Athena business transaction, inventory, reporting, approval, and POS rules are not delivery workflow behavior.",
       assertionIds: ["athena-domain-architecture-is-not-portable-workflow"],
     },
   ],
@@ -876,6 +1128,8 @@ export const RULE_IDENTITY_CONTRACTS = new Map<string, RuleIdentityContract>([
     "compound-reviewer-prompt-graph",
     {
       classification: "excluded",
+      rationale:
+        "The full Athena persona graph remains a research source; U13 must bundle a smaller host-neutral reviewer contract.",
       assertionIds: ["review-selects-core-and-risk-lenses"],
     },
   ],
@@ -883,6 +1137,8 @@ export const RULE_IDENTITY_CONTRACTS = new Map<string, RuleIdentityContract>([
     "codex-host-exposure-metadata",
     {
       classification: "optional-adapter",
+      rationale:
+        "Codex presentation metadata exposes a workflow to one host without owning the workflow body.",
       assertionIds: ["repository-policy-precedes-workflow-examples"],
     },
   ],
@@ -890,6 +1146,7 @@ export const RULE_IDENTITY_CONTRACTS = new Map<string, RuleIdentityContract>([
     "host-tool-sequence",
     {
       classification: "excluded",
+      rationale: "Unadjudicated host mechanics cannot become parity policy.",
       assertionIds: ["host-tool-call-sequence-is-observed-only"],
     },
   ],

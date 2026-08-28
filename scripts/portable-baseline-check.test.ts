@@ -1,4 +1,5 @@
 import {
+  chmod,
   mkdir,
   mkdtemp,
   readFile,
@@ -1402,6 +1403,134 @@ describe("portable workflow characterization baseline", () => {
     ).toEqual([true, true, true]);
   });
 
+  it("binds every non-blocking dependency to its exact declared tuple", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        overlayMap: {
+          ...documents.overlayMap,
+          boundedClosure: {
+            ...documents.overlayMap.boundedClosure,
+            directDependencies:
+              documents.overlayMap.boundedClosure.directDependencies.map(
+                (dependency) =>
+                  dependency.fromMemberId === "ce-work-source-bundle" &&
+                  dependency.toMemberId === "ce-commit-push-pr-source-bundle"
+                    ? { ...dependency, requirement: "contextual" as const }
+                    : dependency,
+              ),
+          },
+        },
+      },
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toContain(
+      "non-blocking-dependency-contract-mismatch",
+    );
+  });
+
+  it("binds every reference disposition and host-alias dependency exactly", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const mutations = [
+      {
+        ...documents,
+        overlayMap: {
+          ...documents.overlayMap,
+          boundedClosure: {
+            ...documents.overlayMap.boundedClosure,
+            referenceDispositions:
+              documents.overlayMap.boundedClosure.referenceDispositions.map(
+                (disposition) =>
+                  disposition.reference === "designing-frontends"
+                    ? {
+                        ...disposition,
+                        rationale: "Rewritten alias rationale.",
+                      }
+                    : disposition,
+              ),
+          },
+        },
+      },
+      {
+        ...documents,
+        overlayMap: {
+          ...documents.overlayMap,
+          boundedClosure: {
+            ...documents.overlayMap.boundedClosure,
+            referenceDispositions:
+              documents.overlayMap.boundedClosure.referenceDispositions.map(
+                (disposition) =>
+                  disposition.resolution === "lexical-non-dependency"
+                    ? {
+                        ...disposition,
+                        mappedMemberId: "ce-plan-source-bundle",
+                      }
+                    : disposition,
+              ),
+          },
+        },
+      },
+      {
+        ...documents,
+        overlayMap: {
+          ...documents.overlayMap,
+          boundedClosure: {
+            ...documents.overlayMap.boundedClosure,
+            referenceDispositions:
+              documents.overlayMap.boundedClosure.referenceDispositions.map(
+                (disposition) =>
+                  disposition.resolution === "external-capability"
+                    ? {
+                        ...disposition,
+                        mappedMemberId: "ce-plan-source-bundle",
+                      }
+                    : disposition,
+              ),
+          },
+        },
+      },
+      {
+        ...documents,
+        overlayMap: {
+          ...documents.overlayMap,
+          boundedClosure: {
+            ...documents.overlayMap.boundedClosure,
+            directDependencies:
+              documents.overlayMap.boundedClosure.directDependencies.map(
+                (dependency) =>
+                  dependency.fromMemberId === "athena-execute-source-bundle" &&
+                  dependency.selector === "invoke `$designing-frontends`"
+                    ? { ...dependency, requirement: "contextual" as const }
+                    : dependency,
+              ),
+          },
+        },
+      },
+    ];
+    const results = await Promise.all(
+      mutations.map((mutation) =>
+        auditPortableWorkflowBaseline(REPO_ROOT, { documents: mutation }),
+      ),
+    );
+
+    expect(results[0].findings.map((finding) => finding.code)).toContain(
+      "reference-disposition-contract-mismatch",
+    );
+    expect(results[1].findings.map((finding) => finding.code)).toContain(
+      "overlay-document-shape-invalid",
+    );
+    expect(results[2].findings.map((finding) => finding.code)).toEqual(
+      expect.arrayContaining(["overlay-document-shape-invalid"]),
+    );
+    expect(results[3].findings.map((finding) => finding.code)).toEqual(
+      expect.arrayContaining([
+        "reference-disposition-contract-mismatch",
+        "non-blocking-dependency-contract-mismatch",
+      ]),
+    );
+  });
+
   it("binds reference-free session selectors to their intended targets", async () => {
     const documents = await loadPortableBaselineDocuments(REPO_ROOT);
     const swappedTargets = new Map([
@@ -1636,6 +1765,42 @@ describe("portable workflow characterization baseline", () => {
     );
   });
 
+  it("binds classification rationales and residual no-migration prose", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const rationaleResult = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        overlayMap: {
+          ...documents.overlayMap,
+          classifications: documents.overlayMap.classifications.map((rule) =>
+            rule.id === "routing-and-repository-discovery"
+              ? { ...rule, rationale: "Contradictory but non-empty rationale." }
+              : rule,
+          ),
+        },
+      },
+    });
+    const descriptionResult = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        overlayMap: {
+          ...documents.overlayMap,
+          outOfScopeInventory: {
+            ...documents.overlayMap.outOfScopeInventory,
+            description: "Everything in residual inventory will migrate.",
+          },
+        },
+      },
+    });
+
+    expect(rationaleResult.findings.map((finding) => finding.code)).toContain(
+      "rule-contract-mismatch",
+    );
+    expect(descriptionResult.findings.map((finding) => finding.code)).toContain(
+      "inventory-description-contract-mismatch",
+    );
+  });
+
   it("requires read-only metadata and the exact classification semantics", async () => {
     const documents = await loadPortableBaselineDocuments(REPO_ROOT);
     const readOnlyResult = await auditPortableWorkflowBaseline(REPO_ROOT, {
@@ -1827,6 +1992,34 @@ describe("portable workflow characterization baseline", () => {
     );
   });
 
+  it("rejects valid extra assertion and classification pairs in required scenarios", async () => {
+    const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+    const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+      documents: {
+        ...documents,
+        scenarios: documents.scenarios.map((scenario) =>
+          scenario.id === "planning"
+            ? {
+                ...scenario,
+                expectedAssertionIds: [
+                  ...scenario.expectedAssertionIds,
+                  "compounding-requires-a-reusable-learning",
+                ],
+                expectedClassificationIds: [
+                  ...scenario.expectedClassificationIds,
+                  "compound-workflow",
+                ],
+              }
+            : scenario,
+        ),
+      },
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toContain(
+      "scenario-contract-coverage-mismatch",
+    );
+  });
+
   it("rejects a tree path that escapes through a parent symlink", async () => {
     const temporaryRoot = await mkdtemp(
       path.join(tmpdir(), "portable-baseline-containment-"),
@@ -1847,26 +2040,25 @@ describe("portable workflow characterization baseline", () => {
     }
   });
 
-  it("hashes an external leaf symlink as metadata without reading its target", async () => {
+  it("rejects symlinks from residual inventory certification", async () => {
     const temporaryRoot = await mkdtemp(
       path.join(tmpdir(), "portable-baseline-leaf-symlink-"),
     );
+    const residualLink = path.join(
+      REPO_ROOT,
+      ".agents/skills/v26-1413-residual-symlink-test",
+    );
     try {
-      const repoRoot = path.join(temporaryRoot, "repo");
       const externalFile = path.join(temporaryRoot, "external.txt");
-      await mkdir(path.join(repoRoot, "inventory"), { recursive: true });
       await writeFile(externalFile, "first target contents\n");
-      await symlink(
-        externalFile,
-        path.join(repoRoot, "inventory", "external-link"),
+      await symlink(externalFile, residualLink);
+      const result = await auditPortableWorkflowBaseline(REPO_ROOT);
+
+      expect(result.findings.map((finding) => finding.code)).toContain(
+        "inventory-symlink-unsupported",
       );
-
-      const before = await collectTreeEntries(repoRoot, "inventory");
-      await writeFile(externalFile, "different target contents\n");
-      const after = await collectTreeEntries(repoRoot, "inventory");
-
-      expect(after).toEqual(before);
     } finally {
+      await rm(residualLink, { force: true });
       await rm(temporaryRoot, { recursive: true, force: true });
     }
   });
@@ -1874,12 +2066,37 @@ describe("portable workflow characterization baseline", () => {
   it("binds tree digests to whether an entry is a file or symlink", () => {
     const digest = "0".repeat(64);
     const fileTreeDigest = digestTreeEntries([
-      { path: "same-path", digest, kind: "file" },
+      { path: "same-path", digest, kind: "file", executable: false },
     ]);
     const symlinkTreeDigest = digestTreeEntries([
       { path: "same-path", digest, kind: "symlink" },
     ]);
 
     expect(fileTreeDigest).not.toBe(symlinkTreeDigest);
+  });
+
+  it("binds regular-file tree digests to the executable bit", async () => {
+    const temporaryRoot = await mkdtemp(
+      path.join(tmpdir(), "portable-baseline-executable-bit-"),
+    );
+    try {
+      const filePath = path.join(temporaryRoot, "workflow.ts");
+      await writeFile(filePath, "export {};\n", { mode: 0o644 });
+      const nonExecutableEntries = await collectTreeEntries(
+        temporaryRoot,
+        "workflow.ts",
+      );
+      await chmod(filePath, 0o755);
+      const executableEntries = await collectTreeEntries(
+        temporaryRoot,
+        "workflow.ts",
+      );
+
+      expect(digestTreeEntries(nonExecutableEntries)).not.toBe(
+        digestTreeEntries(executableEntries),
+      );
+    } finally {
+      await rm(temporaryRoot, { recursive: true, force: true });
+    }
   });
 });

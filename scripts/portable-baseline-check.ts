@@ -7,7 +7,7 @@
  * without generating or rewriting any artifact.
  */
 import { createHash } from "node:crypto";
-import { readFile, readdir, readlink } from "node:fs/promises";
+import { lstat, readFile, readdir, readlink } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -16,6 +16,9 @@ import {
   NORMATIVE_SOURCE_CONTRACTS,
   REQUIRED_BLOCKING_ASSERTION_DIGESTS,
   REQUIRED_BLOCKING_DEPENDENCY_CONTRACTS,
+  REQUIRED_NON_BLOCKING_DEPENDENCY_TUPLES,
+  REQUIRED_REFERENCE_DISPOSITION_CONTRACTS,
+  REQUIRED_RESIDUAL_INVENTORY_DESCRIPTION,
   RULE_IDENTITY_CONTRACTS,
 } from "./portable-baseline-contracts";
 import {
@@ -365,11 +368,18 @@ export type PortableBaselineAuditOptions = {
   documents?: unknown;
 };
 
-type TreeEntry = {
-  path: string;
-  digest: string;
-  kind: "file" | "symlink";
-};
+type TreeEntry =
+  | {
+      path: string;
+      digest: string;
+      kind: "file";
+      executable: boolean;
+    }
+  | {
+      path: string;
+      digest: string;
+      kind: "symlink";
+    };
 
 type ResolvedMemberIdentity = {
   member: BoundedClosureMember;
@@ -430,11 +440,13 @@ export async function collectTreeEntries(
   const { absolutePath: absoluteRoot, state } = containedRoot;
   if (state === "absent") return [];
   if (state === "file") {
+    const fileStat = await lstat(absoluteRoot);
     return [
       {
         path: relativeRoot,
         digest: sha256(await readFile(absoluteRoot)),
         kind: "file",
+        executable: (fileStat.mode & 0o111) !== 0,
       },
     ];
   }
@@ -467,10 +479,12 @@ export async function collectTreeEntries(
           kind: "symlink",
         });
       } else if (child.isFile()) {
+        const fileStat = await lstat(absoluteChild);
         entries.push({
           path: relativeChild,
           digest: sha256(await readFile(absoluteChild)),
           kind: "file",
+          executable: (fileStat.mode & 0o111) !== 0,
         });
       }
     }
@@ -482,7 +496,10 @@ export async function collectTreeEntries(
 export function digestTreeEntries(entries: readonly TreeEntry[]) {
   const manifest = [...entries]
     .sort((left, right) => compareUtf8Bytes(left.path, right.path))
-    .map((entry) => `${entry.path}\0${entry.kind}\0${entry.digest}`)
+    .map(
+      (entry) =>
+        `${entry.path}\0${entry.kind}\0${entry.kind === "file" && entry.executable ? "executable" : "not-executable"}\0${entry.digest}`,
+    )
     .join("\n");
   return sha256(manifest.length === 0 ? "" : `${manifest}\n`);
 }
@@ -557,6 +574,18 @@ function pushDuplicateFindings(
     }
     seen.add(value);
   }
+}
+
+function dependencyTupleKey(
+  dependency: PortableOverlayMap["boundedClosure"]["directDependencies"][number],
+) {
+  return [
+    dependency.fromMemberId,
+    dependency.toMemberId,
+    dependency.selector,
+    dependency.requirement,
+    dependency.parity,
+  ].join("\0");
 }
 
 function hasRuleClassification(value: unknown): value is string {
@@ -1192,12 +1221,13 @@ export async function auditPortableWorkflowBaseline(
     }
     if (
       rule.classification !== contract.classification ||
+      rule.rationale !== contract.rationale ||
       JSON.stringify(rule.assertionIds) !==
         JSON.stringify(contract.assertionIds)
     ) {
       findings.push({
         code: "rule-contract-mismatch",
-        message: `Rule ${ruleId} must preserve its exact classification and assertion membership.`,
+        message: `Rule ${ruleId} must preserve its exact classification, rationale, and assertion membership.`,
       });
     }
   }
@@ -1526,6 +1556,33 @@ export async function auditPortableWorkflowBaseline(
       });
     }
   }
+  const requiredNonBlockingDependencyKeys = new Set(
+    REQUIRED_NON_BLOCKING_DEPENDENCY_TUPLES.map((tuple) => tuple.join("\0")),
+  );
+  const actualNonBlockingDependencyKeys = directDependencies
+    .filter((dependency) => dependency.parity === "non-blocking")
+    .map(dependencyTupleKey);
+  for (const requiredKey of requiredNonBlockingDependencyKeys) {
+    if (
+      actualNonBlockingDependencyKeys.filter((key) => key === requiredKey)
+        .length !== 1
+    ) {
+      findings.push({
+        code: "non-blocking-dependency-contract-mismatch",
+        message:
+          "Every required non-blocking dependency must preserve its exact source, target, selector, requirement, and parity tuple.",
+      });
+    }
+  }
+  for (const actualKey of actualNonBlockingDependencyKeys) {
+    if (!requiredNonBlockingDependencyKeys.has(actualKey)) {
+      findings.push({
+        code: "non-blocking-dependency-contract-mismatch",
+        message:
+          "A non-blocking dependency is missing from the exact bounded-closure contract.",
+      });
+    }
+  }
   for (const dependency of directDependencies) {
     const fromMember = memberById.get(dependency.fromMemberId);
     if (!fromMember) {
@@ -1628,6 +1685,57 @@ export async function auditPortableWorkflowBaseline(
       disposition,
     ]),
   );
+  const dispositionContractKeys = new Set(
+    REQUIRED_REFERENCE_DISPOSITION_CONTRACTS.map(
+      (contract) => `${contract.fromMemberId}\0${contract.reference}`,
+    ),
+  );
+  for (const contract of REQUIRED_REFERENCE_DISPOSITION_CONTRACTS) {
+    const matchingDispositions = referenceDispositions.filter(
+      (disposition) =>
+        disposition.fromMemberId === contract.fromMemberId &&
+        disposition.reference === contract.reference,
+    );
+    const disposition = matchingDispositions[0];
+    const mappedMemberMatches =
+      contract.resolution === "host-alias"
+        ? disposition?.mappedMemberId === contract.mappedMemberId
+        : disposition?.mappedMemberId === undefined;
+    const exactDispositionMatches =
+      matchingDispositions.length === 1 &&
+      disposition?.resolution === contract.resolution &&
+      disposition.parity === contract.parity &&
+      disposition.rationale === contract.rationale &&
+      mappedMemberMatches;
+    const aliasDependencyMatches =
+      contract.resolution !== "host-alias" ||
+      directDependencies.filter(
+        (dependency) =>
+          dependency.fromMemberId === contract.fromMemberId &&
+          dependency.toMemberId === contract.dependency.toMemberId &&
+          dependency.selector === contract.dependency.selector &&
+          dependency.requirement === contract.dependency.requirement &&
+          dependency.parity === contract.dependency.parity,
+      ).length === 1;
+    if (!exactDispositionMatches || !aliasDependencyMatches) {
+      findings.push({
+        code: "reference-disposition-contract-mismatch",
+        message: `Reference disposition ${contract.fromMemberId} -> ${contract.reference} must preserve its exact resolution, mapping, rationale, and host-alias dependency when applicable.`,
+      });
+    }
+  }
+  for (const disposition of referenceDispositions) {
+    if (
+      !dispositionContractKeys.has(
+        `${disposition.fromMemberId}\0${disposition.reference}`,
+      )
+    ) {
+      findings.push({
+        code: "reference-disposition-contract-unexpected",
+        message: `Reference disposition ${disposition.fromMemberId} -> ${disposition.reference} is outside the exact disposition contract.`,
+      });
+    }
+  }
   for (const disposition of referenceDispositions) {
     if (!memberById.has(disposition.fromMemberId)) {
       findings.push({
@@ -1857,6 +1965,16 @@ export async function auditPortableWorkflowBaseline(
         "Residual discovery inventory must explicitly carry no migration commitment.",
     });
   }
+  if (
+    overlayMap.outOfScopeInventory.description !==
+    REQUIRED_RESIDUAL_INVENTORY_DESCRIPTION
+  ) {
+    findings.push({
+      code: "inventory-description-contract-mismatch",
+      message:
+        "Residual inventory must preserve the exact bounded no-migration description.",
+    });
+  }
   const discoveryRootPaths = baseline.discoveryRoots
     .map((root) => root.path)
     .sort(compareUtf8Bytes);
@@ -1912,6 +2030,17 @@ export async function auditPortableWorkflowBaseline(
           entry.path.startsWith(`${classifiedPath}/`),
       ),
   );
+  const residualSymlink = inventoryEntries.find(
+    (entry) => entry.kind === "symlink",
+  );
+  if (residualSymlink) {
+    findings.push({
+      code: "inventory-symlink-unsupported",
+      message:
+        "Residual discovery inventory contains a symlink and cannot certify stable content identity.",
+      path: residualSymlink.path,
+    });
+  }
   if (inventoryEntries.length !== overlayMap.outOfScopeInventory.fileCount) {
     findings.push({
       code: "inventory-count-drift",
@@ -1980,6 +2109,17 @@ export async function auditPortableWorkflowBaseline(
         findings.push({
           code: "scenario-contract-request-kind-mismatch",
           message: `Scenario ${scenario.id} must retain requestKind ${requiredContract.requestKind}.`,
+        });
+      }
+      if (
+        JSON.stringify(scenario.expectedAssertionIds) !==
+          JSON.stringify(requiredContract.assertionIds) ||
+        JSON.stringify(scenario.expectedClassificationIds) !==
+          JSON.stringify(requiredContract.classificationIds)
+      ) {
+        findings.push({
+          code: "scenario-contract-coverage-mismatch",
+          message: `Scenario ${scenario.id} must preserve its exact ordered assertion and classification coverage.`,
         });
       }
       for (const assertionId of requiredContract.assertionIds) {

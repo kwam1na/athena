@@ -597,6 +597,23 @@ function validateOverlay(value: unknown, findings: PortableBaselineFinding[]) {
           `${fieldPath}.mappedMemberId`,
         );
       }
+      if (disposition.resolution === "host-alias") {
+        expectNonEmptyString(
+          disposition.mappedMemberId,
+          context,
+          `${fieldPath}.mappedMemberId`,
+        );
+      } else if (
+        (disposition.resolution === "external-capability" ||
+          disposition.resolution === "lexical-non-dependency") &&
+        disposition.mappedMemberId !== undefined
+      ) {
+        report(
+          context,
+          `${fieldPath}.mappedMemberId`,
+          `must be omitted for ${disposition.resolution}`,
+        );
+      }
       expectNonEmptyString(
         disposition.rationale,
         context,
