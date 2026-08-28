@@ -1100,4 +1100,116 @@ describe("convex backend dependency check", () => {
     const output = jsonOf(result);
     expect(output.scanError).toMatch(/could not write baseline/);
   });
+
+  it("treats escaped relative imports that re-enter convex/ as kernel-surface, not external", () => {
+    const sandbox = createSandbox();
+    writeBaseline(sandbox, [], []);
+    // A sibling root-level `convex/` tree (mirrors the repo root stub): a
+    // kernel escaping the package via `../../../convex/...` addresses that
+    // sibling tree and must still be flagged — never silently dropped as an
+    // external dependency (the prior `inPackage` refinement regressed this).
+    const siblingConvex = path.join(sandbox.rootDir, "convex");
+    mkdirSync(path.join(siblingConvex, "reports"), { recursive: true });
+    writeFileSync(
+      path.join(siblingConvex, "reports", "access.ts"),
+      "export const access = 1;\n",
+    );
+    writeConvex(
+      sandbox,
+      "inventoryLedger/reentry.ts",
+      'import { access } from "../../../convex/reports/access";\nexport const ok = access;\n',
+    );
+    const result = runCheck(sandbox, ["--json"]);
+    const output = jsonOf(result);
+    expect(result.status).toBe(1);
+    const violation = output.violations.find(
+      (v: any) => v.type === "kernel-not-allowed" && v.file.endsWith("reentry.ts"),
+    );
+    expect(violation).toBeDefined();
+    expect(violation.resolved).toBe("../convex/reports/access.ts");
+  });
+
+  it("tries tsconfig alias targets in order like tsc (dead first target cannot hide a forbidden second)", () => {
+    const sandbox = createSandbox();
+    writeBaseline(sandbox, [], []);
+    writePackageFile(
+      sandbox,
+      "tsconfig.json",
+      JSON.stringify({
+        compilerOptions: {
+          paths: {
+            // The first target never resolves to a file (dead); tsc skips it and
+            // the second target wins — a forbidden product domain.
+            "@two/*": ["../upstream/*", "./convex/reports/*"],
+          },
+        },
+      }),
+    );
+    writeConvex(sandbox, "reports/access.ts", "export const access = 1;\n");
+    writeConvex(
+      sandbox,
+      "inventoryLedger/aliasTwo.ts",
+      'import { access } from "@two/access";\nexport const ok = access;\n',
+    );
+    const result = runCheck(sandbox, ["--json"]);
+    const output = jsonOf(result);
+    expect(result.status).toBe(1);
+    const violation = output.violations.find(
+      (v: any) => v.type === "kernel-forbidden" && v.file.endsWith("aliasTwo.ts"),
+    );
+    expect(violation).toBeDefined();
+    expect(violation.resolved).toBe("convex/reports/access.ts");
+  });
+
+  it("treats malformed tsconfig paths entries as corruption (fail closed)", () => {
+    const sandbox = createSandbox();
+    writeBaseline(sandbox, [], []);
+    // A `paths` entry whose value is not a non-empty array of strings — tsc's
+    // schema — silently disables part of the alias surface. The guard must fail
+    // closed (refuse), never skip the entry and pass green.
+    writePackageFile(
+      sandbox,
+      "tsconfig.json",
+      JSON.stringify({ compilerOptions: { paths: { "@cvx/*": null } } }),
+    );
+    writeConvex(
+      sandbox,
+      "inventoryLedger/aliasHot.ts",
+      'import { access } from "@cvx/reports/access";\nexport const ok = access;\n',
+    );
+    const result = runCheck(sandbox, ["--json"]);
+    const output = jsonOf(result);
+    expect(result.status).toBe(1);
+    expect(output.scanError).toMatch(/tsconfig\.json/);
+    expect(output.scanError).toMatch(/refusing/);
+  });
+
+  it("treats a non-object tsconfig paths as corruption (fail closed)", () => {
+    const sandbox = createSandbox();
+    writeBaseline(sandbox, [], []);
+    writePackageFile(
+      sandbox,
+      "tsconfig.json",
+      JSON.stringify({ compilerOptions: { paths: "@cvx/*" } }),
+    );
+    const result = runCheck(sandbox, ["--json"]);
+    const output = jsonOf(result);
+    expect(result.status).toBe(1);
+    expect(output.scanError).toMatch(/tsconfig\.json/);
+  });
+
+  it("exposes unreadableFiles on success and scanError results so reduced coverage is never silent", () => {
+    const sandbox = createSandbox();
+    writeBaseline(sandbox, [], []);
+    const plain = runCheck(sandbox, ["--json"]);
+    expect(plain.status).toBe(0);
+    expect(jsonOf(plain).unreadableFiles).toBe(0);
+    // The field is present on scanError results too (a corrupt baseline forces
+    // the loud-failure path), so a consumer sees coverage even when the run
+    // refuses instead of trusting a green that was never emitted.
+    writeFileSync(sandbox.baselinePath, "{ not json");
+    const corrupt = runCheck(sandbox, ["--json"]);
+    expect(corrupt.status).toBe(1);
+    expect(typeof jsonOf(corrupt).unreadableFiles).toBe("number");
+  });
 });

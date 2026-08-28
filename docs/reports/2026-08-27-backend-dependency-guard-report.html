@@ -5,7 +5,7 @@
   <title>[V26-1354]: Install a shrink-only backend dependency guard</title>
 </head>
 <body>
-<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="c6ec1b71bdba08cc71abcb9267e7173d4eb9027bdb6532e949daa9538897ff6b">
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="3069245324701393ba9972d6a3aec38e1dc2e574955af6eee6073915d8d09d30">
   <header data-report-section="header">
     <h1>[V26-1354]: Install a shrink-only backend dependency guard</h1>
     <p>U1 of Backend Reliability &amp; Maintainability epic — structural sensor to protect inventoryLedger and agentHarness kernels</p>
@@ -16,10 +16,10 @@
       <li>Validation: pr:athena mechanical checks passed</li>
     </ul>
     <dl data-report-meta>
-      <dt>Base</dt><dd>origin/main (8f162730)</dd>
+      <dt>Base</dt><dd>origin/main (fa014b6a)</dd>
       <dt>Head</dt><dd>codex/V26-1354-backend-maintainability-u1-dependency-guard</dd>
-      <dt>Diff fingerprint</dt><dd>c6ec1b71bdba08cc71abcb9267e7173d4eb9027bdb6532e949daa9538897ff6b</dd>
-      <dt>Source lines changed</dt><dd>782</dd>
+      <dt>Diff fingerprint</dt><dd>3069245324701393ba9972d6a3aec38e1dc2e574955af6eee6073915d8d09d30</dd>
+      <dt>Source lines changed</dt><dd>2938</dd>
       <dt>Solution note</dt><dd>docs/solutions/architecture-patterns/athena-shrink-only-backend-dependency-guard-2026-08-27.md</dd>
     </dl>
   </header>
@@ -51,7 +51,7 @@
   <section data-report-section="changes">
     <h2>What changed</h2>
       <p>Created: scripts/convex-backend-dependency-check.ts — Main dependency guard implementation: comment/string-aware import extraction, real-file resolution, Tarjan SCC detection, kernel boundary checks, shrink-only baseline management, and a CLI (--update-baseline, --json, --convex-dir, --package-dir, --baseline, --help).</p>
-      <p>Created: scripts/convex-backend-dependency-check.test.ts — 9 sandbox-based tests (mkdtemp fixtures) covering every contract scenario plus a real-tree characterization test.</p>
+      <p>Created: scripts/convex-backend-dependency-check.test.ts — 42 sandbox-based tests (mkdtemp fixtures) covering every contract scenario plus a real-tree characterization test.</p>
       <p>Created: scripts/convex-backend-dependency-baseline.json — Committed baseline: 4 real cycles and 7 grandfathered kernel violations.</p>
       <p>Modified: package.json (root) — Added the dependency:check:backend script.</p>
       <p>Modified: scripts/harness-app-registry.ts — The `athena.convex-backend-adjacent` scenario now runs the guard (raw repo-root command, the same pattern `agent-sdk:check` uses) whenever Convex sources change; harness docs regenerated.</p>
@@ -60,9 +60,11 @@
   </section>
   <section data-report-section="validation">
     <h2>Validation and review evidence</h2>
-      <p>Test suite: All 9 sandbox-based tests pass — real-tree characterization, empty-scan rejection, extensionless cycle detection with exact members, cycle-swap rejection (new-cycle + baseline-drift), kernel-edge drift + regenerated contraction + reintroduction failure, shrink-only update refusal, leaf-to-facade rejection with facade-preserving legal imports, comment/string-quoted import tolerance, and exact-edge kernel violation reporting.</p>
-      <p>Mechanical checks: pr:athena:prepare (per-package lint + project typecheck) passes on the prepared candidate.</p>
-      <p>Review evidence: execute-provider review will be recorded against the final prepared candidate before merge.</p>
+      <p>Test suite: All 42 sandbox-based tests pass — real-tree characterization, empty-scan rejection, extensionless cycle detection with exact members, cycle-swap rejection (new-cycle + baseline-drift), kernel-edge drift + regenerated contraction + reintroduction failure, shrink-only update refusal, leaf-to-facade rejection with facade-preserving legal imports, comment/string-quoted import tolerance, exact-edge kernel violation reporting, alias-surface coverage (src/shared/bare-root/longest-prefix/JSONC/..-traversal), corrupt-tsconfig fail-closed, and the closure batch (escaped-relative re-entry, ordered multi-target alias resolution, tsconfig shape corruption, unreadableFiles exposure).</p>
+      <p>Hardening rounds: A final-green adversarial review constructed bypasses that were each closed without changing the committed baseline — a test-support seam that could ferry product imports into a runtime kernel (closed with a one-directional carve-out), `..`-traversal alias targets that normalized past the raw-text surface check (closed with normalization-before-classification), and a corrupt tsconfig that silently disabled the alias surface (closed with fail-closed refusal). A closure re-verification then proved three more in-contract P2s — escaped-relative re-entry, tsconfig array-target ordering, and tsconfig shape corruption — plus the `unreadableFiles` output-contract expose, all closed and test-pinned.</p>
+      <p>Real tree: The check runs green on the committed baseline — isClean true, 0 violations, 4 cycles, 7 grandfathered kernel violations, unreadableFiles 0 — confirming the fence is live but the baseline is unchanged.</p>
+      <p>Mechanical checks: pr:athena:prepare (per-package lint + project typecheck) passes on the prepared candidate; the full harness suite passes (1540 tests, 0 fail) including the 42 guard scenarios.</p>
+      <p>Review evidence: execute-provider review is recorded against the prepared candidate before merge (final manifest under compound-engineering/execute).</p>
       <p>Landed-change report: This report satisfies the landed-change-report check for &gt;300 source lines changed and carries the current deliverable diff fingerprint.</p>
       <p>Deployment: Not applicable — sensor/guardrail only, no runtime behavior change.</p>
       <p>Root alignment: Pending — will fast-forward to origin/main after merge.</p>
@@ -82,7 +84,7 @@
       <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
       <tbody>
         <tr><td><code>scripts/convex-backend-dependency-check.ts</code></td><td>Main dependency guard implementation — comment/string-aware extraction, real-file resolution, Tarjan SCCs, kernel checks, shrink-only baseline, CLI</td></tr>
-        <tr><td><code>scripts/convex-backend-dependency-check.test.ts</code></td><td>Test suite — 9 sandbox-based scenarios + real-tree characterization, run by harness:test</td></tr>
+        <tr><td><code>scripts/convex-backend-dependency-check.test.ts</code></td><td>Test suite — 42 sandbox-based scenarios + real-tree characterization, run by harness:test</td></tr>
         <tr><td><code>scripts/convex-backend-dependency-baseline.json</code></td><td>Committed baseline — 4 real cycles and 7 grandfathered inventoryLedger kernel violations</td></tr>
         <tr><td><code>scripts/harness-app-registry.ts</code></td><td>Wired the guard into the convex-backend-adjacent validation surface (runs when Convex or guard files change)</td></tr>
         <tr><td><code>package.json</code></td><td>Added the dependency:check:backend script</td></tr>
@@ -200,7 +202,7 @@
     <h2>Subagent evidence</h2>
     <dl>
       <dt>Session context (ce-session-historian)</dt><dd>Identified V26-1353 epic context, U1 scope from the plan, and the delivery state: an earlier implementation commit shipped a false 0-cycle baseline (extensionless vs .ts path identity mismatch), which a corrective rewrite in the working tree addresses. No prior merged PR exists for this branch.</dd>
-      <dt>Delivered diff (explorer)</dt><dd>Analyzed the corrected check script (838 lines), 9 sandbox-based tests plus real-tree characterization, the regenerated baseline (4 cycles, 7 kernel violations), registry wiring, and both package.json script additions. Confirmed 782 source lines changed, sensor/guardrail only.</dd>
+      <dt>Delivered diff (explorer)</dt><dd>Analyzed the corrected check script (~1667 lines), 42 sandbox-based tests plus real-tree characterization, the regenerated baseline (4 cycles, 7 kernel violations), registry wiring, and both package.json script additions. Confirmed sensor/guardrail only.</dd>
       <dt>Quiz/report reviewer (ce-coherence-reviewer)</dt><dd>Reviewed report for comprehension quality. Verified claims trace to git diff and source files. Quiz questions test mental model, failure boundaries, validation, and next-time guidance; the cycle-swap and leaf-to-facade questions lock in the corrected graph identity that the first draft missed.</dd>
     </dl>
   </section>

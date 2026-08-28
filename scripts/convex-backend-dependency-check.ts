@@ -205,8 +205,14 @@ export const PROTECTED_KERNELS = {
 
 type SourceFile = { path: string; source: string };
 type DependencyGraph = Map<string, Set<string>>;
-/** Alias prefix -> expanded target (relative to packageDir), both with `*` resolved. */
-type AliasMap = Map<string, string>;
+/**
+ * Alias prefix -> ORDERED array of expanded target prefixes (each relative to
+ * packageDir, `*` resolved). tsc tries `paths` array targets in order and uses
+ * the first that resolves to a file; the guard stores the whole list so
+ * `importsOf` can mirror that resolution — a dead first target must never hide
+ * a forbidden second one.
+ */
+type AliasMap = Map<string, string[]>;
 
 interface Violation {
   file: string;
@@ -247,6 +253,8 @@ interface CheckResult {
   repairHint?: string;
   /** Set to true when --update-baseline persisted a new baseline. */
   baselineUpdated?: boolean;
+  /** Number of source files that existed but could not be read (skipped). */
+  unreadableFiles?: number;
 }
 
 /**
@@ -580,12 +588,17 @@ function resolveConvexModule(packageDir: string, convexRel: string): string | nu
 }
 
 /**
- * Read tsconfig `compilerOptions.paths` as an alias prefix -> target map.
- * Returns `corrupt: true` when the file exists but is not parseable as JSONC.
- * A corrupt tsconfig must never silently disable alias coverage (the alias
- * surface is part of the fence), so the caller treats it like any other
- * front-door degradation (empty scan, corrupt baseline, missing kernel roots)
- * and refuses instead of passing green.
+ * Read tsconfig `compilerOptions.paths` as an alias prefix -> ordered target
+ * prefix list. Mirrors TS path mapping exactly: array targets are tried in
+ * declared order (a dead first target must not hide a live second), and the
+ * longest matching alias prefix wins at expansion time.
+ *
+ * Returns `corrupt: true` when the file exists but is not parseable as JSONC,
+ * OR when `paths` has an invalid shape (a `paths` that is not a plain object,
+ * or an entry whose value is not a non-empty array of strings). A corrupt
+ * tsconfig must never silently disable alias coverage, so the caller treats it
+ * like any other front-door degradation (empty scan, corrupt baseline, missing
+ * kernel roots) and refuses instead of passing green.
  */
 function loadTsconfigAliases(
   packageDir: string,
@@ -603,17 +616,52 @@ function loadTsconfigAliases(
       "$1",
     );
     const parsed = JSON.parse(raw) as {
-      compilerOptions?: { paths?: Record<string, string[]> };
+      compilerOptions?: { paths?: unknown };
     };
-    const paths = parsed?.compilerOptions?.paths;
-    if (!paths) return { aliases, corrupt: false };
+    // A tsconfig root that is not a plain object (valid JSON like `123` or a
+    // bare string) is shape corruption too: no alias surface can meaningfully
+    // exist, so failing closed beats silently scanning with zero aliases.
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return { aliases, corrupt: true };
+    }
+    // `compilerOptions` may be absent (no aliases) — that is NOT corruption. A
+    // `paths` that is not a plain object (string, array, null) is shape
+    // corruption and fails closed, because silently skipping it would disable
+    // the whole alias surface.
+    const compilerOptions = parsed?.compilerOptions;
+    if (compilerOptions === undefined || compilerOptions === null) {
+      return { aliases, corrupt: false };
+    }
+    if (typeof compilerOptions !== "object" || Array.isArray(compilerOptions)) {
+      return { aliases, corrupt: true };
+    }
+    const paths = (compilerOptions as { paths?: unknown }).paths;
+    if (paths === undefined || paths === null) return { aliases, corrupt: false };
+    if (typeof paths !== "object" || Array.isArray(paths)) {
+      return { aliases, corrupt: true };
+    }
     for (const [alias, targets] of Object.entries(paths)) {
-      const target = targets?.[0];
-      if (typeof target !== "string") continue;
-      if (alias.endsWith("*") && target.endsWith("*")) {
-        aliases.set(alias.slice(0, -1), target.slice(0, -1).replace(/^\.\//, ""));
+      // Each entry must be a non-empty array of strings (tsc's schema). A null,
+      // string, or empty entry silently removes part of the alias surface —
+      // fail closed rather than skip it like a typo that typescript would
+      // itself reject.
+      if (!Array.isArray(targets) || targets.length === 0) {
+        return { aliases, corrupt: true };
+      }
+      if (!targets.every((t) => typeof t === "string")) {
+        return { aliases, corrupt: true };
+      }
+      // Keep the full ordered list (tsc semantics), stripping a `*` suffix and
+      // a leading `./` from each target exactly as tsc treats them.
+      const targetPrefixes = (targets as string[]).map((target) =>
+        alias.endsWith("*") && target.endsWith("*")
+          ? target.slice(0, -1).replace(/^\.\//, "")
+          : target.replace(/^\.\//, ""),
+      );
+      if (alias.endsWith("*")) {
+        aliases.set(alias.slice(0, -1), targetPrefixes);
       } else {
-        aliases.set(alias, target.replace(/^\.\//, ""));
+        aliases.set(alias, targetPrefixes);
       }
     }
   } catch {
@@ -669,22 +717,23 @@ function stripJsoncComments(raw: string): string {
   return out;
 }
 
-function expandAlias(specifier: string, aliases: AliasMap): string | null {
+function expandAlias(specifier: string, aliases: AliasMap): string[] | null {
   // Mirrors TypeScript's path mapping: when several patterns match, the
   // longest matching prefix wins (not the first one inserted), so overlapping
   // aliases like `@cvx/* -> ./convex/values/*` and the narrower
   // `@cvx/values/* -> ./convex/reports/*` resolve the same way tsc does.
-  let best: { prefixLength: number; expanded: string } | null = null;
-  for (const [aliasPrefix, target] of aliases) {
+  let best: { prefixLength: number; expanded: string[] } | null = null;
+  for (const [aliasPrefix, targets] of aliases) {
     if (aliasPrefix.endsWith("/")) {
       if (!specifier.startsWith(aliasPrefix)) continue;
-      const candidate = target + specifier.slice(aliasPrefix.length);
+      const suffix = specifier.slice(aliasPrefix.length);
+      const candidates = targets.map((t) => t + suffix);
       if (best === null || aliasPrefix.length > best.prefixLength) {
-        best = { prefixLength: aliasPrefix.length, expanded: candidate };
+        best = { prefixLength: aliasPrefix.length, expanded: candidates };
       }
     } else if (specifier === aliasPrefix) {
       if (best === null || aliasPrefix.length > best.prefixLength) {
-        best = { prefixLength: aliasPrefix.length, expanded: target };
+        best = { prefixLength: aliasPrefix.length, expanded: [...targets] };
       }
     }
   }
@@ -696,14 +745,17 @@ type ImportEntry = {
   resolved: string;
   line: number;
   /**
-   * True when the import stays inside the package (a relative path that does
-   * not escape the package root, a bare `convex/...` specifier, or an alias
-   * whose NORMALIZED expansion stays in-package). Only in-package imports are
-   * kernel-surface; external packages are never. This deliberately includes
-   * package code outside convex/src/shared reached via a tsconfig alias: an
-   * alias target like `./convex/../operations/*` normalizes to
-   * `operations/...`, which must be checked exactly like a kernel's relative
-   * `../operations/...` import would be — never silently classified external.
+   * True when the import is kernel-surface: a relative path that stays inside
+   * the package, a relative path that ESCAPES the package root but re-enters a
+   * backend namespace (`convex/`, `src/`, or `shared/` — e.g. a sibling
+   * root-level `convex/` tree reached via `../../../convex/...`), a bare
+   * `convex/...` specifier, or an alias whose NORMALIZED expansion stays
+   * in-package. Only in-package imports are kernel-surface; external packages
+   * are never. This deliberately includes package code outside convex/src/
+   * shared reached via a tsconfig alias: an alias target like
+   * `./convex/../operations/*` normalizes to `operations/...`, which must be
+   * checked exactly like a kernel's relative `../operations/...` import would
+   * be — never silently classified external.
    */
   inPackage: boolean;
 };
@@ -728,33 +780,64 @@ function importsOf(
           )
           .split(path.sep)
           .join("/");
-      // A relative import that escapes the package root (e.g. into
-      // node_modules) is an external dependency, never kernel-surface.
+      // A relative import that escapes the package root is usually an external
+      // dependency (node_modules, unrelated package), never kernel-surface.
+      // BUT an escape that RE-ENTERS a backend namespace — e.g. a kernel at
+      // convex/inventoryLedger/x.ts importing `../../../convex/reports/access`,
+      // which resolves into the workspace-root-level sibling `convex/` tree —
+      // is still kernel-surface product code and must be flagged, never
+      // silently dropped as "external". Off-package escapes into `src/` or
+      // `shared/` are treated the same way.
+      const escaped = resolved === ".." || resolved.startsWith("../");
+      const stripped = escaped ? resolved.replace(/^(?:\.\.\/)+/, "") : resolved;
+      const reentersBackend =
+        stripped === "convex" ||
+        stripped.startsWith("convex/") ||
+        stripped === "src" ||
+        stripped.startsWith("src/") ||
+        stripped === "shared" ||
+        stripped.startsWith("shared/");
       out.push({
         specifier,
         resolved,
         line,
-        inPackage: resolved !== ".." && !resolved.startsWith("../"),
+        inPackage: !escaped || reentersBackend,
       });
       continue;
     }
-    const expanded = expandAlias(specifier, aliases);
     if (specifier.startsWith("convex/")) {
       const resolved = resolveConvexModule(packageDir, specifier) ?? specifier;
       out.push({ specifier, resolved, line, inPackage: true });
       continue;
     }
-    if (expanded !== null) {
-      // Collapse `.`/`..` segments exactly as tsc/esbuild do BEFORE
-      // classifying. A raw `./lib/../convex/...` or `./convex/../operations/...`
-      // must classify on its NORMALIZED identity, never its raw text: the
-      // former must be flagged as the forbidden convex/ domain it actually
-      // reaches, and the latter as in-package (not an external package).
-      const normalized = path.posix.normalize(expanded);
-      const inPackage = normalized !== ".." && !normalized.startsWith("../");
-      if (inPackage) {
-        const resolved = resolveConvexModule(packageDir, normalized) ?? normalized;
-        out.push({ specifier, resolved, line, inPackage: true });
+    // tsconfig alias: mirror tsc target resolution EXACTLY. tsc tries the
+    // array targets in declared order and uses the first that resolves to a
+    // file; a dead or external first target must never hide a live forbidden
+    // second one. Normalize each candidate BEFORE classifying (a raw
+    // `./lib/../convex/...` or `./convex/../operations/...` must classify on
+    // its normalized identity). If no target resolves, the first in-package
+    // normalized candidate is still kernel-surface so a missing-file alias can
+    // never silently disable the fence.
+    const expandedTargets = expandAlias(specifier, aliases);
+    if (expandedTargets !== null && expandedTargets.length > 0) {
+      let firstInPackage: { normalized: string; resolved: string } | null =
+        null;
+      let resolvedTarget: { normalized: string; resolved: string } | null =
+        null;
+      for (const expanded of expandedTargets) {
+        const normalized = path.posix.normalize(expanded);
+        if (normalized === ".." || normalized.startsWith("../")) continue;
+        const candidate = resolveConvexModule(packageDir, normalized);
+        const entry = { normalized, resolved: candidate ?? normalized };
+        if (firstInPackage === null) firstInPackage = entry;
+        if (candidate !== null) {
+          resolvedTarget = entry;
+          break;
+        }
+      }
+      const hit = resolvedTarget ?? firstInPackage;
+      if (hit !== null) {
+        out.push({ specifier, resolved: hit.resolved, line, inPackage: true });
         continue;
       }
     }
@@ -1154,6 +1237,7 @@ export function runDependencyCheck(options: {
         scanError: message,
         repairHint:
           "Restore or repair the corrupt baseline file; it is never regenerated from scratch.",
+        unreadableFiles: collector.unreadable,
       };
     }
     const message = `No Convex backend source files found at ${convexDir}. The dependency guard cannot evaluate an empty scan; refusing to pass.`;
@@ -1165,6 +1249,7 @@ export function runDependencyCheck(options: {
       isClean: false,
       scanError: message,
       repairHint: "Restore the convex source tree; an empty scan is never passable.",
+      unreadableFiles: collector.unreadable,
     };
   }
 
@@ -1185,6 +1270,7 @@ export function runDependencyCheck(options: {
       isClean: false,
       scanError: message,
       repairHint: "Declare the nested _generated directory in PROTECTED_KERNELS.excludedPaths or remove it.",
+      unreadableFiles: collector.unreadable,
     };
   }
 
@@ -1219,6 +1305,7 @@ export function runDependencyCheck(options: {
       scanError: message,
       repairHint:
         "Point the check at the real backend (default convex/ under packages/athena-webapp).",
+      unreadableFiles: collector.unreadable,
     };
   }
 
@@ -1241,6 +1328,7 @@ export function runDependencyCheck(options: {
       scanError: message,
       repairHint:
         "Repair packages/athena-webapp/tsconfig.json (JSONC); alias coverage is part of the fence.",
+      unreadableFiles: collector.unreadable,
     };
   }
   const aliases = aliasLoad.aliases;
@@ -1284,6 +1372,7 @@ export function runDependencyCheck(options: {
       isClean: false,
       scanError: message,
       repairHint: "Restore or repair the corrupt baseline file; it is never regenerated from scratch.",
+      unreadableFiles: collector.unreadable,
     };
   }
   const baseline = baselineLoad.baseline;
@@ -1394,6 +1483,7 @@ export function runDependencyCheck(options: {
         isClean: false,
         scanError: message,
         repairHint: "Fix the new cycles/kernel violations first; --update-baseline is shrink-only (rename-deadlock: restore the original path of a renamed baselined target).",
+        unreadableFiles: collector.unreadable,
       };
     }
 
@@ -1423,6 +1513,7 @@ export function runDependencyCheck(options: {
         isClean: false,
         scanError: message,
         repairHint: `Make ${baselinePath} writable (or pass a writable --baseline path) and retry --update-baseline.`,
+        unreadableFiles: collector.unreadable,
       };
     }
     if (!silent) console.log("Baseline updated.");
@@ -1435,10 +1526,18 @@ export function runDependencyCheck(options: {
       baseline: newBaseline,
       isClean: true,
       baselineUpdated: true,
+      unreadableFiles: collector.unreadable,
     };
   }
 
-  return { violations: allViolations, cycles, baseline, isClean, repairHint };
+  return {
+    violations: allViolations,
+    cycles,
+    baseline,
+    isClean,
+    repairHint,
+    unreadableFiles: collector.unreadable,
+  };
 }
 
 // ============================================================================
