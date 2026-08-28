@@ -100,7 +100,7 @@ function stringArray(value: unknown): value is string[] {
 
 function hasOnlyKeys(value: unknown, allowedKeys: readonly string[]) {
   return (
-    Boolean(value) &&
+    value !== null &&
     typeof value === "object" &&
     !Array.isArray(value) &&
     Object.keys(value).every((key) => allowedKeys.includes(key))

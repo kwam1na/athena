@@ -17,7 +17,7 @@ tags:
   - delivery-telemetry
   - candidate-identity
   - authority-boundary
-delivery_diff_fingerprint: 0391e62acc8607430afa9db3e0aa3860f1b7a12778a2189a85ddc6ca38ee04ce
+delivery_diff_fingerprint: 0ae212f9ade0057aef541d9babe00445098690fe8d7177da8cd21dbd4b7d4e52
 ---
 
 # Portable Workflow Shadow Evidence Remains Observational
