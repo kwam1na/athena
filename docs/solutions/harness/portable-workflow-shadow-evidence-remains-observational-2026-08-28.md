@@ -17,7 +17,7 @@ tags:
   - delivery-telemetry
   - candidate-identity
   - authority-boundary
-delivery_diff_fingerprint: 165035993f4514ca9219c8f7cc1edd08999591f415aa74ae78c55ece9cebcb45
+delivery_diff_fingerprint: 2053419630b321f11d0367b86ac0ffebfb1b6b4f6da9a64549c934fd7b7558d1
 ---
 
 # Portable Workflow Shadow Evidence Remains Observational
@@ -50,10 +50,12 @@ existing delivery ledger, so observation cannot rewrite the gate result.
 The existing delivery telemetry command projects the complete redacted
 comparison into the tracked corpus. It validates the comparison hash and
 requires the nested candidate fingerprint to equal the containing delivery
-record's fingerprint. Historical reads validate this durable structure and its
-self-consistency without comparing old evidence to today's release pins. A
-stale comparison therefore cannot ride inside a current record, while a valid
-older comparison remains readable after later releases.
+record's fingerprint. The validator is closed to unknown fields at each defined
+object boundary, so the single-copy persistence path cannot carry unreviewed or
+unredacted fields into the tracked corpus. Historical reads validate this
+durable structure and its self-consistency without comparing old evidence to
+today's release pins. A stale comparison therefore cannot ride inside a current
+record, while a valid older comparison remains readable after later releases.
 
 ## Prevention
 

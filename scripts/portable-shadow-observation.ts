@@ -94,15 +94,27 @@ function stringArray(value: unknown): value is string[] {
   );
 }
 
+function hasOnlyKeys(value: unknown, allowedKeys: readonly string[]) {
+  return (
+    Boolean(value) &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.keys(value).every((key) => allowedKeys.includes(key))
+  );
+}
+
 function decisions(value: unknown): value is PortableShadowDecisions {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<PortableShadowDecisions>;
   return (
+    hasOnlyKeys(candidate, ["routing", "posture", "gate", "evidence"]) &&
     Boolean(candidate.routing) &&
+    hasOnlyKeys(candidate.routing, ["entryPoint", "workflow"]) &&
     typeof candidate.routing?.entryPoint === "string" &&
     typeof candidate.routing.workflow === "string" &&
     typeof candidate.posture === "string" &&
     Boolean(candidate.gate) &&
+    hasOnlyKeys(candidate.gate, ["status", "blockers"]) &&
     typeof candidate.gate?.status === "string" &&
     stringArray(candidate.gate.blockers) &&
     stringArray(candidate.evidence)
@@ -129,7 +141,27 @@ export function isPortableShadowComparison(
 export function isPortableShadowComparisonRecord(
   value: unknown,
 ): value is PortableShadowComparison {
-  if (!value || typeof value !== "object") return false;
+  if (
+    !hasOnlyKeys(value, [
+      "schemaVersion",
+      "observedAt",
+      "workflow",
+      "inputSha256",
+      "candidateFingerprint",
+      "comparisonSha256",
+      "status",
+      "baseline",
+      "source",
+      "athena",
+      "portable",
+      "portableMutationAttempts",
+      "mismatches",
+      "unavailableReason",
+      "authority",
+    ])
+  ) {
+    return false;
+  }
   const comparison = value as Partial<PortableShadowComparison>;
   const digest = /^[0-9a-f]{64}$/;
   const commit = /^[0-9a-f]{40}$/;
@@ -149,10 +181,19 @@ export function isPortableShadowComparisonRecord(
     comparison.comparisonSha256 ===
       portableShadowComparisonSha256(comparison as PortableShadowComparison) &&
     ["match", "mismatch", "unavailable"].includes(comparison.status ?? "") &&
+    hasOnlyKeys(comparison.baseline, ["baselineId", "sha256"]) &&
     typeof comparison.baseline?.baselineId === "string" &&
     comparison.baseline.baselineId.length > 0 &&
     typeof comparison.baseline.sha256 === "string" &&
     digest.test(comparison.baseline.sha256) &&
+    hasOnlyKeys(comparison.source, [
+      "releaseId",
+      "profile",
+      "sourceCommitSha",
+      "archiveSha256",
+      "metadataSha256",
+      "workflowSha256",
+    ]) &&
     typeof comparison.source?.releaseId === "string" &&
     comparison.source.releaseId.length > 0 &&
     typeof comparison.source.profile === "string" &&
@@ -173,14 +214,27 @@ export function isPortableShadowComparisonRecord(
       (mismatch) =>
         mismatch &&
         typeof mismatch === "object" &&
+        hasOnlyKeys(mismatch, ["field", "athena", "portable", "disposition"]) &&
         typeof mismatch.field === "string" &&
         mismatch.disposition === "unresolved",
     ) &&
     expectedMismatches !== null &&
     semanticJson(comparison.mismatches) === semanticJson(expectedMismatches) &&
+    hasOnlyKeys(comparison.authority, [
+      "authoritativePath",
+      "influencedAuthoritativeResult",
+      "authoritySwitchAllowed",
+      "portableCapabilities",
+    ]) &&
     comparison.authority?.authoritativePath === "athena" &&
     comparison.authority.influencedAuthoritativeResult === false &&
     comparison.authority.authoritySwitchAllowed === false &&
+    hasOnlyKeys(comparison.authority.portableCapabilities, [
+      "trackerMutation",
+      "merge",
+      "deploy",
+      "statusMutation",
+    ]) &&
     comparison.authority.portableCapabilities.trackerMutation === false &&
     comparison.authority.portableCapabilities.merge === false &&
     comparison.authority.portableCapabilities.deploy === false &&

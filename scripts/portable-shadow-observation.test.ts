@@ -183,6 +183,21 @@ describe("portable workflow shadow observation", () => {
     expect(isPortableShadowComparison(changedTimestamp)).toBe(false);
   });
 
+  it("rejects fields outside the redacted comparison schema", async () => {
+    const result = await observePortableShadow(ROOT, {
+      observedAt: "2026-08-28T18:00:00.000Z",
+      candidateFingerprint: CANDIDATE_FINGERPRINT,
+    });
+    const withUnknownField = {
+      ...result,
+      athena: { ...result.athena, unredactedSecret: "leak-me" },
+    };
+    withUnknownField.comparisonSha256 =
+      portableShadowComparisonSha256(withUnknownField);
+
+    expect(isPortableShadowComparison(withUnknownField)).toBe(false);
+  });
+
   it("rejects a comparison whose pinned Athena baseline was replaced", async () => {
     const result = await observePortableShadow(ROOT, {
       observedAt: "2026-08-28T18:00:00.000Z",

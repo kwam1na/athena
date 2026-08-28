@@ -200,6 +200,25 @@ describe("delivery run telemetry", () => {
     ).toThrow("different deliverable");
   });
 
+  it("refuses fields outside the redacted shadow schema before persistence", () => {
+    const shadowComparison = {
+      ...shadowComparisonFixture(),
+      unredactedSecret: "leak-me",
+    };
+
+    expect(() =>
+      buildDeliveryRunTelemetryRecord(
+        ledger("2026-06-18T12:00:00.000Z", "pass"),
+        {
+          branch: "codex/v26-1300-thing",
+          headSha: "abc123",
+          deliverableDiffFingerprint: shadowComparison.candidateFingerprint,
+          shadowComparison,
+        },
+      ),
+    ).toThrow("not valid for telemetry");
+  });
+
   it("names files by timestamp and branch so parallel ticket worktrees never collide", () => {
     const forBranch = (branch: string) =>
       deliveryRunTelemetryPath(
