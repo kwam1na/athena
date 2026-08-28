@@ -636,14 +636,43 @@ function stripJsoncComments(raw: string): string {
   return out;
 }
 
+/**
+ * True when a resolved/expanded target addresses the Convex backend a kernel
+ * may legitimately depend on: the package's convex tree, its src/ directory,
+ * or its shared/ dependency root — as a bare root or a subtree. Everything
+ * else (external packages) is never kernel-surface.
+ */
+function isBackendSurface(target: string): boolean {
+  return (
+    target === "convex" ||
+    target === "src" ||
+    target === "shared" ||
+    target.startsWith("convex/") ||
+    target.startsWith("src/") ||
+    target.startsWith("shared/")
+  );
+}
+
 function expandAlias(specifier: string, aliases: AliasMap): string | null {
+  // Mirrors TypeScript's path mapping: when several patterns match, the
+  // longest matching prefix wins (not the first one inserted), so overlapping
+  // aliases like `@cvx/* -> ./convex/values/*` and the narrower
+  // `@cvx/values/* -> ./convex/reports/*` resolve the same way tsc does.
+  let best: { prefixLength: number; expanded: string } | null = null;
   for (const [aliasPrefix, target] of aliases) {
-    if (aliasPrefix.endsWith("/") && specifier.startsWith(aliasPrefix)) {
-      return target + specifier.slice(aliasPrefix.length);
+    if (aliasPrefix.endsWith("/")) {
+      if (!specifier.startsWith(aliasPrefix)) continue;
+      const candidate = target + specifier.slice(aliasPrefix.length);
+      if (best === null || aliasPrefix.length > best.prefixLength) {
+        best = { prefixLength: aliasPrefix.length, expanded: candidate };
+      }
+    } else if (specifier === aliasPrefix) {
+      if (best === null || aliasPrefix.length > best.prefixLength) {
+        best = { prefixLength: aliasPrefix.length, expanded: target };
+      }
     }
-    if (specifier === aliasPrefix) return target;
   }
-  return null;
+  return best?.expanded ?? null;
 }
 
 type ImportEntry = { specifier: string; resolved: string; line: number };
@@ -672,11 +701,7 @@ function importsOf(
       continue;
     }
     const expanded = expandAlias(specifier, aliases);
-    const backendExpanded =
-      expanded !== null &&
-      (expanded.startsWith("convex/") ||
-        expanded.startsWith("src/") ||
-        expanded.startsWith("shared/"));
+    const backendExpanded = expanded !== null && isBackendSurface(expanded);
     if (specifier.startsWith("convex/") || backendExpanded) {
       const convexRel = specifier.startsWith("convex/") ? specifier : expanded;
       const resolved = resolveConvexModule(packageDir, convexRel) ?? convexRel;
@@ -828,11 +853,7 @@ function checkKernelViolations(
       // bare `convex/...` specifier or tsconfig alias that addresses the
       // backend (convex/, src/, or the package-local shared/ dependency root).
       // External packages are not kernel-surface.
-      const addressesBackend =
-        isRelative ||
-        resolved.startsWith("convex/") ||
-        resolved.startsWith("src/") ||
-        resolved.startsWith("shared/");
+      const addressesBackend = isRelative || isBackendSurface(resolved);
       if (!addressesBackend) continue;
 
       // Forbidden prefixes take precedence over allowed entries by design: a
@@ -853,16 +874,20 @@ function checkKernelViolations(
       }
 
       // A slash-suffixed allowed prefix is a directory (startsWith is exact).
-      // A non-slash allowed prefix is a single module: it must match exactly,
-      // or as a directory/dotted child (`convex/values/...`, `convex/values.ts`),
-      // so a lookalike like `convex/valuesBridge.ts` can never ride an allowed
-      // prefix and smuggle product-domain imports into a kernel (leaf-to-facade).
+      // A non-slash allowed prefix is a single module and must match EXACTLY
+      // as the module itself (`convex/values`), its own entry file
+      // (`convex/values.ts`/`.tsx`), or a directory child (`convex/values/...`).
+      // Any dotted child that is not exactly `prefix.ts(x)` — e.g.
+      // `convex/valuesBridge.ts` or `convex/values.deep.ts` — is a lookalike
+      // and never inherits the allowance, so it cannot ferry product-domain
+      // imports into a kernel (leaf-to-facade).
       const allowed = kernel.allowedImports.some((prefix) =>
         prefix.endsWith("/")
           ? resolved.startsWith(prefix)
           : resolved === prefix ||
-            resolved.startsWith(`${prefix}/`) ||
-            resolved.startsWith(`${prefix}.`),
+            resolved === `${prefix}.ts` ||
+            resolved === `${prefix}.tsx` ||
+            resolved.startsWith(`${prefix}/`),
       );
       if (!allowed) {
         violations.push({
@@ -1081,12 +1106,16 @@ export function runDependencyCheck(options: {
   // protected kernel root at all, it is pointing at the wrong tree (e.g. a
   // foreign --convex-dir) or the kernel tree is gone — either way passing green
   // would silently disable the fence. Refuse loudly instead.
+  // Presence requires an actual KERNEL MODULE per root: files that live only
+  // inside excluded subtrees (profiles/, _generated/, ...) or that are test
+  // files do not count, so a scan of just a kernel's excluded surface cannot
+  // satisfy the check and silently fence nothing.
   const missingKernelRoots = (
     Object.keys(PROTECTED_KERNELS) as Array<keyof typeof PROTECTED_KERNELS>
   )
     .filter(
       (name) =>
-        !files.some((f) => f.path.startsWith(`${PROTECTED_KERNELS[name].root}/`)),
+        !files.some((f) => isKernelModule(f.path, PROTECTED_KERNELS[name])),
     )
     .map((name) => PROTECTED_KERNELS[name].root);
   if (missingKernelRoots.length > 0) {

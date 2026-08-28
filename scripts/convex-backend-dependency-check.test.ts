@@ -866,4 +866,133 @@ describe("convex backend dependency check", () => {
     expect(violation).toBeDefined();
     expect(violation.resolved).toBe("convex/reports/access.ts");
   });
+
+  it("resolves overlapping aliases by longest prefix, exactly like TypeScript", () => {
+    const sandbox = createSandbox();
+    writeBaseline(sandbox, [], []);
+    // `@cvx/values/*` is narrow and must win over the broader `@cvx/*`
+    // regardless of insertion order — TypeScript maps by longest prefix, so a
+    // kernel importing `@cvx/values/access` reaches the FORBIDDEN reports/ dir,
+    // never the allowed values/ dir the broad alias would have routed it to.
+    writePackageFile(
+      sandbox,
+      "tsconfig.json",
+      JSON.stringify({
+        compilerOptions: {
+          paths: {
+            "@cvx/*": ["./convex/values/*"],
+            "@cvx/values/*": ["./convex/reports/*"],
+          },
+        },
+      }),
+    );
+    writeConvex(sandbox, "reports/access.ts", "export const access = 1;\n");
+    writeConvex(sandbox, "values/access.ts", "export const access = 1;\n");
+    writeConvex(
+      sandbox,
+      "inventoryLedger/longestPrefix.ts",
+      'import { access } from "@cvx/values/access";\n',
+    );
+    const result = runCheck(sandbox, ["--json"]);
+    expect(result.status).toBe(1);
+    const output = jsonOf(result);
+    const violation = output.violations.find(
+      (v: any) => v.type === "kernel-forbidden" && v.file.endsWith("longestPrefix.ts"),
+    );
+    expect(violation).toBeDefined();
+    expect(violation.resolved).toBe("convex/reports/access.ts");
+  });
+
+  it("classifies a non-star alias that maps to the bare backend root", () => {
+    const sandbox = createSandbox();
+    writeBaseline(sandbox, [], []);
+    writePackageFile(
+      sandbox,
+      "tsconfig.json",
+      JSON.stringify({
+        compilerOptions: { paths: { "@cvx": ["./convex"] } },
+      }),
+    );
+    writeConvex(
+      sandbox,
+      "index.ts",
+      'import { access } from "./reports/access";\nexport const index = access;\n',
+    );
+    writeConvex(sandbox, "reports/access.ts", "export const access = 1;\n");
+    // `import "@cvx"` resolves to convex/index.ts — the bare root is not a
+    // runtime facade and must not be silently treated as an external package.
+    writeConvex(
+      sandbox,
+      "inventoryLedger/bareRootAlias.ts",
+      'import { index } from "@cvx";\nexport const ok = index;\n',
+    );
+    const result = runCheck(sandbox, ["--json"]);
+    expect(result.status).toBe(1);
+    const output = jsonOf(result);
+    const violation = output.violations.find(
+      (v: any) => v.type === "kernel-not-allowed" && v.file.endsWith("bareRootAlias.ts"),
+    );
+    expect(violation).toBeDefined();
+    expect(violation.resolved).toBe("convex/index.ts");
+  });
+
+  it("refuses a kernel root that contains only excluded-subtree files", () => {
+    const sandbox = createSandbox();
+    writeBaseline(sandbox, [], []);
+    // Remove the agentHarness kernel module seed; leave only a file inside an
+    // excluded subtree (profiles/). A root with zero kernel modules fences
+    // nothing and must not satisfy the presence check.
+    rmSync(path.join(sandbox.convexDir, "agentHarness", "seed.ts"));
+    writeConvex(
+      sandbox,
+      "agentHarness/profiles/offKernel.ts",
+      "export const offKernel = 1;\n",
+    );
+    const result = runCheck(sandbox, ["--json"]);
+    expect(result.status).toBe(1);
+    expect(jsonOf(result).scanError).toMatch(/Protected kernel surface not found/);
+    expect(jsonOf(result).scanError).toMatch(/agentHarness/);
+  });
+
+  it("refuses dotted-child lookalikes of an allowed module but keeps the exact module", () => {
+    const sandbox = createSandbox();
+    writeBaseline(sandbox, [], []);
+    // `convex/values.ts` is the exact allowed module; `convex/values.deep.ts`
+    // is a dotted-child lookalike that must not inherit the allowance.
+    writeConvex(
+      sandbox,
+      "values.ts",
+      'export const values = "values";\n',
+    );
+    writeConvex(
+      sandbox,
+      "values.deep.ts",
+      'import { access } from "./reports/access";\nexport const deep = access;\n',
+    );
+    writeConvex(sandbox, "reports/access.ts", "export const access = 1;\n");
+    writeConvex(
+      sandbox,
+      "inventoryLedger/exactModule.ts",
+      'import { values } from "../values";\n',
+    );
+    writeConvex(
+      sandbox,
+      "inventoryLedger/dottedSmuggler.ts",
+      'import { deep } from "../values.deep";\n',
+    );
+    const result = runCheck(sandbox, ["--json"]);
+    const output = jsonOf(result);
+    // The exact module import stays legal...
+    expect(
+      output.violations.some(
+        (v: any) => v.type === "kernel-not-allowed" && v.file.endsWith("exactModule.ts"),
+      ),
+    ).toBe(false);
+    // ...while the dotted-child smuggler is caught.
+    const violation = output.violations.find(
+      (v: any) => v.type === "kernel-not-allowed" && v.file.endsWith("dottedSmuggler.ts"),
+    );
+    expect(violation).toBeDefined();
+    expect(violation.resolved).toBe("convex/values.deep.ts");
+  });
 });
