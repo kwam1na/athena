@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-28T15:53:13.432Z",
+  "branch": "codex/fix-storefront-webhook-order-lookup",
+  "headSha": "342850073464a2c9b6198d32d11475f5fa5cbe53",
+  "deliverableDiffFingerprint": "1e28ba290a82ce4601dcb7c208eed9eb2312a21164eb07378e785ed8387dc5a5",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 3,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 1114249.674334
+  },
+  "reviewLoop": {
+    "providerId": "ce-code-review",
+    "runId": "13698eb6-74ec-435c-843f-5d55763f9c0f",
+    "finalPassId": "final-frozen-977717a8",
+    "recordedAt": "2026-08-28T15:34:34.800Z",
+    "iterationCount": 2,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 3,
+      "P3": 0
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}

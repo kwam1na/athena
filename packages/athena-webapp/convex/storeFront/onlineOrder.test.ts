@@ -121,6 +121,7 @@ async function seedFulfillableOrder(
     deliveryMethod: "delivery",
     deliveryOption: null,
     discount: null,
+    externalReference: "reference-1",
     hasVerifiedPayment: true,
     orderNumber: "ORD-1",
     pickupLocation: null,
@@ -138,6 +139,7 @@ async function seedFulfillableOrder(
     storeFrontUserId,
   });
   return {
+    checkoutSessionId,
     itemId,
     orderId,
     organizationId,
@@ -146,6 +148,43 @@ async function seedFulfillableOrder(
     storeId,
   };
 }
+
+describe("online order internal lookup", () => {
+  it("preserves lookup by online order id", async () => {
+    const t = convexTest(schema, modules);
+    const { orderId } = await t.run((ctx) => seedFulfillableOrder(ctx));
+
+    const order = await t.query(internal.storeFront.onlineOrder.getInternal, {
+      identifier: orderId,
+    });
+
+    expect(order?._id).toBe(orderId);
+  });
+
+  it("preserves lookup by external reference", async () => {
+    const t = convexTest(schema, modules);
+    const { orderId } = await t.run((ctx) => seedFulfillableOrder(ctx));
+
+    const order = await t.query(internal.storeFront.onlineOrder.getInternal, {
+      identifier: "reference-1",
+    });
+
+    expect(order?._id).toBe(orderId);
+  });
+
+  it("resolves an order by checkout session id", async () => {
+    const t = convexTest(schema, modules);
+    const { checkoutSessionId, orderId } = await t.run((ctx) =>
+      seedFulfillableOrder(ctx),
+    );
+
+    const order = await t.query(internal.storeFront.onlineOrder.getInternal, {
+      identifier: checkoutSessionId,
+    });
+
+    expect(order?._id).toBe(orderId);
+  });
+});
 
 async function readStorefrontFacts(ctx: MutationCtx, storeId: Id<"store">) {
   // eslint-disable-next-line @convex-dev/no-collect-in-query -- test-only helper over a tiny seeded fact set.
