@@ -148,6 +148,19 @@ describe("portable workflow characterization baseline", () => {
         "route-default-implementation-through-deliver-work",
       ]),
     );
+
+    for (const toMemberId of [
+      "ce-debug-source-bundle",
+      "ce-code-review-source-bundle",
+    ]) {
+      expect(
+        documents.overlayMap.boundedClosure.directDependencies.find(
+          (dependency) =>
+            dependency.fromMemberId === "deliver-work-body" &&
+            dependency.toMemberId === toMemberId,
+        ),
+      ).toMatchObject({ requirement: "routing", parity: "blocking" });
+    }
   });
 
   it("classifies the audited direct dependency closure", async () => {
@@ -226,6 +239,37 @@ describe("portable workflow characterization baseline", () => {
       "source-dependency-edge-missing",
     );
   });
+
+  it.each([
+    ["generic debugging route", "ce-debug-source-bundle"],
+    ["generic review route", "ce-code-review-source-bundle"],
+  ])(
+    "derives the deliver-work %s edge from its source phrase",
+    async (_route, omittedTargetMemberId) => {
+      const documents = await loadPortableBaselineDocuments(REPO_ROOT);
+      const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
+        documents: {
+          ...documents,
+          overlayMap: {
+            ...documents.overlayMap,
+            boundedClosure: {
+              ...documents.overlayMap.boundedClosure,
+              directDependencies:
+                documents.overlayMap.boundedClosure.directDependencies.filter(
+                  (dependency) =>
+                    dependency.fromMemberId !== "deliver-work-body" ||
+                    dependency.toMemberId !== omittedTargetMemberId,
+                ),
+            },
+          },
+        },
+      });
+
+      expect(result.findings.map((finding) => finding.code)).toContain(
+        "source-dependency-edge-missing",
+      );
+    },
+  );
 
   it("scans dependencies of selected excluded resources", async () => {
     const documents = await loadPortableBaselineDocuments(REPO_ROOT);

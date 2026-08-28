@@ -51,6 +51,21 @@ const HOST_ALIAS_REFERENCE_NAMES = new Set([
   "requesting-code-review",
 ]);
 
+const SOURCE_BOUND_GENERIC_ROUTER_REFERENCES = [
+  {
+    fromMemberId: "deliver-work-body",
+    selector:
+      "If the request is a bug with unknown root cause, use a systematic debugging skill before planning the fix.",
+    reference: "ce-debug",
+  },
+  {
+    fromMemberId: "deliver-work-body",
+    selector:
+      "If the task is purely a review, use the available code-review skill instead of implementing.",
+    reference: "ce-code-review",
+  },
+] as const;
+
 const REQUIRED_ATHENA_OVERLAYS = [
   "athena-deployment-handoff",
   "athena-generated-artifacts",
@@ -660,6 +675,46 @@ export async function auditPortableWorkflowBaseline(
     rootDir,
     members,
   );
+  for (const mapping of SOURCE_BOUND_GENERIC_ROUTER_REFERENCES) {
+    const sourceMember = memberById.get(mapping.fromMemberId);
+    if (!sourceMember) {
+      findings.push({ code: "source-routing-mapping-member-missing", message: `Generic router mapping source ${mapping.fromMemberId} is not in the bounded closure.` });
+      continue;
+    }
+    const entries = await collectTreeEntries(rootDir, sourceMember.path);
+    let selectorPath: string | undefined;
+    for (const entry of entries) {
+      try {
+        if (
+          (await readFile(path.join(rootDir, entry.path), "utf8")).includes(
+            mapping.selector,
+          )
+        ) {
+          selectorPath = entry.path;
+          break;
+        }
+      } catch {
+        continue;
+      }
+    }
+    if (!selectorPath) {
+      findings.push({ code: "source-routing-selector-drift", message: `Generic router mapping ${mapping.fromMemberId} -> ${mapping.reference} no longer matches its exact source selector.`, path: sourceMember.path });
+      continue;
+    }
+    if (
+      !sourceReferences.some(
+        (reference) =>
+          reference.fromMemberId === mapping.fromMemberId &&
+          reference.reference === mapping.reference,
+      )
+    ) {
+      sourceReferences.push({
+        fromMemberId: mapping.fromMemberId,
+        reference: mapping.reference,
+        path: selectorPath,
+      });
+    }
+  }
   const directDependencyPairs = new Set(
     directDependencies.map(
       (dependency) =>
