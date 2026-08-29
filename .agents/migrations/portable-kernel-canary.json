@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "athena-portable-canary/1",
+  "workflow": "compound-delivery-kernel",
+  "authority": "portable",
+  "release": {
+    "releaseId": "core-v1",
+    "profile": "core",
+    "sourceCommitSha": "ddd04495d4fd5d8bac214cb4b81f9dd985d8dd0d",
+    "archivePath": ".agents/portable/releases/core-v1.zip",
+    "metadataPath": ".agents/portable/releases/core-v1.release.json",
+    "archiveSha256": "004bfcf1c8d245a75d9f696d9f1ac83af4b0e6f2c90a48e3927a916a5b8c5ef8",
+    "metadataSha256": "20b0194b082510d1cb2b7bbbe217888eac444fa28f4610819c76f194493d5e81",
+    "workflowSha256": "d7a651c9392a36f923784771f24a532acca81fa223b865be46cba842c061e706"
+  },
+  "acceptedShadow": {
+    "telemetryPath": "telemetry/delivery-runs/2026-08-28T20-20-17-363Z-codex-v26-1429-shadow-canary.json",
+    "comparisonSha256": "26e0035003608463f9252764a8704bc06fce545ba82be37c109072bdab0d068d"
+  },
+  "lifecycle": {
+    "receiptPath": ".agent-skills/active.json",
+    "predecessorSha256": "30d72ae4d855b508b7ab59720874e8e76091885992a712d3bd5ccb6e510d451e",
+    "exposedHosts": ["claude-code", "codex"]
+  },
+  "rollback": {
+    "pythonPath": ".agent-skills/current",
+    "command": [
+      "python3",
+      "-m",
+      "agent_skills.cli",
+      "--root",
+      ".",
+      "rollback",
+      "--maintenance"
+    ],
+    "sourceIndependent": true
+  }
+}

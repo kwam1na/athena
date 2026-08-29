@@ -11,13 +11,15 @@ severity: medium
 applies_when:
   - "Comparing an extracted workflow with an authoritative repository workflow before an authority switch"
   - "Projecting shadow results into tracked delivery telemetry"
+  - "Switching one reversible portable workflow canary while preserving the accepted characterization baseline"
 tags:
   - harness
   - shadow-mode
   - delivery-telemetry
   - candidate-identity
   - authority-boundary
-delivery_diff_fingerprint: 0ae212f9ade0057aef541d9babe00445098690fe8d7177da8cd21dbd4b7d4e52
+  - portable-canary
+delivery_diff_fingerprint: ce62b4ce36f3849020a9467a88a262524456d9d9962cb4a766d1f6292d37c317
 ---
 
 # Portable Workflow Shadow Evidence Remains Observational
@@ -60,6 +62,22 @@ durable structure and its self-consistency without comparing old evidence to
 today's release pins. A stale comparison therefore cannot ride inside a current
 record, while a valid older comparison remains readable after later releases.
 
+For the first authority canary, keep the accepted characterization document
+immutable. Record the exact qualified release, accepted shadow digest, active
+lifecycle receipt, exposed hosts, retained predecessor, and rollback command in
+one narrow migration record. The current-canary sensor validates that record,
+the existing shadow telemetry, both host exposures, and the installed lifecycle
+status. The characterization sensor projects the retained predecessor only
+after those canary invariants pass, so it continues to evaluate the accepted
+Athena baseline instead of silently redefining the portable body as the new
+baseline.
+
+Rehearse rollback in a disposable Git repository. Remove the copied release
+archive, metadata, and extraction driver before invoking rollback through the
+installed generation. This proves rollback is source-independent while an
+unrelated sentinel file proves the lifecycle leaves other repository bytes
+alone.
+
 ## Prevention
 
 - Give a shadow evaluator fewer capabilities, not a competing decision path.
@@ -68,6 +86,12 @@ record, while a valid older comparison remains readable after later releases.
   telemetry projections.
 - Keep exact-current release validation separate from durable historical-record
   validation so advancing a pin cannot erase older evidence from reads.
+- Keep exact-current canary validation separate from characterization. A
+  verified predecessor projection preserves the old baseline without weakening
+  checks on the active portable authority.
+- Fingerprint managed symlinks by their exact link target. Following a directory
+  symlink as though it were a file makes delivery identity unavailable at the
+  authority-switch boundary.
 - Keep mismatch disposition separate from observation. A match does not itself
   authorize a canary switch, and an unresolved mismatch blocks one.
 - Reuse the existing delivery ledger and telemetry lifecycle instead of adding a
