@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -750,6 +750,26 @@ describe("assertCompoundSolutionCheck", () => {
         threshold: 10,
       })
     ).not.toThrow();
+  });
+
+  it("fingerprints a directory symlink by its exact target", async () => {
+    const rootDir = await createFixtureRepo();
+    await mkdir(path.join(rootDir, "managed", "generation-one"), {
+      recursive: true,
+    });
+    await symlink("generation-one", path.join(rootDir, "managed", "current"));
+
+    const first = collectDeliverableDiffFingerprint(rootDir, "HEAD", [
+      "managed/current",
+    ]);
+    await rm(path.join(rootDir, "managed", "current"));
+    await mkdir(path.join(rootDir, "managed", "generation-two"));
+    await symlink("generation-two", path.join(rootDir, "managed", "current"));
+    const second = collectDeliverableDiffFingerprint(rootDir, "HEAD", [
+      "managed/current",
+    ]);
+
+    expect(second).not.toBe(first);
   });
 
   it("fails when a solution note was generated before final source edits", async () => {

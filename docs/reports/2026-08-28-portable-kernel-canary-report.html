@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Portable Kernel Canary</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="ce62b4ce36f3849020a9467a88a262524456d9d9962cb4a766d1f6292d37c317">
+  <header data-report-section="header">
+    <h1>Portable Kernel Canary</h1>
+    <p>How Athena switches one workflow after shadow agreement while keeping rollback local and verifiable</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>V26-1429</li>
+      <li>One workflow canary</li>
+      <li>No deployment</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Issue</dt><dd>V26-1429</dd>
+      <dt>Branch</dt><dd>codex/V26-1429-portable-kernel-canary</dd>
+      <dt>Base</dt><dd>bcdab8a823bdf19c3183a76acc80ef72c98fb5c3</dd>
+      <dt>Status</dt><dd>Review pending</dd>
+      <dt>Deployment</dt><dd>Deferred</dd>
+      <dt>Root alignment</dt><dd>Pending merge</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+      <p>This candidate switches only compound-delivery-kernel from Athena&#x27;s repository copy to the exact qualified portable core-v1 generation. Codex and Claude Code resolve the same managed workflow body. Every other Athena workflow remains repository-local.</p>
+      <p>The accepted zero-mismatch, zero-mutation shadow comparison is a prerequisite, not authority by itself. The reversible canary decision is also bound to the exact qualified release and retained rollback path. A current sensor verifies that identity and a disposable rehearsal proves rollback works from the installed generation even after the original release inputs are removed.</p>
+      <p>The complete qualified generation is tracked because lifecycle status and rollback execute from that installed generation. Discovery remains narrow: only compound-delivery-kernel is exposed through the two host symlinks.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Why the canary exists</h2>
+      <p>Shadow observation proved that the portable evaluator could match Athena without gaining authority. The next safe step is not a batch migration. It is one reversible authority switch whose inputs, exposure, baseline, and rollback path are all inspectable.</p>
+      <p>The difficult boundary is preserving two different truths: the active workflow is now portable, while the accepted characterization baseline must still describe the Athena behavior that was qualified before the switch.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model: one rail changes points</h2>
+      <p>Think of Athena&#x27;s workflow discovery as a rail junction. The canary moves one set of points, compound-delivery-kernel, onto a qualified managed generation. It does not move the rest of the network.</p>
+      <p>The migration record is the route card: it pins the release, accepted shadow evidence, host exposures, predecessor, and rollback command. The canary sensor checks the current route card. The baseline sensor looks through a verified predecessor projection so the historical comparison target does not move with the active rail.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+      <p>Before: Athena&#x27;s local .agents skill body was authoritative for the kernel; the portable core could only observe the same frozen inputs in shadow mode; Claude Code had no portable kernel exposure.</p>
+      <p>After: both .agents and .claude expose the same managed core-v1 kernel through relative symlinks. The original Athena body is retained by digest as the rollback predecessor and the characterization reference. The remaining workflow corpus and the host-native Linear adapter are unchanged.</p>
+  </section>
+  <section data-report-section="mechanics">
+    <h2>How admission and rollback work</h2>
+      <ul>
+        <li>The migration record binds the canary to the qualified archive, metadata, source commit, workflow body, and accepted shadow-comparison digest.</li>
+        <li>The active lifecycle receipt lists one selected skill and the two host exposures. Status must report current with no blockers.</li>
+        <li>The canary check recomputes archive, metadata, workflow, predecessor, and shadow identities rather than trusting labels.</li>
+        <li>The rollback rehearsal creates a disposable Git repository, adopts the same release, deletes its copied archive, metadata, and extraction driver, then rolls back through the installed generation.</li>
+        <li>The rehearsal verifies restoration, source independence, absence of the added Claude exposure, and preservation of unrelated bytes.</li>
+      </ul>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed and what did not</h2>
+      <p>Changed: a managed release generation and lifecycle receipt are tracked; compound-delivery-kernel is exposed through managed symlinks; a narrow migration record and canary sensor enforce the switch; the baseline sensor can project the verified predecessor; delivery fingerprints now hash a symlink&#x27;s exact target instead of trying to read a directory target as a file.</p>
+      <p>Intentionally unchanged: no other workflow changes authority; the accepted characterization documents and shadow telemetry stay immutable; no new orchestration or telemetry plane is introduced; Linear create, read, update, search, relation, and reconciliation capability remains governed by normal policy and user authority; the application is not deployed.</p>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+      <ul>
+        <li>A changed archive, metadata file, workflow body, shadow comparison, receipt, predecessor, or host link fails the canary sensor.</li>
+        <li>Unexpected Claude discovery content fails the baseline projection instead of broadening the canary silently.</li>
+        <li>The characterization check refuses to project a predecessor unless the canary record and both current exposures are valid.</li>
+        <li>Rollback does not depend on the original extracted driver or copied release inputs; it runs from the installed generation.</li>
+        <li>Batch migration remains blocked until this canary is reviewed, merged, and accepted without unresolved mismatches.</li>
+      </ul>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and finish line</h2>
+      <p>Current local evidence: portable-canary:check passes, including the source-independent rollback rehearsal; portable-baseline:check validates 31 assertions, 24 closure members, 7 scenarios, and 145 out-of-scope discovery files; harness:test passes 1,690 tests with zero failures; focused regressions cover migration-record and active-receipt binding, release metadata, shadow digest, host-link target, and delivery symlink identity; Graphify has been rebuilt.</p>
+      <p>The evidence-bearing reviewer checkpoint, full pr:athena authority gate, hosted CI, merge, and root alignment are still pending. Production deployment is deliberately deferred because this is repository infrastructure and does not affect the application runtime.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Guidance for the next migration</h2>
+      <ul>
+        <li>Advance only from accepted shadow evidence to one reversible canary, then from an accepted canary to batch migration.</li>
+        <li>Keep current-authority checks separate from the immutable characterization baseline.</li>
+        <li>Use the managed lifecycle receipt and installed generation as the rollback authority; do not create a second adoption path.</li>
+        <li>Preserve full policy-authorized tracker capability. Qualification-fixture hygiene is not a production capability limit.</li>
+        <li>If any canary identity or mismatch is unresolved, stop and rerun the existing qualification path.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>.agents/migrations/portable-kernel-canary.json</code></td><td>Pins the exact release, accepted shadow evidence, exposures, predecessor, and rollback contract.</td></tr>
+        <tr><td><code>.agent-skills/active.json</code></td><td>Records the managed generation, selected workflow, qualified file digests, and host exposures.</td></tr>
+        <tr><td><code>.agent-skills/current</code></td><td>Selects the installed generation used for lifecycle status and source-independent rollback.</td></tr>
+        <tr><td><code>.agents/skills/compound-delivery-kernel and .claude/skills/compound-delivery-kernel</code></td><td>Expose only the selected kernel from the managed generation to Codex and Claude Code.</td></tr>
+        <tr><td><code>scripts/portable-canary-adoption.ts</code></td><td>Audits the active canary and rehearses source-independent rollback in a disposable repository.</td></tr>
+        <tr><td><code>scripts/portable-baseline-check.ts</code></td><td>Keeps the accepted baseline immutable by projecting only the verified retained predecessor.</td></tr>
+        <tr><td><code>scripts/delivery-diff-fingerprint.ts</code></td><td>Includes managed symlink targets in the existing delivery identity without adding a new proof plane.</td></tr>
+        <tr><td><code>docs/solutions/harness/portable-workflow-shadow-evidence-remains-observational-2026-08-28.md</code></td><td>Captures the reusable shadow-to-canary authority and baseline-separation pattern.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which workflow changes authority in this canary?</p>
+        <ol data-quiz-options>
+          <li>Every workflow in the core profile</li>
+          <li data-quiz-correct>Only compound-delivery-kernel</li>
+          <li>Only the Linear adapter</li>
+          <li>All Claude Code workflows</li>
+        </ol>
+        <p data-quiz-explanation>The release generation is complete for self-contained lifecycle operation, but exposure and authority switch for exactly one selected workflow.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which shadow-phase prerequisite must be satisfied before the reversible canary decision?</p>
+        <ol data-quiz-options>
+          <li>A matching release name alone</li>
+          <li>A successful application deployment</li>
+          <li data-quiz-correct>The accepted exact zero-mismatch, zero-mutation shadow comparison</li>
+          <li>The presence of a Claude Code directory</li>
+        </ol>
+        <p data-quiz-explanation>Accepted zero-mismatch, zero-mutation evidence is required, but does not authorize a switch by itself; the canary decision also binds the exact qualified release and rollback path.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is the Athena predecessor retained?</p>
+        <ol data-quiz-options>
+          <li>To run both workflows as competing authorities</li>
+          <li data-quiz-correct>To support exact rollback and preserve the accepted characterization reference</li>
+          <li>To expand the release profile automatically</li>
+          <li>To cache Linear issue results</li>
+        </ol>
+        <p data-quiz-explanation>The predecessor is both the rollback target and the immutable behavior reference used by the existing baseline check.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does the disposable rollback rehearsal remove before rollback?</p>
+        <ol data-quiz-options>
+          <li>The installed managed generation</li>
+          <li>All unrelated repository files</li>
+          <li data-quiz-correct>The copied archive, metadata, and extraction driver</li>
+          <li>The retained predecessor</li>
+        </ol>
+        <p data-quiz-explanation>Removing those source inputs proves rollback can execute from the installed generation rather than depending on the original adoption source.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How does the baseline check avoid silently accepting the new portable body as historical Athena behavior?</p>
+        <ol data-quiz-options>
+          <li>It skips the kernel assertion</li>
+          <li>It edits the accepted baseline digest</li>
+          <li data-quiz-correct>It projects the verified retained predecessor at the old logical path</li>
+          <li>It trusts the migration record without checking exposures</li>
+        </ol>
+        <p data-quiz-explanation>Projection keeps the accepted baseline fixed while the separate current-canary sensor proves the active portable authority.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens if the Claude discovery directory contains another entry?</p>
+        <ol data-quiz-options>
+          <li>It is included in the canary automatically</li>
+          <li data-quiz-correct>The baseline projection fails closed</li>
+          <li>It is ignored as out of scope</li>
+          <li>The system deletes it</li>
+        </ol>
+        <p data-quiz-explanation>The first canary is exact. Unexpected discovery content is rejected, not adopted or deleted.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why did the delivery fingerprint helper need a symlink change?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>To hash the exact managed link target instead of reading a directory target as a file</li>
+          <li>To introduce a second cache for portable releases</li>
+          <li>To exclude the canary from delivery identity</li>
+          <li>To follow every external link recursively</li>
+        </ol>
+        <p data-quiz-explanation>The exact link target is part of the candidate identity and can be hashed deterministically without traversing the managed directory.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which capability is intentionally left unconstrained by this canary?</p>
+        <ol data-quiz-options>
+          <li>Rollback from the installed generation</li>
+          <li data-quiz-correct>Policy-authorized Linear create, read, update, search, relations, and reconciliation</li>
+          <li>Mutation by the earlier shadow evaluator</li>
+          <li>Automatic batch migration</li>
+        </ol>
+        <p data-quiz-explanation>Qualification fixture hygiene does not become a runtime issue-count limit or reduce the host-native Linear surface.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What should happen if a canary identity is unresolved or a shadow mismatch has no accepted disposition?</p>
+        <ol data-quiz-options>
+          <li>Proceed to batch and monitor later</li>
+          <li>Deploy the application first</li>
+          <li data-quiz-correct>Stop; resolve or explicitly accept the mismatch against the characterization baseline, then rerun qualification</li>
+          <li>Create a new telemetry service</li>
+        </ol>
+        <p data-quiz-explanation>The migration is fail-closed: mismatches need resolution or explicit baseline disposition before the existing qualification and telemetry path can run again.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the delivery status described by this report?</p>
+        <ol data-quiz-options>
+          <li>Merged, deployed, and root-aligned</li>
+          <li data-quiz-correct>Delivery candidate with review, full gate, merge, and root alignment pending; deployment deferred</li>
+          <li>Batch migration complete</li>
+          <li>Shadow observation only with no authority switch</li>
+        </ol>
+        <p data-quiz-explanation>The report is committed with the candidate before merge and accurately leaves later delivery events pending while marking deployment deferred.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>session context</dt><dd>v26_1429_report_context gathered the prior shadow-first decisions, Linear sequence, no-deploy finish line, and delivery constraints.</dd>
+      <dt>delivered diff</dt><dd>v26_1429_report_diff mapped the staged files, authority flow, rollback boundary, generated artifacts, and intentionally unchanged surfaces.</dd>
+      <dt>quiz and report review</dt><dd>v26_1429_report_review corrected shadow-authority wording, mismatch-disposition guidance, and the explanation of full-generation tracking versus single-workflow exposure.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

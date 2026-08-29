@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readlinkSync } from "node:fs";
 import path from "node:path";
 
 export function normalizeRepoPath(repoPath: string) {
@@ -80,6 +80,11 @@ export function collectDeliverableDiffFingerprint(
 
     if (!existsSync(absolutePath)) {
       hash.update("deleted\n");
+      continue;
+    }
+
+    if (lstatSync(absolutePath).isSymbolicLink()) {
+      hash.update(`symlink:${readlinkSync(absolutePath)}\n`);
       continue;
     }
 

@@ -31,6 +31,10 @@ import {
   PortableBaselineDocumentValidationError,
   validatePortableBaselineDocuments,
 } from "./portable-baseline-schema";
+import {
+  loadPortableCanaryBaselineProjection,
+  type PortableCanaryBaselineProjection,
+} from "./portable-canary-adoption";
 
 const BASELINE_PATH = ".agents/characterization-baseline.json";
 const OVERLAY_MAP_PATH = ".agents/portable-overlay-map.json";
@@ -627,8 +631,15 @@ function memberOwnsPath(memberPath: string, targetPath: string) {
   );
 }
 
-async function resolveReferenceTargetPath(rootDir: string, reference: string) {
+async function resolveReferenceTargetPath(
+  rootDir: string,
+  reference: string,
+  canaryProjection?: PortableCanaryBaselineProjection,
+) {
   const skillPath = `.agents/skills/${reference}`;
+  if (skillPath === canaryProjection?.logicalSkillDirectory) {
+    return skillPath;
+  }
   const skillTarget = await resolveContainedPath(rootDir, skillPath, {
     allowExternalLeafSymlinkMetadata: true,
   });
@@ -683,6 +694,7 @@ async function collectSourceDependencyReferences(
   rootDir: string,
   members: readonly BoundedClosureMember[],
   memberEntriesById: ReadonlyMap<string, readonly TreeEntry[]>,
+  canaryProjection?: PortableCanaryBaselineProjection,
 ) {
   const skillRoot = await resolveContainedPath(rootDir, ".agents/skills");
   const skillNames = new Set(
@@ -690,6 +702,9 @@ async function collectSourceDependencyReferences(
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name),
   );
+  if (canaryProjection) {
+    skillNames.add(canaryProjection.logicalSkillDirectory.split("/").at(-1)!);
+  }
   const references = new Map<string, SourceDependencyReference>();
   for (const member of members) {
     const entries = memberEntriesById.get(member.id) ?? [];
@@ -697,7 +712,11 @@ async function collectSourceDependencyReferences(
       if (entry.kind === "symlink") continue;
       let sourceText: string;
       try {
-        sourceText = await readFile(path.join(rootDir, entry.path), "utf8");
+        const readPath =
+          entry.path === canaryProjection?.logicalSkillFile
+            ? canaryProjection.predecessorFile
+            : entry.path;
+        sourceText = await readFile(path.join(rootDir, readPath), "utf8");
       } catch {
         continue;
       }
@@ -776,13 +795,30 @@ export async function auditPortableWorkflowBaseline(
   }
   const documents = validation.documents;
   const { baseline, overlayMap, scenarios } = documents;
+  let canaryProjection: PortableCanaryBaselineProjection | undefined;
+  try {
+    canaryProjection = await loadPortableCanaryBaselineProjection(rootDir);
+  } catch (error: unknown) {
+    findings.push({
+      code: "canary-baseline-projection-invalid",
+      message:
+        error instanceof Error
+          ? error.message
+          : "The portable canary baseline projection is unavailable.",
+      path: ".agents/migrations/portable-kernel-canary.json",
+    });
+  }
   const referenceTargetPathCache = new Map<string, string | undefined>();
   const resolveCheckedReferenceTargetPath = async (reference: string) => {
     if (referenceTargetPathCache.has(reference)) {
       return referenceTargetPathCache.get(reference);
     }
     try {
-      const targetPath = await resolveReferenceTargetPath(rootDir, reference);
+      const targetPath = await resolveReferenceTargetPath(
+        rootDir,
+        reference,
+        canaryProjection,
+      );
       referenceTargetPathCache.set(reference, targetPath);
       return targetPath;
     } catch (error: unknown) {
@@ -981,9 +1017,17 @@ export async function auditPortableWorkflowBaseline(
       continue;
     }
     try {
-      const containedSource = await resolveContainedPath(rootDir, source.path, {
-        allowExternalLeafSymlinkMetadata: true,
-      });
+      const projectedSourcePath =
+        source.path === canaryProjection?.logicalSkillFile
+          ? canaryProjection.predecessorFile
+          : source.path;
+      const containedSource = await resolveContainedPath(
+        rootDir,
+        projectedSourcePath,
+        {
+          allowExternalLeafSymlinkMetadata: true,
+        },
+      );
       if (containedSource.state === "absent") {
         findings.push({
           code: "source-missing",
@@ -1010,9 +1054,15 @@ export async function auditPortableWorkflowBaseline(
       }
       sourceIdentities.push({
         source,
-        identityPath: containedSource.identityPath,
+        identityPath:
+          projectedSourcePath === source.path
+            ? containedSource.identityPath
+            : source.path,
       });
-      if (containedSource.identityPath !== source.path) {
+      if (
+        projectedSourcePath === source.path &&
+        containedSource.identityPath !== source.path
+      ) {
         findings.push({
           code: "source-path-filesystem-noncanonical",
           message: `Normative source ${source.id} must use filesystem-canonical path ${containedSource.identityPath}.`,
@@ -1080,10 +1130,14 @@ export async function auditPortableWorkflowBaseline(
       throw error;
     }
     const actual = state === "absent" ? "absent" : "present";
-    if (actual !== discoveryRoot.state) {
+    const baselineActual =
+      discoveryRoot.path === ".claude/skills" && canaryProjection
+        ? "absent"
+        : actual;
+    if (baselineActual !== discoveryRoot.state) {
       findings.push({
         code: "discovery-root-drift",
-        message: `Discovery root ${discoveryRoot.path} is ${actual}, expected ${discoveryRoot.state}.`,
+        message: `Discovery root ${discoveryRoot.path} is ${baselineActual}, expected ${discoveryRoot.state}.`,
         path: discoveryRoot.path,
       });
     }
@@ -1369,68 +1423,88 @@ export async function auditPortableWorkflowBaseline(
     if (rejectedMemberIds.has(member.id)) continue;
     let entries: TreeEntry[];
     try {
-      const containedMemberRoot = await resolveContainedPath(
-        rootDir,
-        member.path,
-        { allowExternalLeafSymlinkMetadata: true },
-      );
-      if (containedMemberRoot.state === "absent") {
-        findings.push({
-          code: "bounded-member-missing",
-          message: `Bounded member ${member.id} does not exist.`,
-          path: member.path,
+      if (member.path === canaryProjection?.logicalSkillDirectory) {
+        const predecessorPath = path.join(
+          rootDir,
+          canaryProjection.predecessorFile,
+        );
+        const predecessorStat = await lstat(predecessorPath);
+        entries = [
+          {
+            path: canaryProjection.logicalSkillFile,
+            digest: sha256(await readFile(predecessorPath)),
+            kind: "file",
+            executable: (predecessorStat.mode & 0o111) !== 0,
+          },
+        ];
+        resolvedMemberIdentities.push({
+          member,
+          identityPath: member.path,
         });
-        rejectedMemberIds.add(member.id);
-        continue;
-      }
-      if (containedMemberRoot.state === "symlink") {
-        findings.push({
-          code: "bounded-member-symlink-unsupported",
-          message: `Bounded member ${member.id} is a symlink and cannot certify the required closure.`,
-          path: member.path,
+      } else {
+        const containedMemberRoot = await resolveContainedPath(
+          rootDir,
+          member.path,
+          { allowExternalLeafSymlinkMetadata: true },
+        );
+        if (containedMemberRoot.state === "absent") {
+          findings.push({
+            code: "bounded-member-missing",
+            message: `Bounded member ${member.id} does not exist.`,
+            path: member.path,
+          });
+          rejectedMemberIds.add(member.id);
+          continue;
+        }
+        if (containedMemberRoot.state === "symlink") {
+          findings.push({
+            code: "bounded-member-symlink-unsupported",
+            message: `Bounded member ${member.id} is a symlink and cannot certify the required closure.`,
+            path: member.path,
+          });
+          rejectedMemberIds.add(member.id);
+          continue;
+        }
+        const identityPath = containedMemberRoot.identityPath;
+        if (identityPath === null) {
+          findings.push({
+            code: "bounded-member-filesystem-identity-missing",
+            message: `Bounded member ${member.id} has no repository-relative filesystem identity.`,
+            path: member.path,
+          });
+          rejectedMemberIds.add(member.id);
+          continue;
+        }
+        resolvedMemberIdentities.push({
+          member,
+          identityPath,
         });
-        rejectedMemberIds.add(member.id);
-        continue;
-      }
-      const identityPath = containedMemberRoot.identityPath;
-      if (identityPath === null) {
-        findings.push({
-          code: "bounded-member-filesystem-identity-missing",
-          message: `Bounded member ${member.id} has no repository-relative filesystem identity.`,
-          path: member.path,
-        });
-        rejectedMemberIds.add(member.id);
-        continue;
-      }
-      resolvedMemberIdentities.push({
-        member,
-        identityPath,
-      });
-      if (identityPath !== member.path) {
-        findings.push({
-          code: "bounded-member-path-filesystem-noncanonical",
-          message: `Bounded member ${member.id} must use filesystem-canonical path ${identityPath}.`,
-          path: member.path,
-        });
-      }
-      entries = await collectTreeEntries(rootDir, member.path);
-      if (entries.some((entry) => entry.kind === "symlink")) {
-        findings.push({
-          code: "bounded-member-symlink-unsupported",
-          message: `Bounded member ${member.id} contains a symlink and cannot certify the required closure.`,
-          path: member.path,
-        });
-        rejectedMemberIds.add(member.id);
-        continue;
-      }
-      if (containedMemberRoot.state === "directory" && entries.length === 0) {
-        findings.push({
-          code: "bounded-member-empty-directory-unapproved",
-          message: `Bounded member ${member.id} is an empty directory; empty-directory members require an explicit future baseline policy.`,
-          path: member.path,
-        });
-        rejectedMemberIds.add(member.id);
-        continue;
+        if (identityPath !== member.path) {
+          findings.push({
+            code: "bounded-member-path-filesystem-noncanonical",
+            message: `Bounded member ${member.id} must use filesystem-canonical path ${identityPath}.`,
+            path: member.path,
+          });
+        }
+        entries = await collectTreeEntries(rootDir, member.path);
+        if (entries.some((entry) => entry.kind === "symlink")) {
+          findings.push({
+            code: "bounded-member-symlink-unsupported",
+            message: `Bounded member ${member.id} contains a symlink and cannot certify the required closure.`,
+            path: member.path,
+          });
+          rejectedMemberIds.add(member.id);
+          continue;
+        }
+        if (containedMemberRoot.state === "directory" && entries.length === 0) {
+          findings.push({
+            code: "bounded-member-empty-directory-unapproved",
+            message: `Bounded member ${member.id} is an empty directory; empty-directory members require an explicit future baseline policy.`,
+            path: member.path,
+          });
+          rejectedMemberIds.add(member.id);
+          continue;
+        }
       }
     } catch (error: unknown) {
       if (error instanceof PortableBaselinePathContainmentError) {
@@ -1618,7 +1692,15 @@ export async function auditPortableWorkflowBaseline(
             if (entry.kind === "symlink") return false;
             try {
               return (
-                await readFile(path.join(rootDir, entry.path), "utf8")
+                await readFile(
+                  path.join(
+                    rootDir,
+                    entry.path === canaryProjection?.logicalSkillFile
+                      ? canaryProjection.predecessorFile
+                      : entry.path,
+                  ),
+                  "utf8",
+                )
               ).includes(dependency.selector);
             } catch {
               return false;
@@ -1823,6 +1905,7 @@ export async function auditPortableWorkflowBaseline(
       rootDir,
       members,
       memberEntriesById,
+      canaryProjection,
     );
   } catch (error: unknown) {
     if (!(error instanceof PortableBaselinePathContainmentError)) throw error;
@@ -1849,9 +1932,17 @@ export async function auditPortableWorkflowBaseline(
       if (entry.kind === "symlink") continue;
       try {
         if (
-          (await readFile(path.join(rootDir, entry.path), "utf8")).includes(
-            mapping.selector,
-          )
+          (
+            await readFile(
+              path.join(
+                rootDir,
+                entry.path === canaryProjection?.logicalSkillFile
+                  ? canaryProjection.predecessorFile
+                  : entry.path,
+              ),
+              "utf8",
+            )
+          ).includes(mapping.selector)
         ) {
           selectorPath = entry.path;
           break;
@@ -2032,6 +2123,9 @@ export async function auditPortableWorkflowBaseline(
   }
   const inventoryEntries = collectedInventoryEntries.filter(
     (entry) =>
+      !canaryProjection?.ignoredDiscoveryPaths.some(
+        (ignoredPath) => ignoredPath === entry.path,
+      ) &&
       !classifiedPaths.some(
         (classifiedPath) =>
           entry.path === classifiedPath ||
