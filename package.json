@@ -38,6 +38,7 @@
     "plan-html:check": "bun scripts/validate-plan-html.ts",
     "portable-baseline:check": "bun scripts/portable-baseline-check.ts",
     "portable-canary:check": "bun scripts/portable-canary-adoption.ts",
+    "portable-batches:check": "bun scripts/portable-batch-adoption.ts",
     "github:pr-merge": "bun scripts/github-pr-merge.ts",
     "operational-work:repair": "bun scripts/operational-work-repair.ts",
     "workflow:check": "bun scripts/github-workflows-check.ts",

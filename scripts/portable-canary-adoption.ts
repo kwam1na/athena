@@ -10,7 +10,6 @@ import {
   mkdir,
   mkdtemp,
   readFile,
-  readdir,
   readlink,
   rm,
   unlink,
@@ -294,12 +293,6 @@ export async function loadPortableCanaryBaselineProjection(
     ) {
       throw new Error(`portable canary exposure ${exposure} is not current`);
     }
-  }
-  const claudeEntries = await readdir(path.join(rootDir, ".claude/skills"));
-  if (JSON.stringify(claudeEntries.sort()) !== JSON.stringify([WORKFLOW])) {
-    throw new Error(
-      "Claude discovery contains content outside the single portable canary",
-    );
   }
   return {
     logicalSkillDirectory,
