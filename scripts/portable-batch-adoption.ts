@@ -24,9 +24,9 @@ import { auditPortableCanaryAdoption } from "./portable-canary-adoption";
 const RECORD_PATH = ".agents/migrations/portable-workflow-batches.json";
 const RELEASE_ID = "core-v1";
 const ARCHIVE_SHA256 =
-  "004bfcf1c8d245a75d9f696d9f1ac83af4b0e6f2c90a48e3927a916a5b8c5ef8";
+  "f8b39590bae786767cff1cfd849382884a0b66f12ef9978f752dbcb28c230f26";
 const METADATA_SHA256 =
-  "20b0194b082510d1cb2b7bbbe217888eac444fa28f4610819c76f194493d5e81";
+  "cd0094de0eba4077e05af0c12e10b2a692d93e30e58b7d6aa8495cb0a53899fe";
 const ACCEPTED_SHADOW_SHA256 =
   "26e0035003608463f9252764a8704bc06fce545ba82be37c109072bdab0d068d";
 const PREDECESSOR_SHA256 =
@@ -45,7 +45,7 @@ const WORKFLOW_SHA256 = {
   "deliver-work":
     "11a3f8839a15754a511b787c05e809447aebe871e9dcdc7bdd0a18f1f1f357fa",
   "execute-work":
-    "82b75b0d2929f21cac375b8c76ea17a6310cb8ddf43c98363916220b0483b009",
+    "33ee613ce298fb17935d6788a5485130c141dc82439eec2a501cb110be8ec3e4",
   "plan-work":
     "4347893b7bbe1ea0e60240713082e51a4d13c6b945f7822579f480628d1036bd",
   "review-work":
@@ -89,7 +89,7 @@ const EXPECTED_RECORD = {
   release: {
     releaseId: RELEASE_ID,
     profile: "core",
-    sourceCommitSha: "ddd04495d4fd5d8bac214cb4b81f9dd985d8dd0d",
+    sourceCommitSha: "f0a058d7b40a38bbe43c007f8b11248ecd4bda6a",
     archivePath: ".agents/portable/releases/core-v1.zip",
     metadataPath: ".agents/portable/releases/core-v1.release.json",
     archiveSha256: ARCHIVE_SHA256,

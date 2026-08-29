@@ -19,7 +19,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
-  isPortableShadowComparison,
+  isPortableShadowComparisonRecord,
   portableShadowComparisonSha256,
 } from "./portable-shadow-observation";
 
@@ -27,14 +27,14 @@ const WORKFLOW = "compound-delivery-kernel";
 const RELEASE_ID = "core-v1";
 const PROFILE = "core";
 const ARCHIVE_SHA256 =
-  "004bfcf1c8d245a75d9f696d9f1ac83af4b0e6f2c90a48e3927a916a5b8c5ef8";
+  "f8b39590bae786767cff1cfd849382884a0b66f12ef9978f752dbcb28c230f26";
 const METADATA_SHA256 =
-  "20b0194b082510d1cb2b7bbbe217888eac444fa28f4610819c76f194493d5e81";
+  "cd0094de0eba4077e05af0c12e10b2a692d93e30e58b7d6aa8495cb0a53899fe";
 const WORKFLOW_SHA256 =
   "d7a651c9392a36f923784771f24a532acca81fa223b865be46cba842c061e706";
 const PREDECESSOR_SHA256 =
   "30d72ae4d855b508b7ab59720874e8e76091885992a712d3bd5ccb6e510d451e";
-const SOURCE_COMMIT_SHA = "ddd04495d4fd5d8bac214cb4b81f9dd985d8dd0d";
+const SOURCE_COMMIT_SHA = "f0a058d7b40a38bbe43c007f8b11248ecd4bda6a";
 const ACCEPTED_SHADOW_SHA256 =
   "26e0035003608463f9252764a8704bc06fce545ba82be37c109072bdab0d068d";
 const RECORD_PATH = ".agents/migrations/portable-kernel-canary.json";
@@ -122,6 +122,21 @@ function exactKeys(value: unknown, keys: readonly string[]) {
     !Array.isArray(value) &&
     JSON.stringify(Object.keys(value).sort()) ===
       JSON.stringify([...keys].sort())
+  );
+}
+
+export function isAcceptedCanaryShadow(
+  comparison: unknown,
+  expectedComparisonSha256: string,
+  expectedWorkflowSha256: string,
+) {
+  return (
+    isPortableShadowComparisonRecord(comparison) &&
+    comparison.status === "match" &&
+    comparison.mismatches.length === 0 &&
+    comparison.portableMutationAttempts.length === 0 &&
+    comparison.source.workflowSha256 === expectedWorkflowSha256 &&
+    portableShadowComparisonSha256(comparison) === expectedComparisonSha256
   );
 }
 
@@ -348,12 +363,11 @@ export async function auditPortableCanaryAdoption(rootDir: string) {
   );
   const comparison = telemetry.shadowComparison;
   if (
-    !isPortableShadowComparison(comparison) ||
-    comparison.status !== "match" ||
-    comparison.mismatches.length !== 0 ||
-    comparison.portableMutationAttempts.length !== 0 ||
-    portableShadowComparisonSha256(comparison) !==
-      record.acceptedShadow.comparisonSha256
+    !isAcceptedCanaryShadow(
+      comparison,
+      record.acceptedShadow.comparisonSha256,
+      record.release.workflowSha256,
+    )
   ) {
     findings.push({
       code: "canary-shadow-not-accepted",

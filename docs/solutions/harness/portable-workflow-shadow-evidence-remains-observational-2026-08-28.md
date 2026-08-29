@@ -21,7 +21,7 @@ tags:
   - authority-boundary
   - portable-canary
   - reversible-migration
-delivery_diff_fingerprint: b16ada944a6c2d6291d6e526d2eeeeb14ac113c4f15e7f4c206e960dfa16f685
+delivery_diff_fingerprint: ee139a92730e2b6d807cf950f5ad74e55288389dcb8d243bfef20a680f8b96aa
 ---
 
 # Portable Workflow Shadow Evidence Remains Observational
@@ -63,6 +63,15 @@ unredacted fields into the tracked corpus. Historical reads validate this
 durable structure and its self-consistency without comparing old evidence to
 today's release pins. A stale comparison therefore cannot ride inside a current
 record, while a valid older comparison remains readable after later releases.
+
+When advancing from one qualified portable release to another, reuse an
+accepted shadow comparison only if the canary workflow's content digest is
+unchanged. The active lifecycle receipt, archive digest, metadata digest, source
+commit, and every changed workflow digest must still advance to the new release.
+If the canary workflow digest differs, the existing shadow-first boundary applies
+and a new comparison is required. This keeps the proof tied to the semantics it
+actually observed without turning an archive-identity change into ceremonial
+re-observation or weakening exact-current release checks.
 
 For the first authority canary, keep the accepted characterization document
 immutable. Record the exact qualified release, accepted shadow digest, active
@@ -106,6 +115,8 @@ capabilities are not migrated into the portable core.
   telemetry projections.
 - Keep exact-current release validation separate from durable historical-record
   validation so advancing a pin cannot erase older evidence from reads.
+- Reuse accepted shadow evidence across qualified releases only when the canary
+  workflow digest is identical; otherwise observe the new bytes before switching.
 - Keep exact-current canary validation separate from characterization. A
   verified predecessor projection preserves the old baseline without weakening
   checks on the active portable authority.

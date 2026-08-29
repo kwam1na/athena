@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-29T18:22:38.174Z",
+  "branch": "codex/v26-1443-qualified-core",
+  "headSha": "bc2e0fb4d2afb794ce993e32c76383f3ffaaba41",
+  "deliverableDiffFingerprint": "ee139a92730e2b6d807cf950f5ad74e55288389dcb8d243bfef20a680f8b96aa",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 0,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 821263.816208
+  },
+  "reviewLoop": {
+    "providerId": "ce-code-review",
+    "runId": "20260829-v26-1443-final-1",
+    "finalPassId": "final-7f55b13b",
+    "recordedAt": "2026-08-29T18:06:57.478Z",
+    "iterationCount": 2,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 0,
+      "P3": 0
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}

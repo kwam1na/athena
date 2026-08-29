@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Athena Qualified Portable Core Release</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="ee139a92730e2b6d807cf950f5ad74e55288389dcb8d243bfef20a680f8b96aa">
+  <header data-report-section="header">
+    <h1>Athena Qualified Portable Core Release</h1>
+    <p>An exact, reversible portable-to-portable release update</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>V26-1443</li>
+      <li>No deployment</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Issue</dt><dd>V26-1443</dd>
+      <dt>Branch</dt><dd>codex/v26-1443-qualified-core</dd>
+      <dt>Release</dt><dd>core-v1 at f8b39590bae7</dd>
+      <dt>PR</dt><dd>Pending</dd>
+      <dt>Root alignment</dt><dd>Pending</dd>
+      <dt>Deployment</dt><dd>Not applicable</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+      <p>Athena now resolves its portable delivery workflows through the final qualified core-v1 archive. The lifecycle, host projections, migration records, and exact-release sensors all point at one active generation.</p>
+      <p>This is a bounded portable-to-portable update. Athena remains authoritative through the same delivery system and retains its repository policy, gate, telemetry, reporting, pull-request, deployment, and full Linear overlays.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Why the switch was needed</h2>
+      <p>Athena was already running the portable system, but on an earlier qualified archive. The final release contains the execution workflow refined by <a href="https://github.com/kwam1na/agent-skills/pull/17">agent-skills PR #17</a> after the corrected product pilot exposed missing outcome observability. That exact source merge, f0a058d7b40a, qualified archive f8b39590bae7 with execute-work digest 33ee613ce298.</p>
+      <p>The repeated cross-repository pilot landed <a href="https://github.com/kwam1na/kwamina-fyi/pull/12">kwamina-fyi PR #12</a>: one causal whitespace-tolerant sensor fix passed 315 JavaScript tests, 25 content tests, and the production build. It proved that the abstraction could improve diagnosis and select a smaller valid product diff; it did not by itself prove Athena installation or rollback.</p>
+      <p>The key risk was evidence ambiguity: accepting old shadow evidence merely because it once passed would be unsafe, while demanding a new shadow run for byte-identical canary semantics would add ceremony without observing anything new.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model</h2>
+      <p>Treat the installed portable core like a content-addressed tool chest. The release archive identifies the whole chest, while each workflow digest identifies an individual tool. A new chest requires a new exact receipt, but an observation of one tool remains meaningful only when that tool&#x27;s bytes are unchanged.</p>
+      <p>The lifecycle remains the single switch. Both Codex and Claude follow relative links through .agent-skills/current, and rollback follows the retained prior generation recorded in the active receipt rather than a second orchestration path.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+      <p>Before: Athena&#x27;s current link selected archive 004bfcf1c8d2 and the earlier execute-work body. The portable kernel, accepted shadow comparison, reversible canary, and batch migration were already established.</p>
+      <p>After: the same lifecycle selects archive f8b39590bae7 from source f0a058d7b40a. Five workflow bodies remain byte-identical; execute-work advances to digest 33ee613ce298. The canary accepts the historical comparison only because the kernel digest still equals d7a651c9392a.</p>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed and what did not</h2>
+      <p>Changed: the vendored archive and metadata, installed generation and active receipt, release and batch identities, execute-work digest, and exact-current sensor fixtures. Inside the qualified archive, lifecycle infrastructure also records and safely prunes lifecycle-created directories and gives a clearer remove path when a first install has no prior generation; Athena consumes those already-qualified lifecycle changes without adding another update mechanism.</p>
+      <p>Changed narrowly: canary admission validates historical shadow structure and accepted digest, then separately requires the observed canary workflow digest to equal the active canary digest.</p>
+      <p>Unchanged: Athena application behavior, host topology, repository overlays, runtime Linear capability, deployment behavior, and the existing lifecycle, telemetry, gate, canary, batch, and rollback planes. No durable plan-unit shorthand was added.</p>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+      <ul>
+        <li>Archive, metadata, workflow, active-receipt, migration-record, host-link, predecessor, or inventory drift blocks admission.</li>
+        <li>A changed canary workflow digest invalidates shadow reuse and requires a fresh shadow observation before authority can advance.</li>
+        <li>The retained prior generation supports source-independent rollback and leaves unrelated repository bytes unchanged.</li>
+        <li>Qualification fixture hygiene does not cap production Linear create, read, update, search, relation, or reconciliation behavior.</li>
+      </ul>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and finish-line status</h2>
+      <p>Qualified archive integrity: agent-skills PR #17 passed 202 portable-core tests on macOS, Linux, and Windows, refreshed the exact core/provider/Linear qualification records, and produced archive f8b39590bae7.</p>
+      <p>Cross-repository product proposition: kwamina-fyi PR #12 records the corrected pilot&#x27;s causal one-line sensor fix and its 315 JavaScript tests, 25 content tests, and production build. This demonstrates diagnosis and diff selection, not Athena integration.</p>
+      <p>Athena integration: 131 focused portable and telemetry tests; current portable canary and batch audits; source-independent rollback rehearsals; both host projections; and the full 1,698-test script harness are green. Generated Graphify output was rebuilt and generated-artifact preparation completed.</p>
+      <p>Independent final-green review, pr:athena, pull-request merge, and root alignment are pending at report creation. Deployment is not applicable because this infrastructure-only delivery does not change the application runtime.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Guidance for the next release</h2>
+      <ul>
+        <li>Build and verify the exact qualified archive before changing Athena&#x27;s release records.</li>
+        <li>Compare the canary workflow digest, not just the archive label, before deciding whether historical shadow evidence still observes the active semantics.</li>
+        <li>Advance current release identities and every changed workflow digest together, then run the existing canary, batch, rollback, harness, review, and final gate paths.</li>
+        <li>Keep Athena policy in its overlays and avoid adding parallel caches, telemetry stores, orchestrators, or arbitrary Linear limits.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>.agent-skills/active.json</code></td><td>Records the exact active generation and retained previous release for rollback.</td></tr>
+        <tr><td><code>.agents/portable/releases/core-v1.zip</code></td><td>Carries the final qualified portable core bytes.</td></tr>
+        <tr><td><code>.agents/migrations/portable-kernel-canary.json</code></td><td>Binds canary authority, workflow digest, accepted shadow evidence, host exposure, and rollback.</td></tr>
+        <tr><td><code>.agents/migrations/portable-workflow-batches.json</code></td><td>Pins the remaining workflow digests, complete migration inventory, and reversible batch order.</td></tr>
+        <tr><td><code>scripts/portable-canary-adoption.ts</code></td><td>Fails closed unless retained shadow evidence observes the same canary workflow bytes.</td></tr>
+        <tr><td><code>scripts/portable-batch-adoption.ts</code></td><td>Audits the exact qualified release, full workflow inventory, host projections, and rollback batches.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="5">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 5 of 6.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why can Athena retain the accepted kernel shadow comparison for this release update?</p>
+        <ol data-quiz-options>
+          <li>The release keeps the same core-v1 label.</li>
+          <li data-quiz-correct>The canary kernel workflow digest is byte-identical.</li>
+          <li>Shadow evidence never expires for portable releases.</li>
+        </ol>
+        <p data-quiz-explanation>The proof observed the kernel semantics, so reuse is safe only while those exact workflow bytes remain unchanged.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What must happen if a future release changes the canary workflow bytes?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Run a fresh shadow observation before switching authority.</li>
+          <li>Update only the archive label.</li>
+          <li>Skip directly to batch adoption.</li>
+        </ol>
+        <p data-quiz-explanation>A different canary digest means the accepted comparison did not observe the new semantics, so the shadow-first boundary applies again.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What did the cross-repository pilot prove that Athena&#x27;s integration checks do not?</p>
+        <ol data-quiz-options>
+          <li>That both Athena host projections point at the active generation.</li>
+          <li data-quiz-correct>That the abstraction improved diagnosis and selected a smaller causal product diff.</li>
+          <li>That Athena can roll back without the portable source archive.</li>
+        </ol>
+        <p data-quiz-explanation>The pilot compared delivery outcomes in another repository; Athena&#x27;s checks separately prove installation, projection, exact identity, and rollback.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What governs Linear capability during normal Athena execution?</p>
+        <ol data-quiz-options>
+          <li>An arbitrary two-issue cap.</li>
+          <li>The portable archive filename.</li>
+          <li data-quiz-correct>Repository policy and user authority.</li>
+        </ol>
+        <p data-quiz-explanation>Any disposable-issue bound belongs only to qualification-fixture hygiene; runtime Linear capability remains policy-authorized and complete.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How do Codex and Claude select the active portable workflows?</p>
+        <ol data-quiz-options>
+          <li>Each host keeps an independent copied release.</li>
+          <li data-quiz-correct>Both project through relative links to .agent-skills/current.</li>
+          <li>A new remote orchestration service chooses at runtime.</li>
+        </ol>
+        <p data-quiz-explanation>One lifecycle-owned current generation feeds both host projections, avoiding divergent copies or another control plane.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the deployment status for this delivery?</p>
+        <ol data-quiz-options>
+          <li>Required after merge.</li>
+          <li>Already completed in production.</li>
+          <li data-quiz-correct>Not applicable because the application runtime is unchanged.</li>
+        </ol>
+        <p data-quiz-explanation>This is infrastructure and repository workflow work; the explicit finish line excludes application deployment.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>session context</dt><dd>Reviewed the seven-day delivery history, including shadow-first adoption, canary and batch closure, the kwamina-fyi product proof, no-deploy finish line, and prior failure modes.</dd>
+      <dt>delivered diff</dt><dd>Mapped the candidate files and release identities, verified the bounded before-and-after architecture, and checked that Linear remains unconstrained and no durable plan-unit shorthand entered the diff.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>
