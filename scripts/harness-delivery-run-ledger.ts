@@ -1,6 +1,11 @@
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import {
+  type HarnessReviewLoopTelemetry,
+  isValidReviewLoopTelemetry,
+} from "./harness-obligation-records";
+
 export const DELIVERY_RUN_LEDGER_VERSION = "1.0" as const;
 export const DEFAULT_DELIVERY_RUN_LATEST_PATH =
   "artifacts/harness-delivery-runs/latest.json";
@@ -14,7 +19,7 @@ export type DeliveryRunStatus = "pass" | "fail" | "blocked" | "interrupted";
 export type DeliveryRunCommandStatus =
   "pass" | "fail" | "blocked" | "interrupted";
 export type DeliveryRunProofState =
-  "proof_recorded" | "proof_not_recorded" | "prepush_reused";
+  "proof_recorded" | "proof_not_recorded" | "proof_reused" | "prepush_reused";
 
 export type DeliveryRunCommandSpan = {
   phase: string;
@@ -55,21 +60,11 @@ export type DeliveryRunGateDecisionEvent = {
   timestamp: string;
 };
 
-export type DeliveryRunReviewLoopSummary = {
+export type DeliveryRunReviewLoopSummary = HarnessReviewLoopTelemetry & {
   providerId: string;
   runId: string;
   finalPassId: string;
   recordedAt: string;
-  iterationCount: number;
-  findingCounts?: { P0: number; P1: number; P2: number; P3: number };
-  deferredExpansionCount: number;
-  deferredIssueIds: string[];
-  reviewCost?: {
-    unit: string;
-    total: number;
-    byReviewer?: Record<string, number>;
-    reportedBy?: string;
-  };
 };
 
 export type DeliveryRunLedger = {
@@ -210,6 +205,123 @@ export function createDeliveryRunLedger(
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isFiniteNonNegative(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function isValidIsoTimestamp(value: unknown): value is string {
+  return typeof value === "string" && Number.isFinite(Date.parse(value));
+}
+
+function isValidReviewLoop(
+  value: unknown,
+): value is DeliveryRunReviewLoopSummary {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.providerId === "string" &&
+    value.providerId.length > 0 &&
+    typeof value.runId === "string" &&
+    value.runId.length > 0 &&
+    typeof value.finalPassId === "string" &&
+    value.finalPassId.length > 0 &&
+    isValidIsoTimestamp(value.recordedAt) &&
+    isValidReviewLoopTelemetry(value)
+  );
+}
+
+const COMPLETED_PR_ATHENA_PHASES = [
+  "prepare",
+  "preflight",
+  "validate",
+  "record-proof",
+  "scorecard",
+] as const;
+
+function hasCompletedPrAthenaSpans(ledger: Partial<DeliveryRunLedger>) {
+  return (
+    ledger.proofState === "proof_recorded" &&
+    ledger.commandSpans?.length === COMPLETED_PR_ATHENA_PHASES.length &&
+    ledger.commandSpans.every((span, index) => {
+      const phase = COMPLETED_PR_ATHENA_PHASES[index];
+      return (
+        isRecord(span) &&
+        span.phase === phase &&
+        span.command === `bun run pr:athena:${phase}` &&
+        isValidIsoTimestamp(span.startedAt) &&
+        isValidIsoTimestamp(span.endedAt) &&
+        Date.parse(span.endedAt) >= Date.parse(span.startedAt) &&
+        isFiniteNonNegative(span.durationMs) &&
+        span.status === "pass" &&
+        span.exitCode === 0
+      );
+    })
+  );
+}
+
+function isCanonicalPassingLedger(value: unknown): value is DeliveryRunLedger {
+  if (!value || typeof value !== "object") return false;
+  const ledger = value as Partial<DeliveryRunLedger>;
+  if (
+    ledger.version !== DELIVERY_RUN_LEDGER_VERSION ||
+    !isValidIsoTimestamp(ledger.generatedAt) ||
+    ledger.status !== "pass" ||
+    ![
+      "proof_recorded",
+      "proof_not_recorded",
+      "proof_reused",
+      "prepush_reused",
+    ].includes(String(ledger.proofState)) ||
+    ledger.blockedReason !== undefined ||
+    ledger.interruptedReason !== undefined ||
+    (ledger.deliverableDiffFingerprint !== undefined &&
+      typeof ledger.deliverableDiffFingerprint !== "string") ||
+    (ledger.reviewLoop !== undefined &&
+      !isValidReviewLoop(ledger.reviewLoop)) ||
+    !Array.isArray(ledger.commandSpans) ||
+    !hasCompletedPrAthenaSpans(ledger) ||
+    !Array.isArray(ledger.duplicateCommands) ||
+    !Array.isArray(ledger.duplicatePackageSuites) ||
+    !Array.isArray(ledger.providerSkippedEvents) ||
+    !Array.isArray(ledger.gateDecisionEvents) ||
+    !ledger.summary ||
+    typeof ledger.summary !== "object"
+  ) {
+    return false;
+  }
+
+  try {
+    const canonical = createDeliveryRunLedger({
+      generatedAt: ledger.generatedAt,
+      status: ledger.status,
+      proofState: ledger.proofState as DeliveryRunProofState,
+      commandSpans: ledger.commandSpans,
+      providerSkippedEvents: ledger.providerSkippedEvents.map((event) => ({
+        providerName: event.providerName,
+        coveredBy: event.coveredBy,
+        reason: event.reason,
+      })),
+      gateDecisionEvents: ledger.gateDecisionEvents,
+      reviewLoop: ledger.reviewLoop,
+      deliverableDiffFingerprint: ledger.deliverableDiffFingerprint,
+    });
+    return (
+      JSON.stringify(ledger.providerSkippedEvents) ===
+        JSON.stringify(canonical.providerSkippedEvents) &&
+      JSON.stringify(ledger.duplicateCommands) ===
+        JSON.stringify(canonical.duplicateCommands) &&
+      JSON.stringify(ledger.duplicatePackageSuites) ===
+        JSON.stringify(canonical.duplicatePackageSuites) &&
+      JSON.stringify(ledger.summary) === JSON.stringify(canonical.summary)
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function writeJson(
   rootDir: string,
   relativePath: string,
@@ -306,7 +418,13 @@ export async function readDeliveryRunBaseline(
   rootDir: string,
   relativePath = DEFAULT_DELIVERY_RUN_BASELINE_PATH,
 ) {
-  return readJsonOrNull<DeliveryRunLedger>(rootDir, relativePath);
+  try {
+    const ledger = await readJsonOrNull<unknown>(rootDir, relativePath);
+    return isCanonicalPassingLedger(ledger) ? ledger : null;
+  } catch (error) {
+    if (error instanceof SyntaxError) return null;
+    throw error;
+  }
 }
 
 export async function buildPartialDeliveryRunBaseline(
@@ -484,7 +602,7 @@ export async function promotePassingLatestToBaseline(
     rootDir,
     options.latestPath ?? DEFAULT_DELIVERY_RUN_LATEST_PATH,
   );
-  if (!latest || latest.status !== "pass") {
+  if (!isCanonicalPassingLedger(latest)) {
     return { promoted: false as const };
   }
   await writeJson(

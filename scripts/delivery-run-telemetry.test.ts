@@ -433,6 +433,33 @@ describe("delivery run telemetry", () => {
       ).toEqual([]);
     });
 
+    it("accepts strict telemetry for a reused proof with no command spans", () => {
+      const reusedProofRecord = buildDeliveryRunTelemetryRecord(
+        createDeliveryRunLedger({
+          generatedAt: "2026-06-18T12:00:00.000Z",
+          status: "pass",
+          proofState: "proof_reused",
+          commandSpans: [],
+        }),
+        {
+          branch: "codex/good",
+          headSha: "abc123",
+          deliverableDiffFingerprint: "fingerprint-a",
+        },
+      );
+
+      expect(
+        check({
+          changedPaths: ["scripts/some-change.ts", recordPath],
+          changedRecordContents: new Map([[recordPath, reusedProofRecord]]),
+        }),
+      ).toEqual([]);
+      expect(reusedProofRecord).toMatchObject({
+        proofState: "proof_reused",
+        summary: { commandCount: 0, totalDurationMs: 0 },
+      });
+    });
+
     it("fails a substantial delivery with no record once a gate has run here", () => {
       const findings = check({});
       expect(findings).toHaveLength(1);
