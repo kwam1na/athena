@@ -832,7 +832,7 @@ describe("portable workflow characterization baseline", () => {
     ).toEqual([true, true]);
   });
 
-  it("restricts bounded members to the adjudicated U11 taxonomy", async () => {
+  it("restricts bounded members to the approved baseline classification taxonomy", async () => {
     const documents = await loadPortableBaselineDocuments(REPO_ROOT);
     const expectedAdjudications = {
       "ce-commit-push-pr-source-bundle": "excluded",
