@@ -1152,7 +1152,7 @@ export const RULE_IDENTITY_CONTRACTS = new Map<string, RuleIdentityContract>([
     {
       classification: "excluded",
       rationale:
-        "The full Athena persona graph remains a research source; U13 must bundle a smaller host-neutral reviewer contract.",
+        "The full Athena persona graph remains a research source; the portable review workflow must bundle a smaller host-neutral reviewer contract.",
       assertionIds: ["review-selects-core-and-risk-lenses"],
     },
   ],
