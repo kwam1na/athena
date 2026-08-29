@@ -187,8 +187,18 @@ describe("buildOverviewData", () => {
   const days = [
     day("2026-07-20", { netSalesMinor: 100, unitsSold: 1 }),
     day("2026-07-21", { netSalesMinor: 200, unitsSold: 2 }),
-    day("2026-07-26", { netSalesMinor: 300, unitsSold: 3 }),
-    day("2026-07-27", { netSalesMinor: 400, unitsSold: 4 }),
+    day("2026-07-26", {
+      closeId: "close-2026-07-26" as Id<"dailyClose">,
+      netSalesMinor: 300,
+      transactionCount: 3,
+      unitsSold: 3,
+    }),
+    day("2026-07-27", {
+      closeId: "close-2026-07-27" as Id<"dailyClose">,
+      netSalesMinor: 400,
+      transactionCount: 12,
+      unitsSold: 4,
+    }),
     day("2026-07-28", { status: "open", netSalesMinor: 500, unitsSold: 5 }),
   ];
 
@@ -197,10 +207,6 @@ describe("buildOverviewData", () => {
       days,
       fallbackCurrency: "GHS",
       now: 0,
-      transactionCountsByDate: new Map([
-        ["2026-07-26", 3],
-        ["2026-07-27", 12],
-      ]),
     });
 
     const countsByDate = new Map(
@@ -267,10 +273,14 @@ describe("buildOverviewData", () => {
       unitsSold: 5,
     });
     expect(
-      data.dailyTrend.every(
-        (point) => point.transactionCount === undefined,
-      ),
-    ).toBe(true);
+      data.dailyTrend.find((point) => point.operatingDate === "2026-07-26")
+        ?.transactionCount,
+    ).toBe(3);
+    expect(
+      data.dailyTrend.find((point) => point.operatingDate === "2026-07-27")
+        ?.transactionCount,
+    ).toBe(12);
+    expect(data.dailyTrend.at(-1)?.transactionCount).toBeUndefined();
     // The trailing-30 snapshot excludes the June day too.
     expect(data.trailing30.dayCount).toBe(5);
     expect(data.trailing30.netSalesMinor).toBe(1500);
@@ -487,7 +497,7 @@ describe("rebuildStoreOverview", () => {
     expect(overview?.priorTrailing6Months?.netSalesMinor).toBe(184);
   });
 
-  it("reads the trend's transaction counts from each day's register close", async () => {
+  it("reads the trend's settled transaction counts from reportDay", async () => {
     const t = convexTest(schema, modules);
 
     const { storeId } = await t.run(async (ctx) => {
@@ -520,7 +530,10 @@ describe("rebuildStoreOverview", () => {
           carryForwardCount: 0,
           readyCount: 0,
         },
-        summary: { transactionCount: 17 },
+        // The day projection below is the reporting authority. A conflicting
+        // close summary proves the overview rebuild does not hydrate the full
+        // close document to reconstruct a value the fold already persisted.
+        summary: { transactionCount: 99 },
         sourceSubjects: [],
         carryForwardWorkItemIds: [],
         createdAt: 0,
@@ -529,7 +542,10 @@ describe("rebuildStoreOverview", () => {
 
       // The closed day resolves a count; the open day has no close at all.
       await ctx.db.insert("reportDay", {
-        ...dayFields("2026-07-27", { netSalesMinor: 400 }),
+        ...dayFields("2026-07-27", {
+          netSalesMinor: 400,
+          transactionCount: 17,
+        }),
         closeId,
         storeId,
       });

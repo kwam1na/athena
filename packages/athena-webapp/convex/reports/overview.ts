@@ -13,7 +13,6 @@ import {
   normalizeCurrencyCode,
 } from "../../shared/reportsContract";
 import { addDaysToDate } from "./rollups";
-import { transactionCountFromCloseSummary } from "./transactionCounts";
 
 /**
  * The overview document (slice C).
@@ -168,8 +167,6 @@ export function buildOverviewData(args: {
   days: readonly Doc<"reportDay">[];
   fallbackCurrency: string;
   now: number;
-  /** Settled transaction counts by operating date; absent days stay absent. */
-  transactionCountsByDate?: ReadonlyMap<string, number>;
 }): ReportOverviewData {
   const { days, now } = args;
   const anchor = anchorDate(days);
@@ -266,7 +263,10 @@ export function buildOverviewData(args: {
     netSalesMinor: day.netSalesMinor,
     status: day.status,
     unitsSold: day.unitsSold,
-    transactionCount: args.transactionCountsByDate?.get(day.operatingDate),
+    // A fact-derived count may already exist on an open/provisional day. The
+    // trend promises a settled count, so publish the folded value only once
+    // the day carries accepted-close authority.
+    transactionCount: day.closeId ? day.transactionCount : undefined,
   }));
 
   return {
@@ -313,36 +313,6 @@ export async function readRecentDays(
   return descending.reverse();
 }
 
-/**
- * Settled transaction counts for the trend window, keyed by operating date.
- *
- * Bounded by `OVERVIEW_TREND_DAYS` close lookups on top of the day scan, and
- * only for days that actually closed. Open days are omitted rather than
- * counted live: the sweep would then depend on fact volume, and the overview
- * exists precisely so the dashboard never pays that cost.
- */
-async function readTrendTransactionCounts(
-  ctx: MutationCtx,
-  days: readonly Doc<"reportDay">[],
-): Promise<Map<string, number>> {
-  const trendDays = days.slice(-OVERVIEW_TREND_DAYS).filter((day) => day.closeId);
-  const closes = await Promise.all(
-    trendDays.map((day) => ctx.db.get("dailyClose", day.closeId!)),
-  );
-
-  const counts = new Map<string, number>();
-  trendDays.forEach((day, index) => {
-    const close = closes[index];
-    if (!close) return;
-    counts.set(
-      day.operatingDate,
-      transactionCountFromCloseSummary(close.summary),
-    );
-  });
-
-  return counts;
-}
-
 /** Rebuild and upsert the store's singleton overview doc. */
 export async function rebuildStoreOverview(
   ctx: MutationCtx,
@@ -356,7 +326,6 @@ export async function rebuildStoreOverview(
     days,
     fallbackCurrency: normalizeCurrencyCode(store?.currency),
     now,
-    transactionCountsByDate: await readTrendTransactionCounts(ctx, days),
   });
 
   const existing = await ctx.db
