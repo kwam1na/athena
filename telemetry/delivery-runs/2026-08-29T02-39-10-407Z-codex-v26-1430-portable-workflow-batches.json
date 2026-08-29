@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-29T02:39:10.407Z",
+  "branch": "codex/V26-1430-portable-workflow-batches",
+  "headSha": "c638b4aba9ad5785f5c6264eb592090b2942b894",
+  "deliverableDiffFingerprint": "b16ada944a6c2d6291d6e526d2eeeeb14ac113c4f15e7f4c206e960dfa16f685",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 0,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 654972.0530849999
+  },
+  "reviewLoop": {
+    "providerId": "execute",
+    "runId": "v26-1430-final-20260829T0224Z",
+    "finalPassId": "pass-2",
+    "recordedAt": "2026-08-29T02:27:58.650Z",
+    "iterationCount": 2,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 1,
+      "P3": 6
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}

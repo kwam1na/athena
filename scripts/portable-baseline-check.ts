@@ -35,6 +35,10 @@ import {
   loadPortableCanaryBaselineProjection,
   type PortableCanaryBaselineProjection,
 } from "./portable-canary-adoption";
+import {
+  loadPortableBatchBaselineProjection,
+  type PortableBatchBaselineProjection,
+} from "./portable-batch-adoption";
 
 const BASELINE_PATH = ".agents/characterization-baseline.json";
 const OVERLAY_MAP_PATH = ".agents/portable-overlay-map.json";
@@ -44,6 +48,36 @@ const BASELINE_SCHEMA_VERSION = "athena-portable-characterization-baseline/1";
 const OVERLAY_SCHEMA_VERSION = "athena-portable-overlay-map/1";
 const SCENARIO_SCHEMA_VERSION = "athena-portable-characterization-scenario/1";
 const OBSERVED_ONLY_ASSERTION_ID = "host-tool-call-sequence-is-observed-only";
+
+type PortableBaselineProjection = {
+  canary: PortableCanaryBaselineProjection;
+  batch: PortableBatchBaselineProjection;
+};
+
+function projectedBaselinePath(
+  logicalPath: string,
+  projection?: PortableBaselineProjection,
+) {
+  if (logicalPath === projection?.canary.logicalSkillFile) {
+    return projection.canary.predecessorFile;
+  }
+  return (
+    projection?.batch.fileProjections.find(
+      (entry) => entry.logicalPath === logicalPath,
+    )?.predecessorPath ?? logicalPath
+  );
+}
+
+function ignoredBaselineDiscoveryPaths(
+  projection?: PortableBaselineProjection,
+) {
+  return projection
+    ? [
+        ...projection.canary.ignoredDiscoveryPaths,
+        ...projection.batch.ignoredDiscoveryPaths,
+      ]
+    : [];
+}
 
 const RULE_CLASSIFICATIONS = new Set([
   "portable-candidate",
@@ -634,10 +668,15 @@ function memberOwnsPath(memberPath: string, targetPath: string) {
 async function resolveReferenceTargetPath(
   rootDir: string,
   reference: string,
-  canaryProjection?: PortableCanaryBaselineProjection,
+  projection?: PortableBaselineProjection,
 ) {
   const skillPath = `.agents/skills/${reference}`;
-  if (skillPath === canaryProjection?.logicalSkillDirectory) {
+  if (
+    skillPath === projection?.canary.logicalSkillDirectory ||
+    projection?.batch.fileProjections.some(
+      (entry) => entry.logicalPath.startsWith(`${skillPath}/`),
+    )
+  ) {
     return skillPath;
   }
   const skillTarget = await resolveContainedPath(rootDir, skillPath, {
@@ -694,7 +733,7 @@ async function collectSourceDependencyReferences(
   rootDir: string,
   members: readonly BoundedClosureMember[],
   memberEntriesById: ReadonlyMap<string, readonly TreeEntry[]>,
-  canaryProjection?: PortableCanaryBaselineProjection,
+  projection?: PortableBaselineProjection,
 ) {
   const skillRoot = await resolveContainedPath(rootDir, ".agents/skills");
   const skillNames = new Set(
@@ -702,8 +741,13 @@ async function collectSourceDependencyReferences(
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name),
   );
-  if (canaryProjection) {
-    skillNames.add(canaryProjection.logicalSkillDirectory.split("/").at(-1)!);
+  if (projection) {
+    skillNames.add(
+      projection.canary.logicalSkillDirectory.split("/").at(-1)!,
+    );
+    for (const entry of projection.batch.fileProjections) {
+      skillNames.add(entry.logicalPath.split("/")[2]);
+    }
   }
   const references = new Map<string, SourceDependencyReference>();
   for (const member of members) {
@@ -712,10 +756,7 @@ async function collectSourceDependencyReferences(
       if (entry.kind === "symlink") continue;
       let sourceText: string;
       try {
-        const readPath =
-          entry.path === canaryProjection?.logicalSkillFile
-            ? canaryProjection.predecessorFile
-            : entry.path;
+        const readPath = projectedBaselinePath(entry.path, projection);
         sourceText = await readFile(path.join(rootDir, readPath), "utf8");
       } catch {
         continue;
@@ -795,17 +836,21 @@ export async function auditPortableWorkflowBaseline(
   }
   const documents = validation.documents;
   const { baseline, overlayMap, scenarios } = documents;
-  let canaryProjection: PortableCanaryBaselineProjection | undefined;
+  let baselineProjection: PortableBaselineProjection | undefined;
   try {
-    canaryProjection = await loadPortableCanaryBaselineProjection(rootDir);
+    const [canary, batch] = await Promise.all([
+      loadPortableCanaryBaselineProjection(rootDir),
+      loadPortableBatchBaselineProjection(rootDir),
+    ]);
+    baselineProjection = { canary, batch };
   } catch (error: unknown) {
     findings.push({
-      code: "canary-baseline-projection-invalid",
+      code: "portable-baseline-projection-invalid",
       message:
         error instanceof Error
           ? error.message
-          : "The portable canary baseline projection is unavailable.",
-      path: ".agents/migrations/portable-kernel-canary.json",
+          : "The portable baseline projection is unavailable.",
+      path: ".agents/migrations",
     });
   }
   const referenceTargetPathCache = new Map<string, string | undefined>();
@@ -817,7 +862,7 @@ export async function auditPortableWorkflowBaseline(
       const targetPath = await resolveReferenceTargetPath(
         rootDir,
         reference,
-        canaryProjection,
+        baselineProjection,
       );
       referenceTargetPathCache.set(reference, targetPath);
       return targetPath;
@@ -1017,10 +1062,10 @@ export async function auditPortableWorkflowBaseline(
       continue;
     }
     try {
-      const projectedSourcePath =
-        source.path === canaryProjection?.logicalSkillFile
-          ? canaryProjection.predecessorFile
-          : source.path;
+      const projectedSourcePath = projectedBaselinePath(
+        source.path,
+        baselineProjection,
+      );
       const containedSource = await resolveContainedPath(
         rootDir,
         projectedSourcePath,
@@ -1131,7 +1176,7 @@ export async function auditPortableWorkflowBaseline(
     }
     const actual = state === "absent" ? "absent" : "present";
     const baselineActual =
-      discoveryRoot.path === ".claude/skills" && canaryProjection
+      discoveryRoot.path === ".claude/skills" && baselineProjection
         ? "absent"
         : actual;
     if (baselineActual !== discoveryRoot.state) {
@@ -1423,16 +1468,38 @@ export async function auditPortableWorkflowBaseline(
     if (rejectedMemberIds.has(member.id)) continue;
     let entries: TreeEntry[];
     try {
-      if (member.path === canaryProjection?.logicalSkillDirectory) {
+      if (member.path === baselineProjection?.canary.logicalSkillDirectory) {
         const predecessorPath = path.join(
           rootDir,
-          canaryProjection.predecessorFile,
+          baselineProjection.canary.predecessorFile,
         );
         const predecessorStat = await lstat(predecessorPath);
         entries = [
           {
-            path: canaryProjection.logicalSkillFile,
+            path: baselineProjection.canary.logicalSkillFile,
             digest: sha256(await readFile(predecessorPath)),
+            kind: "file",
+            executable: (predecessorStat.mode & 0o111) !== 0,
+          },
+        ];
+        resolvedMemberIdentities.push({
+          member,
+          identityPath: member.path,
+        });
+      } else if (
+        projectedBaselinePath(member.path, baselineProjection) !== member.path
+      ) {
+        const predecessorPath = projectedBaselinePath(
+          member.path,
+          baselineProjection,
+        );
+        const predecessorStat = await lstat(
+          path.join(rootDir, predecessorPath),
+        );
+        entries = [
+          {
+            path: member.path,
+            digest: sha256(await readFile(path.join(rootDir, predecessorPath))),
             kind: "file",
             executable: (predecessorStat.mode & 0o111) !== 0,
           },
@@ -1695,9 +1762,7 @@ export async function auditPortableWorkflowBaseline(
                 await readFile(
                   path.join(
                     rootDir,
-                    entry.path === canaryProjection?.logicalSkillFile
-                      ? canaryProjection.predecessorFile
-                      : entry.path,
+                    projectedBaselinePath(entry.path, baselineProjection),
                   ),
                   "utf8",
                 )
@@ -1905,7 +1970,7 @@ export async function auditPortableWorkflowBaseline(
       rootDir,
       members,
       memberEntriesById,
-      canaryProjection,
+      baselineProjection,
     );
   } catch (error: unknown) {
     if (!(error instanceof PortableBaselinePathContainmentError)) throw error;
@@ -1936,9 +2001,7 @@ export async function auditPortableWorkflowBaseline(
             await readFile(
               path.join(
                 rootDir,
-                entry.path === canaryProjection?.logicalSkillFile
-                  ? canaryProjection.predecessorFile
-                  : entry.path,
+                projectedBaselinePath(entry.path, baselineProjection),
               ),
               "utf8",
             )
@@ -2123,7 +2186,7 @@ export async function auditPortableWorkflowBaseline(
   }
   const inventoryEntries = collectedInventoryEntries.filter(
     (entry) =>
-      !canaryProjection?.ignoredDiscoveryPaths.some(
+      !ignoredBaselineDiscoveryPaths(baselineProjection).some(
         (ignoredPath) => ignoredPath === entry.path,
       ) &&
       !classifiedPaths.some(

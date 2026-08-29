@@ -1,7 +1,7 @@
 ---
 title: "Portable Workflow Shadow Evidence Remains Observational"
 date: 2026-08-28
-last_updated: 2026-08-28
+last_updated: 2026-08-29
 category: harness
 module: harness
 problem_type: architecture_pattern
@@ -12,6 +12,7 @@ applies_when:
   - "Comparing an extracted workflow with an authoritative repository workflow before an authority switch"
   - "Projecting shadow results into tracked delivery telemetry"
   - "Switching one reversible portable workflow canary while preserving the accepted characterization baseline"
+  - "Migrating the remaining portable workflows in dependency-ordered batches with offline rollback"
 tags:
   - harness
   - shadow-mode
@@ -19,7 +20,8 @@ tags:
   - candidate-identity
   - authority-boundary
   - portable-canary
-delivery_diff_fingerprint: ce62b4ce36f3849020a9467a88a262524456d9d9962cb4a766d1f6292d37c317
+  - reversible-migration
+delivery_diff_fingerprint: b16ada944a6c2d6291d6e526d2eeeeb14ac113c4f15e7f4c206e960dfa16f685
 ---
 
 # Portable Workflow Shadow Evidence Remains Observational
@@ -78,6 +80,24 @@ installed generation. This proves rollback is source-independent while an
 unrelated sentinel file proves the lifecycle leaves other repository bytes
 alone.
 
+After the canary is accepted, migrate only the remaining characterized
+workflow surface. Keep the migration record bound to the same exact release,
+accepted shadow comparison, and canary. Use the smallest dependency order that
+preserves a useful rollback boundary: expose the planning, execution, review,
+and compounding primitives first, then switch the delivery entry point. Retain
+the exact prior entry-point bundle by content digest; workflows that did not
+previously exist need removal, not synthetic predecessors.
+
+Reconstruct the accepted characterization baseline through the existing
+projection. The projection may substitute only verified predecessor bytes and
+ignore only the exposure links named by the exact batch record. It must not
+rewrite the characterization documents or treat the portable result as a new
+baseline. A separate current-batch sensor validates the active release,
+exposures, complete disposition inventory, and rollback rehearsal. Repository
+policy remains local: Athena's harness, gate, review, telemetry, reporting,
+deployment, generated-artifact, pull-request, domain, and full Linear workflow
+capabilities are not migrated into the portable core.
+
 ## Prevention
 
 - Give a shadow evaluator fewer capabilities, not a competing decision path.
@@ -89,6 +109,15 @@ alone.
 - Keep exact-current canary validation separate from characterization. A
   verified predecessor projection preserves the old baseline without weakening
   checks on the active portable authority.
+- Keep batch adoption equally narrow. Record exact workflow digests, host
+  exposures, predecessor identity, dependency order, and every baseline
+  disposition in one manifest; do not add a second lifecycle or cache.
+- Roll back entry points before their dependencies. Restore only an actual
+  predecessor and remove newly introduced exposures; prove this after the
+  portable source has been removed.
+- Keep qualification-fixture hygiene separate from runtime capability. A bound
+  on disposable test issues must never limit policy-authorized Linear create,
+  read, update, search, relation, or reconciliation behavior.
 - Fingerprint managed symlinks by their exact link target. Following a directory
   symlink as though it were a file makes delivery identity unavailable at the
   authority-switch boundary.

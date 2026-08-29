@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Portable Workflow Batches</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="b16ada944a6c2d6291d6e526d2eeeeb14ac113c4f15e7f4c206e960dfa16f685">
+  <header data-report-section="header">
+    <h1>Portable Workflow Batches</h1>
+    <p>How Athena completes the portable workflow migration in two reversible steps without moving repository policy</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>V26-1430</li>
+      <li>Two reversible batches</li>
+      <li>No deployment</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Issue</dt><dd>V26-1430</dd>
+      <dt>Branch</dt><dd>codex/V26-1430-portable-workflow-batches</dd>
+      <dt>Base</dt><dd>c638b4aba9ad5785f5c6264eb592090b2942b894</dd>
+      <dt>Status</dt><dd>Review complete; final gate pending</dd>
+      <dt>Deployment</dt><dd>Deferred</dd>
+      <dt>Root alignment</dt><dd>Pending merge</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+    <p>Athena now exposes the five remaining portable workflows from the already qualified <code>core-v1</code> generation to Codex and Claude Code. The migration is intentionally small: four dependency workflows move first, then the <code>deliver-work</code> entry point moves after them.</p>
+    <p>The batch record is bound to the accepted shadow comparison and successful kernel canary. The prior Athena <code>deliver-work</code> bundle is retained by content digest, and a disposable rehearsal proves that the entry point can be restored and the newly introduced workflows removed after the portable source is unavailable.</p>
+    <p>Athena repository policy does not move. Harness evidence, merge gates, review, telemetry, reporting, deployment, generated artifacts, pull-request rules, domain rules, and the full policy-authorized Linear surface remain local overlays.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Why batch migration needed another boundary</h2>
+    <p>The shadow phase proved observational parity without authority. The canary then proved one reversible authority switch. Completing the migration still needed a bounded answer to three questions: which workflows move, in what dependency order, and what exact state is restored if the entry point or its dependencies regress.</p>
+    <p>Moving every generated workflow in one step would obscure those answers. Creating a new lifecycle or telemetry system would also duplicate infrastructure that already qualified the release. The delivery therefore records only the missing batch facts and reuses the existing release, canary, baseline, and delivery telemetry.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model: replace the tools before the doorway</h2>
+    <p>Think of <code>deliver-work</code> as a doorway and the planning, execution, review, and compounding workflows as the tools behind it. The first batch puts the qualified tools in place. The second batch switches the doorway to the portable entry point.</p>
+    <p>Rollback walks backward. Restore the old doorway first, then remove the newly introduced tools. This keeps the repository usable at each boundary and avoids inventing predecessors for workflows that did not exist in Athena before the migration.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+    <p>Before: only the portable kernel canary was authoritative. Athena still owned <code>deliver-work</code>, and the four portable dependency workflows were not exposed under the two host discovery roots.</p>
+    <p>After: both hosts resolve the same five remaining workflow bodies from the managed <code>core-v1</code> generation. The prior Codex <code>deliver-work</code> body and metadata are retained exactly. The accepted characterization documents remain unchanged and are reconstructed through verified predecessor projection.</p>
+  </section>
+  <section data-report-section="mechanics">
+    <h2>How admission and rollback work</h2>
+    <ul>
+      <li>The manifest names two ordered batches, exact workflow digests, both exposed hosts, the accepted release, the shadow comparison, the kernel canary prerequisite, and every baseline disposition.</li>
+      <li>The current-batch sensor verifies the strict manifest, accepted canary, exact workflow bodies, host links, classification inventory, and retained entry-point predecessor.</li>
+      <li>The baseline projection verifies only the strict record, predecessor bytes, and exact links it ignores. Full current-authority admission remains the separate batch check.</li>
+      <li>The rollback rehearsal copies the active workflows and predecessor into a disposable root, deletes the managed current generation, restores the prior entry point, removes the primitive exposures, and checks an unrelated sentinel byte-for-byte.</li>
+      <li>The characterization sensor still validates the original 31 assertions, 24 closure members, 7 scenarios, and 145 residual files.</li>
+    </ul>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed and what stayed local</h2>
+    <p>Changed: five relative host links, one exact two-batch manifest, one retained predecessor bundle, one focused adoption sensor with rollback rehearsal, and the existing baseline projection needed to reconstruct the former <code>deliver-work</code> paths.</p>
+    <p>Stayed local: Athena’s <code>track</code> workflow and full Linear operations; repository discovery and policy precedence; harness and review evidence; <code>pr:athena</code> authority; telemetry and reporting; deployment policy; generated-artifact obligations; pull-request rules; and domain-specific constraints.</p>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+    <ul>
+      <li>A changed manifest, workflow body, host target, classification disposition, predecessor file, accepted canary, or shadow identity fails current batch admission.</li>
+      <li>A malformed exposure cannot be hidden from residual discovery because the projection verifies every ignored link first.</li>
+      <li>An unresolved shadow or canary mismatch blocks the batch through the accepted canary prerequisite.</li>
+      <li>Rollback does not need the original release archive or source checkout; the retained predecessor is the only restoration input.</li>
+      <li>Qualification fixture hygiene does not become a production issue-count limit or reduce Linear operations.</li>
+    </ul>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and finish line</h2>
+    <p>Current evidence: 75 focused portable adoption, canary, and baseline tests pass; the batch and canary checks pass their source-independent rollback rehearsals; the accepted baseline remains green; the final root harness passes 1,698 tests with zero failures; Graphify is rebuilt and fresh.</p>
+    <p>Independent correctness review found no issues. Independent simplicity review identified one coupling and four small duplicates; the projection was narrowed and the duplicate marker, hashing, policy proxy, and stale fixture names were removed. The full <code>pr:athena</code> gate, hosted checks, merge, and root alignment remain pending. Deployment is deliberately omitted because this delivery changes repository infrastructure, not the application runtime.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Operating guidance</h2>
+    <ul>
+      <li>Keep the exact release, accepted shadow, and successful canary as prerequisites for any later exposure change.</li>
+      <li>Put dependencies in place before switching an entry point; roll back the entry point before dependencies.</li>
+      <li>Retain only real predecessor bytes. Remove newly introduced exposures instead of fabricating historical versions.</li>
+      <li>Keep current adoption checks separate from immutable characterization reconstruction.</li>
+      <li>Do not move Athena policy or constrain host-native Linear capability as a side effect of portable workflow reuse.</li>
+    </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>.agents/migrations/portable-workflow-batches.json</code></td><td>Pins the two batches, exact release, prerequisites, rollback identities, and complete disposition inventory.</td></tr>
+        <tr><td><code>.agent-skills/batch-predecessors/2c0b38d4…/deliver-work</code></td><td>Retains the exact prior Codex entry-point body and metadata used by rollback and baseline reconstruction.</td></tr>
+        <tr><td><code>.agents/skills/* and .claude/skills/*</code></td><td>Expose the five remaining workflows through exact relative links to the managed generation.</td></tr>
+        <tr><td><code>scripts/portable-batch-adoption.ts</code></td><td>Audits current batch identity and rehearses reverse-order rollback without the portable source.</td></tr>
+        <tr><td><code>scripts/portable-batch-adoption.test.ts</code></td><td>Covers manifest, exposure, workflow, predecessor, inventory, Linear disposition, projection, and rollback failures.</td></tr>
+        <tr><td><code>scripts/portable-baseline-check.ts</code></td><td>Reconstructs verified predecessor paths while leaving the accepted characterization documents immutable.</td></tr>
+        <tr><td><code>docs/solutions/harness/portable-workflow-shadow-evidence-remains-observational-2026-08-28.md</code></td><td>Captures the reusable shadow-to-canary-to-batch authority and rollback pattern.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What moves in the first batch?</p>
+        <ol data-quiz-options><li>The Linear adapter</li><li data-quiz-correct>Planning, execution, review, and compounding workflows</li><li>The application runtime</li><li>All repository policy</li></ol>
+        <p data-quiz-explanation>The dependency workflows move before the delivery entry point.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What moves in the second batch?</p>
+        <ol data-quiz-options><li>The kernel canary</li><li>Telemetry</li><li data-quiz-correct>The deliver-work entry point</li><li>Domain rules</li></ol>
+        <p data-quiz-explanation>The entry point switches only after its portable dependencies are exposed.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which sequence is used for rollback?</p>
+        <ol data-quiz-options><li>Remove dependencies, then restore the entry point</li><li data-quiz-correct>Restore the entry point, then remove dependencies</li><li>Deploy, then compare</li><li>Rewrite the baseline</li></ol>
+        <p data-quiz-explanation>Rollback reverses dependency order so a usable entry point is restored first.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is only deliver-work given a predecessor bundle?</p>
+        <ol data-quiz-options><li>Its portable body is unqualified</li><li data-quiz-correct>It existed in Athena before migration; the other four exposures are new</li><li>Claude Code requires metadata</li><li>Linear limits restoration</li></ol>
+        <p data-quiz-explanation>Rollback restores real prior state and removes newly introduced state.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does the baseline projection verify before ignoring new links?</p>
+        <ol data-quiz-options><li>A deployment record</li><li>A cache hit</li><li data-quiz-correct>The strict batch record, predecessor bytes, and exact link targets</li><li>Only the workflow names</li></ol>
+        <p data-quiz-explanation>Malformed links remain visible as failures rather than being hidden from inventory.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What remains the current-adoption authority?</p>
+        <ol data-quiz-options><li>The characterization projection</li><li data-quiz-correct>The separate portable batch check</li><li>The HTML report</li><li>A new telemetry service</li></ol>
+        <p data-quiz-explanation>Projection reconstructs history; it does not approve current authority.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which prerequisite blocks unresolved shadow or canary drift?</p>
+        <ol data-quiz-options><li>A report pill</li><li>The Git branch name</li><li data-quiz-correct>The exact accepted canary bound to the shadow comparison</li><li>The issue count</li></ol>
+        <p data-quiz-explanation>The batch sensor reuses the accepted canary instead of creating another qualification plane.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How is full Linear capability treated?</p>
+        <ol data-quiz-options><li>Limited to two issues</li><li>Moved into the portable core</li><li data-quiz-correct>Kept as a policy-authorized Athena overlay</li><li>Disabled during rollback</li></ol>
+        <p data-quiz-explanation>Fixture hygiene is not a runtime capability limit.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What proves rollback does not depend on the portable source?</p>
+        <ol data-quiz-options><li>A successful deployment</li><li data-quiz-correct>The disposable rehearsal deletes the managed current generation before restoration</li><li>The release name</li><li>The solution note</li></ol>
+        <p data-quiz-explanation>The rehearsal restores from retained predecessor bytes after portable source removal.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What remains before this candidate is finished?</p>
+        <ol data-quiz-options><li>Application deployment</li><li>Another migration plane</li><li data-quiz-correct>The full gate, hosted checks, merge, and root alignment</li><li>A production issue cap</li></ol>
+        <p data-quiz-explanation>Infrastructure delivery ends at verified merge and alignment; deployment is intentionally omitted.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>correctness review</dt><dd>v26_1430_correctness reviewed the manifest, symlinks, predecessor, sensors, and rollback boundaries and reported no correctness findings or test gaps.</dd>
+      <dt>simplicity review</dt><dd>v26_1430_simplicity identified unnecessary projection coupling and duplicate evidence checks; all actionable simplifications were applied and revalidated.</dd>
+      <dt>authority continuity review</dt><dd>v26_1429_agent_native established the accepted canary boundary: shared host discovery, repository policy authority, source-independent rollback, and unconstrained Linear capability. This batch preserves those invariants.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

@@ -21,9 +21,9 @@ import {
 } from "./portable-baseline-check";
 
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
-const CASE_ALIAS_MEMBER_PATH = ".agents/skills/deliver-work/agents/OPENAI.yaml";
+const CASE_ALIAS_MEMBER_PATH = ".agents/skills/CE-COMMIT";
 const CASE_ALIAS_MEMBER_CANONICAL_PATH =
-  ".agents/skills/deliver-work/agents/openai.yaml";
+  ".agents/skills/ce-commit";
 const CASE_ALIAS_SOURCE_PATH = "agents.md";
 const CASE_ALIAS_SOURCE_CANONICAL_PATH = "AGENTS.md";
 
@@ -441,7 +441,9 @@ describe("portable workflow characterization baseline", () => {
 
   it("requires one classification per bounded-closure member and a stable residual inventory", async () => {
     const documents = await loadPortableBaselineDocuments(REPO_ROOT);
-    const [firstMember] = documents.overlayMap.boundedClosure.members;
+    const firstMember = documents.overlayMap.boundedClosure.members.find(
+      (member) => member.id === "ce-plan-source-bundle",
+    )!;
     const result = await auditPortableWorkflowBaseline(REPO_ROOT, {
       documents: {
         ...documents,
@@ -455,7 +457,7 @@ describe("portable workflow characterization baseline", () => {
               {
                 ...firstMember,
                 id: "overlapping-member",
-                path: ".agents/skills/deliver-work",
+                path: ".agents/skills/ce-plan/references",
               },
             ],
           },
@@ -656,7 +658,7 @@ describe("portable workflow characterization baseline", () => {
     async () => {
       const documents = await loadPortableBaselineDocuments(REPO_ROOT);
       const canonicalMember = documents.overlayMap.boundedClosure.members.find(
-        (member) => member.id === "deliver-work-codex-metadata",
+        (member) => member.id === "ce-commit-source-bundle",
       )!;
       const aliasEntries = await collectTreeEntries(
         REPO_ROOT,
@@ -664,7 +666,7 @@ describe("portable workflow characterization baseline", () => {
       );
       const aliasMember = {
         ...canonicalMember,
-        id: "deliver-work-codex-metadata-case-alias",
+        id: "ce-commit-source-bundle-case-alias",
         path: CASE_ALIAS_MEMBER_PATH,
         fileCount: aliasEntries.length,
         treeDigest: digestTreeEntries(aliasEntries),
@@ -703,7 +705,7 @@ describe("portable workflow characterization baseline", () => {
     async () => {
       const documents = await loadPortableBaselineDocuments(REPO_ROOT);
       const canonicalMember = documents.overlayMap.boundedClosure.members.find(
-        (member) => member.id === "deliver-work-codex-metadata",
+        (member) => member.id === "ce-commit-source-bundle",
       )!;
       const aliasEntries = await collectTreeEntries(
         REPO_ROOT,
@@ -743,11 +745,11 @@ describe("portable workflow characterization baseline", () => {
         ]),
       );
 
-      const overlapPath = ".AGENTS/skills/deliver-work";
+      const overlapPath = ".AGENTS/skills/ce-commit/SKILL.md";
       const overlapEntries = await collectTreeEntries(REPO_ROOT, overlapPath);
       const overlapMember = {
         ...canonicalMember,
-        id: "deliver-work-case-alias-overlap",
+        id: "ce-commit-source-bundle-case-alias-overlap",
         kind: "skill-bundle" as const,
         path: overlapPath,
         fileCount: overlapEntries.length,
