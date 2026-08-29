@@ -22,11 +22,11 @@ import {
 const WORKFLOW = "compound-delivery-kernel" as const;
 const RELEASE_ID = "core-v1" as const;
 const RELEASE_PROFILE = "core" as const;
-const SOURCE_COMMIT_SHA = "ddd04495d4fd5d8bac214cb4b81f9dd985d8dd0d";
+const SOURCE_COMMIT_SHA = "f0a058d7b40a38bbe43c007f8b11248ecd4bda6a";
 const ARCHIVE_SHA256 =
-  "004bfcf1c8d245a75d9f696d9f1ac83af4b0e6f2c90a48e3927a916a5b8c5ef8";
+  "f8b39590bae786767cff1cfd849382884a0b66f12ef9978f752dbcb28c230f26";
 const METADATA_SHA256 =
-  "20b0194b082510d1cb2b7bbbe217888eac444fa28f4610819c76f194493d5e81";
+  "cd0094de0eba4077e05af0c12e10b2a692d93e30e58b7d6aa8495cb0a53899fe";
 const SOURCE_WORKFLOW_SHA256 =
   "d7a651c9392a36f923784771f24a532acca81fa223b865be46cba842c061e706";
 const SOURCE_INPUT_SHA256 =

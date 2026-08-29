@@ -19,6 +19,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   auditPortableCanaryAdoption,
+  isAcceptedCanaryShadow,
   rehearsePortableCanaryRollback,
 } from "./portable-canary-adoption";
 import { portableShadowComparisonSha256 } from "./portable-shadow-observation";
@@ -76,13 +77,37 @@ async function canaryFixture() {
 }
 
 describe("portable workflow canary adoption", () => {
-  it("binds one active workflow to the accepted shadow and exact release", async () => {
+  it("reuses accepted shadow only for the same canary workflow bytes", async () => {
     const result = await auditPortableCanaryAdoption(ROOT);
 
     expect(result.findings).toEqual([]);
     expect(result.summary).toContain(
       "compound-delivery-kernel is active from core-v1 for codex and claude-code",
     );
+  });
+
+  it("does not reuse an otherwise valid shadow for different workflow bytes", async () => {
+    const telemetry = JSON.parse(
+      await readFile(
+        path.join(
+          ROOT,
+          "telemetry/delivery-runs/2026-08-28T20-20-17-363Z-codex-v26-1429-shadow-canary.json",
+        ),
+        "utf8",
+      ),
+    );
+    const comparison = telemetry.shadowComparison;
+    comparison.source.workflowSha256 = "0".repeat(64);
+    comparison.comparisonSha256 =
+      portableShadowComparisonSha256(comparison);
+
+    expect(
+      isAcceptedCanaryShadow(
+        comparison,
+        comparison.comparisonSha256,
+        "d7a651c9392a36f923784771f24a532acca81fa223b865be46cba842c061e706",
+      ),
+    ).toBe(false);
   });
 
   it("restores the prior Athena body offline without touching unrelated work", async () => {

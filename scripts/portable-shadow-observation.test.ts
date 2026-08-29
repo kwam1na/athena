@@ -82,11 +82,11 @@ describe("portable workflow shadow observation", () => {
       source: {
         releaseId: "core-v1",
         profile: "core",
-        sourceCommitSha: "ddd04495d4fd5d8bac214cb4b81f9dd985d8dd0d",
+        sourceCommitSha: "f0a058d7b40a38bbe43c007f8b11248ecd4bda6a",
         archiveSha256:
-          "004bfcf1c8d245a75d9f696d9f1ac83af4b0e6f2c90a48e3927a916a5b8c5ef8",
+          "f8b39590bae786767cff1cfd849382884a0b66f12ef9978f752dbcb28c230f26",
         metadataSha256:
-          "20b0194b082510d1cb2b7bbbe217888eac444fa28f4610819c76f194493d5e81",
+          "cd0094de0eba4077e05af0c12e10b2a692d93e30e58b7d6aa8495cb0a53899fe",
       },
       athena: {
         routing: { entryPoint: "deliver-work", workflow: "implement" },
