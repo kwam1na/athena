@@ -1,0 +1,88 @@
+{
+  "schemaVersion": "athena-policy-comparison-report/1",
+  "comparedAt": "2026-08-30",
+  "comparisonAuthority": "bun run pr:athena (unchanged legacy aggregate)",
+  "mode": "read-only",
+  "inputs": {
+    "repository-policy.json": "5206353be3ee1c55fb9c045914c5d96459ed2dbd0f5374318612ba2394591f7e",
+    "adapters.json": "5f8aa52add535acf9d41696b2766e6891d64f3beff85712aa8727d0cbb334238",
+    "pre-cutover-oracle.json": "e16fb8a647771c4cc50531249d0a20e950cb5d4bccb20246a6b65e324469d28b",
+    "compiledDigest": "5421423d9153cf699a227f5e25a585de5bbe1aa05efc338b9ed6d48572e8b0a6"
+  },
+  "results": {
+    "compile": "ok: the declarative document plus the twelve typed adapters compile through the harness policy compiler (agent-delivery-harness 981f39d) with zero rejections",
+    "phaseParity": "ok: oracle phase vector matches the live pr:athena phase order and package.json script chain",
+    "obligationParity": "ok: every live gate obligation (review.green, documentation.current, telemetry.recorded) is activated by the declarative document with matching activation semantics",
+    "leafMapping": "ok: each proposed leaf maps to exactly one adapter; no adapter is mapped twice; the pr:athena aggregate is registered as no leaf",
+    "activationScenarios": "ok: docs-only, script, webapp code, Convex, and storefront candidates all select the identical authoritative phase set; mechanical selection matches the frozen oracle vectors",
+    "authority": "ok: merge-ready is the only granted finish line; pr-creation is the only granted authority; merge and deploy remain ungranted (explicitly forbidden) with their adapters registered discovery-only",
+    "generatedArtifactOwnership": "ok: every generated artifact group is owned by its generator behind stage.generated-artifact-repair, and the non-docs generated trees are protected paths in every checkpoint grant",
+    "plantedCompileRejections": {
+      "duplicate-obligation": ["duplicate_obligation"],
+      "contradictory-merge-authority": ["contradictory_authority"],
+      "merge-finish-line-without-authority": ["contradictory_finish_line"],
+      "required-capability-without-adapter": ["capability_unavailable"],
+      "privileged-credential-in-model-grant": ["privileged_credential_in_model_grant"],
+      "unknown-document-member": ["unknown_member"],
+      "duplicate-capability": ["duplicate_capability"]
+    }
+  },
+  "adjudications": [
+    {
+      "id": "adversarial-lens-category",
+      "observed": "Athena's delivery review runs an outcome-correctness lens and an adversarial lens; the compiled policy vocabulary has no adversarial category.",
+      "projection": "lens.adversarial-testing is declared under the testing-policy category, which is the mandatory category its probing (tests, edge cases, policy compliance) satisfies.",
+      "disposition": "accepted-projection",
+      "blocking": false
+    },
+    {
+      "id": "tracker-host-provided",
+      "observed": "Linear tracking is performed by the host session (MCP), not by any repository-owned command; bun run pr:athena has no tracker dependency.",
+      "projection": "No tracker adapter is registered and trackerAbsenceFallback is proceed-without-tracker, so tracker absence never blocks delivery - matching current behavior.",
+      "disposition": "accepted-projection",
+      "blocking": false
+    },
+    {
+      "id": "admission-config-projection-deferred",
+      "observed": "Athena's live admission authority is the repository gate registry and gate-admission evaluator, not a harness-format HarnessConfig document.",
+      "projection": "The optional admission member of the policy document is omitted. Projecting the registry into the product HarnessConfig grammar would duplicate the live command graph while the legacy aggregate is still the authority; it lands with the shadow-preconditions sub-deliverable once the product installs in shadow mode.",
+      "disposition": "deferred",
+      "blocking": false
+    },
+    {
+      "id": "generator-invocation-surface",
+      "observed": "Generators (graphify:rebuild, convex codegen, agent-sdk:generate, harness:generate) are invoked today through the model-driven shell during preparation.",
+      "projection": "The projected model assigns generated trees to stage.generated-artifact-repair (a mutation-stage leaf) and protects the non-docs generated paths from model-driven stages. Ownership of the bytes is unchanged: generators produce them, sensors verify them.",
+      "disposition": "accepted-projection",
+      "blocking": false
+    },
+    {
+      "id": "preparation-admission-two-adapters",
+      "observed": "The ticket names harness preparation/admission as one proposed leaf surface.",
+      "projection": "It maps to two typed adapters - stage.harness-preparation (publishes the candidate receipt) and sensor.harness-admission (judges the prepared candidate) - because one mutates local state and the other only reads. Each still maps exactly once.",
+      "disposition": "recorded",
+      "blocking": false
+    },
+    {
+      "id": "reporting-leaf-granularity",
+      "observed": "Report-shaped enforcement is split across delivery:documentation-check (obligation provider) and reports:presentation:check (an admission provider command).",
+      "projection": "sensor.delivery-reporting binds delivery:documentation-check as the obligation-level authority; reports:presentation:check stays inside the admission provider command graph rather than becoming a second reporting leaf.",
+      "disposition": "recorded",
+      "blocking": false
+    },
+    {
+      "id": "hosted-check-observation-unscripted",
+      "observed": "Hosted required checks (athena-pr-tests) are observed today via gh pr checks by the operator or agent; no repository script owns that observation.",
+      "projection": "status.hosted-checks is a status-reconciliation adapter (read-only by kind); it grants nothing and mutates nothing, mirroring the observation-only reality.",
+      "disposition": "recorded",
+      "blocking": false
+    },
+    {
+      "id": "branch-push-outside-model-grant",
+      "observed": "Under the legacy authority the agent pushes delivery branches itself after the gates pass.",
+      "projection": "The portable execution grant forbids git.push in every model-driven stage; in the managed model the push happens behind operation.pr-creation outside the model grant. Legacy behavior is unchanged until cutover; this difference is between projections, not a change to current authority.",
+      "disposition": "accepted-projection",
+      "blocking": false
+    }
+  ]
+}
