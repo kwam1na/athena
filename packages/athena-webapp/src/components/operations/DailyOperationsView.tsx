@@ -28,7 +28,6 @@ import {
   Ban,
   Barcode,
   Bot,
-  Calendar as CalendarIcon,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -55,7 +54,6 @@ import {
   getLocalOperatingDate,
   getLocalOperatingDateRange,
   getLocalOperatingDateRangeFromSearch,
-  getOperatingClockNow,
 } from "@/lib/operations/operatingDate";
 import { formatStoredAmount } from "@/lib/pos/displayAmounts";
 import { cn } from "@/lib/utils";
@@ -69,6 +67,7 @@ import { currencyFormatter } from "~/shared/currencyFormatter";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
 import { FinancialValue } from "../common/FinancialValue";
+import { OperatingDatePicker } from "../common/OperatingDatePicker";
 import {
   PageLevelHeader,
   PageWorkspace,
@@ -81,8 +80,6 @@ import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { Calendar } from "../ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import {
   Sheet,
   SheetContent,
@@ -3151,63 +3148,6 @@ function SupportingWorkspaceLinks({
         })}
       </div>
     </div>
-  );
-}
-
-function OperatingDatePicker({
-  disabled = false,
-  latestSelectableDate: latestSelectableDateProp,
-  operatingDate,
-  onChange,
-}: {
-  disabled?: boolean;
-  latestSelectableDate?: Date;
-  operatingDate: string;
-  onChange?: (date: Date) => void;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const selectedDate = getLocalDateFromOperatingDate(operatingDate);
-  const latestSelectableDate = useMemo(() => {
-    if (latestSelectableDateProp) return latestSelectableDateProp;
-
-    const today = getOperatingClockNow();
-
-    return new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  }, [latestSelectableDateProp]);
-
-  return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          aria-label={`Change operating date, currently ${formatOperatingDateWithWeekday(
-            operatingDate,
-          )}`}
-          className="h-auto w-full min-w-0 justify-start rounded-lg px-layout-md py-layout-sm text-sm font-normal text-muted-foreground shadow-surface sm:w-auto"
-          disabled={disabled || !onChange}
-          variant="outline"
-        >
-          <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-          <span className="shrink-0">Operating date</span>
-          <span className="min-w-0 truncate font-medium text-foreground">
-            {formatOperatingDateWithWeekday(operatingDate)}
-          </span>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-auto p-0">
-        <Calendar
-          defaultMonth={selectedDate ?? latestSelectableDate}
-          disabled={{ after: latestSelectableDate }}
-          mode="single"
-          onSelect={(date) => {
-            if (!date) return;
-
-            onChange?.(date);
-            setIsOpen(false);
-          }}
-          selected={selectedDate}
-        />
-      </PopoverContent>
-    </Popover>
   );
 }
 

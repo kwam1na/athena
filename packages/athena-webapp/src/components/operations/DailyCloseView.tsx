@@ -17,7 +17,6 @@ import {
   Banknote,
   Ban,
   Bot,
-  Calendar as CalendarIcon,
   Check,
   CheckCircle2,
   ClipboardCheck,
@@ -51,11 +50,9 @@ import {
 } from "@/lib/errors/runCommand";
 import { getOrigin } from "@/lib/navigationUtils";
 import {
-  getLocalDateFromOperatingDate,
   getLocalOperatingDate,
   getLocalOperatingDateRange,
   getLocalOperatingDateRangeFromSearch,
-  getOperatingClockNow,
 } from "@/lib/operations/operatingDate";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
@@ -72,6 +69,7 @@ import View from "../View";
 import { FadeIn } from "../common/FadeIn";
 import { FinancialValue } from "../common/FinancialValue";
 import { ListPagination } from "../common/ListPagination";
+import { OperatingDatePicker } from "../common/OperatingDatePicker";
 import {
   PageLevelHeader,
   PageWorkspace,
@@ -82,10 +80,8 @@ import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { Calendar } from "../ui/calendar";
 import { Checkbox } from "../ui/checkbox";
 import { LoadingButton } from "../ui/loading-button";
-import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import {
   Accordion,
   AccordionContent,
@@ -3669,63 +3665,6 @@ export function DailyCloseReadOnlyReport({
         </section>
       ) : null}
     </PageWorkspace>
-  );
-}
-
-function OperatingDatePicker({
-  disabled = false,
-  latestSelectableDate: latestSelectableDateProp,
-  operatingDate,
-  onChange,
-}: {
-  disabled?: boolean;
-  latestSelectableDate?: Date;
-  operatingDate: string;
-  onChange?: (date: Date) => void;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const selectedDate = getLocalDateFromOperatingDate(operatingDate);
-  const latestSelectableDate = useMemo(() => {
-    if (latestSelectableDateProp) return latestSelectableDateProp;
-
-    const today = getOperatingClockNow();
-
-    return new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  }, [latestSelectableDateProp]);
-
-  return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          aria-label={`Change operating date, currently ${formatDailyCloseOperatingDate(
-            operatingDate,
-          )}`}
-          className="h-auto justify-start rounded-lg px-layout-md py-layout-sm text-sm font-normal text-muted-foreground shadow-surface"
-          disabled={disabled || !onChange}
-          variant="outline"
-        >
-          <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-          Operating date{" "}
-          <span className="font-medium text-foreground">
-            {formatDailyCloseOperatingDate(operatingDate)}
-          </span>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-auto p-0">
-        <Calendar
-          defaultMonth={selectedDate ?? undefined}
-          disabled={{ after: latestSelectableDate }}
-          mode="single"
-          onSelect={(date) => {
-            if (!date) return;
-
-            onChange?.(date);
-            setIsOpen(false);
-          }}
-          selected={selectedDate}
-        />
-      </PopoverContent>
-    </Popover>
   );
 }
 
