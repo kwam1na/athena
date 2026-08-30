@@ -48,12 +48,16 @@
       "documentation.current": {
         "activation": "always",
         "freshness": "live",
-        "providers": ["delivery-documentation-check"]
+        "providerPolicy": "all",
+        "providers": ["delivery-documentation-check"],
+        "ciDelegation": []
       },
       "telemetry.recorded": {
         "activation": "always",
         "freshness": "live",
+        "providerPolicy": "all",
         "providers": ["delivery-run-telemetry-check"],
+        "ciDelegation": [],
         "blockingThresholdSourceLines": 150,
         "blocksOnlyWhenRequired": "A missing record blocks only for a substantial deliverable (changed source lines at or above the threshold) with a completed local gate run against the current deliverable, or in CI mode."
       }

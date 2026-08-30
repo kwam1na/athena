@@ -6,7 +6,8 @@
   "inputs": {
     "repository-policy.json": "5206353be3ee1c55fb9c045914c5d96459ed2dbd0f5374318612ba2394591f7e",
     "adapters.json": "5f8aa52add535acf9d41696b2766e6891d64f3beff85712aa8727d0cbb334238",
-    "pre-cutover-oracle.json": "e16fb8a647771c4cc50531249d0a20e950cb5d4bccb20246a6b65e324469d28b",
+    "pre-cutover-oracle.json": "76b3e7d79294ff910984435609e44c7fc80f0d52e7f1d2b9419df28488d29564",
+    "compiled-snapshot.json": "20a6c0c9ed57f29601299528927fd6eec9f96f390ed39bfbc74355c2f3752ef7",
     "compiledDigest": "5421423d9153cf699a227f5e25a585de5bbe1aa05efc338b9ed6d48572e8b0a6"
   },
   "results": {

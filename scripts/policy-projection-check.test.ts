@@ -55,7 +55,45 @@ describe("policy projection comparison", () => {
   test("the pre-cutover oracle bytes match the pinned digest", async () => {
     const bytes = await readFile(path.join(policyDir, "pre-cutover-oracle.json"));
     const digest = createHash("sha256").update(bytes).digest("hex");
+    // Inlined rather than compared to the sensor's export, so recharacterizing
+    // the oracle is a three-place edit this test independently witnesses.
+    expect(digest).toBe(
+      "76b3e7d79294ff910984435609e44c7fc80f0d52e7f1d2b9419df28488d29564",
+    );
     expect(digest).toBe(PRE_CUTOVER_ORACLE_DIGEST);
+  });
+
+  test("a hand-edited compiled snapshot goes stale against the recorded report", async () => {
+    const copyDir = await policyDirCopy();
+    const snapshot = await readPolicyJson(copyDir, "compiled-snapshot.json");
+    for (const grant of snapshot.compiled.checkpointGrants) {
+      grant.grant.forbiddenOperations = [];
+    }
+    await writePolicyJson(copyDir, "compiled-snapshot.json", snapshot);
+
+    const result = await runPolicyProjectionCheck(rootDir, { policyDir: copyDir });
+    expect(result.status).toBe("fail");
+    expect(findingCodes(result)).toContain("report_input_stale");
+  });
+
+  test("an emptied adjudication record blocks", async () => {
+    const copyDir = await policyDirCopy();
+    const report = await readPolicyJson(copyDir, "comparison-report.json");
+    report.adjudications = [];
+    await writePolicyJson(copyDir, "comparison-report.json", report);
+
+    const result = await runPolicyProjectionCheck(rootDir, { policyDir: copyDir });
+    expect(result.status).toBe("fail");
+    expect(findingCodes(result)).toContain("adjudication_incomplete");
+  });
+
+  test("valid JSON with the wrong shape fails typed instead of throwing", async () => {
+    const copyDir = await policyDirCopy();
+    await writePolicyJson(copyDir, "adapters.json", {});
+
+    const result = await runPolicyProjectionCheck(rootDir, { policyDir: copyDir });
+    expect(result.status).toBe("fail");
+    expect(findingCodes(result)).toContain("artifact_unreadable");
   });
 
   test("an edited oracle is a digest mismatch, not a silent recharacterization", async () => {

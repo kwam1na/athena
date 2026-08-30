@@ -30,7 +30,7 @@ import { TRACKED_GRAPHIFY_ARTIFACTS } from "./graphify-check";
 export const POLICY_PROJECTION_DIR = ".agents/policy";
 
 export const PRE_CUTOVER_ORACLE_DIGEST =
-  "e16fb8a647771c4cc50531249d0a20e950cb5d4bccb20246a6b65e324469d28b";
+  "76b3e7d79294ff910984435609e44c7fc80f0d52e7f1d2b9419df28488d29564";
 
 const DOCUMENT_FILE = "repository-policy.json";
 const ADAPTERS_FILE = "adapters.json";
@@ -155,7 +155,10 @@ export async function runPolicyProjectionCheck(
           sensitiveScenarioCount?: number;
           relevantBinaryChangeActivates?: boolean;
           blockingThresholdSourceLines?: number;
+          freshness: string;
+          providerPolicy: string;
           providers: string[];
+          ciDelegation: string[];
         }
       >;
       mechanicalSelection: Record<string, string[]>;
@@ -186,6 +189,10 @@ export async function runPolicyProjectionCheck(
     adjudications: { id?: string; disposition?: string; blocking?: boolean }[];
   };
 
+  // Valid JSON with the wrong shape must land as a typed finding, not an
+  // unhandled throw that discards the findings already collected.
+  try {
+
   // -- Oracle immutability ---------------------------------------------------
   const oracleDigest = sha256(bytes.get(ORACLE_FILE)!);
   if (oracleDigest !== PRE_CUTOVER_ORACLE_DIGEST) {
@@ -207,10 +214,15 @@ export async function runPolicyProjectionCheck(
       "the recorded compiled snapshot was not compiled from the current document and adapter bytes; recompile through the harness policy compiler and re-record",
     );
   }
+  // The snapshot's own bytes are pinned through the report: hand-editing the
+  // recorded compile output without re-recording the comparison is a stale
+  // report, not a quieter snapshot.
+  const snapshotFileDigest = sha256(bytes.get(SNAPSHOT_FILE)!);
   if (
     report.inputs[DOCUMENT_FILE] !== documentDigest ||
     report.inputs[ADAPTERS_FILE] !== adaptersDigest ||
     report.inputs[ORACLE_FILE] !== oracleDigest ||
+    report.inputs[SNAPSHOT_FILE] !== snapshotFileDigest ||
     report.inputs["compiledDigest"] !== snapshot.compiled.compiledDigest
   ) {
     emit(
@@ -240,9 +252,28 @@ export async function runPolicyProjectionCheck(
   const phasesLiteral = deliveryRunSource.match(
     /const PR_ATHENA_PHASES[^=]*=\s*\[([\s\S]*?)\];/,
   );
-  const livePhases = phasesLiteral
-    ? [...phasesLiteral[1].matchAll(/phase:\s*"([a-z-]+)"/g)].map((m) => m[1])
+  const livePhaseEntries = phasesLiteral
+    ? [
+        ...phasesLiteral[1].matchAll(
+          /phase:\s*"([a-z-]+)",\s*command:\s*\[([^\]]*)\]/g,
+        ),
+      ].map((match) => ({
+        phase: match[1],
+        command: [...match[2].matchAll(/"([^"]*)"/g)].map((m) => m[1]).join(" "),
+      }))
     : [];
+  const livePhases = livePhaseEntries.map((entry) => entry.phase);
+  for (const entry of livePhaseEntries) {
+    const frozen = oracle.phaseVector.orderedPhases.find(
+      (candidate) => candidate.phase === entry.phase,
+    );
+    if (frozen && frozen.command !== entry.command) {
+      emit(
+        "phase_drift",
+        `phase ${entry.phase} now runs \`${entry.command}\` but the oracle froze \`${frozen.command}\``,
+      );
+    }
+  }
   const scorecardLiteral =
     /const PR_ATHENA_SCORECARD_PHASE[^=]*=\s*\{\s*phase:\s*"scorecard"/.test(
       deliveryRunSource,
@@ -308,6 +339,19 @@ export async function runPolicyProjectionCheck(
       emit(
         "obligation_drift",
         `obligation ${obligationId} providers drifted from the oracle`,
+      );
+    }
+    if (
+      oracleObligation.freshness !== liveObligation.freshness.kind ||
+      oracleObligation.providerPolicy !== liveObligation.providerPolicy ||
+      !equalStringArrays(
+        [...oracleObligation.ciDelegation].sort(),
+        [...liveObligation.ciDelegationPolicyIds].sort(),
+      )
+    ) {
+      emit(
+        "obligation_drift",
+        `obligation ${obligationId} freshness, provider policy, or CI delegation drifted from the oracle`,
       );
     }
   }
@@ -519,8 +563,14 @@ export async function runPolicyProjectionCheck(
   }
 
   // -- Every observed-only mismatch carries a disposition --------------------
+  if (!Array.isArray(report.adjudications) || report.adjudications.length === 0) {
+    emit(
+      "adjudication_incomplete",
+      "the comparison report records no adjudications; the observed-only mismatch record cannot be emptied without a deliberate recharacterization",
+    );
+  }
   const adjudicationIds = new Set<string>();
-  for (const adjudication of report.adjudications) {
+  for (const adjudication of report.adjudications ?? []) {
     if (
       !adjudication.id ||
       adjudicationIds.has(adjudication.id) ||
@@ -533,6 +583,15 @@ export async function runPolicyProjectionCheck(
       );
     }
     if (adjudication.id) adjudicationIds.add(adjudication.id);
+  }
+
+  } catch (error) {
+    emit(
+      "artifact_unreadable",
+      `a policy artifact does not have the expected shape: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
   }
 
   return { status: findings.length === 0 ? "pass" : "fail", findings };

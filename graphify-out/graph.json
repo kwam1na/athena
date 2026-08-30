@@ -168071,7 +168071,7 @@
       "relation": "calls",
       "source": "policy_projection_check_coveredbyprotectedtree",
       "source_file": "scripts/policy-projection-check.ts",
-      "source_location": "L492",
+      "source_location": "L536",
       "target": "policy_projection_check_runpolicyprojectioncheck",
       "weight": 1
     },
@@ -168083,7 +168083,7 @@
       "relation": "calls",
       "source": "policy_projection_check_equalstringarrays",
       "source_file": "scripts/policy-projection-check.ts",
-      "source_location": "L252",
+      "source_location": "L283",
       "target": "policy_projection_check_runpolicyprojectioncheck",
       "weight": 1
     },
@@ -168095,7 +168095,7 @@
       "relation": "calls",
       "source": "policy_projection_check_formatmechanicalselection",
       "source_file": "scripts/policy-projection-check.ts",
-      "source_location": "L435",
+      "source_location": "L479",
       "target": "policy_projection_check_runpolicyprojectioncheck",
       "weight": 1
     },
@@ -168107,7 +168107,7 @@
       "relation": "calls",
       "source": "policy_projection_check_sha256",
       "source_file": "scripts/policy-projection-check.ts",
-      "source_location": "L190",
+      "source_location": "L197",
       "target": "policy_projection_check_runpolicyprojectioncheck",
       "weight": 1
     },
@@ -198731,7 +198731,7 @@
       "relation": "contains",
       "source": "scripts_policy_projection_check_test_ts",
       "source_file": "scripts/policy-projection-check.test.ts",
-      "source_location": "L228",
+      "source_location": "L266",
       "target": "policy_projection_check_test_capturecandidate",
       "weight": 1
     },
@@ -338782,7 +338782,7 @@
       "label": "captureCandidate()",
       "norm_label": "capturecandidate()",
       "source_file": "scripts/policy-projection-check.test.ts",
-      "source_location": "L228"
+      "source_location": "L266"
     },
     {
       "community": 702,
