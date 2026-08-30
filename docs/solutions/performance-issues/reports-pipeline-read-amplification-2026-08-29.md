@@ -12,7 +12,7 @@ root_cause: logic_error
 resolution_type: code_fix
 severity: high
 tags: [convex, reports, read-amplification, projections, checkpoints, migration]
-delivery_diff_fingerprint: d5f7a0ef38e5cfe5fa20236969678f69846038712f2dfb9171d643c495cb89fa
+delivery_diff_fingerprint: 9be94add912f28cc4a360931ded0ffbeb41d98c9dcc8a36098feb0f29e254087
 ---
 
 # Reduce reports read amplification without publishing partial truth

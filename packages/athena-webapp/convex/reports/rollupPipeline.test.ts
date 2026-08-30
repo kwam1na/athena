@@ -278,9 +278,10 @@ describe("immutable input and checkpointed period rollups", () => {
     expect((await output(t, storeId))[0].netSalesMinor).toBe(100);
   });
 
-  // Under V8 coverage, convex-test's in-memory index scans take about 90s for
-  // these 4030 real contributions. Allow concurrent-suite overhead without
-  // reducing cardinality or changing the production worker's bounded batches.
+  // convex-test scans its in-memory tables for indexed queries: these 4030
+  // real contributions take ~89s under local V8 and exceeded 180s in hosted
+  // coverage. Bound simulator time without changing cardinality, assertions,
+  // or production worker batches; this is not a production latency budget.
   it("repairs over 4000 source SKU-day contributions into an isolated epoch without touching legacy totals", async () => {
     const t = convexTest(schema, modules);
     const { storeId, skuIds } = await setup(t, 130);
@@ -334,7 +335,7 @@ describe("immutable input and checkpointed period rollups", () => {
       ctx.db.query("reportPeriodSkuRollup").first(),
     );
     expect(legacy?.netSalesMinor).toBe(777);
-  }, 180_000);
+  }, 360_000);
 
   it("keeps recurring reads proportional to one changed day's contributions", async () => {
     const t = convexTest(schema, modules);
