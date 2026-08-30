@@ -79,6 +79,165 @@ const baseProps = {
   onCursorChange: vi.fn(),
 };
 
+describe("ReportsItemsView period navigation", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it.each([
+    ["day", "2026-07-28", "2026-07-27", "2026-07-29"],
+    ["week", "2026-07-28", "2026-07-21", "2026-08-04"],
+    ["month", "2026-03-31", "2026-02-28", "2026-04-30"],
+  ] as const)(
+    "steps by the selected %s period",
+    async (periodType, periodDate, previous, next) => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(2026, 7, 30, 12));
+      useQuery.mockReturnValue({ rows: [], continueCursor: null });
+      const onPeriodDateChange = vi.fn();
+      render(
+        <ReportsItemsView
+          {...baseProps}
+          periodType={periodType}
+          periodDate={periodDate}
+          onPeriodDateChange={onPeriodDateChange}
+        />,
+      );
+
+      await userEvent.click(
+        screen.getByRole("button", {
+          name: new RegExp(`^Previous ${periodType},`),
+        }),
+      );
+      await userEvent.click(
+        screen.getByRole("button", {
+          name: new RegExp(`^Next ${periodType},`),
+        }),
+      );
+
+      expect(onPeriodDateChange).toHaveBeenNthCalledWith(1, previous);
+      expect(onPeriodDateChange).toHaveBeenNthCalledWith(2, next);
+    },
+  );
+
+  it("clamps a future route date when moving to the previous period", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 7, 30, 12));
+    useQuery.mockReturnValue({ rows: [], continueCursor: null });
+    const onPeriodDateChange = vi.fn();
+    render(
+      <ReportsItemsView
+        {...baseProps}
+        onPeriodDateChange={onPeriodDateChange}
+        periodDate="2026-09-30"
+      />,
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /^Previous day,/ }),
+    );
+
+    expect(onPeriodDateChange).toHaveBeenCalledWith("2026-08-30");
+  });
+
+  it.each([
+    ["day", "2026-08-30"],
+    ["week", "2026-08-24"],
+    ["month", "2026-08-01"],
+  ] as const)(
+    "stops at the current %s even when the selected date is earlier",
+    (periodType, periodDate) => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(2026, 7, 30, 12));
+      useQuery.mockReturnValue({ rows: [], continueCursor: null });
+      render(
+        <ReportsItemsView
+          {...baseProps}
+          periodType={periodType}
+          periodDate={periodDate}
+        />,
+      );
+
+      expect(
+        screen.getByRole("button", { name: `Next ${periodType} unavailable` }),
+      ).toBeDisabled();
+      expect(
+        screen.getByRole("button", {
+          name: new RegExp(`^Previous ${periodType},`),
+        }),
+      ).toBeEnabled();
+    },
+  );
+
+  it.each([
+    ["week", "2026-08-23"],
+    ["month", "2026-07-31"],
+  ] as const)(
+    "returns to the current %s without choosing a future date",
+    async (periodType, periodDate) => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(2026, 7, 26, 12));
+      useQuery.mockReturnValue({ rows: [], continueCursor: null });
+      const onPeriodDateChange = vi.fn();
+      render(
+        <ReportsItemsView
+          {...baseProps}
+          periodType={periodType}
+          periodDate={periodDate}
+          onPeriodDateChange={onPeriodDateChange}
+        />,
+      );
+
+      await userEvent.click(
+        screen.getByRole("button", {
+          name: new RegExp(`^Next ${periodType},`),
+        }),
+      );
+      expect(onPeriodDateChange).toHaveBeenCalledWith("2026-08-26");
+    },
+  );
+
+  it("updates the arrow behavior when the selected period changes", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 7, 30, 12));
+    useQuery.mockReturnValue({ rows: [], continueCursor: null });
+    const onPeriodDateChange = vi.fn();
+    const { rerender } = render(
+      <ReportsItemsView
+        {...baseProps}
+        onPeriodDateChange={onPeriodDateChange}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /^Previous day,/ }),
+    );
+    rerender(
+      <ReportsItemsView
+        {...baseProps}
+        periodType="week"
+        onPeriodDateChange={onPeriodDateChange}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /^Previous week,/ }),
+    );
+    rerender(
+      <ReportsItemsView
+        {...baseProps}
+        periodType="month"
+        onPeriodDateChange={onPeriodDateChange}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /^Previous month,/ }),
+    );
+
+    expect(onPeriodDateChange.mock.calls).toEqual([
+      ["2026-07-27"],
+      ["2026-07-21"],
+      ["2026-06-28"],
+    ]);
+  });
+});
+
 describe("ReportsItemsView shared demo", () => {
   const today = getLocalOperatingDate();
   /** The most recent demo date that actually sold something. */

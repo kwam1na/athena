@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-30T09:34:58.933Z",
+  "branch": "codex/operating-date-navigation",
+  "headSha": "ea4dfdd1a53c850c297496698b9fa621f39c521d",
+  "deliverableDiffFingerprint": "4196b4d58ffae846350621da3b8a4e509a4d72eaf6b85e640834cb32469a1760",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 3,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 880096.4318330002
+  },
+  "reviewLoop": {
+    "providerId": "execute",
+    "runId": "operating-date-navigation-final",
+    "finalPassId": "final-pass-1",
+    "recordedAt": "2026-08-30T09:16:19.940Z",
+    "iterationCount": 2,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 1,
+      "P3": 0
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}

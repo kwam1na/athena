@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Operating-date navigation delivery candidate</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="4196b4d58ffae846350621da3b8a4e509a4d72eaf6b85e640834cb32469a1760">
+  <header data-report-section="header">
+    <h1>Operating-date navigation delivery candidate</h1>
+    <p>Shared historical-date controls for Athena operations and Reports</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Branch codex/operating-date-navigation</li>
+      <li>Frontend-only runtime change</li>
+      <li>PR, merge, root alignment, and deploy pending</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Source</dt><dd>codex/operating-date-navigation against origin/main</dd>
+      <dt>Base</dt><dd>ea4dfdd1</dd>
+      <dt>PR</dt><dd>Not opened</dd>
+      <dt>Status</dt><dd>Delivery candidate</dd>
+      <dt>Production deploy</dt><dd>Pending Athena admin static deploy after merge</dd>
+      <dt>Root alignment</dt><dd>Pending remote merge</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+      <p>This candidate replaces three copied operating-date pickers with one shared picker and navigation control, then gives the Reports Items workspace matching compact day, week, and month arrows.</p>
+      <p>The shared controls make historical review quicker without changing the owner of reporting periods, operating-day lifecycle, queries, permissions, or backend data. Forward navigation stops at the current operating date.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Problem</h2>
+      <p>Daily Operations, Daily Opening, and Daily Close each carried near-identical calendar picker code. Reports Items required selecting a date from its calendar even for a simple adjacent period. The duplicated controls could drift in their future-date guard, accessibility labels, and historical calendar focus.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model</h2>
+      <p>The shared controls are a steering wheel, not the map. `PeriodNavigation` renders arrows only; the workspace supplies labels, availability, arithmetic, and the callback that changes its own state. `OperatingDatePicker` supplies calendar presentation plus adjacent-day steering, while each operations view keeps ownership of its date search state and bounded query.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+      <p>Before, three operations views each rendered a calendar-only picker, and Reports Items had no adjacent-period affordance. After, operations share one picker with accessible previous/next day controls, while Reports computes adjacent day, week, or month values through its reporting-period helper.</p>
+      <p>Month movement preserves the selected day where possible and clamps to the final day in a short month. Day and week movement use operating-date helpers. Reports permits moving into a current partial week or month when that period starts on or before today, then clamps the selected anchor date to today; a wholly future period remains unavailable.</p>
+  </section>
+  <section data-report-section="changes">
+    <h2>Changed and intentionally unchanged</h2>
+      <p>Changed: reusable frontend presentation controls, operations reuse, reporting-period arithmetic, and regression tests for date boundaries, keyboard activation, and disabled states.</p>
+      <p>Unchanged: Convex APIs and mutations, reporting read-model scope, route/search parameters, opening and close readiness rules, authorization, storefront behavior, and production backend deployment requirements. The underlying calendar component is unchanged, while its initial month is now standardized around the selected historical date. The relevant later deployment is the Athena admin static app only.</p>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+      <p>The UI guard prevents future selection; it does not claim a historical operating day has data or alter server-side lifecycle rules. The extraction cannot change Daily Close approvals or history because the picker never owns those commands. A caller remains responsible for what a newly selected date loads and whether that date is actionable.</p>
+      <p>The calendar and next-day arrow share the same inclusive upper date limit, preventing one route into a future day while the other is blocked.</p>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and finish line</h2>
+      <p>`bun run test -- src/components/common/OperatingDatePicker.test.tsx src/components/reports/ReportsItemsView.test.tsx src/components/reports/reportPeriodKeys.test.ts` passed 59 tests. `bun run test -- src/components/operations/DailyOperationsView.test.tsx src/components/operations/DailyOpeningView.test.tsx src/components/operations/DailyCloseView.test.tsx src/components/operations/DailyCloseHistoryView.test.tsx` passed 206 tests. `bun run --filter '@athena/webapp' lint:frontend:changed` and `bun run --filter '@athena/webapp' typecheck` also passed.</p>
+      <p>The first authoritative `bun run pr:athena` run stopped at `athena.pr-validation` with `review_evidence_missing`, `compound-solution`, and `landed-change-report` findings. This report and the solution note address the documentation findings; final review, a passing gate, telemetry, PR merge, root alignment, and the Athena admin deploy remain pending.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Next-time guidance</h2>
+      <p>When another workspace needs adjacent operating dates, reuse the presentation controls but keep business-period arithmetic and query ownership in that workspace. Add tests for month-end, leap-year, and the current operating-date guard before treating a new navigation path as complete.</p>
+      <p>For a substantial Athena frontend candidate, create the solution note, reader report, and exact-candidate review evidence before expecting the authoritative merge gate to proceed.</p>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>packages/athena-webapp/src/components/common/OperatingDatePicker.tsx</code></td><td>Owns the shared calendar presentation, accessible operating-date labels, and adjacent-day controls with a common future-date bound.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/common/PeriodNavigation.tsx</code></td><td>Renders presentation-only previous and next buttons; callers retain period arithmetic and state ownership.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/reports/reportPeriodKeys.ts</code></td><td>Adds day, week, and month stepping, including short-month and leap-year clamping.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/reports/ReportsItemsPerformance.tsx</code></td><td>Connects compact period controls to the Reports Items selection callback and future-period guard.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/operations/DailyOperationsView.tsx</code></td><td>Representative operations consumer that now reuses the shared picker while keeping its selected-day state and query behavior.</td></tr>
+        <tr><td><code>docs/solutions/design-patterns/athena-operating-date-navigation-shared-boundaries-2026-08-30.md</code></td><td>Records the reusable ownership boundary for future operating-date navigation work.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Who decides what happens when an operator selects another period?</p>
+        <ol data-quiz-options>
+          <li>The shared arrow component</li>
+          <li data-quiz-correct>The consuming workspace callback</li>
+          <li>The Convex backend</li>
+          <li>The calendar popover</li>
+        </ol>
+        <p data-quiz-explanation>The shared controls render interaction only; each workspace keeps its own arithmetic, state, and data-loading callback.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How does month navigation handle March 31 moving to February?</p>
+        <ol data-quiz-options>
+          <li>It skips February</li>
+          <li>It always selects February 1</li>
+          <li data-quiz-correct>It clamps to the last valid February day</li>
+          <li>It disables every month boundary</li>
+        </ol>
+        <p data-quiz-explanation>Clamping preserves the day-of-month when possible while keeping the resulting operating date valid.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What stops future operating dates from being selected through the shared picker?</p>
+        <ol data-quiz-options>
+          <li>A different rule for each view</li>
+          <li data-quiz-correct>The same inclusive upper bound used by the calendar and next arrow</li>
+          <li>A backend mutation</li>
+          <li>A browser timezone check in Reports only</li>
+        </ol>
+        <p data-quiz-explanation>The calendar and forward arrow use one limit so they cannot disagree about future dates.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which domain behavior changes as part of this candidate?</p>
+        <ol data-quiz-options>
+          <li>Daily Close approval enforcement</li>
+          <li>Report fact projection</li>
+          <li data-quiz-correct>No backend domain behavior</li>
+          <li>Storefront checkout authorization</li>
+        </ol>
+        <p data-quiz-explanation>The candidate is an admin frontend control extraction and navigation addition; Convex, lifecycle, and authorization rules remain unchanged.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does the shared picker not decide whether a selected day is open or closed?</p>
+        <ol data-quiz-options>
+          <li>It has no date value</li>
+          <li data-quiz-correct>Lifecycle remains a workspace and server-owned business concern</li>
+          <li>The calendar library cannot render status</li>
+          <li>Only Reports can show dates</li>
+        </ol>
+        <p data-quiz-explanation>Presentation reuse must not take ownership of reporting or daily-operations lifecycle semantics.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How do Reports controls handle a current partial week or month?</p>
+        <ol data-quiz-options>
+          <li>They disable it whenever the rendered range ends after today</li>
+          <li data-quiz-correct>They allow it when the period starts by today and clamp the selected anchor to today</li>
+          <li>They choose the last closed Daily Close automatically</li>
+          <li>They allow any future anchor if the calendar is open</li>
+        </ol>
+        <p data-quiz-explanation>Reports allows the current partial period, but never leaves the selected anchor on a future operating date.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which regression scenario is especially important for adjacent month controls?</p>
+        <ol data-quiz-options>
+          <li>A random color theme</li>
+          <li data-quiz-correct>Month-end and leap-year transitions</li>
+          <li>A storefront payment retry</li>
+          <li>A Convex schema migration</li>
+        </ol>
+        <p data-quiz-explanation>Short months and leap years are where naïve date arithmetic can skip or create invalid dates.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What focused evidence has already passed for this candidate?</p>
+        <ol data-quiz-options>
+          <li>Only a manual browser demo</li>
+          <li data-quiz-correct>Reports and operations component tests, frontend lint, and TypeScript checking</li>
+          <li>A production deployment</li>
+          <li>A merged PR and CI</li>
+        </ol>
+        <p data-quiz-explanation>The targeted suites and mechanical frontend checks passed; the final delivery steps are still pending.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why was the initial authoritative PR gate blocked?</p>
+        <ol data-quiz-options>
+          <li>The date helper could not parse leap years</li>
+          <li data-quiz-correct>Required delivery artifacts and final-green review evidence were missing</li>
+          <li>The storefront build failed</li>
+          <li>A Convex mutation changed shape</li>
+        </ol>
+        <p data-quiz-explanation>The gate requires a solution note, candidate-bound report, and fresh review evidence before it spends the full merge-validation cost.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>If this candidate merges unchanged, which production surface should be deployed?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Athena admin static frontend</li>
+          <li>Storefront and Convex together</li>
+          <li>Convex only</li>
+          <li>No surface because it is documentation</li>
+        </ol>
+        <p data-quiz-explanation>The changed runtime is the Athena admin frontend; neither Convex nor storefront source changes are part of this candidate.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>Session context explorer</dt><dd>Confirmed the dirty-tree transfer, required finish line, focused proof, gate blockers, absence of an assigned PR or Linear issue, and frontend-only deployment scope.</dd>
+      <dt>Delivered diff explorer</dt><dd>Mapped the extracted controls, caller-owned behavior boundaries, date arithmetic, regression coverage, generated artifacts, and related solution-note overlap.</dd>
+      <dt>Report coherence reviewer</dt><dd>Found and corrected partial-period wording, historical calendar-focus wording, command-level validation evidence, and report-review attribution.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

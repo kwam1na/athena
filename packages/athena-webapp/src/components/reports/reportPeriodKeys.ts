@@ -165,6 +165,28 @@ export function dateRangeForItemsPeriod(
   }
 }
 
+/** Move the selected calendar date by one period without skipping short months. */
+export function adjacentItemsPeriodDate(
+  periodType: ReportPeriodType,
+  periodDate: string,
+  direction: -1 | 1,
+): string {
+  if (periodType !== "month") {
+    return addOperatingDays(
+      periodDate,
+      direction * (periodType === "week" ? 7 : 1),
+    );
+  }
+
+  const date = operatingDateToUtc(periodDate);
+  const year = date.getUTCFullYear();
+  const targetMonth = date.getUTCMonth() + direction;
+  const lastDay = new Date(Date.UTC(year, targetMonth + 1, 0)).getUTCDate();
+  return utcToOperatingDate(
+    new Date(Date.UTC(year, targetMonth, Math.min(date.getUTCDate(), lastDay))),
+  );
+}
+
 /** Builds the `d:`/`w:`/`m:` period key via the contract's own helpers. */
 export function periodKeyForSelection(
   periodType: ReportPeriodType,

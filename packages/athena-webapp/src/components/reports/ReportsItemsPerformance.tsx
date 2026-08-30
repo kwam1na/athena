@@ -22,6 +22,7 @@ import {
 import { getOrigin } from "@/lib/navigationUtils";
 import type { ReportSkuSortBy } from "~/shared/reportsContract";
 import { FlipNumber } from "@/components/common/FlipNumber";
+import { PeriodNavigation } from "@/components/common/PeriodNavigation";
 import { OperationsSummaryMetric } from "@/components/operations/OperationsSummaryMetric";
 import { formatOperationsMetricComparison } from "@/components/operations/operationsMetricFormatting";
 import { ReportCalendar } from "./ReportCalendar";
@@ -30,6 +31,7 @@ import { ReportMetricComparisonCrossfade } from "./ReportMetricComparisonCrossfa
 import {
   REPORT_PERIOD_TYPE_LABELS,
   REPORT_PERIOD_TYPES,
+  adjacentItemsPeriodDate,
   dateRangeForItemsPeriod,
   type ReportPeriodType,
 } from "./reportPeriodKeys";
@@ -86,6 +88,19 @@ export function ReportsItemsPerformance({
   variant: ReportsItemsVariant;
 }) {
   const periodRange = dateRangeForItemsPeriod(periodType, periodDate);
+  const previousPeriodDate = adjacentItemsPeriodDate(
+    periodType,
+    periodDate,
+    -1,
+  );
+  const nextPeriodDate = adjacentItemsPeriodDate(periodType, periodDate, 1);
+  const previousPeriodRange = dateRangeForItemsPeriod(
+    periodType,
+    previousPeriodDate,
+  );
+  const nextPeriodRange = dateRangeForItemsPeriod(periodType, nextPeriodDate);
+  const today = getLocalOperatingDate();
+  const canMoveNext = nextPeriodRange.startDate <= today;
   const selectedDate = getLocalDateFromOperatingDate(periodDate);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const comparisonPeriodType: ReportPeriodType = comparisonPeriodKey.startsWith(
@@ -185,7 +200,7 @@ export function ReportsItemsPerformance({
               <PopoverTrigger asChild>
                 <Button
                   aria-label={`Change date, currently ${formatOperatingDate(periodDate)}`}
-                  className="h-9 min-w-0 flex-1 justify-start rounded-lg px-3 text-sm font-medium text-foreground transition-[background-color,transform] duration-100 hover:bg-accent active:scale-[0.98] motion-reduce:transition-none sm:flex-none"
+                  className="h-9 min-w-0 flex-1 justify-start rounded-lg px-3 text-sm font-medium text-foreground transition-[background-color,transform] duration-100 hover:bg-accent active:scale-[0.98] motion-reduce:transition-none sm:flex-initial"
                   variant="ghost"
                 >
                   <CalendarIcon className="h-4 w-4 text-muted-foreground" />
@@ -207,6 +222,28 @@ export function ReportsItemsPerformance({
                 />
               </PopoverContent>
             </Popover>
+            <PeriodNavigation
+              compact
+              previousLabel={`Previous ${periodType}, ${formatReportDateRange(previousPeriodRange.startDate, previousPeriodRange.endDate)}`}
+              nextLabel={
+                canMoveNext
+                  ? `Next ${periodType}, ${formatReportDateRange(nextPeriodRange.startDate, nextPeriodRange.endDate)}`
+                  : `Next ${periodType} unavailable`
+              }
+              nextDisabled={!canMoveNext}
+              onPrevious={() =>
+                onPeriodDateChange(
+                  previousPeriodDate > today ? today : previousPeriodDate,
+                )
+              }
+              onNext={() => {
+                if (canMoveNext) {
+                  onPeriodDateChange(
+                    nextPeriodDate > today ? today : nextPeriodDate,
+                  );
+                }
+              }}
+            />
           </div>
 
           <span

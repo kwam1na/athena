@@ -1,12 +1,33 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  adjacentItemsPeriodDate,
   dateRangeForItemsPeriod,
   dateRangeForOverviewWindow,
   REPORT_DATE_RANGE_PRESET_WINDOWS,
   REPORT_OVERVIEW_WINDOWS,
   tableRangeIncludingSelection,
 } from "./reportPeriodKeys";
+
+describe("adjacent item reporting periods", () => {
+  it.each([
+    ["day", "2026-01-01", -1, "2025-12-31"],
+    ["day", "2026-03-08", 1, "2026-03-09"],
+    ["week", "2026-01-01", -1, "2025-12-25"],
+    ["week", "2026-03-08", 1, "2026-03-15"],
+    ["month", "2026-01-31", 1, "2026-02-28"],
+    ["month", "2028-03-31", -1, "2028-02-29"],
+    ["month", "2026-12-30", 1, "2027-01-30"],
+    ["month", "2026-01-30", -1, "2025-12-30"],
+  ] as const)(
+    "moves %s from %s by %s",
+    (periodType, date, direction, expected) => {
+      expect(adjacentItemsPeriodDate(periodType, date, direction)).toBe(
+        expected,
+      );
+    },
+  );
+});
 
 describe("report date-range preset windows", () => {
   it("ships all five preset windows now that every preset surface serves 184 days", () => {

@@ -561,6 +561,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/common/AnimatedHeight.test.tsx`](../../src/components/common/AnimatedHeight.test.tsx)
 - [`src/components/common/FlipNumber.test.tsx`](../../src/components/common/FlipNumber.test.tsx)
 - [`src/components/common/ListPagination.test.tsx`](../../src/components/common/ListPagination.test.tsx)
+- [`src/components/common/OperatingDatePicker.test.tsx`](../../src/components/common/OperatingDatePicker.test.tsx)
 - [`src/components/common/PageHeader.test.tsx`](../../src/components/common/PageHeader.test.tsx)
 - [`src/components/common/PageLevelHeader.test.tsx`](../../src/components/common/PageLevelHeader.test.tsx)
 - [`src/components/docs/DocsReportQuiz.test.tsx`](../../src/components/docs/DocsReportQuiz.test.tsx)
