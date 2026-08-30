@@ -1,6 +1,6 @@
 import { useQuery } from "convex/react";
 import { useParams } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 import { AnimatedDataState } from "@/components/common/AnimatedDataState";
 import { FadeIn } from "@/components/common/FadeIn";
@@ -81,10 +81,11 @@ export function ReportsItemsView({
     dataContext: settledPeriodKey,
     isInitialLoad,
     isRefreshing,
-  } = useStableReportQuery(
-    isSharedDemo ? demoResult : liveResult,
-    periodKey,
-  );
+  } = useStableReportQuery(isSharedDemo ? demoResult : liveResult, periodKey);
+  const readyResult = result?.status === "ready" ? result : undefined;
+  useEffect(() => {
+    if (result?.status === "restart" && cursor) onCursorChange(undefined, []);
+  }, [cursor, onCursorChange, result?.status]);
 
   function handlePageChange(page: number) {
     if (page === 1) {
@@ -95,53 +96,69 @@ export function ReportsItemsView({
       onCursorChange(cursorTrail.at(-1), cursorTrail.slice(0, -1));
       return;
     }
-    if (page === currentPage + 1 && result?.continueCursor) {
+    if (page === currentPage + 1 && readyResult?.continueCursor) {
       onCursorChange(
-        result.continueCursor,
+        readyResult.continueCursor,
         cursor ? [...cursorTrail, cursor] : [],
       );
     }
   }
 
-  const hasActivity = (result?.rows.length ?? 0) > 0;
+  const hasActivity = (readyResult?.rows.length ?? 0) > 0;
 
   return (
     <FadeIn>
-      <div
-        className="space-y-layout-xl"
-        data-testid="reports-items"
-      >
+      <div className="space-y-layout-xl" data-testid="reports-items">
         <ReportBackLink />
 
         <ReportsItemsPerformance
           comparisonPeriodKey={settledPeriodKey ?? periodKey}
           currency={activeStore?.currency ?? "USD"}
           hasActivity={hasActivity}
-          isTodayInProgress={result?.isTodayInProgress ?? false}
+          isTodayInProgress={readyResult?.isTodayInProgress ?? false}
           onPeriodDateChange={onPeriodDateChange}
           onPeriodTypeChange={onPeriodTypeChange}
           onSortByChange={onSortByChange}
           orgUrlSlug={orgUrlSlug!}
           periodDate={periodDate}
           periodType={periodType}
-          priorPeriodTotals={result?.priorPeriodTotals}
+          priorPeriodTotals={readyResult?.priorPeriodTotals}
           sortBy={sortBy}
           storeUrlSlug={storeUrlSlug!}
-          totalNetSalesMinor={result?.totalNetSalesMinor}
-          totalTransactions={result?.totalTransactions}
-          totalUnitsSold={result?.totalUnitsSold}
-          updatedAt={result?.updatedAt}
+          totalNetSalesMinor={readyResult?.totalNetSalesMinor}
+          totalTransactions={readyResult?.totalTransactions}
+          totalUnitsSold={readyResult?.totalUnitsSold}
+          updatedAt={readyResult?.updatedAt}
           variant={variant}
         />
 
-        {isInitialLoad || result === undefined ? null : (
+        {result && result.status !== "ready" ? (
+          <section
+            aria-label="Item sales results"
+            aria-live="polite"
+            className="rounded-xl border border-border bg-surface-raised px-layout-md py-layout-2xl shadow-surface md:px-layout-lg"
+          >
+            <EmptyState
+              title={
+                result.status === "blocked"
+                  ? "Item reports need attention"
+                  : "Item reports are updating"
+              }
+              description={
+                result.status === "blocked"
+                  ? "This period could not be completed. Totals will appear after the report is repaired."
+                  : "Totals and item rankings will appear when this period is ready."
+              }
+            />
+          </section>
+        ) : isInitialLoad || readyResult === undefined ? null : (
           <AnimatedDataState
             stateKey={hasActivity ? "data" : "empty"}
             testId="items-results-state"
           >
             {hasActivity ? (
               <ReportsItemsTable
-                continueCursor={result.continueCursor}
+                continueCursor={readyResult.continueCursor}
                 currency={activeStore?.currency ?? "USD"}
                 currentPage={currentPage}
                 cursor={cursor}
@@ -150,7 +167,7 @@ export function ReportsItemsView({
                 orgUrlSlug={orgUrlSlug!}
                 periodDate={periodDate}
                 periodType={periodType}
-                rows={result.rows}
+                rows={readyResult.rows}
                 storeUrlSlug={storeUrlSlug!}
               />
             ) : (

@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { patchOperationalWorkItemWithInventoryWithCtx } from "./inventoryContributions";
 
 import type { Doc, Id, TableNames } from "../_generated/dataModel";
 import {
@@ -880,14 +881,14 @@ export async function autoResolveSyncedSaleInventoryReviewsForStockAdjustmentWit
       },
     };
 
-    await ctx.db.patch("operationalWorkItem", workItem._id, {
+    await patchOperationalWorkItemWithInventoryWithCtx(ctx, workItem._id, {
       completedAt: resolvedAt,
       metadata: {
         ...metadata,
         resolution,
       },
       status: "completed",
-    });
+    }, workItem);
 
     await recordOperationalEventWithCtx(ctx, {
       actorUserId: args.actorUserId,
@@ -1256,14 +1257,14 @@ export async function resolveSyncedSaleInventoryReviewWithCtx(
   );
   const settledResolution = { ...resolution, sourceSettlement };
 
-  await ctx.db.patch("operationalWorkItem", args.workItemId, {
+  await patchOperationalWorkItemWithInventoryWithCtx(ctx, args.workItemId, {
     ...(status === "completed" ? { completedAt: resolvedAt } : {}),
     metadata: {
       ...metadata,
       resolution: settledResolution,
     },
     status,
-  });
+  }, workItem);
 
   const eventArgs = {
     actorStaffProfileId,

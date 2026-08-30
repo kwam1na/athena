@@ -7,6 +7,9 @@ import { SHARED_DEMO_BASELINE_VERSION } from "./config";
 import { restoreMutableDemoStoreRowsWithCtx } from "./domainRestore";
 import { rollSharedDemoOpeningBaselineWithCtx } from "./openingBaseline";
 import { rollSharedDemoSeededRegisterWithCtx } from "./registerBaseline";
+import { purgePipelineBatchWithCtx } from "../reports/pipelineMaintenance";
+import { beginPipelineMigrationWithCtx } from "../reports/pipelineMigrationStart";
+import { readStoreAllowlist } from "../reports/pipelineAllowlist";
 
 export const SHARED_DEMO_BASELINE = {
   version: SHARED_DEMO_BASELINE_VERSION,
@@ -133,6 +136,7 @@ async function applyBaselineDocumentsWithCtx(
   const domainRestore = await restoreMutableDemoStoreRowsWithCtx(
     ctx,
     args.storeId,
+    { pipelineResetPrepared: true },
   );
   await rollSharedDemoOpeningBaselineWithCtx(ctx, {
     now: args.now,
@@ -300,6 +304,13 @@ export async function applyRestoreLeaseWithCtx(
     throw new Error("The demo restore phase changed.");
   }
   const appliedAt = args.now ?? Date.now();
+  if (state.phase === "leased") {
+    const cleanup = await purgePipelineBatchWithCtx(ctx, { storeId: args.storeId }, appliedAt);
+    if (cleanup.hasMore) {
+      await scheduleRestoreContinuation(ctx, args);
+      return { pending: true as const };
+    }
+  }
   const result = state.phase === "applied"
     ? {
         restoredDocuments: state.restoredDocuments ?? 0,
@@ -308,6 +319,13 @@ export async function applyRestoreLeaseWithCtx(
         now: appliedAt,
         storeId: args.storeId,
       });
+  if (state.phase === "leased" && readStoreAllowlist().has(String(args.storeId))) {
+    // Rebuild preserved source closes/repairs in a new shadow epoch. Activation
+    // remains an explicit proof-gated operation, never part of demo restore.
+    await beginPipelineMigrationWithCtx(ctx, {
+      storeId: args.storeId, epoch: `demo-restore-${state.epoch}`, dryRun: false, autoContinue: true,
+    }, appliedAt);
+  }
   for (const terminalId of state.cleanupTerminalIds ?? []) {
     const terminal = await ctx.db.get("posTerminal", terminalId);
     if (!terminal) continue;

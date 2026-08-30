@@ -26,6 +26,10 @@ import { resolveOperatingDate } from "./operatingDay";
 // that exists, which is noise rather than independence.
 import { loadOnlineOrderLines, toDiscountItems } from "./reseed";
 import { localDateAt, localDateStartAt } from "../lib/storeScheduleTime";
+import { readPipelineControl } from "./pipelineControl";
+// Persisted observed-side reader only. The expected inventory is still
+// independently recomputed from Operations sources below, never contributions.
+import { readCurrentWeeklyInventoryWithCtx } from "./weeklyInventoryProjection";
 // Identity constants, not projection logic: how a synced-sale review group is
 // NAMED is a contract shared by everything that talks about the group. What the
 // weekly report CONCLUDES about those groups is recomputed below.
@@ -952,7 +956,9 @@ export function diffPaymentMix(
         actual: actualRow?.amountMinor ?? 0,
       });
     }
-    if ((expectedRow?.tenderUseCount ?? 0) !== (actualRow?.tenderUseCount ?? 0)) {
+    if (
+      (expectedRow?.tenderUseCount ?? 0) !== (actualRow?.tenderUseCount ?? 0)
+    ) {
       differences.push({
         field: "tenderUseCount",
         method,
@@ -1058,9 +1064,7 @@ function foldedMetrics(day: Doc<"reportDay"> | null): VerifiedMetrics {
   };
 }
 
-function weeklyVerifiedMetrics(
-  metrics: ReportWeekMetrics,
-): VerifiedMetrics {
+function weeklyVerifiedMetrics(metrics: ReportWeekMetrics): VerifiedMetrics {
   return {
     grossSalesMinor: metrics.grossSalesMinor,
     netSalesMinor: metrics.netSalesMinor,
@@ -1283,7 +1287,11 @@ function resolveVerifiedFrame(args: {
   const dates: VerifiedFrameDate[] = [];
   for (let offset = 0; offset < 7; offset += 1) {
     const localDate = shiftLocalDate(startDate, offset);
-    const schedule = scheduleGoverning(args.schedules, localDate, args.timezone);
+    const schedule = scheduleGoverning(
+      args.schedules,
+      localDate,
+      args.timezone,
+    );
     if (!schedule) return null;
     dates.push({
       localDate,
@@ -1355,6 +1363,7 @@ async function verifyAcceptedClosePosture(
     if (close._id === accepted.closeId) continue;
     if (close.status !== "completed") continue;
     if (close.lifecycleStatus === "superseded") continue;
+    if (close.lifecycleStatus === "reopened") continue;
     if (!successor || liveAt(close) > liveAt(successor)) successor = close;
   }
 
@@ -1484,9 +1493,14 @@ async function recountOpenInventoryReviewGroups(
 
 /** Order is presentation; identity and counts are truth. */
 function inventoryAttentionAgrees(
-  stored: NonNullable<
-    Extract<Doc<"reportWeekCurrent">, { included: unknown }>["inventoryAttention"]
-  > | undefined,
+  stored:
+    | NonNullable<
+        Extract<
+          Doc<"reportWeekCurrent">,
+          { included: unknown }
+        >["inventoryAttention"]
+      >
+    | undefined,
   recount: Extract<VerifiedInventoryRecount, { outcome: "ok" }>,
 ): boolean {
   if (!stored) return false;
@@ -1569,7 +1583,9 @@ async function recomputeVerifiedVariance(args: {
     const close = await args.ctx.db.get("dailyClose", closeId);
     if (!close) continue;
     const salesTotal =
-      typeof close.summary.salesTotal === "number" ? close.summary.salesTotal : 0;
+      typeof close.summary.salesTotal === "number"
+        ? close.summary.salesTotal
+        : 0;
     const acceptedNetSalesMinor =
       typeof close.summary.adjustedSalesTotal === "number"
         ? close.summary.adjustedSalesTotal
@@ -1706,13 +1722,18 @@ function closeEvidenceInternallyConsistent(
   ) {
     return false;
   }
-  const rankedRowsValid = (rows: StoredWeekCloseEvidence["expenses"]["bySpend"]) =>
+  const rankedRowsValid = (
+    rows: StoredWeekCloseEvidence["expenses"]["bySpend"],
+  ) =>
     rows.every(
       (row) =>
         isCountWithin(row.quantity, Number.MAX_SAFE_INTEGER) &&
         isCountWithin(row.spendMinor, Number.MAX_SAFE_INTEGER),
     );
-  if (!rankedRowsValid(expenses.bySpend) || !rankedRowsValid(expenses.byQuantity)) {
+  if (
+    !rankedRowsValid(expenses.bySpend) ||
+    !rankedRowsValid(expenses.byQuantity)
+  ) {
     return false;
   }
   // Each ranking plus its remainder restates the full covered totals; a
@@ -1747,7 +1768,7 @@ function closeEvidenceInternallyConsistent(
  * `cashVariancePosture` is the flattened restatement of `closeEvidence.cash`;
  * wherever both were persisted they must tell one story.
  */
-function storedCloseEvidenceConsistent(
+export function storedCloseEvidenceConsistent(
   row: StoredWeekEvidenceRow,
   includedDayCount: number,
 ): boolean {
@@ -2049,7 +2070,9 @@ export async function verifyCurrentWeekWithCtx(
     };
   }
   const inventoryMatches = inventoryAttentionAgrees(
-    current.inventoryAttention,
+    (await readPipelineControl(ctx, storeId))?.mode === "active"
+      ? await readCurrentWeeklyInventoryWithCtx(ctx, current)
+      : current.inventoryAttention,
     recount,
   );
 
@@ -2115,11 +2138,11 @@ export async function verifyCurrentWeekWithCtx(
     JSON.stringify(baseline) !== JSON.stringify(next);
   const acceptedMixMoved = Boolean(
     accepted &&
-      (laneMixMoved(accepted.paymentMix, current.paymentMix) ||
-        laneMixMoved(
-          accepted.outsideSchedulePaymentMix,
-          current.outsideSchedulePaymentMix,
-        )),
+    (laneMixMoved(accepted.paymentMix, current.paymentMix) ||
+      laneMixMoved(
+        accepted.outsideSchedulePaymentMix,
+        current.outsideSchedulePaymentMix,
+      )),
   );
   const expectsAmendment = Boolean(
     accepted &&

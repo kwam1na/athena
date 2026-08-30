@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { makeFunctionReference } from "convex/server";
 import { mutation } from "../_generated/server";
 import type { MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
@@ -17,20 +18,20 @@ import { requestRangeOperationDefinition } from "../operationAdmission/domains/r
 import { admitPublicMutation } from "../platform/operationAdmission";
 import type { OperationMutationCtx } from "../operationAdmission/types";
 import { stableStringHash } from "./fingerprint";
+import {
+  cleanupSummaryRangeWithCtx,
+  ensureSummaryControlWithCtx,
+} from "./pipelineRange";
 
 /**
  * Slice H — custom date-range reports.
  *
  * `requestRange` is a thin, access-gated mutation: it validates the request,
  * computes a deterministic `requestKey`, and upserts a `reportRangeResult`
- * row in "pending" status. The actual aggregation happens in `computeRange`,
- * invoked by slice C's sweeper (never inline in the mutation) so a request
- * for a wide range never blows the mutation's read/time budget.
- *
- * `computeRange` reads ONLY `reportDay` and `reportSkuDay` — never
- * `reportFact`. Those two tables are themselves bounded-size projections
- * (one row per operating day / per (day, sku) with activity), so a range of
- * up to `REPORT_RANGE_MAX_DAYS` days is always a bounded read.
+ * row in "pending" status. pipelineRange owns durable cursor-batched
+ * aggregation over reportDay/reportSkuDay, never source facts. It publishes
+ * complete totals only after verifying the captured range input basis.
+ * `computeRange` remains a legacy math/compatibility helper, not a cron path.
  */
 
 const OPERATING_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -58,10 +59,7 @@ function inclusiveDaySpan(startDate: string, endDate: string): number {
   return Math.round((end - start) / 86_400_000) + 1;
 }
 
-function validateRangeArgs(args: {
-  startDate: string;
-  endDate: string;
-}): void {
+function validateRangeArgs(args: { startDate: string; endDate: string }): void {
   if (!isValidOperatingDate(args.startDate)) {
     throw new Error(`Invalid startDate: "${args.startDate}".`);
   }
@@ -132,7 +130,14 @@ export async function requestRangeCore(
     if (existing.expiresAt > now) {
       return { requestKey };
     }
-    await ctx.db.delete("reportRangeResult", existing._id);
+    const deleted = await cleanupSummaryRangeWithCtx(ctx, existing._id, now);
+    if (!deleted) {
+      // Preserve the expired parent for bounded child-first cleanup while
+      // releasing this exact public request identity for its new generation.
+      await ctx.db.patch("reportRangeResult", existing._id, {
+        requestKey: `expired:${existing._id}:${existing.requestKey}`,
+      });
+    }
   }
 
   await ctx.db.insert("reportRangeResult", {
@@ -141,10 +146,20 @@ export async function requestRangeCore(
     startDate: args.startDate,
     endDate: args.endDate,
     status: "pending",
+    kind: "custom_summary",
+    summaryEligibleAt: now,
     requestedAt: now,
     expiresAt: now + REPORT_RANGE_TTL_MS,
     foldVersion: REPORTS_FOLD_VERSION,
   });
+  await ensureSummaryControlWithCtx(ctx, args.storeId);
+  await ctx.scheduler.runAfter(
+    0,
+    makeFunctionReference<"mutation", { storeId: Id<"store"> }>(
+      "reports/pipelineRange:dispatchStore",
+    ),
+    { storeId: args.storeId },
+  );
 
   return { requestKey };
 }

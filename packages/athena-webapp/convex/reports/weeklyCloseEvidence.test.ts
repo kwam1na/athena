@@ -302,6 +302,46 @@ describe("aggregateWeeklyCloseEvidence", () => {
     });
   });
 
+  it("keeps a weekly expense leader that is below every daily top five", () => {
+    const closes = scheduledDates.map((_, dayIndex) => {
+      const products = Array.from({ length: 5 }, (_, productIndex) => ({
+        productName: `One-day product ${dayIndex}-${productIndex}`,
+        productSku: `SKU-${dayIndex}-${productIndex}`,
+        productSkuId: `${dayIndex}-${productIndex}` as Id<"productSku">,
+        quantity: 1,
+        spend: 101,
+      }));
+      products.push({
+        productName: "Recurring product",
+        productSku: "RECURRING",
+        productSkuId: "recurring" as Id<"productSku">,
+        quantity: 1,
+        spend: 100,
+      });
+      return completeClose(dayIndex, {}, {
+        contractVersion: 1,
+        expenseTotal: 605,
+        products,
+        sourceItemCount: 6,
+        sourceTransactionCount: 1,
+        status: "complete",
+      });
+    });
+
+    const evidence = aggregate(closes);
+    expect(evidence.expenses.coverage.status).toBe("complete");
+    expect(evidence.expenses.bySpend[0]).toMatchObject({
+      productSkuId: "recurring",
+      quantity: 6,
+      spendMinor: 600,
+    });
+    expect(evidence.expenses.coveredSpendMinor).toBe(3_630);
+    expect(evidence.expenses.spendRemainder).toMatchObject({
+      productCount: 26,
+      spendMinor: 2_626,
+    });
+  });
+
   it("excludes outside-schedule and superseded lineage", () => {
     const outsideId = "outside" as Id<"dailyClose">;
     const evidence = aggregateWeeklyCloseEvidence({

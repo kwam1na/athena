@@ -1,4 +1,3 @@
-import type { FunctionReturnType } from "convex/server";
 import { Link } from "@tanstack/react-router";
 
 import { ListPagination } from "@/components/common/ListPagination";
@@ -12,8 +11,10 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { getOrigin } from "@/lib/navigationUtils";
-import { api } from "~/convex/_generated/api";
-import { REPORT_SKU_PAGE_SIZE } from "~/shared/reportsContract";
+import {
+  REPORT_SKU_PAGE_SIZE,
+  type ReportSkuPeriodRow,
+} from "~/shared/reportsContract";
 import type { ReportPeriodType } from "./reportPeriodKeys";
 import {
   formatOptionalMoney,
@@ -22,8 +23,6 @@ import {
   formatSkuSubtitle,
   formatUnits,
 } from "./reportFormat";
-
-type Result = FunctionReturnType<typeof api.reports.queries.listPeriodSkus>;
 
 export function ReportsItemsTable({
   rows,
@@ -38,7 +37,7 @@ export function ReportsItemsTable({
   isRefreshing,
   onPageChange,
 }: {
-  rows: Result["rows"];
+  rows: ReportSkuPeriodRow[];
   currency: string;
   periodDate: string;
   periodType: ReportPeriodType;
@@ -77,7 +76,11 @@ export function ReportsItemsTable({
               <TableCell>
                 <Link
                   className="block min-w-0"
-                  params={{ orgUrlSlug, storeUrlSlug, productSkuId: row.productSkuId }}
+                  params={{
+                    orgUrlSlug,
+                    storeUrlSlug,
+                    productSkuId: row.productSkuId,
+                  }}
                   search={{ o: getOrigin(), periodDate, periodType }}
                   to="/$orgUrlSlug/store/$storeUrlSlug/reports/items/$productSkuId"
                 >
@@ -88,7 +91,10 @@ export function ReportsItemsTable({
                     <span className="min-w-0 truncate">
                       {formatSkuSubtitle(row.identity, row.productSkuId)}
                     </span>
-                    <span aria-hidden="true" className="text-muted-foreground/60">
+                    <span
+                      aria-hidden="true"
+                      className="text-muted-foreground/60"
+                    >
                       ·
                     </span>
                     <span
@@ -106,9 +112,13 @@ export function ReportsItemsTable({
                   </span>
                 </Link>
               </TableCell>
-              <TableCell>{formatOptionalMoney(row.netSalesMinor, currency)}</TableCell>
+              <TableCell>
+                {formatOptionalMoney(row.netSalesMinor, currency)}
+              </TableCell>
               <TableCell>{formatUnits(row.unitsSold)}</TableCell>
-              <TableCell>{formatReportProfit(row.grossProfitMinor, currency)}</TableCell>
+              <TableCell>
+                {formatReportProfit(row.grossProfitMinor, currency)}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>

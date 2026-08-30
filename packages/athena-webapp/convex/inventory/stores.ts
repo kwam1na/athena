@@ -54,6 +54,8 @@ import type {
 } from "../operationAdmission/types";
 import type { MutationCtx } from "../_generated/server";
 import { deleteAgentHarnessContentForStoreWithCtx } from "../agentHarness/retention";
+import { purgePipelineBatchWithCtx } from "../reports/pipelineMaintenance";
+import { readPipelineControl } from "../reports/pipelineControl";
 
 const entity = "store";
 const CONFIG_MIGRATION_PAGE_SIZE = 50;
@@ -108,6 +110,7 @@ export async function removeStoreWithCtx(
   const store = await ctx.db.get("store", storeId);
   if (!store) return true;
 
+  const pipelineCleanup = await purgePipelineBatchWithCtx(ctx, {storeId}, Date.now());
   const cleanup = await deleteWeeklyReportingForStoreWithCtx(ctx, storeId);
   // Agent-harness content (prompts, replay payloads, scratch, claim support)
   // is removed in the same bounded passes; audit rows only gain lifecycle
@@ -117,7 +120,7 @@ export async function removeStoreWithCtx(
     storeId,
     Date.now(),
   );
-  if (cleanup.hasMore || agentCleanup.hasMore) {
+  if (cleanup.hasMore || agentCleanup.hasMore || pipelineCleanup.hasMore) {
     await ctx.scheduler.runAfter(
       0,
       internal.inventory.stores.continueStoreRemoval,
@@ -125,6 +128,8 @@ export async function removeStoreWithCtx(
     );
     return false;
   }
+  const pipelineControl = await readPipelineControl(ctx, storeId);
+  if (pipelineControl) await ctx.db.delete("reportPipelineControl", pipelineControl._id);
   await ctx.db.delete("store", storeId);
   return true;
 }

@@ -14,6 +14,7 @@ import {
   resolveRegisterSessionOperatingDateContext,
 } from "../../../operations/registerSessions";
 import { buildOperationalWorkItem } from "../../../operations/operationalWorkItems";
+import { insertOperationalWorkItemWithInventoryWithCtx } from "../../../operations/inventoryContributions";
 import { normalizeOperationalEventTraceFields } from "../../../operations/operationalEvents";
 import {
   buildServiceCase,
@@ -1002,8 +1003,8 @@ export function createConvexLocalSyncRepository(
       );
     },
     async createServiceWorkItem(input) {
-      return ctx.db.insert(
-        "operationalWorkItem",
+      return insertOperationalWorkItemWithInventoryWithCtx(
+        ctx,
         buildOperationalWorkItem(input),
       );
     },

@@ -7,6 +7,7 @@ import {
 } from "../_generated/server";
 import { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
+import { insertOperationalWorkItemWithInventoryWithCtx, patchOperationalWorkItemWithInventoryWithCtx } from "./inventoryContributions";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
@@ -532,8 +533,8 @@ export async function createOperationalWorkItemWithCtx(
   ctx: MutationCtx,
   args: Parameters<typeof buildOperationalWorkItem>[0],
 ) {
-  const workItemId = await ctx.db.insert(
-    "operationalWorkItem",
+  const workItemId = await insertOperationalWorkItemWithInventoryWithCtx(
+    ctx,
     buildOperationalWorkItem(args),
   );
   return ctx.db.get("operationalWorkItem", workItemId);
@@ -571,7 +572,7 @@ export async function updateOperationalWorkItemStatusWithCtx(
     approvalState?: string;
   },
 ) {
-  const nextFields: Record<string, unknown> = {
+  const nextFields: { status: string; approvalState?: string; startedAt?: number; completedAt?: number } = {
     status: args.status,
   };
 
@@ -587,7 +588,7 @@ export async function updateOperationalWorkItemStatusWithCtx(
     nextFields.completedAt = Date.now();
   }
 
-  await ctx.db.patch("operationalWorkItem", args.workItemId, nextFields);
+  await patchOperationalWorkItemWithInventoryWithCtx(ctx, args.workItemId, nextFields);
   return ctx.db.get("operationalWorkItem", args.workItemId);
 }
 

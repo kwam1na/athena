@@ -6,6 +6,7 @@ import { upsertProductSkuSearchProjection } from "../../../inventory/skuSearch";
 import { advanceRegisterCatalogRevision } from "../sync/registerCatalogRevision";
 import { recordOperationalEventWithCtx } from "../../../operations/operationalEvents";
 import { createOperationalWorkItemWithCtx } from "../../../operations/operationalWorkItems";
+import { patchOperationalWorkItemWithInventoryWithCtx } from "../../../operations/inventoryContributions";
 import { toSlug } from "../../../utils";
 import {
   buildPendingCheckoutReviewWorkItemPriority,
@@ -466,7 +467,7 @@ async function syncPendingCheckoutWorkItem(
     return;
   }
 
-  await ctx.db.patch("operationalWorkItem", workItem._id, {
+  await patchOperationalWorkItemWithInventoryWithCtx(ctx, workItem._id, {
     metadata: {
       ...(workItem.metadata ?? {}),
       lookupCode: item.lookupCode,
@@ -480,7 +481,7 @@ async function syncPendingCheckoutWorkItem(
     },
     priority: buildPendingCheckoutReviewWorkItemPriority(item.reviewPriority),
     title: buildPendingCheckoutReviewWorkItemTitle(item),
-  });
+  }, workItem);
 }
 
 async function recordPendingCheckoutOperationalEvent(

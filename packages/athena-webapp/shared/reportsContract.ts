@@ -1453,6 +1453,8 @@ export type ReportTrendPoint = {
 };
 
 export type ReportTrustSummary = {
+  /** Optional for legacy/demo consumers; queued work is not certified fresh. */
+  projectionStatus?: "ready" | "pending" | "blocked";
   reconciledDays: number;
   provisionalDays: number;
   amendedDays: number;
@@ -1610,6 +1612,33 @@ export type ReportSkuPeriodRow = ReportSkuDayMetrics & {
 };
 
 export type ReportSkuSortBy = "revenue" | "units";
+
+export type ReportPeriodSkusReady = {
+  status: "ready";
+  epoch: string;
+  publicationRevision: number;
+  rows: ReportSkuPeriodRow[];
+  continueCursor: string | null;
+  totalNetSalesMinor: number;
+  totalUnitsSold: number;
+  totalTransactions: number;
+  priorPeriodTotals?: { netSalesMinor: number; unitsSold: number; transactions: number };
+  updatedAt: number | null;
+  isTodayInProgress: boolean;
+};
+export type ReportPeriodSkusUnavailable = {
+  status: "pending" | "blocked" | "restart";
+  reason: "projection_pending" | "repair_required" | "period_changed";
+  rows: [];
+  continueCursor: null;
+  totalNetSalesMinor?: never;
+  totalUnitsSold?: never;
+  totalTransactions?: never;
+  priorPeriodTotals?: never;
+  updatedAt?: never;
+  isTodayInProgress?: never;
+};
+export type ReportPeriodSkusResult = ReportPeriodSkusReady | ReportPeriodSkusUnavailable;
 
 export type ReportSkuMixRow = {
   key: string;

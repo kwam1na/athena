@@ -177,6 +177,9 @@ export async function markStaleFoldVersionDaysWithCtx(
       operatingDate: day.operatingDate,
       reason: "fold_version_bump",
       markedAt: now,
+      generation: 1,
+      firstMarkedAt: now,
+      eligibleAt: now,
     });
     markedCount += 1;
   }

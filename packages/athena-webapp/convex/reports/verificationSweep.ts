@@ -17,6 +17,8 @@ import { addDaysToOperatingDate } from "../operations/dailyOperationsAutomation"
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { resolveOperatingDate } from "./operatingDay";
 import { parseStoreAllowlist, readStoreAllowlist } from "./sweeper";
+import { readPipelineControl } from "./pipelineControl";
+import { hasPendingWeeklyWorkWithCtx } from "./pipelineWeekly";
 import {
   classifyDayResult,
   classifyWeekResult,
@@ -997,6 +999,9 @@ async function hasPendingWeeklyDirtyMarks(
   storeId: Id<"store">,
   cycleFrame: CycleFrame | null,
 ): Promise<boolean> {
+  if ((await readPipelineControl(ctx,storeId))?.mode === "active") {
+    return hasPendingWeeklyWorkWithCtx(ctx,storeId,cycleFrame,true,true);
+  }
   const weekMarks = await ctx.db
     .query("reportDirtyWeek")
     .withIndex("by_storeId", (q) => q.eq("storeId", storeId))

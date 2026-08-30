@@ -50,7 +50,7 @@ export type WeeklyCloseEvidence = {
   };
 };
 
-type CloseSnapshot = {
+export type CloseSnapshot = {
   _id: Id<"dailyClose">;
   lifecycleStatus?: string;
   operatingDate: string;

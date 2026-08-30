@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Reports pipeline read efficiency</title></head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="d5f7a0ef38e5cfe5fa20236969678f69846038712f2dfb9171d643c495cb89fa">
+  <header data-report-section="header">
+    <h1>Reports pipeline read efficiency</h1>
+    <ul data-report-pills><li>Delivery candidate</li><li>Worktree isolated</li><li>Production acceptance pending</li></ul>
+    <dl data-report-meta>
+      <dt>Work</dt><dd><a href="https://linear.app/v26-labs/issue/V26-1452">V26-1452</a>, implementation units V26-1453–V26-1461</dd>
+      <dt>Branch</dt><dd>codex/reports-pipeline-read-optimization</dd>
+      <dt>Base</dt><dd>09bbc74d75d19012aec95b647d8d7c6aed0e999e, PR #811</dd>
+      <dt>PR / merge</dt><dd>Pending; no candidate PR opened or merge authorized</dd>
+      <dt>Deployment</dt><dd>Development artifact refresh performed; production deployment and activation pending approval</dd>
+      <dt>Root alignment</dt><dd>Pending; root checkout remains unchanged</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>What this candidate delivers</h2>
+    <p>The reports pipeline materializes compact frozen evidence once per generation, reuses validated reads within an execution, records exact work, and updates period totals from changed day contributions. Independent workers contain failures; publication gates prevent incomplete financial numbers from appearing complete.</p>
+    <p>Repeated local fixtures show 96.4% less returned payload for weekly refreshes and 62.7% less for period changes. Query calls increase, and weekly document reads increase. These are bandwidth proxies—not production billing, latency or savings claims.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Why the hotfix was not the finish line</h2>
+    <p>PR #811 removed overview’s repeated full-close hydration. Weekly work still revisited large frozen close snapshots, and period rollups reread many unchanged SKU-day rows. Limiting the number of rows or splitting one function into several cannot, by itself, prove lower total read cost.</p>
+    <p>The design had to reduce recurring payload without losing quiet historical work, corrupting accepted reports, or exposing half-applied rollups.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Keep the receipt; update the contribution</h2>
+    <p>Think of the canonical day fold as a signed-off receipt. It atomically saves the day, its SKU contributions, immutable worker inputs and the work still owed. A downstream worker changes a period by removing that day’s previous contribution and adding its new one. The period is readable only when every owed contribution is complete.</p>
+    <pre><code>Source command → facts / compact invalidation
+Day fold → canonical rows + immutable input + exact obligations → acknowledge dirty mark
+Bounded workers → checkpoints → complete period → publish revision</code></pre>
+    <p>Facts, stock and cash still commit through their existing operational transactions. This work moves derived reporting—not business correctness—behind background workers.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+    <table><thead><tr><th>Concern</th><th>Before</th><th>Candidate</th></tr></thead><tbody>
+      <tr><td>Frozen close evidence</td><td>Repeated wide source hydration</td><td>Scalar invalidation plus one-generation compact materialization, outside reportDay</td></tr>
+      <tr><td>Weekly work</td><td>Broad singleton/census work</td><td>Exact date, current, accept and refresh identities with independent recovery</td></tr>
+      <tr><td>Period updates</td><td>Whole-period SKU-day recomputation</td><td>Immutable inputs, epoch/day/SKU checkpoints and reversible deltas</td></tr>
+      <tr><td>Custom summary</td><td>Aggregation coupled to sweep work</td><td>Private cursor-batched accumulation with source-basis publication checks</td></tr>
+      <tr><td>Failure and recovery</td><td>Wide transactions could repeatedly exceed their read budget</td><td>Independent bounded lanes, durable leases, separate failure evidence and child-first cleanup</td></tr>
+    </tbody></table>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Where the decisions live</h2>
+    <p>Backend paths below are relative to packages/athena-webapp/convex.</p>
+    <table><thead><tr><th>Files</th><th>Why they matter</th></tr></thead><tbody>
+      <tr><td><code>reports/closeEvidence.ts</code></td><td>Source-generation ownership, normalized frozen evidence and compact readers</td></tr>
+      <tr><td><code>reports/pipelineWork.ts</code>, <code>pipelineDays.ts</code>, <code>pipelineDispatchRoot.ts</code></td><td>Exact durable work, atomic day handoff and fourteen independent dispatch targets</td></tr>
+      <tr><td><code>reports/pipelineWeekly.ts</code>, <code>weeklyMarks.ts</code></td><td>Exact weekly work without pulling worker composition into source writers</td></tr>
+      <tr><td><code>operations/inventoryContributions.ts</code>, <code>reports/weeklyInventoryWorker.ts</code></td><td>Compact Operations authority and a frame-fenced Reports companion</td></tr>
+      <tr><td><code>reports/rollupPipeline.ts</code>, <code>rollupPeriodRead.ts</code>, <code>rollupParity.ts</code></td><td>Delta/checkpoint correctness, complete publication and independent parity</td></tr>
+      <tr><td><code>reports/pipelineRange.ts</code></td><td>Private summaries, revision checks, expiry and healthy-request progress</td></tr>
+      <tr><td><code>reports/pipelineMigration.ts</code>, <code>pipelineAcceptedParity.ts</code></td><td>Source and historical proof before activation; explicit blockers and restart</td></tr>
+      <tr><td><code>reports/pipelineMaintenance.ts</code>, <code>pipelineRetention.ts</code></td><td>Bounded reset/deletion and safe obsolete-generation cleanup</td></tr>
+      <tr><td><code>reports/pipelineReadCostOptimized.test.ts</code></td><td>Aggregate registered-worker measurements, including recovery and metadata costs</td></tr>
+    </tbody></table>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed—and what did not</h2>
+    <p>Period readers now return ready, pending, blocked or restart states. Pending/blocked results contain no partial financial rows. Recovery keeps both new requests and issued-cursor requests pending; after the replacement epoch is activated and its period is ready, old epoch/publication cursors request a restart. Overview and inventory freshness remain explicit.</p>
+    <p>Accepted financial baselines, original observation cutoffs, notification dedupe, source authorization, inventoryLedger stock ownership and the pure day fold remain authoritative. A folded date refreshes every overlapping accepted frame after a schedule-anchor change, not just the newest. Unknown profit never becomes a fabricated zero. Existing fact/SKU cardinality support is preserved. Movement and mix requests retain their separate lifecycle.</p>
+    <p>The candidate also corrects one admission-checker false positive for literal database-reader chains. Unknown factories and hidden router registrations still fail closed. Two enlarged import cycles were removed without expanding the dependency baseline.</p>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>How incomplete or old state behaves</h2>
+    <p>A failed data transaction rolls back; a separate transaction records retry evidence. A stale generation or lease cannot acknowledge newer work. Expired summary cleanup leaves the live queue before all children drain, and poisoned close cleanup retains foreign data while allowing later healthy headers to progress.</p>
+    <p>Migration builds a fresh epoch from zero and proves source-close, accepted-cutoff and rollup parity. Source/accepted watermarks and the control fence bind every proof page to activation. Unsupported historical corrections or lost observation-time evidence block activation; the code never repairs them by rewriting a frozen accepted report.</p>
+    <p>Reseed and deletion fence old workers. Purged epochs stop receiving fold obligations. Monotonic control activation history survives repeated resets; each migration separately chooses whether proved reactivation is automatic. Never-activated stores still require explicit first activation. Organization removal keeps retained stores paused. Rollback means a fresh, proved rebuild with pending readers—not switching stale legacy totals back on. An arbitrary older binary is not automatically compatible.</p>
+  </section>
+  <section data-report-section="validation">
+    <h2>Evidence and remaining gates</h2>
+    <table><thead><tr><th>Fixture</th><th>Returned UTF-8 bytes</th><th>Other cost</th></tr></thead><tbody>
+      <tr><td>Three busy weekly refreshes</td><td>8,489,472 → 307,073</td><td>Documents 171 → 484; calls 195 → 657</td></tr>
+      <tr><td>Three period changes</td><td>344,228 → 128,481</td><td>Documents 1,008 → 384; calls 18 → 450</td></tr>
+      <tr><td>Maximum-cardinality day</td><td>1,803,397</td><td>2,000 facts + 2,000 existing SKU rows; 4,007 returned documents</td></tr>
+    </tbody></table>
+    <p>Initial materialization/publication costs 2,467,917 bytes versus one warmed legacy sweep at 2,829,824. That is not an equivalent cold-start comparison or a 60% setup saving. The period fixture lacks raw facts and a schedule: all lane attempts are charged, but readiness is asserted for rollups only.</p>
+    <p>The reviewed acceptance/parity target is 4,500 documents / 4 MiB, preserving the 4,000-fact limit. Fixtures prove their specific field widths, not arbitrary strings or Convex billed/index bytes. Increased calls, writes, scheduling and latency remain part of the production tradeoff.</p>
+    <p>Planning reached unanimous alignment after three rounds. The first independent prepared-candidate review found a purged active-epoch pointer and missing exact refresh work for overlapping accepted weeks; a follow-up exposed lost activation eligibility across repeated reseeds. Regressions reproduced these cases before fixes. The combined lifecycle suites pass 42 tests, and exact weekly work passes 15. The complete second review confirmed those fixes but found period and weekly readers could lose pending posture during recovery. Five real-auth registered-query cases reproduced those gaps before a shared recovery guard; all 27 admission/query tests now pass, preserving never-activated compatibility and immutable baselines. All three independent reviewers unanimously approved the complete third candidate with all five prior findings resolved. That approval preceded the validation repairs below. A fresh fourth complete review has now unanimously approved the repaired candidate with no new findings; canonical pr:athena is being rerun. Final gate outcomes belong in the delivery-run record and task handoff.</p>
+    <p>The four recovery/query suites pass 112 tests. The exhaustive export inventory now includes all 77 internal report functions; the public list is unchanged. The first canonical gate passed 10,721 webapp tests and failed nine across five files: one generated-reference mismatch affecting three caller lines, seven fixture expectations/mocks missing required projection/control behavior, and a large rollup test exceeding its 90-second outer deadline. The generator and fixtures were corrected; the three fixture suites pass 129 tests. The unchanged 4,030-contribution case measured 89.31 seconds under coverage, and all six rollup tests pass with a targeted 180-second test budget. No production behavior changed in these validation repairs. The freshly prepared repaired candidate received unanimous fourth-pass approval; the canonical gate rerun remains the local finish-line check at report approval.</p>
+    <p>An earlier root harness run had 1,692 passes, 14 failures and one error. Dependency cycles and three documentation paths were repaired. Five outer integration-test budgets were adjusted after measured healthy subprocess work exceeded them, without changing assertions or internal readiness/cleanup limits. The required full root rerun now passes all 1,706 tests across 75 files with zero failures.</p>
+    <p>Development Convex refresh succeeded. Production deployment, backfill, activation, matched 24-hour/72-hour observation, PR/merge, Linear closure and root alignment are pending or require further approval. Browser validation is user-owned; focused component tests cover the status contract.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Next-time workflow</h2>
+    <ol>
+      <li>Identify the amplified phase and measure complete workloads, not just the largest function.</li>
+      <li>Keep source payloads out of frequently scanned projection rows.</li>
+      <li>Capture immutable input and exact owed work before acknowledging the source generation.</li>
+      <li>Test supersession, unknown profit, missing history, quiet stores, dropped work and every deletion entry point.</li>
+      <li>Use the operational runbook at <code>docs/operations/reports-pipeline-read-efficiency.md</code>. Preview a fresh epoch, obtain approval, build/prove, then activate atomically.</li>
+      <li>Compare matched whole-pipeline production windows. A missing baseline or unresolved blocker is Hold, not Pass.</li>
+    </ol>
+    <p>The focused reusable lesson is recorded in <code>docs/solutions/performance-issues/reports-pipeline-read-amplification-2026-08-29.md</code>.</p>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="9">
+    <h2>Check your understanding</h2>
+    <p>Pass with nine of eleven answers. The questions test boundaries, not filenames.</p>
+    <ol data-quiz>
+      <li data-quiz-question><p data-quiz-prompt>What establishes the optimization’s value?</p><ol data-quiz-options><li>A lower byte count for sweep alone</li><li data-quiz-correct>Lower whole-pipeline recurring bytes with all new overhead included</li><li>A larger number of smaller workers</li></ol><p data-quiz-explanation>Moving reads between functions is not a saving; dispatch, recovery and source-projection costs must be included.</p></li>
+      <li data-quiz-question><p data-quiz-prompt>Why is compact close evidence stored outside reportDay?</p><ol data-quiz-options><li>To let source commands skip facts</li><li>To change accepted close totals</li><li data-quiz-correct>To avoid multiplying frozen evidence across routine day/overview reads</li></ol><p data-quiz-explanation>Frequently scanned day rows stay compact while specialized readers load the evidence they need.</p></li>
+      <li data-quiz-question><p data-quiz-prompt>When may a day worker acknowledge its dirty mark?</p><ol data-quiz-options><li data-quiz-correct>After canonical output, immutable input and exact handoffs commit together</li><li>Before dispatching the fold</li><li>As soon as one downstream worker starts</li></ol><p data-quiz-explanation>The handoff belongs to the same transaction as canonical output so a retry cannot lose owed work.</p></li>
+      <li data-quiz-question><p data-quiz-prompt>What should period readers show during a partial delta apply?</p><ol data-quiz-options><li>The updated rows alongside stale totals</li><li data-quiz-correct>A pending state without partial financial rows</li><li>Zero totals until the worker finishes</li></ol><p data-quiz-explanation>Neither a partial result nor a manufactured zero represents complete financial truth.</p></li>
+      <li data-quiz-question><p data-quiz-prompt>For a ready period outside recovery, what happens if a pagination publication revision changes?</p><ol data-quiz-options><li>Continue with the old cursor</li><li>Merge both generations client-side</li><li data-quiz-correct>Return a typed restart and reset pagination</li></ol><p data-quiz-explanation>A cursor must remain bound to one published generation to avoid duplicates and missing rows. During recovery the request stays pending; after reactivation an old cursor requests a restart.</p></li>
+      <li data-quiz-question><p data-quiz-prompt>How should migration handle an accepted cutoff whose original observation history was destroyed?</p><ol data-quiz-options><li data-quiz-correct>Block and require approved historical evidence or repair</li><li>Move the cutoff to the reseed time</li><li>Replace the accepted baseline with current totals</li></ol><p data-quiz-explanation>Reconstruction cannot silently manufacture the knowledge that existed at an immutable historical cutoff.</p></li>
+      <li data-quiz-question><p data-quiz-prompt>What is the safe rollback model?</p><ol data-quiz-options><li>Flip back to untouched legacy totals</li><li data-quiz-correct>Fence work, build a fresh target, prove it and atomically switch</li><li>Copy old checkpoints onto current totals</li></ol><p data-quiz-explanation>Totals and checkpoints must describe one coherent epoch; mixing them risks double deltas.</p></li>
+      <li data-quiz-question><p data-quiz-prompt>What do the local read fixtures not establish?</p><ol data-quiz-options><li>That the tested returned payload became smaller</li><li>That metadata calls increased</li><li data-quiz-correct>Production billing, latency and savings across arbitrary payload sizes</li></ol><p data-quiz-explanation>Deterministic UTF-8 proxies are useful engineering evidence, not deployment measurements or universal size proofs.</p></li>
+      <li data-quiz-question><p data-quiz-prompt>What should cleanup do when an old close child belongs to another store?</p><ol data-quiz-options><li>Delete it to restore progress</li><li data-quiz-correct>Retain it, record the blocked header and let healthy cleanup progress</li><li>Stop all reporting lanes</li></ol><p data-quiz-explanation>Tenant safety and queue liveness are both required; foreign data is not disposable repair material.</p></li>
+      <li data-quiz-question><p data-quiz-prompt>What remains necessary before claiming production savings?</p><ol data-quiz-options><li data-quiz-correct>Approved rollout plus matched whole-pipeline observation and correctness evidence</li><li>A green local fixture alone</li><li>Opening the worktree report</li></ol><p data-quiz-explanation>This candidate does not authorize production activation or establish matched production results.</p></li>
+      <li data-quiz-question><p data-quiz-prompt>What allows safe automatic reactivation after repeated reseeds?</p><ol data-quiz-options><li>Keeping a pointer to the deleted active epoch</li><li data-quiz-correct>Retained activation history, per-attempt resume policy and a proved new target</li><li>Activating as soon as source replay finishes</li></ol><p data-quiz-explanation>History establishes eligibility, the migration establishes intent, and proof establishes correctness. None substitutes for the others.</p></li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Independent context and review contributions</h2>
+    <ul>
+      <li><strong>plan_coherence</strong>: session-context synthesis, planning lenses, independent rollup/range/migration reviews and resolved cleanup/polling findings; sources were the reviewed plan, code, focused tests and delivery conversation.</li>
+      <li><strong>u1_read_cost</strong>: delivered-diff map, actual registered-worker byte/document/call evidence, admission-checker regression and dependency-cycle repair evidence.</li>
+      <li><strong>plan_feasibility</strong>: close/weekly feasibility, historical accepted proof, schedule source fencing and maximum-cardinality fixture qualifications.</li>
+      <li><strong>final_correctness</strong>: fresh adversarial/data/reliability review requested the reseed and overlap corrections; its follow-up clarified durable activation history. Complete second-pass review confirmed those fixes and found period/weekly recovery freshness gaps.</li>
+      <li><strong>final_contracts</strong>: fresh API/security/standards review independently passed seven admission regressions in round one and confirmed the recovery-period publication gap in round two.</li>
+      <li><strong>final_performance</strong>: fresh testing/performance review inspected delta, range, retention and complete-workload cost assertions, then independently confirmed the recovery-period gap in round two.</li>
+    </ul>
+    <p>Implementation/context contributions are distinct from the fresh prepared-candidate reviewers. The report/quiz reviewer approved the revised eleven-question report, including activation history, per-attempt intent, proof, recovery pending and post-activation cursor restart. The complete third code review received unanimous approval from final_correctness, final_contracts and final_performance for the pre-validation-repair candidate; none implemented it. The repaired candidate subsequently received unanimous approval from the same independent reviewers in a complete fourth pass.</p>
+  </section>
+</article>
+</body>
+</html>

@@ -19,6 +19,7 @@ import type {
 import { stableStringHash } from "./fingerprint";
 import { frozenCatalogLabel } from "./weekly";
 import { aggregateWeeklyCloseEvidence } from "./weeklyCloseEvidence";
+import { bumpAcceptedWatermarkWithCtx } from "./pipelineAcceptedWatermark";
 
 const TARGET_ORGANIZATION_SLUG = "wigclub";
 const TARGET_STORE_SLUG = "wigclub";
@@ -102,18 +103,20 @@ function assertTargetFrame(input: CandidateInput) {
     lineageDates.length !== expectedFrame.length ||
     expectedFrame.some((date, index) => lineageDates[index] !== date)
   ) {
-    throw new Error("Accepted report does not have the expected seven-date frame.");
+    throw new Error(
+      "Accepted report does not have the expected seven-date frame.",
+    );
   }
   const includedDates = input.accepted.scheduleLineage
     .filter((day) => day.included)
     .map((day) => day.localDate);
   if (
     includedDates.length !== TARGET_SCHEDULED_DATES.length ||
-    TARGET_SCHEDULED_DATES.some(
-      (date, index) => includedDates[index] !== date,
-    )
+    TARGET_SCHEDULED_DATES.some((date, index) => includedDates[index] !== date)
   ) {
-    throw new Error("Accepted report does not have the expected six scheduled dates.");
+    throw new Error(
+      "Accepted report does not have the expected six scheduled dates.",
+    );
   }
   if (!input.sourceManifestFingerprint.trim()) {
     throw new Error("Correction source manifest fingerprint is required.");
@@ -145,7 +148,9 @@ export function buildWigclubWeeklyCorrectionCandidate(
       (day, index) => day.operatingDate !== TARGET_SCHEDULED_DATES[index],
     )
   ) {
-    throw new Error("Correction close lineage does not match the sealed cycle.");
+    throw new Error(
+      "Correction close lineage does not match the sealed cycle.",
+    );
   }
   const closeEvidence = aggregateWeeklyCloseEvidence({
     closes: new Map(input.closes.map((close) => [String(close._id), close])),
@@ -156,7 +161,9 @@ export function buildWigclubWeeklyCorrectionCandidate(
     closeEvidence.cash.coverage.status !== "complete" ||
     closeEvidence.cash.cashVarianceMinor !== TARGET_CASH_VARIANCE_MINOR
   ) {
-    throw new Error("Correction cash evidence does not match the sealed census.");
+    throw new Error(
+      "Correction cash evidence does not match the sealed census.",
+    );
   }
   if (
     closeEvidence.payments.coverage.status !== "complete" ||
@@ -168,7 +175,9 @@ export function buildWigclubWeeklyCorrectionCandidate(
       0,
     ) !== TARGET_TENDER_USE_COUNT
   ) {
-    throw new Error("Correction payment evidence does not match the sealed census.");
+    throw new Error(
+      "Correction payment evidence does not match the sealed census.",
+    );
   }
   if (
     closeEvidence.expenses.coverage.status !== "complete" ||
@@ -177,7 +186,9 @@ export function buildWigclubWeeklyCorrectionCandidate(
     totalExpenseProductCount(closeEvidence.expenses) !==
       TARGET_EXPENSE_SKU_COUNT
   ) {
-    throw new Error("Correction expense evidence does not match the sealed census.");
+    throw new Error(
+      "Correction expense evidence does not match the sealed census.",
+    );
   }
   const scheduleLineage = input.accepted.scheduleLineage.map((day) =>
     day.included ? { ...day, dayClosed: true } : day,
@@ -266,7 +277,9 @@ async function reconstructExpenseEvidenceForClose(
     )
     .take(REPAIR_TRANSACTION_PROBE_LIMIT);
   if (transactions.length >= REPAIR_TRANSACTION_PROBE_LIMIT) {
-    throw new Error("Repair expense transaction probe exceeded its sealed bound.");
+    throw new Error(
+      "Repair expense transaction probe exceeded its sealed bound.",
+    );
   }
   const itemsWithTransactions: Array<{
     item: Doc<"expenseTransactionItem">;
@@ -280,9 +293,7 @@ async function reconstructExpenseEvidenceForClose(
         q.eq("transactionId", transaction._id),
       )
       .take(remaining);
-    itemsWithTransactions.push(
-      ...items.map((item) => ({ item, transaction })),
-    );
+    itemsWithTransactions.push(...items.map((item) => ({ item, transaction })));
     if (itemsWithTransactions.length >= REPAIR_ITEM_PROBE_LIMIT) {
       throw new Error("Repair expense item probe exceeded its sealed bound.");
     }
@@ -378,9 +389,7 @@ async function readWigclubCorrectionCandidate(
     ctx.db
       .query("store")
       .withIndex("by_organizationId_slug", (q) =>
-        q
-          .eq("organizationId", organization._id)
-          .eq("slug", TARGET_STORE_SLUG),
+        q.eq("organizationId", organization._id).eq("slug", TARGET_STORE_SLUG),
       )
       .take(2),
     "Sealed Wigclub store lookup was not unique.",
@@ -389,9 +398,7 @@ async function readWigclubCorrectionCandidate(
     ctx.db
       .query("reportWeekAccepted")
       .withIndex("by_storeId_cycleStartDate", (q) =>
-        q
-          .eq("storeId", store._id)
-          .eq("cycleStartDate", TARGET_CYCLE_START),
+        q.eq("storeId", store._id).eq("cycleStartDate", TARGET_CYCLE_START),
       )
       .take(2),
     "Sealed accepted weekly report lookup was not unique.",
@@ -410,7 +417,9 @@ async function readWigclubCorrectionCandidate(
       (day) => day.operatingDate === operatingDate && day.closeId,
     );
     if (matches.length !== 1) {
-      throw new Error(`Repair date ${operatingDate} has no unique close lineage.`);
+      throw new Error(
+        `Repair date ${operatingDate} has no unique close lineage.`,
+      );
     }
     return {
       closeId: matches[0]!.closeId!,
@@ -440,11 +449,15 @@ async function readWigclubCorrectionCandidate(
       close.lifecycleStatus === "reopened" ||
       close.lifecycleStatus === "superseded"
     ) {
-      throw new Error(`Repair date ${day.operatingDate} has invalid close evidence.`);
+      throw new Error(
+        `Repair date ${day.operatingDate} has invalid close evidence.`,
+      );
     }
     const reconstructed = await reconstructExpenseEvidenceForClose(ctx, close);
     transactionCount += reconstructed.transactions.length;
-    const paymentTotals = Array.isArray(close.reportSnapshot?.summary.paymentTotals)
+    const paymentTotals = Array.isArray(
+      close.reportSnapshot?.summary.paymentTotals,
+    )
       ? (close.reportSnapshot.summary.paymentTotals as Array<
           Record<string, unknown>
         >)
@@ -469,7 +482,8 @@ async function readWigclubCorrectionCandidate(
       ),
       paymentValueMinor: paymentTotals.reduce(
         (total, row) =>
-          total + (Number.isSafeInteger(row.amount) ? (row.amount as number) : 0),
+          total +
+          (Number.isSafeInteger(row.amount) ? (row.amount as number) : 0),
         0,
       ),
     });
@@ -537,10 +551,7 @@ async function readWigclubCorrectionCandidate(
   const notificationIntents = await ctx.db
     .query("notificationIntent")
     .withIndex("by_dedupeKey", (q) =>
-      q.eq(
-        "dedupeKey",
-        `eod.weekly_manager_report:${String(accepted._id)}`,
-      ),
+      q.eq("dedupeKey", `eod.weekly_manager_report:${String(accepted._id)}`),
     )
     .take(2);
   const notificationDeliveries = notificationIntents[0]
@@ -602,12 +613,17 @@ export const applyWigclubAug3WeeklyCorrection = internalMutation({
       throw new Error("Accepted baseline fingerprint drifted after preview.");
     }
     if (result.candidate.candidateFingerprint !== args.candidateFingerprint) {
-      throw new Error("Correction candidate fingerprint drifted after preview.");
+      throw new Error(
+        "Correction candidate fingerprint drifted after preview.",
+      );
     }
-    return applyWeeklyAcceptedCorrection(
+    const outcome = await applyWeeklyAcceptedCorrection(
       ctx,
       result.accepted,
       result.candidate.correction,
     );
+    if (outcome.outcome === "applied")
+      await bumpAcceptedWatermarkWithCtx(ctx, result.accepted.storeId);
+    return outcome;
   },
 });

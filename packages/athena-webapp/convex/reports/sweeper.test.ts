@@ -969,7 +969,7 @@ describe("range results", () => {
     expect(remaining.map((row) => row.requestKey)).toEqual(["live"]);
   });
 
-  it("picks up a pending range for a touched, allowlisted store", async () => {
+  it("leaves summary aggregation to its independently budgeted worker", async () => {
     const t = convexTest(schema, modules);
     const { storeId, productSkuId } = await seedStore(t, "range-pickup");
     allow(storeId);
@@ -997,17 +997,15 @@ describe("range results", () => {
     });
 
     const result = await sweep(t);
-    expect(result.rangesComputed).toBe(1);
+    expect(result.rangesComputed).toBe(0);
 
     const stored = await t.run(async (ctx) =>
       // eslint-disable-next-line @convex-dev/no-collect-in-query -- convex-test fixture read, not a production query
       ctx.db.query("reportRangeResult").collect(),
     );
-    expect(stored[0].status).toBe("completed");
-    // Computed from the day docs the sweep just folded, not from raw facts.
-    expect(stored[0].totals?.netSalesMinor).toBe(2_500);
-    expect(stored[0].totals?.dayCount).toBe(1);
-    expect(stored[0].topSkus?.[0]?.productSkuId).toBe(productSkuId);
+    expect(stored[0].status).toBe("pending");
+    expect(stored[0].totals).toBeUndefined();
+    expect(stored[0].topSkus).toBeUndefined();
   });
 });
 
@@ -2194,7 +2192,7 @@ describe("movement lane", () => {
     }
   });
 
-  it("computes pending legacy summaries but never a movement row", async () => {
+  it("does not inline either legacy summary or movement aggregation", async () => {
     const restore = withFrozenScheduler();
     try {
       const t = convexTest(schema, modules);
@@ -2229,7 +2227,7 @@ describe("movement lane", () => {
 
       const result = await sweep(t);
       expect(result.daysFolded).toBe(1);
-      expect(result.rangesComputed).toBe(1);
+      expect(result.rangesComputed).toBe(0);
 
       const legacy = await t.run((ctx) =>
         ctx.db
@@ -2239,7 +2237,7 @@ describe("movement lane", () => {
           )
           .unique(),
       );
-      expect(legacy!.status).toBe("completed");
+      expect(legacy!.status).toBe("pending");
 
       // The movement row is untouched by the summary compute path.
       const movement = await t.run((ctx) =>

@@ -1,7 +1,11 @@
 import { v } from "convex/values";
 
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import { internalMutation, type MutationCtx } from "../_generated/server";
+import { syncInventoryContributionWithCtx } from "../operations/inventoryContributions";
+import { beginInventoryContributionRebuildWithCtx } from "../operations/inventoryContributionRebuild";
+import { purgePipelineBatchWithCtx } from "../reports/pipelineMaintenance";
+import { readPipelineControl } from "../reports/pipelineControl";
 import {
   deleteRegisterSessionWithAuthority,
   insertRegisterSessionWithAuthority,
@@ -424,8 +428,12 @@ export const captureBaselineDocuments = internalMutation({
 export async function restoreMutableDemoStoreRowsWithCtx(
   ctx: any,
   storeId: Id<"store">,
-  options?: { baselineVersion?: number; skipTables?: readonly string[] },
+  options?: { baselineVersion?: number; skipTables?: readonly string[]; pipelineResetPrepared?: boolean },
 ) {
+  if (!options?.pipelineResetPrepared) {
+    const cleanup = await purgePipelineBatchWithCtx(ctx, { storeId }, Date.now());
+    if (cleanup.hasMore) throw new Error("Demo pipeline cleanup requires the staged restore lease.");
+  }
   let restored = 0;
   const actualCounts: Record<string, number> = {};
   const expectedCounts: Record<string, number> = {};
@@ -449,6 +457,14 @@ export async function restoreMutableDemoStoreRowsWithCtx(
   }
 
   const documentIds = new Map<string, string>();
+  // Scoped baseline metadata is not enough: validate the embedded source's
+  // tenant before placeholder inserts or identifier remapping can touch it.
+  for (const { baseline, entry } of tablePlans) {
+    if (entry.tableName !== "operationalWorkItem") continue;
+    for (const snapshot of baseline) {
+      if (snapshot.document.storeId !== storeId) throw new Error("Demo Work Item baseline ownership mismatch.");
+    }
+  }
   for (const { baseline, current } of tablePlans) {
     const currentIds = new Set(current.map((row) => String(row._id)));
     for (const snapshot of baseline) {
@@ -474,6 +490,9 @@ export async function restoreMutableDemoStoreRowsWithCtx(
         if (entry.tableName === "registerSession") {
           await deleteRegisterSessionWithAuthority(ctx, row._id);
         } else {
+          if (entry.tableName === "operationalWorkItem") {
+            await syncInventoryContributionWithCtx(ctx, null, { storeId, workItemId: row._id }, Date.now());
+          }
           await ctx.db.delete(entry.tableName, row._id);
         }
       }
@@ -490,6 +509,16 @@ export async function restoreMutableDemoStoreRowsWithCtx(
         );
       } else {
         await ctx.db.replace(entry.tableName, documentId, document);
+        if (entry.tableName === "operationalWorkItem") {
+          // Placeholder creation and this final remapped publication are in
+          // one transaction. Project only after SKU/member references exist.
+          const workItemId = documentId as Id<"operationalWorkItem">;
+          await syncInventoryContributionWithCtx(ctx, {
+            ...(document as Omit<Doc<"operationalWorkItem">, "_id" | "_creationTime">),
+            _id: workItemId,
+            _creationTime: Date.now(),
+          }, { storeId, workItemId }, Date.now());
+        }
       }
       await ctx.db.patch("sharedDemoBaselineDocument", (snapshot as any)._id, {
         document,
@@ -502,5 +531,15 @@ export async function restoreMutableDemoStoreRowsWithCtx(
     actualCounts[entry.domain] = (actualCounts[entry.domain] ?? 0) + verified.length;
     expectedCounts[entry.domain] = (expectedCounts[entry.domain] ?? 0) + baseline.length;
   }
+  // Preserve dailyClose/repair source authority: neither is a resettable
+  // baseline table. This domain rebuild reconciles surviving repair inputs and
+  // orphan contributions; the report migration separately rebuilds close evidence.
+  await beginInventoryContributionRebuildWithCtx(ctx, storeId, Date.now());
+  const control = await readPipelineControl(ctx, storeId);
+  if (control) await ctx.db.patch("reportPipelineControl", control._id, {
+    mode: "shadow", activeRollupEpoch: undefined, targetRollupEpoch: undefined,
+    hasActivated: control.hasActivated || Boolean(control.activeRollupEpoch),
+    fence: control.fence + 1,
+  });
   return { actualCounts, expectedCounts, restored };
 }

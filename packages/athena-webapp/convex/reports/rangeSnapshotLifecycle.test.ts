@@ -682,7 +682,7 @@ describe("dispatch exhaustiveness", () => {
     ).not.toBeNull();
   });
 
-  it("a full sweep expires legacy kindless rows but never a kinded row", async () => {
+  it("summary cleanup owns legacy and custom-summary headers but not movement or mix", async () => {
     const t = convexTest(schema, modules);
     const { storeId } = await seedStore(t);
 
@@ -704,14 +704,14 @@ describe("dispatch exhaustiveness", () => {
     });
 
     const result = await t.run((ctx) => sweepWithCtx(ctx));
-    expect(result.rangesExpired).toBe(1);
+    expect(result.rangesExpired).toBe(2);
 
     expect(
       await t.run((ctx) => ctx.db.get("reportRangeResult", legacyId)),
     ).toBeNull();
     expect(
       await t.run((ctx) => ctx.db.get("reportRangeResult", kindedId)),
-    ).not.toBeNull();
+    ).toBeNull();
   });
 
   it("the legacy summary compute path is a no-op for ANY kinded request", async () => {

@@ -5,6 +5,7 @@ import {
 } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
+import { patchOperationalWorkItemWithInventoryWithCtx } from "./inventoryContributions";
 import { resolveStockAdjustmentApprovalDecisionWithCtx } from "../stockOps/adjustments";
 import { resolvePaymentMethodCorrectionApprovalDecisionWithCtx } from "../pos/application/commands/correctTransaction";
 import { resolveTransactionItemAdjustmentApprovalDecisionWithCtx } from "../pos/application/commands/adjustTransactionItems";
@@ -207,12 +208,12 @@ async function retireLinkedUnsupportedApprovalWorkItemWithCtx(
     return;
   }
 
-  await ctx.db.patch("operationalWorkItem", workItem._id, {
+  await patchOperationalWorkItemWithInventoryWithCtx(ctx, workItem._id, {
     approvalState: args.decision,
     ...(workItem.type === SERVICE_DEPOSIT_REVIEW_REQUEST_TYPE
       ? { status: "cancelled" }
       : {}),
-  });
+  }, workItem);
 }
 
 async function retireItemAdjustmentApprovalAfterApplyFailure(

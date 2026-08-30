@@ -1,4 +1,5 @@
 import { internalMutation } from "../_generated/server";
+import { v } from "convex/values";
 import type { MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import {
@@ -8,8 +9,15 @@ import {
   normalizeCurrencyCode,
 } from "../../shared/reportsContract";
 import { foldDay } from "./foldDay";
+import { markDirty } from "./marks";
+import { loadAcceptedCompactCloseWithCtx } from "./closeEvidence";
+import { readPipelineControl } from "./pipelineControl";
+import { readStoreAllowlist } from "./pipelineAllowlist";
+export { readStoreAllowlist, parseStoreAllowlist, REPORTS_SWEEP_STORE_ALLOWLIST_ENV } from "./pipelineAllowlist";
+import { captureRollupInputWithCtx } from "./rollupPipeline";
+import { dispatchReportPipeline } from "./pipelineDispatchRoot";
 import { transactionCountFromCloseSummary } from "./transactionCounts";
-import { computeRange } from "./customRange";
+import { cleanupSummaryRangeWithCtx } from "./pipelineRange";
 import { MOVEMENT_RANGE_SNAPSHOT_KIND } from "./skuMovementRange";
 import { MIX_RANGE_SNAPSHOT_KIND } from "./skuMixRange";
 import {
@@ -27,39 +35,17 @@ import {
 } from "./weekly";
 
 /**
- * The sweeper — the ONE reporting cron (slice C).
+ * The one reports cron only dispatches independent lanes (pipelineDispatch).
+ * This module retains the canonical one-day fold and isolated legacy-store
+ * compatibility sweep. Activated stores use pipelineDays: fold, immutable
+ * input capture and exact handoffs commit before dirty acknowledgement.
+ * Thrown data work rolls back; independent failure mutations preserve retry
+ * evidence. Lease expiry is the durable backstop for dropped dispatch.
  *
- * Liveness comes in two deliberate flavors:
- *
- * FOLDS are declarative: work is a `reportDirtyDay` row, this is the only
- * consumer, and a crashed sweep leaves marks in place for the next tick.
- * There are no best-effort scheduling chains and no wedged states in the
- * fold lane.
- *
- * The MOVEMENT lifecycle (reports/skuMovementRange.ts) owns its own queue:
- * admitted requests progress through promptly scheduled internal-action
- * continuations, and this cron is only their BACKSTOP — an unconditional,
- * globally indexed `movementEligibleAt` scan that re-SCHEDULES dropped
- * continuations (never aggregates inline, and never depends on a store
- * having dirty-day marks). Movement snapshot cleanup (child rows first,
- * then headers) rides the same unconditional section.
- *
- * At-least-once by construction: the mark is deleted BEFORE the fold. A crash
- * after the delete loses nothing (the fold is idempotent and the next fact
- * re-dirties the day); a crash before it simply re-runs the fold. Both are
- * safe; double-processing is not — movement batches carry phase/fence
- * expectations for the same reason.
- *
- * Every read is bounded. Nothing here scans a table, and any work that does
- * not fit in a tick is left on the queue for the next one.
- *
- * "No wedged states" is a claim about FOLD errors, which are caught per day and
- * re-marked. It does not extend to the mutation's own transaction limits: a
- * sweep that reads past Convex's per-execution byte ceiling fails before it
- * returns, so nothing commits (marks included — no day is lost or half-written)
- * but the next tick reads the same marks and breaches identically. That wedge
- * is invisible to `SweepResult`, which is why the batch's per-period read cost
- * is kept flat rather than multiplied by SWEEP_DIRTY_BATCH — see `deferRollups`.
+ * Summary ranges own their cursor-batched queue; movement/mix retain their
+ * existing lifecycle. Maintenance dispatch/child-first expiry runs even for
+ * quiet stores. No transaction-count cap is a guarantee about read bytes:
+ * pipelineReadCostOptimized tests the full pipeline's payload tradeoffs.
  */
 
 /** Dirty marks folded per tick. */
@@ -78,15 +64,10 @@ export const MAX_SKU_DAY_ROWS_PER_DAY = 2000;
 export const MAX_CLOSES_PER_DAY = 8;
 /** Day docs examined when locating the store's open day. */
 export const OPEN_DAY_SCAN_LIMIT = 5;
-/** Pending range requests computed per tick, per store. */
-export const RANGE_BATCH_PER_STORE = 3;
 /** Expired range results deleted per tick. */
 export const RANGE_EXPIRY_BATCH = 20;
 /** Weekly singleton rebuilds per existing sweep; one marker per store. */
 export const WEEKLY_DIRTY_BATCH = 10;
-
-export const REPORTS_SWEEP_STORE_ALLOWLIST_ENV =
-  "REPORTS_SWEEP_STORE_ALLOWLIST";
 
 export type SweepResult = {
   marksExamined: number;
@@ -131,29 +112,6 @@ export class DayCapExceeded extends Error {
     );
     this.name = "DayCapExceeded";
   }
-}
-
-// ---------------------------------------------------------------------------
-// Store allowlist
-// ---------------------------------------------------------------------------
-
-/**
- * Comma-separated store ids. Empty or unset allows NOTHING: the rollout gate
- * is fail-closed so a fresh deployment never folds a store nobody has decided
- * to switch over yet (wigclub dev first, per the plan).
- */
-export function parseStoreAllowlist(raw: string | undefined): Set<string> {
-  if (!raw) return new Set();
-  return new Set(
-    raw
-      .split(",")
-      .map((entry) => entry.trim())
-      .filter((entry) => entry.length > 0),
-  );
-}
-
-export function readStoreAllowlist(): Set<string> {
-  return parseStoreAllowlist(process.env[REPORTS_SWEEP_STORE_ALLOWLIST_ENV]);
 }
 
 // ---------------------------------------------------------------------------
@@ -211,7 +169,8 @@ export function toFoldFact(fact: Doc<"reportFact">): FoldFact {
  * `dailyClose` is the legacy operations table and it is not single-valued per
  * day: a day can be reopened and superseded, leaving several rows. "Accepted"
  * is therefore read as: `status === "completed"`, not `lifecycleStatus ===
- * "superseded"`, and — when several survive — the most recently completed one.
+ * "superseded"` or `"reopened"`, and — when several survive — the most recently
+ * completed one.
  * Anything else (no completed row, or only superseded rows) folds as "no
  * close", which yields a `provisional` day rather than a wrong reconciliation.
  *
@@ -223,7 +182,9 @@ export function selectAcceptedClose(
 ): Doc<"dailyClose"> | null {
   const accepted = closes.filter(
     (close) =>
-      close.status === "completed" && close.lifecycleStatus !== "superseded",
+      close.status === "completed" &&
+      close.lifecycleStatus !== "superseded" &&
+      close.lifecycleStatus !== "reopened",
   );
   if (accepted.length === 0) return null;
 
@@ -234,7 +195,7 @@ export function selectAcceptedClose(
   });
 }
 
-export function toCloseRef(close: Doc<"dailyClose">): CloseRef {
+export function toCloseRef(close: Pick<Doc<"dailyClose">, "_id" | "summary" | "completedAt" | "updatedAt">): CloseRef {
   const summary = close.summary as Record<string, unknown>;
   const adjusted = summary.adjustedSalesTotal;
   const sales = summary.salesTotal;
@@ -258,7 +219,10 @@ async function loadAcceptedClose(
   ctx: MutationCtx,
   storeId: Id<"store">,
   operatingDate: string,
-): Promise<Doc<"dailyClose"> | null> {
+): Promise<Pick<Doc<"dailyClose">, "_id" | "summary" | "completedAt" | "updatedAt"> | null> {
+  if ((await readPipelineControl(ctx, storeId))?.mode === "active") {
+    return loadAcceptedCompactCloseWithCtx(ctx, storeId, operatingDate);
+  }
   const closes = await ctx.db
     .query("dailyClose")
     .withIndex("by_storeId_operatingDate", (q) =>
@@ -345,6 +309,7 @@ export async function foldAndReplaceDay(
      * leaves this unset and keeps the inline rebuild.
      */
     deferRollups?: boolean;
+    compactCloseEvidence?: boolean;
   },
 ): Promise<void> {
   const store = await ctx.db.get("store", storeId);
@@ -383,7 +348,9 @@ export async function foldAndReplaceDay(
     );
   }
 
-  const close = await loadAcceptedClose(ctx, storeId, operatingDate);
+  const close = opts?.compactCloseEvidence
+    ? await loadAcceptedCompactCloseWithCtx(ctx, storeId, operatingDate)
+    : await loadAcceptedClose(ctx, storeId, operatingDate);
   const closeRef = close ? toCloseRef(close) : undefined;
 
   const result = foldDay(storeCurrency, facts.map(toFoldFact), closeRef);
@@ -493,6 +460,10 @@ export async function foldAndReplaceDay(
     });
   }
 
+  await captureRollupInputWithCtx(ctx, {
+    storeId, operatingDate, revision: certifiedFoldRevision, skuDays: result.skuDays,
+  }, now);
+
   // --- rollups: re-aggregate the day's calendar periods ---------------------
   if (opts?.deferRollups !== true) {
     await rebuildRollupsForDates(ctx, storeId, [operatingDate]);
@@ -511,27 +482,7 @@ export async function markDayDirty(
   reason: Doc<"reportDirtyDay">["reason"],
   now: number,
 ): Promise<void> {
-  const existing = await ctx.db
-    .query("reportDirtyDay")
-    .withIndex("by_storeId_operatingDate", (q) =>
-      q.eq("storeId", storeId).eq("operatingDate", operatingDate),
-    )
-    .unique();
-
-  if (existing) {
-    await ctx.db.patch("reportDirtyDay", existing._id, {
-      reason,
-      markedAt: now,
-    });
-    return;
-  }
-
-  await ctx.db.insert("reportDirtyDay", {
-    storeId,
-    operatingDate,
-    reason,
-    markedAt: now,
-  });
+  await markDirty(ctx, storeId, operatingDate, reason, now);
 }
 
 /**
@@ -557,62 +508,19 @@ export async function findOpenOperatingDate(
 // Ranges
 // ---------------------------------------------------------------------------
 
-async function computePendingRanges(
-  ctx: MutationCtx,
-  storeId: Id<"store">,
-): Promise<number> {
-  const pending = await ctx.db
-    .query("reportRangeResult")
-    .withIndex("by_storeId_requestKey", (q) => q.eq("storeId", storeId))
-    .filter((q) => q.eq(q.field("status"), "pending"))
-    .take(RANGE_BATCH_PER_STORE);
-
-  let computed = 0;
-
-  for (const request of pending) {
-    // Kinded rows share the header table and are ALSO "pending" while their
-    // worker runs; every kinded lifecycle is owned by its own machinery
-    // (reports/rangeSnapshotLifecycle.ts and its per-kind configs), never by
-    // this legacy summary compute path. The skip is exhaustive over ANY
-    // kinded row — only legacy (kindless) custom-summary requests compute
-    // here, so a newly added kind can never leak into this lane.
-    if (request.kind !== undefined) continue;
-    try {
-      await computeRange(ctx, request);
-      computed += 1;
-    } catch (error) {
-      // A range is a convenience read; one that cannot be computed is recorded
-      // as failed rather than left pending forever (which would re-run it on
-      // every tick). The requester sees the reason.
-      await ctx.db.patch("reportRangeResult", request._id, {
-        status: "failed",
-        failureReason: error instanceof Error ? error.message : String(error),
-        computedAt: Date.now(),
-      });
-    }
-  }
-
-  return computed;
-}
 
 async function expireRangeResults(
   ctx: MutationCtx,
   now: number,
 ): Promise<number> {
-  const expired = await ctx.db
-    .query("reportRangeResult")
-    .withIndex("by_expiresAt", (q) => q.lt("expiresAt", now))
-    .take(RANGE_EXPIRY_BATCH);
-
   let deleted = 0;
-  for (const row of expired) {
-    // Kinded headers own child rows and must drain child-first through
-    // cleanupExpiredRangeSnapshots; deleting them here would skip that
-    // ordering. Exhaustive over ANY kinded row — legacy expiry owns only
-    // kindless custom-summary rows.
-    if (row.kind !== undefined) continue;
-    await ctx.db.delete("reportRangeResult", row._id);
-    deleted += 1;
+  for (const kind of [undefined, "custom_summary"] as const) {
+    const expired = await ctx.db.query("reportRangeResult")
+      .withIndex("by_kind_summaryCleanupBlocked_expiresAt", q => q.eq("kind", kind).eq("summaryCleanupBlocked", undefined).lt("expiresAt", now))
+      .take(1);
+    for (const row of expired) {
+      deleted += Number(await cleanupSummaryRangeWithCtx(ctx, row._id, now));
+    }
   }
   return deleted;
 }
@@ -631,15 +539,19 @@ function rangeSnapshotKindConfigs(): readonly AnyRangeSnapshotKindConfig[] {
   return [MOVEMENT_RANGE_SNAPSHOT_KIND, MIX_RANGE_SNAPSHOT_KIND];
 }
 
-export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
+export async function sweepWithCtx(
+  ctx: MutationCtx,
+  options?: { storeId: Id<"store">; skipMaintenance: boolean },
+): Promise<SweepResult> {
   const now = Date.now();
   const allowlist = readStoreAllowlist();
 
-  const marks = await ctx.db
-    .query("reportDirtyDay")
-    .withIndex("by_markedAt")
-    .order("asc")
-    .take(SWEEP_MARK_SCAN_LIMIT);
+  const marks = options
+    ? await ctx.db.query("reportDirtyDay")
+      .withIndex("by_storeId_markedAt", (q) => q.eq("storeId", options.storeId))
+      .order("asc").take(SWEEP_MARK_SCAN_LIMIT)
+    : await ctx.db.query("reportDirtyDay")
+      .withIndex("by_markedAt").order("asc").take(SWEEP_MARK_SCAN_LIMIT);
 
   const result: SweepResult = {
     marksExamined: marks.length,
@@ -741,7 +653,6 @@ export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
       ...(foldedDatesByStore.get(String(storeId)) ?? []),
     ]);
     await rebuildStoreOverview(ctx, storeId, now);
-    result.rangesComputed += await computePendingRanges(ctx, storeId);
     // A day fold is the sole normal signal for current weekly truth. The
     // singleton is still built from reportDay only, not from source domains.
     // The folded dates ride on the marker rather than on this tick's memory:
@@ -752,11 +663,11 @@ export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
     });
   }
 
-  const dirtyWeeks = await ctx.db
-    .query("reportDirtyWeek")
-    .withIndex("by_markedAt")
-    .order("asc")
-    .take(WEEKLY_DIRTY_BATCH);
+  const dirtyWeeks = options
+    ? await ctx.db.query("reportDirtyWeek")
+      .withIndex("by_storeId", (q) => q.eq("storeId", options.storeId)).take(1)
+    : await ctx.db.query("reportDirtyWeek")
+      .withIndex("by_markedAt").order("asc").take(WEEKLY_DIRTY_BATCH);
   for (const mark of dirtyWeeks) {
     if (!allowlist.has(String(mark.storeId))) continue;
     const store = await ctx.db.get("store", mark.storeId);
@@ -792,6 +703,16 @@ export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
   }
 
   result.storesTouched = touchedStores.size;
+  if (options?.skipMaintenance) return result;
+  return { ...result, ...await maintainReportsWithCtx(ctx, now) };
+}
+
+/** Maintenance commits independently of every fold/projection/store. */
+export async function maintainReportsWithCtx(ctx: MutationCtx, now: number) {
+  const result = {
+    rangesExpired: 0, movementWorkersScheduled: 0,
+    movementChildrenExpired: 0, movementHeadersExpired: 0,
+  };
   result.rangesExpired = await expireRangeResults(ctx, now);
 
   // Kinded snapshot lane — UNCONDITIONAL, never coupled to touchedStores:
@@ -816,5 +737,6 @@ export async function sweepWithCtx(ctx: MutationCtx): Promise<SweepResult> {
 /** The cron entry point. Registered once, every 5 minutes, in convex/crons.ts. */
 export const sweep = internalMutation({
   args: {},
-  handler: async (ctx): Promise<SweepResult> => sweepWithCtx(ctx),
+  returns: v.object({ lanesScheduled: v.number() }),
+  handler: async (ctx) => dispatchReportPipeline(ctx),
 });

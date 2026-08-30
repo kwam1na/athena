@@ -16,17 +16,21 @@ type RestoreCoordinatorArgs = {
   source: "daily" | "hourly" | "manual";
   storeId: string;
 };
+type RestoreCoordinatorResult =
+  | { epoch: number; kind: "pending" | "failed" }
+  | { baselineVersion: number; epoch: number; kind: "started"; restoredDocuments: number };
 
 export async function continueRestoreWithCtx(
   ctx: Pick<ActionCtx, "runMutation">,
   args: RestoreCoordinatorArgs,
-) {
+): Promise<RestoreCoordinatorResult> {
   try {
-    const applied: { appliedAt: number; restoredDocuments: number } =
+    const applied: { pending: true } | { appliedAt: number; restoredDocuments: number } =
       await ctx.runMutation(
         (internal as any).sharedDemo.restore.applyRestoreLease,
         args,
       );
+    if ("pending" in applied) return { epoch: args.epoch, kind: "pending" as const };
     const completed: { baselineVersion: number; epoch: number } =
       await ctx.runMutation(
         (internal as any).sharedDemo.restore.completeRestoreLease,

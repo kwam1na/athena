@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "../../../_generated/server";
 import type { Doc, Id } from "../../../_generated/dataModel";
 import { createOperationalWorkItemWithCtx } from "../../../operations/operationalWorkItems";
+import { patchOperationalWorkItemWithInventoryWithCtx } from "../../../operations/inventoryContributions";
 import { recordOperationalEventWithCtx } from "../../../operations/operationalEvents";
 
 const REVIEW_WORK_TYPE = "pos_pending_checkout_item_review";
@@ -250,7 +251,7 @@ async function cancelPendingCheckoutReviewWorkItem(
 ) {
   const completedAt = now();
 
-  await ctx.db.patch("operationalWorkItem", args.workItem._id, {
+  await patchOperationalWorkItemWithInventoryWithCtx(ctx, args.workItem._id, {
     completedAt,
     metadata: {
       ...(args.workItem.metadata ?? {}),
@@ -263,7 +264,7 @@ async function cancelPendingCheckoutReviewWorkItem(
       ...(args.repairRunId ? { repairRunId: args.repairRunId } : {}),
     },
     status: "cancelled",
-  });
+  }, args.workItem);
 
   await recordLifecycleEvent(ctx, {
     actorUserId: args.actorUserId,
@@ -371,13 +372,13 @@ export async function ensurePendingCheckoutReviewWorkForUnarchivedProduct(
       (await getOpenReviewWorkItemFromPointer(ctx, item)) ??
       (openWorkByItemId.get(String(item._id)) ?? [])[0];
     if (existingWorkItem) {
-      await ctx.db.patch("operationalWorkItem", existingWorkItem._id, {
+      await patchOperationalWorkItemWithInventoryWithCtx(ctx, existingWorkItem._id, {
         metadata: buildPendingCheckoutReviewWorkItemMetadata(item, {
           restoredReason: "provisional_product_unarchived",
         }),
         priority: buildPendingCheckoutReviewWorkItemPriority(item.reviewPriority),
         title: buildPendingCheckoutReviewWorkItemTitle(item),
-      });
+      }, existingWorkItem);
 
       if (item.operationalWorkItemId !== existingWorkItem._id) {
         await ctx.db.patch("posPendingCheckoutItem", item._id, {

@@ -111,6 +111,8 @@ type TableName =
   | "posTransaction"
   | "posTransactionAdjustment"
   | "registerSession"
+  | "reportCloseEvidence"
+  | "reportPipelineWork"
   | "staffProfile"
   | "store"
   | "storeSchedule";
@@ -1101,12 +1103,33 @@ describe("daily operations automation adapter", () => {
     expect(inserts.map((insert) => insert.table)).toEqual([
       "automationRun",
       "dailyClose",
+      "reportCloseEvidence",
+      "reportPipelineWork",
       "reportFact",
       "reportDay",
       "reportDirtyDay",
       "reportDirtyDay",
       "operationalEvent",
     ]);
+    expect(
+      inserts.find((insert) => insert.table === "reportCloseEvidence")?.value,
+    ).toMatchObject({
+      closeId: "dailyClose-1",
+      storeId: "store-1",
+      operatingDate: "2026-06-08",
+      status: "completed",
+      expectedGeneration: 1,
+      publishedGeneration: undefined,
+    });
+    expect(
+      inserts.find((insert) => insert.table === "reportPipelineWork")?.value,
+    ).toMatchObject({
+      storeId: "store-1",
+      kind: "close-evidence",
+      closeId: "dailyClose-1",
+      generation: 1,
+      status: "pending",
+    });
     expect(inserts.at(-1)?.value).toMatchObject({
       actorType: "automation",
       automationRunId: "automationRun-1",
@@ -1716,6 +1739,8 @@ describe("daily operations automation adapter", () => {
     expect(inserts.map((insert) => insert.table)).toEqual([
       "automationRun",
       "dailyClose",
+      "reportCloseEvidence",
+      "reportPipelineWork",
       "reportFact",
       "reportDay",
       "reportDirtyDay",
@@ -1821,6 +1846,8 @@ describe("daily operations automation adapter", () => {
     expect(inserts.map((insert) => insert.table)).toEqual([
       "automationRun",
       "dailyClose",
+      "reportCloseEvidence",
+      "reportPipelineWork",
       "reportFact",
       "reportDay",
       "reportDirtyDay",
@@ -2619,6 +2646,8 @@ describe("daily operations automation adapter", () => {
     expect(inserts.map((insert) => insert.table)).toEqual([
       "automationRun",
       "dailyClose",
+      "reportCloseEvidence",
+      "reportPipelineWork",
       "reportFact",
       "reportDay",
       "reportDirtyDay",

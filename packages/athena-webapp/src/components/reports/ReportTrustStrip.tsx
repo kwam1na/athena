@@ -16,6 +16,14 @@ export function ReportTrustStrip({
   /** Operating date to measure staleness against; defaults to the local day. */
   today?: string;
 }) {
+  if (trust.projectionStatus === "pending" || trust.projectionStatus === "blocked") {
+    return (
+      <p className="text-sm leading-6 text-muted-foreground" data-testid="report-trust-summary" role="status">
+        {trust.projectionStatus === "blocked" ? "Report update delayed." : "Reports updating."}
+        {" Showing the last completed snapshot."}
+      </p>
+    );
+  }
   const oldestUnreconciled = reportOldestUnreconciledPresentation(
     trust.oldestUnreconciledDate,
     today ?? new Date().toISOString().slice(0, 10),

@@ -8,16 +8,25 @@ export async function markDirty(
   storeId: Id<"store">,
   operatingDate: string,
   reason: Doc<"reportDirtyDay">["reason"],
+  markedAt = Date.now(),
 ): Promise<void> {
   const existing = await ctx.db
     .query("reportDirtyDay")
     .withIndex("by_storeId_operatingDate", (q) =>
       q.eq("storeId", storeId).eq("operatingDate", operatingDate),
     )
-    .first();
-  const markedAt = Date.now();
+    .unique();
   if (existing) {
-    await ctx.db.patch("reportDirtyDay", existing._id, { reason, markedAt });
+    await ctx.db.patch("reportDirtyDay", existing._id, {
+      reason,
+      markedAt,
+      firstMarkedAt: existing.firstMarkedAt ?? existing.markedAt,
+      generation: (existing.generation ?? 0) + 1,
+      eligibleAt: markedAt,
+      attempts: 0,
+      claimedAt: undefined,
+      lastFailure: undefined,
+    });
     return;
   }
   await ctx.db.insert("reportDirtyDay", {
@@ -25,6 +34,10 @@ export async function markDirty(
     operatingDate,
     reason,
     markedAt,
+    firstMarkedAt: markedAt,
+    generation: 1,
+    eligibleAt: markedAt,
+    attempts: 0,
   });
 }
 

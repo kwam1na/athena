@@ -1,5 +1,6 @@
 import type { FunctionReference } from "convex/server";
 import { v } from "convex/values";
+import { patchInventoryRepairWithCtx, patchOperationalWorkItemWithInventoryWithCtx, syncInventoryRepairWithCtx } from "./inventoryContributions";
 
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
@@ -211,6 +212,9 @@ export async function createRepairWithCtx(
     supportTicket: args.supportTicket.trim(),
     updatedAt: now,
   });
+  const createdRepair = await ctx.db.get("oversizedOperationalWorkRepair", repairId);
+  if (!createdRepair) throw new Error("inventory_repair_missing");
+  await syncInventoryRepairWithCtx(ctx, createdRepair, { storeId: args.storeId, repairId }, now);
   await recordRepairAuditEvent(ctx, {
     action: "created",
     evidence: args,
@@ -233,7 +237,7 @@ async function pauseRepair(
   repair: Doc<"oversizedOperationalWorkRepair">,
   error: string,
 ) {
-  await ctx.db.patch("oversizedOperationalWorkRepair", repair._id, {
+  await patchInventoryRepairWithCtx(ctx, repair, {
     error,
     status: "paused",
     updatedAt: Date.now(),
@@ -360,7 +364,7 @@ export async function processRepairBatchWithCtx(
       kind: "support_repair",
       supportTicket: repair.supportTicket,
     };
-    await ctx.db.patch("operationalWorkItem", workItemId, {
+    await patchOperationalWorkItemWithInventoryWithCtx(ctx, workItemId, {
       completedAt: resolvedAt,
       metadata: {
         ...(item.metadata ?? {}),
@@ -375,7 +379,7 @@ export async function processRepairBatchWithCtx(
         },
       },
       status: "completed",
-    });
+    }, item);
     await ctx.db.insert(
       "operationalEvent",
       buildOperationalEvent({
@@ -400,7 +404,7 @@ export async function processRepairBatchWithCtx(
 
   const cursor = repair.cursor + batchIds.length;
   if (cursor >= repair.memberIds.length) {
-    await ctx.db.patch("oversizedOperationalWorkRepair", repair._id, {
+    await patchInventoryRepairWithCtx(ctx, repair, {
       cursor,
       error: undefined,
       status: "completed",
@@ -417,7 +421,7 @@ export async function processRepairBatchWithCtx(
     });
     return { action: "completed" as const, processedCount: batchIds.length };
   }
-  await ctx.db.patch("oversizedOperationalWorkRepair", repair._id, {
+  await patchInventoryRepairWithCtx(ctx, repair, {
     cursor,
     error: undefined,
     status: "running",
@@ -453,7 +457,7 @@ export async function amendRepairWithCtx(
     throw new Error("No new aliases are available to amend.");
   }
   const amendedAt = Date.now();
-  await ctx.db.patch("oversizedOperationalWorkRepair", repair._id, {
+  await patchInventoryRepairWithCtx(ctx, repair, {
     error: undefined,
     memberIds: [...repair.memberIds, ...addedMemberIds],
     status: "running",
@@ -479,7 +483,7 @@ export async function resumeRepairWithCtx(
     throw new Error("Only a paused repair can be resumed.");
   }
   const resumedAt = Date.now();
-  await ctx.db.patch("oversizedOperationalWorkRepair", repair._id, {
+  await patchInventoryRepairWithCtx(ctx, repair, {
     error: undefined,
     status: "running",
     updatedAt: resumedAt,

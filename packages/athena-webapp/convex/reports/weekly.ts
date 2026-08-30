@@ -31,9 +31,31 @@ import {
   isCloseWithinWeeklyAcceptanceFloor,
 } from "../platform/capabilityCatalog";
 import { addDaysToDate } from "./rollups";
-import { getStoreScheduleContextForStoreAtWithCtx } from "../inventory/storeSchedule";
+import { getStoreScheduleContextForStoreAtWithCtx } from "../inventory/storeScheduleCore";
 import { scheduleNotificationWithCtx } from "../notifications/emit";
-import { aggregateWeeklyCloseEvidence } from "./weeklyCloseEvidence";
+import {
+  aggregateWeeklyCloseEvidence,
+  type CloseSnapshot,
+} from "./weeklyCloseEvidence";
+import { readPipelineControl } from "./pipelineControl";
+import { bumpAcceptedWatermarkWithCtx } from "./pipelineAcceptedWatermark";
+import { enqueueReportWork } from "./pipelineWork";
+import { markWeekDirty, type WeeklyAcceptanceIntent } from "./weeklyMarks";
+export {
+  markWeekDirty,
+  WEEKLY_MARK_FOLDED_DATE_LIMIT,
+  type WeeklyAcceptanceIntent,
+} from "./weeklyMarks";
+import {
+  closeEvidenceAsSnapshot,
+  compactFrozenInventoryAttention,
+  isActiveAcceptedClose,
+  readCloseEvidenceWithCtx,
+} from "./closeEvidence";
+import {
+  enqueueWeeklyInventoryFrameWithCtx,
+  financialFrameKey,
+} from "./weeklyInventoryProjection";
 
 /**
  * Active/candidate schedule versions read to resolve one seven-date reporting
@@ -285,7 +307,8 @@ function addDay(total: ReportWeekMetrics, day: WeekDay): ReportWeekMetrics {
     paymentHasInvalidAllocation:
       (total.paymentHasInvalidAllocation ?? false) ||
       (payment?.hasInvalidAllocation ?? false),
-    ...(total.transactionCount === undefined || day.transactionCount === undefined
+    ...(total.transactionCount === undefined ||
+    day.transactionCount === undefined
       ? {}
       : { transactionCount: total.transactionCount + day.transactionCount }),
   };
@@ -538,7 +561,7 @@ async function resolveCurrentPeriod(
  * Completion time is deliberately absent: a delayed close can be completed
  * after the next reporting cycle has already started.
  */
-async function resolvePeriodForOperatingDate(
+export async function resolvePeriodForOperatingDate(
   ctx: MutationCtx,
   storeId: Id<"store">,
   operatingDate: string,
@@ -848,14 +871,17 @@ export function computeWeeklyVariancePosture(
 }
 
 async function weeklyCloseEvidence(
-  ctx: QueryCtx,
+  ctx: MutationCtx,
+  storeId: Id<"store">,
   period: Extract<WeeklyPeriod, { kind: "resolved" }>,
   days: readonly Pick<Doc<"reportDay">, "closeId" | "operatingDate">[],
+  validatedCloses?: ReadonlyMap<string, CloseSnapshot>,
 ) {
   // The aggregator discards outside-schedule dates, so their close documents
   // are never fetched: at most one read per scheduled close.
   const scheduled = new Set(period.includedDates);
-  const closes = new Map<string, Doc<"dailyClose">>();
+  const closes = new Map<string, CloseSnapshot>(validatedCloses);
+  const compact = (await readPipelineControl(ctx, storeId))?.mode === "active";
   for (const day of days) {
     if (
       !day.closeId ||
@@ -864,8 +890,20 @@ async function weeklyCloseEvidence(
     ) {
       continue;
     }
-    const close = await ctx.db.get("dailyClose", day.closeId);
-    if (close) closes.set(String(day.closeId), close);
+    if (compact) {
+      const read = await readCloseEvidenceWithCtx(ctx, storeId, day.closeId);
+      if (read.status === "ready")
+        closes.set(String(day.closeId), closeEvidenceAsSnapshot(read));
+      else
+        await enqueueReportWork(
+          ctx,
+          { storeId, kind: "close-evidence", closeId: day.closeId },
+          Date.now(),
+        );
+    } else {
+      const close = await ctx.db.get("dailyClose", day.closeId);
+      if (close?.storeId === storeId) closes.set(String(day.closeId), close);
+    }
   }
   return aggregateWeeklyCloseEvidence({
     closes,
@@ -1177,6 +1215,7 @@ export async function rebuildCurrentWeek(
     .query("reportWeekCurrent")
     .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
     .unique();
+  const compact = (await readPipelineControl(ctx, storeId))?.mode === "active";
   const persistUnavailable = async (
     unavailableReason:
       | "missing_schedule"
@@ -1191,6 +1230,15 @@ export async function rebuildCurrentWeek(
       unavailableReason !== "no_scheduled_dates"
     ) {
       await persistWeeklyIncompleteness(ctx, storeId, unavailableReason);
+      if (
+        compact &&
+        financialFrameKey(existing) !==
+          financialFrameKey({
+            ...existing,
+            completeness: { reason: unavailableReason },
+          })
+      )
+        await enqueueWeeklyInventoryFrameWithCtx(ctx, { storeId, now });
       return;
     }
     const amendmentPosture: ReportWeekAmendmentPosture =
@@ -1210,6 +1258,12 @@ export async function rebuildCurrentWeek(
     } else {
       await ctx.db.insert("reportWeekCurrent", unavailable);
     }
+    if (
+      compact &&
+      (!existing ||
+        financialFrameKey(existing) !== financialFrameKey(unavailable))
+    )
+      await enqueueWeeklyInventoryFrameWithCtx(ctx, { storeId, now });
   };
   const period = await resolveCurrentPeriod(ctx, storeId, now);
   if (period.kind !== "resolved") {
@@ -1235,7 +1289,7 @@ export async function rebuildCurrentWeek(
   const folded = foldWeekFromDays({ period, days });
   const frameStartAt = await periodStartAt(ctx, period);
   const inventoryAttention =
-    frameStartAt === null
+    compact || frameStartAt === null
       ? projectFrozenWeeklyInventoryAttention({
           frameStartAt: now,
           groups: [],
@@ -1276,7 +1330,7 @@ export async function rebuildCurrentWeek(
   const amendmentPosture: ReportWeekAmendmentPosture = accepted?.amendment
     ? "amended"
     : "none";
-  const closeEvidence = await weeklyCloseEvidence(ctx, period, days);
+  const closeEvidence = await weeklyCloseEvidence(ctx, storeId, period, days);
   if (
     accepted &&
     (accepted.lifecyclePosture !== lifecyclePosture ||
@@ -1328,91 +1382,12 @@ export async function rebuildCurrentWeek(
   if (existing)
     await ctx.db.replace("reportWeekCurrent", existing._id, currentDoc);
   else await ctx.db.insert("reportWeekCurrent", currentDoc);
+  if (
+    compact &&
+    (!existing || financialFrameKey(existing) !== financialFrameKey(currentDoc))
+  )
+    await enqueueWeeklyInventoryFrameWithCtx(ctx, { storeId, now });
   return "rebuilt";
-}
-
-export type WeeklyAcceptanceIntent = NonNullable<
-  Doc<"reportDirtyWeek">["intent"]
->;
-
-/** Folded dates carried on one marker. Bounded: two frames of daily work. */
-export const WEEKLY_MARK_FOLDED_DATE_LIMIT = 16;
-
-/**
- * Upsert the per-store marker consumed by the one existing Reports sweeper.
- *
- * `foldedDates` accumulate on the marker instead of being handed over in
- * memory, so a store whose marker misses one weekly page still replays the
- * exact historical dates on the next tick. A recorded acceptance intent is
- * preserved across re-marks and never rewritten by a later mark.
- */
-export async function markWeekDirty(
-  ctx: MutationCtx,
-  storeId: Id<"store">,
-  reason: Doc<"reportDirtyWeek">["reason"],
-  now: number,
-  opts?: {
-    acceptanceBlockedReason?: Doc<"reportDirtyWeek">["acceptanceBlockedReason"];
-    foldedDates?: readonly string[];
-    intent?: WeeklyAcceptanceIntent;
-  },
-): Promise<void> {
-  const current = await ctx.db
-    .query("reportWeekCurrent")
-    .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
-    .unique();
-  if (current && current.availability !== "unavailable") {
-    const lifecyclePosture: ReportWeekLifecyclePosture = current.acceptedBaselineId
-      ? (current.closePosture?.status ?? "accepted")
-      : "materializing";
-    const amendmentPosture: ReportWeekAmendmentPosture =
-      current.acceptedBaselineId ? "pending_recompute" : "none";
-    await ctx.db.patch("reportWeekCurrent", current._id, {
-      lifecyclePosture,
-      amendmentPosture,
-    });
-    if (current.acceptedBaselineId) {
-      await ctx.db.patch(
-        "reportWeekAccepted",
-        current.acceptedBaselineId,
-        {
-          lifecyclePosture,
-          amendmentPosture,
-        },
-      );
-    }
-  }
-  const existing = await ctx.db
-    .query("reportDirtyWeek")
-    .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
-    .unique();
-  const foldedDates = [
-    ...new Set([...(existing?.foldedDates ?? []), ...(opts?.foldedDates ?? [])]),
-  ]
-    .sort()
-    .slice(-WEEKLY_MARK_FOLDED_DATE_LIMIT);
-  const intent = existing?.intent ?? opts?.intent;
-  const acceptanceBlockedReason =
-    opts?.acceptanceBlockedReason ??
-    (intent ? undefined : existing?.acceptanceBlockedReason);
-  if (existing) {
-    await ctx.db.patch("reportDirtyWeek", existing._id, {
-      reason,
-      markedAt: now,
-      intent,
-      acceptanceBlockedReason,
-      ...(foldedDates.length > 0 ? { foldedDates } : {}),
-    });
-    return;
-  }
-  await ctx.db.insert("reportDirtyWeek", {
-    storeId,
-    reason,
-    markedAt: now,
-    ...(intent ? { intent } : {}),
-    ...(acceptanceBlockedReason ? { acceptanceBlockedReason } : {}),
-    ...(foldedDates.length > 0 ? { foldedDates } : {}),
-  });
 }
 
 /**
@@ -1432,7 +1407,7 @@ export async function markWeekDirty(
 async function resolveWeeklyAcceptanceIntent(
   ctx: MutationCtx,
   args: {
-    close: Doc<"dailyClose">;
+    close: Pick<Doc<"dailyClose">, "_id" | "completedAt">;
     cycleStartDate: string;
     now: number;
     storeId: Id<"store">;
@@ -1560,7 +1535,9 @@ async function localDateForPeriod(
     "storeSchedule",
     scheduleVersionId as Id<"storeSchedule">,
   );
-  return schedule?.timezone ? localDateAt(now, schedule.timezone) : period.startDate;
+  return schedule?.timezone
+    ? localDateAt(now, schedule.timezone)
+    : period.startDate;
 }
 
 /**
@@ -1576,6 +1553,8 @@ export async function materializeAcceptedWeek(args: {
   closeId: Id<"dailyClose">;
   ctx: MutationCtx;
   cutoffObservedAt?: number;
+  /** Exact work identity; never reinterpret a queued cycle after schedule edits. */
+  cycleStartDate?: string;
   now?: number;
   storeId: Id<"store">;
 }): Promise<"created" | "existing" | "incomplete" | "unavailable"> {
@@ -1587,15 +1566,41 @@ export async function materializeAcceptedWeek(args: {
   ) {
     return "unavailable";
   }
-  const close = await args.ctx.db.get("dailyClose", args.closeId);
+  const compact =
+    (await readPipelineControl(args.ctx, args.storeId))?.mode === "active";
+  const compactRead = compact
+    ? await readCloseEvidenceWithCtx(args.ctx, args.storeId, args.closeId)
+    : null;
+  if (compactRead && compactRead.status !== "ready") {
+    await enqueueReportWork(
+      args.ctx,
+      { storeId: args.storeId, kind: "close-evidence", closeId: args.closeId },
+      args.now ?? Date.now(),
+    );
+    return "incomplete";
+  }
+  const sourceClose = compact
+    ? null
+    : await args.ctx.db.get("dailyClose", args.closeId);
+  const close =
+    compactRead?.status === "ready"
+      ? { ...compactRead.header, _id: compactRead.header.closeId }
+      : sourceClose;
   if (
     !close ||
     close.storeId !== args.storeId ||
-    close.status !== "completed" ||
-    close.lifecycleStatus === "superseded"
+    !isActiveAcceptedClose(close)
   ) {
     return "unavailable";
   }
+  // Invocation-local reuse only: these snapshots have already passed the
+  // compact reader's store/parent/generation checks in this transaction.
+  const validatedCloseSnapshots = new Map<string, CloseSnapshot>();
+  if (compactRead?.status === "ready")
+    validatedCloseSnapshots.set(
+      String(args.closeId),
+      closeEvidenceAsSnapshot(compactRead),
+    );
   const period = await resolvePeriodForOperatingDate(
     args.ctx,
     args.storeId,
@@ -1603,6 +1608,8 @@ export async function materializeAcceptedWeek(args: {
   );
   if (
     period.kind !== "resolved" ||
+    (args.cycleStartDate !== undefined &&
+      period.startDate !== args.cycleStartDate) ||
     period.finalScheduledDate === null ||
     close.operatingDate !== period.finalScheduledDate
   ) {
@@ -1623,12 +1630,19 @@ export async function materializeAcceptedWeek(args: {
     }
     return "existing";
   }
-  const intent = await resolveWeeklyAcceptanceIntent(args.ctx, {
-    close,
-    cycleStartDate: period.startDate,
-    now: args.now ?? Date.now(),
-    storeId: args.storeId,
-  });
+  const intent =
+    compact && args.cutoffObservedAt !== undefined
+      ? {
+          closeId: args.closeId,
+          cycleStartDate: period.startDate,
+          cutoffObservedAt: args.cutoffObservedAt,
+        }
+      : await resolveWeeklyAcceptanceIntent(args.ctx, {
+          close,
+          cycleStartDate: period.startDate,
+          now: args.now ?? Date.now(),
+          storeId: args.storeId,
+        });
   if (!intent) return "unavailable";
   const acceptedAt = args.acceptedAt ?? intent.cutoffObservedAt;
   const cutoffObservedAt = args.cutoffObservedAt ?? intent.cutoffObservedAt;
@@ -1707,6 +1721,34 @@ export async function materializeAcceptedWeek(args: {
   );
   if (acceptedRead.status !== "ok") return "incomplete";
   const acceptedDays = acceptedRead.days;
+  if (compact) {
+    for (const day of acceptedDays) {
+      if (!day.closeId || !period.includedDates.includes(day.operatingDate))
+        continue;
+      if (validatedCloseSnapshots.has(String(day.closeId))) continue;
+      const evidence = await readCloseEvidenceWithCtx(
+        args.ctx,
+        args.storeId,
+        day.closeId,
+      );
+      if (evidence.status !== "ready") {
+        await enqueueReportWork(
+          args.ctx,
+          {
+            storeId: args.storeId,
+            kind: "close-evidence",
+            closeId: day.closeId,
+          },
+          args.now ?? Date.now(),
+        );
+        return "incomplete";
+      }
+      validatedCloseSnapshots.set(
+        String(day.closeId),
+        closeEvidenceAsSnapshot(evidence),
+      );
+    }
+  }
   const currentFolded = foldWeekFromDays({ period, days: acceptedDays });
   if (!currentFolded.completeness.complete) return "incomplete";
   const closePosture = await resolveAcceptedWeekClosePosture(
@@ -1721,8 +1763,10 @@ export async function materializeAcceptedWeek(args: {
   if (!closePosture) return "incomplete";
   const closeEvidence = await weeklyCloseEvidence(
     args.ctx,
+    args.storeId,
     period,
     acceptedDays,
+    validatedCloseSnapshots,
   );
   const amendment = deriveWeeklyAmendment({
     accepted: {
@@ -1789,7 +1833,10 @@ export async function materializeAcceptedWeek(args: {
     topSkuLeaders,
     lifecyclePosture: closePosture.status,
     amendmentPosture: amendment ? "amended" : "none",
-    inventoryAttention: acceptedInventoryFromClose(close, frameStartAt),
+    inventoryAttention:
+      compactRead?.status === "ready"
+        ? compactFrozenInventoryAttention(compactRead, frameStartAt)
+        : acceptedInventoryFromClose(sourceClose!, frameStartAt),
     closePosture,
     amendment,
     priorPeriod,
@@ -1802,6 +1849,7 @@ export async function materializeAcceptedWeek(args: {
     },
     closeEvidence,
   });
+  await bumpAcceptedWatermarkWithCtx(args.ctx, args.storeId);
   const deliverySchedule = await getStoreScheduleContextForStoreAtWithCtx(
     args.ctx,
     { at: acceptedAt, storeId: args.storeId },
@@ -1820,7 +1868,11 @@ export async function materializeAcceptedWeek(args: {
     .query("reportWeekCurrent")
     .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
     .unique();
-  if (current && current.availability !== "unavailable") {
+  if (
+    current &&
+    current.availability !== "unavailable" &&
+    current.cycleStartDate === period.startDate
+  ) {
     await args.ctx.db.patch("reportWeekCurrent", current._id, {
       acceptedBaselineId: baselineId,
       closePosture,
@@ -1829,7 +1881,8 @@ export async function materializeAcceptedWeek(args: {
       amendmentPosture: amendment ? "amended" : "none",
     });
   }
-  await clearWeeklyAcceptanceIntent(args.ctx, args.storeId, intent);
+  if (!compact)
+    await clearWeeklyAcceptanceIntent(args.ctx, args.storeId, intent);
   return "created";
 }
 
@@ -1866,6 +1919,59 @@ export async function resolveAcceptedWeekClosePosture(
   >,
   finalScheduledDate: string | null,
 ) {
+  if ((await readPipelineControl(ctx, accepted.storeId))?.mode === "active") {
+    const original = await ctx.db
+      .query("reportCloseEvidence")
+      .withIndex("by_closeId", (q) => q.eq("closeId", accepted.closeId))
+      .unique();
+    if (
+      !original ||
+      original.storeId !== accepted.storeId ||
+      !finalScheduledDate
+    )
+      return null;
+    const versions = await ctx.db
+      .query("reportCloseEvidence")
+      .withIndex("by_storeId_operatingDate", (q) =>
+        q
+          .eq("storeId", accepted.storeId)
+          .eq("operatingDate", finalScheduledDate),
+      )
+      .take(WEEKLY_CLOSE_VERSION_LIMIT + 1);
+    if (versions.length > WEEKLY_CLOSE_VERSION_LIMIT) return null;
+    const successor = versions
+      .filter(
+        (close) =>
+          close.closeId !== accepted.closeId && isActiveAcceptedClose(close),
+      )
+      .sort(
+        (a, b) =>
+          (b.completedAt ?? b.sourceUpdatedAt) -
+          (a.completedAt ?? a.sourceUpdatedAt),
+      )[0];
+    if (successor)
+      return {
+        acceptedCloseId: accepted.closeId,
+        currentCloseId: successor.closeId,
+        changedAt: successor.completedAt ?? successor.sourceUpdatedAt,
+        status: "successor_accepted" as const,
+      };
+    if (
+      original.lifecycleStatus === "reopened" ||
+      original.lifecycleStatus === "superseded"
+    )
+      return {
+        acceptedCloseId: accepted.closeId,
+        changedAt: original.reopenedAt ?? original.sourceUpdatedAt,
+        status: "reopened_awaiting_successor" as const,
+      };
+    return {
+      acceptedCloseId: accepted.closeId,
+      currentCloseId: accepted.closeId,
+      changedAt: accepted.acceptedAt,
+      status: "accepted" as const,
+    };
+  }
   const original = await ctx.db.get("dailyClose", accepted.closeId);
   if (!original || !finalScheduledDate) {
     return {
@@ -1884,10 +1990,7 @@ export async function resolveAcceptedWeekClosePosture(
   const closes = closeProbe;
   const successor = closes
     .filter(
-      (close) =>
-        close._id !== accepted.closeId &&
-        close.status === "completed" &&
-        close.lifecycleStatus !== "superseded",
+      (close) => close._id !== accepted.closeId && isActiveAcceptedClose(close),
     )
     .sort(
       (left, right) =>
@@ -1925,7 +2028,7 @@ export async function resolveAcceptedWeekClosePosture(
   };
 }
 
-async function refreshAcceptedWeek(
+export async function refreshAcceptedWeek(
   ctx: MutationCtx,
   accepted: Doc<"reportWeekAccepted">,
   now: number,
@@ -1972,7 +2075,12 @@ async function refreshAcceptedWeek(
     // Only the matching current row republishes evidence, so the bounded
     // accepted-history sweep never pays close reads for cycle-mismatched
     // weeks it refreshes.
-    const closeEvidence = await weeklyCloseEvidence(ctx, period, days);
+    const closeEvidence = await weeklyCloseEvidence(
+      ctx,
+      accepted.storeId,
+      period,
+      days,
+    );
     await ctx.db.patch("reportWeekCurrent", current._id, {
       acceptedBaselineId: accepted._id,
       amendment,
@@ -2007,6 +2115,12 @@ async function retainAcceptedWeekDateRetry(
   if (dirtyDay) {
     await ctx.db.patch("reportDirtyDay", dirtyDay._id, {
       markedAt: now,
+      generation: (dirtyDay.generation ?? 0) + 1,
+      firstMarkedAt: dirtyDay.firstMarkedAt ?? dirtyDay.markedAt,
+      eligibleAt: now,
+      claimedAt: undefined,
+      attempts: 0,
+      lastFailure: undefined,
     });
     return;
   }
@@ -2015,6 +2129,9 @@ async function retainAcceptedWeekDateRetry(
     operatingDate,
     reason: "late_fact",
     markedAt: now,
+    generation: 1,
+    firstMarkedAt: now,
+    eligibleAt: now,
   });
 }
 
@@ -2028,6 +2145,14 @@ export async function refreshAcceptedWeekForDate(
   operatingDate: string,
   now: number,
 ) {
+  if ((await readPipelineControl(ctx, storeId))?.mode === "active") {
+    await enqueueReportWork(
+      ctx,
+      { storeId, kind: "resolve-week-date", operatingDate },
+      now,
+    );
+    return 0;
+  }
   const store = await ctx.db.get("store", storeId);
   if (!store) return 0;
   if (
@@ -2092,11 +2217,7 @@ export async function refreshAcceptedWeekForDate(
   }
   const closes = closeProbe;
   const close = closes
-    .filter(
-      (candidate) =>
-        candidate.status === "completed" &&
-        candidate.lifecycleStatus !== "superseded",
-    )
+    .filter((candidate) => isActiveAcceptedClose(candidate))
     .sort(
       (left, right) =>
         (right.completedAt ?? right.updatedAt) -
@@ -2153,6 +2274,7 @@ export async function reconcileRecentAcceptedWeeksForStore(
   storeId: Id<"store">,
   now: number,
 ) {
+  if ((await readPipelineControl(ctx, storeId))?.mode === "active") return 0;
   const store = await ctx.db.get("store", storeId);
   if (
     !store ||
@@ -2169,8 +2291,7 @@ export async function reconcileRecentAcceptedWeeksForStore(
   let created = 0;
   for (const close of closes) {
     if (
-      close.status !== "completed" ||
-      close.lifecycleStatus === "superseded" ||
+      !isActiveAcceptedClose(close) ||
       // Pre-activation closes never gain retrospective accepted baselines.
       !isCloseWithinWeeklyAcceptanceFloor(store, close.completedAt)
     ) {
