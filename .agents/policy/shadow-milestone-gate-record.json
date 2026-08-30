@@ -1,0 +1,42 @@
+{
+  "spec": "athena-shadow-milestone-gate-record/1",
+  "repositoryId": "athena",
+  "purpose": "The shadow milestone's measurement artifact: one entry per shadow delivery, carrying the binding-sourced projection-consumption record alongside the intervention and blocked-share measurements the milestone gate compares against the frozen manual-choreography baseline. A measurement artifact, not a journal — it is written by the binding, outside every execution grant's writable paths, and no session may author an entry.",
+  "recordedAt": "2026-08-30T22:10:00Z",
+  "status": "awaiting-shadow-deliveries",
+  "baseline": {
+    "repository": "agent-delivery-harness",
+    "path": "qualifications/manual-choreography-baseline.json",
+    "schemaVersion": "manual-choreography-baseline/1",
+    "provingHost": "claude-code"
+  },
+  "comparisonSetRequirement": {
+    "note": "the counted set must match the baseline's mix and count; a delivery without an affirmative binding-sourced consumption record never counts, whatever its measurements say",
+    "mix": {
+      "code": 1,
+      "docs": 1,
+      "operations": 1
+    },
+    "total": 3
+  },
+  "gateMetrics": {
+    "medianOperatorInterventionsAfterAcceptance": "must be strictly lower than the baseline's",
+    "blockedVersusProgressingShare": "must not regress against the baseline's",
+    "policyRequiredInterruptions": "recorded and reported alongside interventions, never counted as interventions"
+  },
+  "consumptionRecordContract": {
+    "requiredSource": "binding",
+    "shape": {
+      "source": "binding",
+      "affirmative": true,
+      "projectionDigest": "the digest the binding receipted at materialization",
+      "marker": {
+        "deliveryId": "the delivery the projection was materialized for",
+        "fence": "the invocation fence the marker binds",
+        "consumed": "the pinned generation archive the run consumed as its workflow source"
+      }
+    },
+    "rejected": "any record whose source is not the binding — a session-authored or otherwise agent-supplied claim is a finding and excludes the delivery from the comparison set"
+  },
+  "deliveries": []
+}

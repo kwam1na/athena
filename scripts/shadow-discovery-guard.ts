@@ -1,0 +1,432 @@
+import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
+import { POLICY_PROJECTION_DIR } from "./policy-projection-check";
+
+/**
+ * The pre-cutover exactly-one-discovery guard for Athena's read-only shadow
+ * window.
+ *
+ * The composed delivery product is installed in shadow mode and materializes
+ * its run-pinned projection into managed delivery worktrees, while `bun run
+ * pr:athena` stays the repository's only delivery authority. This guard holds
+ * the four positions that window depends on, and holds nothing else:
+ *
+ *   - POSTURE. The activation metadata must still say shadow, and must not
+ *     claim delivery authority.
+ *   - BYTE-NEUTRALITY. The vendored discovery layout — the vendored generation
+ *     tree and the host exposure symlinks that point into it — is pinned by
+ *     digest. Suppression happens inside managed worktrees through host
+ *     discovery configuration the binding writes; no tracked byte of the
+ *     layout moves before the cutover's removal gate.
+ *   - SCOPE. The projection root may exist only inside a managed delivery
+ *     worktree. The repository root and every non-managed worktree keep the
+ *     vendored generation authoritative.
+ *   - CONSUMPTION. The record that a delivery consumed the run-pinned
+ *     projection comes from the binding's per-run marker, never from the
+ *     session. An agent-supplied claim is a finding, and any delivery without
+ *     an affirmative binding-sourced record is excluded from the milestone's
+ *     comparison set.
+ *
+ * Exclusivity itself is deliberately NOT asserted as blocking here. Both
+ * graded hosts are exclusivity-ungraded — they can add the run-pinned
+ * discovery root but cannot scope discovery to it — so ambient vendored
+ * discovery coexists inside a managed worktree. That cannot corrupt authority
+ * while the shadow window holds none, so coexistence is recorded as a
+ * non-blocking observation. It becomes a finding the moment the proving host
+ * is graded exclusivity-capable, and hard exclusivity arrives with the
+ * cutover's removal gate.
+ *
+ * Everything here is read-only: the guard opens files, asks git for tracked
+ * object names, and returns typed findings.
+ */
+export const SHADOW_ACTIVATION_FILE = "shadow-activation.json";
+export const SHADOW_GATE_RECORD_FILE = "shadow-milestone-gate-record.json";
+
+/**
+ * The vendored generation tree. Every tracked entry under it is part of the
+ * layout whose bytes must not move before the removal gate.
+ */
+const VENDORED_GENERATION_TREE = ".agent-skills";
+
+/**
+ * The host discovery roots the vendored generation is exposed through. Only
+ * the tracked SYMLINKS under them belong to the layout: those are the
+ * generation's exposures. Ordinary repository-owned skills living beside them
+ * are Athena's own content and change on their own schedule.
+ */
+const VENDORED_EXPOSURE_ROOTS = [".claude/skills", ".agents/skills"];
+
+/** Git's symlink file mode, as `git ls-files -s` reports it. */
+const SYMLINK_MODE = "120000";
+
+/**
+ * The pinned bytes of the vendored discovery layout. Changing the layout is a
+ * deliberate two-place edit — the tracked bytes and this digest — rather than
+ * a quiet drift that the shadow window would absorb.
+ */
+export const VENDORED_DISCOVERY_LAYOUT_DIGEST =
+  "7d0269b5a180ccc96a1a706c9938b87cc366a9714ebdee713390d3cc483230d3";
+
+export type ShadowGuardFindingCode =
+  | "artifact_unreadable"
+  | "activation_not_shadow"
+  | "delivery_authority_claimed"
+  | "exclusivity_position_unsupported"
+  | "vendored_layout_drift"
+  | "projection_outside_managed_worktree"
+  | "discovery_exclusivity_violation"
+  | "consumption_record_missing"
+  | "consumption_record_shape"
+  | "agent_supplied_consumption_claim"
+  | "comparison_set_admission_defect"
+  | "comparison_set_mix_defect";
+
+export type ShadowGuardObservationCode =
+  | "exclusivity_non_blocking"
+  | "comparison_set_incomplete";
+
+export type ShadowGuardFinding = {
+  code: ShadowGuardFindingCode;
+  message: string;
+};
+
+export type ShadowGuardObservation = {
+  code: ShadowGuardObservationCode;
+  message: string;
+};
+
+export type ShadowGuardResult = {
+  status: "pass" | "fail";
+  findings: ShadowGuardFinding[];
+  observations: ShadowGuardObservation[];
+  countedDeliveryIds: string[];
+};
+
+/** What the guard was able to see about the tree it is judging. */
+export type ObservedWorktree = {
+  dir: string;
+  projectionPresent: boolean;
+  vendoredDiscoveryVisible?: boolean;
+};
+
+export type ShadowGuardOptions = {
+  policyDir?: string;
+  /** Overrides the git-derived layout digest; used to plant drift. */
+  observedLayoutDigest?: string;
+  /** Overrides the observation of the tree the guard runs in. */
+  worktree?: ObservedWorktree;
+};
+
+function sha256(value: string) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function runGit(rootDir: string, args: string[]) {
+  const result = Bun.spawnSync(["git", ...args], {
+    cwd: rootDir,
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `git ${args.join(" ")} failed: ${result.stderr.toString().trim()}`,
+    );
+  }
+  return result.stdout.toString();
+}
+
+function trackedEntries(rootDir: string, paths: string[]) {
+  return runGit(rootDir, ["ls-files", "-s", ...paths])
+    .split("\n")
+    .filter((line) => line.length > 0);
+}
+
+/**
+ * The layout's canonical form: `git ls-files -s` lines — mode, object name,
+ * stage, path — for the vendored generation tree plus the exposure symlinks,
+ * sorted by code unit so the digest does not depend on locale collation.
+ */
+export async function computeVendoredDiscoveryLayoutDigest(rootDir: string) {
+  const generation = trackedEntries(rootDir, [VENDORED_GENERATION_TREE]);
+  const exposures = trackedEntries(rootDir, VENDORED_EXPOSURE_ROOTS).filter(
+    (line) => line.startsWith(`${SYMLINK_MODE} `),
+  );
+  const lines = [...generation, ...exposures].sort((left, right) =>
+    left < right ? -1 : left > right ? 1 : 0,
+  );
+  return sha256(`${lines.join("\n")}\n`);
+}
+
+/** Whether a path lies inside the declared managed delivery worktree root. */
+export function isManagedDeliveryWorktree(dir: string, managedRoot: string) {
+  const wanted = managedRoot.split("/").filter((segment) => segment.length > 0);
+  const segments = path.resolve(dir).split(path.sep);
+  return segments.some((_, index) =>
+    wanted.every((segment, offset) => segments[index + offset] === segment),
+  );
+}
+
+function isHex64(value: unknown) {
+  return typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
+}
+
+export async function runShadowDiscoveryGuard(
+  rootDir: string,
+  options: ShadowGuardOptions = {},
+): Promise<ShadowGuardResult> {
+  const findings: ShadowGuardFinding[] = [];
+  const observations: ShadowGuardObservation[] = [];
+  const countedDeliveryIds: string[] = [];
+  const emit = (code: ShadowGuardFindingCode, message: string) => {
+    findings.push({ code, message });
+  };
+  const observe = (code: ShadowGuardObservationCode, message: string) => {
+    observations.push({ code, message });
+  };
+
+  const policyDir =
+    options.policyDir ?? path.join(rootDir, POLICY_PROJECTION_DIR);
+
+  const documents = new Map<string, any>();
+  for (const file of [SHADOW_ACTIVATION_FILE, SHADOW_GATE_RECORD_FILE]) {
+    try {
+      documents.set(
+        file,
+        JSON.parse(await readFile(path.join(policyDir, file), "utf8")),
+      );
+    } catch (error) {
+      emit(
+        "artifact_unreadable",
+        `${POLICY_PROJECTION_DIR}/${file} is missing or not valid JSON: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+  const activation = documents.get(SHADOW_ACTIVATION_FILE);
+  const gateRecord = documents.get(SHADOW_GATE_RECORD_FILE);
+  if (activation === undefined || gateRecord === undefined) {
+    return { status: "fail", findings, observations, countedDeliveryIds };
+  }
+
+  // ── Posture ───────────────────────────────────────────────────────────────
+  if (activation.installationMode !== "shadow") {
+    emit(
+      "activation_not_shadow",
+      `the activation declares installation mode ${JSON.stringify(
+        activation.installationMode,
+      )}; the guard only governs the read-only shadow window`,
+    );
+  }
+  if (activation.deliveryAuthority !== "none") {
+    emit(
+      "delivery_authority_claimed",
+      `the activation claims delivery authority ${JSON.stringify(
+        activation.deliveryAuthority,
+      )}; during the shadow window ${activation.comparisonAuthority} remains the only authority`,
+    );
+  }
+
+  const provingHost = activation.hosts?.find(
+    (host: any) => host.hostId === activation.provingHost,
+  );
+  const provingHostExclusivityUngraded =
+    provingHost?.exclusivityGrading === "exclusivity-ungraded";
+  const declaredPosition = activation.exclusivityPosition?.duringShadowWindow;
+  if (declaredPosition === "blocking" && provingHostExclusivityUngraded) {
+    emit(
+      "exclusivity_position_unsupported",
+      `the activation claims a blocking exclusivity position while the proving host ${activation.provingHost} is graded exclusivity-ungraded; the guard may not assert an exclusivity the host cannot deliver`,
+    );
+  }
+
+  // ── Byte-neutrality of the vendored discovery layout ──────────────────────
+  let observedLayoutDigest = options.observedLayoutDigest;
+  if (observedLayoutDigest === undefined) {
+    try {
+      observedLayoutDigest = await computeVendoredDiscoveryLayoutDigest(rootDir);
+    } catch (error) {
+      emit(
+        "artifact_unreadable",
+        `the vendored discovery layout could not be read from git: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+  if (
+    observedLayoutDigest !== undefined &&
+    observedLayoutDigest !== VENDORED_DISCOVERY_LAYOUT_DIGEST
+  ) {
+    emit(
+      "vendored_layout_drift",
+      `the vendored discovery layout hashes to ${observedLayoutDigest}, not the pinned ${VENDORED_DISCOVERY_LAYOUT_DIGEST}; no tracked byte of it may change before the cutover's removal gate`,
+    );
+  }
+
+  // ── Projection scope and discovery coexistence ────────────────────────────
+  const projectionRoot = activation.projection?.root ?? ".managed-projection";
+  const managedRoot =
+    activation.projection?.managedDeliveryWorktreeRoot ?? ".worktrees/managed";
+  const worktree: ObservedWorktree = options.worktree ?? {
+    dir: rootDir,
+    projectionPresent: existsSync(path.join(rootDir, projectionRoot)),
+    vendoredDiscoveryVisible: existsSync(
+      path.join(rootDir, VENDORED_GENERATION_TREE),
+    ),
+  };
+  const managed = isManagedDeliveryWorktree(worktree.dir, managedRoot);
+  if (worktree.projectionPresent && !managed) {
+    emit(
+      "projection_outside_managed_worktree",
+      `${worktree.dir} carries ${projectionRoot} but is not a managed delivery worktree under ${managedRoot}; the repository root and non-managed worktrees keep the vendored generation authoritative`,
+    );
+  }
+  if (worktree.projectionPresent && worktree.vendoredDiscoveryVisible) {
+    if (provingHostExclusivityUngraded) {
+      observe(
+        "exclusivity_non_blocking",
+        `${worktree.dir} exposes both the run-pinned projection and the ambient vendored generation; the proving host ${activation.provingHost} is graded exclusivity-ungraded, so coexistence is non-blocking during the read-only shadow window and hard exclusivity arrives at ${activation.exclusivityPosition?.becomesBlockingAt}`,
+      );
+    } else {
+      emit(
+        "discovery_exclusivity_violation",
+        `${worktree.dir} exposes both the run-pinned projection and the ambient vendored generation while the proving host ${activation.provingHost} is graded exclusivity-capable; discovery must resolve to the run-pinned projection alone`,
+      );
+    }
+  }
+
+  // ── Binding-sourced projection-consumption records ────────────────────────
+  const requirement = gateRecord.comparisonSetRequirement ?? {};
+  const requiredMix: Record<string, number> = requirement.mix ?? {};
+  const deliveries: any[] = Array.isArray(gateRecord.deliveries)
+    ? gateRecord.deliveries
+    : [];
+  const countedByCategory = new Map<string, number>();
+
+  for (const delivery of deliveries) {
+    const id = String(delivery?.id ?? "<unnamed>");
+    const record = delivery?.projectionConsumption;
+    let admissible = false;
+
+    if (record === undefined || record === null) {
+      emit(
+        "consumption_record_missing",
+        `delivery ${id} carries no projection-consumption record, so it cannot count toward the comparison set`,
+      );
+    } else if (record.source !== "binding") {
+      emit(
+        "agent_supplied_consumption_claim",
+        `delivery ${id} carries a projection-consumption record sourced from ${JSON.stringify(
+          record.source,
+        )}; only the binding's own per-run marker is accepted, so the claim is rejected and the delivery is excluded`,
+      );
+    } else if (record.affirmative === false) {
+      // An honest negative: the run did not consume the run-pinned projection.
+      // Excluded from the comparison set, and not a defect.
+    } else if (record.affirmative !== true) {
+      emit(
+        "consumption_record_shape",
+        `delivery ${id} has a projection-consumption record whose affirmative flag is ${JSON.stringify(
+          record.affirmative,
+        )}; it must be an explicit boolean`,
+      );
+    } else if (!isHex64(record.projectionDigest)) {
+      emit(
+        "consumption_record_shape",
+        `delivery ${id} affirms consumption without the projection digest the binding receipted at materialization`,
+      );
+    } else if (record.marker?.deliveryId !== delivery?.id) {
+      emit(
+        "consumption_record_shape",
+        `delivery ${id} carries a marker naming ${JSON.stringify(
+          record.marker?.deliveryId,
+        )}; a marker from another run proves nothing about this one`,
+      );
+    } else if (typeof record.marker?.fence !== "number") {
+      emit(
+        "consumption_record_shape",
+        `delivery ${id} carries a marker without the numeric invocation fence that binds it to this run`,
+      );
+    } else if (
+      typeof record.marker?.consumed !== "string" ||
+      record.marker.consumed.length === 0
+    ) {
+      emit(
+        "consumption_record_shape",
+        `delivery ${id} carries a marker that names no consumed workflow source`,
+      );
+    } else {
+      admissible = true;
+    }
+
+    if (delivery?.countedInComparisonSet === true) {
+      if (!admissible) {
+        emit(
+          "comparison_set_admission_defect",
+          `delivery ${id} is counted in the comparison set without an affirmative binding-sourced consumption record`,
+        );
+      } else {
+        countedDeliveryIds.push(id);
+        const category = String(delivery?.category ?? "<uncategorised>");
+        countedByCategory.set(
+          category,
+          (countedByCategory.get(category) ?? 0) + 1,
+        );
+      }
+    }
+  }
+
+  for (const [category, count] of countedByCategory) {
+    const allowed = requiredMix[category];
+    if (allowed === undefined) {
+      emit(
+        "comparison_set_mix_defect",
+        `the comparison set counts a ${category} delivery, which the baseline mix does not include`,
+      );
+    } else if (count > allowed) {
+      emit(
+        "comparison_set_mix_defect",
+        `the comparison set counts ${count} ${category} deliveries against the baseline's ${allowed}; the set must match the baseline's mix and count`,
+      );
+    }
+  }
+  const requiredTotal = Number(requirement.total ?? 0);
+  if (countedDeliveryIds.length < requiredTotal) {
+    observe(
+      "comparison_set_incomplete",
+      `the comparison set holds ${countedDeliveryIds.length} of the ${requiredTotal} deliveries the baseline mix requires; the shadow-delivery gate cannot be scored until it is complete`,
+    );
+  }
+
+  return {
+    status: findings.length === 0 ? "pass" : "fail",
+    findings,
+    observations,
+    countedDeliveryIds,
+  };
+}
+
+if (import.meta.main) {
+  const rootDir = path.resolve(import.meta.dirname, "..");
+  const result = await runShadowDiscoveryGuard(rootDir);
+  if (result.status === "pass") {
+    console.log(
+      "[shadow-discovery-guard] Shadow-window posture holds: shadow-mode activation, byte-neutral vendored discovery layout, projection scoped to managed delivery worktrees, and binding-sourced consumption records only.",
+    );
+  } else {
+    console.log(
+      `[shadow-discovery-guard] Found ${result.findings.length} guard finding(s):`,
+    );
+    for (const finding of result.findings) {
+      console.log(`  - [${finding.code}] ${finding.message}`);
+    }
+  }
+  for (const observation of result.observations) {
+    console.log(`  · [${observation.code}] ${observation.message}`);
+  }
+  process.exitCode = result.status === "pass" ? 0 : 1;
+}
