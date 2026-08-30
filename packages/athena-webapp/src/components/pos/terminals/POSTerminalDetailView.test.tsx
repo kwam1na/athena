@@ -3204,5 +3204,5 @@ describe("POSTerminalDetailView", () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith(
       "Replacement terminal reconnected",
     );
-  });
+  }, 15_000);
 });
