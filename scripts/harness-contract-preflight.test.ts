@@ -206,6 +206,7 @@ describe("runHarnessContractPreflight", () => {
     }
   });
 
+  // Real audit/test subprocesses need an outer integration budget; repair cases run them twice.
   it("runs every default adapter under Vitest without relying on Bun globals", async () => {
     const result = await runHarnessContractPreflight(process.cwd(), {
       baseRef: "HEAD",
@@ -214,7 +215,7 @@ describe("runHarnessContractPreflight", () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.machine.findings).toEqual([]);
-  });
+  }, 60_000);
 
   it("surfaces and clears real harness-audit fixture drift", async () => {
     const { rootDir, registryPath, baselineRegistry } =
@@ -230,7 +231,7 @@ describe("runHarnessContractPreflight", () => {
     } finally {
       await rm(rootDir, { recursive: true, force: true });
     }
-  }, 20_000);
+  }, 60_000);
 
   it("aggregates three real contract failures, then passes after all are repaired", async () => {
     const siblingRoot = await createSiblingPolicyFixture();
@@ -290,5 +291,5 @@ describe("runHarnessContractPreflight", () => {
         rm(auditFixture.rootDir, { recursive: true, force: true }),
       ]);
     }
-  }, 20_000);
+  }, 60_000);
 });

@@ -9,6 +9,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { createOperationalWorkItemWithCtx } from "./operationalWorkItems";
+import { patchOperationalWorkItemWithInventoryWithCtx } from "./inventoryContributions";
 import {
   projectLogicalOperationalWork,
   type LogicalOperationalWorkGroup,
@@ -74,6 +75,11 @@ import type { OperationMutationCtx } from "../operationAdmission/types";
 import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
 import type { AutomationDecisionEvidence } from "../automation/runLedger";
 import { recordFacts } from "../reports/ingest";
+import {
+  publishCloseLifecycleWithCtx,
+  supersedeCloseEvidenceWithCtx,
+} from "../reports/closeEvidence";
+import { markDirty as markReportDayDirty } from "../reports/marks";
 import { resolveOperatingDate } from "../reports/operatingDay";
 import {
   normalizeCurrencyCode,
@@ -1105,7 +1111,7 @@ async function patchDailyCloseCarryForwardWorkItemMetadata(
   },
 ) {
   for (const workItem of args.workItems) {
-    await ctx.db.patch("operationalWorkItem", workItem._id, {
+    await patchOperationalWorkItemWithInventoryWithCtx(ctx, workItem._id, {
       metadata: {
         ...(workItem.metadata ?? {}),
         businessDate: carryForwardBusinessDate(workItem) ?? args.operatingDate,
@@ -1113,7 +1119,7 @@ async function patchDailyCloseCarryForwardWorkItemMetadata(
         dailyCloseId: args.dailyCloseId,
         source: DAILY_CLOSE_SUBJECT_TYPE,
       },
-    });
+    }, workItem);
   }
 }
 
@@ -4270,34 +4276,6 @@ async function recordDailyCloseCompletedEvent(
   });
 }
 
-/** Upsert the (store, day) dirty mark for a report-relevant business event. */
-async function markReportDayDirty(
-  ctx: MutationCtx,
-  storeId: Id<"store">,
-  operatingDate: string,
-  reason: Doc<"reportDirtyDay">["reason"],
-): Promise<void> {
-  const existing = await ctx.db
-    .query("reportDirtyDay")
-    .withIndex("by_storeId_operatingDate", (q) =>
-      q.eq("storeId", storeId).eq("operatingDate", operatingDate),
-    )
-    .first();
-  const markedAt = Date.now();
-
-  if (existing) {
-    await ctx.db.patch("reportDirtyDay", existing._id, { reason, markedAt });
-    return;
-  }
-
-  await ctx.db.insert("reportDirtyDay", {
-    storeId,
-    operatingDate,
-    reason,
-    markedAt,
-  });
-}
-
 /**
  * On close acceptance: record the `close_snapshot` fact the fold uses to
  * derive variance, and mark the close's operating day dirty so the
@@ -4312,6 +4290,9 @@ async function recordDailyCloseCompletedReportFacts(
   },
 ): Promise<void> {
   const { dailyClose, store } = args;
+  // Mandatory scalar lifecycle invalidation commits with completion. The
+  // expensive frozen-evidence projection runs in its own reports worker.
+  await publishCloseLifecycleWithCtx(ctx, dailyClose, Date.now());
   const salesTotal =
     typeof dailyClose.summary.salesTotal === "number"
       ? dailyClose.summary.salesTotal
@@ -4612,6 +4593,12 @@ export async function completeDailyCloseWithCtx(
       supersededByDailyCloseId: dailyClose._id,
       updatedAt: now,
     });
+    await supersedeCloseEvidenceWithCtx(ctx, {
+      storeId: dailyClose.storeId,
+      closeId: dailyClose.supersedesDailyCloseId,
+      operatingDate: dailyClose.operatingDate,
+      supersededByCloseId: dailyClose._id,
+    }, now);
   }
 
   await recordDailyCloseCompletedReportFacts(ctx, {
@@ -4956,6 +4943,12 @@ export async function completeDailyCloseForAutomationWithCtx(
       supersededByDailyCloseId: dailyClose._id,
       updatedAt: now,
     });
+    await supersedeCloseEvidenceWithCtx(ctx, {
+      storeId: dailyClose.storeId,
+      closeId: dailyClose.supersedesDailyCloseId,
+      operatingDate: dailyClose.operatingDate,
+      supersededByCloseId: dailyClose._id,
+    }, now);
   }
 
   await recordDailyCloseCompletedReportFacts(ctx, {
@@ -5225,14 +5218,14 @@ export async function resolveDailyCloseCarryForwardWithCtx(
     sourceId: args.sourceId,
   };
 
-  await ctx.db.patch("operationalWorkItem", workItem._id, {
+  await patchOperationalWorkItemWithInventoryWithCtx(ctx, workItem._id, {
     status: nextStatus,
     ...(nextStatus === "completed" ? { completedAt: now } : {}),
     metadata: {
       ...(workItem.metadata ?? {}),
       carryForwardResolution: resolutionEvidence,
     },
-  });
+  }, workItem);
 
   const updatedWorkItem = await ctx.db.get("operationalWorkItem", workItem._id);
 
@@ -5475,6 +5468,9 @@ export async function reopenDailyCloseWithCtx(
       retryable: true,
     });
   }
+
+  await publishCloseLifecycleWithCtx(ctx, updatedOriginalDailyClose, now);
+  await publishCloseLifecycleWithCtx(ctx, reopenedDailyClose, now);
 
   await recordOperationalEventWithCtx(ctx, {
     storeId: args.storeId,

@@ -3,6 +3,7 @@
 import { mutation, query, MutationCtx, QueryCtx } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
+import { patchOperationalWorkItemWithInventoryWithCtx } from "../operations/inventoryContributions";
 import { resolveRegisterSessionForInStoreCollectionWithCtx } from "../cashControls/paymentAllocationAttribution";
 import { summarizeInventoryMovements } from "../operations/inventoryMovements";
 import {
@@ -472,7 +473,7 @@ export async function createServiceCaseWithCtx(
 
   const workItem = await ctx.db.get("operationalWorkItem", args.operationalWorkItemId);
   if (workItem) {
-    await ctx.db.patch("operationalWorkItem", args.operationalWorkItemId, {
+    await patchOperationalWorkItemWithInventoryWithCtx(ctx, args.operationalWorkItemId, {
       metadata: {
         ...(workItem.metadata ?? {}),
         appointmentId: args.appointmentId ?? null,
@@ -480,7 +481,7 @@ export async function createServiceCaseWithCtx(
         serviceCatalogId: args.serviceCatalogId ?? null,
         serviceMode: args.serviceMode,
       },
-    });
+    }, workItem);
   }
 
   await recordOperationalEventWithCtx(ctx, {

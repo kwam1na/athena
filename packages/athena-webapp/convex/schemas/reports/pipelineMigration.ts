@@ -1,0 +1,32 @@
+import { v } from "convex/values";
+export const pipelineMigrationPhase = v.union(
+  v.literal("closes"),
+  v.literal("legacy-week"),
+  v.literal("inventory"),
+  v.literal("fact-dates"),
+  v.literal("canonical"),
+  v.literal("seed"),
+  v.literal("drain"),
+  v.literal("close-coverage"),
+  v.literal("accepted-coverage"),
+  v.literal("day-coverage"),
+  v.literal("parity"),
+  v.literal("ready"),
+  v.literal("active"),
+);
+export const reportPipelineMigrationSchema = v.object({
+  storeId: v.id("store"),
+  epoch: v.string(),
+  generation: v.number(),
+  controlFence: v.number(),
+  phase: pipelineMigrationPhase,
+  cursor: v.union(v.string(), v.null()),
+  startedAt: v.number(),
+  updatedAt: v.number(),
+  inventoryGeneration: v.optional(v.number()),
+  proofWatermark: v.optional(v.number()),
+  proofAcceptedWatermark: v.optional(v.number()),
+  rollback: v.boolean(),
+  resumeActivePipeline: v.optional(v.boolean()),
+  lastFailure: v.optional(v.string()),
+});

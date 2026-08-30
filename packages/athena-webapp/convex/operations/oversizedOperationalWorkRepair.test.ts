@@ -36,6 +36,49 @@ function queryResult(rows: unknown[]) {
   };
 }
 
+/** Retain the source-authority unit fixtures while executing real compact hooks. */
+function withInventoryTables<T extends { db: object }>(ctx: T) {
+  const rows = new Map<string, Record<string, unknown>>();
+  const insertedSources = new Map<string, Record<string, unknown>>();
+  const compactTable = (table: string) => table.startsWith("operationalInventory") || table === "reportPipelineWork";
+  const db = new Proxy(ctx.db, {
+    get(target, property) {
+      const original = Reflect.get(target, property);
+      if (property === "query") return (table: string) => {
+        if (!compactTable(table)) return original.call(target, table);
+        return { withIndex: (_index: string, apply: (q: { eq: (key: string, value: unknown) => unknown }) => unknown) => {
+          const constraints: Record<string, unknown> = {};
+          const builder = { eq(key: string, value: unknown) { constraints[key] = value; return builder; } };
+          apply(builder);
+          const matches = [...rows.values()].filter((row) => row.table === table && Object.entries(constraints).every(([key, value]) => row[key] === value));
+          return { unique: async () => matches[0] ?? null, take: async (limit: number) => matches.slice(0, limit) };
+        } };
+      };
+      if (property === "insert") return async (table: string, value: Record<string, unknown>) => {
+        if (compactTable(table)) {
+          const id = `compact-${rows.size}`;
+          rows.set(id, { ...value, table, _id: id, _creationTime: 0 }); return id;
+        }
+        const id = await original.call(target, table, value);
+        insertedSources.set(`${table}:${id}`, { ...value, _id: id, _creationTime: 0 });
+        return id;
+      };
+      if (property === "get") return async (table: string, id: string) =>
+        await original.call(target, table, id) ?? insertedSources.get(`${table}:${id}`) ?? null;
+      if (property === "patch" || property === "replace") return async (table: string, id: string, value: Record<string, unknown>) => {
+        if (!compactTable(table)) return original.call(target, table, id, value);
+        rows.set(id, { ...(property === "patch" ? rows.get(id) : {}), ...value, table, _id: id, _creationTime: 0 });
+      };
+      if (property === "delete") return async (table: string, id: string) => {
+        if (!compactTable(table)) return original.call(target, table, id);
+        rows.delete(id);
+      };
+      return typeof original === "function" ? original.bind(target) : original;
+    },
+  });
+  return { ...ctx, db };
+}
+
 function repairDoc(
   overrides: Partial<Doc<"oversizedOperationalWorkRepair">> = {},
 ): Doc<"oversizedOperationalWorkRepair"> {
@@ -98,7 +141,7 @@ describe("oversized operational work repair", () => {
       scheduler: { runAfter: vi.fn() },
     };
 
-    await createRepairWithCtx(ctx as never, {
+    await createRepairWithCtx(withInventoryTables(ctx) as never, {
       groupKey: "synced_sale_inventory_review:store-1:sku-1",
       initiatorIdentifier: "support@example.com",
       organizationId: "org-1" as Id<"organization">,
@@ -164,7 +207,7 @@ describe("oversized operational work repair", () => {
       scheduler: { runAfter: vi.fn() },
     };
 
-    const result = await processRepairBatchWithCtx(ctx as never, {
+    const result = await processRepairBatchWithCtx(withInventoryTables(ctx) as never, {
       repairId: repair._id,
     });
 
@@ -250,7 +293,7 @@ describe("oversized operational work repair", () => {
       scheduler: { runAfter: vi.fn() },
     };
 
-    const result = await processRepairBatchWithCtx(ctx as never, {
+    const result = await processRepairBatchWithCtx(withInventoryTables(ctx) as never, {
       repairId: repair._id,
     });
 
@@ -303,7 +346,7 @@ describe("oversized operational work repair", () => {
       scheduler: { runAfter: vi.fn() },
     };
 
-    const result = await processRepairBatchWithCtx(ctx as never, {
+    const result = await processRepairBatchWithCtx(withInventoryTables(ctx) as never, {
       repairId: repair._id,
     });
 
@@ -369,7 +412,7 @@ describe("oversized operational work repair", () => {
       scheduler: { runAfter: vi.fn() },
     };
 
-    const result = await processRepairBatchWithCtx(ctx as never, {
+    const result = await processRepairBatchWithCtx(withInventoryTables(ctx) as never, {
       repairId: repair._id,
     });
 
@@ -424,7 +467,7 @@ describe("oversized operational work repair", () => {
       scheduler: { runAfter: vi.fn() },
     };
 
-    const result = await processRepairBatchWithCtx(ctx as never, {
+    const result = await processRepairBatchWithCtx(withInventoryTables(ctx) as never, {
       repairId: repair._id,
     });
 
@@ -479,7 +522,7 @@ describe("oversized operational work repair", () => {
       scheduler: { runAfter: vi.fn() },
     };
 
-    const result = await processRepairBatchWithCtx(ctx as never, {
+    const result = await processRepairBatchWithCtx(withInventoryTables(ctx) as never, {
       repairId: repair._id,
     });
 
@@ -520,7 +563,7 @@ describe("oversized operational work repair", () => {
       scheduler: { runAfter: vi.fn() },
     };
 
-    await resumeRepairWithCtx(ctx as never, {
+    await resumeRepairWithCtx(withInventoryTables(ctx) as never, {
       initiatorIdentifier: "support-2@example.com",
       reason: "Stock proof restored.",
       repairId: repair._id,
@@ -584,7 +627,7 @@ describe("oversized operational work repair", () => {
       scheduler: { runAfter: vi.fn() },
     };
 
-    const result = await amendRepairWithCtx(ctx as never, {
+    const result = await amendRepairWithCtx(withInventoryTables(ctx) as never, {
       initiatorIdentifier: "support-2@example.com",
       reason: "Include the duplicate alias.",
       repairId: repair._id,

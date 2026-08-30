@@ -199,7 +199,11 @@ export async function rebuildPeriodRollup(
         .gte("operatingDate", range.startDate)
         .lte("operatingDate", range.endDate),
     )
-    .take(MAX_ROLLUP_SKU_DAY_ROWS);
+    .take(MAX_ROLLUP_SKU_DAY_ROWS + 1);
+
+  if (skuDays.length > MAX_ROLLUP_SKU_DAY_ROWS) {
+    throw new Error("report_rollup_source_capacity: use the resumable epoch rebuild");
+  }
 
   const desired = aggregateSkuDays(skuDays);
 
@@ -208,7 +212,11 @@ export async function rebuildPeriodRollup(
     .withIndex("by_storeId_periodKey_productSkuId", (q) =>
       q.eq("storeId", storeId).eq("periodKey", periodKey),
     )
-    .take(MAX_ROLLUP_ROWS_PER_PERIOD);
+    .take(MAX_ROLLUP_ROWS_PER_PERIOD + 1);
+
+  if (existing.length > MAX_ROLLUP_ROWS_PER_PERIOD) {
+    throw new Error("report_rollup_output_capacity: use the resumable epoch rebuild");
+  }
 
   let upserted = 0;
   let deleted = 0;

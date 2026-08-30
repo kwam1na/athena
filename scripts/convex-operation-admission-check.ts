@@ -3896,6 +3896,42 @@ function collectRouteModuleFacts(
     return names;
   };
   /**
+   * A literal Convex read chain returns database data, not a router. Keep the
+   * existing local context / DatabaseReader disambiguation inside reader-table
+   * arrow functions too. Unknown roots, computed methods, factories and result
+   * transformations such as `.then(...)` remain opaque. The main AST visitor
+   * still inspects every argument/callback for route registrations and escapes.
+   */
+  const isLocalDatabaseRead = (
+    call: ts.CallExpression,
+    bound: ReadonlySet<string>,
+  ): boolean => {
+    const databaseReceiver = (receiver: ts.Expression): boolean => {
+      const root = chainRootIdentifier(receiver);
+      if (!root || !bound.has(root.text) || !aliasedParameterOf(root)) return false;
+      return ts.isPropertyAccessExpression(receiver)
+        ? !isUnresolvableNestedChain(receiver, root, new Set())
+        : ts.isIdentifier(receiver) &&
+            !isUnresolvableNestedReference(receiver, new Set());
+    };
+    const queryChain = (expression: ts.Expression): boolean => {
+      const value = unwrapTypeOnly(expression);
+      if (!ts.isCallExpression(value)) return false;
+      const member = unwrapTypeOnly(value.expression);
+      if (!ts.isPropertyAccessExpression(member)) return false;
+      const receiver = unwrapTypeOnly(member.expression);
+      if (member.name.text === "query") return databaseReceiver(receiver);
+      return ["withIndex", "withSearchIndex", "filter", "order"].includes(member.name.text) &&
+        queryChain(receiver);
+    };
+    const member = unwrapTypeOnly(call.expression);
+    if (!ts.isPropertyAccessExpression(member)) return false;
+    const receiver = unwrapTypeOnly(member.expression);
+    if (member.name.text === "get") return databaseReceiver(receiver);
+    return ["collect", "take", "first", "unique", "paginate"].includes(member.name.text) &&
+      queryChain(receiver);
+  };
+  /**
    * Is a declaration INITIALIZER something a router may reach the receiver
    * through (round 6)? `const routers = { sub }`, `const alias = sub`,
    * `const [r] = [sub]`, `const alias = flag ? sub : other`,
@@ -3931,6 +3967,7 @@ function collectRouteModuleFacts(
     let unresolvable = false;
     const walk = (node: ts.Node, bound: ReadonlySet<string>) => {
       if (unresolvable || ts.isTypeNode(node)) return;
+      if (ts.isCallExpression(node) && isLocalDatabaseRead(node, bound)) return;
       if (ts.isFunctionLike(node)) {
         // Descend, but only free variables can reach a router in here.
         const inner = new Set([...bound, ...namesBoundWithin(node)]);

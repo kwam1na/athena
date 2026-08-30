@@ -7,7 +7,8 @@ const navigateBackMock = vi.fn();
 const search = { current: {} as Record<string, unknown> };
 const renderedLinkSearches: unknown[] = [];
 /** `null` = a real store; see `useReportsSharedDemoMode`. */
-let sharedDemoContext: { kind: string; storeId?: string } | null | undefined = null;
+let sharedDemoContext: { kind: string; storeId?: string } | null | undefined =
+  null;
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => useQuery(...args),
 }));
@@ -107,9 +108,7 @@ describe("ReportsItemsView shared demo", () => {
     for (const [, args] of liveReads) {
       // Two reads the fixture cannot answer: the current operating day, and
       // current stock. Everything else is answered locally.
-      expect(args).toEqual(
-        expect.objectContaining({ storeId: "store-1" }),
-      );
+      expect(args).toEqual(expect.objectContaining({ storeId: "store-1" }));
       expect(Object.keys(args as object).sort()).toEqual(
         (args as { operatingDate?: string }).operatingDate
           ? ["operatingDate", "storeId"]
@@ -128,13 +127,22 @@ describe("ReportsItemsView shared demo", () => {
     );
     expect(
       within(table).getByText(
-        formatSkuDisplayName(expected.rows[0]!.identity, expected.rows[0]!.productSkuId),
+        formatSkuDisplayName(
+          expected.rows[0]!.identity,
+          expected.rows[0]!.productSkuId,
+        ),
       ),
     ).toBeInTheDocument();
   });
 
   it("keeps the live period read for a real store", () => {
-    useQuery.mockReturnValue({ rows: [], continueCursor: null });
+    useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
+      rows: [],
+      continueCursor: null,
+    });
 
     render(<ReportsItemsView {...demoProps} />);
 
@@ -157,8 +165,87 @@ describe("ReportsItemsView shared demo", () => {
 });
 
 describe("ReportsItemsView", () => {
+  it("hides previously displayed financial totals and rows as soon as a period becomes pending", () => {
+    useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "epoch-1",
+      publicationRevision: 1,
+      rows: [
+        {
+          productSkuId: "ready-sku",
+          periodKey: "d:2026-07-28",
+          unitsSold: 16,
+          unitsReturned: 0,
+          grossSalesMinor: 1600,
+          netSalesMinor: 1600,
+          refundsMinor: 0,
+          uncostedRevenueMinor: 0,
+          grossProfitMinor: 800,
+        },
+      ],
+      continueCursor: null,
+      totalNetSalesMinor: 1600,
+      totalUnitsSold: 16,
+      totalTransactions: 7,
+      updatedAt: null,
+      isTodayInProgress: false,
+    });
+    const { rerender } = render(<ReportsItemsView {...baseProps} />);
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    useQuery.mockReturnValue({
+      status: "pending",
+      reason: "projection_pending",
+      rows: [],
+      continueCursor: null,
+    });
+    rerender(<ReportsItemsView {...baseProps} />);
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("items-period-net-sales"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Item reports are updating")).toBeInTheDocument();
+    expect(screen.queryByText("No item sales")).not.toBeInTheDocument();
+  });
+
+  it("shows a calm blocked state and restarts stale pagination without partial totals", () => {
+    const onCursorChange = vi.fn();
+    useQuery.mockReturnValue({
+      status: "blocked",
+      reason: "repair_required",
+      rows: [],
+      continueCursor: null,
+    });
+    const { rerender } = render(
+      <ReportsItemsView
+        {...baseProps}
+        cursor="page-2"
+        onCursorChange={onCursorChange}
+      />,
+    );
+    expect(screen.getByText("Item reports need attention")).toBeInTheDocument();
+    expect(screen.queryByText("No item sales")).not.toBeInTheDocument();
+    useQuery.mockReturnValue({
+      status: "restart",
+      reason: "period_changed",
+      rows: [],
+      continueCursor: null,
+    });
+    rerender(
+      <ReportsItemsView
+        {...baseProps}
+        cursor="page-2"
+        onCursorChange={onCursorChange}
+      />,
+    );
+    expect(onCursorChange).toHaveBeenCalledWith(undefined, []);
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
   it("shows total units sold for the selected period", () => {
     useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
       rows: [
         {
           productSkuId: "sku-1",
@@ -188,9 +275,7 @@ describe("ReportsItemsView", () => {
       within(total).getByTestId("items-period-units-number"),
     ).toHaveAttribute("data-value", "16");
     const transactions = screen.getByTestId("items-period-transactions");
-    expect(
-      within(transactions).getByText("Transactions"),
-    ).toBeInTheDocument();
+    expect(within(transactions).getByText("Transactions")).toBeInTheDocument();
     expect(
       within(transactions).getByTestId("items-period-transactions-number"),
     ).toHaveAttribute("data-value", "7");
@@ -204,6 +289,9 @@ describe("ReportsItemsView", () => {
 
   it("flips both period totals when refreshed values settle", () => {
     let result = {
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
       rows: [
         {
           productSkuId: "sku-1",
@@ -246,6 +334,9 @@ describe("ReportsItemsView", () => {
 
   it("does not show the period summary when there is no SKU activity", () => {
     useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
       rows: [],
       continueCursor: null,
       totalUnitsSold: 0,
@@ -270,6 +361,9 @@ describe("ReportsItemsView", () => {
   it("discloses the item rollup processing delay and snapshot time", () => {
     const updatedAt = Date.UTC(2026, 6, 29, 15, 30);
     useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
       rows: [],
       continueCursor: null,
       updatedAt,
@@ -291,7 +385,13 @@ describe("ReportsItemsView", () => {
   });
 
   it("queries listPeriodSkus with a d: period key built via the contract helper", () => {
-    useQuery.mockReturnValue({ rows: [], continueCursor: null });
+    useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
+      rows: [],
+      continueCursor: null,
+    });
     render(<ReportsItemsView {...baseProps} />);
 
     expect(useQuery).toHaveBeenCalledWith(
@@ -302,6 +402,9 @@ describe("ReportsItemsView", () => {
 
   it("identifies a SKU by product name with its code beneath", () => {
     useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
       rows: [
         {
           productSkuId: "kx70hda5jszy8a9c8eg04wb39188g5g6",
@@ -338,6 +441,9 @@ describe("ReportsItemsView", () => {
 
   it("carries the selected reporting period into SKU detail links", () => {
     useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
       rows: [
         {
           productSkuId: "sku-1",
@@ -366,6 +472,9 @@ describe("ReportsItemsView", () => {
 
   it("falls back to the id when the SKU record is gone", () => {
     useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
       rows: [
         {
           productSkuId: "sku-deleted",
@@ -390,7 +499,13 @@ describe("ReportsItemsView", () => {
 
   it("offers a way back only when a caller supplied an origin", async () => {
     const user = userEvent.setup();
-    useQuery.mockReturnValue({ rows: [], continueCursor: null });
+    useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
+      rows: [],
+      continueCursor: null,
+    });
 
     search.current = {};
     const { unmount } = render(<ReportsItemsView {...baseProps} />);
@@ -410,6 +525,9 @@ describe("ReportsItemsView", () => {
   it("requests the next cursor when paginating", async () => {
     const onCursorChange = vi.fn();
     useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
       rows: [
         {
           productSkuId: "sku-1",
@@ -438,6 +556,9 @@ describe("ReportsItemsView", () => {
   it("uses the cursor trail to return to the previous page", async () => {
     const onCursorChange = vi.fn();
     useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
       rows: [
         {
           productSkuId: "sku-21",
@@ -474,18 +595,28 @@ describe("ReportsItemsView", () => {
 
   it("switches sort mode via the revenue/units sold toggle", async () => {
     const onSortByChange = vi.fn();
-    useQuery.mockReturnValue({ rows: [], continueCursor: null });
+    useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
+      rows: [],
+      continueCursor: null,
+    });
 
     render(<ReportsItemsView {...baseProps} onSortByChange={onSortByChange} />);
-    await userEvent.click(
-      screen.getByRole("button", { name: "Units sold" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "Units sold" }));
 
     expect(onSortByChange).toHaveBeenCalledWith("units");
   });
 
   it("groups the period and ranking controls with clear labels", () => {
-    useQuery.mockReturnValue({ rows: [], continueCursor: null });
+    useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
+      rows: [],
+      continueCursor: null,
+    });
 
     render(<ReportsItemsView {...baseProps} />);
 
@@ -520,6 +651,9 @@ describe("ReportsItemsView", () => {
 
   it("separates period performance from the SKU results table", () => {
     useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
       rows: [
         {
           productSkuId: "sku-1",
@@ -556,13 +690,18 @@ describe("ReportsItemsView", () => {
     expect(performance).toContainElement(
       screen.getByTestId("items-period-units-sold"),
     );
-    expect(performance).toContainElement(screen.getByTestId("report-freshness"));
+    expect(performance).toContainElement(
+      screen.getByTestId("report-freshness"),
+    );
     expect(performance).not.toContainElement(screen.getByRole("table"));
     expect(results).toContainElement(screen.getByRole("table"));
   });
 
   it("supports a canvas workspace with Operations metric cards", () => {
     useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
       rows: [
         {
           productSkuId: "sku-1",
@@ -610,6 +749,9 @@ describe("ReportsItemsView", () => {
 
   it("shows each card's comparison with the prior calendar period", () => {
     const result = {
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
       rows: [
         {
           productSkuId: "sku-1",
@@ -658,11 +800,7 @@ describe("ReportsItemsView", () => {
 
     queryResult = undefined;
     rerender(
-      <ReportsItemsView
-        {...baseProps}
-        periodType="week"
-        variant="canvas"
-      />,
+      <ReportsItemsView {...baseProps} periodType="week" variant="canvas" />,
     );
     expect(
       screen
@@ -672,11 +810,7 @@ describe("ReportsItemsView", () => {
 
     queryResult = result;
     rerender(
-      <ReportsItemsView
-        {...baseProps}
-        periodType="week"
-        variant="canvas"
-      />,
+      <ReportsItemsView {...baseProps} periodType="week" variant="canvas" />,
     );
     expect(screen.getByTestId("items-period-net-sales")).toHaveTextContent(
       "vs prior week",
@@ -688,11 +822,7 @@ describe("ReportsItemsView", () => {
     ).toHaveAttribute("data-comparison-key", "week");
 
     rerender(
-      <ReportsItemsView
-        {...baseProps}
-        periodType="month"
-        variant="canvas"
-      />,
+      <ReportsItemsView {...baseProps} periodType="month" variant="canvas" />,
     );
     expect(screen.getByTestId("items-period-net-sales")).toHaveTextContent(
       "vs prior month",
@@ -706,6 +836,9 @@ describe("ReportsItemsView", () => {
 
   it("links sales and transaction metrics to oldest-first transactions for the selected period", () => {
     useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
       rows: [
         {
           productSkuId: "sku-1",
@@ -759,6 +892,9 @@ describe("ReportsItemsView", () => {
 
   it("lets an in-progress day use the transactions view's newest-first default", () => {
     useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
       rows: [
         {
           productSkuId: "sku-1",
@@ -803,6 +939,9 @@ describe("ReportsItemsView", () => {
 
   it("keeps a historic day oldest-first in the transactions view", () => {
     useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
       rows: [
         {
           productSkuId: "sku-1",
@@ -838,7 +977,13 @@ describe("ReportsItemsView", () => {
   });
 
   it("retains the original card workspace as the default variant", () => {
-    useQuery.mockReturnValue({ rows: [], continueCursor: null });
+    useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
+      rows: [],
+      continueCursor: null,
+    });
 
     render(<ReportsItemsView {...baseProps} />);
 
@@ -850,6 +995,9 @@ describe("ReportsItemsView", () => {
 
   it("uses the shared animated data surface for full and empty states", async () => {
     let result = {
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
       rows: [
         {
           productSkuId: "sku-1",
@@ -883,6 +1031,9 @@ describe("ReportsItemsView", () => {
 
     result = {
       ...result,
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
       rows: [],
       totalUnitsSold: 0,
       totalTransactions: 0,
@@ -900,6 +1051,9 @@ describe("ReportsItemsView", () => {
 
     result = {
       ...result,
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
       rows: [
         {
           productSkuId: "sku-1",
@@ -926,7 +1080,13 @@ describe("ReportsItemsView", () => {
   });
 
   it("communicates the resolved month range near the period controls", () => {
-    useQuery.mockReturnValue({ rows: [], continueCursor: null });
+    useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
+      rows: [],
+      continueCursor: null,
+    });
 
     render(
       <ReportsItemsView
@@ -942,7 +1102,13 @@ describe("ReportsItemsView", () => {
   });
 
   it("communicates the resolved ISO week range near the period controls", () => {
-    useQuery.mockReturnValue({ rows: [], continueCursor: null });
+    useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
+      rows: [],
+      continueCursor: null,
+    });
 
     render(
       <ReportsItemsView
@@ -958,7 +1124,13 @@ describe("ReportsItemsView", () => {
   });
 
   it("smoothly reveals and collapses the range outside day periods", () => {
-    useQuery.mockReturnValue({ rows: [], continueCursor: null });
+    useQuery.mockReturnValue({
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
+      rows: [],
+      continueCursor: null,
+    });
 
     const { rerender } = render(<ReportsItemsView {...baseProps} />);
 

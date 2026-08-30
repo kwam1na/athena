@@ -7,6 +7,10 @@ import {
 } from "../../shared/sharedDemoRegisterError";
 import type { MutationCtx } from "../_generated/server";
 import {
+  acceptedScheduleProofChanged,
+  bumpAcceptedWatermarkWithCtx,
+} from "../reports/pipelineAcceptedWatermark";
+import {
   insertRegisterSessionWithAuthority,
   patchRegisterSessionWithAuthority,
 } from "../operations/registerSessionAuthorityRevision";
@@ -151,7 +155,7 @@ export function buildSharedDemoStoreSchedule(args: {
   };
 }
 
-async function ensureSharedDemoStoreScheduleWithCtx(
+export async function ensureSharedDemoStoreScheduleWithCtx(
   ctx: MutationCtx,
   args: {
     actorUserId: Id<"athenaUser">;
@@ -172,11 +176,14 @@ async function ensureSharedDemoStoreScheduleWithCtx(
   const scheduleDocument = buildSharedDemoStoreSchedule(args);
   if (existing) {
     await ctx.db.replace("storeSchedule", existing._id, scheduleDocument);
+    if (acceptedScheduleProofChanged(existing, scheduleDocument))
+      await bumpAcceptedWatermarkWithCtx(ctx, args.storeId);
     const updated = await ctx.db.get("storeSchedule", existing._id);
     if (!updated) throw new Error("Demo store hours are missing.");
     return updated;
   }
   const scheduleId = await ctx.db.insert("storeSchedule", scheduleDocument);
+  await bumpAcceptedWatermarkWithCtx(ctx, args.storeId);
   const schedule = await ctx.db.get("storeSchedule", scheduleId);
   if (!schedule) throw new Error("Demo store hours are missing.");
   return schedule;
@@ -268,7 +275,10 @@ export async function bindSharedDemoRegisterBaselineWithCtx(
       storeId: args.storeId,
       terminalId: narrative.terminalId,
     });
-    const createdSession = await ctx.db.get("registerSession", registerSessionId);
+    const createdSession = await ctx.db.get(
+      "registerSession",
+      registerSessionId,
+    );
     if (!createdSession) {
       throw new Error("The demo register session could not be allocated.");
     }

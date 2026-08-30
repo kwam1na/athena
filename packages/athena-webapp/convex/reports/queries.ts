@@ -1,4 +1,12 @@
 import { v } from "convex/values";
+import {
+  isPipelineRecoveryPending,
+  overviewProjectionStatus,
+} from "./pipelineFreshness";
+import { readEpochPeriodResultWithCtx } from "./rollupPeriodRead";
+import type { ReportPeriodSkusResult } from "../../shared/reportsContract";
+import { readPipelineControl } from "./pipelineControl";
+import { readCurrentWeeklyInventoryWithCtx } from "./weeklyInventoryProjection";
 import { paginationOptsValidator } from "convex/server";
 import { query } from "../_generated/server";
 import type { QueryCtx } from "../_generated/server";
@@ -75,6 +83,7 @@ import {
 } from "./weeklyInventory";
 import { addDaysToDate, periodDateRange } from "./rollups";
 import { transactionCountFromCloseSummary } from "./transactionCounts";
+import { hasPendingWeeklyWorkWithCtx } from "./pipelineWeekly";
 
 /**
  * Slice D — read queries for the rebuilt reports layer.
@@ -429,6 +438,9 @@ async function liveWeeklyInventoryAttention(
   ctx: QueryCtx,
   doc: MaterializedWeekCurrent,
 ): Promise<ReportWeekInventoryAttention> {
+  if ((await readPipelineControl(ctx, doc.storeId))?.mode === "active") {
+    return inventoryAttentionProjection(await readCurrentWeeklyInventoryWithCtx(ctx, doc));
+  }
   const scheduleVersionId = doc.scheduleLineage.find(
     (day) => day.scheduleVersionId !== null,
   )?.scheduleVersionId;
@@ -774,7 +786,7 @@ export const getOverview = query({
       priorTrailing6Months: priorTrailing6Months ?? emptySnapshot(),
       comparisons: doc.comparisons,
       dailyTrend,
-      trust: doc.trust,
+      trust: { ...doc.trust, projectionStatus: await overviewProjectionStatus(ctx, args.storeId) },
     };
     },
   ),
@@ -844,6 +856,20 @@ export const getActiveWeeklyBriefing = query({
       : null;
 
     const currentProjection = toWeeklyCurrentProjection(current);
+    const control = await readPipelineControl(ctx, args.storeId);
+    if (
+      isPipelineRecoveryPending(control) ||
+      (control?.mode === "active" &&
+        (await hasPendingWeeklyWorkWithCtx(ctx, args.storeId, current)))
+    ) {
+      currentProjection.completeness = { complete: false, reason: "missing_day_fold" };
+      currentProjection.totalCompleteness = { complete: false, reason: "missing_day_fold" };
+      currentProjection.amendmentPosture = current.acceptedBaselineId
+        ? "pending_recompute"
+        : "none";
+      if (!current.acceptedBaselineId)
+        currentProjection.lifecyclePosture = "materializing";
+    }
     currentProjection.inventoryAttention = await liveWeeklyInventoryAttention(
       ctx,
       current,
@@ -892,10 +918,20 @@ export const listAcceptedWeeklyHistory = query({
       .withIndex("by_storeId_acceptedAt", (q) => q.eq("storeId", args.storeId))
       .order("desc")
       .paginate(args.paginationOpts);
+    const control = await readPipelineControl(ctx, args.storeId);
+    const recoveryPending = isPipelineRecoveryPending(control);
 
     return {
       ...page,
-      page: page.page.map(toAcceptedWeeklyProjection),
+      page: await Promise.all(page.page.map(async accepted => {
+        const projection=toAcceptedWeeklyProjection(accepted);
+        if (
+          recoveryPending ||
+          (control?.mode === "active" &&
+            (await hasPendingWeeklyWorkWithCtx(ctx, args.storeId, accepted, false)))
+        ) projection.amendmentPosture = "pending_recompute";
+        return projection;
+      })),
     };
     },
   ),
@@ -929,7 +965,15 @@ export const getAcceptedWeeklyDetail = query({
         q.eq("storeId", args.storeId).eq("cycleStartDate", cycleStartDate),
       )
       .unique();
-    return accepted ? toAcceptedWeeklyProjection(accepted) : null;
+    if (!accepted) return null;
+    const projection=toAcceptedWeeklyProjection(accepted);
+    const control = await readPipelineControl(ctx, args.storeId);
+    if (
+      isPipelineRecoveryPending(control) ||
+      (control?.mode === "active" &&
+        (await hasPendingWeeklyWorkWithCtx(ctx, args.storeId, accepted, false)))
+    ) projection.amendmentPosture = "pending_recompute";
+    return projection;
     },
   ),
 });
@@ -1381,26 +1425,19 @@ export const listPeriodSkus = query({
       sortBy: "revenue" | "units";
       cursor?: string;
     },
-  ): Promise<{
-    rows: ReportSkuPeriodRow[];
-    continueCursor: string | null;
-    totalNetSalesMinor: number;
-    totalUnitsSold: number;
-    totalTransactions: number;
-    priorPeriodTotals: {
-      netSalesMinor: number;
-      unitsSold: number;
-      transactions: number;
-    };
-    updatedAt: number | null;
-    isTodayInProgress: boolean;
-  }> => {
+  ): Promise<ReportPeriodSkusResult> => {
     await requireReportsStoreAccess(ctx, args.storeId);
     const periodRange = periodDateRange(args.periodKey as ReportPeriodKey);
     const priorRange = priorPeriodDateRange(
       args.periodKey as ReportPeriodKey,
       periodRange,
     );
+
+    const epochResult = await readEpochPeriodResultWithCtx(ctx, args, priorRange);
+    if (epochResult) {
+      if (epochResult.status !== "ready") return epochResult;
+      return { ...epochResult, rows: await withSkuIdentity(ctx, epochResult.rows) };
+    }
 
     let cursorCtx: ListPeriodSkusCursor | null = null;
     if (args.cursor) {
@@ -1522,6 +1559,9 @@ export const listPeriodSkus = query({
         : null;
 
     return {
+      status: "ready",
+      epoch: "legacy",
+      publicationRevision: 0,
       rows,
       continueCursor,
       totalNetSalesMinor: periodDays.reduce(

@@ -68,6 +68,10 @@ type TableName =
   | "posTransaction"
   | "posTransactionItem"
   | "registerSession"
+  | "reportCloseEvidence"
+  | "reportCloseEvidenceChunk"
+  | "reportPipelineWork"
+  | "reportPipelineControl"
   | "reportDirtyDay"
   | "staffProfile"
   | "store";
@@ -189,6 +193,11 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
     const chain = {
       collect: async () => filteredRows(),
       first: async () => filteredRows()[0] ?? null,
+      unique: async () => {
+        const rows = filteredRows();
+        if (rows.length > 1) throw new Error("Expected one fixture row");
+        return rows[0] ?? null;
+      },
       order(direction: "asc" | "desc") {
         sortDirection = direction;
         return chain;
@@ -244,6 +253,7 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
   };
 
   const db = {
+    normalizeId(_table: string, id: string) { return id; },
     async get(tableOrId: string, maybeId?: string) {
       if (maybeId !== undefined) {
         return tableFor(tableOrId as TableName).get(maybeId) ?? null;
@@ -3672,6 +3682,8 @@ describe("end-of-day review backend foundation", () => {
       "operationalEvent",
       "operationalWorkItem",
       "dailyClose",
+      "reportCloseEvidence",
+      "reportPipelineWork",
       "reportDirtyDay",
       "operationalEvent",
       "operationalEvent",
@@ -5402,6 +5414,10 @@ describe("end-of-day review backend foundation", () => {
     });
     if (humanResult.kind !== "ok") throw new Error("Expected human close");
     expect(humanResult.data.dailyClose.readiness.carryForwardCount).toBe(500);
+    expect(Array.from(humanDb.tables.get("reportCloseEvidence")?.values() ?? [])).toEqual([
+      expect.objectContaining({ closeId: humanResult.data.dailyClose._id, status: "completed", expectedGeneration: 1 }),
+    ]);
+    expect(humanDb.tables.get("reportCloseEvidenceChunk")?.size ?? 0).toBe(0);
     expect(
       humanResult.data.dailyClose.reportSnapshot?.summary
         .carryForwardWorkItemCount,
@@ -5698,6 +5714,8 @@ describe("end-of-day review backend foundation", () => {
     );
     expect(inserts.map((insert) => insert.table)).toEqual([
       "dailyClose",
+      "reportCloseEvidence",
+      "reportPipelineWork",
       "reportDirtyDay",
       "operationalEvent",
     ]);
@@ -6679,6 +6697,8 @@ describe("end-of-day review backend foundation", () => {
     );
     expect(inserts.map((insert) => insert.table)).toEqual([
       "dailyClose",
+      "reportCloseEvidence",
+      "reportPipelineWork",
       "reportDirtyDay",
       "operationalEvent",
     ]);
@@ -7040,6 +7060,10 @@ describe("end-of-day review backend foundation", () => {
       automationRunId: "automation-run-1",
       policyReviewedItemKeys: [],
     });
+    expect(Array.from(tables.get("reportCloseEvidence")?.values() ?? [])).toEqual(expect.arrayContaining([
+      expect.objectContaining({ closeId: "daily-close-1", lifecycleStatus: "reopened", publishedGeneration: undefined }),
+      expect.objectContaining({ status: "open", lifecycleStatus: "active", supersedesCloseId: "daily-close-1" }),
+    ]));
     expect(Array.from(tables.get("reportDirtyDay")?.values() ?? [])).toEqual([
       expect.objectContaining({
         operatingDate: "2026-05-07",
@@ -7080,6 +7104,10 @@ describe("end-of-day review backend foundation", () => {
     expect(inserts.map((insert) => insert.table)).toEqual([
       "operationalEvent",
       "dailyClose",
+      "reportCloseEvidence",
+      "reportPipelineWork",
+      "reportCloseEvidence",
+      "reportPipelineWork",
       "operationalEvent",
       "reportDirtyDay",
     ]);
@@ -7307,6 +7335,10 @@ describe("end-of-day review backend foundation", () => {
       reportSnapshot: completedDailyCloseSnapshot(),
       status: "completed",
     });
+    expect(Array.from(tables.get("reportCloseEvidence")?.values() ?? [])).toEqual(expect.arrayContaining([
+      expect.objectContaining({ closeId: "daily-close-1", lifecycleStatus: "superseded", supersededByCloseId: "daily-close-reopened", publishedGeneration: undefined }),
+      expect.objectContaining({ closeId: "daily-close-reopened", status: "completed", lifecycleStatus: "active" }),
+    ]));
     expect(reportsIngestMocks.recordFacts).toHaveBeenCalledWith(
       expect.anything(),
       "store-1",

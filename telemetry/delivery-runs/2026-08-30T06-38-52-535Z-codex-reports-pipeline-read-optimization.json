@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-30T06:38:52.535Z",
+  "branch": "codex/reports-pipeline-read-optimization",
+  "headSha": "7fd2d462663f5b96e249d1836395f41102358650",
+  "deliverableDiffFingerprint": "9be94add912f28cc4a360931ded0ffbeb41d98c9dcc8a36098feb0f29e254087",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 12,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 1354085.7635829998
+  },
+  "reviewLoop": {
+    "providerId": "execute",
+    "runId": "reports-pipeline-2026-08-29",
+    "finalPassId": "pass-5",
+    "recordedAt": "2026-08-30T06:16:17.793Z",
+    "iterationCount": 5,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 2,
+      "P2": 3,
+      "P3": 0
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}

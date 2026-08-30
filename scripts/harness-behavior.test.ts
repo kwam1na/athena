@@ -851,6 +851,7 @@ describe("scenario port reclaim", () => {
     return port;
   }
 
+  // Budget real process teardown plus the final port probe; nested deadlines stay strict.
   it("reclaims a port from a survivor that escaped the process group", async () => {
     const rootDir = await createFixtureRoot("athena-harness-behavior-reclaim-");
     const port = await reserveFreePortForReclaim();
@@ -932,7 +933,7 @@ describe("scenario port reclaim", () => {
     });
 
     expect(stillListening).toBe(false);
-  });
+  }, 20_000);
 });
 
 describe("harnessBehaviorFailedBlocker", () => {

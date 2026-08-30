@@ -304,6 +304,11 @@ beforeEach(() => {
 
 function createApprovalDecisionMutationCtx() {
   const tables = {
+    // These legacy source-work fixtures predate projection backfill.
+    operationalInventoryContribution: new Map<
+      string,
+      Record<string, unknown>
+    >(),
     approvalRequest: new Map<string, Record<string, unknown>>([
       [
         "approval-1",
@@ -442,6 +447,14 @@ function createApprovalDecisionMutationCtx() {
       applyIndex(query);
 
       return {
+        unique: async () => {
+          const rows = Array.from(tables[table].values()).filter((record) =>
+            filters.every(([field, value]) => record[field] === value),
+          );
+          if (rows.length > 1)
+            throw new Error(`Non-unique ${table} fixture query`);
+          return rows[0] ?? null;
+        },
         collect: async () =>
           Array.from(tables[table].values()).filter((record) =>
             filters.every(([field, value]) => record[field] === value),
@@ -509,6 +522,11 @@ function createSubmissionMutationCtx(args: {
   membershipRole?: "full_admin" | "pos_only" | null;
 }) {
   const tables = {
+    // These legacy source-work fixtures predate projection backfill.
+    operationalInventoryContribution: new Map<
+      string,
+      Record<string, unknown>
+    >(),
     approvalRequest: new Map<string, Record<string, unknown>>(),
     athenaUser: new Map<string, Record<string, unknown>>(
       (
@@ -646,6 +664,7 @@ function createSubmissionMutationCtx(args: {
       | "inventoryMovement"
       | "inventoryImportProvisionalSku"
       | "operationalEvent"
+      | "operationalInventoryContribution"
       | "operationalWorkItem"
       | "posPendingCheckoutItem"
       | "product"
@@ -671,6 +690,14 @@ function createSubmissionMutationCtx(args: {
       applyIndex(query);
 
       return {
+        unique: async () => {
+          const rows = Array.from(tables[table].values()).filter((record) =>
+            filters.every(([field, value]) => record[field] === value),
+          );
+          if (rows.length > 1)
+            throw new Error(`Non-unique ${table} fixture query`);
+          return rows[0] ?? null;
+        },
         collect: async () =>
           Array.from(tables[table].values()).filter((record) =>
             filters.every(([field, value]) => record[field] === value),
@@ -823,6 +850,7 @@ function createSubmissionMutationCtx(args: {
           table === "inventoryMovement" ||
           table === "inventoryImportProvisionalSku" ||
           table === "operationalEvent" ||
+          table === "operationalInventoryContribution" ||
           table === "operationalWorkItem" ||
           table === "posPendingCheckoutItem" ||
           table === "catalogSummary" ||

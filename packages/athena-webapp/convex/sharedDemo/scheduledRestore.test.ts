@@ -8,6 +8,13 @@ import {
 } from "./scheduledRestore";
 
 describe("shared demo scheduled restore environment gate", () => {
+  it("does not complete a lease while bounded pipeline cleanup is still pending", async () => {
+    const runMutation = vi.fn().mockResolvedValue({ pending: true });
+    expect(await continueRestoreWithCtx({ runMutation } as never, {
+      epoch: 3, idempotencyKey: "daily:3", source: "daily", storeId: "store-1",
+    })).toEqual({ epoch: 3, kind: "pending" });
+    expect(runMutation).toHaveBeenCalledTimes(1);
+  });
   it("requires the flag in an allowed deployment environment", () => {
     expect(
       sharedDemoRestoreEnabled({

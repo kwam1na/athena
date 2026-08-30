@@ -24,9 +24,11 @@ import type {
 import type { Id } from "../_generated/dataModel";
 import { deleteWeeklyReportingForStoreWithCtx } from "./stores";
 import { deleteAgentHarnessContentForOrganizationWithCtx } from "../agentHarness/retention";
+import { purgePipelineBatchWithCtx } from "../reports/pipelineMaintenance";
 
 const entity = "organization";
-const ORGANIZATION_STORE_DELETE_BATCH_SIZE = 10;
+// One store's compact children may fill the transaction's byte budget.
+const ORGANIZATION_STORE_DELETE_BATCH_SIZE = 1;
 
 async function removeOrganizationBatchWithCtx(
   ctx: MutationCtx,
@@ -72,12 +74,23 @@ async function removeOrganizationBatchWithCtx(
     return false;
   }
 
-  let storeHasMoreWeeklyRows = false;
+  let storeHasMoreRows = false;
   for (const store of stores.page) {
+    const pipeline = await purgePipelineBatchWithCtx(
+      ctx,
+      { storeId: store._id },
+      Date.now(),
+    );
+    // Retained store rows keep their paused control after the org disappears.
+    // Drain large compact children before reading large accepted documents.
+    if (pipeline.hasMore || pipeline.deleted > 0) {
+      storeHasMoreRows = true;
+      continue;
+    }
     const cleanup = await deleteWeeklyReportingForStoreWithCtx(ctx, store._id);
-    storeHasMoreWeeklyRows ||= cleanup.hasMore;
+    storeHasMoreRows ||= cleanup.hasMore;
   }
-  if (storeHasMoreWeeklyRows) {
+  if (storeHasMoreRows) {
     await ctx.scheduler.runAfter(
       0,
       internal.inventory.organizations.continueOrganizationRemoval,
@@ -206,15 +219,15 @@ export const create = mutation({
         createdByUserId: Id<"athenaUser">;
       },
     ) => {
-    const id = await ctx.db.insert(entity, args);
+      const id = await ctx.db.insert(entity, args);
 
-    await ctx.db.insert("organizationMember", {
-      userId: args.createdByUserId,
-      organizationId: id,
-      role: "full_admin",
-    });
+      await ctx.db.insert("organizationMember", {
+        userId: args.createdByUserId,
+        organizationId: id,
+        role: "full_admin",
+      });
 
-    return await ctx.db.get("organization", id);
+      return await ctx.db.get("organization", id);
     },
   ),
 });

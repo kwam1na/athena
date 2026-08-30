@@ -105,9 +105,9 @@ parameter, never as a request-body field.
 | `intelligence/capabilities/actions:generateUserInsights` | action | packages/athena-webapp/convex/intelligence/capabilities/actions.ts:599 | `internal.intelligence.runs.updateProviderInvocation` | internal | `invocationId` (client-supplied) | already-internal |
 | `intelligence/capabilities/actions:generateUserInsights` | action | packages/athena-webapp/convex/intelligence/capabilities/actions.ts:580 | `internal.intelligence.runs.updateProviderInvocation` | internal | `invocationId` (client-supplied) | already-internal |
 | `inventory/auth:sendVerificationCodeViaProvider` | action | packages/athena-webapp/convex/inventory/auth.ts:190 | `internal.inventory.auth.requestVerificationCode` | internal | — | already-internal |
-| `inventory/stores:getAllByOrganization` | action | packages/athena-webapp/convex/inventory/stores.ts:208 | `internal.inventory.stores.getAllInternal` | internal | `organizationId` (client-supplied) | already-internal |
-| `inventory/stores:updateLandingPageReel` | action | packages/athena-webapp/convex/inventory/stores.ts:802 | `internal.inventory.stores.updateConfig` | internal | `id` (client-supplied) | already-internal |
-| `inventory/stores:uploadImageAssets` | action | packages/athena-webapp/convex/inventory/stores.ts:752 | `internal.inventory.stores.createImageAsset` | internal | `storeId` (client-supplied) | already-internal |
+| `inventory/stores:getAllByOrganization` | action | packages/athena-webapp/convex/inventory/stores.ts:213 | `internal.inventory.stores.getAllInternal` | internal | `organizationId` (client-supplied) | already-internal |
+| `inventory/stores:updateLandingPageReel` | action | packages/athena-webapp/convex/inventory/stores.ts:807 | `internal.inventory.stores.updateConfig` | internal | `id` (client-supplied) | already-internal |
+| `inventory/stores:uploadImageAssets` | action | packages/athena-webapp/convex/inventory/stores.ts:757 | `internal.inventory.stores.createImageAsset` | internal | `storeId` (client-supplied) | already-internal |
 | `llm/storeInsights:getStoreInsightsFromLlm` | action | packages/athena-webapp/convex/llm/storeInsights.ts:30 | `internal.intelligence.capabilities.actions
           .internalGenerateStoreInsights` | internal | — | already-internal |
 | `llm/userInsights:getStoreInsightsFromLlm` | action | packages/athena-webapp/convex/llm/userInsights.ts:57 | `internal.intelligence.capabilities.actions

@@ -116,7 +116,9 @@ describe("accepted weekly correction", () => {
       coverage: { status: "complete", usableDayCount: 6 },
     });
     expect(candidate.correction.closeEvidence.expenses.bySpend).toHaveLength(5);
-    expect(candidate.correction.closeEvidence.expenses.byQuantity).toHaveLength(5);
+    expect(candidate.correction.closeEvidence.expenses.byQuantity).toHaveLength(
+      5,
+    );
     expect(candidate.candidateFingerprint).toMatch(/^v1:[0-9a-f]{8}$/);
   });
 
@@ -133,8 +135,7 @@ describe("accepted weekly correction", () => {
 
   it("refuses a tender-use census that does not match the retained week", () => {
     const input = fixture();
-    input.closes[0]!.reportSnapshot.summary.paymentTotals[0]!.transactionCount =
-      62;
+    input.closes[0]!.reportSnapshot.summary.paymentTotals[0]!.transactionCount = 62;
 
     expect(() => buildWigclubWeeklyCorrectionCandidate(input)).toThrow(
       "payment evidence",
@@ -211,9 +212,7 @@ const zeroWeekMetrics = {
 const evidenceCoverage = (usableDayCount: number) => ({
   scheduledDayCount: 6,
   status:
-    usableDayCount === 0
-      ? ("unavailable" as const)
-      : ("complete" as const),
+    usableDayCount === 0 ? ("unavailable" as const) : ("complete" as const),
   usableDayCount,
 });
 
@@ -625,6 +624,37 @@ async function apply(
 }
 
 describe("sealed Wigclub Aug 3-9 repair commands", () => {
+  it("invalidates an accepted migration proof only when correction applies", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await seedWigclubWeek(t);
+    const controlId = await t.run(async (ctx) => {
+      const accepted = await ctx.db.get(
+        "reportWeekAccepted",
+        seeded.acceptedId!,
+      );
+      return ctx.db.insert("reportPipelineControl", {
+        storeId: accepted!.storeId,
+        mode: "shadow",
+        fence: 1,
+        sourceWatermark: 0,
+        acceptedWatermark: 2,
+      });
+    });
+    const dryRun = await preview(t);
+    const args = {
+      baselineFingerprint: dryRun.baselineFingerprint,
+      candidateFingerprint: dryRun.candidateFingerprint,
+    };
+    expect(await apply(t, args)).toEqual({ outcome: "applied" });
+    expect(
+      await t.run((ctx) => ctx.db.get("reportPipelineControl", controlId)),
+    ).toMatchObject({ acceptedWatermark: 3 });
+    expect(await apply(t, args)).toEqual({ outcome: "unchanged" });
+    expect(
+      await t.run((ctx) => ctx.db.get("reportPipelineControl", controlId)),
+    ).toMatchObject({ acceptedWatermark: 3 });
+  });
+
   it("dry run reconstructs the sealed census and writes nothing", async () => {
     const t = convexTest(schema, modules);
     await seedWigclubWeek(t);
@@ -744,7 +774,10 @@ describe("sealed Wigclub Aug 3-9 repair commands", () => {
       await ctx.db.patch("dailyClose", seeded.closeIds[0]!, {
         reportSnapshot: {
           ...close!.reportSnapshot!,
-          summary: { ...close!.reportSnapshot!.summary, netCashVariance: 11_000 },
+          summary: {
+            ...close!.reportSnapshot!.summary,
+            netCashVariance: 11_000,
+          },
         },
       });
     });
@@ -772,9 +805,7 @@ describe("sealed Wigclub Aug 3-9 repair commands", () => {
       }
     });
 
-    await expect(preview(t)).rejects.toThrow(
-      "probe exceeded its sealed bound",
-    );
+    await expect(preview(t)).rejects.toThrow("probe exceeded its sealed bound");
   });
 
   it("refuses a day whose reconstructed spend differs from its frozen close expense total", async () => {
@@ -859,9 +890,7 @@ describe("sealed Wigclub Aug 3-9 repair commands", () => {
       ctx.db.patch("productSku", seeded.skuIds[1]!, { sku: "null" }),
     );
 
-    await expect(preview(t)).rejects.toThrow(
-      "has no resolvable catalog label",
-    );
+    await expect(preview(t)).rejects.toThrow("has no resolvable catalog label");
     await expect(
       apply(t, {
         baselineFingerprint: "baseline-live",
@@ -907,10 +936,15 @@ describe("sealed Wigclub Aug 3-9 repair commands", () => {
         baselineFingerprint: dryRun.baselineFingerprint,
         candidateFingerprint: dryRun.candidateFingerprint,
       }),
-    ).rejects.toThrow("Correction candidate fingerprint drifted after preview.");
+    ).rejects.toThrow(
+      "Correction candidate fingerprint drifted after preview.",
+    );
     expect(
-      (await t.run((ctx) => ctx.db.get("reportWeekAccepted", seeded.acceptedId!)))
-        ?.correction,
+      (
+        await t.run((ctx) =>
+          ctx.db.get("reportWeekAccepted", seeded.acceptedId!),
+        )
+      )?.correction,
     ).toBeUndefined();
   });
 
@@ -941,8 +975,11 @@ describe("sealed Wigclub Aug 3-9 repair commands", () => {
       "Correction candidate fingerprint drifted after preview.",
     );
     expect(
-      (await t.run((ctx) => ctx.db.get("reportWeekAccepted", seeded.acceptedId!)))
-        ?.correction,
+      (
+        await t.run((ctx) =>
+          ctx.db.get("reportWeekAccepted", seeded.acceptedId!),
+        )
+      )?.correction,
     ).toBeUndefined();
   });
 });

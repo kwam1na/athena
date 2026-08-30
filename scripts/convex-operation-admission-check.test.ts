@@ -3802,6 +3802,53 @@ describe("round 7: the router reference sweep — a router value outside the acc
     expect(result.findings).toEqual([]);
   });
 
+  it("accepts computed calls on an object of literal Convex database readers", async () => {
+    const result = await check(`
+      import type { MutationCtx, DatabaseReader } from "../../../../_generated/server";
+      const readers = {
+        work: (ctx: MutationCtx, storeId: string, limit: number) => ctx.db
+          .query("reportPipelineWork")
+          .withIndex("by_storeId_workKey", q => q.eq("storeId", storeId))
+          .take(limit),
+        direct: (db: DatabaseReader, id: string) => db.get("reportPipelineWork", id),
+      };
+      export function read(ctx: MutationCtx, table: keyof typeof readers, storeId: string, limit: number) {
+        return readers[table](ctx, storeId, limit);
+      }
+    `);
+    expect(unresolvable(result)).toEqual([]);
+    expect(result.findings).toEqual([]);
+  });
+
+  it.each([
+    ["unknown factory", `(ctx, id) => makeReader(ctx, id)`],
+    ["unknown receiver", `(ctx, id) => ctx.query("work").take(id)`],
+    ["computed database method", `(ctx, id) => ctx.db[method]("work", id)`],
+    ["unknown chain method", `(ctx, id) => ctx.db.query("work").then(() => makeReader(id))`],
+    ["arrow returning a router", `(() => { return sub; })`],
+  ])("still fails closed for a computed reader table containing an %s", async (_label, reader) => {
+    const result = await check(`
+      import { sub } from "./sub";
+      const readers = { read: ${reader} };
+      export function read(ctx, table, id) { return readers[table](ctx, id); }
+    `);
+    expect(unresolvable(result).some((finding) => finding.functionName === ".[computed](...)"))
+      .toBe(true);
+  });
+
+  it("still detects a router registration inside a database reader callback", async () => {
+    const result = await check(`
+      import { sub } from "./sub";
+      const readers = {
+        read: (ctx, id) => ctx.db.query("work")
+          .withIndex("by_id", q => { sub.post("evil", handler); return q.eq("id", id); })
+          .take(1),
+      };
+      export function read(ctx, table, id) { return readers[table](ctx, id); }
+    `);
+    expect(result.findings.some((finding) => finding.line === 5)).toBe(true);
+  });
+
   it("does not follow a router module through a namespace member as a .route child, and flags it", async () => {
     const result = await check(
       `export {};`,

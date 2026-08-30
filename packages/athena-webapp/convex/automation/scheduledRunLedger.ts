@@ -14,6 +14,19 @@ export const SCHEDULED_CRON_INTERVAL_MINUTES = {
   // would split one tick's evidence across windows or collapse two ticks into
   // one run key.
   "report-verification-sweep": 60,
+  // Reports workers commit independently; evidence partitions by lane so one
+  // worker cannot overwrite another worker's counts in the same cron window.
+  "reports-pipeline-fold": 5,
+  "reports-pipeline-close-evidence": 5,
+  "reports-pipeline-resolve-week-date": 5,
+  "reports-pipeline-current": 5,
+  "reports-pipeline-accept": 5,
+  "reports-pipeline-refresh": 5,
+  "reports-pipeline-rollup": 5,
+  "reports-pipeline-overview": 5,
+  "reports-pipeline-inventory": 5,
+  "reports-pipeline-legacy": 5,
+  "reports-pipeline-maintenance": 5,
 } as const;
 
 export type ScheduledCronFamily = keyof typeof SCHEDULED_CRON_INTERVAL_MINUTES;
@@ -174,6 +187,17 @@ const scheduledRunEvidenceArgs = {
     v.literal("release-pos-session-items"),
     v.literal("auto-verify-payments"),
     v.literal("report-verification-sweep"),
+    v.literal("reports-pipeline-fold"),
+    v.literal("reports-pipeline-close-evidence"),
+    v.literal("reports-pipeline-resolve-week-date"),
+    v.literal("reports-pipeline-current"),
+    v.literal("reports-pipeline-accept"),
+    v.literal("reports-pipeline-refresh"),
+    v.literal("reports-pipeline-rollup"),
+    v.literal("reports-pipeline-overview"),
+    v.literal("reports-pipeline-inventory"),
+    v.literal("reports-pipeline-legacy"),
+    v.literal("reports-pipeline-maintenance"),
   ),
   now: v.optional(v.number()),
   scope: v.union(v.literal("store"), v.literal("system")),

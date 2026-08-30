@@ -56,6 +56,8 @@ import type {
   OperationMutationCtx,
   OperationQueryCtx,
 } from "../operationAdmission/types";
+import { bumpAcceptedWatermarkWithCtx } from "../reports/pipelineAcceptedWatermark";
+import { markWeekDirty } from "../reports/weeklyMarks";
 
 /**
  * `upsertStoreScheduleCommand` answers with a `CommandResult`, and today an
@@ -525,6 +527,11 @@ export async function upsertStoreScheduleCommandWithCtx(
       updatedAt: now,
       updatedByUserId: actorUserId,
     });
+  }
+
+  if (draft.status !== "candidate" || args.supersedesScheduleId) {
+    await bumpAcceptedWatermarkWithCtx(ctx, args.storeId);
+    await markWeekDirty(ctx, args.storeId, "day_folded", now);
   }
 
   const saved = await ctx.db.get(entity, scheduleId);

@@ -717,6 +717,14 @@ export const reportDirtyDaySchema = v.object({
     v.literal("fact_cap_exceeded"),
   ),
   markedAt: v.number(),
+  // Additive while legacy marks drain; absent generation/fence means zero.
+  firstMarkedAt: v.optional(v.number()),
+  generation: v.optional(v.number()),
+  eligibleAt: v.optional(v.number()),
+  dispatchFence: v.optional(v.number()),
+  claimedAt: v.optional(v.number()),
+  attempts: v.optional(v.number()),
+  lastFailure: v.optional(v.string()),
 });
 
 /**
@@ -805,6 +813,17 @@ export const reportRangeResultSchema = v.object({
   /** Sanitized terminal metadata — never raw exception text. */
   movementErrorCode: v.optional(v.string()),
   movementCorrelationId: v.optional(v.string()),
+  summaryPhase: v.optional(v.union(v.literal("days"), v.literal("skus"), v.literal("publish"), v.literal("cleaning"))),
+  summaryCursor: v.optional(v.union(v.string(), v.null())),
+  summaryEligibleAt: v.optional(v.number()),
+  summaryFence: v.optional(v.number()),
+  summaryClaimed: v.optional(v.boolean()),
+  summaryWatermark: v.optional(v.number()),
+  summaryBasis: v.optional(v.string()),
+  summaryCleanupBlocked: v.optional(v.boolean()),
+  summaryControlFence: v.optional(v.number()),
+  summaryAttempts: v.optional(v.number()),
+  summaryTotals: v.optional(v.object({ ...dayMetrics, dayCount: v.number(), unsettledDayCount: v.number() })),
   totals: v.optional(
     v.object({
       ...dayMetrics,

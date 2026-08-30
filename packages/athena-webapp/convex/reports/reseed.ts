@@ -11,6 +11,11 @@ import { getDiscountValue } from "../inventory/utils";
 import { recordFacts } from "./ingest";
 import { resolveOperatingDate } from "./operatingDay";
 import { markWeekDirty } from "./weekly";
+import { markDirty } from "./marks";
+import { purgePipelineBatchWithCtx } from "./pipelineMaintenance";
+import { readPipelineControl } from "./pipelineControl";
+import { beginPipelineMigrationWithCtx } from "./pipelineMigrationStart";
+import { readStoreAllowlist } from "./pipelineAllowlist";
 
 /**
  * Reseed — rebuild a store's entire reporting layer from domain sources.
@@ -134,7 +139,9 @@ const START_CURSOR: ReseedCursor = {
 
 /** Coerce a caller-supplied cursor. An unknown phase restarts, never crashes. */
 export function normalizeReseedCursor(
-  cursor: { pageCursor: string | null; phase: string; purgeTableIndex: number } | undefined,
+  cursor:
+    | { pageCursor: string | null; phase: string; purgeTableIndex: number }
+    | undefined,
 ): ReseedCursor {
   if (!cursor) return START_CURSOR;
   const known =
@@ -174,7 +181,9 @@ async function purgeBatch(
       case "reportFact":
         return ctx.db
           .query("reportFact")
-          .withIndex("by_storeId_operatingDate", (q) => q.eq("storeId", storeId))
+          .withIndex("by_storeId_operatingDate", (q) =>
+            q.eq("storeId", storeId),
+          )
           .take(RESEED_PURGE_BATCH);
       case "reportSkuDay":
         return ctx.db
@@ -186,7 +195,9 @@ async function purgeBatch(
       case "reportDay":
         return ctx.db
           .query("reportDay")
-          .withIndex("by_storeId_operatingDate", (q) => q.eq("storeId", storeId))
+          .withIndex("by_storeId_operatingDate", (q) =>
+            q.eq("storeId", storeId),
+          )
           .take(RESEED_PURGE_BATCH);
       case "reportPeriodSkuRollup":
         return ctx.db
@@ -222,7 +233,9 @@ async function purgeBatch(
       case "reportDirtyDay":
         return ctx.db
           .query("reportDirtyDay")
-          .withIndex("by_storeId_operatingDate", (q) => q.eq("storeId", storeId))
+          .withIndex("by_storeId_operatingDate", (q) =>
+            q.eq("storeId", storeId),
+          )
           .take(RESEED_PURGE_BATCH);
     }
   })();
@@ -269,7 +282,11 @@ async function unitCostMinorForLine(
 
 /** Shape `getDiscountValue` (the storefront discount authority) expects. */
 export function toDiscountItems(
-  items: readonly { price: number; productSkuId?: Id<"productSku">; quantity: number }[],
+  items: readonly {
+    price: number;
+    productSkuId?: Id<"productSku">;
+    quantity: number;
+  }[],
 ): Array<{ price: number; productSkuId: string; quantity: number }> {
   return items.map((item) => ({
     price: item.price,
@@ -606,7 +623,8 @@ async function storefrontFacts(
   items: OnlineOrderLine[],
   currency: string,
 ): Promise<NewReportFact[]> {
-  const occurredAt = order.completedAt ?? order.updatedAt ?? order._creationTime;
+  const occurredAt =
+    order.completedAt ?? order.updatedAt ?? order._creationTime;
   const deliveryFee = Math.max(0, Math.round(order.deliveryFee ?? 0));
   const discountAmount = Math.max(
     0,
@@ -763,7 +781,11 @@ function serviceFacts(
  * with (see `selectAcceptedClose`).
  */
 export function isAcceptedClose(close: Doc<"dailyClose">): boolean {
-  return close.status === "completed" && close.lifecycleStatus !== "superseded";
+  return (
+    close.status === "completed" &&
+    close.lifecycleStatus !== "superseded" &&
+    close.lifecycleStatus !== "reopened"
+  );
 }
 
 function closeSnapshotFact(
@@ -887,11 +909,17 @@ async function receivingFacts(
   batch: Doc<"receivingBatch">,
   storeCurrency: string,
 ): Promise<NewReportFact[]> {
-  const purchaseOrder = await ctx.db.get("purchaseOrder", batch.purchaseOrderId);
+  const purchaseOrder = await ctx.db.get(
+    "purchaseOrder",
+    batch.purchaseOrderId,
+  );
   const facts: NewReportFact[] = [];
 
   for (const lineItem of batch.lineItems) {
-    const poLine = await ctx.db.get("purchaseOrderLineItem", lineItem.purchaseOrderLineItemId);
+    const poLine = await ctx.db.get(
+      "purchaseOrderLineItem",
+      lineItem.purchaseOrderLineItemId,
+    );
     const plannedUnitCost = poLine?.unitCost ?? 0;
     const receivedUnitCostMinor = lineItem.confirmedUnitCost;
     const receivedNetAmountMinor =
@@ -1085,7 +1113,9 @@ async function walkPhase(
         const items = await loadOnlineOrderLines(ctx, order);
         if (items.capExceeded) return capExceededOutcome("online_order_items");
         if (items.lines.length === 0) continue;
-        facts.push(...(await storefrontFacts(ctx, order, items.lines, currency)));
+        facts.push(
+          ...(await storefrontFacts(ctx, order, items.lines, currency)),
+        );
       }
 
       return {
@@ -1196,23 +1226,7 @@ async function markReseedDirty(
   storeId: Id<"store">,
   operatingDate: string,
 ): Promise<void> {
-  const existing = await ctx.db
-    .query("reportDirtyDay")
-    .withIndex("by_storeId_operatingDate", (q) =>
-      q.eq("storeId", storeId).eq("operatingDate", operatingDate),
-    )
-    .first();
-  const markedAt = Date.now();
-  if (existing) {
-    await ctx.db.patch("reportDirtyDay", existing._id, { markedAt, reason: "reseed" });
-    return;
-  }
-  await ctx.db.insert("reportDirtyDay", {
-    markedAt,
-    operatingDate,
-    reason: "reseed",
-    storeId,
-  });
+  await markDirty(ctx, storeId, operatingDate, "reseed");
 }
 
 // ---------------------------------------------------------------------------
@@ -1240,8 +1254,38 @@ export async function reseedStep(
     // sweeper nor projection-only repair can publish partial current/amendment
     // truth while earlier source pages are still absent.
     if (store.reportingReseedStartedAt !== undefined) {
-      await ctx.db.patch("store", storeId, { reportingReseedStartedAt: undefined });
+      await ctx.db.patch("store", storeId, {
+        reportingReseedStartedAt: undefined,
+      });
       await markWeekDirty(ctx, storeId, "day_folded", Date.now());
+      const control = await readPipelineControl(ctx, storeId);
+      if (control && readStoreAllowlist().has(String(storeId))) {
+        await beginPipelineMigrationWithCtx(
+          ctx,
+          {
+            storeId,
+            epoch: `reseed-${store.reportingReseedStartedAt}`,
+            dryRun: false,
+            autoContinue: true,
+            resumeActivePipeline: Boolean(
+              control.hasActivated || control.activeRollupEpoch,
+            ),
+          },
+          Date.now(),
+        );
+        // The migration captures this attempt's resume policy, while control
+        // retains activation history. The purged epoch must receive no new folds.
+        await ctx.db.patch("reportPipelineControl", control._id, {
+          activeRollupEpoch: undefined,
+        });
+      } else if (control) {
+        await ctx.db.patch("reportPipelineControl", control._id, {
+          mode: "shadow",
+          fence: control.fence + 1,
+          activeRollupEpoch: undefined,
+          targetRollupEpoch: undefined,
+        });
+      }
     }
     return {
       cursor: null,
@@ -1254,10 +1298,55 @@ export async function reseedStep(
   }
 
   if (store.reportingReseedStartedAt === undefined) {
-    await ctx.db.patch("store", storeId, { reportingReseedStartedAt: Date.now() });
+    await ctx.db.patch("store", storeId, {
+      reportingReseedStartedAt: Date.now(),
+    });
+  }
+  // Also fences resumes from legacy cursors already past the first purge page.
+  const replayFloor = store.reportingReseedStartedAt ?? Date.now();
+  const control = await readPipelineControl(ctx, storeId);
+  if (!control) {
+    await ctx.db.insert("reportPipelineControl", {
+      storeId,
+      mode: "paused",
+      fence: 1,
+      sourceWatermark: 0,
+      acceptedReplayUnavailableBefore: replayFloor,
+    });
+  } else if (
+    control.mode !== "paused" ||
+    (!control.hasActivated && Boolean(control.activeRollupEpoch)) ||
+    (control.acceptedReplayUnavailableBefore ?? 0) < replayFloor
+  ) {
+    await ctx.db.patch("reportPipelineControl", control._id, {
+      mode: "paused",
+      fence: control.fence + (control.mode === "paused" ? 0 : 1),
+      hasActivated: control.hasActivated || Boolean(control.activeRollupEpoch),
+      acceptedReplayUnavailableBefore: Math.max(
+        control.acceptedReplayUnavailableBefore ?? 0,
+        replayFloor,
+      ),
+    });
   }
 
   if (cursor.phase === "purge") {
+    if (cursor.purgeTableIndex === 0) {
+      const pipeline = await purgePipelineBatchWithCtx(
+        ctx,
+        { storeId },
+        Date.now(),
+      );
+      if (pipeline.hasMore || pipeline.deleted > 0) {
+        return {
+          cursor,
+          datesTouched: [],
+          docsScanned: 0,
+          factsRecorded: 0,
+          phase: "purge",
+          rowsPurged: pipeline.deleted,
+        };
+      }
+    }
     const table = RESEED_PURGE_TABLES[cursor.purgeTableIndex];
     if (table === undefined) {
       return {

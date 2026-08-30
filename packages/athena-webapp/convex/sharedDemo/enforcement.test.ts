@@ -214,8 +214,9 @@ describe("actual public shared-demo enforcement boundaries", () => {
 
   it("preserves the existing normal store-removal behavior", async () => {
     vi.mocked(requireSharedDemoCapabilityIfApplicable).mockResolvedValueOnce(null);
-    // Store removal now sweeps the weekly reporting tables first; an empty
-    // weekly universe keeps the removal single-mutation.
+    // Store removal pauses workers before sweeping the empty reporting
+    // universe, then removes that control and the store in one mutation.
+    let pipelineControl: Record<string, unknown> | null = null;
     const emptyWeeklyQuery = {
       withIndex: vi.fn().mockReturnThis(),
       unique: vi.fn().mockResolvedValue(null),
@@ -225,13 +226,40 @@ describe("actual public shared-demo enforcement boundaries", () => {
       db: {
         delete: vi.fn(),
         get: vi.fn().mockResolvedValue({ _id: "store" }),
-        query: vi.fn().mockReturnValue(emptyWeeklyQuery),
+        insert: vi.fn(async (table: string, value: Record<string, unknown>) => {
+          expect(table).toBe("reportPipelineControl");
+          pipelineControl = { _id: "pipeline-control", ...value };
+          return "pipeline-control";
+        }),
+        query: vi.fn((table: string) =>
+          table === "reportPipelineControl"
+            ? {
+                ...emptyWeeklyQuery,
+                unique: vi.fn(async () => pipelineControl),
+              }
+            : emptyWeeklyQuery,
+        ),
       },
     };
     await expect(invoke(removeStore, ctx, { id: "store" })).resolves.toEqual({
       message: "OK",
     });
-    expect(ctx.db.delete).toHaveBeenCalledWith("store", "store");
+    expect(ctx.db.insert).toHaveBeenCalledExactlyOnceWith(
+      "reportPipelineControl",
+      {
+        storeId: "store",
+        mode: "paused",
+        fence: 1,
+        sourceWatermark: 0,
+      },
+    );
+    expect(ctx.db.delete.mock.calls).toEqual([
+      ["reportPipelineControl", "pipeline-control"],
+      ["store", "store"],
+    ]);
+    expect(ctx.db.insert.mock.invocationCallOrder[0]).toBeLessThan(
+      ctx.db.delete.mock.invocationCallOrder[0],
+    );
   });
 
   it("clamps and fences approval decisions to the request's demo store", async () => {

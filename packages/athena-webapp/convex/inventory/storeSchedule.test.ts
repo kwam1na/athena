@@ -321,7 +321,10 @@ describe("store schedule validation", () => {
           table === "store" ? { _id: id, organizationId: "org-1" } : null,
         ),
         query: vi.fn(() => ({
-          withIndex: vi.fn(() => ({ take: vi.fn(async () => [current]) })),
+          withIndex: vi.fn(() => ({
+            take: vi.fn(async () => [current]),
+            unique: vi.fn(async () => null),
+          })),
         })),
         insert: vi.fn(async () => "next-schedule"),
         patch: vi.fn(),

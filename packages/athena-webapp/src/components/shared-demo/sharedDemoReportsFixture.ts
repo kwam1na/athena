@@ -152,6 +152,9 @@ const CURSOR_VERSION = 1;
 
 /** Matches `convex/reports/queries.ts` `listPeriodSkus`. */
 export type SharedDemoPeriodSkusResult = {
+  status: "ready";
+  epoch: string;
+  publicationRevision: number;
   rows: ReportSkuPeriodRow[];
   continueCursor: string | null;
   totalNetSalesMinor: number;
@@ -1244,6 +1247,9 @@ export function createSharedDemoPeriodSkus(args: {
     range && range.startDate === range.endDate ? range.startDate : null;
 
   return {
+    status: "ready",
+    epoch: "shared-demo",
+    publicationRevision: 1,
     rows: page.map((row) => {
       const identity = skuIdentity(model, row.productSkuId);
       return {

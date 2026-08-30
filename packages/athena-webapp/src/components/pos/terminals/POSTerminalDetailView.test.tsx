@@ -3161,12 +3161,18 @@ describe("POSTerminalDetailView", () => {
         name: "Reconnect replacement terminal",
       }),
     );
-    await user.type(screen.getByLabelText("Username"), "manager");
+    // This verifies approval/command binding, not keyboard focus timing. The
+    // real dialog schedules focus after opening; populate its controlled inputs
+    // directly so coverage-run scheduling cannot redirect typed PIN digits.
+    fireEvent.change(screen.getByLabelText("Username"), {
+      target: { value: "manager" },
+    });
     const pinInput = screen
       .getAllByRole("textbox")
       .find((input) => input.hasAttribute("data-input-otp"));
     expect(pinInput).toBeDefined();
-    await user.type(pinInput!, "1234");
+    expect(mocks.mutation).not.toHaveBeenCalled();
+    fireEvent.change(pinInput!, { target: { value: "1234" } });
 
     await waitFor(() =>
       expect(mocks.mutation).toHaveBeenNthCalledWith(1, {

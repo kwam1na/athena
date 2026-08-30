@@ -813,6 +813,7 @@ describe("weekly accepted scale proof", () => {
       oversizedOperationalWorkRepair: 0,
       reportWeekAccepted: 1,
       reportWeekCurrent: 1,
+      reportPipelineControl: 0,
       storeSchedule: 1,
     });
     expect(active.reads.operationalWorkItem).toBeLessThanOrEqual(
@@ -823,8 +824,9 @@ describe("weekly accepted scale proof", () => {
     );
     expect(history.reads).toEqual({
       reportWeekAccepted: HISTORY_PAGE_SIZE + 1,
+      reportPipelineControl: 0,
     });
-    expect(detail.reads).toEqual({ reportWeekAccepted: 1 });
+    expect(detail.reads).toEqual({ reportWeekAccepted: 1, reportPipelineControl: 0 });
     expect(active.p95Ms).toBeLessThanOrEqual(PUBLIC_READ_P95_LIMIT_MS);
     expect(history.p95Ms).toBeLessThanOrEqual(PUBLIC_READ_P95_LIMIT_MS);
     expect(detail.p95Ms).toBeLessThanOrEqual(PUBLIC_READ_P95_LIMIT_MS);

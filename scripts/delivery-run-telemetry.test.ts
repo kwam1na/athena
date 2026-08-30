@@ -831,6 +831,7 @@ describe("delivery run telemetry against a real repository", () => {
     ).rejects.toThrow(/No delivery-run ledger to record/);
   });
 
+  // Real Git commits and repeated source scans need an outer integration budget.
   it("evaluates end to end: quiet, then demanding, then satisfied by a committed record", async () => {
     const rootDir = await repoFixture();
     // Must live where the shared source-line counter looks, or it is not
@@ -884,7 +885,7 @@ describe("delivery run telemetry against a real repository", () => {
         ciMode: true,
       }),
     ).toMatchObject({ status: "pass" });
-  });
+  }, 20_000);
 
   async function recordAfterLedger(rootDir: string) {
     const fingerprint = collectDeliverableDiffFingerprint(

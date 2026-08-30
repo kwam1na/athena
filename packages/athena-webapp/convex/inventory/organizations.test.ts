@@ -78,6 +78,68 @@ async function seedOrganization(
 }
 
 describe("organization deletion weekly retention", () => {
+  it("fences active pipeline state before draining more than one child batch", async () => {
+    const t = convexTest(schema, modules);
+    const ids = await t.run(async (ctx) => {
+      const s = await seedOrganization(ctx, "pipeline-remove", 1);
+      const storeId = s.storeIds[0];
+      const controlId = await ctx.db.insert("reportPipelineControl", {
+        storeId,
+        mode: "active",
+        fence: 7,
+        sourceWatermark: 1,
+        activeRollupEpoch: "old",
+      });
+      const inputId = await ctx.db.insert("reportRollupInput", {
+        storeId,
+        operatingDate: "2026-08-01",
+        revision: 1,
+        rowCount: 0,
+        chunkCount: 101,
+        digest: "fixture",
+        createdAt: 1,
+      });
+      for (let i = 0; i < 101; i++)
+        await ctx.db.insert("reportRollupInputChunk", {
+          storeId,
+          inputId,
+          ordinal: i,
+          rows: [],
+        });
+      return { ...s, controlId, inputId };
+    });
+    vi.useFakeTimers();
+    try {
+      expect(
+        await t.run((ctx) =>
+          removeOrganizationWithCtx(ctx, ids.organizationId),
+        ),
+      ).toBe(false);
+      expect(
+        await t.run((ctx) =>
+          ctx.db.get("reportPipelineControl", ids.controlId),
+        ),
+      ).toMatchObject({ mode: "paused", fence: 8 });
+      expect(
+        await t.run((ctx) => ctx.db.get("reportRollupInput", ids.inputId)),
+      ).not.toBeNull();
+      expect(
+        await t.run((ctx) => ctx.db.get("organization", ids.organizationId)),
+      ).not.toBeNull();
+      await t.finishAllScheduledFunctions(() => vi.runAllTimers());
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(
+      await t.run((ctx) => ctx.db.query("reportRollupInputChunk").take(1)),
+    ).toEqual([]);
+    expect(
+      await t.run((ctx) => ctx.db.get("reportPipelineControl", ids.controlId)),
+    ).toMatchObject({ mode: "paused", fence: 8 });
+    expect(
+      await t.run((ctx) => ctx.db.get("organization", ids.organizationId)),
+    ).toBeNull();
+  });
   it("deletes weekly rows for every organization store and preserves other stores", async () => {
     const t = convexTest(schema, modules);
     const seeded = await t.run(async (ctx) => ({
@@ -91,7 +153,7 @@ describe("organization deletion weekly retention", () => {
         await t.run(async (ctx) =>
           removeOrganizationWithCtx(ctx, seeded.removed.organizationId),
         ),
-      ).toBe(true);
+      ).toBe(false);
       await t.finishAllScheduledFunctions(() => vi.runAllTimers());
     } finally {
       vi.useRealTimers();
@@ -145,12 +207,12 @@ describe("organization deletion weekly retention", () => {
           )
           .take(402);
         expect(firstStoreRemaining).toHaveLength(301);
-        expect(await weeklyRowCounts(ctx, seeded.removed.storeIds[1]!)).toEqual([
-          0, 10, 0,
-        ]);
-        expect(await weeklyRowCounts(ctx, seeded.retained.storeIds[0]!)).toEqual([
-          1, 1, 1,
-        ]);
+        expect(await weeklyRowCounts(ctx, seeded.removed.storeIds[1]!)).toEqual(
+          [1, 10, 1],
+        );
+        expect(
+          await weeklyRowCounts(ctx, seeded.retained.storeIds[0]!),
+        ).toEqual([1, 1, 1]);
       });
 
       await t.finishAllScheduledFunctions(() => vi.runAllTimers());
@@ -187,15 +249,26 @@ describe("organization deletion weekly retention", () => {
         expect(
           await ctx.db.get("organization", seeded.removed.organizationId),
         ).not.toBeNull();
-        expect(await weeklyRowCounts(ctx, seeded.removed.storeIds[0]!)).toEqual([
-          0, 0, 0,
-        ]);
-        expect(await weeklyRowCounts(ctx, seeded.removed.storeIds[50]!)).toEqual([
-          1, 1, 1,
-        ]);
+        expect(await weeklyRowCounts(ctx, seeded.removed.storeIds[0]!)).toEqual(
+          [0, 0, 0],
+        );
+        expect(
+          await weeklyRowCounts(ctx, seeded.removed.storeIds[50]!),
+        ).toEqual([1, 1, 1]);
       });
 
-      await t.finishAllScheduledFunctions(() => vi.runAllTimers());
+      // One bounded store page per transaction exceeds convex-test's generic
+      // 100-iteration convenience limit for this 101-store fixture.
+      for (let page = 0; page < 110; page++) {
+        if (
+          !(await t.run((ctx) =>
+            ctx.db.get("organization", seeded.removed.organizationId),
+          ))
+        )
+          break;
+        await vi.runAllTimersAsync();
+        await t.finishInProgressScheduledFunctions();
+      }
     } finally {
       vi.useRealTimers();
     }

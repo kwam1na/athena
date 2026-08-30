@@ -23,7 +23,7 @@
  * that at least one place runs the whole chain for real.
  */
 
-import { convexTest } from "convex-test";
+import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "../_generated/api";
@@ -31,7 +31,12 @@ import type { Id } from "../_generated/dataModel";
 import schema from "../schema";
 import { validateOperationDefinition } from "../operationAdmission/definitions";
 import { validateReadOperationDefinition } from "../operationAdmission/readDefinitions";
-import { SHARED_DEMO_ALLOWED_CAPABILITIES } from "../platform/capabilityCatalog";
+import {
+  SHARED_DEMO_ALLOWED_CAPABILITIES,
+  WEEKLY_REPORT_STORE_ALLOWLIST_ENV,
+} from "../platform/capabilityCatalog";
+import { REPORT_SKU_PAGE_SIZE } from "../../shared/reportsContract";
+import { enqueueReportWork } from "./pipelineWork";
 import { SHARED_DEMO_ALLOWED_READ_INTENTS } from "../sharedDemo/policy";
 import {
   REPORTS_DEFINITIONS,
@@ -281,6 +286,264 @@ async function seedWorld(t: ReturnType<typeof convexTest>) {
 function as(t: ReturnType<typeof convexTest>, authUserId: Id<"users">) {
   return t.withIdentity({ subject: `${authUserId}|session` });
 }
+
+const recoverySkuMetrics = {
+  grossSalesMinor: 100,
+  netSalesMinor: 100,
+  refundsMinor: 0,
+  unitsSold: 1,
+  unitsReturned: 0,
+  uncostedRevenueMinor: 0,
+  grossProfitMinor: 40,
+};
+
+async function seedRecoveryPeriods(
+  t: TestConvex<typeof schema>,
+  operator: Awaited<ReturnType<typeof seedWorld>>["operator"],
+) {
+  return t.run(async (ctx) => {
+    const { storeId, organizationId, athenaUserId } = operator;
+    const categoryId = await ctx.db.insert("category", {
+      storeId, name: "Recovery", slug: "recovery",
+    });
+    const subcategoryId = await ctx.db.insert("subcategory", {
+      storeId, categoryId, name: "Recovery", slug: "recovery",
+    });
+    const productId = await ctx.db.insert("product", {
+      storeId, organizationId, createdByUserId: athenaUserId,
+      categoryId, subcategoryId, name: "Recovery", slug: "recovery",
+      currency: "GHS", availability: "live", inventoryCount: 0,
+    });
+    const skuIds: Id<"productSku">[] = [];
+    for (let index = 0; index <= REPORT_SKU_PAGE_SIZE; index++) {
+      skuIds.push(await ctx.db.insert("productSku", {
+        storeId, productId, sku: `RECOVERY-${index}`, images: [],
+        price: 100, inventoryCount: 0, quantityAvailable: 0,
+      }));
+    }
+    const legacyId = await ctx.db.insert("reportPeriodSkuRollup", {
+      storeId, periodKey: "m:2026-07", productSkuId: skuIds[0]!,
+      ...recoverySkuMetrics, revenueSortKey: -100, unitsSortKey: -1,
+    });
+    for (const epoch of ["before-rebuild", "after-rebuild"]) {
+      await ctx.db.insert("reportRollupEpoch", {
+        storeId, epoch, createdAt: 1, backfillCursor: null, backfillComplete: true,
+      });
+      for (const productSkuId of skuIds) {
+        await ctx.db.insert("reportEpochSkuRollup", {
+          storeId, epoch, periodKey: "m:2026-07", productSkuId,
+          ...recoverySkuMetrics, knownProfitMinor: 40, unknownProfitDays: 0,
+          contributingDays: 1, revenueSortKey: -100, unitsSortKey: -1,
+        });
+      }
+    }
+    await ctx.db.insert("reportDay", {
+      storeId, operatingDate: "2026-07-27", currency: "GHS", status: "reconciled",
+      ...recoverySkuMetrics,
+      grossSalesMinor: skuIds.length * 100, netSalesMinor: skuIds.length * 100,
+      unitsSold: skuIds.length, grossProfitMinor: skuIds.length * 40,
+      paymentsCollectedMinor: skuIds.length * 100, paymentsRefundedMinor: 0,
+      paymentAllocatedMinor: skuIds.length * 100, transactionCount: skuIds.length,
+      foldVersion: 1, factCount: skuIds.length, lastFactRecordedAt: 1,
+      flags: { mixedCurrency: false, hasUncostedRevenue: false, quarantinedFactCount: 0 },
+    });
+    return { legacyId, skuIds };
+  });
+}
+
+async function seedRecoveryWeekly(
+  t: TestConvex<typeof schema>,
+  operator: Awaited<ReturnType<typeof seedWorld>>["operator"],
+  accepted: boolean,
+) {
+  vi.stubEnv(WEEKLY_REPORT_STORE_ALLOWLIST_ENV, String(operator.storeId));
+  return t.run(async (ctx) => {
+    const { storeId, organizationId } = operator;
+    const verification = {
+      status: "complete" as const, missingCount: 0, startedAt: 1, completedAt: 1,
+    };
+    await ctx.db.patch("store", storeId, {
+      weeklyObservedAtVerification: verification,
+      weeklyReportingCycleAnchorVerification: verification,
+    });
+    const closeId = await ctx.db.insert("dailyClose", {
+      storeId, organizationId, operatingDate: "2026-08-02", status: "completed",
+      isCurrent: true,
+      readiness: { status: "ready", blockerCount: 0, reviewCount: 0, carryForwardCount: 0, readyCount: 1 },
+      summary: {}, sourceSubjects: [], carryForwardWorkItemIds: [],
+      createdAt: 1, updatedAt: 1, completedAt: 1,
+    });
+    const metrics = {
+      ...recoverySkuMetrics, paymentsCollectedMinor: 100, paymentsRefundedMinor: 0,
+      paymentAllocatedMinor: 100, paymentUnsettledMinor: 0,
+      paymentAllocationCoverage: "complete" as const,
+    };
+    const frame = {
+      storeId, cycleStartDate: "2026-07-27", cycleEndDate: "2026-08-02",
+      currency: "GHS", metricVersion: 1, included: metrics, outsideSchedule: metrics,
+      completeness: { complete: true, reason: "complete" as const },
+      scheduleLineage: [{
+        localDate: "2026-07-27", included: true, scheduleVersionId: null,
+        dayStatus: "reconciled" as const, dayAvailable: true, activityPosture: "recorded" as const,
+      }],
+      amendmentPosture: "none" as const,
+    };
+    const acceptedId = await ctx.db.insert("reportWeekAccepted", {
+      ...frame, acceptedAt: 1000, cutoffObservedAt: 900, closeId,
+      baselineFingerprint: "recovery-baseline", lifecyclePosture: "accepted",
+    });
+    const currentId = await ctx.db.insert("reportWeekCurrent", {
+      ...frame, materializedAt: 1100, lifecyclePosture: accepted ? "accepted" : "live",
+      ...(accepted ? { acceptedBaselineId: acceptedId } : {}),
+    });
+    const controlId = await ctx.db.insert("reportPipelineControl", {
+      storeId, mode: "active", hasActivated: true, fence: 1, sourceWatermark: 1,
+      activeRollupEpoch: "before-rebuild",
+    });
+    await enqueueReportWork(ctx, { storeId, kind: "current" }, 1);
+    const dirtyId = await ctx.db.insert("reportDirtyDay", {
+      storeId, operatingDate: "2026-07-27", reason: "late_fact", markedAt: 1,
+    });
+    return { acceptedId, currentId, controlId, dirtyId };
+  });
+}
+
+describe("exported reporting recovery freshness", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("keeps never-activated shadow legacy reads but withholds them during post-activation shadow recovery", async () => {
+    const t = convexTest(schema, modules);
+    const { operator } = await seedWorld(t);
+    const { legacyId } = await seedRecoveryPeriods(t, operator);
+    const admin = as(t, operator.authUserId);
+    const args = { storeId: operator.storeId, periodKey: "m:2026-07", sortBy: "revenue" as const };
+    const controlId = await t.run((ctx) => ctx.db.insert("reportPipelineControl", {
+      storeId: operator.storeId, mode: "shadow", fence: 1, sourceWatermark: 0,
+    }));
+    const legacy = await admin.query(api.reports.queries.listPeriodSkus, args);
+    expect(legacy.status).toBe("ready");
+    expect(legacy.rows).toHaveLength(1);
+    expect(legacy.rows[0]?.netSalesMinor).toBe(100);
+    const storedLegacy = await t.run((ctx) => ctx.db.get("reportPeriodSkuRollup", legacyId));
+
+    await t.run((ctx) => ctx.db.patch("reportPipelineControl", controlId, { hasActivated: true }));
+    expect(await admin.query(api.reports.queries.listPeriodSkus, args)).toEqual({
+      status: "pending", reason: "projection_pending", rows: [], continueCursor: null,
+    });
+    expect(await t.run((ctx) => ctx.db.get("reportPeriodSkuRollup", legacyId))).toEqual(storedLegacy);
+  });
+
+  it("keeps an issued epoch cursor pending throughout recovery and restarts it only after reactivation", async () => {
+    const t = convexTest(schema, modules);
+    const { operator } = await seedWorld(t);
+    await seedRecoveryPeriods(t, operator);
+    const admin = as(t, operator.authUserId);
+    const args = { storeId: operator.storeId, periodKey: "m:2026-07", sortBy: "revenue" as const };
+    const controlId = await t.run((ctx) => ctx.db.insert("reportPipelineControl", {
+      storeId: operator.storeId, mode: "active", hasActivated: true,
+      activeRollupEpoch: "before-rebuild", fence: 1, sourceWatermark: 1,
+    }));
+    const firstPage = await admin.query(api.reports.queries.listPeriodSkus, args);
+    expect(firstPage.status).toBe("ready");
+    expect(firstPage.continueCursor).toBeTruthy();
+    const cursor = firstPage.continueCursor!;
+    for (const mode of ["paused", "shadow"] as const) {
+      await t.run((ctx) => ctx.db.patch("reportPipelineControl", controlId, {
+        mode, activeRollupEpoch: undefined, fence: 2,
+      }));
+      expect(await admin.query(api.reports.queries.listPeriodSkus, { ...args, cursor })).toEqual({
+        status: "pending", reason: "projection_pending", rows: [], continueCursor: null,
+      });
+    }
+    await t.run((ctx) => ctx.db.patch("reportPipelineControl", controlId, {
+      mode: "active", activeRollupEpoch: "after-rebuild", fence: 3,
+    }));
+    expect(await admin.query(api.reports.queries.listPeriodSkus, { ...args, cursor })).toEqual({
+      status: "restart", reason: "period_changed", rows: [], continueCursor: null,
+    });
+    expect(await admin.query(api.reports.queries.listPeriodSkus, args)).toMatchObject({ status: "ready" });
+  });
+
+  it.each([
+    { mode: "paused" as const, hasActivated: true, activeRollupEpoch: undefined },
+    { mode: "shadow" as const, hasActivated: true, activeRollupEpoch: undefined },
+    { mode: "shadow" as const, hasActivated: undefined, activeRollupEpoch: "legacy-active" },
+  ])("does not certify weekly projections during $mode recovery (history=$hasActivated, epoch=$activeRollupEpoch)", async (recovery) => {
+    for (const accepted of [false, true]) {
+      const t = convexTest(schema, modules);
+      const { operator } = await seedWorld(t);
+      const seeded = await seedRecoveryWeekly(t, operator, accepted);
+      const admin = as(t, operator.authUserId);
+      const args = { storeId: operator.storeId };
+      const storedBaseline = await t.run((ctx) => ctx.db.get("reportWeekAccepted", seeded.acceptedId));
+      const assertPending = async () => {
+        const briefing = await admin.query(api.reports.queries.getActiveWeeklyBriefing, args);
+        expect(briefing.status).toBe("available");
+        if (briefing.status !== "available") throw new Error("Expected admitted weekly briefing");
+        expect.soft(briefing.current.completeness).toEqual({ complete: false, reason: "missing_day_fold" });
+        expect.soft(briefing.current.totalCompleteness).toEqual({ complete: false, reason: "missing_day_fold" });
+        expect.soft(briefing.current.amendmentPosture).toBe(accepted ? "pending_recompute" : "none");
+        expect.soft(briefing.current.lifecyclePosture).toBe(accepted ? "accepted" : "materializing");
+        expect(briefing.current.included).toEqual(storedBaseline?.included);
+        expect(briefing.acceptedBaseline?.amendmentPosture ?? null).toBe(accepted ? "none" : null);
+        if (accepted) {
+          expect(briefing.acceptedBaseline).toMatchObject({
+            included: storedBaseline?.included, completeness: { complete: true }, cutoffObservedAt: 900,
+          });
+        }
+        const history = await admin.query(api.reports.queries.listAcceptedWeeklyHistory, {
+          ...args, paginationOpts: { cursor: null, numItems: 10 },
+        });
+        const detail = await admin.query(api.reports.queries.getAcceptedWeeklyDetail, {
+          ...args, reportId: "week:2026-07-27",
+        });
+        expect(history.page).toHaveLength(1);
+        expect(history.page[0]).toEqual(detail);
+        expect.soft(detail).toMatchObject({
+          amendmentPosture: "pending_recompute", included: storedBaseline?.included,
+          completeness: { complete: true }, cutoffObservedAt: 900,
+        });
+        expect(await t.run((ctx) => ctx.db.get("reportWeekAccepted", seeded.acceptedId))).toEqual(storedBaseline);
+      };
+      await assertPending(); // Active + exact dirty/current work already worked.
+      await t.run((ctx) => ctx.db.patch("reportPipelineControl", seeded.controlId, recovery));
+      await assertPending();
+      // Purging the transient queue is not proof that recovery has completed.
+      await t.run(async (ctx) => {
+        await ctx.db.delete("reportDirtyDay", seeded.dirtyId);
+        const work = await ctx.db.query("reportPipelineWork").withIndex("by_storeId_kind_createdAt", (q) =>
+          q.eq("storeId", operator.storeId).eq("kind", "current")).unique();
+        if (work) await ctx.db.delete("reportPipelineWork", work._id);
+      });
+      await assertPending();
+      await t.run((ctx) => ctx.db.patch("reportPipelineControl", seeded.controlId, {
+        mode: "active", hasActivated: true, activeRollupEpoch: "after-rebuild",
+      }));
+      expect(await admin.query(api.reports.queries.getActiveWeeklyBriefing, args)).toMatchObject({
+        status: "available", current: { completeness: { complete: true }, amendmentPosture: "none" },
+      });
+      expect(await admin.query(api.reports.queries.getAcceptedWeeklyDetail, {
+        ...args, reportId: "week:2026-07-27",
+      })).toMatchObject({ amendmentPosture: "none" });
+    }
+  });
+
+  it("preserves weekly legacy completeness in never-activated shadow mode", async () => {
+    const t = convexTest(schema, modules);
+    const { operator } = await seedWorld(t);
+    const { controlId } = await seedRecoveryWeekly(t, operator, true);
+    await t.run((ctx) => ctx.db.patch("reportPipelineControl", controlId, {
+      mode: "shadow", hasActivated: undefined, activeRollupEpoch: undefined,
+    }));
+    const admin = as(t, operator.authUserId);
+    expect(await admin.query(api.reports.queries.getActiveWeeklyBriefing, { storeId: operator.storeId })).toMatchObject({
+      status: "available", current: { completeness: { complete: true }, amendmentPosture: "none" },
+    });
+    expect(await admin.query(api.reports.queries.getAcceptedWeeklyDetail, {
+      storeId: operator.storeId, reportId: "week:2026-07-27",
+    })).toMatchObject({ amendmentPosture: "none" });
+  });
+});
 
 describe("U8 exported handler admission", () => {
   beforeEach(() => {

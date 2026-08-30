@@ -91,6 +91,12 @@ import {
 } from "./schemas/pos";
 import { posSessionSchema } from "./schemas/pos/posSession";
 import {
+  operationalInventoryContributionSchema,
+  operationalInventoryRepairSchema,
+  operationalInventoryRepairMemberSchema,
+  operationalInventoryCoverageSchema,
+} from "./schemas/operations/inventoryContributions";
+import {
   mtnCollectionsTokenSchema,
   mtnCollectionTransactionSchema,
 } from "./schemas/payments/mtnCollections";
@@ -213,6 +219,26 @@ import {
   reportRangeMixSkuSchema,
   reportMovementAdmissionSchema,
   reportVerificationRunSchema,
+  reportPipelineWorkSchema,
+  reportPipelineControlSchema,
+  reportPipelineCursorSchema,
+  reportCloseEvidenceSchema,
+  reportCloseEvidenceChunkSchema,
+  reportWeekInventorySchema,
+  reportWeeklyRecoverySchema,
+  reportRangeSummarySkuSchema,
+  reportPipelineMigrationSchema,
+  reportRollupParitySchema,
+  reportPipelineRetentionSchema,
+  reportRollupInputSchema,
+  reportRollupInputChunkSchema,
+  reportRollupInputCurrentSchema,
+  reportRollupEpochSchema,
+  reportRollupCheckpointSchema,
+  reportRollupDayStateSchema,
+  reportPeriodReadinessSchema,
+  reportPeriodObligationSchema,
+  reportEpochSkuRollupSchema,
 } from "./schemas/reports";
 import {
   walkthroughBudgetCounterSchema,
@@ -1557,6 +1583,17 @@ const schema = defineSchema({
       "expiresAt",
     ])
     .index("by_expiresAt", ["expiresAt"]),
+  operationalInventoryContribution: defineTable(operationalInventoryContributionSchema)
+    .index("by_workItemId", ["workItemId"])
+    .index("by_storeId", ["storeId"]),
+  operationalInventoryRepair: defineTable(operationalInventoryRepairSchema)
+    .index("by_repairId", ["repairId"])
+    .index("by_storeId_status_sourceCreatedAt", ["storeId", "status", "sourceCreatedAt"]),
+  operationalInventoryRepairMember: defineTable(operationalInventoryRepairMemberSchema)
+    .index("by_repairId_sourceIdentity", ["repairId", "sourceIdentity"])
+    .index("by_storeId", ["storeId"]),
+  operationalInventoryCoverage: defineTable(operationalInventoryCoverageSchema)
+    .index("by_storeId", ["storeId"]),
   operationalWorkItem: defineTable(operationalWorkItemSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_status", ["storeId", "status"])
@@ -1915,7 +1952,63 @@ const schema = defineSchema({
     ]),
   reportDirtyDay: defineTable(reportDirtyDaySchema)
     .index("by_storeId_operatingDate", ["storeId", "operatingDate"])
+    .index("by_storeId_markedAt", ["storeId", "markedAt"])
+    .index("by_storeId_eligibleAt", ["storeId", "eligibleAt"])
     .index("by_markedAt", ["markedAt"]),
+  reportPipelineControl: defineTable(reportPipelineControlSchema)
+    .index("by_storeId", ["storeId"]),
+  reportPipelineMigration: defineTable(reportPipelineMigrationSchema)
+    .index("by_storeId", ["storeId"]),
+  reportPipelineRetention: defineTable(reportPipelineRetentionSchema)
+    .index("by_storeId_lane", ["storeId", "lane"]),
+  reportRollupParity: defineTable(reportRollupParitySchema)
+    .index("by_storeId_epoch", ["storeId", "epoch"])
+    .index("by_inputId", ["inputId"]),
+  reportWeekInventory: defineTable(reportWeekInventorySchema)
+    .index("by_storeId", ["storeId"]),
+  reportWeeklyRecovery: defineTable(reportWeeklyRecoverySchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_nextRunAt", ["nextRunAt"]),
+  reportRollupInput: defineTable(reportRollupInputSchema)
+    .index("by_storeId_operatingDate_revision", ["storeId", "operatingDate", "revision"]),
+  reportRollupInputChunk: defineTable(reportRollupInputChunkSchema)
+    .index("by_storeId", ["storeId"])
+    .index("by_inputId_ordinal", ["inputId", "ordinal"]),
+  reportRollupInputCurrent: defineTable(reportRollupInputCurrentSchema)
+    .index("by_storeId_operatingDate", ["storeId", "operatingDate"]),
+  reportRollupEpoch: defineTable(reportRollupEpochSchema)
+    .index("by_storeId_epoch", ["storeId", "epoch"]),
+  reportRollupCheckpoint: defineTable(reportRollupCheckpointSchema)
+    .index("by_storeId_epoch_operatingDate_productSkuId", ["storeId", "epoch", "operatingDate", "productSkuId"])
+    .index("by_storeId_epoch_productSkuId_operatingDate", ["storeId", "epoch", "productSkuId", "operatingDate"]),
+  reportRollupDayState: defineTable(reportRollupDayStateSchema)
+    .index("by_storeId_epoch_operatingDate", ["storeId", "epoch", "operatingDate"])
+    .index("by_inputId", ["inputId"]),
+  reportPeriodReadiness: defineTable(reportPeriodReadinessSchema)
+    .index("by_storeId_epoch_periodKey", ["storeId", "epoch", "periodKey"]),
+  reportPeriodObligation: defineTable(reportPeriodObligationSchema)
+    .index("by_storeId_epoch_periodKey_operatingDate", ["storeId", "epoch", "periodKey", "operatingDate"])
+    .index("by_storeId_epoch_operatingDate", ["storeId", "epoch", "operatingDate"]),
+  reportEpochSkuRollup: defineTable(reportEpochSkuRollupSchema)
+    .index("by_storeId_epoch_periodKey_productSkuId", ["storeId", "epoch", "periodKey", "productSkuId"])
+    .index("by_storeId_epoch_periodKey_revenueSortKey_productSkuId", ["storeId", "epoch", "periodKey", "revenueSortKey", "productSkuId"])
+    .index("by_storeId_epoch_periodKey_unitsSortKey_productSkuId", ["storeId", "epoch", "periodKey", "unitsSortKey", "productSkuId"]),
+  reportCloseEvidence: defineTable(reportCloseEvidenceSchema)
+    .index("by_closeId", ["closeId"])
+    .index("by_storeId_operatingDate", ["storeId", "operatingDate"])
+    .index("by_storeId", ["storeId"]),
+  reportCloseEvidenceChunk: defineTable(reportCloseEvidenceChunkSchema)
+    .index("by_headerId_generation_ordinal", ["headerId", "generation", "ordinal"])
+    .index("by_headerId", ["headerId"])
+    .index("by_storeId", ["storeId"]),
+  reportPipelineCursor: defineTable(reportPipelineCursorSchema)
+    .index("by_lane", ["lane"]),
+  reportPipelineWork: defineTable(reportPipelineWorkSchema)
+    .index("by_storeId_workKey", ["storeId", "workKey"])
+    .index("by_storeId_kind_eligibleAt", ["storeId", "kind", "eligibleAt"])
+    .index("by_storeId_kind_cycleStartDate", ["storeId", "kind", "cycleStartDate"])
+    .index("by_storeId_kind_operatingDate", ["storeId", "kind", "operatingDate"])
+    .index("by_storeId_kind_createdAt", ["storeId", "kind", "createdAt"]),
   reportWeekCurrent: defineTable(reportWeekCurrentSchema).index("by_storeId", [
     "storeId",
   ]),
@@ -1927,12 +2020,19 @@ const schema = defineSchema({
     .index("by_markedAt", ["markedAt"]),
   reportRangeResult: defineTable(reportRangeResultSchema)
     .index("by_storeId_requestKey", ["storeId", "requestKey"])
+    .index("by_storeId_kind_status_summaryEligibleAt", ["storeId", "kind", "status", "summaryEligibleAt"])
+    .index("by_kind_expiresAt", ["kind", "expiresAt"])
+    .index("by_kind_summaryCleanupBlocked_expiresAt", ["kind", "summaryCleanupBlocked", "expiresAt"])
     .index("by_expiresAt", ["expiresAt"])
     // Global eligible-work queue for the movement lifecycle: rows whose
     // `movementEligibleAt` has passed are (re)scheduled by the sweeper's
     // unconditional backstop scan. Legacy/summary rows never set the field
     // and are excluded by querying gte 1 (undefined sorts below all numbers).
     .index("by_movementEligibleAt", ["movementEligibleAt"]),
+  reportRangeSummarySku: defineTable(reportRangeSummarySkuSchema)
+    .index("by_rangeResultId_productSkuId", ["rangeResultId", "productSkuId"])
+    .index("by_rangeResultId_revenueSortKey_productSkuId", ["rangeResultId", "revenueSortKey", "productSkuId"])
+    .index("by_storeId", ["storeId"]),
   reportRangeMovementSku: defineTable(reportRangeMovementSkuSchema)
     // Store-bound uniqueness per (request, SKU); accumulation upserts here.
     .index("by_storeId_rangeResultId_productSkuId", [
