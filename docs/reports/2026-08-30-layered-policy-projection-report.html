@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Layered Policy Projection with a Frozen Pre-Cutover Oracle</title>
+  </head>
+  <body>
+    <article
+      data-athena-landed-change-report="v2"
+      data-athena-report-diff-fingerprint="0aa490aee82d642a96a28c058cb9a7656829e7606047cdf2479275e51b4a8af2"
+    >
+      <header data-report-section="header">
+        <h1>Layered Policy Projection with a Frozen Pre-Cutover Oracle</h1>
+        <ul data-report-pills>
+          <li>Delivery candidate</li>
+          <li>Branch kwamina0x00/v26-1482-project-athena-into-the-layered-policy-model</li>
+          <li>Read-only: pr:athena unchanged</li>
+          <li>14 projection tests green</li>
+          <li>1720 script tests green</li>
+        </ul>
+        <dl data-report-meta>
+          <dt>Ticket</dt>
+          <dd>V26-1482 (policy-mapping half)</dd>
+          <dt>Status</dt>
+          <dd>Delivery candidate</dd>
+          <dt>Compiler</dt>
+          <dd>agent-delivery-harness 981f39d</dd>
+        </dl>
+      </header>
+
+      <section data-report-section="summary">
+        <h2>Executive summary</h2>
+        <p>
+          Athena's delivery authority — the <code>pr:athena</code> aggregate and the gates it
+          chains — is now also expressed as a layered policy projection under
+          <code>.agents/policy/</code>: a declarative repository-policy document, twelve typed
+          leaf capability adapters, a compiled snapshot produced by the real harness policy
+          compiler, and a frozen pre-cutover oracle recording the exact phase order, activation
+          rules, and blocker codes of the legacy authority. A new read-only sensor,
+          <code>scripts/policy-projection-check.ts</code>, continuously compares all of it against
+          the live routing. Nothing about active delivery authority changes:
+          <code>bun run pr:athena</code> remains the only authority and the comparison's judge.
+        </p>
+      </section>
+
+      <section data-report-section="problem">
+        <h2>Problem and context</h2>
+        <p>
+          The managed delivery product will eventually compile Athena's policy and drive
+          deliveries through checkpoints. Before any of that can be trusted, two things must
+          exist: a faithful declarative mapping of what Athena's delivery authority actually is
+          today, and an independent, tamper-evident record of pre-cutover behavior that later
+          parity claims are judged against. Without the second, the "truth" could quietly be
+          rewritten to match whatever the new system happens to do. The ticket's other half
+          (shadow-mode product install, managed projection materialization, discovery guard)
+          stays blocked on upstream product work and is explicitly not built here.
+        </p>
+      </section>
+
+      <section data-report-section="mental-model">
+        <h2>Mental model</h2>
+        <p>
+          Think of three layers that must always agree, with the oldest one frozen in amber:
+        </p>
+        <ul>
+          <li>
+            <strong>The live authority</strong> — <code>pr:athena</code>, the gate registry, the
+            mechanical selection, the blocker codes. It keeps running exactly as before.
+          </li>
+          <li>
+            <strong>The projection</strong> — a declarative document ("Athena grants merge-ready
+            and pr-creation, forbids merge and deploy, activates these obligations") plus typed
+            adapters ("here is what Athena can execute"). Declaring a merge adapter grants
+            nothing: discovery never grants authority.
+          </li>
+          <li>
+            <strong>The oracle</strong> — a frozen snapshot of the live authority's observable
+            behavior, pinned by digest. The projection is compared against both the oracle and
+            the live code, so drift in either direction surfaces as a typed finding.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="before-after">
+        <h2>Before and after</h2>
+        <p>
+          <strong>Before:</strong> delivery authority existed only as executable script wiring.
+          Any future managed-policy comparison would have had nothing independent to compare
+          against, and no declarative statement of what Athena grants or forbids.
+        </p>
+        <p>
+          <strong>After:</strong> the same authority also exists as data — compiled through the
+          harness policy compiler with zero rejections, digest-bound, and watched by a read-only
+          sensor. Merge-ready is the only granted finish line; pr-creation is the only granted
+          authority; merge and deploy are explicitly forbidden while their adapters exist as
+          discovery-only leaves. The oracle freezes phase order
+          (prepare, preflight, validate, record-proof, scorecard), obligation activation
+          (review projection threshold 50 relevant lines, telemetry blocking threshold 150
+          source lines), per-candidate-class mechanical selection, and thirteen seeded failing
+          candidates with the codes they must produce.
+        </p>
+      </section>
+
+      <section data-report-section="key-files">
+        <h2>Key files</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Why it matters</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>.agents/policy/repository-policy.json</code></td>
+              <td>
+                The declarative layer: grants, forbidden authority, obligations, required
+                capabilities, and checkpoint grant overrides protecting the vendored discovery
+                layout and generated trees.
+              </td>
+            </tr>
+            <tr>
+              <td><code>.agents/policy/adapters.json</code></td>
+              <td>
+                Twelve typed leaf adapters for the proposed leaves: focused tests,
+                generated-artifact repair, harness preparation, harness admission, Graphify,
+                Convex admission/audit, delivery reporting, telemetry, hosted-check observation,
+                PR creation, merge, deploy.
+              </td>
+            </tr>
+            <tr>
+              <td><code>.agents/policy/pre-cutover-oracle.json</code></td>
+              <td>
+                The immutable pre-cutover truth: phase, activation, and blocker vectors, seeded
+                failing candidates, leaf mapping, aggregate exclusion, and generated-artifact
+                ownership. Its sha256 is pinned in the sensor.
+              </td>
+            </tr>
+            <tr>
+              <td><code>.agents/policy/compiled-snapshot.json</code></td>
+              <td>
+                The recorded output of compiling the document and adapters through the harness
+                policy compiler at commit 981f39d, digest-bound with input digests.
+              </td>
+            </tr>
+            <tr>
+              <td><code>.agents/policy/comparison-report.json</code></td>
+              <td>
+                The read-only comparison results, the planted compiler-rejection evidence, and a
+                recorded disposition for every observed-only mismatch.
+              </td>
+            </tr>
+            <tr>
+              <td><code>scripts/policy-projection-check.ts</code></td>
+              <td>
+                The read-only comparison sensor: oracle immutability, staleness, phase and
+                obligation parity, exactly-once leaf mapping, mechanical activation probes,
+                generated-artifact ownership, adjudication completeness.
+              </td>
+            </tr>
+            <tr>
+              <td><code>scripts/policy-projection-check.test.ts</code></td>
+              <td>
+                Planted failures for every finding class plus blocker parity of the oracle's
+                seeded candidates against the live gate functions.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section data-report-section="changes">
+        <h2>What changed and what did not</h2>
+        <p><strong>Changed:</strong></p>
+        <ul>
+          <li>Added the five policy artifacts under <code>.agents/policy/</code>.</li>
+          <li>Added the projection sensor and its test suite under <code>scripts/</code>.</li>
+          <li>Added this report and a solution note (delivery documentation).</li>
+          <li>Graphify artifacts regenerated by the standard pre-commit generator.</li>
+        </ul>
+        <p><strong>Intentionally unchanged:</strong></p>
+        <ul>
+          <li>
+            <code>pr:athena</code> and every script it chains — the legacy aggregate remains the
+            comparison authority, byte for byte.
+          </li>
+          <li>
+            The vendored discovery layout (<code>.agents/skills</code>,
+            <code>.agents/agents</code>, <code>.agent-skills</code>,
+            <code>.claude/skills</code>) — zero tracked byte changes.
+          </li>
+          <li>
+            Active delivery authority: the projection is compiled and compared read-only; the
+            compiled snapshot grants nothing to anyone today.
+          </li>
+          <li>
+            The shadow-preconditions sub-deliverable (shadow product install, managed projection
+            materialization, exactly-one-discovery guard, milestone gate record) — blocked on
+            the composition-lifecycle and host-integration tickets, deliberately not built.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="validation">
+        <h2>Validation and review evidence</h2>
+        <ul>
+          <li>
+            Test-first: the projection test suite was run before the sensor existed and failed
+            (module not found), then implemented to green — 14 tests, 47 assertions.
+          </li>
+          <li>
+            The document and adapters compile through the real harness policy compiler
+            (agent-delivery-harness commit 981f39d) with zero rejections; compiled digest
+            recorded in <code>.agents/policy/compiled-snapshot.json</code>.
+          </li>
+          <li>
+            Seven planted compiler-rejection fixtures (duplicate obligation, contradictory
+            authority, merge finish line without authority, required capability without adapter,
+            privileged credential in a model grant, unknown document member, duplicate
+            capability) each rejected with the expected typed code; recorded in the comparison
+            report.
+          </li>
+          <li>
+            <code>bun scripts/policy-projection-check.ts</code> passes read-only against the
+            live authority; full script suite (<code>bun run harness:test</code>) green at 1720
+            tests.
+          </li>
+          <li>
+            Independent two-lens review (outcome-correctness and adversarial) ran over the
+            delivered diff; merge-blocking findings were fixed and re-reviewed before delivery.
+          </li>
+          <li>
+            Deployment status: not applicable — no runtime behavior changes; nothing to deploy.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="guidance">
+        <h2>Next-time guidance</h2>
+        <ul>
+          <li>
+            To change the policy document or adapters: edit them, recompile through the harness
+            policy compiler, re-record <code>compiled-snapshot.json</code> and
+            <code>comparison-report.json</code>, and bring
+            <code>bun scripts/policy-projection-check.ts</code> back to green.
+          </li>
+          <li>
+            To recharacterize the oracle (only when the legacy authority itself legitimately
+            changes): update the oracle and the pinned digest in
+            <code>scripts/policy-projection-check.ts</code> together, and say why in the commit.
+          </li>
+          <li>
+            Adopters freezing their own pre-cutover truth can copy the oracle's shape: phase
+            vector, activation vector, blocker vector with seeded failing candidates, leaf
+            mapping, aggregate exclusions, and generated-artifact ownership, pinned by digest.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="quiz" data-quiz-pass-threshold="8">
+        <h2>Comprehension quiz</h2>
+        <ol data-quiz>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              After this delivery, what decides whether an Athena delivery may merge?
+            </p>
+            <ol data-quiz-options>
+              <li>The compiled policy snapshot under .agents/policy/</li>
+              <li data-quiz-correct>The unchanged legacy authority: bun run pr:athena and its gates</li>
+              <li>The pre-cutover oracle</li>
+              <li>The managed delivery product in shadow mode</li>
+            </ol>
+            <p data-quiz-explanation>
+              The projection is compiled and compared read-only. The legacy aggregate remains
+              the only active delivery authority until the separately gated cutover ticket.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why are merge and deploy adapters declared even though merge and deploy are
+              forbidden?
+            </p>
+            <ol data-quiz-options>
+              <li>So the compiler can grant them automatically later</li>
+              <li>Because every adapter must have a matching authority grant</li>
+              <li data-quiz-correct>
+                Adapters are discovery, not authority: they describe what Athena can execute,
+                while grants come only from the declarative document
+              </li>
+              <li>To satisfy the tracker-absence fallback</li>
+            </ol>
+            <p data-quiz-explanation>
+              The policy model separates capability discovery from granted authority; an adapter
+              output cannot claim an ungranted action, and absence of a grant is denial.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What makes the pre-cutover oracle immutable in practice?</p>
+            <ol data-quiz-options>
+              <li>The file is committed with read-only permissions</li>
+              <li data-quiz-correct>
+                Its sha256 is pinned inside the projection sensor, so any edit fails the sensor
+                and its tests until both places change deliberately
+              </li>
+              <li>Git hooks reject commits touching it</li>
+              <li>It is stored outside the repository</li>
+            </ol>
+            <p data-quiz-explanation>
+              Immutability is enforced by digest pinning: recharacterizing the frozen truth
+              requires a visible two-place edit, never a quiet drift.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why is aggregate pr:athena deliberately not registered as a leaf adapter?
+            </p>
+            <ol data-quiz-options>
+              <li>It is too slow to run as a leaf</li>
+              <li data-quiz-correct>
+                It re-enters review, evidence, admission, and validation, so registering it
+                would duplicate the command graph inside the policy model
+              </li>
+              <li>The compiler rejects adapters with colons in their names</li>
+              <li>It is owned by the harness repository, not Athena</li>
+            </ol>
+            <p data-quiz-explanation>
+              Leaves are single-purpose sensors and operations. The aggregate is the comparison
+              authority; the sensor fails if anything registers it as a leaf.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>When does a missing telemetry record block a delivery today?</p>
+            <ol data-quiz-options>
+              <li>On every delivery, unconditionally</li>
+              <li>Never; telemetry is advisory</li>
+              <li data-quiz-correct>
+                Only for a substantial deliverable — at or above the 150 changed-source-line
+                threshold — with a completed local gate run against the current deliverable, or
+                in CI mode
+              </li>
+              <li>Only when the branch touches Convex functions</li>
+            </ol>
+            <p data-quiz-explanation>
+              The oracle freezes exactly this: telemetry.recorded activates always but blocks
+              only when currently required, matching the live threshold logic.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              How does the sensor catch a policy document edit that skipped recompilation?
+            </p>
+            <ol data-quiz-options>
+              <li>It recompiles the document itself on every run</li>
+              <li data-quiz-correct>
+                The compiled snapshot records sha256 digests of its input bytes; a mismatch with
+                the current document or adapter bytes is a snapshot_input_stale finding
+              </li>
+              <li>It compares file modification times</li>
+              <li>It cannot; recompilation is on the honor system</li>
+            </ol>
+            <p data-quiz-explanation>
+              Athena CI has no harness compiler available, so compile freshness is enforced
+              through recorded input digests rather than recompiling in place.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              What happens to an observed-only mismatch between the projection and current
+              behavior?
+            </p>
+            <ol data-quiz-options>
+              <li>It silently becomes blocking policy on the next compile</li>
+              <li>It is deleted from the comparison report</li>
+              <li data-quiz-correct>
+                It is adjudicated: recorded in the comparison report with a disposition, and the
+                sensor fails if any adjudication lacks one
+              </li>
+              <li>It reverts the policy document automatically</li>
+            </ol>
+            <p data-quiz-explanation>
+              Eight adjudications are recorded (lens category projection, host-provided tracker,
+              deferred admission projection, generator invocation surface, and others), each
+              with an explicit non-blocking disposition.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Which finish lines and external authorities does the compiled Athena policy grant?
+            </p>
+            <ol data-quiz-options>
+              <li>merge-ready and merge, with operator approval for merge</li>
+              <li data-quiz-correct>
+                Only the merge-ready finish line and only pr-creation authority; merge and
+                deploy are explicitly forbidden
+              </li>
+              <li>merge-ready, merge, and deploy behind approvals</li>
+              <li>No finish lines; the document is empty until cutover</li>
+            </ol>
+            <p data-quiz-explanation>
+              Merge-ready stays the default and merge/deploy stay ungranted; the sensor and a
+              planted test both fail if a candidate copy grants merge.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              How do generated artifacts like graphify-out and the Convex generated API appear
+              in the projection?
+            </p>
+            <ol data-quiz-options>
+              <li>As writable paths in every checkpoint grant</li>
+              <li>They are excluded from the policy model entirely</li>
+              <li data-quiz-correct>
+                As generator-owned groups behind the generated-artifact repair stage, with the
+                non-docs generated trees protected in every checkpoint grant
+              </li>
+              <li>As sensor adapters with credentials</li>
+            </ol>
+            <p data-quiz-explanation>
+              Derived-artifact ownership is preserved: generators produce the bytes, sensors
+              verify them, and model-driven stages must not hand-edit the protected trees.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why did this delivery mark the ticket partial rather than complete?
+            </p>
+            <ol data-quiz-options>
+              <li>The review found unresolved merge-blocking findings</li>
+              <li>The oracle could not be frozen</li>
+              <li data-quiz-correct>
+                The ticket's second sub-deliverable — shadow-mode preconditions — waits on the
+                composition-lifecycle and host-integration tickets and was deliberately not
+                built
+              </li>
+              <li>The compiler rejected the Athena document</li>
+            </ol>
+            <p data-quiz-explanation>
+              Only the policy-mapping half was unblocked. Building the shadow preconditions
+              early would have duplicated product-owned work behind its dependencies.
+            </p>
+          </li>
+        </ol>
+      </section>
+
+      <section data-report-section="subagent-evidence">
+        <h2>Subagent evidence</h2>
+        <ul>
+          <li>
+            <strong>Outcome-correctness reviewer (read-only subagent):</strong> verified the
+            projection against the live registry, phase order, blocker codes, and compiled
+            snapshot; ran the delivered tests and sensor independently.
+          </li>
+          <li>
+            <strong>Adversarial reviewer (read-only subagent):</strong> probed the sensor for
+            silent-drift and false-pass modes with concrete mutations against scratch copies of
+            the policy directory, and checked the diff for any change to active authority or the
+            vendored discovery layout.
+          </li>
+          <li>
+            <strong>Session context:</strong> this report was authored in the delivering
+            session itself, which held the full characterization trail (live-source reads of the
+            gate registry, delivery-run phases, preparation receipt, telemetry and admission
+            code sets) rather than delegating context recovery.
+          </li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

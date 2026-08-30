@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-30T18:31:32.024Z",
+  "branch": "kwamina0x00/v26-1482-project-athena-into-the-layered-policy-model",
+  "headSha": "1168b61a84a5e7e2560eebb3df5c89b78d967d2b",
+  "deliverableDiffFingerprint": "0aa490aee82d642a96a28c058cb9a7656829e7606047cdf2479275e51b4a8af2",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 0,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 959561.2325839999
+  },
+  "reviewLoop": {
+    "providerId": "execute",
+    "runId": "v26-1482-policy-projection-1788113602",
+    "finalPassId": "pass-2-delta",
+    "recordedAt": "2026-08-30T18:13:26.295Z",
+    "iterationCount": 2,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 1,
+      "P3": 6
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}

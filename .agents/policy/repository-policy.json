@@ -1,0 +1,82 @@
+{
+  "spec": "repository-policy-document/1",
+  "repositoryId": "athena",
+  "policyGeneration": 1,
+  "grantedFinishLines": ["merge-ready"],
+  "grantedAuthority": ["pr-creation"],
+  "forbiddenAuthority": ["merge", "deploy"],
+  "reviewLenses": [
+    { "lensId": "lens.outcome-correctness", "category": "outcome-correctness" },
+    { "lensId": "lens.adversarial-testing", "category": "testing-policy" }
+  ],
+  "obligations": [
+    { "obligationId": "preparation.current" },
+    { "obligationId": "contract.preflight" },
+    { "obligationId": "review.green" },
+    { "obligationId": "documentation.current" },
+    { "obligationId": "telemetry.recorded" },
+    { "obligationId": "validation.proof-recorded" },
+    { "obligationId": "delivery.scorecard" }
+  ],
+  "requiredCapabilities": [
+    { "capabilityId": "sensor.focused-tests", "kind": "sensor", "version": "1" },
+    { "capabilityId": "stage.generated-artifact-repair", "kind": "mutation-stage", "version": "1" },
+    { "capabilityId": "stage.harness-preparation", "kind": "mutation-stage", "version": "1" },
+    { "capabilityId": "sensor.harness-admission", "kind": "sensor", "version": "1" },
+    { "capabilityId": "sensor.graphify", "kind": "sensor", "version": "1" },
+    { "capabilityId": "sensor.convex-admission", "kind": "sensor", "version": "1" },
+    { "capabilityId": "sensor.delivery-reporting", "kind": "sensor", "version": "1" },
+    { "capabilityId": "sensor.telemetry", "kind": "sensor", "version": "1" },
+    { "capabilityId": "status.hosted-checks", "kind": "status-reconciliation", "version": "1" },
+    { "capabilityId": "operation.pr-creation", "kind": "pr-creation", "version": "1" }
+  ],
+  "approvals": [],
+  "trackerAbsenceFallback": "proceed-without-tracker",
+  "checkpoints": [
+    {
+      "stageId": "plan",
+      "allowedCapabilities": ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Task", "TodoWrite"],
+      "writablePaths": ["docs"],
+      "credentials": [],
+      "additionalProtectedPaths": [
+        ".agents",
+        ".agent-skills",
+        "artifacts",
+        "graphify-out",
+        "packages/athena-webapp/convex/_generated",
+        "packages/athena-webapp/convex/agentHarness/_generated"
+      ],
+      "additionalForbiddenOperations": []
+    },
+    {
+      "stageId": "implement",
+      "allowedCapabilities": ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Task", "TodoWrite"],
+      "writablePaths": ["packages", "scripts", "docs", "telemetry", ".github"],
+      "credentials": [],
+      "additionalProtectedPaths": [
+        ".agents",
+        ".agent-skills",
+        "artifacts",
+        "graphify-out",
+        "packages/athena-webapp/convex/_generated",
+        "packages/athena-webapp/convex/agentHarness/_generated"
+      ],
+      "additionalForbiddenOperations": []
+    },
+    {
+      "stageId": "compound",
+      "allowedCapabilities": ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Task", "TodoWrite"],
+      "writablePaths": ["docs"],
+      "credentials": [],
+      "additionalProtectedPaths": [
+        ".agents",
+        ".agent-skills",
+        "artifacts",
+        "graphify-out",
+        "packages/athena-webapp/convex/_generated",
+        "packages/athena-webapp/convex/agentHarness/_generated"
+      ],
+      "additionalForbiddenOperations": []
+    }
+  ]
+}

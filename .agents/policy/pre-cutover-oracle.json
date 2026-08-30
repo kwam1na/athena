@@ -1,0 +1,300 @@
+{
+  "schemaVersion": "athena-pre-cutover-oracle/1",
+  "frozen": true,
+  "capturedAt": "2026-08-30",
+  "comparisonAuthority": "bun run pr:athena",
+  "description": "Immutable pre-cutover truth for the Athena policy projection: the phase, activation, and blocker behavior of the unchanged legacy delivery authority, captured before any managed-policy comparison. The policy-projection sensor pins this file's digest; editing it is a deliberate two-place change.",
+  "phaseVector": {
+    "aggregateEntrypoint": "pr:athena",
+    "orderedPhases": [
+      { "phase": "prepare", "command": "bun run pr:athena:prepare" },
+      { "phase": "preflight", "command": "bun run pr:athena:preflight" },
+      { "phase": "validate", "command": "bun run pr:athena:validate" },
+      { "phase": "record-proof", "command": "bun run pr:athena:record-proof" },
+      { "phase": "scorecard", "command": "bun run pr:athena:scorecard" }
+    ],
+    "scorecardRunsOnlyAfterPass": true,
+    "prepareInternalOrder": [
+      "bun-version-check",
+      "frontend-dependency-parity-repair",
+      "generated-artifact-refresh-and-verify",
+      "validation-proof-readiness",
+      "mechanical-checks",
+      "candidate-capture-and-receipt"
+    ],
+    "validateInternalOrder": [
+      "pr:athena:validate-provider",
+      "write-provider-evidence",
+      "harness:review",
+      "harness:inferential-review",
+      "harness:audit",
+      "graphify:check"
+    ]
+  },
+  "activationVector": {
+    "gateId": "athena.pr-validation",
+    "authoritativeGateSetInvariant": "Every candidate class runs the identical ordered phase set; activation varies only inside obligation activation rules and mechanical command selection.",
+    "obligations": {
+      "review.green": {
+        "activation": "review_projection",
+        "minimumRelevantChangedLines": 50,
+        "sensitiveScenarioCount": 11,
+        "relevantBinaryChangeActivates": true,
+        "freshness": "exact_candidate",
+        "providerPolicy": "existential",
+        "providers": ["ce-code-review", "execute"],
+        "ciDelegation": ["athena-pr-tests"]
+      },
+      "documentation.current": {
+        "activation": "always",
+        "freshness": "live",
+        "providerPolicy": "all",
+        "providers": ["delivery-documentation-check"],
+        "ciDelegation": []
+      },
+      "telemetry.recorded": {
+        "activation": "always",
+        "freshness": "live",
+        "providerPolicy": "all",
+        "providers": ["delivery-run-telemetry-check"],
+        "ciDelegation": [],
+        "blockingThresholdSourceLines": 150,
+        "blocksOnlyWhenRequired": "A missing record blocks only for a substantial deliverable (changed source lines at or above the threshold) with a completed local gate run against the current deliverable, or in CI mode."
+      }
+    },
+    "mechanicalSelection": {
+      "docs-only-change": [],
+      "script-change": [],
+      "webapp-code-change": [
+        "packages/athena-webapp lint:architecture",
+        "packages/athena-webapp lint:frontend:changed",
+        "packages/athena-webapp lint:convex:changed",
+        "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
+      ],
+      "convex-change": [
+        "packages/athena-webapp lint:convex:changed",
+        "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
+      ],
+      "storefront-change": [
+        "packages/storefront-webapp lint:architecture",
+        "bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json"
+      ]
+    },
+    "mechanicalSelectionProbes": {
+      "docs-only-change": ["docs/solutions/example-fix.md"],
+      "script-change": ["scripts/harness-review.ts"],
+      "webapp-code-change": ["packages/athena-webapp/src/components/orders/OrdersView.tsx"],
+      "convex-change": ["packages/athena-webapp/convex/inventory/orders.ts"],
+      "storefront-change": ["packages/storefront-webapp/src/components/checkout/Checkout.tsx"]
+    }
+  },
+  "blockerVector": {
+    "seededFailingCandidates": [
+      {
+        "id": "preparation-receipt-missing",
+        "surface": "preparation-receipt-evaluation",
+        "expectedBlockerCode": "preparation_missing"
+      },
+      {
+        "id": "candidate-changed-after-preparation",
+        "surface": "preparation-receipt-evaluation",
+        "expectedBlockerCode": "preparation_stale"
+      },
+      {
+        "id": "base-advanced-after-preparation",
+        "surface": "preparation-receipt-evaluation",
+        "expectedBlockerCode": "preparation_base_changed"
+      },
+      {
+        "id": "preparation-wiring-changed",
+        "surface": "preparation-receipt-evaluation",
+        "expectedBlockerCode": "preparation_wiring_mismatch"
+      },
+      {
+        "id": "review-evidence-missing-substantial-change",
+        "obligation": "review.green",
+        "expectedFindingCode": "review_evidence_missing",
+        "humanWaivable": true
+      },
+      {
+        "id": "review-evidence-stale",
+        "obligation": "review.green",
+        "expectedFindingCode": "stale_evidence",
+        "humanWaivable": true
+      },
+      {
+        "id": "solution-note-missing",
+        "obligation": "documentation.current",
+        "expectedFindingCode": "compound-solution",
+        "humanWaivable": true
+      },
+      {
+        "id": "landed-change-report-missing",
+        "obligation": "documentation.current",
+        "expectedFindingCode": "landed-change-report",
+        "humanWaivable": true
+      },
+      {
+        "id": "telemetry-record-missing-substantial",
+        "obligation": "telemetry.recorded",
+        "expectedFindingCode": "telemetry_record_missing",
+        "humanWaivable": true
+      },
+      {
+        "id": "telemetry-record-hand-edited",
+        "obligation": "telemetry.recorded",
+        "expectedFindingCode": "telemetry_record_malformed",
+        "humanWaivable": false
+      },
+      {
+        "id": "graphify-artifacts-stale",
+        "surface": "graphify:check",
+        "expectedFailure": "nonzero-exit",
+        "remediation": "bun run graphify:rebuild"
+      },
+      {
+        "id": "convex-operation-admission-violation",
+        "surface": "audit:convex",
+        "expectedFailure": "nonzero-exit"
+      },
+      {
+        "id": "hosted-required-check-failing",
+        "surface": "gh pr checks (athena-pr-tests)",
+        "expectedFailure": "merge blocked by required hosted check; observation is read-only"
+      }
+    ]
+  },
+  "leafMappings": [
+    {
+      "leaf": "focused-tests",
+      "capabilityId": "sensor.focused-tests",
+      "kind": "sensor",
+      "authority": [
+        "pr:athena:mechanical (changed-path selection)",
+        "bun run test:coverage (admission provider command)",
+        "bun run harness:test"
+      ]
+    },
+    {
+      "leaf": "generated-artifact-repair",
+      "capabilityId": "stage.generated-artifact-repair",
+      "kind": "mutation-stage",
+      "authority": ["pre-commit:generated-artifacts (prepare phase)"]
+    },
+    {
+      "leaf": "harness-preparation",
+      "capabilityId": "stage.harness-preparation",
+      "kind": "mutation-stage",
+      "authority": ["pr:athena:prepare (candidate receipt publication)"]
+    },
+    {
+      "leaf": "harness-admission",
+      "capabilityId": "sensor.harness-admission",
+      "kind": "sensor",
+      "authority": ["pr:athena:validate-provider"]
+    },
+    {
+      "leaf": "graphify",
+      "capabilityId": "sensor.graphify",
+      "kind": "sensor",
+      "authority": ["graphify:check"],
+      "remediation": "graphify:rebuild"
+    },
+    {
+      "leaf": "convex-admission-audit",
+      "capabilityId": "sensor.convex-admission",
+      "kind": "sensor",
+      "authority": ["bun run --filter @athena/webapp audit:convex (admission provider command)"]
+    },
+    {
+      "leaf": "reporting",
+      "capabilityId": "sensor.delivery-reporting",
+      "kind": "sensor",
+      "authority": [
+        "delivery:documentation-check",
+        "reports:presentation:check (admission provider command)"
+      ]
+    },
+    {
+      "leaf": "telemetry",
+      "capabilityId": "sensor.telemetry",
+      "kind": "sensor",
+      "authority": ["delivery:telemetry-check"],
+      "remediation": "delivery:telemetry-record"
+    },
+    {
+      "leaf": "hosted-check-observation",
+      "capabilityId": "status.hosted-checks",
+      "kind": "status-reconciliation",
+      "authority": ["gh pr checks (athena-pr-tests required check)"]
+    },
+    {
+      "leaf": "pr",
+      "capabilityId": "operation.pr-creation",
+      "kind": "pr-creation",
+      "authority": ["gh pr create"],
+      "granted": true
+    },
+    {
+      "leaf": "merge",
+      "capabilityId": "operation.merge",
+      "kind": "merge",
+      "authority": ["github:pr-merge"],
+      "granted": false
+    },
+    {
+      "leaf": "deployment",
+      "capabilityId": "operation.deploy",
+      "kind": "deploy",
+      "authority": ["scripts/deploy-vps.sh (production approval path unchanged)"],
+      "granted": false
+    }
+  ],
+  "aggregateExclusions": [
+    {
+      "entrypoint": "pr:athena",
+      "reason": "The aggregate re-enters review, evidence, admission, and validation; it is the comparison authority, never a leaf."
+    }
+  ],
+  "generatedArtifactOwnership": {
+    "repairStage": "stage.generated-artifact-repair",
+    "groups": [
+      {
+        "id": "graphify",
+        "generator": "graphify:rebuild",
+        "paths": [
+          "graphify-out/wiki/index.md",
+          "graphify-out/wiki/packages/athena-webapp.md",
+          "graphify-out/wiki/packages/storefront-webapp.md",
+          "graphify-out/wiki/packages/valkey-proxy-server.md",
+          "graphify-out/GRAPH_REPORT.md",
+          "graphify-out/graph.json"
+        ]
+      },
+      {
+        "id": "convex-generated-api",
+        "generator": "bunx convex dev --once",
+        "paths": [
+          "packages/athena-webapp/convex/_generated/api.d.ts",
+          "packages/athena-webapp/convex/_generated/api.js",
+          "packages/athena-webapp/convex/_generated/dataModel.d.ts",
+          "packages/athena-webapp/convex/_generated/server.d.ts",
+          "packages/athena-webapp/convex/_generated/server.js"
+        ]
+      },
+      {
+        "id": "agent-sdk",
+        "generator": "agent-sdk:generate",
+        "paths": [
+          "packages/athena-webapp/convex/agentHarness/_generated/registry.ts",
+          "packages/athena-webapp/convex/agentHarness/_generated/schemas.ts"
+        ]
+      },
+      {
+        "id": "harness-docs",
+        "generator": "harness:generate",
+        "pathAuthority": "HARNESS_APP_REGISTRY harnessDocs.generatedDocs (per-package docs/agent indexes)"
+      }
+    ]
+  }
+}
