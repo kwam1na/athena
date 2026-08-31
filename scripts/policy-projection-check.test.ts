@@ -222,8 +222,15 @@ describe("policy projection comparison", () => {
   test("a lens that names no reviewer charter is caught after re-stamping", async () => {
     const copyDir = await policyDirCopy();
     const document = await readPolicyJson(copyDir, "repository-policy.json");
+    const snapshot = await readPolicyJson(copyDir, "compiled-snapshot.json");
+    // Dropped from BOTH sides, which is what a genuine recompile of a
+    // charterless lens produces. Dropping it from the document alone would
+    // leave the two sides disagreeing, and the red would come from the
+    // agreement rule below rather than from the rule this test names.
     delete document.reviewLenses[0].personaId;
+    delete snapshot.compiled.snapshot.reviewLenses[0].personaId;
     await writePolicyJson(copyDir, "repository-policy.json", document);
+    await writePolicyJson(copyDir, "compiled-snapshot.json", snapshot);
     await restampPolicyDigests(copyDir);
 
     const result = await runPolicyProjectionCheck(rootDir, { policyDir: copyDir });
@@ -244,6 +251,9 @@ describe("policy projection comparison", () => {
     snapshot.compiled.snapshot.reviewLenses.push({
       lensId: "lens.additional",
       category: "additional",
+      // Well-formed on every other axis, so the only thing wrong with the
+      // added lens is the charter it does not name.
+      personaDigest: "b".repeat(64),
     });
     await writePolicyJson(copyDir, "repository-policy.json", document);
     await writePolicyJson(copyDir, "compiled-snapshot.json", snapshot);
@@ -253,6 +263,26 @@ describe("policy projection comparison", () => {
     expect(result.status).toBe("fail");
     expect(findingCodes(result)).toContain("lens_persona_defect");
     expect(findingCodes(result)).not.toContain("snapshot_input_stale");
+    expect(findingCodes(result)).not.toContain("report_input_stale");
+  });
+
+  test("a compiled snapshot carrying a lens the document never declared is caught", async () => {
+    const copyDir = await policyDirCopy();
+    const snapshot = await readPolicyJson(copyDir, "compiled-snapshot.json");
+    // Added to the snapshot alone. Enumerating the document's lenses walks
+    // only its own two, so nothing but the count comparison reaches this.
+    snapshot.compiled.snapshot.reviewLenses.push({
+      lensId: "lens.ghost",
+      category: "testing-policy",
+      personaId: "persona.simplicity",
+      personaDigest: "c".repeat(64),
+    });
+    await writePolicyJson(copyDir, "compiled-snapshot.json", snapshot);
+    await restampPolicyDigests(copyDir);
+
+    const result = await runPolicyProjectionCheck(rootDir, { policyDir: copyDir });
+    expect(result.status).toBe("fail");
+    expect(findingCodes(result)).toContain("lens_persona_defect");
     expect(findingCodes(result)).not.toContain("report_input_stale");
   });
 
