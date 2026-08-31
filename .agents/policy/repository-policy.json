@@ -6,8 +6,16 @@
   "grantedAuthority": ["pr-creation"],
   "forbiddenAuthority": ["merge", "deploy"],
   "reviewLenses": [
-    { "lensId": "lens.outcome-correctness", "category": "outcome-correctness" },
-    { "lensId": "lens.adversarial-testing", "category": "testing-policy" }
+    {
+      "lensId": "lens.outcome-correctness",
+      "category": "outcome-correctness",
+      "personaId": "persona.outcome-correctness"
+    },
+    {
+      "lensId": "lens.adversarial-testing",
+      "category": "testing-policy",
+      "personaId": "persona.adversarial"
+    }
   ],
   "obligations": [
     { "obligationId": "preparation.current" },
