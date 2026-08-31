@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shadow-window preconditions: a guard that lets a migration run beside production</title>
+  </head>
+  <body>
+    <article
+      data-athena-landed-change-report="v2"
+      data-athena-report-diff-fingerprint="0e961f7d80ee8d9384c9aac88723a54cc6c380f6f65a90c43839d5c4b873dd13"
+    >
+      <header data-report-section="header">
+        <h1>Shadow-window preconditions: a guard that lets a migration run beside production</h1>
+        <ul data-report-pills>
+          <li>Delivery candidate</li>
+          <li>Branch kwamina0x00/v26-1482-shadow-preconditions</li>
+          <li>47 guard tests green</li>
+          <li>Read-only: no delivery authority moved</li>
+        </ul>
+        <dl data-report-meta>
+          <dt>Linear</dt><dd>V26-1482 (shadow-preconditions half)</dd>
+          <dt>Companion</dt><dd>PR #814 — policy mapping and pre-cutover oracle</dd>
+          <dt>Status</dt><dd>Delivery candidate</dd>
+          <dt>Deploy</dt><dd>Not applicable — no runtime surface changes</dd>
+          <dt>Root alignment</dt><dd>Pending merge</dd>
+        </dl>
+      </header>
+
+      <section data-report-section="summary">
+        <h2>Executive summary</h2>
+        <p>
+          Athena is migrating its delivery machinery to a managed product that
+          lives in another repository. Before anything cuts over, the product
+          needs to run <em>beside</em> the existing machinery long enough to be
+          measured against it. This change makes that side-by-side window safe
+          to open.
+        </p>
+        <p>
+          It adds three things: activation metadata declaring the window is
+          shadow-only and holds no delivery authority, a milestone measurement
+          artifact that will hold one entry per shadow delivery, and a read-only
+          guard that enforces four positions — the posture stays shadow, the
+          vendored agent tooling keeps every tracked byte, the managed product's
+          workflow projection appears only inside managed delivery worktrees,
+          and a shadow run counts as evidence only on a record naming the
+          product's own binding as its source — never the agent that ran.
+        </p>
+        <p>
+          <code>bun run pr:athena</code> is untouched and remains the only
+          delivery authority — the guard adds no command to it. One honest
+          qualification: the gate runs <code>test:coverage</code>
+          unconditionally, which reaches every <code>scripts/*.test.ts</code>,
+          so the guard's own suite is collected — and one of its cases runs the
+          whole guard against the real tree. Any of the four positions failing
+          — a changed vendored layout, a projection outside a managed worktree
+          — therefore does block delivery until it is resolved. That is the
+          intended effect.
+        </p>
+      </section>
+
+      <section data-report-section="problem">
+        <h2>The problem</h2>
+        <p>
+          The managed product materializes a run-pinned copy of its workflow
+          text into the worktree a delivery runs in. That is how a managed run
+          gets its instructions. Three things can go wrong while the old and new
+          systems coexist, and each fails in a different direction.
+        </p>
+        <p>
+          <strong>Wrong place.</strong> If that projection lands at the
+          repository root, every ordinary delivery — which still runs on the
+          vendored generation — suddenly has a second, untracked source of agent
+          instructions sitting beside the real one. Nobody asked for that, and
+          nobody would notice.
+        </p>
+        <p>
+          <strong>Wrong method.</strong> The obvious way to stop the old tooling
+          from being found is to move or edit its files. Do that and the shadow
+          window has quietly become a cutover: there is no removal gate left to
+          pass, and no cheap way back.
+        </p>
+        <p>
+          <strong>Wrong witness.</strong> A shadow delivery only measures the new
+          product if the run actually used the new product's workflow text. The
+          only party that can honestly report that is the one that wrote the
+          bytes. Asking the agent whether it used them measures a claim, not a
+          run — and the whole point of the milestone is to compare real
+          behaviour against a frozen manual baseline.
+        </p>
+      </section>
+
+      <section data-report-section="mental-model">
+        <h2>Mental model</h2>
+        <p>
+          Think of a scaffold erected around a building that is still open for
+          business.
+        </p>
+        <ul>
+          <li>
+            <strong>The building is the vendored tooling.</strong> Every
+            ordinary delivery still walks through its front door. Not one brick
+            may move until the scaffold has proven itself.
+          </li>
+          <li>
+            <strong>The scaffold is the managed projection.</strong> It is
+            erected only in the specific rooms set aside for the trial — managed
+            delivery worktrees — and it is invisible from everywhere else.
+          </li>
+          <li>
+            <strong>The guard is the site inspector.</strong> It checks four
+            things and refuses to check anything it cannot actually see: is this
+            still a trial, are the bricks untouched, is the scaffold only in the
+            trial rooms, and — crucially — who signed the worksheet.
+          </li>
+        </ul>
+        <p>
+          The signature matters most. The workers on the scaffold cannot sign
+          their own worksheets; the sign-off comes from the scaffold itself, in
+          the form of a marker the product stamps into the projection when it
+          erects it.
+        </p>
+      </section>
+
+      <section data-report-section="before-after">
+        <h2>Before and after</h2>
+        <p><strong>Before this change.</strong></p>
+        <ul>
+          <li>
+            Athena's delivery authority was mapped into a declarative policy
+            document and compared read-only against a frozen pre-cutover oracle
+            (the companion half of this ticket).
+          </li>
+          <li>
+            Nothing said where the managed product could install, where its
+            projection could land, or what made a shadow run admissible
+            evidence. A shadow delivery could have been run — and its results
+            would have been unfalsifiable.
+          </li>
+        </ul>
+        <p><strong>After this change.</strong></p>
+        <ul>
+          <li>
+            The window is declared: shadow installation mode, delivery authority
+            <code>none</code>, <code>bun run pr:athena</code> named as the
+            comparison authority, and installation paths restricted to
+            disposable directories that are never the operator's real host
+            configuration.
+          </li>
+          <li>
+            The projection's permitted location is declared and checkable: only
+            inside a managed delivery worktree.
+          </li>
+          <li>
+            The vendored discovery layout is pinned by digest over the index and
+            checked again against the working tree, so a tracked byte cannot
+            move before the cutover's removal gate — staged or not — without
+            failing the guard.
+          </li>
+          <li>
+            The milestone's admission rule exists and is enforced: a delivery
+            counts only on an affirmative record naming the product's binding as
+            its source and carrying that run's marker fields.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="key-files">
+        <h2>Key files</h2>
+        <table>
+          <thead>
+            <tr><th>File</th><th>Why it matters</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>scripts/shadow-discovery-guard.ts</code></td>
+              <td>
+                The guard. Owns the vendored discovery layout's path set and its
+                pinned digest, the projection scoping rule, the exclusivity
+                downgrade, and the consumption-record admissibility rules. Read
+                only: it opens files and asks git for tracked object names.
+              </td>
+            </tr>
+            <tr>
+              <td><code>scripts/shadow-discovery-guard.test.ts</code></td>
+              <td>
+                Plants one defect per rule against disposable copies of the
+                artifacts, so no planted failure ever touches the repository's
+                own tracked bytes. Also asserts the pin is live, not
+                self-equal.
+              </td>
+            </tr>
+            <tr>
+              <td><code>.agents/policy/shadow-activation.json</code></td>
+              <td>
+                Athena's activation metadata: mode, authority, hosts and their
+                exclusivity grades with the record they came from, the
+                projection root and managed worktree root, and the recorded
+                characterization of a real shadow install.
+              </td>
+            </tr>
+            <tr>
+              <td><code>.agents/policy/shadow-milestone-gate-record.json</code></td>
+              <td>
+                The milestone measurement artifact: the baseline it is scored
+                against, the required comparison-set mix, the gate metrics, the
+                consumption-record contract, and the (currently empty) delivery
+                list.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>docs/solutions/harness/shadow-window-preconditions-managed-projection-scope-2026-08-30.md</code>
+              </td>
+              <td>
+                The reusable pattern: how to hold a read-only window beside
+                production tooling without being able to damage it.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section data-report-section="changes">
+        <h2>What changed, and what deliberately did not</h2>
+        <p><strong>Changed.</strong></p>
+        <ul>
+          <li>
+            Added the activation metadata, the milestone gate record, the guard,
+            its suite, and a solution note. Five new files; no existing
+            behaviour edited.
+          </li>
+          <li>
+            Generated Graphify artifacts refreshed by the repository's own
+            pre-commit generator, as for any source change.
+          </li>
+        </ul>
+        <p><strong>Deliberately not changed.</strong></p>
+        <ul>
+          <li>
+            <code>pr:athena</code> and every script it chains. No package
+            script was added either: the guard is invoked directly, exactly like
+            the companion policy-projection sensor, so the delivery gate's
+            command graph is byte-identical. What the gate does pick up is the
+            guard's suite, which it collects along with every other root-script
+            suite — so the positions are enforced in delivery, without the gate
+            gaining a command.
+          </li>
+          <li>
+            The vendored discovery layout. Not a file moved, not a symlink
+            retargeted. That is the property the guard exists to defend, so
+            changing it here would have been self-defeating.
+          </li>
+          <li>
+            Exclusivity is <em>not</em> asserted as blocking. Both graded hosts
+            can add the run-pinned discovery root but cannot scope discovery to
+            it, so coexisting ambient discovery is recorded as a non-blocking
+            observation. Claiming otherwise would have been a claim the hosts
+            cannot deliver — and the guard rejects an activation that makes it.
+          </li>
+          <li>
+            The repository's own skills living beside the exposure symlinks are
+            outside the pinned layout. Including them would have made every
+            unrelated skill edit fail the guard.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="failure-boundaries">
+        <h2>Failure boundaries</h2>
+        <p>
+          What this guard does <strong>not</strong> claim, stated plainly so a
+          later reader does not over-trust it:
+        </p>
+        <ul>
+          <li>
+            It does not prevent a projection from being materialized in the
+            wrong place; it detects one that is there. Placement is the
+            product's responsibility.
+          </li>
+          <li>
+            It does not make discovery exclusive. During the shadow window the
+            vendored generation remains discoverable inside managed worktrees
+            too. That is tolerable only because the window holds no authority.
+          </li>
+          <li>
+            It observes the root of the tree it is invoked in — not every
+            worktree on the machine, and not every directory beneath that root.
+            The scoping rule is a per-invocation assertion.
+          </li>
+          <li>
+            It checks the consumption record's <em>declared</em> source and
+            shape. It cannot itself verify the bytes came from the binding. What
+            keeps a session from writing that record is that
+            <code>.agents</code> is a protected path in every checkpoint grant,
+            plus the binding-side writer that emits the entry — which the
+            product does not yet ship, so the comparison set is empty rather
+            than provisionally populated.
+          </li>
+          <li>
+            An affirmative consumption record attests that the projection's
+            bytes were materialized for that delivery and fence. It is not a
+            proof that the model read them.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="validation">
+        <h2>Validation and review evidence</h2>
+        <ul>
+          <li>
+            <strong>Characterization against the real product.</strong> A
+            disposable shadow install of the composed product, followed by one
+            projection materialization driven through the product's own
+            installer and Claude Code binding, in a scratch repository carrying
+            Athena's vendored discovery layout shape. Observed: the projection
+            landed only in the managed worktree, that worktree's
+            <code>git status --porcelain</code> was empty, the repository root
+            and a non-managed worktree carried no projection and no marker, and
+            the tracked tree was unchanged. The binding produced the consumption
+            marker; nothing was hand-written.
+          </li>
+          <li>
+            <strong>Guard suite:</strong> 47 tests green, covering posture,
+            byte-neutrality (a live pin check, plus index and working-tree
+            drift), projection scoping across root, managed and non-managed
+            trees including a degenerate declared root, the exclusivity
+            downgrade and its flip, and every consumption-record admission and
+            rejection path.
+          </li>
+          <li>
+            <strong>Recorded red run:</strong> the suite was written first and
+            run against a missing module before the guard existed.
+          </li>
+          <li>
+            <strong>Companion sensor unaffected:</strong>
+            <code>bun scripts/policy-projection-check.ts</code> still passes.
+          </li>
+          <li>
+            <strong>Independent review:</strong> two lenses — outcome
+            correctness and adversarial — run as separate agents against the
+            branch diff and the product's own source. Both raised one
+            merge-blocking finding, and both were fixed: the activation recorded
+            a composition profile the product refuses for a production
+            repository, and byte-neutrality was measured only against the git
+            index while the guard's real context is a dirty working tree.
+            Further accepted findings closed an admission hole for an unnamed
+            delivery, a degenerate declared worktree root that disabled the
+            scope rule, four rules with no coverage, and three places where the
+            prose claimed more than the code does.
+          </li>
+          <li>
+            <strong>Delivery gate:</strong> <code>bun run pr:athena</code>.
+          </li>
+          <li><strong>Deployment:</strong> not applicable — no runtime surface.</li>
+          <li><strong>Root alignment:</strong> pending merge.</li>
+        </ul>
+      </section>
+
+      <section data-report-section="guidance">
+        <h2>Guidance for next time</h2>
+        <ul>
+          <li>
+            When a migration needs to run beside the thing it replaces, spend
+            the effort on the <em>admission rule</em> before the measurement.
+            A milestone that cannot say which runs count will be argued about
+            rather than decided.
+          </li>
+          <li>
+            Source evidence from the component that produced the effect, not
+            from the component being evaluated. Here that is one line of policy
+            — the record's source must be the binding — and it is what keeps
+            the eventual improvement claim honest.
+          </li>
+          <li>
+            Pin the bytes you promise not to touch. A digest turns "we did not
+            change it" from a claim into a check, and turns changing it into a
+            deliberate two-place edit.
+          </li>
+          <li>
+            Scope a pin to exactly what you mean. Pinning a whole directory
+            because it is convenient makes the guard fail on unrelated work, and
+            a guard people routinely re-pin protects nothing.
+          </li>
+          <li>
+            Do not assert a capability the graded host does not have. Recording
+            a downgrade with its reason is stronger than an aspirational claim,
+            because it tells the next reader exactly what has to change for the
+            claim to become true.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="quiz" data-quiz-pass-threshold="8">
+        <h2>Comprehension quiz</h2>
+        <p>Eight of ten to pass.</p>
+        <ol data-quiz>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why is a shadow delivery excluded from the comparison set when the
+              agent itself reports that it consumed the run-pinned projection?
+            </p>
+            <ol data-quiz-options>
+              <li>Agent reports arrive too late in the run to be recorded.</li>
+              <li data-quiz-correct>
+                The agent is the component being evaluated, so its own claim
+                cannot establish that the evaluation happened.
+              </li>
+              <li>Agent reports are not machine-readable.</li>
+              <li>The milestone only accepts records written after merge.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The milestone exists to measure the managed product. A record
+              produced by the thing under measurement measures a claim rather
+              than a run, so only the binding's own marker is admissible.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Where may the run-pinned projection appear during the shadow
+              window?
+            </p>
+            <ol data-quiz-options>
+              <li>Anywhere inside the repository, as long as it is untracked.</li>
+              <li>At the repository root only.</li>
+              <li data-quiz-correct>Inside a managed delivery worktree only.</li>
+              <li>In any worktree that has the product installed.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The repository root and every non-managed worktree keep the
+              vendored generation authoritative, so a projection outside a
+              managed delivery worktree is a finding.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why is the exclusivity assertion non-blocking during this window?
+            </p>
+            <ol data-quiz-options>
+              <li>Because exclusivity is expensive to check on every run.</li>
+              <li data-quiz-correct>
+                Because both graded hosts can only add the run-pinned discovery
+                root, and coexisting discovery cannot corrupt an authority the
+                window does not hold.
+              </li>
+              <li>Because the vendored generation is already disabled.</li>
+              <li>Because the milestone does not measure discovery.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Neither graded host can scope discovery to one root. Since the
+              shadow window holds no delivery authority, coexistence is recorded
+              as an observation rather than asserted away.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              What happens if the activation metadata declares a blocking
+              exclusivity position?
+            </p>
+            <ol data-quiz-options>
+              <li>The guard upgrades its checks to match.</li>
+              <li>Nothing; the field is advisory.</li>
+              <li data-quiz-correct>
+                The guard reports a finding, because the proving host is graded
+                exclusivity-ungraded and cannot deliver that position.
+              </li>
+              <li>The guard falls back to the vendored generation.</li>
+            </ol>
+            <p data-quiz-explanation>
+              A claim the graded host cannot support is worse than no claim, so
+              the guard refuses an activation that makes one.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              What exactly is covered by the pinned vendored-discovery-layout
+              digest?
+            </p>
+            <ol data-quiz-options>
+              <li>Every file under the repository's agent directories.</li>
+              <li data-quiz-correct>
+                The tracked vendored generation tree plus the exposure symlinks
+                that point into it — and nothing else.
+              </li>
+              <li>Only the active generation pointer.</li>
+              <li>The whole repository tree.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Repository-owned skills living beside the exposure symlinks are
+              deliberately excluded; including them would fail the guard on
+              unrelated skill edits.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              What actually happens to the vendored generation inside a managed
+              delivery worktree during this window?
+            </p>
+            <ol data-quiz-options>
+              <li>It is deleted for the run and restored afterwards.</li>
+              <li>Its files are moved aside so only the projection is found.</li>
+              <li data-quiz-correct>
+                Nothing — it stays discoverable beside the projection, because
+                neither graded host can scope discovery to one root.
+              </li>
+              <li>Discovery is disabled entirely for the duration.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The mechanism is model-external and byte-neutral: configuration the
+              binding owns, outside the repository's tracked content. On these
+              hosts it adds the projection rather than removing the vendored
+              generation, which is why coexistence is recorded rather than
+              asserted away.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              A record says the source is the binding and affirmative is false.
+              What should happen?
+            </p>
+            <ol data-quiz-options>
+              <li>A finding, because every shadow run must consume the projection.</li>
+              <li data-quiz-correct>
+                No finding, but the delivery is excluded from the comparison
+                set — an honest negative is not a defect.
+              </li>
+              <li>The delivery counts, since the source is trusted.</li>
+              <li>The guard rewrites the record.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Absent, negative, and agent-supplied records all fail to admit the
+              delivery; only the agent-supplied one is additionally a defect.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why does the milestone gate record live outside every execution
+              grant's writable paths?
+            </p>
+            <ol data-quiz-options>
+              <li>To keep the repository's directory listing tidy.</li>
+              <li>Because it is generated and would be overwritten.</li>
+              <li data-quiz-correct>
+                So a session cannot author or edit its own milestone
+                measurement.
+              </li>
+              <li>Because it is too large for a tracked path.</li>
+            </ol>
+            <p data-quiz-explanation>
+              It is a measurement artifact, not a journal, and its value depends
+              on the measured party being unable to write it.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              How does the suite prove the layout pin is live rather than
+              self-satisfying?
+            </p>
+            <ol data-quiz-options>
+              <li>It compares the constant to itself.</li>
+              <li data-quiz-correct>
+                It recomputes the digest from git and asserts it equals the
+                pin, and separately drives the guard with a different observed
+                digest to prove drift is reported.
+              </li>
+              <li>It reruns the guard twice and compares outputs.</li>
+              <li>It checks the file's modification time.</li>
+            </ol>
+            <p data-quiz-explanation>
+              One test grounds the pin in the repository's real tracked state;
+              another proves a mismatch is actually surfaced.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              What must happen before the shadow-delivery gate can be scored?
+            </p>
+            <ol data-quiz-options>
+              <li>The vendored generation must be removed.</li>
+              <li>The host must carry the affirmative <code>exclusivity-graded</code> value.</li>
+              <li data-quiz-correct>
+                Shadow deliveries matching the baseline's mix and count must be
+                run, each carrying an affirmative binding-sourced consumption
+                record.
+              </li>
+              <li>The policy document must grant merge authority.</li>
+            </ol>
+            <p data-quiz-explanation>
+              An incomplete comparison set is reported as an observation, and
+              the gate's improvement comparison cannot be made until the set is
+              complete and admissible.
+            </p>
+          </li>
+        </ol>
+      </section>
+
+      <section data-report-section="subagent-evidence">
+        <h2>Subagent evidence</h2>
+        <dl>
+          <dt>Outcome-correctness reviewer</dt>
+          <dd>
+            Read the branch diff against the plan's stated outcomes and the
+            managed product's binding source, checking whether the guard's
+            digest actually covers the vendored layout, whether the consumption
+            rule is unforgeable by a session, whether the exclusivity downgrade
+            flips correctly on a graded host, and whether the recorded
+            characterization claims are supported by the product's code.
+            Contributed the correctness verdict cited in the validation section.
+          </dd>
+          <dt>Adversarial reviewer</dt>
+          <dd>
+            Attacked the guard and its suite for vacuity and bypasses: mutating
+            each rule to find tests that pass against a gutted implementation,
+            searching for a record shaped to look binding-sourced, for a
+            projection location the scoping rule misses, and for a layout change
+            the pin does not observe. Contributed the adversarial verdict cited
+            in the validation section.
+          </dd>
+          <dt>Repository review round, three times</dt>
+          <dd>
+            The repository's own eight-persona review — correctness, testing,
+            maintainability, project standards, agent-native, learnings,
+            adversarial, and TypeScript — ran against the branch, and then ran again in full after each round's fixes
+            moved the candidate — three complete passes. Round one raised two
+            merge-blocking findings; round two raised one more, which four
+            personas found independently: the first round had hardened the
+            blocking-exclusivity <em>declaration</em> against unrecognised host
+            gradings but left the <em>enforcement</em> branch reading the same
+            field with the opposite polarity, so an unrecognised grading emitted
+            the blocking claim this window may not make. Round two also caught a
+            test of ours that would have deleted a live run-pinned projection
+            had the suite ever run from inside a managed delivery worktree. Round three
+            came back with no merge-blocking findings from any persona, and its
+            mutation batteries confirmed each earlier fix dies when reverted.
+          </dd>
+          <dt>Delivered-diff analysis</dt>
+          <dd>
+            Covered by every reviewer above, all of which worked from the branch
+            diff and the managed product's source rather than from this
+            session's narrative. No separate historian agent was run: the review
+            rounds this branch closed are recorded in its own commits, and the
+            companion half's solution note carries the preceding decisions.
+          </dd>
+        </dl>
+      </section>
+    </article>
+  </body>
+</html>
