@@ -342,6 +342,66 @@ describe("policy projection comparison", () => {
     expect(findingCodes(result)).toContain("lens_persona_defect");
   });
 
+  // The agreement rule compares three axes at once, so each axis needs its own
+  // witness: a test that moves two of them at once is satisfied by whichever
+  // clause happens to fire, and the other clause can then be deleted unnoticed.
+  test("a compiled lens bound to a lens identity the document never declared is caught", async () => {
+    const copyDir = await policyDirCopy();
+    const snapshot = await readPolicyJson(copyDir, "compiled-snapshot.json");
+    snapshot.compiled.snapshot.reviewLenses[0].lensId = "lens.renamed";
+    await writePolicyJson(copyDir, "compiled-snapshot.json", snapshot);
+    await restampPolicyDigests(copyDir);
+
+    const result = await runPolicyProjectionCheck(rootDir, { policyDir: copyDir });
+    expect(result.status).toBe("fail");
+    expect(findingCodes(result)).toContain("lens_persona_defect");
+  });
+
+  test("a compiled lens filed under a category the document never declared is caught", async () => {
+    const copyDir = await policyDirCopy();
+    const snapshot = await readPolicyJson(copyDir, "compiled-snapshot.json");
+    snapshot.compiled.snapshot.reviewLenses[0].category = "additional";
+    await writePolicyJson(copyDir, "compiled-snapshot.json", snapshot);
+    await restampPolicyDigests(copyDir);
+
+    const result = await runPolicyProjectionCheck(rootDir, { policyDir: copyDir });
+    expect(result.status).toBe("fail");
+    expect(findingCodes(result)).toContain("lens_persona_defect");
+  });
+
+  // Every other mutation removes a member; these malform one, which is what
+  // holds the two format rules to their shape rather than to mere presence.
+  test("a charter identity that is not a well-formed persona id is caught", async () => {
+    const copyDir = await policyDirCopy();
+    const document = await readPolicyJson(copyDir, "repository-policy.json");
+    const snapshot = await readPolicyJson(copyDir, "compiled-snapshot.json");
+    // Carried on both sides so the agreement rule stays quiet and the red is
+    // attributable to the identity format rule alone.
+    document.reviewLenses[0].personaId = "persona.Outcome_Correctness";
+    snapshot.compiled.snapshot.reviewLenses[0].personaId = "persona.Outcome_Correctness";
+    await writePolicyJson(copyDir, "repository-policy.json", document);
+    await writePolicyJson(copyDir, "compiled-snapshot.json", snapshot);
+    await restampPolicyDigests(copyDir);
+
+    const result = await runPolicyProjectionCheck(rootDir, { policyDir: copyDir });
+    expect(result.status).toBe("fail");
+    expect(findingCodes(result)).toContain("lens_persona_defect");
+  });
+
+  test("a resolved charter digest that is not a sha256 is caught", async () => {
+    const copyDir = await policyDirCopy();
+    const snapshot = await readPolicyJson(copyDir, "compiled-snapshot.json");
+    // Hex, but far short of a sha256: a rule checking only the alphabet
+    // rather than the width would accept this.
+    snapshot.compiled.snapshot.reviewLenses[0].personaDigest = "abc123";
+    await writePolicyJson(copyDir, "compiled-snapshot.json", snapshot);
+    await restampPolicyDigests(copyDir);
+
+    const result = await runPolicyProjectionCheck(rootDir, { policyDir: copyDir });
+    expect(result.status).toBe("fail");
+    expect(findingCodes(result)).toContain("lens_persona_defect");
+  });
+
   test("the tracked document references shipped charters by identity alone", async () => {
     const document = await readPolicyJson(policyDir, "repository-policy.json");
     const snapshot = await readPolicyJson(policyDir, "compiled-snapshot.json");
