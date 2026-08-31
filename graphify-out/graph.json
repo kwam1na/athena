@@ -202043,7 +202043,7 @@
       "relation": "contains",
       "source": "scripts_shadow_discovery_guard_test_ts",
       "source_file": "scripts/shadow-discovery-guard.test.ts",
-      "source_location": "L53",
+      "source_location": "L61",
       "target": "shadow_discovery_guard_test_bindingsourceddelivery",
       "weight": 1
     },
@@ -202055,7 +202055,7 @@
       "relation": "contains",
       "source": "scripts_shadow_discovery_guard_test_ts",
       "source_file": "scripts/shadow-discovery-guard.test.ts",
-      "source_location": "L20",
+      "source_location": "L21",
       "target": "shadow_discovery_guard_test_codes",
       "weight": 1
     },
@@ -202067,7 +202067,7 @@
       "relation": "contains",
       "source": "scripts_shadow_discovery_guard_test_ts",
       "source_file": "scripts/shadow-discovery-guard.test.ts",
-      "source_location": "L32",
+      "source_location": "L33",
       "target": "shadow_discovery_guard_test_plantedtree",
       "weight": 1
     },
@@ -202079,7 +202079,7 @@
       "relation": "contains",
       "source": "scripts_shadow_discovery_guard_test_ts",
       "source_file": "scripts/shadow-discovery-guard.test.ts",
-      "source_location": "L24",
+      "source_location": "L25",
       "target": "shadow_discovery_guard_test_readpolicy",
       "weight": 1
     },
@@ -202091,7 +202091,7 @@
       "relation": "contains",
       "source": "scripts_shadow_discovery_guard_ts",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L171",
+      "source_location": "L184",
       "target": "shadow_discovery_guard_computevendoreddiscoverylayoutdigest",
       "weight": 1
     },
@@ -202103,7 +202103,7 @@
       "relation": "contains",
       "source": "scripts_shadow_discovery_guard_ts",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L293",
+      "source_location": "L312",
       "target": "shadow_discovery_guard_evaluateshadowartifacts",
       "weight": 1
     },
@@ -202115,7 +202115,7 @@
       "relation": "contains",
       "source": "scripts_shadow_discovery_guard_ts",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L166",
+      "source_location": "L179",
       "target": "shadow_discovery_guard_exposuresymlinkentries",
       "weight": 1
     },
@@ -202127,7 +202127,7 @@
       "relation": "contains",
       "source": "scripts_shadow_discovery_guard_ts",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L221",
+      "source_location": "L234",
       "target": "shadow_discovery_guard_ishex64",
       "weight": 1
     },
@@ -202139,7 +202139,7 @@
       "relation": "contains",
       "source": "scripts_shadow_discovery_guard_ts",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L210",
+      "source_location": "L223",
       "target": "shadow_discovery_guard_ismanageddeliveryworktree",
       "weight": 1
     },
@@ -202151,7 +202151,7 @@
       "relation": "contains",
       "source": "scripts_shadow_discovery_guard_ts",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L200",
+      "source_location": "L213",
       "target": "shadow_discovery_guard_observevendoreddiscoverylayoutworkingtree",
       "weight": 1
     },
@@ -202163,7 +202163,7 @@
       "relation": "contains",
       "source": "scripts_shadow_discovery_guard_ts",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L141",
+      "source_location": "L154",
       "target": "shadow_discovery_guard_rungit",
       "weight": 1
     },
@@ -202175,7 +202175,7 @@
       "relation": "contains",
       "source": "scripts_shadow_discovery_guard_ts",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L225",
+      "source_location": "L238",
       "target": "shadow_discovery_guard_runshadowdiscoveryguard",
       "weight": 1
     },
@@ -202187,7 +202187,7 @@
       "relation": "contains",
       "source": "scripts_shadow_discovery_guard_ts",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L137",
+      "source_location": "L150",
       "target": "shadow_discovery_guard_sha256",
       "weight": 1
     },
@@ -202199,7 +202199,7 @@
       "relation": "contains",
       "source": "scripts_shadow_discovery_guard_ts",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L155",
+      "source_location": "L168",
       "target": "shadow_discovery_guard_trackedentries",
       "weight": 1
     },
@@ -202211,7 +202211,7 @@
       "relation": "contains",
       "source": "scripts_shadow_discovery_guard_ts",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L191",
+      "source_location": "L204",
       "target": "shadow_discovery_guard_vendoreddiscoverylayoutpathspec",
       "weight": 1
     },
@@ -203351,7 +203351,7 @@
       "relation": "calls",
       "source": "shadow_discovery_guard_exposuresymlinkentries",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L173",
+      "source_location": "L186",
       "target": "shadow_discovery_guard_computevendoreddiscoverylayoutdigest",
       "weight": 1
     },
@@ -203363,7 +203363,7 @@
       "relation": "calls",
       "source": "shadow_discovery_guard_sha256",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L176",
+      "source_location": "L189",
       "target": "shadow_discovery_guard_computevendoreddiscoverylayoutdigest",
       "weight": 1
     },
@@ -203375,7 +203375,7 @@
       "relation": "calls",
       "source": "shadow_discovery_guard_trackedentries",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L172",
+      "source_location": "L185",
       "target": "shadow_discovery_guard_computevendoreddiscoverylayoutdigest",
       "weight": 1
     },
@@ -203387,7 +203387,7 @@
       "relation": "calls",
       "source": "shadow_discovery_guard_computevendoreddiscoverylayoutdigest",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L349",
+      "source_location": "L439",
       "target": "shadow_discovery_guard_evaluateshadowartifacts",
       "weight": 1
     },
@@ -203399,7 +203399,7 @@
       "relation": "calls",
       "source": "shadow_discovery_guard_ishex64",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L465",
+      "source_location": "L555",
       "target": "shadow_discovery_guard_evaluateshadowartifacts",
       "weight": 1
     },
@@ -203411,7 +203411,7 @@
       "relation": "calls",
       "source": "shadow_discovery_guard_ismanageddeliveryworktree",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L399",
+      "source_location": "L489",
       "target": "shadow_discovery_guard_evaluateshadowartifacts",
       "weight": 1
     },
@@ -203423,7 +203423,7 @@
       "relation": "calls",
       "source": "shadow_discovery_guard_observevendoreddiscoverylayoutworkingtree",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L371",
+      "source_location": "L461",
       "target": "shadow_discovery_guard_evaluateshadowartifacts",
       "weight": 1
     },
@@ -203435,7 +203435,7 @@
       "relation": "calls",
       "source": "shadow_discovery_guard_trackedentries",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L167",
+      "source_location": "L180",
       "target": "shadow_discovery_guard_exposuresymlinkentries",
       "weight": 1
     },
@@ -203447,7 +203447,7 @@
       "relation": "calls",
       "source": "shadow_discovery_guard_rungit",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L201",
+      "source_location": "L214",
       "target": "shadow_discovery_guard_observevendoreddiscoverylayoutworkingtree",
       "weight": 1
     },
@@ -203459,7 +203459,7 @@
       "relation": "calls",
       "source": "shadow_discovery_guard_vendoreddiscoverylayoutpathspec",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L205",
+      "source_location": "L218",
       "target": "shadow_discovery_guard_observevendoreddiscoverylayoutworkingtree",
       "weight": 1
     },
@@ -203471,7 +203471,7 @@
       "relation": "calls",
       "source": "shadow_discovery_guard_runshadowdiscoveryguard",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L265",
+      "source_location": "L283",
       "target": "shadow_discovery_guard_evaluateshadowartifacts",
       "weight": 1
     },
@@ -203483,7 +203483,7 @@
       "relation": "calls",
       "source": "shadow_discovery_guard_test_readpolicy",
       "source_file": "scripts/shadow-discovery-guard.test.ts",
-      "source_location": "L37",
+      "source_location": "L39",
       "target": "shadow_discovery_guard_test_plantedtree",
       "weight": 1
     },
@@ -203495,7 +203495,7 @@
       "relation": "calls",
       "source": "shadow_discovery_guard_rungit",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L156",
+      "source_location": "L169",
       "target": "shadow_discovery_guard_trackedentries",
       "weight": 1
     },
@@ -203507,7 +203507,7 @@
       "relation": "calls",
       "source": "shadow_discovery_guard_exposuresymlinkentries",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L194",
+      "source_location": "L207",
       "target": "shadow_discovery_guard_vendoreddiscoverylayoutpathspec",
       "weight": 1
     },
@@ -290188,7 +290188,7 @@
       "label": "computeVendoredDiscoveryLayoutDigest()",
       "norm_label": "computevendoreddiscoverylayoutdigest()",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L171"
+      "source_location": "L184"
     },
     {
       "community": 279,
@@ -290197,7 +290197,7 @@
       "label": "evaluateShadowArtifacts()",
       "norm_label": "evaluateshadowartifacts()",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L293"
+      "source_location": "L312"
     },
     {
       "community": 279,
@@ -290206,7 +290206,7 @@
       "label": "exposureSymlinkEntries()",
       "norm_label": "exposuresymlinkentries()",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L166"
+      "source_location": "L179"
     },
     {
       "community": 279,
@@ -290215,7 +290215,7 @@
       "label": "isHex64()",
       "norm_label": "ishex64()",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L221"
+      "source_location": "L234"
     },
     {
       "community": 279,
@@ -290224,7 +290224,7 @@
       "label": "isManagedDeliveryWorktree()",
       "norm_label": "ismanageddeliveryworktree()",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L210"
+      "source_location": "L223"
     },
     {
       "community": 279,
@@ -290233,7 +290233,7 @@
       "label": "observeVendoredDiscoveryLayoutWorkingTree()",
       "norm_label": "observevendoreddiscoverylayoutworkingtree()",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L200"
+      "source_location": "L213"
     },
     {
       "community": 279,
@@ -290242,7 +290242,7 @@
       "label": "runGit()",
       "norm_label": "rungit()",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L141"
+      "source_location": "L154"
     },
     {
       "community": 279,
@@ -290251,7 +290251,7 @@
       "label": "runShadowDiscoveryGuard()",
       "norm_label": "runshadowdiscoveryguard()",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L225"
+      "source_location": "L238"
     },
     {
       "community": 279,
@@ -290260,7 +290260,7 @@
       "label": "sha256()",
       "norm_label": "sha256()",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L137"
+      "source_location": "L150"
     },
     {
       "community": 279,
@@ -290269,7 +290269,7 @@
       "label": "trackedEntries()",
       "norm_label": "trackedentries()",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L155"
+      "source_location": "L168"
     },
     {
       "community": 279,
@@ -290278,7 +290278,7 @@
       "label": "vendoredDiscoveryLayoutPathspec()",
       "norm_label": "vendoreddiscoverylayoutpathspec()",
       "source_file": "scripts/shadow-discovery-guard.ts",
-      "source_location": "L191"
+      "source_location": "L204"
     },
     {
       "community": 2790,
@@ -348940,7 +348940,7 @@
       "label": "bindingSourcedDelivery()",
       "norm_label": "bindingsourceddelivery()",
       "source_file": "scripts/shadow-discovery-guard.test.ts",
-      "source_location": "L53"
+      "source_location": "L61"
     },
     {
       "community": 837,
@@ -348949,7 +348949,7 @@
       "label": "codes()",
       "norm_label": "codes()",
       "source_file": "scripts/shadow-discovery-guard.test.ts",
-      "source_location": "L20"
+      "source_location": "L21"
     },
     {
       "community": 837,
@@ -348958,7 +348958,7 @@
       "label": "plantedTree()",
       "norm_label": "plantedtree()",
       "source_file": "scripts/shadow-discovery-guard.test.ts",
-      "source_location": "L32"
+      "source_location": "L33"
     },
     {
       "community": 837,
@@ -348967,7 +348967,7 @@
       "label": "readPolicy()",
       "norm_label": "readpolicy()",
       "source_file": "scripts/shadow-discovery-guard.test.ts",
-      "source_location": "L24"
+      "source_location": "L25"
     },
     {
       "community": 838,
