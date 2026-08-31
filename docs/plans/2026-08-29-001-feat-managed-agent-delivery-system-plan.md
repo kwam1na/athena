@@ -3,7 +3,7 @@ title: "feat: Compose the managed agent delivery system"
 type: feat
 status: approved
 date: 2026-08-29
-last_amended: 2026-08-30
+last_amended: 2026-08-31
 origin: docs/brainstorms/2026-08-27-cross-agent-delivery-skills-requirements.md
 execution_posture: characterization-first
 ---
@@ -48,9 +48,11 @@ The new composition layer owns compatibility and lifecycle across those modules.
 
 ## Current-State Evidence
 
+The repository identities below are historical planning baselines captured on 2026-08-29, not claims about the repositories' current heads. They remain the inputs U1 characterizes; later delivery commits do not rewrite the starting point the plan was approved against.
+
 ### `agent-delivery-harness`
 
-- Current baseline: main at `47eca5780548153852799bb4c088c5371085809c`; `npm run check` passes 37 Vitest files and 1,206 tests.
+- Historical planning baseline: main was at `47eca5780548153852799bb4c088c5371085809c`; `npm run check` passed 37 Vitest files and 1,206 tests.
 - `@agent-delivery-harness/kernel` already separates candidate identity, preparation, records, validation, admission, and delivery-record verification from CLI, MCP, Action, and conformance surfaces.
 - The provider rail already defines version negotiation, ordered events, idempotency, cancellation, and fail-closed terminal states.
 - The ordinary gate can invoke one configured evidence provider, but it does not register pre-candidate work, persist delivery checkpoints, expose host-native SDLC progression, run repository operations, or execute a finish line.
@@ -59,7 +61,7 @@ The new composition layer owns compatibility and lifecycle across those modules.
 
 ### `agent-skills`
 
-- Current baseline: main at `0de253bc3c5a6837590602b42194b9a7de2b3296`; registry validation, 8 hostile mutation sensors, and 252 collected unit tests pass in CI (the `jsonschema` test extra is required locally).
+- Historical planning baseline: main was at `0de253bc3c5a6837590602b42194b9a7de2b3296`; registry validation, 8 hostile mutation sensors, and 252 collected unit tests passed in CI (the `jsonschema` test extra is required locally).
 - An authenticated profile archive already contains exact workflow bodies, lifecycle/runtime modules, host adapters, provider, schemas, provenance, and conformance inputs.
 - The machine-readable workflow graph/result contract has already landed via the portable autonomous delivery tranche: `workflows/delivery-v1.json` (`workflow-graph/1`, ten stages), `schemas/workflow-graph.schema.json`, `schemas/workflow-stage-result.schema.json`, plus diagnosis and review-orchestration modules. D8 and U6 therefore pin and parity-qualify this contract rather than author it.
 - Workflow reducers for planning, execution, review, and compounding are separate from release lifecycle, host projection, optional connectors, and evidence adaptation.
@@ -68,7 +70,7 @@ The new composition layer owns compatibility and lifecycle across those modules.
 
 ### Athena
 
-- Current baseline: main at `539ae232`; the qualified portable core is active for Codex and Claude Code through `.agent-skills/active.json` and generation `f8b39590bae786767cff1cfd849382884a0b66f12ef9978f752dbcb28c230f26`.
+- Historical planning baseline: main was at `539ae232f022bb78aac421fd8b4defbf51efa7e7`; the qualified portable core was active for Codex and Claude Code through `.agent-skills/active.json` and generation `f8b39590bae786767cff1cfd849382884a0b66f12ef9978f752dbcb28c230f26`.
 - Athena currently vendors the full workflow runtime and skill generation into the repository and separately retains its harness, `pr:athena`, telemetry, reporting, Graphify, Convex, PR, merge, and deployment machinery.
 - `.agents/characterization-baseline.json` and `.agents/portable-overlay-map.json` already distinguish reusable workflow behavior, optional adapters, retained Athena policy, and excluded domain behavior.
 - This is a proven migration baseline, not the desired steady state: Athena still carries system implementation bytes and their lifecycle in addition to repository policy.
@@ -628,7 +630,9 @@ After U3, U4-U6, U7A, and U8-U10 are available with U13's read-only adapter and 
 
 `already-scoped handoff -> accepted delivery -> host-native isolated worktree -> managed next checkpoint -> plan -> implementation -> focused Athena leaf sensors -> outcome verification -> review/remediation -> harness admission -> neutral tracked record -> external verification -> merge-ready report`
 
-This milestone cannot cut over Athena authority or merge. It must demonstrate that the active host task can progress without operator stage choreography, that ending the task leaves the delivery safely paused (Tier 2) or unknown (Tier 1) without checkpoint corruption, and that a fresh task on the same host resumes from durable state. It counts operator interventions after acceptance (as defined in U2V), records and reports policy-required interruption counts — including per-session-boundary confirmations — alongside them in the gate record, together with the U13 guard's binding-sourced projection-consumption record (a shadow delivery without an affirmative record does not count toward the comparison set), measures time spent blocked versus progressing, and verifies that every interruption is policy-required or gives one actionable remediation. Improvement is decided against U1's recorded manual-choreography baseline: median operator interventions after acceptance must be strictly lower and the blocked-versus-progressing share must not regress; failing either metric stops second-host, control-plane, and action expansion until the product journey is corrected.
+This milestone cannot cut over Athena authority or merge. It must demonstrate that the active host task can progress without operator stage choreography, that ending the task leaves the delivery safely paused (Tier 2) or unknown (Tier 1) without checkpoint corruption, and that a fresh task on the same host resumes from durable state. It counts and reports operator interventions after acceptance in full (as defined in U2V), records and reports policy-required interruption counts — including per-session-boundary confirmations — alongside them in the gate record, together with the U13 guard's binding-sourced projection-consumption record (a shadow delivery without an affirmative record does not count toward the comparison set), measures time spent blocked versus progressing, and verifies that every interruption is policy-required or gives one actionable remediation. The intervention median is report-only: U1's recorded counts are `[2, 0, 0]`, so their median is already the non-negative metric's floor, and the baseline itself says those counts are lower bounds because transcripts omit silently granted host permission prompts. The sole M1 metric gate is that blocked-versus-progressing share must not regress against U1's recorded manual-choreography baseline; failing that gate stops second-host, control-plane, and action expansion until the product journey is corrected. Intervention reporting becomes gating again only after the baseline is re-recorded under a rubric with measurable headroom; policy-required interruptions remain separately reported and enter neither figure.
+
+Athena's adopter-local `.agents/policy/shadow-milestone-gate-record.json` is the V26-1467 M1 comparison authority and owns the matched code/docs/operations set for this milestone. The harness repository's separate gate record is product self-dogfood evidence: it neither fills nor duplicates Athena's three delivery slots.
 
 ### M2. Local managed product release
 

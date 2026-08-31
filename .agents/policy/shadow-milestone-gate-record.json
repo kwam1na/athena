@@ -1,8 +1,8 @@
 {
   "spec": "athena-shadow-milestone-gate-record/1",
   "repositoryId": "athena",
-  "purpose": "The shadow milestone's measurement artifact: one entry per shadow delivery, carrying the binding-sourced projection-consumption record alongside the intervention and blocked-share measurements the milestone gate compares against the frozen manual-choreography baseline. A measurement artifact, not a journal. Entries are written by the product's binding, which ships at the product's pinned commit; this list is empty because no shadow delivery has run yet, not because no producer exists. Its location is already outside every execution grant's writable paths: `.agents` is an additionally protected path in all three checkpoint grants of .agents/policy/repository-policy.json, so no session may author an entry.",
-  "recordedAt": "2026-08-31T15:40:00Z",
+  "purpose": "Athena's adopter-local V26-1467 M1 comparison authority: one entry per Athena shadow delivery, carrying the binding-sourced projection-consumption record alongside the intervention and blocked-share measurements compared against the frozen manual-choreography baseline. The harness repository's separate record is product self-dogfood evidence; it neither fills nor duplicates this record's three delivery slots. A measurement artifact, not a journal. Entries are written by the product's binding, which ships at the product's pinned commit; this list is empty because no Athena shadow delivery has run yet, not because no producer exists. Its location is already outside every execution grant's writable paths: `.agents` is an additionally protected path in all three checkpoint grants of .agents/policy/repository-policy.json, so no session may author an entry.",
+  "recordedAt": "2026-08-31T23:00:22Z",
   "status": "awaiting-shadow-deliveries",
   "baseline": {
     "repository": "agent-delivery-harness",
@@ -20,8 +20,9 @@
     "total": 3
   },
   "gateMetrics": {
-    "medianOperatorInterventionsAfterAcceptance": "must be strictly lower than the baseline's",
-    "blockedVersusProgressingShare": "must not regress against the baseline's",
+    "gatingCriterion": "blockedVersusProgressingShare",
+    "medianOperatorInterventionsAfterAcceptance": "reported in full and gates nothing. The baseline's own intervention counts are [2, 0, 0] — a median of 0, which is the floor of the metric. No non-negative count can be strictly lower, so a baseline sitting at the floor cannot demonstrate improvement in either direction. The baseline's limitations block concedes the counts are lower bounds: transcripts do not record silently granted host permission prompts, so the figure it reports is admittedly incomplete. Ceasing to gate on the figure is not licence to stop measuring it; it becomes gating again only once the baseline is re-recorded under a rubric wide enough to have headroom.",
+    "blockedVersusProgressingShare": "must not regress against the baseline's; the sole gating criterion",
     "policyRequiredInterruptions": "recorded and reported alongside interventions, never counted as interventions"
   },
   "consumptionRecordContract": {
