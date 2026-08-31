@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-31T01:49:35.178Z",
+  "branch": "kwamina0x00/v26-1482-shadow-preconditions",
+  "headSha": "a367ffacb51eca22571b957b46670772d511ebaf",
+  "deliverableDiffFingerprint": "0e961f7d80ee8d9384c9aac88723a54cc6c380f6f65a90c43839d5c4b873dd13",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 0,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 770721.6719589999
+  },
+  "reviewLoop": {
+    "providerId": "ce-code-review",
+    "runId": "ccr-v26-1482-1788135977",
+    "finalPassId": "ccr-v26-1482-1788135977-final-1",
+    "recordedAt": "2026-08-31T01:36:40.372Z",
+    "iterationCount": 4,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 6,
+      "P2": 11,
+      "P3": 5
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}
