@@ -12,7 +12,7 @@ import { POLICY_PROJECTION_DIR } from "./policy-projection-check";
  * The composed delivery product is installed in shadow mode and materializes
  * its run-pinned projection into managed delivery worktrees, while `bun run
  * pr:athena` stays the repository's only delivery authority. This guard holds
- * the four positions that window depends on, and holds nothing else:
+ * the five positions that window depends on, and holds nothing else:
  *
  *   - POSTURE. The activation metadata must still say shadow, and must not
  *     claim delivery authority.
@@ -28,6 +28,15 @@ import { POLICY_PROJECTION_DIR } from "./policy-projection-check";
  *     worktree. The repository root and every non-managed worktree keep the
  *     vendored generation authoritative. What is checked is the root of the
  *     tree the guard is invoked in, not every directory beneath it.
+ *   - PIN EVIDENCE. The activation pins the installed product at one commit,
+ *     and the characterization it records is evidence about that exact commit
+ *     and no other. So the characterization names the commit it observed, the
+ *     guard requires the two to agree, and the charter references the
+ *     compilation resolved are checked against the lenses this repository's
+ *     policy document actually declares. Moving the pin without re-observing,
+ *     and moving a lens without recompiling, are the two ways the activation
+ *     and the policy come to describe incompatible worlds — which is the state
+ *     this position exists to refuse, having already happened once.
  *   - CONSUMPTION. A delivery counts toward the milestone's comparison set
  *     only on a record that declares the binding as its source and carries the
  *     binding's marker fields for this delivery and fence. The guard checks
@@ -56,6 +65,8 @@ import { POLICY_PROJECTION_DIR } from "./policy-projection-check";
  */
 export const SHADOW_ACTIVATION_FILE = "shadow-activation.json";
 export const SHADOW_GATE_RECORD_FILE = "shadow-milestone-gate-record.json";
+/** The policy document whose lenses the recorded compilation must still describe. */
+export const REPOSITORY_POLICY_FILE = "repository-policy.json";
 
 /**
  * The vendored generation tree. Every tracked entry under it is part of the
@@ -87,6 +98,8 @@ export type ShadowGuardFindingCode =
   | "activation_not_shadow"
   | "delivery_authority_claimed"
   | "exclusivity_position_unsupported"
+  | "characterization_pin_mismatch"
+  | "characterized_lenses_stale"
   | "vendored_layout_drift"
   | "projection_outside_managed_worktree"
   | "discovery_exclusivity_violation"
@@ -240,7 +253,7 @@ export async function runShadowDiscoveryGuard(
     options.policyDir ?? path.join(rootDir, POLICY_PROJECTION_DIR);
 
   const documents = new Map<string, any>();
-  for (const file of [SHADOW_ACTIVATION_FILE, SHADOW_GATE_RECORD_FILE]) {
+  for (const file of [SHADOW_ACTIVATION_FILE, SHADOW_GATE_RECORD_FILE, REPOSITORY_POLICY_FILE]) {
     try {
       documents.set(
         file,
@@ -257,7 +270,12 @@ export async function runShadowDiscoveryGuard(
   }
   const activation = documents.get(SHADOW_ACTIVATION_FILE);
   const gateRecord = documents.get(SHADOW_GATE_RECORD_FILE);
-  if (activation === undefined || gateRecord === undefined) {
+  const repositoryPolicy = documents.get(REPOSITORY_POLICY_FILE);
+  if (
+    activation === undefined ||
+    gateRecord === undefined ||
+    repositoryPolicy === undefined
+  ) {
     return { status: "fail", findings, observations, countedDeliveryIds };
   }
 
@@ -267,6 +285,7 @@ export async function runShadowDiscoveryGuard(
       options,
       activation,
       gateRecord,
+      repositoryPolicy,
       countedDeliveryIds,
       emit,
       observe,
@@ -295,12 +314,21 @@ async function evaluateShadowArtifacts(input: {
   options: ShadowGuardOptions;
   activation: any;
   gateRecord: any;
+  repositoryPolicy: any;
   countedDeliveryIds: string[];
   emit: (code: ShadowGuardFindingCode, message: string) => void;
   observe: (code: ShadowGuardObservationCode, message: string) => void;
 }) {
-  const { rootDir, options, activation, gateRecord, countedDeliveryIds, emit, observe } =
-    input;
+  const {
+    rootDir,
+    options,
+    activation,
+    gateRecord,
+    repositoryPolicy,
+    countedDeliveryIds,
+    emit,
+    observe,
+  } = input;
 
   // ── Posture ───────────────────────────────────────────────────────────────
   if (activation.installationMode !== "shadow") {
@@ -339,6 +367,68 @@ async function evaluateShadowArtifacts(input: {
       )} carries the grading ${JSON.stringify(
         provingHost?.exclusivityGrading,
       )}; only an exclusivity-graded host can deliver one`,
+    );
+  }
+
+  // ── The pin and the evidence recorded about it ────────────────────────────
+  //
+  // The pin is a full object id, not an abbreviation: an abbreviated id names
+  // a commit only until the repository grows one that shares its prefix, and
+  // an installation that resolves to a different tree than the one
+  // characterized is exactly what the evidence binding below exists to stop.
+  const pin = activation.product?.commit;
+  const characterizedPin = activation.characterization?.productCommit;
+  if (typeof pin !== "string" || !/^[0-9a-f]{40}$/.test(pin)) {
+    emit(
+      "characterization_pin_mismatch",
+      `the activation pins the product at ${JSON.stringify(
+        pin,
+      )}, which is not a full 40-character object id`,
+    );
+  } else if (characterizedPin !== pin) {
+    // Evidence binds to the commit it was taken at. Moving the pin without
+    // re-running the characterization leaves the activation describing a
+    // product nobody observed, which is how the activation and the policy
+    // came to describe incompatible worlds in the first place.
+    emit(
+      "characterization_pin_mismatch",
+      `the activation pins the product at ${pin} and records a characterization observed at ${JSON.stringify(
+        characterizedPin,
+      )}; the recorded evidence is about one commit and the installation is about another, so re-run the characterization at the pinned commit rather than carrying the old observation forward`,
+    );
+  }
+
+  // The compilation the characterization recorded is what says this
+  // repository's policy is compilable by the pinned product at all. It is
+  // evidence about the lens set that existed when it ran, so a lens the
+  // document has since added, dropped, or re-pointed leaves it describing a
+  // policy this repository no longer carries.
+  const lensIdentity = (lens: any) =>
+    JSON.stringify([lens?.lensId ?? null, lens?.category ?? null, lens?.personaId ?? null]);
+  const sorted = (lenses: any[]) => lenses.map(lensIdentity).sort();
+  const declaredLenses: any[] = repositoryPolicy.reviewLenses;
+  const compiledLenses: any[] =
+    activation.characterization?.observed?.policyCompilation?.resolvedLenses ?? [];
+  if (!Array.isArray(declaredLenses)) {
+    throw new Error(
+      `${REPOSITORY_POLICY_FILE} does not declare a review-lens list`,
+    );
+  }
+  const declared = sorted(declaredLenses);
+  const compiled = sorted(compiledLenses);
+  if (
+    declared.length !== compiled.length ||
+    declared.some((entry, index) => entry !== compiled[index])
+  ) {
+    emit(
+      "characterized_lenses_stale",
+      `the characterization at ${JSON.stringify(
+        characterizedPin,
+      )} records resolving ${JSON.stringify(
+        compiled,
+      )}, and ${POLICY_PROJECTION_DIR}/${REPOSITORY_POLICY_FILE} now declares ${JSON.stringify(
+        declared,
+      )}; a lens the pinned product was never shown to resolve is a charter reference with no evidence behind it, so recompile against the pinned product and record what it resolved`,
     );
   }
 
@@ -555,7 +645,7 @@ if (import.meta.main) {
   const result = await runShadowDiscoveryGuard(rootDir);
   if (result.status === "pass") {
     console.log(
-      "[shadow-discovery-guard] Shadow-window posture holds: shadow-mode activation, byte-neutral vendored discovery layout, projection scoped to managed delivery worktrees, and binding-sourced consumption records only.",
+      "[shadow-discovery-guard] Shadow-window posture holds: shadow-mode activation, characterization evidence bound to the pinned product and the declared lenses, byte-neutral vendored discovery layout, projection scoped to managed delivery worktrees, and binding-sourced consumption records only.",
     );
   } else {
     console.log(
