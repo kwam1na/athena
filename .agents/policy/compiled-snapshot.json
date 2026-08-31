@@ -2,13 +2,19 @@
   "schemaVersion": "athena-compiled-policy-snapshot/1",
   "compiledWith": {
     "repository": "agent-delivery-harness",
-    "commit": "981f39d72520b25d962761898efb407c009b74d0",
+    "commit": "a13ae38046a1043deacbc80b7ad079abf81ea58a",
     "module": "packages/kernel/src/policy/compile.ts",
     "productTrustRevocationEpoch": 0,
-    "repositoryAuthorityRevocationEpoch": 0
+    "repositoryAuthorityRevocationEpoch": 0,
+    "personaSource": {
+      "form": "shipped-by-identity",
+      "composition": "qualifications/fixtures/agent-skills-core-v1-composition.zip",
+      "archiveSha256": "9ce12f12c4096e346154ef377fc89187c9168944d6e59b9d6596feb98e57d2ed",
+      "manifest": "personas/manifest.json"
+    }
   },
   "inputDigests": {
-    "repository-policy.json": "5206353be3ee1c55fb9c045914c5d96459ed2dbd0f5374318612ba2394591f7e",
+    "repository-policy.json": "c49f425be88ba67a6958e20ca8d68d52184f866d5fae748fce8dc08dedc05239",
     "adapters.json": "5f8aa52add535acf9d41696b2766e6891d64f3beff85712aa8727d0cbb334238"
   },
   "compiled": {
@@ -28,11 +34,15 @@
       "reviewLenses": [
         {
           "lensId": "lens.outcome-correctness",
-          "category": "outcome-correctness"
+          "category": "outcome-correctness",
+          "personaId": "persona.outcome-correctness",
+          "personaDigest": "a5d96a825150e40b840cd91b55c2d7480f5ee7e481004464062afb8ef5430e2c"
         },
         {
           "lensId": "lens.adversarial-testing",
-          "category": "testing-policy"
+          "category": "testing-policy",
+          "personaId": "persona.adversarial",
+          "personaDigest": "ae9969a9835d66a8fd0b4dca434915f23e2904b5f3865035f887583338571b0d"
         }
       ],
       "obligations": [
@@ -58,7 +68,7 @@
           "obligationId": "delivery.scorecard"
         }
       ],
-      "policyDigest": "42393e0feee0417063208d13cc5acd29393dc1e3ff70a1a318de6574578e8e44"
+      "policyDigest": "795c6433691852debe5b24c1e234735c90f3ed5481582945645adbf199d34236"
     },
     "capabilities": [
       {
@@ -269,6 +279,6 @@
     "approvals": [],
     "tracker": "absent",
     "trackerAbsenceFallback": "proceed-without-tracker",
-    "compiledDigest": "5421423d9153cf699a227f5e25a585de5bbe1aa05efc338b9ed6d48572e8b0a6"
+    "compiledDigest": "170269c54fbfcbe1fef2442fcb40bbdc2d9e7f130505f7b8be95fc5605b1e0f5"
   }
 }

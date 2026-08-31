@@ -61,6 +61,7 @@ export type PolicyProjectionFinding = {
     | "phase_drift"
     | "obligation_drift"
     | "authority_drift"
+    | "lens_persona_defect"
     | "leaf_mapping_defect"
     | "aggregate_registered_as_leaf"
     | "mechanical_activation_drift"
@@ -135,6 +136,12 @@ export async function runPolicyProjectionCheck(
     grantedFinishLines: string[];
     grantedAuthority: string[];
     forbiddenAuthority: string[];
+    reviewLenses: {
+      lensId: string;
+      category: string;
+      personaId?: string;
+      personaDigest?: string;
+    }[];
     obligations: { obligationId: string }[];
     requiredCapabilities: { capabilityId: string; kind: string; version: string }[];
     checkpoints?: { stageId: string; additionalProtectedPaths: string[] }[];
@@ -179,6 +186,12 @@ export async function runPolicyProjectionCheck(
         grantedFinishLines: string[];
         grantedAuthority: string[];
         obligations: { obligationId: string }[];
+        reviewLenses: {
+          lensId: string;
+          category: string;
+          personaId?: string;
+          personaDigest?: string;
+        }[];
       };
       capabilities: { capabilityId: string }[];
       checkpointGrants: { stageId: string; grant: { protectedPaths: string[] } }[];
@@ -396,6 +409,64 @@ export async function runPolicyProjectionCheck(
       "authority_drift",
       "the recorded compiled snapshot obligations do not match the declarative document obligations",
     );
+  }
+
+  // -- Each lens names the reviewer charter it hands its reviewer ------------
+  // Enumerated off the document's own lens list, and off the snapshot's own
+  // lens list, position by position. A claim phrased over "every lens" is
+  // satisfied for free by a document that declares none and by a snapshot the
+  // document never reaches, so the count is pinned first and each member is
+  // then named individually.
+  const documentLenses = document.reviewLenses;
+  const snapshotLenses = snapshot.compiled.snapshot.reviewLenses;
+  if (!Array.isArray(documentLenses) || documentLenses.length === 0) {
+    emit(
+      "lens_persona_defect",
+      "the declarative document activates no review lens; the review floor is not lowered by omission and a per-lens charter claim over an empty list proves nothing",
+    );
+  } else if (!Array.isArray(snapshotLenses) || snapshotLenses.length !== documentLenses.length) {
+    emit(
+      "lens_persona_defect",
+      `the document declares ${documentLenses.length} review lens(es) and the recorded compiled snapshot carries ${
+        Array.isArray(snapshotLenses) ? snapshotLenses.length : 0
+      }; the snapshot is not a compile of this document`,
+    );
+  } else {
+    documentLenses.forEach((lens, index) => {
+      const compiled = snapshotLenses[index];
+      if (typeof lens.personaId !== "string" || !/^persona\.[a-z0-9-]+$/.test(lens.personaId)) {
+        emit(
+          "lens_persona_defect",
+          `document lens ${lens.lensId ?? `#${index}`} names no reviewer charter; personaId is a required member of a lens declaration and the policy does not compile without it`,
+        );
+      }
+      // Athena references shipped charters by identity alone. Pinning charter
+      // bytes here would claim repository-owned charters this repository does
+      // not carry, and would put advancing the shipped set behind an edit to
+      // this document.
+      if (lens.personaDigest !== undefined) {
+        emit(
+          "lens_persona_defect",
+          `document lens ${lens.lensId ?? `#${index}`} pins charter bytes; Athena supplies no repository-owned charter, so its lenses reference shipped charters by identity and the digest is bound at compilation instead`,
+        );
+      }
+      if (
+        compiled.lensId !== lens.lensId ||
+        compiled.category !== lens.category ||
+        compiled.personaId !== lens.personaId
+      ) {
+        emit(
+          "lens_persona_defect",
+          `document lens ${lens.lensId ?? `#${index}`} (${lens.category}, ${lens.personaId}) does not match the recorded compiled lens ${compiled.lensId} (${compiled.category}, ${compiled.personaId})`,
+        );
+      }
+      if (typeof compiled.personaDigest !== "string" || !/^[0-9a-f]{64}$/.test(compiled.personaDigest)) {
+        emit(
+          "lens_persona_defect",
+          `compiled lens ${compiled.lensId ?? `#${index}`} carries no resolved charter digest; identity alone is what the document declares, and compilation is where those bytes get bound`,
+        );
+      }
+    });
   }
 
   // -- Leaf mapping: each proposed leaf maps exactly once --------------------
