@@ -9,7 +9,8 @@
   "product": {
     "repository": "agent-delivery-harness",
     "commit": "8635ea8aca18f27f660b3551b950ffb7e6ad22dd",
-    "compositionProfile": "confirmation-fixture",
+    "compositionProfile": "production",
+    "compositionProfileNote": "the fixture profile registers deliveries only in the disposable repositories its install receipt names, so an installation serving repository athena must carry the production profile; the read-only posture comes from this document's shadow installation mode, not from the profile",
     "qualificationRecords": [
       "qualifications/claude-code-integration.json",
       "qualifications/host-admission-capabilities.json",
@@ -29,7 +30,9 @@
     "owner": "the product's Claude Code binding (materialization, digest receipt, per-run consumption marker, teardown)",
     "managedDeliveryWorktreeRoot": ".worktrees/managed",
     "scopeRule": "the projection root may exist only inside a managed delivery worktree; the repository root and every non-managed worktree must not carry one",
-    "suppression": "model-external and byte-neutral — the binding writes host discovery configuration and a worktree-scoped exclusion inside the managed worktree only; no tracked byte of the vendored discovery layout is moved or edited"
+    "managedDeliveryWorktreePathShape": "the operator creates each managed delivery worktree at .worktrees/managed/<deliveryId> — a sibling path such as .worktrees/managed-<deliveryId> is not a managed delivery worktree and a projection there is a finding",
+    "mechanism": "model-external and byte-neutral — the binding writes its session settings and the worktree-scoped excludes file into its own directory outside the working tree, points the managed worktree's worktree-scoped git configuration at them, and enables worktree configuration once in the shared repository config; no tracked byte of the vendored discovery layout is moved or edited, and the configuration takes effect in the managed worktree alone",
+    "whatIsNotSuppressed": "on the exclusivity-ungraded hosts of this window nothing suppresses the ambient vendored generation — it stays discoverable inside a managed worktree alongside the projection. Scoping discovery to the run-pinned projection is where this mechanism would apply on an exclusivity-graded host; until a host is graded, the honest statement is coexistence, not suppression"
   },
   "provingHost": "claude-code",
   "hosts": [
@@ -56,10 +59,12 @@
   },
   "consumptionRecord": {
     "requiredSource": "binding",
-    "producedBy": "the per-run marker the binding injects at projection materialization and reads back from fence-bound submissions",
+    "producedBy": "the per-run marker the binding injects at projection materialization and reads back from fence-bound submissions; the marker carries the delivery, the fence, and the consumed generation archive, and the gate record's entry carries those fields plus the receipted projection digest",
     "agentSuppliedClaims": "rejected — a delivery carrying one is excluded from the comparison set and the guard reports a finding",
     "absentOrNegative": "excluded from the comparison set",
-    "writtenInto": ".agents/policy/shadow-milestone-gate-record.json"
+    "writtenInto": ".agents/policy/shadow-milestone-gate-record.json",
+    "whatTheGuardChecks": "the record's declared source and its shape — the guard reads the gate-record artifact and cannot itself verify that the bytes came from the binding",
+    "whatProvenanceRestsOn": "two things outside the guard: .agents is an additionally protected path in every checkpoint grant of .agents/policy/repository-policy.json, so no execution grant may write the gate record; and the binding-side writer that emits the entry. That writer is not present in the product at the pinned commit, so until it ships the entry has no admissible producer and the comparison set stays empty — which is the correct outcome, not a gap the guard papers over"
   },
   "vendoredDiscoveryLayout": {
     "owner": "scripts/shadow-discovery-guard.ts",
@@ -67,6 +72,7 @@
   },
   "characterization": {
     "method": "a disposable shadow install of the composed product followed by one projection materialization into a managed delivery worktree, driven through the product's own installer and Claude Code binding; no Athena byte and no host configuration outside the disposable directories was touched",
+    "compositionProfile": "confirmation-fixture, with the disposable repository identity athena-shadow-characterization — the characterization ran in a scratch repository, so it used the qualification profile rather than the production profile the real Athena installation carries",
     "observedAt": "2026-08-30T22:02:00Z",
     "observed": {
       "generationDigest": "29e56eb637a54a42882825dabbff1f0fcd27594b887b6db1ac587d146940c4f3",

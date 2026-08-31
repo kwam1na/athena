@@ -1,7 +1,7 @@
 {
   "spec": "athena-shadow-milestone-gate-record/1",
   "repositoryId": "athena",
-  "purpose": "The shadow milestone's measurement artifact: one entry per shadow delivery, carrying the binding-sourced projection-consumption record alongside the intervention and blocked-share measurements the milestone gate compares against the frozen manual-choreography baseline. A measurement artifact, not a journal — it is written by the binding, outside every execution grant's writable paths, and no session may author an entry.",
+  "purpose": "The shadow milestone's measurement artifact: one entry per shadow delivery, carrying the binding-sourced projection-consumption record alongside the intervention and blocked-share measurements the milestone gate compares against the frozen manual-choreography baseline. A measurement artifact, not a journal. Entries are to be written by the product's binding — that writer is not present at the product's pinned commit, so no entry has an admissible producer yet and this list is correctly empty. Its location is already outside every execution grant's writable paths: `.agents` is an additionally protected path in all three checkpoint grants of .agents/policy/repository-policy.json, so no session may author an entry.",
   "recordedAt": "2026-08-30T22:10:00Z",
   "status": "awaiting-shadow-deliveries",
   "baseline": {

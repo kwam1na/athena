@@ -8,6 +8,7 @@ import {
   SHADOW_GATE_RECORD_FILE,
   VENDORED_DISCOVERY_LAYOUT_DIGEST,
   computeVendoredDiscoveryLayoutDigest,
+  observeVendoredDiscoveryLayoutWorkingTree,
   runShadowDiscoveryGuard,
 } from "./shadow-discovery-guard";
 import { POLICY_PROJECTION_DIR } from "./policy-projection-check";
@@ -115,6 +116,17 @@ describe("vendored discovery layout byte-neutrality", () => {
     });
     expect(codes(result)).toContain("vendored_layout_drift");
   });
+
+  test("the tracked layout is also clean in the working tree", async () => {
+    expect(observeVendoredDiscoveryLayoutWorkingTree(rootDir)).toBe("");
+  });
+
+  test("an unstaged retarget of an exposure symlink is drift the index cannot see", async () => {
+    const result = await runShadowDiscoveryGuard(rootDir, {
+      observedLayoutWorkingTree: " M .claude/skills/deliver-work",
+    });
+    expect(codes(result)).toContain("vendored_layout_drift");
+  });
 });
 
 describe("projection scoping", () => {
@@ -141,6 +153,19 @@ describe("projection scoping", () => {
         dir: path.join(rootDir, ".worktrees", "codex", "some-other-work"),
         projectionPresent: true,
       },
+    });
+    expect(codes(result)).toContain("projection_outside_managed_worktree");
+  });
+
+  test("a degenerate managed worktree root does not turn the scope rule off", async () => {
+    const policyDirCopy = await plantedTree({
+      activation: (value) => {
+        value.projection.managedDeliveryWorktreeRoot = "";
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, {
+      policyDir: policyDirCopy,
+      worktree: { dir: rootDir, projectionPresent: true },
     });
     expect(codes(result)).toContain("projection_outside_managed_worktree");
   });
@@ -303,6 +328,68 @@ describe("binding-sourced projection-consumption records", () => {
     const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
     expect(codes(result)).toContain("consumption_record_shape");
     expect(result.countedDeliveryIds).toEqual([]);
+  });
+
+  test("an unnamed delivery whose marker is also unnamed is a finding", async () => {
+    const policyDirCopy = await plantedTree({
+      gateRecord: (value) => {
+        const delivery = bindingSourcedDelivery();
+        delete delivery.id;
+        delete delivery.projectionConsumption.marker.deliveryId;
+        value.deliveries = [delivery];
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("consumption_record_shape");
+    expect(result.countedDeliveryIds).toEqual([]);
+  });
+
+  test("an affirmative flag that is not a boolean is a finding", async () => {
+    const policyDirCopy = await plantedTree({
+      gateRecord: (value) => {
+        const delivery = bindingSourcedDelivery();
+        delivery.projectionConsumption.affirmative = "yes";
+        value.deliveries = [delivery];
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("consumption_record_shape");
+    expect(result.countedDeliveryIds).toEqual([]);
+  });
+
+  test("an affirmative record without the receipted projection digest is a finding", async () => {
+    const policyDirCopy = await plantedTree({
+      gateRecord: (value) => {
+        const delivery = bindingSourcedDelivery();
+        delete delivery.projectionConsumption.projectionDigest;
+        value.deliveries = [delivery];
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("consumption_record_shape");
+    expect(result.countedDeliveryIds).toEqual([]);
+  });
+
+  test("a marker naming no consumed workflow source is a finding", async () => {
+    const policyDirCopy = await plantedTree({
+      gateRecord: (value) => {
+        const delivery = bindingSourcedDelivery();
+        delivery.projectionConsumption.marker.consumed = "";
+        value.deliveries = [delivery];
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("consumption_record_shape");
+  });
+
+  test("a counted category the baseline mix does not include is a finding", async () => {
+    const policyDirCopy = await plantedTree({
+      gateRecord: (value) => {
+        value.deliveries = [bindingSourcedDelivery({ category: "chore" })];
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("comparison_set_mix_defect");
   });
 
   test("a marker missing its fence is a finding", async () => {

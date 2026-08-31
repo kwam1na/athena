@@ -18,17 +18,24 @@ import { POLICY_PROJECTION_DIR } from "./policy-projection-check";
  *     claim delivery authority.
  *   - BYTE-NEUTRALITY. The vendored discovery layout — the vendored generation
  *     tree and the host exposure symlinks that point into it — is pinned by
- *     digest. Suppression happens inside managed worktrees through host
- *     discovery configuration the binding writes; no tracked byte of the
- *     layout moves before the cutover's removal gate.
+ *     digest over the index and checked again against the working tree, since
+ *     the guard's real execution context is an operator's dirty tree during a
+ *     live shadow install. No tracked byte of the layout moves before the
+ *     cutover's removal gate, and nothing here edits or relocates one: the
+ *     product's binding materializes its projection alongside the vendored
+ *     generation and keeps it untracked with a worktree-scoped exclusion.
  *   - SCOPE. The projection root may exist only inside a managed delivery
  *     worktree. The repository root and every non-managed worktree keep the
- *     vendored generation authoritative.
- *   - CONSUMPTION. The record that a delivery consumed the run-pinned
- *     projection comes from the binding's per-run marker, never from the
- *     session. An agent-supplied claim is a finding, and any delivery without
- *     an affirmative binding-sourced record is excluded from the milestone's
- *     comparison set.
+ *     vendored generation authoritative. What is checked is the root of the
+ *     tree the guard is invoked in, not every directory beneath it.
+ *   - CONSUMPTION. A delivery counts toward the milestone's comparison set
+ *     only on a record that declares the binding as its source and carries the
+ *     binding's marker fields for this delivery and fence. The guard checks
+ *     that declaration and shape; what keeps a session from writing the record
+ *     is that `.agents` is a protected path in every checkpoint grant, plus
+ *     the binding-side writer the product supplies. An agent-supplied claim is
+ *     a finding, and an absent or non-affirmative record excludes the
+ *     delivery.
  *
  * Exclusivity itself is deliberately NOT asserted as blocking here. Both
  * graded hosts are exclusivity-ungraded — they can add the run-pinned
@@ -116,6 +123,8 @@ export type ShadowGuardOptions = {
   policyDir?: string;
   /** Overrides the git-derived layout digest; used to plant drift. */
   observedLayoutDigest?: string;
+  /** Overrides the git-derived working-tree state of the layout. */
+  observedLayoutWorkingTree?: string;
   /** Overrides the observation of the tree the guard runs in. */
   worktree?: ObservedWorktree;
 };
@@ -160,9 +169,29 @@ export async function computeVendoredDiscoveryLayoutDigest(rootDir: string) {
   return sha256(`${lines.join("\n")}\n`);
 }
 
+/**
+ * The working-tree half of byte-neutrality. The digest above reads the index,
+ * and the guard's real execution context is an operator's working tree during
+ * a live shadow install — where an unstaged edit, or an exposure symlink
+ * retargeted out of the vendored tree, is exactly the change the position
+ * exists to catch and is invisible to the index.
+ */
+export function observeVendoredDiscoveryLayoutWorkingTree(rootDir: string) {
+  return runGit(rootDir, [
+    "status",
+    "--porcelain",
+    "--",
+    VENDORED_GENERATION_TREE,
+    ...VENDORED_EXPOSURE_ROOTS,
+  ]).trim();
+}
+
 /** Whether a path lies inside the declared managed delivery worktree root. */
 export function isManagedDeliveryWorktree(dir: string, managedRoot: string) {
   const wanted = managedRoot.split("/").filter((segment) => segment.length > 0);
+  // An empty declared root would make every segment match vacuously, turning
+  // the whole scope position off; a degenerate value narrows nothing.
+  if (wanted.length === 0) return false;
   const segments = path.resolve(dir).split(path.sep);
   return segments.some((_, index) =>
     wanted.every((segment, offset) => segments[index + offset] === segment),
@@ -266,6 +295,25 @@ export async function runShadowDiscoveryGuard(
       `the vendored discovery layout hashes to ${observedLayoutDigest}, not the pinned ${VENDORED_DISCOVERY_LAYOUT_DIGEST}; no tracked byte of it may change before the cutover's removal gate`,
     );
   }
+  let workingTree = options.observedLayoutWorkingTree;
+  if (workingTree === undefined) {
+    try {
+      workingTree = observeVendoredDiscoveryLayoutWorkingTree(rootDir);
+    } catch (error) {
+      emit(
+        "artifact_unreadable",
+        `the vendored discovery layout's working-tree state could not be read from git: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+  if (workingTree !== undefined && workingTree.length > 0) {
+    emit(
+      "vendored_layout_drift",
+      `the vendored discovery layout is modified in the working tree, which the index digest cannot see:\n${workingTree}`,
+    );
+  }
 
   // ── Projection scope and discovery coexistence ────────────────────────────
   const projectionRoot = activation.projection?.root ?? ".managed-projection";
@@ -339,7 +387,10 @@ export async function runShadowDiscoveryGuard(
         "consumption_record_shape",
         `delivery ${id} affirms consumption without the projection digest the binding receipted at materialization`,
       );
-    } else if (record.marker?.deliveryId !== delivery?.id) {
+    } else if (
+      typeof delivery?.id !== "string" ||
+      record.marker?.deliveryId !== delivery.id
+    ) {
       emit(
         "consumption_record_shape",
         `delivery ${id} carries a marker naming ${JSON.stringify(

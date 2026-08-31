@@ -14,7 +14,7 @@
         <ul data-report-pills>
           <li>Delivery candidate</li>
           <li>Branch kwamina0x00/v26-1482-shadow-preconditions</li>
-          <li>24 guard tests green</li>
+          <li>32 guard tests green</li>
           <li>Read-only: no delivery authority moved</li>
         </ul>
         <dl data-report-meta>
@@ -42,8 +42,8 @@
           guard that enforces four positions — the posture stays shadow, the
           vendored agent tooling keeps every tracked byte, the managed product's
           workflow projection appears only inside managed delivery worktrees,
-          and a shadow run counts as evidence only when the product's own
-          binding — never the agent that ran — says the run consumed it.
+          and a shadow run counts as evidence only on a record naming the
+          product's own binding as its source — never the agent that ran.
         </p>
         <p>
           <code>bun run pr:athena</code> is untouched and remains the only
@@ -145,14 +145,15 @@
             inside a managed delivery worktree.
           </li>
           <li>
-            The vendored discovery layout is pinned by digest, so a tracked byte
-            cannot move before the cutover's removal gate without failing the
-            guard.
+            The vendored discovery layout is pinned by digest over the index and
+            checked again against the working tree, so a tracked byte cannot
+            move before the cutover's removal gate — staged or not — without
+            failing the guard.
           </li>
           <li>
             The milestone's admission rule exists and is enforced: a delivery
-            counts only on an affirmative record whose source is the product's
-            binding.
+            counts only on an affirmative record naming the product's binding as
+            its source and carrying that run's marker fields.
           </li>
         </ul>
       </section>
@@ -273,13 +274,23 @@
             too. That is tolerable only because the window holds no authority.
           </li>
           <li>
-            It observes the tree it is invoked in, not every worktree on the
-            machine. The scoping rule is a per-invocation assertion.
+            It observes the root of the tree it is invoked in — not every
+            worktree on the machine, and not every directory beneath that root.
+            The scoping rule is a per-invocation assertion.
           </li>
           <li>
-            An affirmative consumption record proves the projection's bytes were
-            materialized for that delivery and fence. It is not a proof that the
-            model read them.
+            It checks the consumption record's <em>declared</em> source and
+            shape. It cannot itself verify the bytes came from the binding. What
+            keeps a session from writing that record is that
+            <code>.agents</code> is a protected path in every checkpoint grant,
+            plus the binding-side writer that emits the entry — which the
+            product does not yet ship, so the comparison set is empty rather
+            than provisionally populated.
+          </li>
+          <li>
+            An affirmative consumption record attests that the projection's
+            bytes were materialized for that delivery and fence. It is not a
+            proof that the model read them.
           </li>
         </ul>
       </section>
@@ -300,9 +311,10 @@
             marker; nothing was hand-written.
           </li>
           <li>
-            <strong>Guard suite:</strong> 24 tests green, covering posture,
-            byte-neutrality (including a live pin check), projection scoping
-            across root, managed and non-managed trees, the exclusivity
+            <strong>Guard suite:</strong> 32 tests green, covering posture,
+            byte-neutrality (a live pin check, plus index and working-tree
+            drift), projection scoping across root, managed and non-managed
+            trees including a degenerate declared root, the exclusivity
             downgrade and its flip, and every consumption-record admission and
             rejection path.
           </li>
@@ -317,7 +329,15 @@
           <li>
             <strong>Independent review:</strong> two lenses — outcome
             correctness and adversarial — run as separate agents against the
-            branch diff, with merge-blocking findings resolved before delivery.
+            branch diff and the product's own source. Both raised one
+            merge-blocking finding, and both were fixed: the activation recorded
+            a composition profile the product refuses for a production
+            repository, and byte-neutrality was measured only against the git
+            index while the guard's real context is a dirty working tree.
+            Further accepted findings closed an admission hole for an unnamed
+            delivery, a degenerate declared worktree root that disabled the
+            scope rule, four rules with no coverage, and three places where the
+            prose claimed more than the code does.
           </li>
           <li>
             <strong>Delivery gate:</strong> <code>bun run pr:athena</code>.
@@ -463,22 +483,24 @@
           </li>
           <li data-quiz-question>
             <p data-quiz-prompt>
-              Why is suppression described as model-external and byte-neutral?
+              What actually happens to the vendored generation inside a managed
+              delivery worktree during this window?
             </p>
             <ol data-quiz-options>
-              <li>Because the model is asked not to read the vendored files.</li>
+              <li>It is deleted for the run and restored afterwards.</li>
+              <li>Its files are moved aside so only the projection is found.</li>
               <li data-quiz-correct>
-                Because the binding writes host discovery configuration inside
-                the managed worktree, and no tracked byte of the vendored layout
-                is moved or edited.
+                Nothing — it stays discoverable beside the projection, because
+                neither graded host can scope discovery to one root.
               </li>
-              <li>Because the vendored files are deleted and restored per run.</li>
-              <li>Because discovery is disabled entirely during the window.</li>
+              <li>Discovery is disabled entirely for the duration.</li>
             </ol>
             <p data-quiz-explanation>
-              Suppression lives in configuration the binding owns, not in the
-              repository's tracked content, which is what keeps the window
-              reversible.
+              The mechanism is model-external and byte-neutral: configuration the
+              binding owns, outside the repository's tracked content. On these
+              hosts it adds the projection rather than removing the vendored
+              generation, which is why coexistence is recorded rather than
+              asserted away.
             </p>
           </li>
           <li data-quiz-question>

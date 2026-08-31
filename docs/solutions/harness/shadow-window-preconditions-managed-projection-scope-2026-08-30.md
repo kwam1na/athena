@@ -64,24 +64,36 @@ The guard's four positions:
 - **Byte-neutrality.** The vendored discovery layout — every tracked entry of
   the vendored generation tree plus the exposure symlinks that point into it,
   and deliberately not the repository's own skills living beside them — is
-  pinned by digest. Suppression happens inside managed worktrees through host
-  discovery configuration the product's binding writes; no tracked byte of the
-  layout moves before the cutover's removal gate.
+  pinned by digest over the index and checked again against the working tree.
+  Both halves are needed: the guard's real execution context is an operator's
+  dirty tree during a live shadow install, where an unstaged retarget of an
+  exposure symlink is exactly the change the position exists to catch and is
+  invisible to the index.
 - **Scope.** The projection root may exist only inside a managed delivery
   worktree. The repository root and every non-managed worktree keep the vendored
-  generation authoritative.
-- **Consumption.** A delivery counts toward the comparison set only on an
-  affirmative record whose source is the binding's own per-run marker. An
-  agent-supplied claim is a finding and excludes the delivery; so does an absent
-  record, and so does a record that honestly affirms non-consumption.
+  generation authoritative. What is checked is the root of the tree the guard
+  runs in, not every directory beneath it.
+- **Consumption.** A delivery counts toward the comparison set only on a record
+  that declares the binding as its source and carries the binding's marker
+  fields for that delivery and fence. An agent-supplied claim is a finding and
+  excludes the delivery; so does an absent record, and so does a record that
+  honestly affirms non-consumption.
 
-Exclusivity is deliberately **not** asserted as blocking. Both graded hosts can
-add the run-pinned discovery root but cannot scope discovery to it, so ambient
-vendored discovery coexists inside a managed worktree. During a read-only window
-that holds no authority, coexistence cannot corrupt anything, so the guard
-records it as a non-blocking observation — and refuses an activation that claims
-a blocking exclusivity position the graded host cannot deliver. Coexistence
-becomes a finding the moment the proving host is graded exclusivity-capable.
+Exclusivity is deliberately **not** asserted as blocking, and nothing here
+suppresses the vendored generation. Neither graded host can scope discovery to
+one root, so ambient vendored discovery coexists inside a managed worktree.
+During a read-only window that holds no authority, coexistence cannot corrupt
+anything, so the guard records it as a non-blocking observation — and refuses an
+activation that claims a blocking exclusivity position the graded host cannot
+deliver. Coexistence becomes a finding the moment the proving host is graded
+exclusivity-capable, and scoping is what such a grade would buy.
+
+One honest limit on the consumption position: the guard reads the gate-record
+artifact, so it checks the record's *declared* source and shape. What keeps a
+session from writing that record is not the guard — it is that `.agents` is an
+additionally protected path in every checkpoint grant, plus the binding-side
+writer that emits the entry. That writer is not in the product yet, so the
+comparison set is empty rather than provisionally populated.
 
 ## Why This Matters
 
