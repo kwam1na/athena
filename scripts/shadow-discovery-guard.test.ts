@@ -9,6 +9,7 @@ import {
   VENDORED_DISCOVERY_LAYOUT_DIGEST,
   computeVendoredDiscoveryLayoutDigest,
   observeVendoredDiscoveryLayoutWorkingTree,
+  vendoredDiscoveryLayoutPathspec,
   runShadowDiscoveryGuard,
 } from "./shadow-discovery-guard";
 import { POLICY_PROJECTION_DIR } from "./policy-projection-check";
@@ -163,6 +164,18 @@ describe("vendored discovery layout byte-neutrality", () => {
       // pathspec that matches nothing.
       await writeFile(layoutProbe, "probe\n");
       expect(observeVendoredDiscoveryLayoutWorkingTree(rootDir)).not.toBe("");
+      // And the pathspec must name both halves of the layout. Watching the
+      // generation tree alone would leave a retargeted exposure symlink — the
+      // change this position most exists to catch — outside what git is asked
+      // about, with the suite still green.
+      const pathspec = vendoredDiscoveryLayoutPathspec(rootDir);
+      expect(pathspec).toContain(".agent-skills");
+      expect(
+        pathspec.filter((entry) => entry.startsWith(".claude/skills/")).length,
+      ).toBeGreaterThan(0);
+      expect(
+        pathspec.filter((entry) => entry.startsWith(".agents/skills/")).length,
+      ).toBeGreaterThan(0);
     } finally {
       await rm(skillProbe, { force: true });
       await rm(layoutProbe, { force: true });
@@ -229,13 +242,18 @@ describe("projection scoping", () => {
   });
 
   test("a real projection at the repository root is observed without being injected", async () => {
+    // A file, not a directory: the guard only asks existsSync, so a file is an
+    // identical control — and it can never adopt-and-delete a live run-pinned
+    // projection if this suite is ever run from inside a managed delivery
+    // worktree. A leaked probe also shows up in git status, which an empty
+    // directory would not.
     const projection = path.join(rootDir, ".managed-projection");
-    await mkdir(projection, { recursive: true });
+    await writeFile(projection, "probe\n");
     try {
       const result = await runShadowDiscoveryGuard(rootDir);
       expect(codes(result)).toContain("projection_outside_managed_worktree");
     } finally {
-      await rm(projection, { recursive: true, force: true });
+      await rm(projection, { force: true });
     }
   });
 
@@ -268,6 +286,46 @@ describe("exactly-one-discovery exclusivity", () => {
     expect(
       result.observations.map((observation) => observation.code),
     ).toContain("exclusivity_non_blocking");
+  });
+
+  test("coexisting roots stay non-blocking on any grading that is not the capable one", async () => {
+    for (const grading of ["exclusivity-pending", undefined]) {
+      const policyDirCopy = await plantedTree({
+        activation: (value) => {
+          if (grading === undefined) delete value.hosts[0].exclusivityGrading;
+          else value.hosts[0].exclusivityGrading = grading;
+        },
+      });
+      const result = await runShadowDiscoveryGuard(rootDir, {
+        policyDir: policyDirCopy,
+        worktree: {
+          dir: path.join(rootDir, ".worktrees", "managed", "delivery-1"),
+          projectionPresent: true,
+          vendoredDiscoveryVisible: true,
+        },
+      });
+      expect(codes(result)).not.toContain("discovery_exclusivity_violation");
+      expect(
+        result.observations.map((observation) => observation.code),
+      ).toContain("exclusivity_non_blocking");
+    }
+  });
+
+  test("coexisting roots stay non-blocking when no hosts entry grades the proving host", async () => {
+    const policyDirCopy = await plantedTree({
+      activation: (value) => {
+        value.provingHost = "claude-code-2";
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, {
+      policyDir: policyDirCopy,
+      worktree: {
+        dir: path.join(rootDir, ".worktrees", "managed", "delivery-1"),
+        projectionPresent: true,
+        vendoredDiscoveryVisible: true,
+      },
+    });
+    expect(codes(result)).not.toContain("discovery_exclusivity_violation");
   });
 
   test("coexisting roots become a finding once the host is exclusivity-graded", async () => {

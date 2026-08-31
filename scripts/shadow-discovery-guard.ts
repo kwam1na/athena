@@ -42,9 +42,14 @@ import { POLICY_PROJECTION_DIR } from "./policy-projection-check";
  * discovery root but cannot scope discovery to it — so ambient vendored
  * discovery coexists inside a managed worktree. That cannot corrupt authority
  * while the shadow window holds none, so coexistence is recorded as a
- * non-blocking observation. It becomes a finding the moment the proving host
- * is graded exclusivity-capable, and hard exclusivity arrives with the
+ * non-blocking observation. It becomes a finding only once the proving host
+ * carries the affirmative capable grade, and hard exclusivity arrives with the
  * cutover's removal gate.
+ *
+ * Both consumers of the grading therefore key on that affirmative value rather
+ * than on the absence of the ungraded one. Keying on the absence would read a
+ * grading the guard does not recognise as capable, and invent exactly the
+ * blocking exclusivity claim this window is not allowed to make.
  *
  * Everything here is read-only: the guard opens files, asks git for tracked
  * object names, and returns typed findings.
@@ -183,16 +188,21 @@ export async function computeVendoredDiscoveryLayoutDigest(rootDir: string) {
  * a guard that fires on ordinary skill churn is one the operator learns to
  * ignore.
  */
+export function vendoredDiscoveryLayoutPathspec(rootDir: string) {
+  return [
+    VENDORED_GENERATION_TREE,
+    ...exposureSymlinkEntries(rootDir).map((line) =>
+      line.slice(line.indexOf("\t") + 1),
+    ),
+  ];
+}
+
 export function observeVendoredDiscoveryLayoutWorkingTree(rootDir: string) {
-  const exposurePaths = exposureSymlinkEntries(rootDir).map((line) =>
-    line.slice(line.indexOf("\t") + 1),
-  );
   return runGit(rootDir, [
     "status",
     "--porcelain",
     "--",
-    VENDORED_GENERATION_TREE,
-    ...exposurePaths,
+    ...vendoredDiscoveryLayoutPathspec(rootDir),
   ]).trim();
 }
 
@@ -257,7 +267,6 @@ export async function runShadowDiscoveryGuard(
       options,
       activation,
       gateRecord,
-      findings,
       countedDeliveryIds,
       emit,
       observe,
@@ -267,7 +276,7 @@ export async function runShadowDiscoveryGuard(
     // the same policy the companion projection sensor applies.
     emit(
       "artifact_unreadable",
-      `a shadow policy artifact does not have the expected shape: ${
+      `a shadow policy artifact does not have the expected shape, so the guard positions after this point were not evaluated: ${
         error instanceof Error ? error.message : String(error)
       }`,
     );
@@ -286,7 +295,6 @@ async function evaluateShadowArtifacts(input: {
   options: ShadowGuardOptions;
   activation: any;
   gateRecord: any;
-  findings: ShadowGuardFinding[];
   countedDeliveryIds: string[];
   emit: (code: ShadowGuardFindingCode, message: string) => void;
   observe: (code: ShadowGuardObservationCode, message: string) => void;
@@ -315,18 +323,15 @@ async function evaluateShadowArtifacts(input: {
   const provingHost = Array.isArray(activation.hosts)
     ? activation.hosts.find((host: any) => host?.hostId === activation.provingHost)
     : undefined;
-  const provingHostExclusivityUngraded =
-    provingHost?.exclusivityGrading === "exclusivity-ungraded";
+  const provingHostExclusivityGraded =
+    provingHost?.exclusivityGrading === "exclusivity-graded";
   const declaredPosition = activation.exclusivityPosition?.duringShadowWindow;
   // Only the affirmative capable grade admits a blocking claim. An ungraded
   // host, an unrecognised grading, and a proving host no entry grades all
   // refuse it: this is the one position that would otherwise widen on a value
   // it does not understand, and a claim the host cannot deliver is worse than
   // no claim.
-  if (
-    declaredPosition === "blocking" &&
-    provingHost?.exclusivityGrading !== "exclusivity-graded"
-  ) {
+  if (declaredPosition === "blocking" && !provingHostExclusivityGraded) {
     emit(
       "exclusivity_position_unsupported",
       `the activation claims a blocking exclusivity position while the proving host ${JSON.stringify(
@@ -399,15 +404,25 @@ async function evaluateShadowArtifacts(input: {
     );
   }
   if (worktree.projectionPresent && worktree.vendoredDiscoveryVisible) {
-    if (provingHostExclusivityUngraded) {
-      observe(
-        "exclusivity_non_blocking",
-        `${worktree.dir} exposes both the run-pinned projection and the ambient vendored generation; the proving host ${activation.provingHost} is graded exclusivity-ungraded, so coexistence is non-blocking during the read-only shadow window and hard exclusivity arrives at ${activation.exclusivityPosition?.becomesBlockingAt}`,
-      );
-    } else {
+    // Both consumers of the grading key on the same affirmative value. Keying
+    // this one on the absence of the ungraded token would read an unrecognised
+    // grading as capable and emit the blocking exclusivity claim the shadow
+    // window is specifically not allowed to invent.
+    if (provingHostExclusivityGraded) {
       emit(
         "discovery_exclusivity_violation",
-        `${worktree.dir} exposes both the run-pinned projection and the ambient vendored generation while the proving host ${activation.provingHost} is graded exclusivity-capable; discovery must resolve to the run-pinned projection alone`,
+        `${worktree.dir} exposes both the run-pinned projection and the ambient vendored generation while the proving host ${JSON.stringify(
+          activation.provingHost,
+        )} is graded exclusivity-graded; discovery must resolve to the run-pinned projection alone`,
+      );
+    } else {
+      observe(
+        "exclusivity_non_blocking",
+        `${worktree.dir} exposes both the run-pinned projection and the ambient vendored generation; the proving host ${JSON.stringify(
+          activation.provingHost,
+        )} carries the grading ${JSON.stringify(
+          provingHost?.exclusivityGrading,
+        )}, which is not the capable grade, so coexistence is non-blocking during the read-only shadow window and hard exclusivity arrives at ${activation.exclusivityPosition?.becomesBlockingAt}`,
       );
     }
   }
