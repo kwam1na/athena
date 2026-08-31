@@ -11,7 +11,7 @@ applies_when:
   - "A repository runs a managed delivery product alongside its existing vendored agent tooling before any cutover"
   - "A migration milestone must decide which shadow runs are admissible evidence without trusting the agent that produced them"
 tags: [delivery-harness, shadow-window, discovery-guard, projection-consumption, byte-neutrality]
-delivery_diff_fingerprint: 63fa341b0538b4541ccdeb7d3b6559d76457c41bf7dfa6b18f1b0773958218a3
+delivery_diff_fingerprint: 2638b05037cccc63a9842ab767e5187a6dea0c45784da419f9fa60cc54b7362a
 ---
 
 # Hold a read-only shadow window with a byte-neutral discovery guard and binding-sourced consumption records
