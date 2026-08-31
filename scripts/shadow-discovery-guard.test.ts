@@ -84,6 +84,32 @@ describe("shadow-window posture", () => {
     });
     const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
     expect(codes(result)).toContain("delivery_authority_claimed");
+    expect(result.status).toBe("fail");
+  });
+
+  test("valid JSON of the wrong shape is an unreadable artifact, not a crash", async () => {
+    const policyDirCopy = await plantedTree({
+      activation: (value) => {
+        value.projection.managedDeliveryWorktreeRoot = 7;
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, {
+      policyDir: policyDirCopy,
+      worktree: { dir: rootDir, projectionPresent: true },
+    });
+    expect(result.status).toBe("fail");
+    expect(codes(result)).toContain("artifact_unreadable");
+  });
+
+  test("a hosts list that is not a list is handled without crashing", async () => {
+    const policyDirCopy = await plantedTree({
+      activation: (value) => {
+        value.hosts = { "claude-code": {} };
+        value.exclusivityPosition.duringShadowWindow = "blocking";
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("exclusivity_position_unsupported");
   });
 
   test("an activation outside shadow mode is a finding", async () => {
@@ -125,13 +151,21 @@ describe("vendored discovery layout byte-neutrality", () => {
     // The exposure roots also hold Athena's own skills. Watching the roots
     // wholesale would raise drift on ordinary skill churn, which is a guard
     // the operator learns to ignore.
-    const probe = path.join(rootDir, ".agents", "skills", "zz-guard-pathspec-probe");
-    await mkdir(probe, { recursive: true });
-    await writeFile(path.join(probe, "SKILL.md"), "probe\n");
+    // One untracked file rather than a directory: a killed run then leaves a
+    // stray file under the exposure root, never a stray discoverable skill.
+    const skillProbe = path.join(rootDir, ".agents", "skills", "zz-guard-pathspec-probe.md");
+    const layoutProbe = path.join(rootDir, ".agent-skills", "zz-guard-layout-probe");
+    await writeFile(skillProbe, "probe\n");
     try {
       expect(observeVendoredDiscoveryLayoutWorkingTree(rootDir)).toBe("");
+      // The positive control: the same observer must see a change inside the
+      // layout itself, so an empty result is a real observation and not a
+      // pathspec that matches nothing.
+      await writeFile(layoutProbe, "probe\n");
+      expect(observeVendoredDiscoveryLayoutWorkingTree(rootDir)).not.toBe("");
     } finally {
-      await rm(probe, { recursive: true, force: true });
+      await rm(skillProbe, { force: true });
+      await rm(layoutProbe, { force: true });
     }
   });
 
@@ -182,6 +216,27 @@ describe("projection scoping", () => {
       worktree: { dir: rootDir, projectionPresent: true },
     });
     expect(codes(result)).toContain("projection_outside_managed_worktree");
+  });
+
+  test("a sibling of the managed worktree root is not a managed worktree", async () => {
+    const result = await runShadowDiscoveryGuard(rootDir, {
+      worktree: {
+        dir: path.join(rootDir, ".worktrees", "managed-delivery-1"),
+        projectionPresent: true,
+      },
+    });
+    expect(codes(result)).toContain("projection_outside_managed_worktree");
+  });
+
+  test("a real projection at the repository root is observed without being injected", async () => {
+    const projection = path.join(rootDir, ".managed-projection");
+    await mkdir(projection, { recursive: true });
+    try {
+      const result = await runShadowDiscoveryGuard(rootDir);
+      expect(codes(result)).toContain("projection_outside_managed_worktree");
+    } finally {
+      await rm(projection, { recursive: true, force: true });
+    }
   });
 
   test("a managed worktree without a projection is not a finding", async () => {
@@ -240,6 +295,42 @@ describe("exactly-one-discovery exclusivity", () => {
     });
     const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
     expect(codes(result)).toContain("exclusivity_position_unsupported");
+  });
+
+  test("a blocking claim is refused on any grading that is not the capable one", async () => {
+    for (const grading of ["ungraded", "exclusivity-pending", undefined]) {
+      const policyDirCopy = await plantedTree({
+        activation: (value) => {
+          value.exclusivityPosition.duringShadowWindow = "blocking";
+          if (grading === undefined) delete value.hosts[0].exclusivityGrading;
+          else value.hosts[0].exclusivityGrading = grading;
+        },
+      });
+      const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+      expect(codes(result)).toContain("exclusivity_position_unsupported");
+    }
+  });
+
+  test("a blocking claim is refused when no hosts entry grades the proving host", async () => {
+    const policyDirCopy = await plantedTree({
+      activation: (value) => {
+        value.exclusivityPosition.duringShadowWindow = "blocking";
+        value.provingHost = "claude-code-2";
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("exclusivity_position_unsupported");
+  });
+
+  test("a blocking claim is accepted once the proving host is graded capable", async () => {
+    const policyDirCopy = await plantedTree({
+      activation: (value) => {
+        value.exclusivityPosition.duringShadowWindow = "blocking";
+        value.hosts[0].exclusivityGrading = "exclusivity-graded";
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).not.toContain("exclusivity_position_unsupported");
   });
 });
 
@@ -342,6 +433,56 @@ describe("binding-sourced projection-consumption records", () => {
     const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
     expect(codes(result)).toContain("consumption_record_shape");
     expect(result.countedDeliveryIds).toEqual([]);
+  });
+
+  test("a consumption record with no declared source is rejected", async () => {
+    const policyDirCopy = await plantedTree({
+      gateRecord: (value) => {
+        const delivery = bindingSourcedDelivery();
+        delete delivery.projectionConsumption.source;
+        value.deliveries = [delivery];
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("agent_supplied_consumption_claim");
+    expect(result.countedDeliveryIds).toEqual([]);
+  });
+
+  test("an empty-string delivery id is a finding, not an admitted entry", async () => {
+    const policyDirCopy = await plantedTree({
+      gateRecord: (value) => {
+        const delivery = bindingSourcedDelivery({ id: "" });
+        delivery.projectionConsumption.marker.deliveryId = "";
+        value.deliveries = [delivery];
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("consumption_record_shape");
+    expect(result.countedDeliveryIds).toEqual([]);
+  });
+
+  test("one run counted twice does not fill the comparison set", async () => {
+    const policyDirCopy = await plantedTree({
+      gateRecord: (value) => {
+        value.deliveries = [
+          bindingSourcedDelivery(),
+          bindingSourcedDelivery({ category: "docs" }),
+        ];
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("comparison_set_admission_defect");
+    expect(result.countedDeliveryIds).toEqual(["athena-shadow-1"]);
+  });
+
+  test("a category named after a prototype member does not skip the mix cap", async () => {
+    const policyDirCopy = await plantedTree({
+      gateRecord: (value) => {
+        value.deliveries = [bindingSourcedDelivery({ category: "constructor" })];
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("comparison_set_mix_defect");
   });
 
   test("an unnamed delivery whose marker is also unnamed is a finding", async () => {

@@ -14,7 +14,7 @@
         <ul data-report-pills>
           <li>Delivery candidate</li>
           <li>Branch kwamina0x00/v26-1482-shadow-preconditions</li>
-          <li>33 guard tests green</li>
+          <li>44 guard tests green</li>
           <li>Read-only: no delivery authority moved</li>
         </ul>
         <dl data-report-meta>
@@ -47,8 +47,12 @@
         </p>
         <p>
           <code>bun run pr:athena</code> is untouched and remains the only
-          delivery authority. Nothing here can block, reroute, or weaken an
-          ordinary delivery.
+          delivery authority — the guard adds no command to it. One honest
+          qualification: the guard's own suite runs inside the delivery gate
+          like every other root-script suite, so changing the vendored
+          discovery layout does block delivery until the pin is deliberately
+          re-stamped. That is the intended effect, and it is the only way this
+          change can stop an ordinary delivery.
         </p>
       </section>
 
@@ -234,7 +238,10 @@
             <code>pr:athena</code> and every script it chains. No package
             script was added either: the guard is invoked directly, exactly like
             the companion policy-projection sensor, so the delivery gate's
-            command graph is byte-identical.
+            command graph is byte-identical. What the gate does pick up is the
+            guard's suite, which it collects along with every other root-script
+            suite — so the positions are enforced in delivery, without the gate
+            gaining a command.
           </li>
           <li>
             The vendored discovery layout. Not a file moved, not a symlink
@@ -311,7 +318,7 @@
             marker; nothing was hand-written.
           </li>
           <li>
-            <strong>Guard suite:</strong> 33 tests green, covering posture,
+            <strong>Guard suite:</strong> 44 tests green, covering posture,
             byte-neutrality (a live pin check, plus index and working-tree
             drift), projection scoping across root, managed and non-managed
             trees including a degenerate declared root, the exclusivity

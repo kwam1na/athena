@@ -197,7 +197,7 @@ export function observeVendoredDiscoveryLayoutWorkingTree(rootDir: string) {
 }
 
 /** Whether a path lies inside the declared managed delivery worktree root. */
-export function isManagedDeliveryWorktree(dir: string, managedRoot: string) {
+function isManagedDeliveryWorktree(dir: string, managedRoot: string) {
   const wanted = managedRoot.split("/").filter((segment) => segment.length > 0);
   // An empty declared root would make every segment match vacuously, turning
   // the whole scope position off; a degenerate value narrows nothing.
@@ -251,6 +251,49 @@ export async function runShadowDiscoveryGuard(
     return { status: "fail", findings, observations, countedDeliveryIds };
   }
 
+  try {
+    await evaluateShadowArtifacts({
+      rootDir,
+      options,
+      activation,
+      gateRecord,
+      findings,
+      countedDeliveryIds,
+      emit,
+      observe,
+    });
+  } catch (error) {
+    // Valid JSON of the wrong shape is an unreadable artifact, not a crash —
+    // the same policy the companion projection sensor applies.
+    emit(
+      "artifact_unreadable",
+      `a shadow policy artifact does not have the expected shape: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+
+  return {
+    status: findings.length === 0 ? "pass" : "fail",
+    findings,
+    observations,
+    countedDeliveryIds,
+  };
+}
+
+async function evaluateShadowArtifacts(input: {
+  rootDir: string;
+  options: ShadowGuardOptions;
+  activation: any;
+  gateRecord: any;
+  findings: ShadowGuardFinding[];
+  countedDeliveryIds: string[];
+  emit: (code: ShadowGuardFindingCode, message: string) => void;
+  observe: (code: ShadowGuardObservationCode, message: string) => void;
+}) {
+  const { rootDir, options, activation, gateRecord, countedDeliveryIds, emit, observe } =
+    input;
+
   // ── Posture ───────────────────────────────────────────────────────────────
   if (activation.installationMode !== "shadow") {
     emit(
@@ -269,16 +312,28 @@ export async function runShadowDiscoveryGuard(
     );
   }
 
-  const provingHost = activation.hosts?.find(
-    (host: any) => host.hostId === activation.provingHost,
-  );
+  const provingHost = Array.isArray(activation.hosts)
+    ? activation.hosts.find((host: any) => host?.hostId === activation.provingHost)
+    : undefined;
   const provingHostExclusivityUngraded =
     provingHost?.exclusivityGrading === "exclusivity-ungraded";
   const declaredPosition = activation.exclusivityPosition?.duringShadowWindow;
-  if (declaredPosition === "blocking" && provingHostExclusivityUngraded) {
+  // Only the affirmative capable grade admits a blocking claim. An ungraded
+  // host, an unrecognised grading, and a proving host no entry grades all
+  // refuse it: this is the one position that would otherwise widen on a value
+  // it does not understand, and a claim the host cannot deliver is worse than
+  // no claim.
+  if (
+    declaredPosition === "blocking" &&
+    provingHost?.exclusivityGrading !== "exclusivity-graded"
+  ) {
     emit(
       "exclusivity_position_unsupported",
-      `the activation claims a blocking exclusivity position while the proving host ${activation.provingHost} is graded exclusivity-ungraded; the guard may not assert an exclusivity the host cannot deliver`,
+      `the activation claims a blocking exclusivity position while the proving host ${JSON.stringify(
+        activation.provingHost,
+      )} carries the grading ${JSON.stringify(
+        provingHost?.exclusivityGrading,
+      )}; only an exclusivity-graded host can deliver one`,
     );
   }
 
@@ -302,7 +357,7 @@ export async function runShadowDiscoveryGuard(
   ) {
     emit(
       "vendored_layout_drift",
-      `the vendored discovery layout hashes to ${observedLayoutDigest}, not the pinned ${VENDORED_DISCOVERY_LAYOUT_DIGEST}; no tracked byte of it may change before the cutover's removal gate`,
+      `the vendored discovery layout hashes to ${observedLayoutDigest}, not the pinned ${VENDORED_DISCOVERY_LAYOUT_DIGEST}; no tracked byte of it may change before the cutover's removal gate, and a deliberate change is re-pinned by updating VENDORED_DISCOVERY_LAYOUT_DIGEST in scripts/shadow-discovery-guard.ts`,
     );
   }
   let workingTree = options.observedLayoutWorkingTree;
@@ -321,7 +376,7 @@ export async function runShadowDiscoveryGuard(
   if (workingTree !== undefined && workingTree.length > 0) {
     emit(
       "vendored_layout_drift",
-      `the vendored discovery layout is modified in the working tree, which the index digest cannot see:\n${workingTree}`,
+      `the vendored discovery layout is modified in the working tree, which the index digest cannot see (a deliberate change is committed and then re-pinned by updating VENDORED_DISCOVERY_LAYOUT_DIGEST in scripts/shadow-discovery-guard.ts):\n${workingTree}`,
     );
   }
 
@@ -397,7 +452,7 @@ export async function runShadowDiscoveryGuard(
         "consumption_record_shape",
         `delivery ${id} affirms consumption without the projection digest the binding receipted at materialization`,
       );
-    } else if (typeof delivery?.id !== "string") {
+    } else if (typeof delivery?.id !== "string" || delivery.id.length === 0) {
       emit(
         "consumption_record_shape",
         "a gate-record entry with no delivery id cannot be tied to any run, so its marker proves nothing",
@@ -432,6 +487,13 @@ export async function runShadowDiscoveryGuard(
           "comparison_set_admission_defect",
           `delivery ${id} is counted in the comparison set without an affirmative binding-sourced consumption record`,
         );
+      } else if (countedDeliveryIds.includes(id)) {
+        // One run counted twice fills the comparison set without measuring a
+        // second delivery; the marker binds a delivery, so the id is the run.
+        emit(
+          "comparison_set_admission_defect",
+          `delivery ${id} is counted more than once; each counted delivery must be a distinct run`,
+        );
       } else {
         countedDeliveryIds.push(id);
         const category = String(delivery?.category ?? "<uncategorised>");
@@ -444,7 +506,11 @@ export async function runShadowDiscoveryGuard(
   }
 
   for (const [category, count] of countedByCategory) {
-    const allowed = requiredMix[category];
+    // Own properties only: a category named after an Object.prototype member
+    // would otherwise resolve through the prototype chain and skip the cap.
+    const allowed = Object.hasOwn(requiredMix, category)
+      ? requiredMix[category]
+      : undefined;
     if (allowed === undefined) {
       emit(
         "comparison_set_mix_defect",
@@ -464,13 +530,6 @@ export async function runShadowDiscoveryGuard(
       `the comparison set holds ${countedDeliveryIds.length} of the ${requiredTotal} deliveries the baseline mix requires; the shadow-delivery gate cannot be scored until it is complete`,
     );
   }
-
-  return {
-    status: findings.length === 0 ? "pass" : "fail",
-    findings,
-    observations,
-    countedDeliveryIds,
-  };
 }
 
 if (import.meta.main) {
