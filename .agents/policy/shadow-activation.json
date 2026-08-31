@@ -58,13 +58,13 @@
     "beforeThatGate": "no tracked byte of the vendored discovery layout changes"
   },
   "consumptionRecord": {
-    "requiredSource": "binding",
-    "producedBy": "the per-run marker the binding injects at projection materialization and reads back from fence-bound submissions; the marker carries the delivery, the fence, and the consumed generation archive, and the gate record's entry carries those fields plus the receipted projection digest",
+    "requiredSource": "a binding or interceptor model-external event proving the exact receipted projection path and digest were loaded or read as the run's workflow source",
+    "producedBy": "the current per-run marker is binding-sourced diagnostic evidence only; it cannot fill an M1 slot until V26-1519 supplies the exact workflow-source read event, V26-1520 binds the writer to the derived target repository identity, and V26-1521 aligns measurement at the first merge-ready report",
     "agentSuppliedClaims": "rejected — a delivery carrying one is excluded from the comparison set and the guard reports a finding",
     "absentOrNegative": "excluded from the comparison set",
     "writtenInto": ".agents/policy/shadow-milestone-gate-record.json",
-    "whatTheGuardChecks": "the record's declared source and its shape — the guard reads the gate-record artifact and cannot itself verify that the bytes came from the binding",
-    "whatProvenanceRestsOn": "two things outside the guard: the binding-side writer that emits the entry, and the protected-path property that keeps the artifact out of every session's reach. The writer ships in the product at the pinned commit, so an entry now has an admissible producer; the remaining rest-point is that .agents is an additionally protected path in every checkpoint grant of .agents/policy/repository-policy.json, so no execution grant may write the gate record and the only thing that can author an entry is the binding"
+    "whatTheGuardChecks": "the record's declared source and shape, plus a temporary fail-closed interlock that rejects every delivery while the gate record lists an open pre-M1 blocker; the guard cannot itself prove a workflow-source read, repository identity, or measurement endpoint",
+    "whatProvenanceRestsOn": "two things outside the guard: the binding-side writer that emits the entry, and the protected-path property that keeps the artifact out of every session's reach. The writer ships in the product at the pinned commit, while V26-1520 remains open to bind its target to the derived repository identity. .agents is an additionally protected path in every checkpoint grant of .agents/policy/repository-policy.json, so no execution grant may write the gate record"
   },
   "vendoredDiscoveryLayout": {
     "owner": "scripts/shadow-discovery-guard.ts",
@@ -102,7 +102,9 @@
       "gateRecordEntry": {
         "id": "athena-shadow-characterization-1",
         "category": "operations",
-        "countedInComparisonSet": true,
+        "countedInComparisonSet": false,
+        "evidenceClassification": "diagnostic-only",
+        "nonCountingReason": "the disposable scratch characterization launched no host runtime and observed no model-external exact workflow-source read; V26-1519, V26-1520, and V26-1521 remain open",
         "projectionConsumption": {
           "source": "binding",
           "affirmative": true,
@@ -132,6 +134,6 @@
         ]
       }
     },
-    "conclusion": "the projection landed only in the managed delivery worktree, was invisible to git there, left the repository root and the non-managed worktree untouched, produced a consumption record the binding — not the session — authored, and compiled this repository's live policy with both lens charter references resolved out of the pinned composition. The same characterization replayed against the previous pin 8635ea8aca18f27f660b3551b950ffb7e6ad22dd reproduced that pin's recorded generation digest 29e56eb637a54a42882825dabbff1f0fcd27594b887b6db1ac587d146940c4f3, and there the identical allowed interception recorded no consumption observation, no writer existed to emit an entry, and the live policy did not compile at all — the pinned grammar had no charter member, so both lens charter references were rejected as unknown. That difference is what the re-pin buys, and it was observed rather than argued: the interception was allowed at both pins, so the missing observation at the old one is the absent mechanism and not a denied invocation"
+    "conclusion": "the projection landed only in the managed delivery worktree, was invisible to git there, left the repository root and the non-managed worktree untouched, retained a binding-authored marker record as non-counting diagnostic field data, and compiled this repository's live policy with both lens charter references resolved out of the pinned composition. No host runtime or model-external exact workflow-source read was observed, so the scratch entry is not M1 consumption evidence while V26-1519, V26-1520, and V26-1521 remain open. The same characterization replayed against the previous pin 8635ea8aca18f27f660b3551b950ffb7e6ad22dd reproduced that pin's recorded generation digest 29e56eb637a54a42882825dabbff1f0fcd27594b887b6db1ac587d146940c4f3, and there the identical allowed interception recorded no consumption observation, no writer existed to emit an entry, and the live policy did not compile at all — the pinned grammar had no charter member, so both lens charter references were rejected as unknown. That difference is what the re-pin buys, and it was observed rather than argued: the interception was allowed at both pins, so the missing observation at the old one is the absent mechanism and not a denied invocation"
   }
 }

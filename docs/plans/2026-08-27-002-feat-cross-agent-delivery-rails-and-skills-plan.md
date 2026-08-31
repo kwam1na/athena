@@ -9,8 +9,6 @@ origin: docs/brainstorms/2026-08-27-cross-agent-delivery-skills-requirements.md
 
 # feat: Cross-agent delivery rails and portable skills
 
-> **Requirement-citation note (2026-08-30):** the origin brainstorm was rewritten for the managed-agent-delivery-system pivot and its requirements renumbered (formerly R1-R26, now R1-R20 with different semantics). Requirement citations in this plan refer to the brainstorm's pre-rewrite revision — recover it via `git log --follow docs/brainstorms/2026-08-27-cross-agent-delivery-skills-requirements.md` (last revision before 2026-08-30). The adopter-facing product-boundary decisions here are superseded by `2026-08-29-001-feat-managed-agent-delivery-system-plan.md`; the qualified work this plan produced is retained.
-
 **Target repositories:** `agent-skills` (portable workflow implementation and distribution), `agent-delivery-harness` (reference enforcement implementation and current incubation home for the neutral rails contract), and `athena` (reference adopter). Paths are prefixed `agent-skills:`, `delivery-harness:`, or `athena:` when they belong outside the repository containing this plan.
 
 ## Summary

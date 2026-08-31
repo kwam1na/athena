@@ -83,10 +83,10 @@
   <header>
     <h1>Managed agent delivery system</h1>
     <div class="meta">
-      <span>Approved 2026-08-29 · amended 2026-08-30</span><span>Type: feat</span><span>Posture: characterization-first, simplicity-constrained</span>
-      <span>Review: unanimous after 20 re-review rounds, plus a persona amendment aligned in 4</span><span>Plan SHA-256: <code>ce843844…4f3cdc3f</code></span>
+      <span>Approved 2026-08-29 · amended 2026-08-31</span><span>Type: feat</span><span>Posture: characterization-first, simplicity-constrained</span>
+      <span>Review: architectural revision plus bounded persona and M1 delta reviews</span><span>Plan SHA-256: <code>b3da72188f904ab02e4f9226edffe16944352903f5f7bd49958bf94783c0af3a</code></span>
       <span>Source: <a href="2026-08-29-001-feat-managed-agent-delivery-system-plan.md">canonical Markdown plan</a></span>
-      <span>Requirements: <a href="../brainstorms/2026-08-27-cross-agent-delivery-skills-requirements.md">approved requirements</a></span>
+      <span>Requirements: <a href="../brainstorms/2026-08-27-managed-agent-delivery-system-requirements.md">approved requirements</a></span>
     </div>
     <p class="lede">Compose the extracted workflow system and evidence harness into one managed product. The product owns exact composition, durable checkpoints, repository policy, evidence, and finish-line decisions; Claude Code (the proving host) and Codex keep ownership of native agents, subagents, tools, permissions, cancellation, and workspaces.</p>
     <div class="callout"><strong>Settled boundary:</strong> one managed delivery product, mandatory internal modularity, and no product-owned agent daemon, subprocess supervisor, subagent scheduler, or worktree manager.</div>
@@ -171,11 +171,12 @@
     <h2>Premise gates and releases</h2>
     <div class="milestones">
       <div class="milestone"><b>M0 · Thin walking skeleton</b>Graded host-capability discovery proves Tier 1 admission, one local generation exists, and one handoff/resume/merge-ready path completes on the first Tier 1-qualified host (Claude Code default) before broad hardening.</div>
-      <div class="milestone"><b>M1 · Athena shadow</b>Compare the host-native journey, interventions (including per-session-boundary confirmations), blockers, and exact decisions against Athena’s immutable pre-cutover oracle.</div>
+      <div class="milestone"><b>M1 · Athena shadow</b>Compare only event-backed, repository-bound Athena shadow deliveries against a like-for-like manual baseline, measuring acceptance through the first merge-ready report. Blocked-versus-progressing share is the sole gate; interventions and policy-required interruptions remain separately reported.</div>
       <div class="milestone"><b>M2 · Trackerless local product</b>Qualify exact composition, update/rollback, two policies, and no-control-plane merge-ready delivery; each host completes at its qualified tier, with a single-host release claim if the second host is below Tier 1.</div>
       <div class="milestone"><b>M3 · Athena cutover</b>Switch one checkpoint/evidence authority with shadow parity, fencing, rollback rehearsal, and preserved <code>pr:athena</code> strength.</div>
       <div class="milestone"><b>M4 · Optional Linear composition</b>Add the versioned connector after core release, then rerun composition, the U12 paths for every claimed supported host, and Athena shadow/update/rollback before activation.</div>
     </div>
+    <div class="callout warn"><strong>M1 has not been claimed:</strong> the explicit-input scorer shipped in <code>agent-delivery-harness</code> commit <code>025f349bdb30105a126d5607482dccccae1da599</code> (<a href="https://github.com/kwam1na/agent-delivery-harness/pull/60">PR #60</a>) reads Athena’s adopter-local gate record and writes its adopter-local verdict. That verdict remains honestly <code>incomplete / no_observed_consumption</code>: zero of three required deliveries are counted because no binding-admitted shadow delivery is recorded. Before M1, <a href="https://linear.app/v26-labs/issue/V26-1519/prove-exact-workflow-projection-reads-before-admitting-m1-consumption">V26-1519</a> must replace diagnostic path-name observation with trustworthy model-external exact-projection read evidence, <a href="https://linear.app/v26-labs/issue/V26-1520/bind-adopter-local-m1-gate-writes-to-the-target-repository-identity">V26-1520</a> must bind gate writes to the derived target repository identity, and <a href="https://linear.app/v26-labs/issue/V26-1521/align-the-m1-blocked-share-window-at-the-merge-ready-report">V26-1521</a> must align baseline and shadow measurement at the first merge-ready report so post-report wait cannot manufacture a pass. The gate record currently lists those IDs in <code>openPreM1Blockers</code>, and the guard rejects every non-empty delivery list until all three implementations and planted sensors land. The retained scratch marker characterization is diagnostic and non-counting because it launched no host runtime and observed no exact workflow-source read. These are implementation gaps, not runtime or cutover claims.</div>
   </section>
 
   <section id="units">
@@ -231,7 +232,7 @@
       <li>The trackerless product passes qualification for every claimed supported host and two policies, then Athena cutover; the later optional Linear composition reruns the full exact-composition and Athena gates before activation.</li>
       <li>Athena retains its policy, executable adapters, Graphify/Convex/telemetry/reporting behavior, and <code>pr:athena</code> authority while shedding independent skills/harness lifecycle choreography.</li>
     </ul>
-    <div class="callout"><strong>Review result:</strong> after five amendments (local-digest trust rescope, graded host-capability ladder, contract-freeze split, baseline refresh, Claude Code as proving host) and twenty re-review rounds, the coherence, feasibility, product, security, scope, and adversarial lenses unanimously approved the exact final Markdown plan on 2026-08-30. No P0, P1, or P2 findings remain; declined P3 nits are recorded in the plan's review log.</div>
+    <div class="callout"><strong>Review record:</strong> on 2026-08-30, after five amendments and twenty re-review rounds, the coherence, feasibility, product, security, scope, and adversarial lenses aligned on the then-current architectural revision — not on later Markdown digests. The subsequent reviewer-persona amendment reached security/adversarial alignment in its own bounded review, and the 2026-08-31 M1 authority/scoring delta underwent its own six-lens review. The resulting adversarial and security corrections are recorded here as pre-M1 gaps; this does not claim their runtime implementation or one final six-lens approval of the corrected post-finding digest.</div>
   </section>
 </main>
 </body>

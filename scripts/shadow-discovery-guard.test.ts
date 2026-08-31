@@ -27,8 +27,10 @@ async function readPolicy(file: string) {
 }
 
 /**
- * A disposable tree carrying the two policy artifacts, so a planted defect is
- * never written into the repository's own tracked bytes.
+ * A disposable tree carrying the policy artifacts, so a planted defect is
+ * never written into the repository's own tracked bytes. Planted trees clear
+ * the temporary pre-M1 blocker list before applying their edit so the existing
+ * per-entry checks remain independently exercised.
  */
 async function plantedTree(edit: {
   activation?: (value: any) => void;
@@ -39,6 +41,7 @@ async function plantedTree(edit: {
   const activation = await readPolicy(SHADOW_ACTIVATION_FILE);
   const gateRecord = await readPolicy(SHADOW_GATE_RECORD_FILE);
   const repositoryPolicy = await readPolicy(REPOSITORY_POLICY_FILE);
+  gateRecord.openPreM1Blockers = [];
   edit.activation?.(activation);
   edit.gateRecord?.(gateRecord);
   edit.repositoryPolicy?.(repositoryPolicy);
@@ -83,6 +86,19 @@ describe("shadow-window posture", () => {
     const result = await runShadowDiscoveryGuard(rootDir);
     expect(result.findings).toEqual([]);
     expect(result.status).toBe("pass");
+    expect(result.countedDeliveryIds).toEqual([]);
+    expect(
+      result.observations.map((observation) => observation.code),
+    ).toContain("comparison_set_incomplete");
+  });
+
+  test("the scratch marker characterization remains diagnostic and non-counting", async () => {
+    const activation = await readPolicy(SHADOW_ACTIVATION_FILE);
+    const entry = activation.characterization.observed.gateRecordEntry;
+    expect(entry.countedInComparisonSet).toBe(false);
+    expect(entry.evidenceClassification).toBe("diagnostic-only");
+    expect(entry.nonCountingReason).toContain("no model-external exact workflow-source read");
+    expect(entry.nonCountingReason).toContain("V26-1519, V26-1520, and V26-1521 remain open");
   });
 
   test("an activation that claims delivery authority is a finding", async () => {
@@ -572,6 +588,21 @@ describe("exactly-one-discovery exclusivity", () => {
 });
 
 describe("binding-sourced projection-consumption records", () => {
+  test("open pre-M1 blockers reject a marker-only entry before it can count", async () => {
+    const policyDirCopy = await plantedTree({
+      gateRecord: (value) => {
+        value.openPreM1Blockers = ["V26-1519", "V26-1520", "V26-1521"];
+        value.deliveries = [bindingSourcedDelivery()];
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toEqual(["pre_m1_blockers_open"]);
+    expect(result.countedDeliveryIds).toEqual([]);
+    expect(
+      result.observations.map((observation) => observation.code),
+    ).toContain("comparison_set_incomplete");
+  });
+
   test("an affirmative binding-sourced record counts toward the comparison set", async () => {
     const policyDirCopy = await plantedTree({
       gateRecord: (value) => {

@@ -44,14 +44,12 @@ import { POLICY_PROJECTION_DIR } from "./policy-projection-check";
  *     it. That is the honest limit of a self-attested artifact, and the
  *     lens comparison below is what still fails on such an edit whenever the
  *     restamped evidence stops describing the declared lens set.
- *   - CONSUMPTION. A delivery counts toward the milestone's comparison set
- *     only on a record that declares the binding as its source and carries the
- *     binding's marker fields for this delivery and fence. The guard checks
- *     that declaration and shape; what keeps a session from writing the record
- *     is that `.agents` is a protected path in every checkpoint grant, plus
- *     the binding-side writer the product supplies. An agent-supplied claim is
- *     a finding, and an absent or non-affirmative record excludes the
- *     delivery.
+ *   - CONSUMPTION. While the gate record declares open pre-M1 blockers, every
+ *     delivery is rejected before its marker can be considered. Once that list
+ *     is empty, the existing per-entry source and shape checks govern. What
+ *     keeps a session from writing the record is that `.agents` is a protected
+ *     path in every checkpoint grant, plus the binding-side writer the product
+ *     supplies.
  *
  * Exclusivity itself is deliberately NOT asserted as blocking here. Both
  * graded hosts are exclusivity-ungraded — they can add the run-pinned
@@ -113,6 +111,7 @@ export type ShadowGuardFindingCode =
   | "consumption_record_missing"
   | "consumption_record_shape"
   | "agent_supplied_consumption_claim"
+  | "pre_m1_blockers_open"
   | "comparison_set_admission_defect"
   | "comparison_set_mix_defect";
 
@@ -530,8 +529,26 @@ async function evaluateShadowArtifacts(input: {
     ? gateRecord.deliveries
     : [];
   const countedByCategory = new Map<string, number>();
+  const openPreM1Blockers = gateRecord.openPreM1Blockers;
+  const blockerListValid = Array.isArray(openPreM1Blockers);
 
-  for (const delivery of deliveries) {
+  if (!blockerListValid) {
+    emit(
+      "artifact_unreadable",
+      "the gate record's openPreM1Blockers field must be an explicit list; admission fails closed until the list can be read",
+    );
+  } else if (openPreM1Blockers.length > 0 && deliveries.length > 0) {
+    emit(
+      "pre_m1_blockers_open",
+      `the gate record still lists open pre-M1 blockers ${openPreM1Blockers.join(
+        ", ",
+      )}; no delivery may be recorded or counted until the list is empty`,
+    );
+  }
+
+  const deliveriesToEvaluate =
+    blockerListValid && openPreM1Blockers.length === 0 ? deliveries : [];
+  for (const delivery of deliveriesToEvaluate) {
     const id = String(delivery?.id ?? "<unnamed>");
     const record = delivery?.projectionConsumption;
     let admissible = false;
@@ -651,7 +668,7 @@ if (import.meta.main) {
   const result = await runShadowDiscoveryGuard(rootDir);
   if (result.status === "pass") {
     console.log(
-      "[shadow-discovery-guard] Shadow-window posture holds: shadow-mode activation, characterization evidence bound to the pinned product and the declared lenses, byte-neutral vendored discovery layout, projection scoped to managed delivery worktrees, and binding-sourced consumption records only.",
+      "[shadow-discovery-guard] Shadow-window posture holds: shadow-mode activation, characterization evidence bound to the pinned product and the declared lenses, byte-neutral vendored discovery layout, projection scoped to managed delivery worktrees, and the pre-M1 admission interlock intact.",
     );
   } else {
     console.log(

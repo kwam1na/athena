@@ -1,9 +1,14 @@
 {
   "spec": "athena-shadow-milestone-gate-record/1",
   "repositoryId": "athena",
-  "purpose": "Athena's adopter-local V26-1467 M1 comparison authority: one entry per Athena shadow delivery, carrying the binding-sourced projection-consumption record alongside the intervention and blocked-share measurements compared against the frozen manual-choreography baseline. The harness repository's separate record is product self-dogfood evidence; it neither fills nor duplicates this record's three delivery slots. A measurement artifact, not a journal. Entries are written by the product's binding, which ships at the product's pinned commit; this list is empty because no Athena shadow delivery has run yet, not because no producer exists. Its location is already outside every execution grant's writable paths: `.agents` is an additionally protected path in all three checkpoint grants of .agents/policy/repository-policy.json, so no session may author an entry.",
-  "recordedAt": "2026-08-31T23:00:22Z",
+  "purpose": "Athena's adopter-local V26-1467 M1 comparison authority: one entry per binding-admitted Athena shadow delivery, carrying the binding-sourced projection-consumption record alongside the intervention and blocked-share measurements compared against the frozen manual-choreography baseline. The harness repository's separate record is product self-dogfood evidence; it neither fills nor duplicates this record's three delivery slots. A measurement artifact, not a journal. Entries are written by the product's binding, which ships at the product's pinned commit; this list is empty because no binding-admitted Athena shadow delivery is recorded, not because no producer exists. Current path-name observation is diagnostic only and cannot fill a slot; trustworthy exact-projection read evidence, repository-bound target validation, and a like-for-like merge-ready-report measurement endpoint remain explicit pre-M1 implementation gaps. Its location is already outside every execution grant's writable paths: `.agents` is an additionally protected path in all three checkpoint grants of .agents/policy/repository-policy.json, so no session may author an entry. Nothing in this record claims runtime enforcement, M1 success, or cutover readiness.",
+  "recordedAt": "2026-09-01T00:32:38Z",
   "status": "awaiting-shadow-deliveries",
+  "openPreM1Blockers": [
+    "V26-1519",
+    "V26-1520",
+    "V26-1521"
+  ],
   "baseline": {
     "repository": "agent-delivery-harness",
     "path": "qualifications/manual-choreography-baseline.json",
@@ -11,7 +16,7 @@
     "provingHost": "claude-code"
   },
   "comparisonSetRequirement": {
-    "note": "the counted set must match the baseline's mix and count; a delivery without an affirmative binding-sourced consumption record never counts, whatever its measurements say",
+    "note": "the counted set must match the baseline's mix and count; a delivery never counts without an affirmative binding-sourced record backed by a model-external exact-path workflow-source read event and written only after the target repository identity is derived and matched, whatever its measurements say",
     "mix": {
       "code": 1,
       "docs": 1,
@@ -21,12 +26,13 @@
   },
   "gateMetrics": {
     "gatingCriterion": "blockedVersusProgressingShare",
+    "appliedCriteriaRecordedIn": ".agents/policy/shadow-milestone-gate-verdict.json",
     "medianOperatorInterventionsAfterAcceptance": "reported in full and gates nothing. The baseline's own intervention counts are [2, 0, 0] — a median of 0, which is the floor of the metric. No non-negative count can be strictly lower, so a baseline sitting at the floor cannot demonstrate improvement in either direction. The baseline's limitations block concedes the counts are lower bounds: transcripts do not record silently granted host permission prompts, so the figure it reports is admittedly incomplete. Ceasing to gate on the figure is not licence to stop measuring it; it becomes gating again only once the baseline is re-recorded under a rubric wide enough to have headroom.",
-    "blockedVersusProgressingShare": "must not regress against the baseline's; the sole gating criterion",
+    "blockedVersusProgressingShare": "must not regress against the baseline's over the same acceptance-through-first-merge-ready-report endpoint; eventual merge and post-report wait are excluded, and the baseline must be re-recorded if its transcripts cannot derive that endpoint; the sole gating criterion",
     "policyRequiredInterruptions": "recorded and reported alongside interventions, never counted as interventions"
   },
   "consumptionRecordContract": {
-    "requiredSource": "binding",
+    "requiredSource": "binding, admitted only from its existing model-external observation boundary's trustworthy exact-path workflow-source read event",
     "shape": {
       "source": "binding",
       "affirmative": true,
@@ -34,10 +40,10 @@
       "marker": {
         "deliveryId": "the delivery the projection was materialized for",
         "fence": "the invocation fence the marker binds",
-        "consumed": "the pinned generation archive the run consumed as its workflow source"
+        "consumed": "the pinned generation archive proved loaded or read as the run's workflow source by the model-external event; a path name or echoed marker alone cannot satisfy this field"
       }
     },
-    "rejected": "any record whose source is not the binding — a session-authored or otherwise agent-supplied claim is a finding and excludes the delivery from the comparison set"
+    "rejected": "any record whose source is not the binding, whose only evidence is a path name or echoed marker, or whose writer has not derived and matched the target repository identity — a session-authored, otherwise agent-supplied, non-consuming, unsupported-host, or cross-repository claim is excluded and must leave the record unchanged"
   },
   "deliveries": []
 }

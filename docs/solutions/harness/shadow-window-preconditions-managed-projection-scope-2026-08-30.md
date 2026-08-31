@@ -11,7 +11,7 @@ applies_when:
   - "A repository runs a managed delivery product alongside its existing vendored agent tooling before any cutover"
   - "A migration milestone must decide which shadow runs are admissible evidence without trusting the agent that produced them"
 tags: [delivery-harness, shadow-window, discovery-guard, projection-consumption, byte-neutrality]
-delivery_diff_fingerprint: 0e961f7d80ee8d9384c9aac88723a54cc6c380f6f65a90c43839d5c4b873dd13
+delivery_diff_fingerprint: 2091c94e96cccfb31b6fb8131c056508effced51bb2c4e410f6e793a2d059b88
 ---
 
 # Hold a read-only shadow window with a byte-neutral discovery guard and binding-sourced consumption records
@@ -31,11 +31,17 @@ vendored generation the obvious way, by moving or editing its tracked bytes,
 and the shadow window silently becomes a cutover with no removal gate and no
 way back.
 
-The third failure is subtler. A shadow delivery only measures the managed
-product if the run actually consumed the run-pinned projection as its workflow
-source. The only party that can honestly report that is the one that wrote the
-bytes; a session asked whether it used them is exactly the wrong witness, and a
-milestone that accepts its answer measures a claim rather than a run.
+The third failure is subtler and crosses three trust boundaries. A shadow
+delivery only measures the managed product if a model-external binding or
+interceptor event proves that the exact receipted path and digest were actually
+loaded or read as the run's workflow source. The current binding source label,
+path name, and marker prove only that the projection was available; they are
+diagnostic evidence, not consumption proof. Even a trustworthy read must be
+written only to a gate record whose derived repository identity matches the
+delivery, and blocked-share measurement must stop at the same first
+merge-ready-report endpoint for baseline and shadow. Otherwise a repeated path
+name, a cross-repository record target, or post-report idle time can manufacture
+an apparent improvement without measuring the managed journey.
 
 ## Solution
 
@@ -73,11 +79,21 @@ The guard's four positions:
   worktree. The repository root and every non-managed worktree keep the vendored
   generation authoritative. What is checked is the root of the tree the guard
   runs in, not every directory beneath it.
-- **Consumption.** A delivery counts toward the comparison set only on a record
-  that declares the binding as its source and carries the binding's marker
-  fields for that delivery and fence. An agent-supplied claim is a finding and
-  excludes the delivery; so does an absent record, and so does a record that
-  honestly affirms non-consumption.
+- **Consumption.** The current binding source label and marker fields are
+  diagnostic only and cannot fill a comparison slot. Before any delivery can
+  count, [V26-1519](https://linear.app/v26-labs/issue/V26-1519) must provide a
+  model-external exact-path-and-digest workflow-source read event,
+  [V26-1520](https://linear.app/v26-labs/issue/V26-1520) must bind the writer to
+  the derived target repository identity, and
+  [V26-1521](https://linear.app/v26-labs/issue/V26-1521) must align baseline and
+  shadow measurement at the first merge-ready report. All three are required
+  pre-M1 blockers. The current enforcement is a declarative
+  `openPreM1Blockers` list in the gate record: while it is non-empty, the guard
+  rejects any non-empty delivery list with one finding and counts nothing. The
+  list is emptied only after all three implementations and their planted
+  sensors land; the existing per-entry checks govern after that. An
+  agent-supplied claim is still a finding and excludes the delivery; so does an
+  absent record or a trustworthy event that affirms non-consumption.
 
 Exclusivity is deliberately **not** asserted as blocking, and nothing here
 suppresses the vendored generation. Neither graded host can scope discovery to
@@ -89,11 +105,16 @@ deliver. Coexistence becomes a finding the moment the proving host is graded
 `exclusivity-graded`, the affirmative value both consumers key on, and scoping is what such a grade would buy.
 
 One honest limit on the consumption position: the guard reads the gate-record
-artifact, so it checks the record's *declared* source and shape. What keeps a
-session from writing that record is not the guard — it is that `.agents` is an
-additionally protected path in every checkpoint grant, plus the binding-side
-writer that emits the entry. That writer is not in the product yet, so the
-comparison set is empty rather than provisionally populated.
+artifact, so it checks only the record's *declared* source and shape. It cannot
+prove that the receipted projection was read, that the writer targeted the same
+repository as the delivery, or that the measurement ended at the merge-ready
+report. The `.agents` checkpoint protection and the binding-side writer in the
+pinned product preserve the guard-versus-writer provenance boundary, but they
+do not close those three semantic gaps. Athena's current comparison set is
+empty because no binding-admitted Athena shadow delivery is recorded, not
+because the writer is absent. Until V26-1519, V26-1520, and V26-1521 all land,
+no delivery may count and M1 remains incomplete. Nothing in this pre-cutover
+note claims delivery authority, runtime parity, or cutover readiness.
 
 ## Why This Matters
 
@@ -101,10 +122,13 @@ The window's whole value is that it can run for as long as the migration takes
 without ever being able to damage the thing it runs beside. Byte-neutrality is
 what makes that reversible: the vendored generation is untouched, so abandoning
 the migration costs nothing but deleting an installation. Scoping is what keeps
-ordinary deliveries ordinary. And sourcing the consumption record from the
-binding is what keeps the eventual improvement claim honest — the milestone
-compares runs that provably used the managed product, not runs that said they
-did.
+ordinary deliveries ordinary. Binding-sourced records preserve custody, but
+custody alone does not prove use. The eventual improvement claim becomes honest
+only when a model-external event proves the exact workflow-source read, the
+writer proves the record belongs to the same repository, and both cohorts stop
+at the merge-ready report. Those conditions close the path-name,
+cross-repository, and post-report-dilution false positives without asserting
+runtime parity or cutover readiness.
 
 ## Prevention
 
@@ -116,6 +140,11 @@ did.
   managed worktree, an exclusivity claim the grade does not support, an
   agent-supplied consumption claim, a marker from another run, and a comparison
   set larger than the baseline mix.
+- The three pre-M1 blockers add planted sensors for a non-consuming path-name
+  observation, a cross-repository write that leaves both records unchanged, and
+  post-report waiting that cannot dilute blocked share. Until those sensors and
+  their corresponding behavior land, `openPreM1Blockers` remains non-empty and
+  the comparison set remains empty.
 - An incomplete comparison set is reported as an observation rather than passing
   silently, so the gate cannot be scored on a partial set.
 
