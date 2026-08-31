@@ -158,13 +158,15 @@ function trackedEntries(rootDir: string, paths: string[]) {
  * stage, path — for the vendored generation tree plus the exposure symlinks,
  * sorted by code unit so the digest does not depend on locale collation.
  */
+const exposureSymlinkEntries = (rootDir: string) =>
+  trackedEntries(rootDir, VENDORED_EXPOSURE_ROOTS).filter((line) =>
+    line.startsWith(`${SYMLINK_MODE} `),
+  );
+
 export async function computeVendoredDiscoveryLayoutDigest(rootDir: string) {
   const generation = trackedEntries(rootDir, [VENDORED_GENERATION_TREE]);
-  const exposures = trackedEntries(rootDir, VENDORED_EXPOSURE_ROOTS).filter(
-    (line) => line.startsWith(`${SYMLINK_MODE} `),
-  );
-  const lines = [...generation, ...exposures].sort((left, right) =>
-    left < right ? -1 : left > right ? 1 : 0,
+  const lines = [...generation, ...exposureSymlinkEntries(rootDir)].sort(
+    (left, right) => (left < right ? -1 : left > right ? 1 : 0),
   );
   return sha256(`${lines.join("\n")}\n`);
 }
@@ -175,14 +177,22 @@ export async function computeVendoredDiscoveryLayoutDigest(rootDir: string) {
  * a live shadow install — where an unstaged edit, or an exposure symlink
  * retargeted out of the vendored tree, is exactly the change the position
  * exists to catch and is invisible to the index.
+ *
+ * The pathspec is the layout's actual members, not the exposure roots. Those
+ * roots also hold Athena's own skills, which change on their own schedule, and
+ * a guard that fires on ordinary skill churn is one the operator learns to
+ * ignore.
  */
 export function observeVendoredDiscoveryLayoutWorkingTree(rootDir: string) {
+  const exposurePaths = exposureSymlinkEntries(rootDir).map((line) =>
+    line.slice(line.indexOf("\t") + 1),
+  );
   return runGit(rootDir, [
     "status",
     "--porcelain",
     "--",
     VENDORED_GENERATION_TREE,
-    ...VENDORED_EXPOSURE_ROOTS,
+    ...exposurePaths,
   ]).trim();
 }
 
@@ -387,10 +397,12 @@ export async function runShadowDiscoveryGuard(
         "consumption_record_shape",
         `delivery ${id} affirms consumption without the projection digest the binding receipted at materialization`,
       );
-    } else if (
-      typeof delivery?.id !== "string" ||
-      record.marker?.deliveryId !== delivery.id
-    ) {
+    } else if (typeof delivery?.id !== "string") {
+      emit(
+        "consumption_record_shape",
+        "a gate-record entry with no delivery id cannot be tied to any run, so its marker proves nothing",
+      );
+    } else if (record.marker?.deliveryId !== delivery.id) {
       emit(
         "consumption_record_shape",
         `delivery ${id} carries a marker naming ${JSON.stringify(

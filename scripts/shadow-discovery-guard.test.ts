@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -119,6 +119,20 @@ describe("vendored discovery layout byte-neutrality", () => {
 
   test("the tracked layout is also clean in the working tree", async () => {
     expect(observeVendoredDiscoveryLayoutWorkingTree(rootDir)).toBe("");
+  });
+
+  test("the working-tree pathspec covers the layout's members, not the exposure roots", async () => {
+    // The exposure roots also hold Athena's own skills. Watching the roots
+    // wholesale would raise drift on ordinary skill churn, which is a guard
+    // the operator learns to ignore.
+    const probe = path.join(rootDir, ".agents", "skills", "zz-guard-pathspec-probe");
+    await mkdir(probe, { recursive: true });
+    await writeFile(path.join(probe, "SKILL.md"), "probe\n");
+    try {
+      expect(observeVendoredDiscoveryLayoutWorkingTree(rootDir)).toBe("");
+    } finally {
+      await rm(probe, { recursive: true, force: true });
+    }
   });
 
   test("an unstaged retarget of an exposure symlink is drift the index cannot see", async () => {
