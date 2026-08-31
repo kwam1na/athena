@@ -1,14 +1,14 @@
 {
   "spec": "athena-shadow-activation/1",
   "repositoryId": "athena",
-  "recordedAt": "2026-08-30T22:10:00Z",
+  "recordedAt": "2026-08-31T15:40:00Z",
   "purpose": "Athena's activation metadata for the read-only shadow window: the composed delivery product is installed and its run-pinned projection is materialized into managed delivery worktrees, while `bun run pr:athena` remains the repository's only delivery authority. The discovery-scoping mechanism itself is product-owned; this document carries only Athena's activation of it and the positions the exactly-one-discovery guard enforces.",
   "installationMode": "shadow",
   "deliveryAuthority": "none",
   "comparisonAuthority": "bun run pr:athena",
   "product": {
     "repository": "agent-delivery-harness",
-    "commit": "8635ea8aca18f27f660b3551b950ffb7e6ad22dd",
+    "commit": "0c874281d5b6f22fdf844500496c8329935fb8ae",
     "compositionProfile": "production",
     "compositionProfileNote": "the fixture profile registers deliveries only in the disposable repositories its install receipt names, so an installation serving repository athena must carry the production profile; the read-only posture comes from this document's shadow installation mode, not from the profile",
     "qualificationRecords": [
@@ -64,21 +64,23 @@
     "absentOrNegative": "excluded from the comparison set",
     "writtenInto": ".agents/policy/shadow-milestone-gate-record.json",
     "whatTheGuardChecks": "the record's declared source and its shape — the guard reads the gate-record artifact and cannot itself verify that the bytes came from the binding",
-    "whatProvenanceRestsOn": "two things outside the guard: .agents is an additionally protected path in every checkpoint grant of .agents/policy/repository-policy.json, so no execution grant may write the gate record; and the binding-side writer that emits the entry. That writer is not present in the product at the pinned commit, so until it ships the entry has no admissible producer and the comparison set stays empty — which is the correct outcome, not a gap the guard papers over"
+    "whatProvenanceRestsOn": "two things outside the guard: the binding-side writer that emits the entry, and the protected-path property that keeps the artifact out of every session's reach. The writer ships in the product at the pinned commit, so an entry now has an admissible producer; the remaining rest-point is that .agents is an additionally protected path in every checkpoint grant of .agents/policy/repository-policy.json, so no execution grant may write the gate record and the only thing that can author an entry is the binding"
   },
   "vendoredDiscoveryLayout": {
     "owner": "scripts/shadow-discovery-guard.ts",
     "note": "the guard owns the layout's path set and its pinned byte digest; they are not duplicated here so there is one place to change and one place to review"
   },
   "characterization": {
-    "method": "a disposable shadow install of the composed product followed by one projection materialization into a managed delivery worktree, driven through the product's own installer and Claude Code binding; no Athena byte and no host configuration outside the disposable directories was touched",
+    "productCommit": "0c874281d5b6f22fdf844500496c8329935fb8ae",
+    "method": "a disposable shadow install of the composed product, one projection materialization into a managed delivery worktree, one interception of an invocation naming a receipted projection entry, one gate-record emission, and one compilation of this repository's live repository-policy.json against the pinned composition's charter set — all driven through the product's own installer, Claude Code binding, model-external interceptor, and policy compiler. The repository under characterization was a disposable scratch repository in a temp directory; no Athena byte and no host configuration outside the disposable directories was touched, and no host runtime was launched",
     "compositionProfile": "confirmation-fixture, with the disposable repository identity athena-shadow-characterization — the characterization ran in a scratch repository, so it used the qualification profile rather than the production profile the real Athena installation carries",
-    "observedAt": "2026-08-30T22:02:00Z",
+    "observedAt": "2026-08-31T15:22:00Z",
     "observed": {
-      "generationDigest": "29e56eb637a54a42882825dabbff1f0fcd27594b887b6db1ac587d146940c4f3",
-      "installationId": "install-646341843f375857f12689e020c05ab3",
+      "generationDigest": "4745a372fce1584afc90bf41a579802353da48dd95b352dce78eaf8447af20a5",
+      "installationId": "install-c3c84494425828a3d17030c9e205e44f",
       "projectionDigest": "6791217c94ce2cafe5aa802c057ad4db11d874920b68fbf9598bb1f86e34539e",
       "managedWorktree": {
+        "path": ".worktrees/managed/athena-shadow-characterization-1",
         "projectionPresent": true,
         "gitStatusPorcelain": "",
         "consumptionMarker": {
@@ -96,8 +98,40 @@
       "nonManagedWorktree": {
         "projectionPresent": false,
         "consumptionMarkerRead": "consumption_marker_missing"
+      },
+      "gateRecordEntry": {
+        "id": "athena-shadow-characterization-1",
+        "category": "operations",
+        "countedInComparisonSet": true,
+        "projectionConsumption": {
+          "source": "binding",
+          "affirmative": true,
+          "projectionDigest": "6791217c94ce2cafe5aa802c057ad4db11d874920b68fbf9598bb1f86e34539e",
+          "marker": {
+            "deliveryId": "athena-shadow-characterization-1",
+            "fence": 1,
+            "consumed": "skills/agent-skills-core-v1.zip"
+          }
+        }
+      },
+      "policyCompilation": {
+        "compiledDigest": "170269c54fbfcbe1fef2442fcb40bbdc2d9e7f130505f7b8be95fc5605b1e0f5",
+        "resolvedLenses": [
+          {
+            "lensId": "lens.outcome-correctness",
+            "category": "outcome-correctness",
+            "personaId": "persona.outcome-correctness",
+            "personaDigest": "a5d96a825150e40b840cd91b55c2d7480f5ee7e481004464062afb8ef5430e2c"
+          },
+          {
+            "lensId": "lens.adversarial-testing",
+            "category": "testing-policy",
+            "personaId": "persona.adversarial",
+            "personaDigest": "ae9969a9835d66a8fd0b4dca434915f23e2904b5f3865035f887583338571b0d"
+          }
+        ]
       }
     },
-    "conclusion": "the projection landed only in the managed delivery worktree, was invisible to git there, left the repository root and the non-managed worktree untouched, and produced a consumption record the binding — not the session — authored"
+    "conclusion": "the projection landed only in the managed delivery worktree, was invisible to git there, left the repository root and the non-managed worktree untouched, produced a consumption record the binding — not the session — authored, and compiled this repository's live policy with both lens charter references resolved out of the pinned composition. The same characterization replayed against the previous pin 8635ea8aca18f27f660b3551b950ffb7e6ad22dd reproduced that pin's recorded generation digest 29e56eb637a54a42882825dabbff1f0fcd27594b887b6db1ac587d146940c4f3, and there the identical allowed interception recorded no consumption observation, no writer existed to emit an entry, and the live policy did not compile at all — the pinned grammar had no charter member, so both lens charter references were rejected as unknown. That difference is what the re-pin buys, and it was observed rather than argued: the interception was allowed at both pins, so the missing observation at the old one is the absent mechanism and not a denied invocation"
   }
 }

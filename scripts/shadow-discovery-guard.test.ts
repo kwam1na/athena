@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  REPOSITORY_POLICY_FILE,
   SHADOW_ACTIVATION_FILE,
   SHADOW_GATE_RECORD_FILE,
   VENDORED_DISCOVERY_LAYOUT_DIGEST,
@@ -32,12 +33,15 @@ async function readPolicy(file: string) {
 async function plantedTree(edit: {
   activation?: (value: any) => void;
   gateRecord?: (value: any) => void;
+  repositoryPolicy?: (value: any) => void;
 }) {
   const dir = await mkdtemp(path.join(tmpdir(), "athena-shadow-guard-"));
   const activation = await readPolicy(SHADOW_ACTIVATION_FILE);
   const gateRecord = await readPolicy(SHADOW_GATE_RECORD_FILE);
+  const repositoryPolicy = await readPolicy(REPOSITORY_POLICY_FILE);
   edit.activation?.(activation);
   edit.gateRecord?.(gateRecord);
+  edit.repositoryPolicy?.(repositoryPolicy);
   await writeFile(
     path.join(dir, SHADOW_ACTIVATION_FILE),
     `${JSON.stringify(activation, null, 2)}\n`,
@@ -45,6 +49,10 @@ async function plantedTree(edit: {
   await writeFile(
     path.join(dir, SHADOW_GATE_RECORD_FILE),
     `${JSON.stringify(gateRecord, null, 2)}\n`,
+  );
+  await writeFile(
+    path.join(dir, REPOSITORY_POLICY_FILE),
+    `${JSON.stringify(repositoryPolicy, null, 2)}\n`,
   );
   return dir;
 }
@@ -126,6 +134,172 @@ describe("shadow-window posture", () => {
   test("a missing artifact is a finding rather than a silent pass", async () => {
     const emptyDir = await mkdtemp(path.join(tmpdir(), "athena-shadow-guard-empty-"));
     const result = await runShadowDiscoveryGuard(rootDir, { policyDir: emptyDir });
+    expect(codes(result)).toContain("artifact_unreadable");
+    expect(result.status).toBe("fail");
+  });
+});
+
+describe("the pinned product and the evidence recorded about it", () => {
+  test("the tracked characterization names the pinned commit, as a full object id", async () => {
+    const activation = await readPolicy(SHADOW_ACTIVATION_FILE);
+    expect(activation.product.commit).toMatch(/^[0-9a-f]{40}$/);
+    expect(activation.characterization.productCommit).toBe(activation.product.commit);
+  });
+
+  test("the tracked characterization records resolving a charter for every declared lens", async () => {
+    // Named members, not a count: a compilation that resolved some other lens
+    // set would satisfy a count and satisfy nothing else, and the defect this
+    // repository actually hit was a specific charter reference the pinned
+    // product could not resolve.
+    const activation = await readPolicy(SHADOW_ACTIVATION_FILE);
+    const policy = await readPolicy(REPOSITORY_POLICY_FILE);
+    const resolved = activation.characterization.observed.policyCompilation.resolvedLenses;
+    expect(
+      resolved.map((lens: any) => [lens.lensId, lens.personaId]).sort(),
+    ).toEqual([
+      ["lens.adversarial-testing", "persona.adversarial"],
+      ["lens.outcome-correctness", "persona.outcome-correctness"],
+    ]);
+    expect(
+      policy.reviewLenses.map((lens: any) => [lens.lensId, lens.personaId]).sort(),
+    ).toEqual([
+      ["lens.adversarial-testing", "persona.adversarial"],
+      ["lens.outcome-correctness", "persona.outcome-correctness"],
+    ]);
+    // Each resolved lens carries the digest of the charter bytes the pinned
+    // composition resolved it to. Athena holds no copy of that composition, so
+    // this asserts the shape only — that a charter digest was recorded at all,
+    // not that these bytes are the charter's.
+    for (const lens of resolved) expect(lens.personaDigest).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  test("reverting the pin without re-characterizing is a finding", async () => {
+    const policyDirCopy = await plantedTree({
+      activation: (value) => {
+        value.product.commit = "8635ea8aca18f27f660b3551b950ffb7e6ad22dd";
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("characterization_pin_mismatch");
+  });
+
+  test("moving the characterization off the pin is the same finding", async () => {
+    // The mirror of the row above: the defect is the two disagreeing, not the
+    // product member specifically, so the guard must not be satisfied by
+    // re-stamping the evidence's commit instead of re-observing it.
+    const policyDirCopy = await plantedTree({
+      activation: (value) => {
+        value.characterization.productCommit = "8635ea8aca18f27f660b3551b950ffb7e6ad22dd";
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("characterization_pin_mismatch");
+  });
+
+  test("a characterization that names no commit is a finding", async () => {
+    const policyDirCopy = await plantedTree({
+      activation: (value) => {
+        delete value.characterization.productCommit;
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("characterization_pin_mismatch");
+  });
+
+  test("an abbreviated pin is a finding, whatever the characterization says", async () => {
+    // An abbreviation names a commit only until a colliding prefix exists, so
+    // it is refused even when the recorded evidence agrees with it.
+    const policyDirCopy = await plantedTree({
+      activation: (value) => {
+        value.product.commit = "0c87428";
+        value.characterization.productCommit = "0c87428";
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("characterization_pin_mismatch");
+  });
+
+  test("a lens the pinned product was never shown to resolve is a finding", async () => {
+    const policyDirCopy = await plantedTree({
+      repositoryPolicy: (value) => {
+        value.reviewLenses.push({
+          lensId: "lens.security",
+          category: "security",
+          personaId: "persona.security",
+        });
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("characterized_lenses_stale");
+  });
+
+  test("re-pointing a declared lens at another charter is a finding", async () => {
+    // The exact mapping this repository chose: lens.adversarial-testing sits
+    // in the testing-policy category and references persona.adversarial. A
+    // guard that only counted lenses would pass this silently.
+    const policyDirCopy = await plantedTree({
+      repositoryPolicy: (value) => {
+        value.reviewLenses[1].personaId = "persona.testing-policy";
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("characterized_lenses_stale");
+  });
+
+  test("re-pointing a declared lens at another category is a finding", async () => {
+    // The category is a taxonomy slot the compilation resolved under, and it
+    // is part of the identity the guard compares. Mutating only the charter
+    // reference would leave this component of that identity unwitnessed, and a
+    // later narrowing of the comparison would ship green.
+    const policyDirCopy = await plantedTree({
+      repositoryPolicy: (value) => {
+        value.reviewLenses[1].category = "outcome-correctness";
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("characterized_lenses_stale");
+  });
+
+  test("renaming a declared lens is a finding", async () => {
+    const policyDirCopy = await plantedTree({
+      repositoryPolicy: (value) => {
+        value.reviewLenses[1].lensId = "lens.adversarial";
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("characterized_lenses_stale");
+  });
+
+  test("dropping a declared lens is a finding", async () => {
+    const policyDirCopy = await plantedTree({
+      repositoryPolicy: (value) => {
+        value.reviewLenses = [value.reviewLenses[0]];
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("characterized_lenses_stale");
+  });
+
+  test("reordering the declared lenses is not a finding", async () => {
+    // The comparison is over the lens set, not the document's order: a
+    // reordering changes no charter reference, and a guard that fired on it
+    // would demand a re-characterization for nothing.
+    const policyDirCopy = await plantedTree({
+      repositoryPolicy: (value) => {
+        value.reviewLenses = [...value.reviewLenses].reverse();
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).not.toContain("characterized_lenses_stale");
+  });
+
+  test("a policy document with no lens list is an unreadable artifact, not a crash", async () => {
+    const policyDirCopy = await plantedTree({
+      repositoryPolicy: (value) => {
+        value.reviewLenses = "two";
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
     expect(codes(result)).toContain("artifact_unreadable");
     expect(result.status).toBe("fail");
   });
