@@ -299,6 +299,21 @@ describe("policy projection comparison", () => {
     expect(shortResult.status).toBe("fail");
     expect(findingCodes(shortResult)).toContain("lens_persona_defect");
     expect(findingCodes(shortResult)).not.toContain("artifact_unreadable");
+
+    // A snapshot with no lens list at all, rather than a short one. Kept as
+    // its own fixture: replacing the short one with this would stop witnessing
+    // the count comparison, and replacing this one with the short would stop
+    // witnessing the shape guard.
+    const absent = await policyDirCopy();
+    const absentSnapshot = await readPolicyJson(absent, "compiled-snapshot.json");
+    delete absentSnapshot.compiled.snapshot.reviewLenses;
+    await writePolicyJson(absent, "compiled-snapshot.json", absentSnapshot);
+    await restampPolicyDigests(absent);
+
+    const absentResult = await runPolicyProjectionCheck(rootDir, { policyDir: absent });
+    expect(absentResult.status).toBe("fail");
+    expect(findingCodes(absentResult)).toContain("lens_persona_defect");
+    expect(findingCodes(absentResult)).not.toContain("artifact_unreadable");
   });
 
   test("a document with no review lenses cannot satisfy the per-lens charter claim by emptiness", async () => {
@@ -314,6 +329,23 @@ describe("policy projection comparison", () => {
     const result = await runPolicyProjectionCheck(rootDir, { policyDir: copyDir });
     expect(result.status).toBe("fail");
     expect(findingCodes(result)).toContain("lens_persona_defect");
+
+    // A document carrying no lens list at all, rather than an empty one. The
+    // emptied fixture above cannot witness the shape guard, because an empty
+    // array satisfies it.
+    const absent = await policyDirCopy();
+    const absentDocument = await readPolicyJson(absent, "repository-policy.json");
+    const absentSnapshot = await readPolicyJson(absent, "compiled-snapshot.json");
+    delete absentDocument.reviewLenses;
+    delete absentSnapshot.compiled.snapshot.reviewLenses;
+    await writePolicyJson(absent, "repository-policy.json", absentDocument);
+    await writePolicyJson(absent, "compiled-snapshot.json", absentSnapshot);
+    await restampPolicyDigests(absent);
+
+    const absentResult = await runPolicyProjectionCheck(rootDir, { policyDir: absent });
+    expect(absentResult.status).toBe("fail");
+    expect(findingCodes(absentResult)).toContain("lens_persona_defect");
+    expect(findingCodes(absentResult)).not.toContain("artifact_unreadable");
   });
 
   test("a compiled lens that lost its resolved charter digest is caught", async () => {
