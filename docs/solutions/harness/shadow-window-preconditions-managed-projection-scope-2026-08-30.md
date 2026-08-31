@@ -11,7 +11,7 @@ applies_when:
   - "A repository runs a managed delivery product alongside its existing vendored agent tooling before any cutover"
   - "A migration milestone must decide which shadow runs are admissible evidence without trusting the agent that produced them"
 tags: [delivery-harness, shadow-window, discovery-guard, projection-consumption, byte-neutrality]
-delivery_diff_fingerprint: 8e2f4d11cb536f73d16b6dabc71afd2bc041562724dfd40a7b96e48c1ff1a362
+delivery_diff_fingerprint: b00619de722f5bc9f09d732b637b2eaded6b70bc32af3166aea4632e18eaec6a
 ---
 
 # Hold a read-only shadow window with a byte-neutral discovery guard and binding-sourced consumption records
@@ -108,8 +108,9 @@ did.
 
 ## Prevention
 
-- The pinned layout digest fails the guard on any tracked change to the vendored
-  discovery layout, so the removal gate cannot be reached early by accident.
+- The pinned layout digest fails the guard on any change to the vendored
+  discovery layout, staged or unstaged, so the removal gate cannot be reached
+  early by accident.
 - The guard's planted-failure suite ties each rejection to a concrete defect
   class: a claimed authority, a non-shadow mode, drift, a projection outside a
   managed worktree, an exclusivity claim the grade does not support, an
