@@ -539,7 +539,10 @@ async function evaluateShadowArtifacts(input: {
     }
   }
   const requiredTotal = Number(requirement.total ?? 0);
-  if (countedDeliveryIds.length < requiredTotal) {
+  // Written as a negated `>=` so an unparseable total falls to the incomplete
+  // side: NaN makes every comparison false, and silently dropping the
+  // observation would let a malformed requirement read as a scorable set.
+  if (!(countedDeliveryIds.length >= requiredTotal)) {
     observe(
       "comparison_set_incomplete",
       `the comparison set holds ${countedDeliveryIds.length} of the ${requiredTotal} deliveries the baseline mix requires; the shadow-delivery gate cannot be scored until it is complete`,

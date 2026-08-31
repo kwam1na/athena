@@ -252,6 +252,11 @@ describe("projection scoping", () => {
     try {
       const result = await runShadowDiscoveryGuard(rootDir);
       expect(codes(result)).toContain("projection_outside_managed_worktree");
+      // The same un-injected observation also sees the vendored generation, so
+      // this pins the default coexistence read, not just the projection half.
+      expect(
+        result.observations.map((observation) => observation.code),
+      ).toContain("exclusivity_non_blocking");
     } finally {
       await rm(projection, { force: true });
     }
@@ -570,17 +575,22 @@ describe("binding-sourced projection-consumption records", () => {
     expect(result.countedDeliveryIds).toEqual([]);
   });
 
-  test("an affirmative record without the receipted projection digest is a finding", async () => {
-    const policyDirCopy = await plantedTree({
-      gateRecord: (value) => {
-        const delivery = bindingSourcedDelivery();
-        delete delivery.projectionConsumption.projectionDigest;
-        value.deliveries = [delivery];
-      },
-    });
-    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
-    expect(codes(result)).toContain("consumption_record_shape");
-    expect(result.countedDeliveryIds).toEqual([]);
+  test("an affirmative record without a receipted projection digest is a finding", async () => {
+    // Both the absent field and a value that is not the receipted digest's
+    // shape: an absence-only test leaves the shape check unpinned.
+    for (const digest of [undefined, "not-a-digest"]) {
+      const policyDirCopy = await plantedTree({
+        gateRecord: (value) => {
+          const delivery = bindingSourcedDelivery();
+          if (digest === undefined) delete delivery.projectionConsumption.projectionDigest;
+          else delivery.projectionConsumption.projectionDigest = digest;
+          value.deliveries = [delivery];
+        },
+      });
+      const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+      expect(codes(result)).toContain("consumption_record_shape");
+      expect(result.countedDeliveryIds).toEqual([]);
+    }
   });
 
   test("a marker naming no consumed workflow source is a finding", async () => {
@@ -628,6 +638,18 @@ describe("binding-sourced projection-consumption records", () => {
     });
     const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
     expect(codes(result)).toContain("comparison_set_mix_defect");
+  });
+
+  test("an unparseable required total still reports the gate as not runnable", async () => {
+    const policyDirCopy = await plantedTree({
+      gateRecord: (value) => {
+        value.comparisonSetRequirement.total = "three";
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(
+      result.observations.map((observation) => observation.code),
+    ).toContain("comparison_set_incomplete");
   });
 
   test("an empty comparison set reports the gate as not yet runnable", async () => {

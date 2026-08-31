@@ -86,7 +86,7 @@ During a read-only window that holds no authority, coexistence cannot corrupt
 anything, so the guard records it as a non-blocking observation — and refuses an
 activation that claims a blocking exclusivity position the graded host cannot
 deliver. Coexistence becomes a finding the moment the proving host is graded
-exclusivity-capable, and scoping is what such a grade would buy.
+`exclusivity-graded`, the affirmative value both consumers key on, and scoping is what such a grade would buy.
 
 One honest limit on the consumption position: the guard reads the gate-record
 artifact, so it checks the record's *declared* source and shape. What keeps a

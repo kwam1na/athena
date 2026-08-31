@@ -14,7 +14,7 @@
         <ul data-report-pills>
           <li>Delivery candidate</li>
           <li>Branch kwamina0x00/v26-1482-shadow-preconditions</li>
-          <li>46 guard tests green</li>
+          <li>47 guard tests green</li>
           <li>Read-only: no delivery authority moved</li>
         </ul>
         <dl data-report-meta>
@@ -48,12 +48,13 @@
         <p>
           <code>bun run pr:athena</code> is untouched and remains the only
           delivery authority — the guard adds no command to it. One honest
-          qualification: the guard's own suite runs inside the delivery gate
-          like every other root-script suite, and one of its cases runs the
-          guard against the real tree. So any of the four positions failing —
-          a changed vendored layout, a projection outside a managed worktree —
-          does block delivery until it is resolved. That is the intended
-          effect.
+          qualification: the gate runs <code>test:coverage</code>
+          unconditionally, which reaches every <code>scripts/*.test.ts</code>,
+          so the guard's own suite is collected — and one of its cases runs the
+          whole guard against the real tree. Any of the four positions failing
+          — a changed vendored layout, a projection outside a managed worktree
+          — therefore does block delivery until it is resolved. That is the
+          intended effect.
         </p>
       </section>
 
@@ -319,7 +320,7 @@
             marker; nothing was hand-written.
           </li>
           <li>
-            <strong>Guard suite:</strong> 46 tests green, covering posture,
+            <strong>Guard suite:</strong> 47 tests green, covering posture,
             byte-neutrality (a live pin check, plus index and working-tree
             drift), projection scoping across root, managed and non-managed
             trees including a degenerate declared root, the exclusivity
@@ -575,7 +576,7 @@
             </p>
             <ol data-quiz-options>
               <li>The vendored generation must be removed.</li>
-              <li>The host must be graded exclusivity-capable.</li>
+              <li>The host must carry the affirmative <code>exclusivity-graded</code> value.</li>
               <li data-quiz-correct>
                 Shadow deliveries matching the baseline's mix and count must be
                 run, each carrying an affirmative binding-sourced consumption
@@ -614,20 +615,22 @@
             the pin does not observe. Contributed the adversarial verdict cited
             in the validation section.
           </dd>
-          <dt>Repository review round, twice</dt>
+          <dt>Repository review round, three times</dt>
           <dd>
             The repository's own eight-persona review — correctness, testing,
             maintainability, project standards, agent-native, learnings,
-            adversarial, and TypeScript — ran against the branch, and then ran
-            again in full after the fixes moved the candidate. Round one raised
-            two merge-blocking findings; round two raised one more, which four
+            adversarial, and TypeScript — ran against the branch, and then ran again in full after each round's fixes
+            moved the candidate — three complete passes. Round one raised two
+            merge-blocking findings; round two raised one more, which four
             personas found independently: the first round had hardened the
             blocking-exclusivity <em>declaration</em> against unrecognised host
             gradings but left the <em>enforcement</em> branch reading the same
             field with the opposite polarity, so an unrecognised grading emitted
             the blocking claim this window may not make. Round two also caught a
             test of ours that would have deleted a live run-pinned projection
-            had the suite ever run from inside a managed delivery worktree.
+            had the suite ever run from inside a managed delivery worktree. Round three
+            came back with no merge-blocking findings from any persona, and its
+            mutation batteries confirmed each earlier fix dies when reverted.
           </dd>
           <dt>Delivered-diff analysis</dt>
           <dd>
