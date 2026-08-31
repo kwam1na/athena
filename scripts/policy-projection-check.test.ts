@@ -284,6 +284,21 @@ describe("policy projection comparison", () => {
     expect(result.status).toBe("fail");
     expect(findingCodes(result)).toContain("lens_persona_defect");
     expect(findingCodes(result)).not.toContain("report_input_stale");
+
+    // The other direction: a snapshot short of a lens the document declares,
+    // which is the ordinary shape of a stale recompile. Without the count
+    // comparison the per-member walk dereferences a missing compiled lens and
+    // the sensor degrades from the lens verdict to an untyped shape error.
+    const short = await policyDirCopy();
+    const shortSnapshot = await readPolicyJson(short, "compiled-snapshot.json");
+    shortSnapshot.compiled.snapshot.reviewLenses.pop();
+    await writePolicyJson(short, "compiled-snapshot.json", shortSnapshot);
+    await restampPolicyDigests(short);
+
+    const shortResult = await runPolicyProjectionCheck(rootDir, { policyDir: short });
+    expect(shortResult.status).toBe("fail");
+    expect(findingCodes(shortResult)).toContain("lens_persona_defect");
+    expect(findingCodes(shortResult)).not.toContain("artifact_unreadable");
   });
 
   test("a document with no review lenses cannot satisfy the per-lens charter claim by emptiness", async () => {
