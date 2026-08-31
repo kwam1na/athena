@@ -33,10 +33,17 @@ import { POLICY_PROJECTION_DIR } from "./policy-projection-check";
  *     and no other. So the characterization names the commit it observed, the
  *     guard requires the two to agree, and the charter references the
  *     compilation resolved are checked against the lenses this repository's
- *     policy document actually declares. Moving the pin without re-observing,
- *     and moving a lens without recompiling, are the two ways the activation
- *     and the policy come to describe incompatible worlds — which is the state
- *     this position exists to refuse, having already happened once.
+ *     policy document actually declares. Moving the pin and leaving the
+ *     evidence behind, and moving a lens without recompiling, are the two ways
+ *     the activation and the policy come to describe incompatible worlds —
+ *     which is the state this position exists to refuse, having already
+ *     happened once. What it holds is that the two cannot silently DIVERGE:
+ *     both fields live in this one hand-editable document, and Athena carries
+ *     no copy of the product to check either against, so an editor who bumps
+ *     the pin and restamps the evidence's commit in the same edit satisfies
+ *     it. That is the honest limit of a self-attested artifact, and the
+ *     lens comparison below is what still fails on such an edit whenever the
+ *     restamped evidence stops describing the declared lens set.
  *   - CONSUMPTION. A delivery counts toward the milestone's comparison set
  *     only on a record that declares the binding as its source and carries the
  *     binding's marker fields for this delivery and fence. The guard checks
@@ -386,10 +393,10 @@ async function evaluateShadowArtifacts(input: {
       )}, which is not a full 40-character object id`,
     );
   } else if (characterizedPin !== pin) {
-    // Evidence binds to the commit it was taken at. Moving the pin without
-    // re-running the characterization leaves the activation describing a
-    // product nobody observed, which is how the activation and the policy
-    // came to describe incompatible worlds in the first place.
+    // Evidence names the commit it was taken at. Moving the pin and leaving
+    // the evidence behind leaves the activation describing a product nobody
+    // observed, which is how the activation and the policy came to describe
+    // incompatible worlds in the first place.
     emit(
       "characterization_pin_mismatch",
       `the activation pins the product at ${pin} and records a characterization observed at ${JSON.stringify(
@@ -406,14 +413,13 @@ async function evaluateShadowArtifacts(input: {
   const lensIdentity = (lens: any) =>
     JSON.stringify([lens?.lensId ?? null, lens?.category ?? null, lens?.personaId ?? null]);
   const sorted = (lenses: any[]) => lenses.map(lensIdentity).sort();
+  // A policy document or a recorded compilation of the wrong shape throws out
+  // of `sorted` and lands in this function's shared catch as an unreadable
+  // artifact — the same policy every other position here applies, and one
+  // fewer bespoke throw to keep witnessed.
   const declaredLenses: any[] = repositoryPolicy.reviewLenses;
   const compiledLenses: any[] =
     activation.characterization?.observed?.policyCompilation?.resolvedLenses ?? [];
-  if (!Array.isArray(declaredLenses)) {
-    throw new Error(
-      `${REPOSITORY_POLICY_FILE} does not declare a review-lens list`,
-    );
-  }
   const declared = sorted(declaredLenses);
   const compiled = sorted(compiledLenses);
   if (

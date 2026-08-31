@@ -77,7 +77,7 @@
     "observedAt": "2026-08-31T15:22:00Z",
     "observed": {
       "generationDigest": "4745a372fce1584afc90bf41a579802353da48dd95b352dce78eaf8447af20a5",
-      "installationId": "install-8f4fd55cecb07431b2c0b446af5a2991",
+      "installationId": "install-c3c84494425828a3d17030c9e205e44f",
       "projectionDigest": "6791217c94ce2cafe5aa802c057ad4db11d874920b68fbf9598bb1f86e34539e",
       "managedWorktree": {
         "path": ".worktrees/managed/athena-shadow-characterization-1",

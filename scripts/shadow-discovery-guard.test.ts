@@ -166,9 +166,10 @@ describe("the pinned product and the evidence recorded about it", () => {
       ["lens.adversarial-testing", "persona.adversarial"],
       ["lens.outcome-correctness", "persona.outcome-correctness"],
     ]);
-    // Every resolved lens is bound to the charter bytes it resolved to, so the
-    // record names a specific charter rather than an identity that could be
-    // satisfied by anything shipping under that name later.
+    // Each resolved lens carries the digest of the charter bytes the pinned
+    // composition resolved it to. Athena holds no copy of that composition, so
+    // this asserts the shape only — that a charter digest was recorded at all,
+    // not that these bytes are the charter's.
     for (const lens of resolved) expect(lens.personaDigest).toMatch(/^[0-9a-f]{64}$/);
   });
 
@@ -239,6 +240,30 @@ describe("the pinned product and the evidence recorded about it", () => {
     const policyDirCopy = await plantedTree({
       repositoryPolicy: (value) => {
         value.reviewLenses[1].personaId = "persona.testing-policy";
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("characterized_lenses_stale");
+  });
+
+  test("re-pointing a declared lens at another category is a finding", async () => {
+    // The category is a taxonomy slot the compilation resolved under, and it
+    // is part of the identity the guard compares. Mutating only the charter
+    // reference would leave this component of that identity unwitnessed, and a
+    // later narrowing of the comparison would ship green.
+    const policyDirCopy = await plantedTree({
+      repositoryPolicy: (value) => {
+        value.reviewLenses[1].category = "outcome-correctness";
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("characterized_lenses_stale");
+  });
+
+  test("renaming a declared lens is a finding", async () => {
+    const policyDirCopy = await plantedTree({
+      repositoryPolicy: (value) => {
+        value.reviewLenses[1].lensId = "lens.adversarial";
       },
     });
     const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
