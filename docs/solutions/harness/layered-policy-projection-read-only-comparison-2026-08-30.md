@@ -12,7 +12,7 @@ applies_when:
   - "A repository plans to hand delivery routing to an external policy compiler without changing its live authority yet"
   - "A migration needs an independent record of pre-cutover behavior that later parity claims can be judged against"
 tags: [delivery-harness, policy-projection, pre-cutover-oracle, read-only-comparison]
-delivery_diff_fingerprint: e0f3848699431ccba3a138eb3f2ad9f071f59096196d833b035b27e79966a45f
+delivery_diff_fingerprint: 183dbf1f9c7d3335226e70197af66c3cc59b70841f37271201f753e769d6f9f0
 ---
 
 # Project delivery authority into a layered policy model with a frozen pre-cutover oracle

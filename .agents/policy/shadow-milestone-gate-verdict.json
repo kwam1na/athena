@@ -24,7 +24,7 @@
       ]
     },
     "gateRecord": {
-      "path": "/Users/kwamina/athena/.worktrees/codex/v26-1524-athena-managed-shadow/.agents/policy/shadow-milestone-gate-record.json",
+      "path": "/Users/kwamina/athena/.worktrees/codex/v26-1530-remove-confirmation-blocker/.agents/policy/shadow-milestone-gate-record.json",
       "openPreM1Blockers": [],
       "countedDeliveryIds": [],
       "excludedDeliveries": [],
