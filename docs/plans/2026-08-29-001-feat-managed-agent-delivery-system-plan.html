@@ -83,8 +83,8 @@
   <header>
     <h1>Managed agent delivery system</h1>
     <div class="meta">
-      <span>Approved 2026-08-29 · amended 2026-08-31</span><span>Type: feat</span><span>Posture: characterization-first, simplicity-constrained</span>
-      <span>Review: architectural revision plus bounded persona and M1 delta reviews</span><span>Plan SHA-256: <code>b3da72188f904ab02e4f9226edffe16944352903f5f7bd49958bf94783c0af3a</code></span>
+      <span>Approved 2026-08-29 · amended 2026-09-01</span><span>Type: feat</span><span>Posture: characterization-first, simplicity-constrained</span>
+      <span>Review: architectural revision plus bounded persona, M1, and confirmation-boundary delta reviews</span><span>Plan SHA-256: <code>a28902fbabc59749f9083dd4cb2d7daec38dc9b714c8bf9e96a59b5935378104</code></span>
       <span>Source: <a href="2026-08-29-001-feat-managed-agent-delivery-system-plan.md">canonical Markdown plan</a></span>
       <span>Requirements: <a href="../brainstorms/2026-08-27-managed-agent-delivery-system-requirements.md">approved requirements</a></span>
     </div>
@@ -113,7 +113,7 @@
     <div class="architecture" aria-label="Managed product composition">
       <div class="node workflow"><strong>Managed workflow + evidence</strong><p>Exact skills bundle, checkpoints, policy compiler, harness admission, delivery records, finish-line reducer, release lifecycle.</p></div>
       <div class="arrow" aria-hidden="true">↔</div>
-      <div class="node host"><strong>Claude Code / Codex native harness</strong><p>Trusted model-external admission applies the grant, fence, workspace, and worktree-materialized run-pinned projection. The admitted task owns agents, subagents, tools, permissions, cancellation, and workspaces. Hosts qualify on a graded capability ladder; Tier 1 is the V1 mutation floor.</p></div>
+      <div class="node host"><strong>Claude Code / Codex native harness</strong><p>Trusted model-external admission applies the grant, fence, workspace, and worktree-materialized run-pinned projection. A qualified host-owned opaque producer presents and receives operator confirmation before registration; the kernel evaluates one host-neutral observation. The admitted task owns agents, subagents, tools, permissions, cancellation, and workspaces. Hosts without that producer remain Tier 0.</p></div>
       <div class="arrow" aria-hidden="true">↔</div>
       <div class="node policy"><strong>Repository policy overlay</strong><p>Activation, executable sensors, writable/protected paths, approvals, trusted operations, and allowed merge-ready/merge/deploy authority.</p></div>
     </div>
@@ -144,7 +144,7 @@
     </div>
     <div class="two">
       <article class="card"><h3>Host interruption</h3><p>A graceful lifecycle event reports <code>paused</code>; an unobserved crash or disconnect reports <code>unknown</code> lazily on status/resume. Neither advances the delivery checkpoint.</p></article>
-      <article class="card"><h3>Safe takeover</h3><p>Same-workspace reuse requires non-model-mintable graceful termination provenance (Tier 3). Otherwise the designed path quarantines the old workspace and resumes from the last trusted candidate in a fresh native worktree, at the cost of one typed operator confirmation per session boundary.</p></article>
+      <article class="card"><h3>Safe takeover</h3><p>Same-workspace reuse requires non-model-mintable graceful termination provenance (Tier 3). Otherwise the designed path quarantines the old workspace and resumes from the last trusted candidate in a fresh native worktree, using one qualified host-owned confirmation that the kernel evaluates through the neutral evidence contract.</p></article>
     </div>
   </section>
 
@@ -161,7 +161,7 @@
         <tr><td>Allowed tools, paths, credentials, external operations</td><td>Compiled stage grant enforced at trusted host admission</td></tr>
         <tr><td>Repository obligations, sensors, merge/deploy grants</td><td>Compiled local policy and executable repository adapters</td></tr>
 <tr><td>Reviewer charter, and whether a lens is qualified or merely labelled</td><td>Reviewer personas shipped in the run-pinned agent-skills generation, or adopter-supplied at a protected path; each attempt record binds the persona digest the product resolved, never one an agent claims</td></tr>
-        <tr><td>Human authorization</td><td>Two non-model-mintable classes: sensitive approvals (host- or OS-native assertion) and operator confirmations (binding-owned echo-challenge channel), each bound to action/identities/epochs</td></tr>
+        <tr><td>Human authorization</td><td>Two non-model-mintable classes: sensitive approvals (host- or OS-native assertion) and operator confirmations (opaque host-owned producer, host-neutral kernel observation), each bound to action/identities/epochs</td></tr>
         <tr><td>Queue and cross-repository visibility</td><td>Optional control plane; never local evidence or finish-line authority</td></tr>
       </tbody>
     </table></div>
