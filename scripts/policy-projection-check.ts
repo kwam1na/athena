@@ -12,6 +12,10 @@ import {
 } from "./harness-mechanical-check";
 import { AGENT_SDK_GENERATED_ARTIFACTS } from "./agent-sdk-generate";
 import { TRACKED_GRAPHIFY_ARTIFACTS } from "./graphify-check";
+import {
+  ATHENA_PREPARATION_SENSOR,
+  validateAthenaPreparationSensor,
+} from "./athena-preparation-sensor.mjs";
 
 /**
  * Read-only comparison between Athena's layered policy projection under
@@ -37,6 +41,7 @@ const ADAPTERS_FILE = "adapters.json";
 const ORACLE_FILE = "pre-cutover-oracle.json";
 const SNAPSHOT_FILE = "compiled-snapshot.json";
 const REPORT_FILE = "comparison-report.json";
+const PREPARATION_SENSOR_FILE = ATHENA_PREPARATION_SENSOR.trustedBasePath;
 
 const ADJUDICATION_DISPOSITIONS = new Set([
   "accepted-projection",
@@ -66,7 +71,10 @@ export type PolicyProjectionFinding = {
     | "aggregate_registered_as_leaf"
     | "mechanical_activation_drift"
     | "generated_ownership_drift"
-    | "adjudication_incomplete";
+    | "adjudication_incomplete"
+    | "admission_projection_defect"
+    | "preparation_sensor_defect"
+    | "session_grant_defect";
   message: string;
 };
 
@@ -77,6 +85,7 @@ export type PolicyProjectionCheckResult = {
 
 type PolicyProjectionOptions = {
   policyDir?: string;
+  preparationSensor?: unknown;
 };
 
 export function formatMechanicalSelection(commands: MechanicalCommand[]) {
@@ -114,6 +123,20 @@ export async function runPolicyProjectionCheck(
   };
   const policyDir = options.policyDir ?? path.join(rootDir, POLICY_PROJECTION_DIR);
 
+  let preparationSensorDigest: string | undefined;
+  try {
+    preparationSensorDigest = sha256(
+      await readFile(path.join(rootDir, PREPARATION_SENSOR_FILE)),
+    );
+  } catch (error) {
+    emit(
+      "preparation_sensor_defect",
+      `${PREPARATION_SENSOR_FILE} is missing or unreadable: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+
   const bytes = new Map<string, Buffer>();
   const parsed = new Map<string, unknown>();
   for (const file of [DOCUMENT_FILE, ADAPTERS_FILE, ORACLE_FILE, SNAPSHOT_FILE, REPORT_FILE]) {
@@ -143,6 +166,7 @@ export async function runPolicyProjectionCheck(
       personaDigest?: string;
     }[];
     obligations: { obligationId: string }[];
+    admission?: unknown;
     requiredCapabilities: { capabilityId: string; kind: string; version: string }[];
     checkpoints?: { stageId: string; additionalProtectedPaths: string[] }[];
   };
@@ -194,7 +218,16 @@ export async function runPolicyProjectionCheck(
         }[];
       };
       capabilities: { capabilityId: string }[];
-      checkpointGrants: { stageId: string; grant: { protectedPaths: string[] } }[];
+      checkpointGrants: {
+        stageId: string;
+        grant: {
+          allowedCapabilities: string[];
+          writablePaths: string[];
+          protectedPaths: string[];
+          forbiddenOperations: string[];
+        };
+      }[];
+      admission?: unknown;
     };
   };
   const report = parsed.get(REPORT_FILE) as {
@@ -205,6 +238,66 @@ export async function runPolicyProjectionCheck(
   // Valid JSON with the wrong shape must land as a typed finding, not an
   // unhandled throw that discards the findings already collected.
   try {
+
+  // -- Managed-shadow admission bootstrap -----------------------------------
+  // The product compiles the complete declarative policy, but this first
+  // adoption projection deliberately admits only product-native final-green
+  // review evidence. The legacy aggregate remains the wider authority.
+  const admissionObligationIds = (value: unknown) => {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+    const obligations = (value as { obligations?: unknown }).obligations;
+    if (!Array.isArray(obligations) || !obligations.every((entry) => typeof entry === "object" && entry !== null && typeof (entry as { id?: unknown }).id === "string")) {
+      return undefined;
+    }
+    return obligations.map((entry) => (entry as { id: string }).id);
+  };
+  const documentAdmissionIds = admissionObligationIds(document.admission);
+  const compiledAdmissionIds = admissionObligationIds(snapshot.compiled.admission);
+  if (
+    !equalStringArrays(documentAdmissionIds ?? [], ["review.green"]) ||
+    !equalStringArrays(compiledAdmissionIds ?? [], ["review.green"])
+  ) {
+    emit(
+      "admission_projection_defect",
+      "the managed-shadow admission projection must be present in both document and compile output with exactly product-native review.green",
+    );
+  }
+  if ((compiledAdmissionIds ?? []).some((obligationId) => !document.obligations.some((entry) => entry.obligationId === obligationId))) {
+    emit(
+      "admission_projection_defect",
+      "the managed-shadow admission projection names an obligation outside the declarative policy",
+    );
+  }
+
+  const preparationSensor = options.preparationSensor ?? ATHENA_PREPARATION_SENSOR;
+  for (const defect of validateAthenaPreparationSensor(rootDir, preparationSensor)) {
+    emit("preparation_sensor_defect", defect);
+  }
+  if (
+    typeof preparationSensor !== "object" ||
+    preparationSensor === null ||
+    (preparationSensor as { capabilityId?: unknown }).capabilityId !== "sensor.harness-admission" ||
+    !adapters.some((adapter) => adapter.capabilityId === "sensor.harness-admission" && adapter.kind === "sensor")
+  ) {
+    emit(
+      "preparation_sensor_defect",
+      "the trusted preparation sensor must bind the existing sensor.harness-admission capability",
+    );
+  }
+
+  const [firstGrant] = snapshot.compiled.checkpointGrants;
+  if (
+    firstGrant === undefined ||
+    snapshot.compiled.checkpointGrants.length !== 3 ||
+    snapshot.compiled.checkpointGrants.some(
+      (entry) => JSON.stringify(entry.grant) !== JSON.stringify(firstGrant.grant),
+    )
+  ) {
+    emit(
+      "session_grant_defect",
+      "the one-session managed-shadow binding requires identical plan, implement, and compound grants",
+    );
+  }
 
   // -- Oracle immutability ---------------------------------------------------
   const oracleDigest = sha256(bytes.get(ORACLE_FILE)!);
@@ -236,11 +329,12 @@ export async function runPolicyProjectionCheck(
     report.inputs[ADAPTERS_FILE] !== adaptersDigest ||
     report.inputs[ORACLE_FILE] !== oracleDigest ||
     report.inputs[SNAPSHOT_FILE] !== snapshotFileDigest ||
-    report.inputs["compiledDigest"] !== snapshot.compiled.compiledDigest
+    report.inputs["compiledDigest"] !== snapshot.compiled.compiledDigest ||
+    report.inputs[PREPARATION_SENSOR_FILE] !== preparationSensorDigest
   ) {
     emit(
       "report_input_stale",
-      "the comparison report does not describe the current policy artifacts; re-run the comparison and re-record it",
+      "the comparison report does not describe the current policy artifacts or trusted preparation sensor; re-run the comparison and re-record it",
     );
   }
 

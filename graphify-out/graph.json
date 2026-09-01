@@ -20459,7 +20459,7 @@
       "relation": "calls",
       "source": "delivery_run_telemetry_evaluatedeliveryruntelemetrycheck",
       "source_file": "scripts/delivery-run-telemetry.ts",
-      "source_location": "L617",
+      "source_location": "L623",
       "target": "delivery_run_telemetry_assertdeliveryruntelemetrycheck",
       "weight": 1
     },
@@ -20471,7 +20471,7 @@
       "relation": "calls",
       "source": "delivery_run_telemetry_istelemetryrecord",
       "source_file": "scripts/delivery-run-telemetry.ts",
-      "source_location": "L454",
+      "source_location": "L460",
       "target": "delivery_run_telemetry_collectdeliveryruntelemetryfindings",
       "weight": 1
     },
@@ -20495,7 +20495,7 @@
       "relation": "calls",
       "source": "delivery_run_telemetry_collectdeliveryruntelemetryfindings",
       "source_file": "scripts/delivery-run-telemetry.ts",
-      "source_location": "L585",
+      "source_location": "L591",
       "target": "delivery_run_telemetry_evaluatedeliveryruntelemetrycheck",
       "weight": 1
     },
@@ -20507,7 +20507,7 @@
       "relation": "calls",
       "source": "delivery_run_telemetry_gitlines",
       "source_file": "scripts/delivery-run-telemetry.ts",
-      "source_location": "L567",
+      "source_location": "L573",
       "target": "delivery_run_telemetry_evaluatedeliveryruntelemetrycheck",
       "weight": 1
     },
@@ -20519,7 +20519,7 @@
       "relation": "calls",
       "source": "delivery_run_telemetry_readlocalledgerfingerprint",
       "source_file": "scripts/delivery-run-telemetry.ts",
-      "source_location": "L597",
+      "source_location": "L603",
       "target": "delivery_run_telemetry_evaluatedeliveryruntelemetrycheck",
       "weight": 1
     },
@@ -20591,7 +20591,7 @@
       "relation": "calls",
       "source": "delivery_run_telemetry_test_git",
       "source_file": "scripts/delivery-run-telemetry.test.ts",
-      "source_location": "L904",
+      "source_location": "L919",
       "target": "delivery_run_telemetry_test_changedpathsforfixture",
       "weight": 1
     },
@@ -20615,7 +20615,7 @@
       "relation": "calls",
       "source": "delivery_run_telemetry_test_recordafterledger",
       "source_file": "scripts/delivery-run-telemetry.test.ts",
-      "source_location": "L894",
+      "source_location": "L909",
       "target": "delivery_run_telemetry_test_changedpathsforfixture",
       "weight": 1
     },
@@ -20627,7 +20627,7 @@
       "relation": "calls",
       "source": "delivery_run_telemetry_test_writeledger",
       "source_file": "scripts/delivery-run-telemetry.test.ts",
-      "source_location": "L896",
+      "source_location": "L911",
       "target": "delivery_run_telemetry_test_recordafterledger",
       "weight": 1
     },
@@ -20639,7 +20639,7 @@
       "relation": "calls",
       "source": "delivery_run_telemetry_test_createtemproot",
       "source_file": "scripts/delivery-run-telemetry.test.ts",
-      "source_location": "L680",
+      "source_location": "L695",
       "target": "delivery_run_telemetry_test_repofixture",
       "weight": 1
     },
@@ -20651,7 +20651,7 @@
       "relation": "calls",
       "source": "delivery_run_telemetry_test_git",
       "source_file": "scripts/delivery-run-telemetry.test.ts",
-      "source_location": "L681",
+      "source_location": "L696",
       "target": "delivery_run_telemetry_test_repofixture",
       "weight": 1
     },
@@ -168071,7 +168071,7 @@
       "relation": "calls",
       "source": "policy_projection_check_coveredbyprotectedtree",
       "source_file": "scripts/policy-projection-check.ts",
-      "source_location": "L607",
+      "source_location": "L701",
       "target": "policy_projection_check_runpolicyprojectioncheck",
       "weight": 1
     },
@@ -168083,7 +168083,7 @@
       "relation": "calls",
       "source": "policy_projection_check_equalstringarrays",
       "source_file": "scripts/policy-projection-check.ts",
-      "source_location": "L296",
+      "source_location": "L257",
       "target": "policy_projection_check_runpolicyprojectioncheck",
       "weight": 1
     },
@@ -168095,7 +168095,7 @@
       "relation": "calls",
       "source": "policy_projection_check_formatmechanicalselection",
       "source_file": "scripts/policy-projection-check.ts",
-      "source_location": "L550",
+      "source_location": "L644",
       "target": "policy_projection_check_runpolicyprojectioncheck",
       "weight": 1
     },
@@ -168107,7 +168107,7 @@
       "relation": "calls",
       "source": "policy_projection_check_sha256",
       "source_file": "scripts/policy-projection-check.ts",
-      "source_location": "L210",
+      "source_location": "L128",
       "target": "policy_projection_check_runpolicyprojectioncheck",
       "weight": 1
     },
@@ -168119,7 +168119,7 @@
       "relation": "calls",
       "source": "policy_projection_check_test_readpolicyjson",
       "source_file": "scripts/policy-projection-check.test.ts",
-      "source_location": "L199",
+      "source_location": "L237",
       "target": "policy_projection_check_test_restamppolicydigests",
       "weight": 1
     },
@@ -168131,7 +168131,7 @@
       "relation": "calls",
       "source": "policy_projection_check_test_writepolicyjson",
       "source_file": "scripts/policy-projection-check.test.ts",
-      "source_location": "L202",
+      "source_location": "L240",
       "target": "policy_projection_check_test_restamppolicydigests",
       "weight": 1
     },
@@ -189743,7 +189743,7 @@
       "relation": "contains",
       "source": "scripts_delivery_run_telemetry_test_ts",
       "source_file": "scripts/delivery-run-telemetry.test.ts",
-      "source_location": "L901",
+      "source_location": "L916",
       "target": "delivery_run_telemetry_test_changedpathsforfixture",
       "weight": 1
     },
@@ -189791,7 +189791,7 @@
       "relation": "contains",
       "source": "scripts_delivery_run_telemetry_test_ts",
       "source_file": "scripts/delivery-run-telemetry.test.ts",
-      "source_location": "L665",
+      "source_location": "L680",
       "target": "delivery_run_telemetry_test_git",
       "weight": 1
     },
@@ -189815,7 +189815,7 @@
       "relation": "contains",
       "source": "scripts_delivery_run_telemetry_test_ts",
       "source_file": "scripts/delivery-run-telemetry.test.ts",
-      "source_location": "L890",
+      "source_location": "L905",
       "target": "delivery_run_telemetry_test_recordafterledger",
       "weight": 1
     },
@@ -189827,7 +189827,7 @@
       "relation": "contains",
       "source": "scripts_delivery_run_telemetry_test_ts",
       "source_file": "scripts/delivery-run-telemetry.test.ts",
-      "source_location": "L679",
+      "source_location": "L694",
       "target": "delivery_run_telemetry_test_repofixture",
       "weight": 1
     },
@@ -189851,7 +189851,7 @@
       "relation": "contains",
       "source": "scripts_delivery_run_telemetry_test_ts",
       "source_file": "scripts/delivery-run-telemetry.test.ts",
-      "source_location": "L692",
+      "source_location": "L707",
       "target": "delivery_run_telemetry_test_writeledger",
       "weight": 1
     },
@@ -189863,7 +189863,7 @@
       "relation": "contains",
       "source": "scripts_delivery_run_telemetry_ts",
       "source_file": "scripts/delivery-run-telemetry.ts",
-      "source_location": "L613",
+      "source_location": "L619",
       "target": "delivery_run_telemetry_assertdeliveryruntelemetrycheck",
       "weight": 1
     },
@@ -189887,7 +189887,7 @@
       "relation": "contains",
       "source": "scripts_delivery_run_telemetry_ts",
       "source_file": "scripts/delivery-run-telemetry.ts",
-      "source_location": "L443",
+      "source_location": "L449",
       "target": "delivery_run_telemetry_collectdeliveryruntelemetryfindings",
       "weight": 1
     },
@@ -189911,7 +189911,7 @@
       "relation": "contains",
       "source": "scripts_delivery_run_telemetry_ts",
       "source_file": "scripts/delivery-run-telemetry.ts",
-      "source_location": "L557",
+      "source_location": "L563",
       "target": "delivery_run_telemetry_evaluatedeliveryruntelemetrycheck",
       "weight": 1
     },
@@ -189923,7 +189923,7 @@
       "relation": "contains",
       "source": "scripts_delivery_run_telemetry_ts",
       "source_file": "scripts/delivery-run-telemetry.ts",
-      "source_location": "L519",
+      "source_location": "L525",
       "target": "delivery_run_telemetry_gitlines",
       "weight": 1
     },
@@ -189971,7 +189971,7 @@
       "relation": "contains",
       "source": "scripts_delivery_run_telemetry_ts",
       "source_file": "scripts/delivery-run-telemetry.ts",
-      "source_location": "L626",
+      "source_location": "L632",
       "target": "delivery_run_telemetry_parseargs",
       "weight": 1
     },
@@ -190007,7 +190007,7 @@
       "relation": "contains",
       "source": "scripts_delivery_run_telemetry_ts",
       "source_file": "scripts/delivery-run-telemetry.ts",
-      "source_location": "L543",
+      "source_location": "L549",
       "target": "delivery_run_telemetry_readlocalledgerfingerprint",
       "weight": 1
     },
@@ -190043,7 +190043,7 @@
       "relation": "contains",
       "source": "scripts_delivery_run_telemetry_ts",
       "source_file": "scripts/delivery-run-telemetry.ts",
-      "source_location": "L670",
+      "source_location": "L676",
       "target": "delivery_run_telemetry_telemetryclicontract",
       "weight": 1
     },
@@ -198755,7 +198755,7 @@
       "relation": "contains",
       "source": "scripts_policy_projection_check_test_ts",
       "source_file": "scripts/policy-projection-check.test.ts",
-      "source_location": "L553",
+      "source_location": "L594",
       "target": "policy_projection_check_test_capturecandidate",
       "weight": 1
     },
@@ -198803,7 +198803,7 @@
       "relation": "contains",
       "source": "scripts_policy_projection_check_test_ts",
       "source_file": "scripts/policy-projection-check.test.ts",
-      "source_location": "L192",
+      "source_location": "L230",
       "target": "policy_projection_check_test_restamppolicydigests",
       "weight": 1
     },
@@ -198827,7 +198827,7 @@
       "relation": "contains",
       "source": "scripts_policy_projection_check_ts",
       "source_file": "scripts/policy-projection-check.ts",
-      "source_location": "L101",
+      "source_location": "L110",
       "target": "policy_projection_check_coveredbyprotectedtree",
       "weight": 1
     },
@@ -198839,7 +198839,7 @@
       "relation": "contains",
       "source": "scripts_policy_projection_check_ts",
       "source_file": "scripts/policy-projection-check.ts",
-      "source_location": "L94",
+      "source_location": "L103",
       "target": "policy_projection_check_equalstringarrays",
       "weight": 1
     },
@@ -198851,7 +198851,7 @@
       "relation": "contains",
       "source": "scripts_policy_projection_check_ts",
       "source_file": "scripts/policy-projection-check.ts",
-      "source_location": "L82",
+      "source_location": "L91",
       "target": "policy_projection_check_formatmechanicalselection",
       "weight": 1
     },
@@ -198863,7 +198863,7 @@
       "relation": "contains",
       "source": "scripts_policy_projection_check_ts",
       "source_file": "scripts/policy-projection-check.ts",
-      "source_location": "L107",
+      "source_location": "L116",
       "target": "policy_projection_check_runpolicyprojectioncheck",
       "weight": 1
     },
@@ -198875,7 +198875,7 @@
       "relation": "contains",
       "source": "scripts_policy_projection_check_ts",
       "source_file": "scripts/policy-projection-check.ts",
-      "source_location": "L90",
+      "source_location": "L99",
       "target": "policy_projection_check_sha256",
       "weight": 1
     },
@@ -249400,7 +249400,7 @@
       "label": "assertDeliveryRunTelemetryCheck()",
       "norm_label": "assertdeliveryruntelemetrycheck()",
       "source_file": "scripts/delivery-run-telemetry.ts",
-      "source_location": "L613"
+      "source_location": "L619"
     },
     {
       "community": 146,
@@ -249418,7 +249418,7 @@
       "label": "collectDeliveryRunTelemetryFindings()",
       "norm_label": "collectdeliveryruntelemetryfindings()",
       "source_file": "scripts/delivery-run-telemetry.ts",
-      "source_location": "L443"
+      "source_location": "L449"
     },
     {
       "community": 146,
@@ -249436,7 +249436,7 @@
       "label": "evaluateDeliveryRunTelemetryCheck()",
       "norm_label": "evaluatedeliveryruntelemetrycheck()",
       "source_file": "scripts/delivery-run-telemetry.ts",
-      "source_location": "L557"
+      "source_location": "L563"
     },
     {
       "community": 146,
@@ -249445,7 +249445,7 @@
       "label": "gitLines()",
       "norm_label": "gitlines()",
       "source_file": "scripts/delivery-run-telemetry.ts",
-      "source_location": "L519"
+      "source_location": "L525"
     },
     {
       "community": 146,
@@ -249481,7 +249481,7 @@
       "label": "parseArgs()",
       "norm_label": "parseargs()",
       "source_file": "scripts/delivery-run-telemetry.ts",
-      "source_location": "L626"
+      "source_location": "L632"
     },
     {
       "community": 146,
@@ -249508,7 +249508,7 @@
       "label": "readLocalLedgerFingerprint()",
       "norm_label": "readlocalledgerfingerprint()",
       "source_file": "scripts/delivery-run-telemetry.ts",
-      "source_location": "L543"
+      "source_location": "L549"
     },
     {
       "community": 146,
@@ -249535,7 +249535,7 @@
       "label": "telemetryCliContract()",
       "norm_label": "telemetryclicontract()",
       "source_file": "scripts/delivery-run-telemetry.ts",
-      "source_location": "L670"
+      "source_location": "L676"
     },
     {
       "community": 146,
@@ -297523,7 +297523,7 @@
       "label": "changedPathsForFixture()",
       "norm_label": "changedpathsforfixture()",
       "source_file": "scripts/delivery-run-telemetry.test.ts",
-      "source_location": "L901"
+      "source_location": "L916"
     },
     {
       "community": 308,
@@ -297559,7 +297559,7 @@
       "label": "git()",
       "norm_label": "git()",
       "source_file": "scripts/delivery-run-telemetry.test.ts",
-      "source_location": "L665"
+      "source_location": "L680"
     },
     {
       "community": 308,
@@ -297577,7 +297577,7 @@
       "label": "recordAfterLedger()",
       "norm_label": "recordafterledger()",
       "source_file": "scripts/delivery-run-telemetry.test.ts",
-      "source_location": "L890"
+      "source_location": "L905"
     },
     {
       "community": 308,
@@ -297586,7 +297586,7 @@
       "label": "repoFixture()",
       "norm_label": "repofixture()",
       "source_file": "scripts/delivery-run-telemetry.test.ts",
-      "source_location": "L679"
+      "source_location": "L694"
     },
     {
       "community": 308,
@@ -297604,7 +297604,7 @@
       "label": "writeLedger()",
       "norm_label": "writeledger()",
       "source_file": "scripts/delivery-run-telemetry.test.ts",
-      "source_location": "L692"
+      "source_location": "L707"
     },
     {
       "community": 308,
@@ -301074,6 +301074,15 @@
     {
       "community": 3237,
       "file_type": "code",
+      "id": "scripts_athena_preparation_sensor_test_ts",
+      "label": "athena-preparation-sensor.test.ts",
+      "norm_label": "athena-preparation-sensor.test.ts",
+      "source_file": "scripts/athena-preparation-sensor.test.ts",
+      "source_location": "L1"
+    },
+    {
+      "community": 3238,
+      "file_type": "code",
       "id": "scripts_check_register_session_authority_writers_test_ts",
       "label": "check-register-session-authority-writers.test.ts",
       "norm_label": "check-register-session-authority-writers.test.ts",
@@ -301081,21 +301090,12 @@
       "source_location": "L1"
     },
     {
-      "community": 3238,
+      "community": 3239,
       "file_type": "code",
       "id": "scripts_delivery_documentation_admission_test_ts",
       "label": "delivery-documentation-admission.test.ts",
       "norm_label": "delivery-documentation-admission.test.ts",
       "source_file": "scripts/delivery-documentation-admission.test.ts",
-      "source_location": "L1"
-    },
-    {
-      "community": 3239,
-      "file_type": "code",
-      "id": "scripts_delivery_documentation_check_test_ts",
-      "label": "delivery-documentation-check.test.ts",
-      "norm_label": "delivery-documentation-check.test.ts",
-      "source_file": "scripts/delivery-documentation-check.test.ts",
       "source_location": "L1"
     },
     {
@@ -301191,6 +301191,15 @@
     {
       "community": 3240,
       "file_type": "code",
+      "id": "scripts_delivery_documentation_check_test_ts",
+      "label": "delivery-documentation-check.test.ts",
+      "norm_label": "delivery-documentation-check.test.ts",
+      "source_file": "scripts/delivery-documentation-check.test.ts",
+      "source_location": "L1"
+    },
+    {
+      "community": 3241,
+      "file_type": "code",
       "id": "scripts_documentation_waiver_command_test_ts",
       "label": "documentation-waiver-command.test.ts",
       "norm_label": "documentation-waiver-command.test.ts",
@@ -301198,7 +301207,7 @@
       "source_location": "L1"
     },
     {
-      "community": 3241,
+      "community": 3242,
       "file_type": "code",
       "id": "scripts_harness_app_registry_test_ts",
       "label": "harness-app-registry.test.ts",
@@ -301207,7 +301216,7 @@
       "source_location": "L1"
     },
     {
-      "community": 3242,
+      "community": 3243,
       "file_type": "code",
       "id": "scripts_harness_behavior_fixtures_athena_runtime_app_test_ts",
       "label": "athena-runtime-app.test.ts",
@@ -301216,7 +301225,7 @@
       "source_location": "L1"
     },
     {
-      "community": 3243,
+      "community": 3244,
       "file_type": "code",
       "id": "scripts_harness_behavior_fixtures_storefront_runtime_api_test_ts",
       "label": "storefront-runtime-api.test.ts",
@@ -301225,7 +301234,7 @@
       "source_location": "L1"
     },
     {
-      "community": 3244,
+      "community": 3245,
       "file_type": "code",
       "id": "scripts_harness_behavior_fixtures_valkey_runtime_app_test_ts",
       "label": "valkey-runtime-app.test.ts",
@@ -301234,7 +301243,7 @@
       "source_location": "L1"
     },
     {
-      "community": 3245,
+      "community": 3246,
       "file_type": "code",
       "id": "scripts_harness_behavior_scenarios_test_ts",
       "label": "harness-behavior-scenarios.test.ts",
@@ -301243,7 +301252,7 @@
       "source_location": "L1"
     },
     {
-      "community": 3246,
+      "community": 3247,
       "file_type": "code",
       "id": "scripts_harness_execution_context_test_ts",
       "label": "harness-execution-context.test.ts",
@@ -301252,7 +301261,7 @@
       "source_location": "L1"
     },
     {
-      "community": 3247,
+      "community": 3248,
       "file_type": "code",
       "id": "scripts_harness_gate_registry_test_ts",
       "label": "harness-gate-registry.test.ts",
@@ -301261,21 +301270,12 @@
       "source_location": "L1"
     },
     {
-      "community": 3248,
+      "community": 3249,
       "file_type": "code",
       "id": "scripts_harness_repo_validation_test_ts",
       "label": "harness-repo-validation.test.ts",
       "norm_label": "harness-repo-validation.test.ts",
       "source_file": "scripts/harness-repo-validation.test.ts",
-      "source_location": "L1"
-    },
-    {
-      "community": 3249,
-      "file_type": "code",
-      "id": "scripts_operational_work_repair_test_ts",
-      "label": "operational-work-repair.test.ts",
-      "norm_label": "operational-work-repair.test.ts",
-      "source_file": "scripts/operational-work-repair.test.ts",
       "source_location": "L1"
     },
     {
@@ -301371,6 +301371,15 @@
     {
       "community": 3250,
       "file_type": "code",
+      "id": "scripts_operational_work_repair_test_ts",
+      "label": "operational-work-repair.test.ts",
+      "norm_label": "operational-work-repair.test.ts",
+      "source_file": "scripts/operational-work-repair.test.ts",
+      "source_location": "L1"
+    },
+    {
+      "community": 3251,
+      "file_type": "code",
       "id": "tools_screen_redact_extension_background_js",
       "label": "background.js",
       "norm_label": "background.js",
@@ -301378,7 +301387,7 @@
       "source_location": "L1"
     },
     {
-      "community": 3251,
+      "community": 3252,
       "file_type": "code",
       "id": "tools_screen_redact_extension_popup_js",
       "label": "popup.js",
@@ -326539,7 +326548,7 @@
       "label": "captureCandidate()",
       "norm_label": "capturecandidate()",
       "source_file": "scripts/policy-projection-check.test.ts",
-      "source_location": "L553"
+      "source_location": "L594"
     },
     {
       "community": 559,
@@ -326575,7 +326584,7 @@
       "label": "restampPolicyDigests()",
       "norm_label": "restamppolicydigests()",
       "source_file": "scripts/policy-projection-check.test.ts",
-      "source_location": "L192"
+      "source_location": "L230"
     },
     {
       "community": 559,
@@ -339409,7 +339418,7 @@
       "label": "coveredByProtectedTree()",
       "norm_label": "coveredbyprotectedtree()",
       "source_file": "scripts/policy-projection-check.ts",
-      "source_location": "L101"
+      "source_location": "L110"
     },
     {
       "community": 704,
@@ -339418,7 +339427,7 @@
       "label": "equalStringArrays()",
       "norm_label": "equalstringarrays()",
       "source_file": "scripts/policy-projection-check.ts",
-      "source_location": "L94"
+      "source_location": "L103"
     },
     {
       "community": 704,
@@ -339427,7 +339436,7 @@
       "label": "formatMechanicalSelection()",
       "norm_label": "formatmechanicalselection()",
       "source_file": "scripts/policy-projection-check.ts",
-      "source_location": "L82"
+      "source_location": "L91"
     },
     {
       "community": 704,
@@ -339436,7 +339445,7 @@
       "label": "runPolicyProjectionCheck()",
       "norm_label": "runpolicyprojectioncheck()",
       "source_file": "scripts/policy-projection-check.ts",
-      "source_location": "L107"
+      "source_location": "L116"
     },
     {
       "community": 704,
@@ -339445,7 +339454,7 @@
       "label": "sha256()",
       "norm_label": "sha256()",
       "source_file": "scripts/policy-projection-check.ts",
-      "source_location": "L90"
+      "source_location": "L99"
     },
     {
       "community": 704,

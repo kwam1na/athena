@@ -434,9 +434,15 @@ export type DeliveryRunTelemetryCheckInput = {
 };
 
 function isTelemetryRecordPath(repoPath: string) {
+  // The managed product writes its candidate-bound `delivery-record/1` beside
+  // Athena's review-neutral telemetry. It is evidence for a different
+  // contract, so Athena neither parses it nor accepts it as telemetry.
   return (
     repoPath.startsWith(`${DELIVERY_RUN_TELEMETRY_DIR}/`) &&
-    repoPath.endsWith(".json")
+    repoPath.endsWith(".json") &&
+    !repoPath
+      .slice(`${DELIVERY_RUN_TELEMETRY_DIR}/`.length)
+      .startsWith("managed-delivery-record--")
   );
 }
 

@@ -1,17 +1,19 @@
 {
   "schemaVersion": "athena-policy-comparison-report/1",
-  "comparedAt": "2026-08-31",
+  "comparedAt": "2026-09-01",
   "comparisonAuthority": "bun run pr:athena (unchanged legacy aggregate)",
   "mode": "read-only",
   "inputs": {
-    "repository-policy.json": "c49f425be88ba67a6958e20ca8d68d52184f866d5fae748fce8dc08dedc05239",
+    "repository-policy.json": "664f34eaaea9258e5f1e8891c8baa4087391df217456326b2cbf6715eb8b1c97",
     "adapters.json": "5f8aa52add535acf9d41696b2766e6891d64f3beff85712aa8727d0cbb334238",
     "pre-cutover-oracle.json": "76b3e7d79294ff910984435609e44c7fc80f0d52e7f1d2b9419df28488d29564",
-    "compiled-snapshot.json": "691b9c094f3721e59c63b5153b690936b9bcde92788df9d2174f4860bb9ccc12",
-    "compiledDigest": "170269c54fbfcbe1fef2442fcb40bbdc2d9e7f130505f7b8be95fc5605b1e0f5"
+    "compiled-snapshot.json": "2abd0246b82580758c5b34cfe8318656ef359adcf195cb3a54fa4849f7cf5a5c",
+    "compiledDigest": "5282b9f67b8647ccfdc11063c01ff13213c04af8ec60dabc2b8fa76fd31bd070",
+    "scripts/athena-preparation-sensor.mjs": "9bdc05e223c324787fece19b082e715bee4fcf03bcce6a3aad23c44fc9fef009"
   },
   "results": {
-    "compile": "ok: the declarative document plus the twelve typed adapters compile through the harness policy compiler (agent-delivery-harness a13ae38) with zero rejections, each lens resolving its reviewer charter by identity from the pinned composition archive 9ce12f12",
+    "compile": "ok: the declarative document plus the twelve typed adapters compile through the harness policy compiler (agent-delivery-harness 493d950) with zero rejections, each lens resolving its reviewer charter by identity from the pinned composition archive 9ce12f12",
+    "managedShadowAdmission": "ok: the compiled admission projection validates exactly product-native review.green with Claude Code's qualified ce-code-review producer, while bun run pr:athena remains the wider legacy authority",
     "phaseParity": "ok: oracle phase vector matches the live pr:athena phase order and package.json script chain",
     "obligationParity": "ok: every live gate obligation (review.green, documentation.current, telemetry.recorded) is activated by the declarative document with matching activation semantics",
     "leafMapping": "ok: each proposed leaf maps to exactly one adapter; no adapter is mapped twice; the pr:athena aggregate is registered as no leaf",
@@ -44,10 +46,10 @@
       "blocking": false
     },
     {
-      "id": "admission-config-projection-deferred",
-      "observed": "Athena's live admission authority is the repository gate registry and gate-admission evaluator, not a harness-format HarnessConfig document.",
-      "projection": "The optional admission member of the policy document is omitted. Projecting the registry into the product HarnessConfig grammar would duplicate the live command graph while the legacy aggregate is still the authority; it lands with the shadow-preconditions sub-deliverable once the product installs in shadow mode.",
-      "disposition": "deferred",
+      "id": "managed-shadow-admission-bootstrap",
+      "observed": "Athena's live admission authority remains the repository gate registry and the pr:athena aggregate, whose wider gate obligations are not duplicated into this shadow bootstrap.",
+      "projection": "The policy's optional admission member compiles through the product's characterized HarnessConfig loader with exactly review.green, the qualified Claude ce-code-review producer, and a candidate-keyed record path under the existing neutral telemetry tree. The direct trusted-base sensor invokes pr:athena:prepare only; it does not replace the aggregate or admit other legacy obligations.",
+      "disposition": "accepted-projection",
       "blocking": false
     },
     {
