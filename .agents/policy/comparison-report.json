@@ -9,7 +9,7 @@
     "pre-cutover-oracle.json": "76b3e7d79294ff910984435609e44c7fc80f0d52e7f1d2b9419df28488d29564",
     "compiled-snapshot.json": "2abd0246b82580758c5b34cfe8318656ef359adcf195cb3a54fa4849f7cf5a5c",
     "compiledDigest": "5282b9f67b8647ccfdc11063c01ff13213c04af8ec60dabc2b8fa76fd31bd070",
-    "scripts/athena-preparation-sensor.mjs": "9bdc05e223c324787fece19b082e715bee4fcf03bcce6a3aad23c44fc9fef009"
+    "scripts/athena-preparation-sensor.mjs": "4db6afeee61db051c4e70a2662038ab84d5bdc2283f3e98c03a8fe0fcb225eed"
   },
   "results": {
     "compile": "ok: the declarative document plus the twelve typed adapters compile through the harness policy compiler (agent-delivery-harness 493d950) with zero rejections, each lens resolving its reviewer charter by identity from the pinned composition archive 9ce12f12",
@@ -92,13 +92,6 @@
       "observed": "Each lens must now name the reviewer charter it hands its reviewer. Athena's delivery review runs a correctness reviewer and an adversarial reviewer (ce-correctness-reviewer and ce-adversarial-reviewer in .agents/skills/ce-code-review/references/persona-catalog.md), and the review telemetry keys those two as correctness and adversarial.",
       "projection": "lens.outcome-correctness references persona.outcome-correctness and lens.adversarial-testing references persona.adversarial, both by identity alone, so advancing the shipped charter set never edits this document. The charter bytes are bound in the compiled snapshot instead. lens.adversarial-testing keeps the testing-policy category, which remains a taxonomy slot forced by the closed category vocabulary and not a statement about which charter the lens hands out - see adversarial-lens-category.",
       "disposition": "accepted-projection",
-      "blocking": false
-    },
-    {
-      "id": "shadow-activation-product-pin-predates-personas",
-      "observed": "shadow-activation.json pins the shadow-window product at agent-delivery-harness 8635ea8, which is an ancestor of a13ae38 and therefore carries no shipped charter set. The compile recorded here used the current compiler and its pinned composition, not the shadow window's older product pin.",
-      "projection": "The recorded snapshot is a compile against the current compiler, which is what the acceptance criteria ask for; the shadow window holds no delivery authority, so the lagging product pin changes no active gate. Advancing that pin is a separate deliberate re-pin, not a quiet edit folded into this one.",
-      "disposition": "deferred",
       "blocking": false
     }
   ]

@@ -11,17 +11,10 @@ export const ATHENA_PREPARATION_SENSOR = Object.freeze({
   trustedBasePath: "scripts/athena-preparation-sensor.mjs",
 });
 
-/** The authority inputs pr:athena:prepare itself reads; candidates may not rewrite them mid-run. */
+/** The executable preparation surface; script-changing candidates stay outside the MVP shadow lane. */
 export const ATHENA_PREPARATION_AUTHORITY_PATHS = Object.freeze([
   "package.json",
-  "scripts/pr-athena-prepare.ts",
-  "scripts/harness-candidate.ts",
-  "scripts/bun-version-check.ts",
-  "scripts/frontend-dependency-parity.ts",
-  "scripts/pre-commit-generated-artifacts.ts",
-  "scripts/pre-push-validation-proof.ts",
-  "scripts/harness-mechanical-check.ts",
-  "scripts/harness-blockers.ts",
+  "scripts",
 ]);
 
 function isDescriptor(value) {
@@ -69,6 +62,22 @@ function invokePreparation(command, cwd) {
   });
 }
 
+function checkCandidateClean(rootDir) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("git", ["status", "--porcelain=v1", "--untracked-files=all"], {
+      cwd: rootDir,
+      stdio: ["ignore", "pipe", "inherit"],
+    });
+    let output = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      output += chunk;
+    });
+    child.once("error", reject);
+    child.once("exit", (code) => resolve(code === 0 && output.trim().length === 0));
+  });
+}
+
 /** Returns false when the candidate has changed its own preparation authority. */
 export async function checkAthenaPreparationAuthority(rootDir, options = {}) {
   const runGit = options.runGit ?? ((command, cwd) => invokePreparation(command, cwd));
@@ -86,7 +95,10 @@ export async function runAthenaPreparationSensor(rootDir, options = {}) {
   if (defects.length > 0) throw new Error(defects.join("; "));
   const authorityCurrent = await (options.checkAuthority ?? checkAthenaPreparationAuthority)(rootDir);
   if (!authorityCurrent) return 1;
-  return (options.invoke ?? invokePreparation)(ATHENA_PREPARATION_SENSOR.command, rootDir);
+  const result = await (options.invoke ?? invokePreparation)(ATHENA_PREPARATION_SENSOR.command, rootDir);
+  if (result !== 0) return result;
+  const candidateClean = await (options.checkCandidateClean ?? checkCandidateClean)(rootDir);
+  return candidateClean ? 0 : 1;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
