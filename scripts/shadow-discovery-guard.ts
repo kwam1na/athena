@@ -571,9 +571,9 @@ async function evaluateShadowArtifacts(input: {
     } else if (record.source !== "binding") {
       emit(
         "agent_supplied_consumption_claim",
-        `delivery ${id} carries a derived projection-consumption summary sourced from ${JSON.stringify(
+        `delivery ${id} carries a derived projection-consumption summary with literal source ${JSON.stringify(
           record.source,
-        )}; only a manually recorded derived summary that identifies the qualified adapter as binding is accepted, so the claim is rejected and the delivery is excluded`,
+        )}; the guard requires the literal value "binding" but does not independently verify qualified-adapter provenance, so the operator must assert that provenance before recording a counted summary`,
       );
     } else if (record.affirmative === false) {
       // An honest negative: the run did not consume the run-pinned projection.
@@ -623,7 +623,7 @@ async function evaluateShadowArtifacts(input: {
       if (!admissible) {
         emit(
           "comparison_set_admission_defect",
-          `delivery ${id} is counted in the comparison set without an affirmative manually recorded derived consumption summary sourced from the qualified adapter`,
+          `delivery ${id} is counted in the comparison set without a shape-valid derived consumption summary: literal source "binding", affirmative true, digest, and marker are required; the guard cannot independently verify adapter provenance after summarization`,
         );
       } else if (countedDeliveryIds.includes(id)) {
         // One run counted twice fills the comparison set without measuring a

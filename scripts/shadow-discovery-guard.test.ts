@@ -60,7 +60,7 @@ async function plantedTree(edit: {
   return dir;
 }
 
-/** A derived summary the guard can accept without inspecting an external artifact. */
+/** A shape-valid derived summary; the guard does not independently verify provenance. */
 function bindingSourcedDelivery(overrides: Record<string, unknown> = {}) {
   return {
     id: "athena-shadow-1",
@@ -613,7 +613,7 @@ describe("derived projection-consumption summaries without external-artifact ins
     ).toContain("comparison_set_incomplete");
   });
 
-  test("an affirmative manually recorded derived summary is accepted without external-artifact inspection", async () => {
+  test("a shape-valid derived summary is accepted without independent provenance inspection", async () => {
     const policyDirCopy = await plantedTree({
       gateRecord: (value) => {
         value.deliveries = [bindingSourcedDelivery()];

@@ -12,7 +12,7 @@ applies_when:
   - "A repository plans to hand delivery routing to an external policy compiler without changing its live authority yet"
   - "A migration needs an independent record of pre-cutover behavior that later parity claims can be judged against"
 tags: [delivery-harness, policy-projection, pre-cutover-oracle, read-only-comparison]
-delivery_diff_fingerprint: 7210788959f36dedc5c6f851abbd5d0881c4d0ed5c4c553382cacd995c6a56d1
+delivery_diff_fingerprint: 738a84cbd19badc11cdf9257101cd976d293f060d139db9f4909f78d693f613c
 ---
 
 # Project delivery authority into a layered policy model with a frozen pre-cutover oracle
@@ -83,7 +83,11 @@ only a derived source/affirmative/digest/marker summary plus that candidate and
 GitHub evidence. The guard and scorer validate those recorded inputs, not
 external artifact retention; an accepted entry means the operator asserted the
 manual precondition and the tools accepted the derived input, and neither proves
-nor preserves the complete envelope. The
+nor preserves the complete envelope. The operator must not record
+unsupported-host, path-only, echoed, cross-repository, symlinked/hardlinked,
+or protected-target-mismatched evidence; those are manual admission
+prohibitions that the guard and scorer cannot independently detect after a
+shape-valid summary is represented. The
 qualified Claude PostToolUse adapter produces the normalized contract now. A
 future qualified Codex native adapter must emit the same contract; Codex is
 excluded from counting now because it has no qualified binding or producer,
@@ -100,7 +104,8 @@ artifact outside the model grant and manually record only its derived M1
 summary with immutable candidate and GitHub/`pr:athena` evidence before running
 the deterministic scorer. This remains an operator assertion: the guard and
 scorer do not inspect external retention or exclude a summary solely because
-the artifact is later lost or unavailable. Repeat once each for a code, documentation, and
+the artifact is later lost or unavailable, and they do not independently
+verify host provenance or underlying path conditions. Repeat once each for a code, documentation, and
 operations delivery. Do not add a launcher, registry, scheduler, daemon,
 callback framework, control plane, session manager, automatic binding-side
 writer, or automated scorer unless field data exposes a concrete failure.
