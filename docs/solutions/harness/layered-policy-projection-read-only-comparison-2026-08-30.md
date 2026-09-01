@@ -1,6 +1,7 @@
 ---
 title: Project delivery authority into a layered policy model with a frozen pre-cutover oracle
 date: 2026-08-30
+last_updated: 2026-09-01
 category: harness
 module: delivery-harness-policy
 problem_type: architecture_pattern
@@ -11,7 +12,7 @@ applies_when:
   - "A repository plans to hand delivery routing to an external policy compiler without changing its live authority yet"
   - "A migration needs an independent record of pre-cutover behavior that later parity claims can be judged against"
 tags: [delivery-harness, policy-projection, pre-cutover-oracle, read-only-comparison]
-delivery_diff_fingerprint: 0aa490aee82d642a96a28c058cb9a7656829e7606047cdf2479275e51b4a8af2
+delivery_diff_fingerprint: c48b7a1a0b91d7d6accca0de700cffbfe355c3327401c3113358826e2a7d7f33
 ---
 
 # Project delivery authority into a layered policy model with a frozen pre-cutover oracle
@@ -63,6 +64,28 @@ each failure class and also proves the seeded oracle candidates against the
 live gate functions (telemetry findings, preparation receipt blockers,
 waivability parity).
 
+The first managed-shadow bootstrap extends that projection through four narrow
+seams rather than introducing a second delivery workflow:
+
+- the existing policy document admits exactly product-native `review.green`
+  from the currently qualified Claude Code producer; hosts without a qualified
+  producer remain excluded, and the shared evidence contract stays
+  host-neutral;
+- one trusted sensor invokes `bun run pr:athena:prepare`, while the existing
+  aggregate remains Athena's wider authority;
+- the sensor refuses candidates that change `package.json` or any `scripts/**`
+  file, which closes transitive executable rewrites without maintaining a
+  dependency registry; and
+- if preparation repairs or stages candidate bytes, the sensor returns a
+  failing observation so the host can remediate and checkpoint again instead
+  of advancing a dirty candidate into review.
+
+Managed product records may share the neutral `telemetry/delivery-runs/` tree,
+but Athena's telemetry parser ignores their distinct schema and still requires
+an authentic Athena delivery-run record. Installation evidence likewise does
+not count as registration, workflow consumption, or a completed shadow
+delivery.
+
 ## Why This Matters
 
 The oracle is the template any adopter can use to freeze its pre-cutover
@@ -82,6 +105,11 @@ instead of being silently absorbed.
   the sensor when the document or adapters change without recompilation.
 - The planted-failure tests keep the oracle's blocker codes tied to what the
   live gate can actually emit, so blocker parity cannot rot.
+- Fence the entire executable preparation surface for the MVP. Broaden that
+  lane only after a real delivery demonstrates the need; do not grow a script
+  dependency registry pre-emptively.
+- After a mutation-capable preparation command succeeds, verify the candidate
+  is still clean before emitting a passing sensor result.
 
 ## Examples
 
@@ -99,3 +127,4 @@ bun scripts/policy-projection-check.ts   # must return to green afterwards
 - `.agents/policy/comparison-report.json` — the recorded adjudications
 - `scripts/harness-gate-registry.ts` — the live obligation registry the
   projection is compared against
+- V26-1524 — Athena's first production-install-backed managed-shadow bootstrap
