@@ -2,7 +2,7 @@
   "schemaVersion": "athena-compiled-policy-snapshot/1",
   "compiledWith": {
     "repository": "agent-delivery-harness",
-    "commit": "a13ae38046a1043deacbc80b7ad079abf81ea58a",
+    "commit": "f942c278d143d7a622e95a964a8e0664d4ae06a1",
     "module": "packages/kernel/src/policy/compile.ts",
     "productTrustRevocationEpoch": 0,
     "repositoryAuthorityRevocationEpoch": 0,

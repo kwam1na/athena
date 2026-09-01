@@ -60,7 +60,7 @@ async function plantedTree(edit: {
   return dir;
 }
 
-/** An affirmative record in exactly the shape the binding produces. */
+/** A shape-valid derived summary; the guard does not independently verify provenance. */
 function bindingSourcedDelivery(overrides: Record<string, unknown> = {}) {
   return {
     id: "athena-shadow-1",
@@ -597,7 +597,7 @@ describe("exactly-one-discovery exclusivity", () => {
   });
 });
 
-describe("binding-sourced projection-consumption records", () => {
+describe("derived projection-consumption summaries without external-artifact inspection", () => {
   test("open pre-M1 blockers reject a marker-only entry before it can count", async () => {
     const policyDirCopy = await plantedTree({
       gateRecord: (value) => {
@@ -613,7 +613,7 @@ describe("binding-sourced projection-consumption records", () => {
     ).toContain("comparison_set_incomplete");
   });
 
-  test("an affirmative binding-sourced record counts toward the comparison set", async () => {
+  test("a shape-valid derived summary is accepted without independent provenance inspection", async () => {
     const policyDirCopy = await plantedTree({
       gateRecord: (value) => {
         value.deliveries = [bindingSourcedDelivery()];
@@ -624,7 +624,7 @@ describe("binding-sourced projection-consumption records", () => {
     expect(result.countedDeliveryIds).toEqual(["athena-shadow-1"]);
   });
 
-  test("an agent-supplied consumption claim is rejected", async () => {
+  test("a literal non-binding consumption summary is rejected", async () => {
     const policyDirCopy = await plantedTree({
       gateRecord: (value) => {
         value.deliveries = [

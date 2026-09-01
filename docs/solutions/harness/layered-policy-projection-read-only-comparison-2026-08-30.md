@@ -1,6 +1,7 @@
 ---
 title: Project delivery authority into a layered policy model with a frozen pre-cutover oracle
 date: 2026-08-30
+last_updated: 2026-09-01
 category: harness
 module: delivery-harness-policy
 problem_type: architecture_pattern
@@ -11,7 +12,7 @@ applies_when:
   - "A repository plans to hand delivery routing to an external policy compiler without changing its live authority yet"
   - "A migration needs an independent record of pre-cutover behavior that later parity claims can be judged against"
 tags: [delivery-harness, policy-projection, pre-cutover-oracle, read-only-comparison]
-delivery_diff_fingerprint: 0aa490aee82d642a96a28c058cb9a7656829e7606047cdf2479275e51b4a8af2
+delivery_diff_fingerprint: 943b053cf16e5cadc621c41a16fedd79620734e6c5fbb8b1f6e0a3f2af9c0116
 ---
 
 # Project delivery authority into a layered policy model with a frozen pre-cutover oracle
@@ -63,6 +64,52 @@ each failure class and also proves the seeded oracle candidates against the
 live gate functions (telemetry findings, preparation receipt blockers,
 waivability parity).
 
+The first manual-shadow bootstrap keeps that projection deliberately smaller
+than a managed execution lane. The coding host runs Athena's existing workflow
+and owns sessions, agents, tools, sequencing, worktrees, and remediation.
+`bun run pr:athena` remains repository-policy authority and GitHub remains
+merge authority. The product materializes portable workflow definitions,
+normalizes exact candidate-bound evidence, and returns deterministic decisions
+for comparison; it does not add a second admission system or preparation
+sensor inside Athena.
+
+A counting shadow uses a manual operator admission condition: before recording
+a counted derived summary, the operator independently verifies and retains the complete
+`projection-consumption-observation/1` artifact: `spec`, `deliveryId`,
+`fence`, `entry` `workflows/delivery-v1.json`, `canonicalProjectionPath`,
+`projectionDigest`, `hostInvocationId`, and `observedAt`, alongside
+immutable candidate and GitHub/`pr:athena` evidence. The M1 gate entry retains
+only a derived source/affirmative/digest/marker summary plus that candidate and
+GitHub evidence. The guard and scorer validate those recorded inputs, not
+external artifact retention; an accepted entry means the operator asserted the
+manual precondition and the tools accepted the derived input, and neither proves
+nor preserves the complete envelope. The operator must not record
+unsupported-host, path-only, echoed, cross-repository, symlinked/hardlinked,
+or protected-target-mismatched evidence; those are manual admission
+prohibitions that the guard and scorer cannot independently detect after a
+shape-valid summary is represented. The
+qualified Claude PostToolUse adapter produces the normalized contract now. A
+future qualified Codex native adapter must emit the same contract; Codex is
+excluded from counting now because it has no qualified binding or producer,
+and unqualified hosts remain excluded. The comparison does not claim trusted
+operator intent, delivery registration, takeover authority, or model
+isolation. V26-1527's opaque pre-registration confirmation is therefore
+deferred to a future higher-assurance trust tier.
+
+The manual operator loop is: materialize the pinned projection, compose the
+qualified Claude PostToolUse adapter, let it emit
+`projection-consumption-observation/1` for the exact full Read, then after
+final immutable delivery evidence independently verify and retain the complete
+artifact outside the model grant and manually record only its derived M1
+summary with immutable candidate and GitHub/`pr:athena` evidence before running
+the deterministic scorer. This remains an operator assertion: the guard and
+scorer do not inspect external retention or exclude a summary solely because
+the artifact is later lost or unavailable, and they do not independently
+verify host provenance or underlying path conditions. Repeat once each for a code, documentation, and
+operations delivery. Do not add a launcher, registry, scheduler, daemon,
+callback framework, control plane, session manager, automatic binding-side
+writer, or automated scorer unless field data exposes a concrete failure.
+
 ## Why This Matters
 
 The oracle is the template any adopter can use to freeze its pre-cutover
@@ -82,6 +129,20 @@ instead of being silently absorbed.
   the sensor when the document or adapters change without recompilation.
 - The planted-failure tests keep the oracle's blocker codes tied to what the
   live gate can actually emit, so blocker parity cannot rot.
+- Keep the shadow comparison non-authoritative: host orchestration,
+  `pr:athena`, and GitHub retain their current ownership.
+- Preserve `projection-consumption-observation/1` as the host-neutral
+  exact-read contract. The qualified Claude PostToolUse adapter produces it
+  today; a future qualified Codex native adapter must emit that same normalized
+  contract. Codex currently has no qualified binding or producer, and hosts
+  without a qualified producer remain excluded rather than emitting weaker
+  evidence. Before recording a counted summary, the operator independently
+  verifies and retains the complete artifact outside model grants; this is a
+  manual admission condition, while the guard and scorer validate only derived
+  and candidate/GitHub inputs. The M1 summary does not replace or independently
+  prove the full artifact. An automatic writer is a future non-MVP tier.
+- Add machinery only after one of the three real shadows demonstrates a named
+  failure the existing workflow and evidence contracts cannot express.
 
 ## Examples
 
@@ -99,3 +160,4 @@ bun scripts/policy-projection-check.ts   # must return to green afterwards
 - `.agents/policy/comparison-report.json` — the recorded adjudications
 - `scripts/harness-gate-registry.ts` — the live obligation registry the
   projection is compared against
+- V26-1524 — Athena's first production-install-backed managed-shadow bootstrap

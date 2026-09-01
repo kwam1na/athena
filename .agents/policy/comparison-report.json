@@ -1,17 +1,18 @@
 {
   "schemaVersion": "athena-policy-comparison-report/1",
-  "comparedAt": "2026-08-31",
+  "comparedAt": "2026-09-01",
   "comparisonAuthority": "bun run pr:athena (unchanged legacy aggregate)",
   "mode": "read-only",
   "inputs": {
     "repository-policy.json": "c49f425be88ba67a6958e20ca8d68d52184f866d5fae748fce8dc08dedc05239",
     "adapters.json": "5f8aa52add535acf9d41696b2766e6891d64f3beff85712aa8727d0cbb334238",
     "pre-cutover-oracle.json": "76b3e7d79294ff910984435609e44c7fc80f0d52e7f1d2b9419df28488d29564",
-    "compiled-snapshot.json": "691b9c094f3721e59c63b5153b690936b9bcde92788df9d2174f4860bb9ccc12",
+    "compiled-snapshot.json": "0194582ec54ec5333c5e2f2e67aaddda75a3056c620e7b7acbb90ab82f04fcf8",
     "compiledDigest": "170269c54fbfcbe1fef2442fcb40bbdc2d9e7f130505f7b8be95fc5605b1e0f5"
   },
   "results": {
-    "compile": "ok: the declarative document plus the twelve typed adapters compile through the harness policy compiler (agent-delivery-harness a13ae38) with zero rejections, each lens resolving its reviewer charter by identity from the pinned composition archive 9ce12f12",
+    "compile": "ok: the declarative document plus the twelve typed adapters compile through the harness policy compiler (agent-delivery-harness f942c27) with zero rejections, each lens resolving its reviewer charter by identity from the pinned composition archive 9ce12f12",
+    "mvpBoundary": "ok: before manually recording a counted derived summary, the operator independently verifies and retains the complete projection-consumption-observation/1 artifact outside model grants and must not record unsupported-host, path-only, echoed, cross-repository, symlinked/hardlinked, or protected-target-mismatched evidence. These are manual admission conditions and operator assertions; the guard and scorer validate only literal derived source/affirmative/digest/marker and candidate/GitHub input, not external retention or underlying provenance/path conditions, so an accepted entry does not independently prove the full envelope, trusted intent, registration, isolation, or writer provenance",
     "phaseParity": "ok: oracle phase vector matches the live pr:athena phase order and package.json script chain",
     "obligationParity": "ok: every live gate obligation (review.green, documentation.current, telemetry.recorded) is activated by the declarative document with matching activation semantics",
     "leafMapping": "ok: each proposed leaf maps to exactly one adapter; no adapter is mapped twice; the pr:athena aggregate is registered as no leaf",
@@ -44,10 +45,10 @@
       "blocking": false
     },
     {
-      "id": "admission-config-projection-deferred",
-      "observed": "Athena's live admission authority is the repository gate registry and gate-admission evaluator, not a harness-format HarnessConfig document.",
-      "projection": "The optional admission member of the policy document is omitted. Projecting the registry into the product HarnessConfig grammar would duplicate the live command graph while the legacy aggregate is still the authority; it lands with the shadow-preconditions sub-deliverable once the product installs in shadow mode.",
-      "disposition": "deferred",
+      "id": "mvp-decision-evidence-only",
+      "observed": "Athena's live delivery authority remains bun run pr:athena and GitHub, with the coding host orchestrating the workflow.",
+      "projection": "Before manually recording a counted derived summary, the operator independently verifies and retains the complete host-neutral observation outside model grants and must not record unsupported-host, path-only, echoed, cross-repository, symlinked/hardlinked, or protected-target-mismatched evidence. These are manual admission conditions and operator assertions; the guard and scorer validate only literal derived source/affirmative/digest/marker and candidate/GitHub input, not external retention or underlying provenance/path conditions, so an accepted entry is not proof or storage of the full envelope. No automatic writer, registration, takeover, trusted operator intent, or model isolation is claimed. V26-1527 is deferred to a future higher-assurance trust tier.",
+      "disposition": "accepted-projection",
       "blocking": false
     },
     {
@@ -90,13 +91,6 @@
       "observed": "Each lens must now name the reviewer charter it hands its reviewer. Athena's delivery review runs a correctness reviewer and an adversarial reviewer (ce-correctness-reviewer and ce-adversarial-reviewer in .agents/skills/ce-code-review/references/persona-catalog.md), and the review telemetry keys those two as correctness and adversarial.",
       "projection": "lens.outcome-correctness references persona.outcome-correctness and lens.adversarial-testing references persona.adversarial, both by identity alone, so advancing the shipped charter set never edits this document. The charter bytes are bound in the compiled snapshot instead. lens.adversarial-testing keeps the testing-policy category, which remains a taxonomy slot forced by the closed category vocabulary and not a statement about which charter the lens hands out - see adversarial-lens-category.",
       "disposition": "accepted-projection",
-      "blocking": false
-    },
-    {
-      "id": "shadow-activation-product-pin-predates-personas",
-      "observed": "shadow-activation.json pins the shadow-window product at agent-delivery-harness 8635ea8, which is an ancestor of a13ae38 and therefore carries no shipped charter set. The compile recorded here used the current compiler and its pinned composition, not the shadow window's older product pin.",
-      "projection": "The recorded snapshot is a compile against the current compiler, which is what the acceptance criteria ask for; the shadow window holds no delivery authority, so the lagging product pin changes no active gate. Advancing that pin is a separate deliberate re-pin, not a quiet edit folded into this one.",
-      "disposition": "deferred",
       "blocking": false
     }
   ]

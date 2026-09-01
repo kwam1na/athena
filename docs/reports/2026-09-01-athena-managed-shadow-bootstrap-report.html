@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Athena manual-shadow bootstrap</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="943b053cf16e5cadc621c41a16fedd79620734e6c5fbb8b1f6e0a3f2af9c0116">
+  <header data-report-section="header">
+    <h1>Athena manual-shadow bootstrap</h1>
+    <p>Productizing Athena's existing delivery workflow as a reusable decision and evidence layer</p>
+    <ul data-report-pills>
+      <li>PR #819</li>
+      <li>Delivery candidate</li>
+      <li>M1 remains 0/3</li>
+      <li>No orchestration added</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Linear</dt><dd>V26-1524</dd>
+      <dt>PR</dt><dd>#819</dd>
+      <dt>Status</dt><dd>Draft; merge and three real shadows pending</dd>
+      <dt>Product pin</dt><dd>agent-delivery-harness f942c27</dd>
+    </dl>
+  </header>
+
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+    <p>This bootstrap records an operator-observed local product-maintenance snapshot for Athena's manual shadows and preserves the useful core already present in Athena: portable workflow definitions, repository-policy overlays, normalized candidate-bound evidence, review and validation records, and deterministic finish-line decisions. A fresh OS-native authorization approved the existing maintenance update; at that bootstrap-time observation sequence 2 was active, accepted, and pinned while sequence 1 remained the rollback target. This is not a repository sensor, durable guarantee, or automatic detector of later local drift.</p>
+    <p>It deliberately removes the attempted managed-admission and preparation-sensor layer. The coding host still orchestrates the work, <code>bun run pr:athena</code> remains repository-policy authority, and GitHub remains merge authority. The next evidence comes from three manual Athena shadows, not more machinery.</p>
+  </section>
+
+  <section data-report-section="problem">
+    <h2>The product boundary</h2>
+    <p>The product is a referee and evidence ledger beside Athena's existing delivery workflow. It does not launch agents, schedule subagents, manage sessions or worktrees, or replace Athena's repository gates.</p>
+    <p>Before manually recording a counted derived summary, the operator independently verifies and retains outside model grants the complete <code>projection-consumption-observation/1</code> artifact: <code>spec</code>, <code>deliveryId</code>, <code>fence</code>, <code>entry</code> <code>workflows/delivery-v1.json</code>, <code>canonicalProjectionPath</code>, <code>projectionDigest</code>, <code>hostInvocationId</code>, and <code>observedAt</code>, plus immutable candidate and GitHub/<code>pr:athena</code> evidence. The operator must not record unsupported-host, path-only, echoed, cross-repository, symlinked/hardlinked, or protected-target-mismatched evidence. These are manual admission conditions and operator assertions. Athena's M1 entry retains only a derived source/affirmative/digest/marker summary plus candidate and GitHub evidence; the guard and scorer validate only those literal recorded inputs, not external retention or underlying provenance/path conditions. A counted entry therefore means the operator asserted these preconditions and the tools accepted the derived input; it does not itself preserve or prove the complete envelope, trusted operator intent, registration, takeover authority, model isolation, or writer provenance. The qualified Claude PostToolUse adapter produces that normalized contract now; a future qualified Codex native adapter must emit the same contract. Codex has no qualified binding or producer now, and it and all unqualified hosts remain excluded from counting.</p>
+  </section>
+
+  <section data-report-section="mental-model">
+    <h2>Mental model: compare decisions, do not replace delivery</h2>
+    <p>The coding host runs the delivery exactly as Athena does today. After final immutable delivery evidence, the operator independently verifies and retains the qualified host's complete observation outside model grants, then manually records its derived M1 summary with candidate and GitHub evidence. This is an operator admission assertion: the guard and scorer validate the recorded derived and candidate/GitHub inputs, not external retention, and cannot exclude a summary solely because the external artifact is later lost or unavailable. Athena and GitHub still decide whether the candidate is merge-ready and merged.</p>
+  </section>
+
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+    <ul>
+      <li>Before: PR #819 added a second admission projection, a repository preparation sensor, session-grant assertions, and a parallel delivery-record telemetry exception.</li>
+      <li>After: those PR-only seams are removed; the portable policy/checkpoint mapping, typed adapters, frozen pre-cutover oracle, and product pin remain.</li>
+      <li>Before: V26-1527's higher-assurance confirmation capability could be read as an MVP prerequisite.</li>
+      <li>After: V26-1527 is explicitly deferred; three manual field comparisons are the next gate.</li>
+    </ul>
+  </section>
+
+  <section data-report-section="changes">
+    <h2>What changed</h2>
+    <ul>
+      <li>The policy and compiled snapshot no longer carry a Claude-only managed admission member or managed delivery-record path.</li>
+      <li>The PR-only preparation sensor, telemetry exception, and admission/session-grant assertions are removed.</li>
+      <li>The activation record reports the product-packed, closure-verified sequence-2 generation <code>425e400c…</code> / distribution <code>adb64360…</code> as an operator-observed local product-maintenance snapshot from this bootstrap: after the configured OS-native assertion approved the existing maintenance update, sequence 2 was accepted and pinned at high-water mark 2 while the rollback pointer retained accepted sequence 1. It is not a repository sensor or durable future-drift guarantee.</li>
+      <li>The plan, comparison record, operator guidance, and report now state the same narrow MVP claims.</li>
+      <li>No launcher, registry, scheduler, daemon, callback framework, control plane, session manager, or automated shadow scorer was added.</li>
+    </ul>
+  </section>
+
+  <section data-report-section="failure-boundaries">
+    <h2>Deferred assurance and failure boundaries</h2>
+    <p>V26-1527's opaque pre-registration confirmation is a future higher-assurance trust tier. Athena's current delivery system does not rely on that guarantee, so the MVP does not claim it and does not block field use on it.</p>
+    <p>The exact-read scorer is not weakened. The qualified Claude PostToolUse adapter produces <code>projection-consumption-observation/1</code>; a future qualified Codex native adapter must emit that same normalized contract. Codex currently has no qualified binding or producer, and unqualified hosts still produce no affirmative observation. The MVP has no automatic binding-side writer: independent verification and retention of the full artifact before recording a counted summary is a manual operator admission condition, not a scorer or guard verification. Any automatic writer or other machinery is a future non-MVP tier and must answer a concrete field failure.</p>
+  </section>
+
+  <section data-report-section="validation">
+    <h2>Validation and current finish line</h2>
+    <ul>
+      <li>The current pinned harness compiler accepts the Athena document and twelve typed adapters and produces compiled digest <code>170269c5…</code>.</li>
+      <li>The read-only projection sensor and focused tests verify the policy, oracle, adapters, and recorded compile remain coherent.</li>
+      <li>During this bootstrap, the operator observed through the existing product primitive and configured OS-native assertion that the active pointer and trust pin selected sequence 2, the accepted set contained sequences 1 and 2, high-water mark was 2, the maintenance journal recorded update start and completion, the rollback pointer retained sequence 1, and the install receipt was unchanged. This local snapshot is not continuously checked by repository sensors.</li>
+      <li>The paired plan HTML validates as static, local-only HTML.</li>
+      <li>M1 remains honestly incomplete at 0/3 until real code, documentation, and operations shadows record qualified exact-read evidence.</li>
+      <li>The existing product installation was activated through its maintenance lane; that is distinct from deployment. No Athena web deployment occurs in this policy-and-documentation bootstrap, and deployment of this report remains a separate post-merge step under the repository's normal report-delivery rule.</li>
+      <li>Final <code>bun run pr:athena</code>, hosted checks, squash merge, and root-main alignment remain pending.</li>
+    </ul>
+  </section>
+
+  <section data-report-section="guidance">
+    <h2>Manual operator checklist</h2>
+    <ol>
+      <li>Before every shadow, re-read live active-pointer and trust-pin state, accepted set/high-water mark, closure, maintenance journal, rollback pointer, and receipt. Do not rely on this bootstrap snapshot to detect local drift.</li>
+      <li>For any later update, use the existing maintenance update and approve its fresh OS-native prompt; then re-read the same live state before treating that generation as eligible.</li>
+      <li>Compose the qualified Claude PostToolUse adapter, which emits <code>projection-consumption-observation/1</code>; a future qualified Codex native adapter must emit the same contract. Codex has no qualified binding or producer now, and hosts without a qualified producer remain excluded.</li>
+      <li>Let the host complete and report the exact full Read of the canonical workflow path.</li>
+      <li>After final immutable delivery evidence, outside the model grant independently verify and retain the complete observation artifact (<code>spec</code>, <code>deliveryId</code>, <code>fence</code>, <code>entry</code> <code>workflows/delivery-v1.json</code>, <code>canonicalProjectionPath</code>, <code>projectionDigest</code>, <code>hostInvocationId</code>, and <code>observedAt</code>), then manually record only its derived source/affirmative/digest/marker summary with immutable candidate and GitHub/<code>pr:athena</code> evidence. Do not record unsupported-host, path-only, echoed, cross-repository, symlinked/hardlinked, or protected-target-mismatched evidence. These are the operator's manual admission assertions; the guard and scorer do not inspect external retention, provenance, or path conditions after a shape-valid summary is represented.</li>
+      <li>Run the deterministic scorer and preserve the first merge-ready report.</li>
+      <li>Repeat manually for one code, one documentation, and one operations delivery.</li>
+    </ol>
+  </section>
+
+  <section data-report-section="credits">
+    <h2>Credits</h2>
+    <dl>
+      <dt>Product direction</dt><dd>Kept the MVP centered on productizing Athena's proven delivery workflow as-is.</dd>
+      <dt>Implementation and review agents</dt><dd>Removed speculative seams, preserved exact-read evidence semantics, and re-pinned the current product generation.</dd>
+    </dl>
+  </section>
+
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td><code>.agents/policy/repository-policy.json</code></td><td>Athena's portable overlay and checkpoint grants, without a second admission system.</td></tr>
+        <tr><td><code>.agents/policy/compiled-snapshot.json</code></td><td>Candidate-independent recorded compile through the pinned product compiler.</td></tr>
+        <tr><td><code>.agents/policy/shadow-activation.json</code></td><td>Exact product pin, narrow claims, and honest 0/3 characterization.</td></tr>
+        <tr><td><code>.agents/policy/pre-cutover-oracle.json</code></td><td>Frozen truth for comparing product decisions with Athena's existing delivery behavior.</td></tr>
+        <tr><td><code>scripts/policy-projection-check.ts</code></td><td>Read-only drift detection for the portable projection.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question><p data-quiz-prompt>Who orchestrates the delivery?</p><ol data-quiz-options><li data-quiz-correct>The coding host</li><li>The product</li><li>The scorer</li></ol><p data-quiz-explanation>The host owns sessions, agents, tools, and sequencing.</p></li>
+      <li data-quiz-question><p data-quiz-prompt>What remains Athena's repository-policy authority?</p><ol data-quiz-options><li data-quiz-correct><code>bun run pr:athena</code></li><li>The product installer</li><li>The projection marker</li></ol><p data-quiz-explanation>The shadow compares with Athena's authority; it does not replace it.</p></li>
+      <li data-quiz-question><p data-quiz-prompt>What remains merge authority?</p><ol data-quiz-options><li>The model</li><li data-quiz-correct>GitHub</li><li>The policy compiler</li></ol><p data-quiz-explanation>GitHub remains the authoritative merge boundary.</p></li>
+      <li data-quiz-question><p data-quiz-prompt>Which claim can a counting shadow make?</p><ol data-quiz-options><li>Trusted operator intent</li><li data-quiz-correct>A qualified host emitted projection-consumption-observation/1 for the exact full Read</li><li>Guaranteed model isolation</li></ol><p data-quiz-explanation>The MVP claim is limited to the qualified host's normalized observation.</p></li>
+      <li data-quiz-question><p data-quiz-prompt>Does this MVP claim delivery registration?</p><ol data-quiz-options><li>Yes</li><li data-quiz-correct>No</li></ol><p data-quiz-explanation>Registration belongs to a future assurance tier.</p></li>
+      <li data-quiz-question><p data-quiz-prompt>What is V26-1527 now?</p><ol data-quiz-options><li>An M1 blocker</li><li data-quiz-correct>Deferred higher-assurance work</li><li>A shadow runner</li></ol><p data-quiz-explanation>Athena's current delivery does not need its guarantee.</p></li>
+      <li data-quiz-question><p data-quiz-prompt>How many manual shadows are next?</p><ol data-quiz-options><li>One</li><li data-quiz-correct>Three</li><li>Ten</li></ol><p data-quiz-explanation>One each for code, documentation, and operations.</p></li>
+      <li data-quiz-question><p data-quiz-prompt>Where is the complete observation retained?</p><ol data-quiz-options><li>Inside the model grant</li><li data-quiz-correct>Outside the model grant in operator evidence</li></ol><p data-quiz-explanation>The M1 entry is only a derived summary; the complete observation and immutable candidate evidence remain operator-side records.</p></li>
+      <li data-quiz-question><p data-quiz-prompt>Was an automated shadow scorer added?</p><ol data-quiz-options><li>Yes</li><li data-quiz-correct>No</li></ol><p data-quiz-explanation>The first three deliveries are scored through the existing deterministic contract manually.</p></li>
+      <li data-quiz-question><p data-quiz-prompt>When should more machinery be added?</p><ol data-quiz-options><li>Before field use</li><li data-quiz-correct>After an observed delivery failure demonstrates the need</li><li>Whenever a future tier is imaginable</li></ol><p data-quiz-explanation>Field evidence, not speculative assurance, drives expansion.</p></li>
+    </ol>
+  </section>
+
+  <section data-report-section="subagent-evidence">
+    <h2>Implementation and review evidence</h2>
+    <dl>
+      <dt>MVP boundary audit</dt><dd>Confirmed the first product version should compare Athena's existing delivery decisions and evidence without adding managed registration or orchestration.</dd>
+      <dt>PR simplification implementation</dt><dd>Removed PR-only admission, preparation-sensor, telemetry, and session-grant machinery while preserving the portable policy projection and exact-read scorer contract.</dd>
+      <dt>Product re-pin audit</dt><dd>Resolved the current harness commit, sequence, generation digest, and distribution digest used by the activation and compiled records.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

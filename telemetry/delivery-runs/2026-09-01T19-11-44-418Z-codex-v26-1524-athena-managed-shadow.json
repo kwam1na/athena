@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-01T19:11:44.418Z",
+  "branch": "codex/v26-1524-athena-managed-shadow",
+  "headSha": "99f3048acac39e2bec2f8fbc47dcf97383b2ddf4",
+  "deliverableDiffFingerprint": "943b053cf16e5cadc621c41a16fedd79620734e6c5fbb8b1f6e0a3f2af9c0116",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 0,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 761509.34525
+  },
+  "reviewLoop": {
+    "providerId": "execute",
+    "runId": "v26-1524-final-pass",
+    "finalPassId": "final-pass-5",
+    "recordedAt": "2026-09-01T18:58:57.762Z",
+    "iterationCount": 5,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 0,
+      "P3": 0
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}
