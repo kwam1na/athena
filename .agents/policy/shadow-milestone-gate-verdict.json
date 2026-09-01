@@ -1,11 +1,11 @@
 {
   "spec": "shadow-milestone-gate-verdict/1",
   "status": "incomplete",
-  "summary": "the M1 shadow gate is not scorable: no_observed_consumption",
+  "summary": "the M1 shadow gate is not scorable: pre_m1_blockers_unresolved",
   "incomplete": [
     {
-      "code": "no_observed_consumption",
-      "message": "no delivery has been observed consuming a projection, so there is no comparison set to score; this is the absence of a measurement, not a measured absence"
+      "code": "pre_m1_blockers_unresolved",
+      "message": "the gate record still names 1 open pre-M1 blocker(s); no delivery is enumerated until the list is explicitly empty"
     }
   ],
   "failures": [],
@@ -24,8 +24,10 @@
       ]
     },
     "gateRecord": {
-      "path": "/Users/kwamina/athena/.worktrees/codex/managed-agent-delivery-system-plan/.agents/policy/shadow-milestone-gate-record.json",
-      "openPreM1Blockers": [],
+      "path": "/Users/kwamina/athena/.worktrees/codex/v26-1529-pre-m1-blocker/.agents/policy/shadow-milestone-gate-record.json",
+      "openPreM1Blockers": [
+        "V26-1527"
+      ],
       "countedDeliveryIds": [],
       "excludedDeliveries": [],
       "perDeliveryWindows": [],

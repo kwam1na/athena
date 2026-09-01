@@ -4,7 +4,9 @@
   "purpose": "Athena's adopter-local V26-1467 M1 comparison authority: one entry per binding-admitted Athena shadow delivery, carrying the binding-sourced projection-consumption record alongside the intervention and blocked-share measurements compared against the frozen manual-choreography baseline. The harness repository's separate record is product self-dogfood evidence; it neither fills nor duplicates this record's three delivery slots. A measurement artifact, not a journal. Entries are written only by the installed binding after its host-neutral observation contract accepts a Claude-qualified full direct canonical workflow Read and its writer derives the delivery repository identity, then verifies the literal protected Athena target and record repositoryId before mutation. This list is empty because no binding-admitted Athena shadow delivery is recorded. Its location is outside every execution grant's writable paths: `.agents` is additionally protected in .agents/policy/repository-policy.json. Nothing here claims runtime enforcement, M1 success, or cutover readiness.",
   "recordedAt": "2026-09-01T07:15:00Z",
   "status": "awaiting-shadow-deliveries",
-  "openPreM1Blockers": [],
+  "openPreM1Blockers": [
+    "V26-1527"
+  ],
   "baseline": {
     "repository": "agent-delivery-harness",
     "path": "qualifications/manual-choreography-baseline.json",
