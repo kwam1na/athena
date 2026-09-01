@@ -11,7 +11,7 @@ applies_when:
   - "A repository runs a managed delivery product alongside its existing vendored agent tooling before any cutover"
   - "A migration milestone must decide which shadow runs are admissible evidence without trusting the agent that produced them"
 tags: [delivery-harness, shadow-window, discovery-guard, projection-consumption, byte-neutrality]
-delivery_diff_fingerprint: 0e961f7d80ee8d9384c9aac88723a54cc6c380f6f65a90c43839d5c4b873dd13
+delivery_diff_fingerprint: 2091c94e96cccfb31b6fb8131c056508effced51bb2c4e410f6e793a2d059b88
 ---
 
 # Hold a read-only shadow window with a byte-neutral discovery guard and binding-sourced consumption records
@@ -31,11 +31,17 @@ vendored generation the obvious way, by moving or editing its tracked bytes,
 and the shadow window silently becomes a cutover with no removal gate and no
 way back.
 
-The third failure is subtler. A shadow delivery only measures the managed
-product if the run actually consumed the run-pinned projection as its workflow
-source. The only party that can honestly report that is the one that wrote the
-bytes; a session asked whether it used them is exactly the wrong witness, and a
-milestone that accepts its answer measures a claim rather than a run.
+The third failure is subtler and crosses three trust boundaries. A shadow
+delivery only measures the managed product if a model-external binding or
+interceptor event proves that the exact receipted path and digest were actually
+loaded or read as the run's workflow source. The current binding source label,
+path name, and marker prove only that the projection was available; they are
+diagnostic evidence, not consumption proof. Even a trustworthy read must be
+written only to a gate record whose derived repository identity matches the
+delivery, and blocked-share measurement must stop at the same first
+merge-ready-report endpoint for baseline and shadow. Otherwise a repeated path
+name, a cross-repository record target, or post-report idle time can manufacture
+an apparent improvement without measuring the managed journey.
 
 ## Solution
 
@@ -73,27 +79,37 @@ The guard's four positions:
   worktree. The repository root and every non-managed worktree keep the vendored
   generation authoritative. What is checked is the root of the tree the guard
   runs in, not every directory beneath it.
-- **Consumption.** A delivery counts toward the comparison set only on a record
-  that declares the binding as its source and carries the binding's marker
-  fields for that delivery and fence. An agent-supplied claim is a finding and
-  excludes the delivery; so does an absent record, and so does a record that
-  honestly affirms non-consumption.
+- **Consumption.** The marker alone remains diagnostic and cannot fill a
+  comparison slot. The pinned harness product now owns a host-neutral observation
+  contract and admits affirmative evidence only when its Claude-qualified
+  adapter reports a completed full Read of the direct receipt-derived canonical
+  workflow path, bound to the delivery, fence, host invocation, and projection
+  digest. Its existing writer derives the delivery repository identity and
+  accepts only the real repository's literal protected gate target with one
+  link before mutation. The frozen scorer measures the baseline and shadow
+  through the first merge-ready report. `openPreM1Blockers` is therefore empty;
+  ordinary per-entry checks now govern admission. An agent-supplied claim, an
+  absent record, a negative event, an unsupported host, or an aliasing target
+  still excludes the delivery. None of those mechanisms supplies a delivery by
+  itself, so Athena remains at zero of three and M1 remains incomplete.
 
-Exclusivity is deliberately **not** asserted as blocking, and nothing here
-suppresses the vendored generation. Neither graded host can scope discovery to
-one root, so ambient vendored discovery coexists inside a managed worktree.
-During a read-only window that holds no authority, coexistence cannot corrupt
-anything, so the guard records it as a non-blocking observation — and refuses an
-activation that claims a blocking exclusivity position the graded host cannot
-deliver. Coexistence becomes a finding the moment the proving host is graded
-`exclusivity-graded`, the affirmative value both consumers key on, and scoping is what such a grade would buy.
+The sole proving delivery host is Claude Code 2.1.252 under the qualified
+`--restricted`, empty-setting-sources exact-Read binding profile. That
+qualification proves the model-external workflow Read; it does not regrade
+discovery-scoping exclusivity at that version. Coexistence with ambient vendored
+discovery in a managed worktree therefore remains a non-blocking diagnostic
+observation during this authority-free shadow window. A later exact-version
+exclusivity regrade is required before the guard can treat coexistence as
+blocking. No other host is in Athena's M1 delivery lane.
 
 One honest limit on the consumption position: the guard reads the gate-record
-artifact, so it checks the record's *declared* source and shape. What keeps a
-session from writing that record is not the guard — it is that `.agents` is an
-additionally protected path in every checkpoint grant, plus the binding-side
-writer that emits the entry. That writer is not in the product yet, so the
-comparison set is empty rather than provisionally populated.
+artifact, so it checks only the record's *declared* source and shape. It does
+not reproduce the host callback, the writer's repository/target checks, or the
+scorer's window computation. Those are installed-product boundaries. Athena's
+current comparison set is empty because no binding-admitted Athena shadow
+delivery is recorded, not because the producer or writer is absent. Nothing in
+this pre-cutover note claims delivery authority, runtime parity, or cutover
+readiness.
 
 ## Why This Matters
 
@@ -101,10 +117,13 @@ The window's whole value is that it can run for as long as the migration takes
 without ever being able to damage the thing it runs beside. Byte-neutrality is
 what makes that reversible: the vendored generation is untouched, so abandoning
 the migration costs nothing but deleting an installation. Scoping is what keeps
-ordinary deliveries ordinary. And sourcing the consumption record from the
-binding is what keeps the eventual improvement claim honest — the milestone
-compares runs that provably used the managed product, not runs that said they
-did.
+ordinary deliveries ordinary. Binding-sourced records preserve custody, but
+custody alone does not prove use. The eventual improvement claim becomes honest
+only when a model-external event proves the exact workflow-source read, the
+writer proves the record belongs to the same repository, and both cohorts stop
+at the merge-ready report. Those conditions close the path-name,
+cross-repository, and post-report-dilution false positives without asserting
+runtime parity or cutover readiness.
 
 ## Prevention
 
@@ -116,6 +135,12 @@ did.
   managed worktree, an exclusivity claim the grade does not support, an
   agent-supplied consumption claim, a marker from another run, and a comparison
   set larger than the baseline mix.
+- The harness product's planted sensors cover a non-consuming or partial
+  workflow Read, a cross-repository/symlink/hardlink write that leaves records
+  unchanged, and post-report waiting that cannot dilute blocked share. The
+  Athena record keeps `openPreM1Blockers` empty because those behaviors are
+  landed, while its still-empty delivery set honestly preserves the incomplete
+  result.
 - An incomplete comparison set is reported as an observation rather than passing
   silently, so the gate cannot be scored on a partial set.
 

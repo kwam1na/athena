@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Managed agent delivery system</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f6f8; --surface: #fff; --text: #17202e; --muted: #667085;
+      --line: #dfe3e8; --accent: #3157a4; --accent-soft: #edf2ff;
+      --workflow: #eef6ff; --host: #f0f8f3; --policy: #fff6e8; --evidence: #f3efff;
+      --good: #eaf7ef; --good-line: #24864c; --warn: #fff7e8; --warn-line: #bd7411;
+      --danger: #fff0f0; --danger-line: #c04444;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.56 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { width: min(1180px, calc(100% - 32px)); margin: 32px auto 64px; }
+    header, section { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 24px; margin-bottom: 16px; }
+    h1 { margin: 0 0 10px; font-size: clamp(2rem, 5vw, 3.25rem); line-height: 1.06; letter-spacing: -.035em; }
+    h2 { margin: 0 0 14px; font-size: 1.38rem; }
+    h3 { margin: 18px 0 6px; font-size: 1rem; }
+    p, ul, ol { margin: 8px 0 0; }
+    a { color: var(--accent); }
+    code { background: var(--accent-soft); border-radius: 4px; padding: 1px 5px; font-size: .92em; }
+    .meta { color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px 18px; }
+    .lede { max-width: 980px; font-size: 1.1rem; }
+    nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+    nav a { background: var(--accent-soft); border-radius: 999px; padding: 6px 11px; text-decoration: none; font-size: .9rem; }
+    .callout { background: var(--good); border-left: 4px solid var(--good-line); border-radius: 8px; padding: 13px 15px; margin-top: 14px; }
+    .callout.warn { background: var(--warn); border-left-color: var(--warn-line); }
+    .callout.danger { background: var(--danger); border-left-color: var(--danger-line); }
+    .stats, .two, .three, .architecture, .modules, .journey, .milestones { display: grid; gap: 12px; margin-top: 16px; }
+    .stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+    .stats div, .card, .node, .module, .step, .milestone { border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+    .stats b { display: block; font-size: 1.65rem; line-height: 1.1; }
+    .stats span, .muted, small { color: var(--muted); }
+    .two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .card h3 { margin-top: 0; }
+    .architecture { grid-template-columns: 1fr auto 1.2fr auto 1fr; align-items: stretch; }
+    .architecture .workflow { background: var(--workflow); }
+    .architecture .host { background: var(--host); }
+    .architecture .policy { background: var(--policy); }
+    .arrow { align-self: center; color: var(--muted); font-weight: 700; font-size: 1.3rem; }
+    .modules { grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); }
+    .module strong, .step strong, .milestone b { display: block; margin-bottom: 4px; }
+    .module:nth-child(1), .module:nth-child(2) { background: var(--workflow); }
+    .module:nth-child(3), .module:nth-child(4) { background: var(--host); }
+    .module:nth-child(5) { background: var(--policy); }
+    .module:nth-child(6) { background: var(--evidence); }
+    .journey { grid-template-columns: repeat(8, minmax(108px, 1fr)); gap: 18px; }
+    .step { position: relative; background: var(--accent-soft); min-height: 120px; }
+    .step:not(:last-child)::after { content: "→"; position: absolute; right: -15px; top: 42%; color: var(--muted); font-weight: 700; }
+    .milestones { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+    .milestone { border-top: 4px solid var(--accent); background: var(--accent-soft); }
+    .overflow { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: .92rem; }
+    th, td { border: 1px solid var(--line); padding: 9px 11px; text-align: left; vertical-align: top; }
+    th { background: var(--accent-soft); }
+    .phase { white-space: nowrap; font-weight: 650; }
+    .tag { display: inline-block; background: var(--accent-soft); border-radius: 999px; padding: 2px 8px; margin: 2px 4px 2px 0; font-size: .82rem; }
+    @media (max-width: 1020px) {
+      .journey { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+      .step:not(:last-child)::after { display: none; }
+    }
+    @media (max-width: 760px) {
+      main { width: min(100% - 20px, 1180px); margin-top: 10px; }
+      header, section { padding: 18px; border-radius: 10px; }
+      .two, .three, .architecture, .journey { grid-template-columns: 1fr; }
+      .architecture .arrow { transform: rotate(90deg); justify-self: center; }
+      .step { min-height: 0; }
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#11151c; --surface:#191f29; --text:#e7eaf0; --muted:#9ca6b6; --line:#2d3543; --accent:#9eb9ff; --accent-soft:#222b3e; --workflow:#1b2b3d; --host:#193126; --policy:#352a18; --evidence:#2b2540; --good:#193326; --warn:#392c14; --danger:#3a2020; }
+    }
+    @media print { body { background:#fff; color:#111; } main { width:100%; margin:0; } header, section { break-inside:avoid; } nav { display:none; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Managed agent delivery system</h1>
+    <div class="meta">
+      <span>Approved 2026-08-29 · amended 2026-08-31</span><span>Type: feat</span><span>Posture: characterization-first, simplicity-constrained</span>
+      <span>Review: architectural revision plus bounded persona and M1 delta reviews</span><span>Plan SHA-256: <code>b3da72188f904ab02e4f9226edffe16944352903f5f7bd49958bf94783c0af3a</code></span>
+      <span>Source: <a href="2026-08-29-001-feat-managed-agent-delivery-system-plan.md">canonical Markdown plan</a></span>
+      <span>Requirements: <a href="../brainstorms/2026-08-27-managed-agent-delivery-system-requirements.md">approved requirements</a></span>
+    </div>
+    <p class="lede">Compose the extracted workflow system and evidence harness into one managed product. The product owns exact composition, durable checkpoints, repository policy, evidence, and finish-line decisions; Claude Code (the proving host) and Codex keep ownership of native agents, subagents, tools, permissions, cancellation, and workspaces.</p>
+    <div class="callout"><strong>Settled boundary:</strong> one managed delivery product, mandatory internal modularity, and no product-owned agent daemon, subprocess supervisor, subagent scheduler, or worktree manager.</div>
+    <nav><a href="#frame">Frame</a><a href="#architecture">Architecture</a><a href="#journey">Journey</a><a href="#authority">Authority</a><a href="#milestones">Milestones</a><a href="#units">Units</a><a href="#safety">Safety</a><a href="#finish">Finish line</a></nav>
+  </header>
+
+  <section id="frame">
+    <h2>What changes</h2>
+    <div class="stats">
+      <div><b>1</b><span>adopter-operated product</span></div><div><b>3</b><span>repositories with explicit ownership</span></div>
+      <div><b>7</b><span>mandatory internal boundaries</span></div><div><b>20</b><span>dependency-linked units</span></div>
+      <div><b>20</b><span>requirements covered</span></div><div><b>6</b><span>review lenses aligned</span></div>
+    </div>
+    <div class="three">
+      <article class="card"><h3><code>agent-delivery-harness</code></h3><p>Becomes the managed product and durable delivery authority: composition, checkpoint reducer, policy compiler, evidence/admission, finish lines, lifecycle, and host binding contracts.</p></article>
+      <article class="card"><h3><code>agent-skills</code></h3><p>Remains the mandatory workflow module: authenticated workflow bundle, machine-readable stage/result contracts, host-facing sources/templates, and qualified optional profiles.</p></article>
+      <article class="card"><h3>Athena</h3><p>Supplies layered repository policy, executable leaf adapters, characterization sensors, and minimal activation metadata. It no longer operates skills and harness versions independently.</p></article>
+    </div>
+    <div class="callout warn"><strong>Operator promise:</strong> define the task and outcome—or discuss until scoped—then hand over once. While a supported coding-agent task is active, the system advances without manual stage choreography; without one, it reports activity honestly as paused or unknown.</div>
+  </section>
+
+  <section id="architecture">
+    <h2>One product, host-native execution</h2>
+    <div class="architecture" aria-label="Managed product composition">
+      <div class="node workflow"><strong>Managed workflow + evidence</strong><p>Exact skills bundle, checkpoints, policy compiler, harness admission, delivery records, finish-line reducer, release lifecycle.</p></div>
+      <div class="arrow" aria-hidden="true">↔</div>
+      <div class="node host"><strong>Claude Code / Codex native harness</strong><p>Trusted model-external admission applies the grant, fence, workspace, and worktree-materialized run-pinned projection. The admitted task owns agents, subagents, tools, permissions, cancellation, and workspaces. Hosts qualify on a graded capability ladder; Tier 1 is the V1 mutation floor.</p></div>
+      <div class="arrow" aria-hidden="true">↔</div>
+      <div class="node policy"><strong>Repository policy overlay</strong><p>Activation, executable sensors, writable/protected paths, approvals, trusted operations, and allowed merge-ready/merge/deploy authority.</p></div>
+    </div>
+    <div class="modules" aria-label="Mandatory internal modules">
+      <div class="module"><strong>Workflow semantics</strong>Scope, Plan, Work, Review, Compound.</div>
+      <div class="module"><strong>Checkpoint orchestration</strong>Pure reducer and durable typed state.</div>
+      <div class="module"><strong>Host integration</strong>Model-external binding plus in-task projection.</div>
+      <div class="module"><strong>Local execution</strong>Host-owned workspace and repository capabilities.</div>
+      <div class="module"><strong>Policy integration</strong>Layered declarations and executable grants.</div>
+      <div class="module"><strong>Evidence / admission</strong>Exact-candidate claims and verification.</div>
+      <div class="module"><strong>Lifecycle / coordination</strong>Composition, update, rollback, optional control plane.</div>
+    </div>
+    <div class="callout"><strong>Admission order:</strong> register delivery → compile policy → pin product generation → issue invocation fence and stage grant → apply them through the trusted native host boundary → attest before model tools become available.</div>
+    <div class="callout danger"><strong>Hard negative boundary:</strong> the managed product must not launch <code>codex exec</code>, <code>claude --print</code>, or another coding-agent runtime to recreate orchestration the hosts already provide.</div>
+  </section>
+
+  <section id="journey">
+    <h2>Delivery journey</h2>
+    <div class="journey">
+      <div class="step"><strong>1 · Scope</strong><small>Operator-owned outcome</small><br>Use already-scoped work or discuss until the bounded contract is explicit.</div>
+      <div class="step"><strong>2 · Register</strong><small>Managed authority begins</small><br>Pin composition, policy, candidate request, and permitted finish line.</div>
+      <div class="step"><strong>3 · Admit</strong><small>Model-external</small><br>Host applies grant, fence, workspace, and pinned projection before tools.</div>
+      <div class="step"><strong>4 · Plan</strong><small>Host-native orchestration</small><br>Codex or Claude Code uses its own agents and delegation model.</div>
+      <div class="step"><strong>5 · Work</strong><small>Candidate-bound</small><br>Implement and checkpoint through native workspace and Git tools.</div>
+      <div class="step"><strong>6 · Validate</strong><small>Repository authority</small><br>Run activated trusted sensors against the exact candidate.</div>
+      <div class="step"><strong>7 · Review + admit</strong><small>Evidence-backed</small><br>Remediate findings, verify outcomes, and admit all obligations.</div>
+      <div class="step"><strong>8 · Finish</strong><small>Policy-selected</small><br>Record and externally verify merge-ready, merge, or deploy.</div>
+    </div>
+    <div class="two">
+      <article class="card"><h3>Host interruption</h3><p>A graceful lifecycle event reports <code>paused</code>; an unobserved crash or disconnect reports <code>unknown</code> lazily on status/resume. Neither advances the delivery checkpoint.</p></article>
+      <article class="card"><h3>Safe takeover</h3><p>Same-workspace reuse requires non-model-mintable graceful termination provenance (Tier 3). Otherwise the designed path quarantines the old workspace and resumes from the last trusted candidate in a fresh native worktree, at the cost of one typed operator confirmation per session boundary.</p></article>
+    </div>
+  </section>
+
+  <section id="authority">
+    <h2>Authority stays layered</h2>
+    <div class="overflow"><table>
+      <thead><tr><th>Decision or fact</th><th>Authority</th></tr></thead>
+      <tbody>
+        <tr><td>Task, outcome, scope, requested finish line</td><td>Confirmed scoped delivery contract, bounded by repository policy</td></tr>
+        <tr><td>Workflow meaning and checkpoint outputs</td><td>Exact run-pinned <code>agent-skills</code> generation</td></tr>
+        <tr><td>Valid transitions, evidence requirements, final decision</td><td>Managed checkpoint reducer and harness kernel</td></tr>
+        <tr><td>Agents, subagents, tools, permission enforcement, cancellation</td><td>Active Codex or Claude Code harness</td></tr>
+        <tr><td>Workspace lifecycle and candidate edits</td><td>Host-native workspace facilities, bound and observed by the product</td></tr>
+        <tr><td>Allowed tools, paths, credentials, external operations</td><td>Compiled stage grant enforced at trusted host admission</td></tr>
+        <tr><td>Repository obligations, sensors, merge/deploy grants</td><td>Compiled local policy and executable repository adapters</td></tr>
+<tr><td>Reviewer charter, and whether a lens is qualified or merely labelled</td><td>Reviewer personas shipped in the run-pinned agent-skills generation, or adopter-supplied at a protected path; each attempt record binds the persona digest the product resolved, never one an agent claims</td></tr>
+        <tr><td>Human authorization</td><td>Two non-model-mintable classes: sensitive approvals (host- or OS-native assertion) and operator confirmations (binding-owned echo-challenge channel), each bound to action/identities/epochs</td></tr>
+        <tr><td>Queue and cross-repository visibility</td><td>Optional control plane; never local evidence or finish-line authority</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="milestones">
+    <h2>Premise gates and releases</h2>
+    <div class="milestones">
+      <div class="milestone"><b>M0 · Thin walking skeleton</b>Graded host-capability discovery proves Tier 1 admission, one local generation exists, and one handoff/resume/merge-ready path completes on the first Tier 1-qualified host (Claude Code default) before broad hardening.</div>
+      <div class="milestone"><b>M1 · Athena shadow</b>Compare only event-backed, repository-bound Athena shadow deliveries against a like-for-like manual baseline, measuring acceptance through the first merge-ready report. Blocked-versus-progressing share is the sole gate; interventions and policy-required interruptions remain separately reported.</div>
+      <div class="milestone"><b>M2 · Trackerless local product</b>Qualify exact composition, update/rollback, two policies, and no-control-plane merge-ready delivery; each host completes at its qualified tier, with a single-host release claim if the second host is below Tier 1.</div>
+      <div class="milestone"><b>M3 · Athena cutover</b>Switch one checkpoint/evidence authority with shadow parity, fencing, rollback rehearsal, and preserved <code>pr:athena</code> strength.</div>
+      <div class="milestone"><b>M4 · Optional Linear composition</b>Add the versioned connector after core release, then rerun composition, the U12 paths for every claimed supported host, and Athena shadow/update/rollback before activation.</div>
+    </div>
+    <div class="callout warn"><strong>M1 has not been claimed:</strong> consolidated <code>agent-delivery-harness</code> commit <code>777311361120ff0717d957853144c57e1d0b912c</code> (<a href="https://github.com/kwam1na/agent-delivery-harness/pull/65">PR #65</a>) supplies the explicit-input scorer, host-neutral observation contract, Claude-qualified full direct canonical Read producer, repository-derived literal protected gate target, and frozen first-report window. The Claude 2.1.252 exact-Read qualification does not regrade discovery exclusivity, so ambient discovery coexistence remains non-blocking during this authority-free shadow window. Athena’s adopter-local verdict remains honestly <code>incomplete / no_observed_consumption</code>: zero of three required deliveries are counted because no binding-admitted Athena shadow delivery is recorded. The now-empty <code>openPreM1Blockers</code> list records landed product behavior, not an observed delivery. The retained scope characterization and explicit scorer path create no host session or gate entry, so they fill no slot. Nothing here claims runtime success, M1 success, cutover readiness, merge, or deployment.</div>
+  </section>
+
+  <section id="units">
+    <h2>Implementation units</h2>
+    <p class="muted">M0 is implemented through official minimum slices in the final module boundaries; later units harden those same paths.</p>
+    <div class="overflow"><table>
+      <thead><tr><th>Unit</th><th>Outcome</th><th>Direct dependencies</th></tr></thead>
+      <tbody>
+        <tr><td class="phase">U1</td><td>Freeze the three-repository composition baseline.</td><td>—</td></tr>
+        <tr><td class="phase">U2</td><td>Define product, checkpoint, policy, grant, trust, evidence, and finish-line contracts.</td><td>U1</td></tr>
+        <tr><td class="phase">U2H</td><td>Prove trusted model-external host admission on exact supported host versions.</td><td>U2</td></tr>
+        <tr><td class="phase">U3V</td><td>Build one minimum immutable local composition and pinned generation root.</td><td>U2, U2H</td></tr>
+        <tr><td class="phase">U2V</td><td>Prove the official thin one-handoff walking skeleton on the first Tier 1-qualified host.</td><td>U2H, U3V</td></tr>
+        <tr><td class="phase">U3</td><td>Harden digest-closed composition, cross-platform install, update, GC, rollback, and maintenance-lane trust authority.</td><td>U2V, U3V</td></tr>
+        <tr><td class="phase">U4</td><td>Harden layered repository policy and checkpoint-specific execution grants.</td><td>U2V</td></tr>
+        <tr><td class="phase">U5</td><td>Harden durable checkpoints, fencing, cancellation, takeover, and security blocking.</td><td>U2, U4</td></tr>
+        <tr><td class="phase">U6</td><td>Harden executable workflow graphs and normalized results.</td><td>U2, U3, U5</td></tr>
+        <tr><td class="phase">U6T</td><td>Bundle and qualify the optional first Linear integration.</td><td>U3, U4, U6</td></tr>
+        <tr><td class="phase">U7A</td><td>Qualify the Claude Code binding/projection without owning host orchestration.</td><td>U2H, U3, U5, U6</td></tr>
+        <tr><td class="phase">U7B</td><td>Qualify the equivalent Codex-native integration.</td><td>U2H, U6, U7A</td></tr>
+        <tr><td class="phase">U8</td><td>Compose repository sensors, multi-lens review, outcome claims, and admission.</td><td>U4, U5, U6, U7A</td></tr>
+        <tr><td class="phase">U9</td><td>Prove the safe merge-ready finish line.</td><td>U5, U8</td></tr>
+        <tr><td class="phase">U10</td><td>Expose one host-native scope/status/resume/checkpoint facade.</td><td>U3, U4, U5, U6, U7A, U8, U9</td></tr>
+        <tr><td class="phase">U11</td><td>Qualify optional control-plane coordination without moving authority.</td><td>U5, U10, U14</td></tr>
+        <tr><td class="phase">U12</td><td>Qualify the exact trackerless product across both hosts and two policies.</td><td>U2V, U3, U4, U5, U6, U7B, U8, U9, U10</td></tr>
+        <tr><td class="phase">U13</td><td>Project Athena into layered policy and leaf capabilities.</td><td>U4; U3, U7A for the M1 shadow preconditions only</td></tr>
+        <tr><td class="phase">U14</td><td>Cut Athena over through one reversible, fenced canary.</td><td>U10, U12, U13</td></tr>
+        <tr><td class="phase">U15</td><td>Add separately authorized merge and deploy actions.</td><td>U9, U12, U14</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="safety">
+    <h2>Failure and trust posture</h2>
+    <div class="two">
+      <article class="card"><h3>Native grant enforcement</h3><ul><li>Grant, workspace, fence, and pinned root apply before model tools.</li><li>Missing, empty, unsupported, or failed grant application yields no mutation token.</li><li>Direct shell/MCP/provider bypass and protected-path writes are hostile qualification cases.</li></ul></article>
+      <article class="card"><h3>Stale-host containment</h3><ul><li>Every invocation is monotonically fenced against journal revision, candidate, policy, trust, and workspace.</li><li>Old-fence checkpoint, evidence, approval, and external-action submissions reject permanently.</li><li>Unverified prior workspaces are quarantined, never silently reused.</li></ul></article>
+      <article class="card"><h3>Dual revocation ceilings</h3><ul><li>Repository authority can narrow stage and finish-line powers immediately.</li><li>V1 product trust is local and operator-pinned (<code>product-trust: local-digest / operator-pinned</code>): a revocation list with a monotonic epoch and a no-downgrade high-water mark in the installation-scoped trust store; detached signing deferred to the first external adopter.</li><li>Revoked generations remain audit-retained but cannot admit, mutate, satisfy evidence, finish, or serve as executable rollback targets.</li></ul></article>
+      <article class="card"><h3>Human and privileged actions</h3><ul><li>Agents cannot mint termination provenance, sensitive approval assertions, or operator confirmations.</li><li>Merge/deploy/update/rollback credentials never enter model-driven tasks.</li><li>External actions bind both revocation epochs, candidate, fence, adapter, approval, and current evidence.</li></ul></article>
+    </div>
+    <div class="callout warn"><strong>Local trust, no outage mode:</strong> there is no network trust authority and no metadata expiry, so local trust state is always current. Revocation immediately fences the invocation and enters <code>security_blocked</code> at any canonical recheck site; the exit always requires current trust state, full re-preparation, and revoked-era evidence invalidation — plus an explicit operator-asserted migration when the generation changed or the delivery is rebound.</div>
+  </section>
+
+  <section id="finish">
+    <h2>Observable finish line</h2>
+    <ul>
+      <li>One install exposes an exact inspectable composition with no adopter-selectable skills/harness split.</li>
+      <li>One scoped handoff progresses through Plan → Work → Review → Compound and the policy-selected finish line without operator stage choreography while a supported host task is active.</li>
+      <li>The first Tier 1-qualified host (Claude Code default) proves model-external admission and host-native orchestration, the second host completes at its graded tier; the product launches no coding-agent subprocess, schedules no subagent, and creates or deletes no worktree.</li>
+      <li>Pause, unknown activity, cancellation, stale-task races, fresh-worktree takeover, and candidate mutation cannot accept stale evidence or duplicate external actions.</li>
+      <li>Every merge-ready result has criterion-mapped evidence, unanimous required review, a neutral tracked record, and compiled external-verifier proof.</li>
+      <li>Both repository-authority and product-trust revocation gate admission through terminal success; revoked generations enter a typed, actionable security block.</li>
+      <li>The trackerless product passes qualification for every claimed supported host and two policies, then Athena cutover; the later optional Linear composition reruns the full exact-composition and Athena gates before activation.</li>
+      <li>Athena retains its policy, executable adapters, Graphify/Convex/telemetry/reporting behavior, and <code>pr:athena</code> authority while shedding independent skills/harness lifecycle choreography.</li>
+    </ul>
+    <div class="callout"><strong>Review record:</strong> on 2026-08-30, after five amendments and twenty re-review rounds, the coherence, feasibility, product, security, scope, and adversarial lenses aligned on the then-current architectural revision — not on later Markdown digests. The subsequent reviewer-persona amendment reached security/adversarial alignment in its own bounded review, and the 2026-08-31 M1 authority/scoring delta underwent its own six-lens review. The resulting adversarial and security corrections are recorded here as pre-M1 gaps; this does not claim their runtime implementation or one final six-lens approval of the corrected post-finding digest.</div>
+  </section>
+</main>
+</body>
+</html>

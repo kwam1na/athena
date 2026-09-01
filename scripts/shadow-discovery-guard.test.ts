@@ -27,8 +27,10 @@ async function readPolicy(file: string) {
 }
 
 /**
- * A disposable tree carrying the two policy artifacts, so a planted defect is
- * never written into the repository's own tracked bytes.
+ * A disposable tree carrying the policy artifacts, so a planted defect is
+ * never written into the repository's own tracked bytes. Planted trees clear
+ * the temporary pre-M1 blocker list before applying their edit so the existing
+ * per-entry checks remain independently exercised.
  */
 async function plantedTree(edit: {
   activation?: (value: any) => void;
@@ -39,6 +41,7 @@ async function plantedTree(edit: {
   const activation = await readPolicy(SHADOW_ACTIVATION_FILE);
   const gateRecord = await readPolicy(SHADOW_GATE_RECORD_FILE);
   const repositoryPolicy = await readPolicy(REPOSITORY_POLICY_FILE);
+  gateRecord.openPreM1Blockers = [];
   edit.activation?.(activation);
   edit.gateRecord?.(gateRecord);
   edit.repositoryPolicy?.(repositoryPolicy);
@@ -83,6 +86,19 @@ describe("shadow-window posture", () => {
     const result = await runShadowDiscoveryGuard(rootDir);
     expect(result.findings).toEqual([]);
     expect(result.status).toBe("pass");
+    expect(result.countedDeliveryIds).toEqual([]);
+    expect(
+      result.observations.map((observation) => observation.code),
+    ).toContain("comparison_set_incomplete");
+  });
+
+  test("the scratch marker characterization remains diagnostic and non-counting", async () => {
+    const activation = await readPolicy(SHADOW_ACTIVATION_FILE);
+    const entry = activation.characterization.historicalScopeCharacterization.observed.gateRecordEntry;
+    expect(entry.countedInComparisonSet).toBe(false);
+    expect(entry.evidenceClassification).toBe("diagnostic-only");
+    expect(entry.nonCountingReason).toContain("no qualified host callback");
+    expect(entry.nonCountingReason).toContain("fills no M1 slot");
   });
 
   test("an activation that claims delivery authority is a finding", async () => {
@@ -146,14 +162,14 @@ describe("the pinned product and the evidence recorded about it", () => {
     expect(activation.characterization.productCommit).toBe(activation.product.commit);
   });
 
-  test("the tracked characterization records resolving a charter for every declared lens", async () => {
+  test("the historical scope characterization records resolving a charter for every declared lens", async () => {
     // Named members, not a count: a compilation that resolved some other lens
     // set would satisfy a count and satisfy nothing else, and the defect this
     // repository actually hit was a specific charter reference the pinned
     // product could not resolve.
     const activation = await readPolicy(SHADOW_ACTIVATION_FILE);
     const policy = await readPolicy(REPOSITORY_POLICY_FILE);
-    const resolved = activation.characterization.observed.policyCompilation.resolvedLenses;
+    const resolved = activation.characterization.historicalScopeCharacterization.observed.policyCompilation.resolvedLenses;
     expect(
       resolved.map((lens: any) => [lens.lensId, lens.personaId]).sort(),
     ).toEqual([
@@ -190,6 +206,17 @@ describe("the pinned product and the evidence recorded about it", () => {
     const policyDirCopy = await plantedTree({
       activation: (value) => {
         value.characterization.productCommit = "8635ea8aca18f27f660b3551b950ffb7e6ad22dd";
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("characterization_pin_mismatch");
+  });
+
+  test("an explicit scorer from another commit is a finding", async () => {
+    const policyDirCopy = await plantedTree({
+      activation: (value) => {
+        value.characterization.observed.scorerAuthority.commit =
+          "8635ea8aca18f27f660b3551b950ffb7e6ad22dd";
       },
     });
     const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
@@ -426,8 +453,6 @@ describe("projection scoping", () => {
     try {
       const result = await runShadowDiscoveryGuard(rootDir);
       expect(codes(result)).toContain("projection_outside_managed_worktree");
-      // The same un-injected observation also sees the vendored generation, so
-      // this pins the default coexistence read, not just the projection half.
       expect(
         result.observations.map((observation) => observation.code),
       ).toContain("exclusivity_non_blocking");
@@ -453,7 +478,7 @@ describe("projection scoping", () => {
 });
 
 describe("exactly-one-discovery exclusivity", () => {
-  test("coexisting roots on an exclusivity-ungraded host are non-blocking", async () => {
+  test("coexisting roots on the current-version-unverified proving host are non-blocking", async () => {
     const result = await runShadowDiscoveryGuard(rootDir, {
       worktree: {
         dir: path.join(rootDir, ".worktrees", "managed", "delivery-1"),
@@ -528,6 +553,7 @@ describe("exactly-one-discovery exclusivity", () => {
     const policyDirCopy = await plantedTree({
       activation: (value) => {
         value.exclusivityPosition.duringShadowWindow = "blocking";
+        value.hosts[0].exclusivityGrading = "exclusivity-ungraded";
       },
     });
     const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
@@ -572,6 +598,21 @@ describe("exactly-one-discovery exclusivity", () => {
 });
 
 describe("binding-sourced projection-consumption records", () => {
+  test("open pre-M1 blockers reject a marker-only entry before it can count", async () => {
+    const policyDirCopy = await plantedTree({
+      gateRecord: (value) => {
+        value.openPreM1Blockers = ["V26-1519", "V26-1520", "V26-1521"];
+        value.deliveries = [bindingSourcedDelivery()];
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toEqual(["pre_m1_blockers_open"]);
+    expect(result.countedDeliveryIds).toEqual([]);
+    expect(
+      result.observations.map((observation) => observation.code),
+    ).toContain("comparison_set_incomplete");
+  });
+
   test("an affirmative binding-sourced record counts toward the comparison set", async () => {
     const policyDirCopy = await plantedTree({
       gateRecord: (value) => {

@@ -28,39 +28,26 @@ import { POLICY_PROJECTION_DIR } from "./policy-projection-check";
  *     worktree. The repository root and every non-managed worktree keep the
  *     vendored generation authoritative. What is checked is the root of the
  *     tree the guard is invoked in, not every directory beneath it.
- *   - PIN EVIDENCE. The activation pins the installed product at one commit,
- *     and the characterization it records is evidence about that exact commit
- *     and no other. So the characterization names the commit it observed, the
- *     guard requires the two to agree, and the charter references the
- *     compilation resolved are checked against the lenses this repository's
- *     policy document actually declares. Moving the pin and leaving the
- *     evidence behind, and moving a lens without recompiling, are the two ways
- *     the activation and the policy come to describe incompatible worlds —
- *     which is the state this position exists to refuse, having already
- *     happened once. What it holds is that the two cannot silently DIVERGE:
- *     both fields live in this one hand-editable document, and Athena carries
- *     no copy of the product to check either against, so an editor who bumps
- *     the pin and restamps the evidence's commit in the same edit satisfies
- *     it. That is the honest limit of a self-attested artifact, and the
- *     lens comparison below is what still fails on such an edit whenever the
- *     restamped evidence stops describing the declared lens set.
- *   - CONSUMPTION. A delivery counts toward the milestone's comparison set
- *     only on a record that declares the binding as its source and carries the
- *     binding's marker fields for this delivery and fence. The guard checks
- *     that declaration and shape; what keeps a session from writing the record
- *     is that `.agents` is a protected path in every checkpoint grant, plus
- *     the binding-side writer the product supplies. An agent-supplied claim is
- *     a finding, and an absent or non-affirmative record excludes the
- *     delivery.
+ *   - PIN EVIDENCE. The activation pins the candidate product at one commit,
+ *     and its current characterization names that exact commit. A current
+ *     explicit-input scorer observation is not a projection or policy-compile
+ *     observation; the earlier scope characterization stays separately pinned
+ *     to its own historical commit. The guard checks that historical charter
+ *     references still describe the policy only as historical context. It
+ *     never lets a newer product pin restamp that older materialization.
+ *   - CONSUMPTION. While the gate record declares open pre-M1 blockers, every
+ *     delivery is rejected before its marker can be considered. Once that list
+ *     is empty, the existing per-entry source and shape checks govern. What
+ *     keeps a session from writing the record is that `.agents` is a protected
+ *     path in every checkpoint grant, plus the binding-side writer the product
+ *     supplies.
  *
- * Exclusivity itself is deliberately NOT asserted as blocking here. Both
- * graded hosts are exclusivity-ungraded — they can add the run-pinned
- * discovery root but cannot scope discovery to it — so ambient vendored
- * discovery coexists inside a managed worktree. That cannot corrupt authority
- * while the shadow window holds none, so coexistence is recorded as a
- * non-blocking observation. It becomes a finding only once the proving host
- * carries the affirmative capable grade, and hard exclusivity arrives with the
- * cutover's removal gate.
+ * The current sole proving host is qualified for strict exact Read but its
+ * current-version discovery exclusivity is unverified. Ambient vendored
+ * discovery alongside a managed projection is therefore diagnostic and
+ * non-blocking while the shadow window holds no authority. Unsupported hosts
+ * remain outside the lane; this guard neither admits them nor provides a
+ * fallback.
  *
  * Both consumers of the grading therefore key on that affirmative value rather
  * than on the absence of the ungraded one. Keying on the absence would read a
@@ -113,6 +100,7 @@ export type ShadowGuardFindingCode =
   | "consumption_record_missing"
   | "consumption_record_shape"
   | "agent_supplied_consumption_claim"
+  | "pre_m1_blockers_open"
   | "comparison_set_admission_defect"
   | "comparison_set_mix_defect";
 
@@ -404,6 +392,17 @@ async function evaluateShadowArtifacts(input: {
       )}; the recorded evidence is about one commit and the installation is about another, so re-run the characterization at the pinned commit rather than carrying the old observation forward`,
     );
   }
+  if (
+    activation.characterization?.kind === "explicit-scorer" &&
+    activation.characterization?.observed?.scorerAuthority?.commit !== pin
+  ) {
+    emit(
+      "characterization_pin_mismatch",
+      `the activation pins the product at ${pin}, but its explicit scorer observation names ${JSON.stringify(
+        activation.characterization?.observed?.scorerAuthority?.commit,
+      )}; rerun the scorer from the pinned product before carrying its result into this activation`,
+    );
+  }
 
   // The compilation the characterization recorded is what says this
   // repository's policy is compilable by the pinned product at all. It is
@@ -418,8 +417,11 @@ async function evaluateShadowArtifacts(input: {
   // artifact — the same policy every other position here applies, and one
   // fewer bespoke throw to keep witnessed.
   const declaredLenses: any[] = repositoryPolicy.reviewLenses;
+  const historicalScope = activation.characterization?.historicalScopeCharacterization;
   const compiledLenses: any[] =
-    activation.characterization?.observed?.policyCompilation?.resolvedLenses ?? [];
+    activation.characterization?.kind === "explicit-scorer"
+      ? historicalScope?.observed?.policyCompilation?.resolvedLenses ?? []
+      : activation.characterization?.observed?.policyCompilation?.resolvedLenses ?? [];
   const declared = sorted(declaredLenses);
   const compiled = sorted(compiledLenses);
   if (
@@ -429,12 +431,14 @@ async function evaluateShadowArtifacts(input: {
     emit(
       "characterized_lenses_stale",
       `the characterization at ${JSON.stringify(
-        characterizedPin,
+        activation.characterization?.kind === "explicit-scorer"
+          ? historicalScope?.productCommit
+          : characterizedPin,
       )} records resolving ${JSON.stringify(
         compiled,
       )}, and ${POLICY_PROJECTION_DIR}/${REPOSITORY_POLICY_FILE} now declares ${JSON.stringify(
         declared,
-      )}; a lens the pinned product was never shown to resolve is a charter reference with no evidence behind it, so recompile against the pinned product and record what it resolved`,
+      )}; a lens the recorded characterization was never shown to resolve is a charter reference with no evidence behind it, so recompile against the relevant product pin and record what it resolved`,
     );
   }
 
@@ -530,8 +534,26 @@ async function evaluateShadowArtifacts(input: {
     ? gateRecord.deliveries
     : [];
   const countedByCategory = new Map<string, number>();
+  const openPreM1Blockers = gateRecord.openPreM1Blockers;
+  const blockerListValid = Array.isArray(openPreM1Blockers);
 
-  for (const delivery of deliveries) {
+  if (!blockerListValid) {
+    emit(
+      "artifact_unreadable",
+      "the gate record's openPreM1Blockers field must be an explicit list; admission fails closed until the list can be read",
+    );
+  } else if (openPreM1Blockers.length > 0 && deliveries.length > 0) {
+    emit(
+      "pre_m1_blockers_open",
+      `the gate record still lists open pre-M1 blockers ${openPreM1Blockers.join(
+        ", ",
+      )}; no delivery may be recorded or counted until the list is empty`,
+    );
+  }
+
+  const deliveriesToEvaluate =
+    blockerListValid && openPreM1Blockers.length === 0 ? deliveries : [];
+  for (const delivery of deliveriesToEvaluate) {
     const id = String(delivery?.id ?? "<unnamed>");
     const record = delivery?.projectionConsumption;
     let admissible = false;
@@ -651,7 +673,7 @@ if (import.meta.main) {
   const result = await runShadowDiscoveryGuard(rootDir);
   if (result.status === "pass") {
     console.log(
-      "[shadow-discovery-guard] Shadow-window posture holds: shadow-mode activation, characterization evidence bound to the pinned product and the declared lenses, byte-neutral vendored discovery layout, projection scoped to managed delivery worktrees, and binding-sourced consumption records only.",
+      "[shadow-discovery-guard] Shadow-window posture holds: shadow-mode activation, characterization evidence bound to the pinned product and the declared lenses, byte-neutral vendored discovery layout, projection scoped to managed delivery worktrees, and the pre-M1 admission interlock intact.",
     );
   } else {
     console.log(

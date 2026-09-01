@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-01T08:21:24.986Z",
+  "branch": "codex/managed-agent-delivery-system-plan",
+  "headSha": "a651789bd1158336e755bd9bd60a9e4c318de810",
+  "deliverableDiffFingerprint": "04b8c39c8483689e82a3ea01e35427aca6938541f35c12e6e1c7de0d20b90395",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 0,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 760519.684708
+  },
+  "reviewLoop": {
+    "providerId": "ce-code-review",
+    "runId": "41d90900-7cad-46d7-bd3c-44609b9d2ef9",
+    "finalPassId": "028e534a-7628-4bd9-ae37-b2d7146e36b7",
+    "recordedAt": "2026-09-01T08:08:36.844Z",
+    "iterationCount": 2,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 0,
+      "P3": 0
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": []
+  }
+}
