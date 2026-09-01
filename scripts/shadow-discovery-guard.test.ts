@@ -94,11 +94,11 @@ describe("shadow-window posture", () => {
 
   test("the scratch marker characterization remains diagnostic and non-counting", async () => {
     const activation = await readPolicy(SHADOW_ACTIVATION_FILE);
-    const entry = activation.characterization.observed.gateRecordEntry;
+    const entry = activation.characterization.historicalScopeCharacterization.observed.gateRecordEntry;
     expect(entry.countedInComparisonSet).toBe(false);
     expect(entry.evidenceClassification).toBe("diagnostic-only");
-    expect(entry.nonCountingReason).toContain("no model-external exact workflow-source read");
-    expect(entry.nonCountingReason).toContain("V26-1519, V26-1520, and V26-1521 remain open");
+    expect(entry.nonCountingReason).toContain("no qualified host callback");
+    expect(entry.nonCountingReason).toContain("fills no M1 slot");
   });
 
   test("an activation that claims delivery authority is a finding", async () => {
@@ -162,14 +162,14 @@ describe("the pinned product and the evidence recorded about it", () => {
     expect(activation.characterization.productCommit).toBe(activation.product.commit);
   });
 
-  test("the tracked characterization records resolving a charter for every declared lens", async () => {
+  test("the historical scope characterization records resolving a charter for every declared lens", async () => {
     // Named members, not a count: a compilation that resolved some other lens
     // set would satisfy a count and satisfy nothing else, and the defect this
     // repository actually hit was a specific charter reference the pinned
     // product could not resolve.
     const activation = await readPolicy(SHADOW_ACTIVATION_FILE);
     const policy = await readPolicy(REPOSITORY_POLICY_FILE);
-    const resolved = activation.characterization.observed.policyCompilation.resolvedLenses;
+    const resolved = activation.characterization.historicalScopeCharacterization.observed.policyCompilation.resolvedLenses;
     expect(
       resolved.map((lens: any) => [lens.lensId, lens.personaId]).sort(),
     ).toEqual([
@@ -442,11 +442,9 @@ describe("projection scoping", () => {
     try {
       const result = await runShadowDiscoveryGuard(rootDir);
       expect(codes(result)).toContain("projection_outside_managed_worktree");
-      // The same un-injected observation also sees the vendored generation, so
-      // this pins the default coexistence read, not just the projection half.
-      expect(
-        result.observations.map((observation) => observation.code),
-      ).toContain("exclusivity_non_blocking");
+      // The qualified proving-host lane makes ambient coexistence a finding,
+      // rather than treating it as a non-blocking diagnostic observation.
+      expect(codes(result)).toContain("discovery_exclusivity_violation");
     } finally {
       await rm(projection, { force: true });
     }
@@ -469,7 +467,7 @@ describe("projection scoping", () => {
 });
 
 describe("exactly-one-discovery exclusivity", () => {
-  test("coexisting roots on an exclusivity-ungraded host are non-blocking", async () => {
+  test("coexisting roots on the qualified proving host are a finding", async () => {
     const result = await runShadowDiscoveryGuard(rootDir, {
       worktree: {
         dir: path.join(rootDir, ".worktrees", "managed", "delivery-1"),
@@ -477,10 +475,7 @@ describe("exactly-one-discovery exclusivity", () => {
         vendoredDiscoveryVisible: true,
       },
     });
-    expect(codes(result)).not.toContain("discovery_exclusivity_violation");
-    expect(
-      result.observations.map((observation) => observation.code),
-    ).toContain("exclusivity_non_blocking");
+    expect(codes(result)).toContain("discovery_exclusivity_violation");
   });
 
   test("coexisting roots stay non-blocking on any grading that is not the capable one", async () => {
@@ -544,6 +539,7 @@ describe("exactly-one-discovery exclusivity", () => {
     const policyDirCopy = await plantedTree({
       activation: (value) => {
         value.exclusivityPosition.duringShadowWindow = "blocking";
+        value.hosts[0].exclusivityGrading = "exclusivity-ungraded";
       },
     });
     const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });

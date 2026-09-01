@@ -79,42 +79,36 @@ The guard's four positions:
   worktree. The repository root and every non-managed worktree keep the vendored
   generation authoritative. What is checked is the root of the tree the guard
   runs in, not every directory beneath it.
-- **Consumption.** The current binding source label and marker fields are
-  diagnostic only and cannot fill a comparison slot. Before any delivery can
-  count, [V26-1519](https://linear.app/v26-labs/issue/V26-1519) must provide a
-  model-external exact-path-and-digest workflow-source read event,
-  [V26-1520](https://linear.app/v26-labs/issue/V26-1520) must bind the writer to
-  the derived target repository identity, and
-  [V26-1521](https://linear.app/v26-labs/issue/V26-1521) must align baseline and
-  shadow measurement at the first merge-ready report. All three are required
-  pre-M1 blockers. The current enforcement is a declarative
-  `openPreM1Blockers` list in the gate record: while it is non-empty, the guard
-  rejects any non-empty delivery list with one finding and counts nothing. The
-  list is emptied only after all three implementations and their planted
-  sensors land; the existing per-entry checks govern after that. An
-  agent-supplied claim is still a finding and excludes the delivery; so does an
-  absent record or a trustworthy event that affirms non-consumption.
+- **Consumption.** The marker alone remains diagnostic and cannot fill a
+  comparison slot. The pinned harness product now owns a host-neutral observation
+  contract and admits affirmative evidence only when its Claude-qualified
+  adapter reports a completed full Read of the direct receipt-derived canonical
+  workflow path, bound to the delivery, fence, host invocation, and projection
+  digest. Its existing writer derives the delivery repository identity and
+  accepts only the real repository's literal protected gate target with one
+  link before mutation. The frozen scorer measures the baseline and shadow
+  through the first merge-ready report. `openPreM1Blockers` is therefore empty;
+  ordinary per-entry checks now govern admission. An agent-supplied claim, an
+  absent record, a negative event, an unsupported host, or an aliasing target
+  still excludes the delivery. None of those mechanisms supplies a delivery by
+  itself, so Athena remains at zero of three and M1 remains incomplete.
 
-Exclusivity is deliberately **not** asserted as blocking, and nothing here
-suppresses the vendored generation. Neither graded host can scope discovery to
-one root, so ambient vendored discovery coexists inside a managed worktree.
-During a read-only window that holds no authority, coexistence cannot corrupt
-anything, so the guard records it as a non-blocking observation — and refuses an
-activation that claims a blocking exclusivity position the graded host cannot
-deliver. Coexistence becomes a finding the moment the proving host is graded
-`exclusivity-graded`, the affirmative value both consumers key on, and scoping is what such a grade would buy.
+The sole proving delivery host is Claude Code 2.1.252 under the qualified
+`--restricted`, empty-setting-sources binding profile. That profile scopes the
+M1 lane to the run-pinned projection, so coexistence with ambient vendored
+discovery in a managed worktree is blocking evidence rather than a diagnostic
+observation. No other host is in Athena's M1 delivery lane: a capability-only
+host may be inventoried separately but cannot supply an affirmative record or a
+fallback discovery posture.
 
 One honest limit on the consumption position: the guard reads the gate-record
-artifact, so it checks only the record's *declared* source and shape. It cannot
-prove that the receipted projection was read, that the writer targeted the same
-repository as the delivery, or that the measurement ended at the merge-ready
-report. The `.agents` checkpoint protection and the binding-side writer in the
-pinned product preserve the guard-versus-writer provenance boundary, but they
-do not close those three semantic gaps. Athena's current comparison set is
-empty because no binding-admitted Athena shadow delivery is recorded, not
-because the writer is absent. Until V26-1519, V26-1520, and V26-1521 all land,
-no delivery may count and M1 remains incomplete. Nothing in this pre-cutover
-note claims delivery authority, runtime parity, or cutover readiness.
+artifact, so it checks only the record's *declared* source and shape. It does
+not reproduce the host callback, the writer's repository/target checks, or the
+scorer's window computation. Those are installed-product boundaries. Athena's
+current comparison set is empty because no binding-admitted Athena shadow
+delivery is recorded, not because the producer or writer is absent. Nothing in
+this pre-cutover note claims delivery authority, runtime parity, or cutover
+readiness.
 
 ## Why This Matters
 
@@ -140,11 +134,12 @@ runtime parity or cutover readiness.
   managed worktree, an exclusivity claim the grade does not support, an
   agent-supplied consumption claim, a marker from another run, and a comparison
   set larger than the baseline mix.
-- The three pre-M1 blockers add planted sensors for a non-consuming path-name
-  observation, a cross-repository write that leaves both records unchanged, and
-  post-report waiting that cannot dilute blocked share. Until those sensors and
-  their corresponding behavior land, `openPreM1Blockers` remains non-empty and
-  the comparison set remains empty.
+- The harness product's planted sensors cover a non-consuming or partial
+  workflow Read, a cross-repository/symlink/hardlink write that leaves records
+  unchanged, and post-report waiting that cannot dilute blocked share. The
+  Athena record keeps `openPreM1Blockers` empty because those behaviors are
+  landed, while its still-empty delivery set honestly preserves the incomplete
+  result.
 - An incomplete comparison set is reported as an observation rather than passing
   silently, so the gate cannot be scored on a partial set.
 
