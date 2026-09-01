@@ -624,7 +624,7 @@ describe("derived projection-consumption summaries without external-artifact ins
     expect(result.countedDeliveryIds).toEqual(["athena-shadow-1"]);
   });
 
-  test("an agent-supplied consumption claim is rejected", async () => {
+  test("a literal non-binding consumption summary is rejected", async () => {
     const policyDirCopy = await plantedTree({
       gateRecord: (value) => {
         value.deliveries = [
