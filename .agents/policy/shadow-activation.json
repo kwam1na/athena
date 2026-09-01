@@ -72,8 +72,8 @@
     "beforeThatGate": "no tracked byte of the vendored discovery layout changes"
   },
   "consumptionRecord": {
-    "requiredSource": "the host-neutral projection-consumption observation contract, accepted only when the qualified host reports a completed full Read of the direct receipt-derived canonical workflow path with the matching delivery, fence, host invocation, and projection digest",
-    "producedBy": "Claude Code is the sole qualified producer at this generation. Its model-external PostToolUse Read observation is admitted by the host-neutral contract; unsupported hosts produce no affirmative evidence and remain excluded from M1",
+    "requiredSource": "projection-consumption-observation/1: the host-neutral normalized observation contract, accepted only when the qualified host reports a completed full Read of the direct receipt-derived canonical workflow path with the matching delivery, fence, host invocation, and projection digest",
+    "producedBy": "the qualified Claude Code PostToolUse adapter produces projection-consumption-observation/1 now. A future qualified Codex native adapter must emit that same normalized contract; Codex is excluded from counting now because no qualified binding or producer exists, and unqualified hosts produce no affirmative evidence and remain excluded from M1",
     "agentSuppliedClaims": "rejected — a delivery carrying one is excluded from the comparison set and the guard reports a finding",
     "absentOrNegative": "excluded from the comparison set",
     "writtenInto": ".agents/policy/shadow-milestone-gate-record.json",

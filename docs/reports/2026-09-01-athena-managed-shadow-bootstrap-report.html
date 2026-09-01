@@ -5,7 +5,7 @@
   <title>Athena manual-shadow bootstrap</title>
 </head>
 <body>
-<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="f04711719aea31e068ed7b2cea62605dfc1b1980d5abc8cf2568a999a1ca7726">
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="e0f3848699431ccba3a138eb3f2ad9f071f59096196d833b035b27e79966a45f">
   <header data-report-section="header">
     <h1>Athena manual-shadow bootstrap</h1>
     <p>Productizing Athena's existing delivery workflow as a reusable decision and evidence layer</p>
@@ -32,7 +32,7 @@
   <section data-report-section="problem">
     <h2>The product boundary</h2>
     <p>The product is a referee and evidence ledger beside Athena's existing delivery workflow. It does not launch agents, schedule subagents, manage sessions or worktrees, or replace Athena's repository gates.</p>
-    <p>A counting shadow may claim only that a qualified host reported a completed exact full Read, exact candidate-bound evidence was recorded, and Athena's repository policy passed. It does not prove trusted operator intent, registration, takeover authority, or model isolation.</p>
+    <p>A counting shadow may claim only that a qualified host emitted <code>projection-consumption-observation/1</code> for a completed exact full Read, exact candidate-bound evidence was recorded, and Athena's repository policy passed. The qualified Claude PostToolUse adapter produces that normalized contract now; a future qualified Codex native adapter must emit the same contract. Codex has no qualified binding or producer now, and it and all unqualified hosts remain excluded from counting. This does not prove trusted operator intent, registration, takeover authority, or model isolation.</p>
   </section>
 
   <section data-report-section="mental-model">
@@ -64,7 +64,7 @@
   <section data-report-section="failure-boundaries">
     <h2>Deferred assurance and failure boundaries</h2>
     <p>V26-1527's opaque pre-registration confirmation is a future higher-assurance trust tier. Athena's current delivery system does not rely on that guarantee, so the MVP does not claim it and does not block field use on it.</p>
-    <p>The exact-read scorer is not weakened. Unsupported hosts still produce no affirmative observation. Any machinery beyond the manual loop must answer a concrete failure observed in the first three real deliveries.</p>
+    <p>The exact-read scorer is not weakened. The qualified Claude PostToolUse adapter produces <code>projection-consumption-observation/1</code>; a future qualified Codex native adapter must emit that same normalized contract. Codex currently has no qualified binding or producer, and unqualified hosts still produce no affirmative observation. Any machinery beyond the manual loop must answer a concrete failure observed in the first three real deliveries.</p>
   </section>
 
   <section data-report-section="validation">
@@ -85,7 +85,7 @@
     <ol>
       <li>Before a shadow, use the active accepted sequence-2 generation.</li>
       <li>For any later update, use the existing maintenance update and approve its fresh OS-native prompt; then verify the active pointer, accepted set/high-water mark, journal, rollback pointer, and receipt before treating that generation as eligible.</li>
-      <li>Compose the qualified Claude adapter; hosts without a qualified producer remain excluded.</li>
+      <li>Compose the qualified Claude PostToolUse adapter, which emits <code>projection-consumption-observation/1</code>; a future qualified Codex native adapter must emit the same contract. Codex has no qualified binding or producer now, and hosts without a qualified producer remain excluded.</li>
       <li>Let the host complete and report the exact full Read of the canonical workflow path.</li>
       <li>Outside the model grant, record that observation with immutable candidate identity and exact <code>pr:athena</code> evidence.</li>
       <li>Run the deterministic scorer and preserve the first merge-ready report.</li>
@@ -122,7 +122,7 @@
       <li data-quiz-question><p data-quiz-prompt>Who orchestrates the delivery?</p><ol data-quiz-options><li data-quiz-correct>The coding host</li><li>The product</li><li>The scorer</li></ol><p data-quiz-explanation>The host owns sessions, agents, tools, and sequencing.</p></li>
       <li data-quiz-question><p data-quiz-prompt>What remains Athena's repository-policy authority?</p><ol data-quiz-options><li data-quiz-correct><code>bun run pr:athena</code></li><li>The product installer</li><li>The projection marker</li></ol><p data-quiz-explanation>The shadow compares with Athena's authority; it does not replace it.</p></li>
       <li data-quiz-question><p data-quiz-prompt>What remains merge authority?</p><ol data-quiz-options><li>The model</li><li data-quiz-correct>GitHub</li><li>The policy compiler</li></ol><p data-quiz-explanation>GitHub remains the authoritative merge boundary.</p></li>
-      <li data-quiz-question><p data-quiz-prompt>Which claim can a counting shadow make?</p><ol data-quiz-options><li>Trusted operator intent</li><li data-quiz-correct>A qualified host reported the exact full Read</li><li>Guaranteed model isolation</li></ol><p data-quiz-explanation>The MVP claim is limited to qualified host-reported observation.</p></li>
+      <li data-quiz-question><p data-quiz-prompt>Which claim can a counting shadow make?</p><ol data-quiz-options><li>Trusted operator intent</li><li data-quiz-correct>A qualified host emitted projection-consumption-observation/1 for the exact full Read</li><li>Guaranteed model isolation</li></ol><p data-quiz-explanation>The MVP claim is limited to the qualified host's normalized observation.</p></li>
       <li data-quiz-question><p data-quiz-prompt>Does this MVP claim delivery registration?</p><ol data-quiz-options><li>Yes</li><li data-quiz-correct>No</li></ol><p data-quiz-explanation>Registration belongs to a future assurance tier.</p></li>
       <li data-quiz-question><p data-quiz-prompt>What is V26-1527 now?</p><ol data-quiz-options><li>An M1 blocker</li><li data-quiz-correct>Deferred higher-assurance work</li><li>A shadow runner</li></ol><p data-quiz-explanation>Athena's current delivery does not need its guarantee.</p></li>
       <li data-quiz-question><p data-quiz-prompt>How many manual shadows are next?</p><ol data-quiz-options><li>One</li><li data-quiz-correct>Three</li><li>Ten</li></ol><p data-quiz-explanation>One each for code, documentation, and operations.</p></li>

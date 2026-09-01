@@ -12,7 +12,7 @@ applies_when:
   - "A repository plans to hand delivery routing to an external policy compiler without changing its live authority yet"
   - "A migration needs an independent record of pre-cutover behavior that later parity claims can be judged against"
 tags: [delivery-harness, policy-projection, pre-cutover-oracle, read-only-comparison]
-delivery_diff_fingerprint: deb70d96637491814598e19f3a1648d1edb617832983ed3f1d40c77be1e75b41
+delivery_diff_fingerprint: e0f3848699431ccba3a138eb3f2ad9f071f59096196d833b035b27e79966a45f
 ---
 
 # Project delivery authority into a layered policy model with a frozen pre-cutover oracle
@@ -73,17 +73,23 @@ normalizes exact candidate-bound evidence, and returns deterministic decisions
 for comparison; it does not add a second admission system or preparation
 sensor inside Athena.
 
-A counting shadow claims only three things: a qualified host reported the
-completed exact full Read of the canonical workflow path, exact candidate-bound
-evidence was recorded outside the model grant, and Athena's repository policy
-passed. It does not claim trusted operator intent, delivery registration,
-takeover authority, or model isolation. V26-1527's opaque pre-registration
-confirmation is therefore deferred to a future higher-assurance trust tier.
+A counting shadow claims only three things: a qualified host emitted
+`projection-consumption-observation/1` for the completed exact full Read of the
+canonical workflow path, exact candidate-bound evidence was recorded outside
+the model grant, and Athena's repository policy passed. The qualified Claude
+PostToolUse adapter produces that normalized contract now. A future qualified
+Codex native adapter must emit the same contract; Codex is excluded from
+counting now because it has no qualified binding or producer, and unqualified
+hosts remain excluded. The comparison does not claim trusted operator intent,
+delivery registration, takeover authority, or model isolation. V26-1527's
+opaque pre-registration confirmation is therefore deferred to a future
+higher-assurance trust tier.
 
 The manual operator loop is: materialize the pinned projection, compose the
-qualified Claude adapter, let the host complete and report the exact full Read,
-record that observation with immutable candidate and `pr:athena` evidence, then
-run the deterministic scorer. Repeat once each for a code, documentation, and
+qualified Claude PostToolUse adapter, let it emit
+`projection-consumption-observation/1` for the exact full Read, record that
+observation with immutable candidate and `pr:athena` evidence, then run the
+deterministic scorer. Repeat once each for a code, documentation, and
 operations delivery. Do not add a launcher, registry, scheduler, daemon,
 callback framework, control plane, session manager, or automated scorer unless
 field data exposes a concrete failure.
@@ -109,8 +115,12 @@ instead of being silently absorbed.
   live gate can actually emit, so blocker parity cannot rot.
 - Keep the shadow comparison non-authoritative: host orchestration,
   `pr:athena`, and GitHub retain their current ownership.
-- Preserve the host-neutral exact-read contract. Hosts without a qualified
-  producer remain excluded rather than emitting weaker evidence.
+- Preserve `projection-consumption-observation/1` as the host-neutral
+  exact-read contract. The qualified Claude PostToolUse adapter produces it
+  today; a future qualified Codex native adapter must emit that same normalized
+  contract. Codex currently has no qualified binding or producer, and hosts
+  without a qualified producer remain excluded rather than emitting weaker
+  evidence.
 - Add machinery only after one of the three real shadows demonstrates a named
   failure the existing workflow and evidence contracts cannot express.
 
