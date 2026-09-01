@@ -1,11 +1,11 @@
 # Graph Report - .
 
 ## Corpus Check
-- 3329 files · ~0 words
+- 3328 files · ~0 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 14941 nodes · 18686 edges · 3253 communities detected
+- 14940 nodes · 18686 edges · 3252 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -3262,7 +3262,6 @@
 - [[_COMMUNITY_Community 3249|Community 3249]]
 - [[_COMMUNITY_Community 3250|Community 3250]]
 - [[_COMMUNITY_Community 3251|Community 3251]]
-- [[_COMMUNITY_Community 3252|Community 3252]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `createJourneyEvent()` - 40 edges
@@ -16298,10 +16297,6 @@ Nodes (0):
 Cohesion: 1.0
 Nodes (0):
 
-### Community 3252 - "Community 3252"
-Cohesion: 1.0
-Nodes (0):
-
 ## Knowledge Gaps
 - **3 isolated node(s):** `StaleConstructionError`, `FakeMessageChannel`, `HelpRequested`
   These have ≤1 connection - possible missing edges or undocumented components.
@@ -19945,37 +19940,35 @@ Nodes (0):
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 3236`** (1 nodes): `architecture-diagram-config.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 3237`** (1 nodes): `athena-preparation-sensor.test.ts`
+- **Thin community `Community 3237`** (1 nodes): `check-register-session-authority-writers.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 3238`** (1 nodes): `check-register-session-authority-writers.test.ts`
+- **Thin community `Community 3238`** (1 nodes): `delivery-documentation-admission.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 3239`** (1 nodes): `delivery-documentation-admission.test.ts`
+- **Thin community `Community 3239`** (1 nodes): `delivery-documentation-check.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 3240`** (1 nodes): `delivery-documentation-check.test.ts`
+- **Thin community `Community 3240`** (1 nodes): `documentation-waiver-command.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 3241`** (1 nodes): `documentation-waiver-command.test.ts`
+- **Thin community `Community 3241`** (1 nodes): `harness-app-registry.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 3242`** (1 nodes): `harness-app-registry.test.ts`
+- **Thin community `Community 3242`** (1 nodes): `athena-runtime-app.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 3243`** (1 nodes): `athena-runtime-app.test.ts`
+- **Thin community `Community 3243`** (1 nodes): `storefront-runtime-api.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 3244`** (1 nodes): `storefront-runtime-api.test.ts`
+- **Thin community `Community 3244`** (1 nodes): `valkey-runtime-app.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 3245`** (1 nodes): `valkey-runtime-app.test.ts`
+- **Thin community `Community 3245`** (1 nodes): `harness-behavior-scenarios.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 3246`** (1 nodes): `harness-behavior-scenarios.test.ts`
+- **Thin community `Community 3246`** (1 nodes): `harness-execution-context.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 3247`** (1 nodes): `harness-execution-context.test.ts`
+- **Thin community `Community 3247`** (1 nodes): `harness-gate-registry.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 3248`** (1 nodes): `harness-gate-registry.test.ts`
+- **Thin community `Community 3248`** (1 nodes): `harness-repo-validation.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 3249`** (1 nodes): `harness-repo-validation.test.ts`
+- **Thin community `Community 3249`** (1 nodes): `operational-work-repair.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 3250`** (1 nodes): `operational-work-repair.test.ts`
+- **Thin community `Community 3250`** (1 nodes): `background.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 3251`** (1 nodes): `background.js`
-  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 3252`** (1 nodes): `popup.js`
+- **Thin community `Community 3251`** (1 nodes): `popup.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions

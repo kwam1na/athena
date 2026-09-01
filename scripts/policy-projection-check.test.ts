@@ -52,44 +52,6 @@ describe("policy projection comparison", () => {
     expect(result.status).toBe("pass");
   });
 
-  test("the managed-shadow bootstrap requires the exact product-native review admission", async () => {
-    const copyDir = await policyDirCopy();
-    const document = await readPolicyJson(copyDir, "repository-policy.json");
-    delete document.admission;
-    await writePolicyJson(copyDir, "repository-policy.json", document);
-    await restampPolicyDigests(copyDir);
-
-    const result = await runPolicyProjectionCheck(rootDir, { policyDir: copyDir });
-    expect(result.status).toBe("fail");
-    expect(findingCodes(result)).toContain("admission_projection_defect");
-  });
-
-  test("a missing trusted preparation authority path blocks the projection before the sensor can run", async () => {
-    const result = await runPolicyProjectionCheck(rootDir, {
-      preparationSensor: {
-        spec: "athena-preparation-sensor/1",
-        capabilityId: "sensor.harness-admission",
-        command: ["bun", "run", "pr:athena:prepare"],
-        trustedBasePath: "scripts/not-present.mjs",
-      },
-    });
-
-    expect(result.status).toBe("fail");
-    expect(findingCodes(result)).toContain("preparation_sensor_defect");
-  });
-
-  test("the managed-shadow binding rejects non-identical stage grants", async () => {
-    const copyDir = await policyDirCopy();
-    const snapshot = await readPolicyJson(copyDir, "compiled-snapshot.json");
-    snapshot.compiled.checkpointGrants[0].grant.writablePaths = ["docs"];
-    await writePolicyJson(copyDir, "compiled-snapshot.json", snapshot);
-    await restampPolicyDigests(copyDir);
-
-    const result = await runPolicyProjectionCheck(rootDir, { policyDir: copyDir });
-    expect(result.status).toBe("fail");
-    expect(findingCodes(result)).toContain("session_grant_defect");
-  });
-
   test("the pre-cutover oracle bytes match the pinned digest", async () => {
     const bytes = await readFile(path.join(policyDir, "pre-cutover-oracle.json"));
     const digest = createHash("sha256").update(bytes).digest("hex");
@@ -245,9 +207,6 @@ describe("policy projection comparison", () => {
     report.inputs["pre-cutover-oracle.json"] = oracleDigest;
     report.inputs["compiled-snapshot.json"] = await digestOf("compiled-snapshot.json");
     report.inputs["compiledDigest"] = snapshot.compiled.compiledDigest;
-    report.inputs["scripts/athena-preparation-sensor.mjs"] = createHash("sha256")
-      .update(await readFile(path.join(rootDir, "scripts/athena-preparation-sensor.mjs")))
-      .digest("hex");
     await writePolicyJson(dir, "comparison-report.json", report);
   }
 

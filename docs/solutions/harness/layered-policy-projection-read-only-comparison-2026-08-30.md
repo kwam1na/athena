@@ -12,7 +12,7 @@ applies_when:
   - "A repository plans to hand delivery routing to an external policy compiler without changing its live authority yet"
   - "A migration needs an independent record of pre-cutover behavior that later parity claims can be judged against"
 tags: [delivery-harness, policy-projection, pre-cutover-oracle, read-only-comparison]
-delivery_diff_fingerprint: c48b7a1a0b91d7d6accca0de700cffbfe355c3327401c3113358826e2a7d7f33
+delivery_diff_fingerprint: deb70d96637491814598e19f3a1648d1edb617832983ed3f1d40c77be1e75b41
 ---
 
 # Project delivery authority into a layered policy model with a frozen pre-cutover oracle
@@ -64,27 +64,29 @@ each failure class and also proves the seeded oracle candidates against the
 live gate functions (telemetry findings, preparation receipt blockers,
 waivability parity).
 
-The first managed-shadow bootstrap extends that projection through four narrow
-seams rather than introducing a second delivery workflow:
+The first manual-shadow bootstrap keeps that projection deliberately smaller
+than a managed execution lane. The coding host runs Athena's existing workflow
+and owns sessions, agents, tools, sequencing, worktrees, and remediation.
+`bun run pr:athena` remains repository-policy authority and GitHub remains
+merge authority. The product materializes portable workflow definitions,
+normalizes exact candidate-bound evidence, and returns deterministic decisions
+for comparison; it does not add a second admission system or preparation
+sensor inside Athena.
 
-- the existing policy document admits exactly product-native `review.green`
-  from the currently qualified Claude Code producer; hosts without a qualified
-  producer remain excluded, and the shared evidence contract stays
-  host-neutral;
-- one trusted sensor invokes `bun run pr:athena:prepare`, while the existing
-  aggregate remains Athena's wider authority;
-- the sensor refuses candidates that change `package.json` or any `scripts/**`
-  file, which closes transitive executable rewrites without maintaining a
-  dependency registry; and
-- if preparation repairs or stages candidate bytes, the sensor returns a
-  failing observation so the host can remediate and checkpoint again instead
-  of advancing a dirty candidate into review.
+A counting shadow claims only three things: a qualified host reported the
+completed exact full Read of the canonical workflow path, exact candidate-bound
+evidence was recorded outside the model grant, and Athena's repository policy
+passed. It does not claim trusted operator intent, delivery registration,
+takeover authority, or model isolation. V26-1527's opaque pre-registration
+confirmation is therefore deferred to a future higher-assurance trust tier.
 
-Managed product records may share the neutral `telemetry/delivery-runs/` tree,
-but Athena's telemetry parser ignores their distinct schema and still requires
-an authentic Athena delivery-run record. Installation evidence likewise does
-not count as registration, workflow consumption, or a completed shadow
-delivery.
+The manual operator loop is: materialize the pinned projection, compose the
+qualified Claude adapter, let the host complete and report the exact full Read,
+record that observation with immutable candidate and `pr:athena` evidence, then
+run the deterministic scorer. Repeat once each for a code, documentation, and
+operations delivery. Do not add a launcher, registry, scheduler, daemon,
+callback framework, control plane, session manager, or automated scorer unless
+field data exposes a concrete failure.
 
 ## Why This Matters
 
@@ -105,11 +107,12 @@ instead of being silently absorbed.
   the sensor when the document or adapters change without recompilation.
 - The planted-failure tests keep the oracle's blocker codes tied to what the
   live gate can actually emit, so blocker parity cannot rot.
-- Fence the entire executable preparation surface for the MVP. Broaden that
-  lane only after a real delivery demonstrates the need; do not grow a script
-  dependency registry pre-emptively.
-- After a mutation-capable preparation command succeeds, verify the candidate
-  is still clean before emitting a passing sensor result.
+- Keep the shadow comparison non-authoritative: host orchestration,
+  `pr:athena`, and GitHub retain their current ownership.
+- Preserve the host-neutral exact-read contract. Hosts without a qualified
+  producer remain excluded rather than emitting weaker evidence.
+- Add machinery only after one of the three real shadows demonstrates a named
+  failure the existing workflow and evidence contracts cannot express.
 
 ## Examples
 

@@ -2,27 +2,27 @@
   "spec": "athena-shadow-activation/1",
   "repositoryId": "athena",
   "recordedAt": "2026-09-01T10:24:07Z",
-  "purpose": "Athena's activation metadata for a read-only shadow window. A production-profile product generation is installed outside Athena with full digest closure verified, but no delivery, projection consumption, or runtime enforcement is claimed here; `bun run pr:athena` remains the repository's only delivery authority. The discovery-scoping mechanism itself is product-owned; this document carries only Athena's activation positions and the guard that enforces them.",
+  "purpose": "Athena's activation metadata for three manual, non-authoritative shadow comparisons. The product supplies workflow definitions plus candidate-bound decision and evidence contracts; the coding host orchestrates, `bun run pr:athena` remains repository policy authority, and GitHub remains merge authority. This record makes no claim of trusted operator intent, registration or takeover authority, model isolation, or runtime enforcement.",
   "installationMode": "shadow",
   "deliveryAuthority": "none",
   "comparisonAuthority": "bun run pr:athena",
   "product": {
     "repository": "agent-delivery-harness",
-    "commit": "493d9509b35d7439a9122af07005626748619ac2",
+    "commit": "f942c278d143d7a622e95a964a8e0664d4ae06a1",
     "compositionProfile": "production",
     "compositionProfileNote": "the installed generation carries the production profile. The read-only posture comes from this document's shadow installation mode and deliveryAuthority none, not from the profile",
     "productionInstallation": {
-      "generationDigest": "113be7493e2fce211165918e1e470a4adb18bb7f6a0d1be1271f7d9171c5dd7d",
+      "generationDigest": "425e400c9b22826abb597cbeb90ce1d18378a4dda2b76fff21f88db01fac0074",
       "installationId": "install-35dbe7efb798bc5cca3cc1933fcb7924",
-      "compositionSequence": 1,
+      "compositionSequence": 2,
       "productTrustLabel": "local-digest / operator-pinned",
-      "distributionDigest": "c8892422d2b0bb6677d3c8aead9d41d575a4ffa451a4f1c428b4e6fa57a4eca4",
+      "distributionDigest": "adb6436088e229974df6e6d56323f0e24da2b1b623658a5875976f1e570521c8",
       "installReceipt": {
         "relativeLocator": "receipts/72ed6cf074997d97e5a38ffecfdfa83dcbc5cac998ca8d3a4feee756a26f9a32.json",
         "sha256": "cab3ac785e5f61cf921002073e3de0b09fd63437c94aa57f3696a48ed96eec55"
       },
       "closureVerified": true,
-      "runtimeEvidence": "none: installation and closure verification do not claim a registered delivery, materialized projection, host session, or projection consumption"
+      "runtimeEvidence": "none: installation and closure verification do not claim a delivery, materialized projection, host session, exact-read observation, registration, takeover, or runtime enforcement"
     },
     "qualificationRecords": [
       "qualifications/claude-code-integration.json",
@@ -47,11 +47,11 @@
   },
   "projection": {
     "root": ".managed-projection",
-    "owner": "the product's Claude Code binding (materialization, digest receipt, per-run consumption marker, teardown)",
+    "owner": "descriptive product capability: the qualified Claude adapter can materialize and tear down the pinned projection; this activation record does not claim that it has done so for an Athena delivery",
     "managedDeliveryWorktreeRoot": ".worktrees/managed",
     "scopeRule": "the projection root may exist only inside a managed delivery worktree; the repository root and every non-managed worktree must not carry one",
     "managedDeliveryWorktreePathShape": "the operator creates each managed delivery worktree at .worktrees/managed/<deliveryId> — a sibling path such as .worktrees/managed-<deliveryId> is not a managed delivery worktree and a projection there is a finding",
-    "mechanism": "model-external and byte-neutral — the binding writes its session settings and the worktree-scoped excludes file into its own directory outside the working tree, points the managed worktree's worktree-scoped git configuration at them, and enables worktree configuration once in the shared repository config; no tracked byte of the vendored discovery layout is moved or edited, and the configuration takes effect in the managed worktree alone",
+    "mechanism": "descriptive qualified capability, not bootstrap evidence: model-external and byte-neutral materialization may write adapter-owned session settings and worktree-scoped excludes outside tracked repository bytes; a manual shadow must record its own exact materialization evidence before this capability is treated as observed",
     "whatIsNotSuppressed": "Claude Code 2.1.252 is qualified for the strict exact-Read delivery lane, but its discovery-scoping exclusivity is current-version-unverified. During this read-only shadow window ambient vendored discovery may coexist with a managed projection as a non-blocking diagnostic observation; a later exclusivity regrade is required before this position becomes blocking"
   },
   "provingHost": "claude-code",
@@ -77,22 +77,22 @@
     "absentOrNegative": "excluded from the comparison set",
     "writtenInto": ".agents/policy/shadow-milestone-gate-record.json",
     "whatTheGuardChecks": "the record's declared source and shape. The guard does not reproduce the host observation, repository binding, or scorer; those remain the harness product and explicit scorer boundaries",
-    "whatProvenanceRestsOn": "the host-neutral observation contract, the Claude-qualified adapter, and the binding-side writer that derives the delivery repository identity and accepts only the real repository's literal .agents/policy/shadow-milestone-gate-record.json single-link target. .agents is an additionally protected path in every checkpoint grant of .agents/policy/repository-policy.json, so no execution grant may write the gate record"
+    "whatProvenanceRestsOn": "the host-neutral observation contract, the Claude-qualified adapter that reports the exact full Read, and an operator recording the observation outside model grants together with immutable candidate and pr:athena evidence. The bootstrap claims no facade or binding-side delivery writer, because no managed delivery was registered. .agents is an additionally protected path in every checkpoint grant of .agents/policy/repository-policy.json, so no execution grant may write the gate record"
   },
   "vendoredDiscoveryLayout": {
     "owner": "scripts/shadow-discovery-guard.ts",
     "note": "the guard owns the layout's path set and its pinned byte digest; they are not duplicated here so there is one place to change and one place to review"
   },
   "characterization": {
-    "productCommit": "493d9509b35d7439a9122af07005626748619ac2",
+    "productCommit": "f942c278d143d7a622e95a964a8e0664d4ae06a1",
     "kind": "explicit-scorer",
-    "method": "the explicit-input scorer loaded from the exact pinned agent-delivery-harness source checkout over Athena's authority artifacts. The separately recorded production installation is not a launcher and the scorer creates no delivery, so this run establishes only the 0/3 incomplete result and creates no host session, projection, policy compilation, or gate entry. No runtime claim is inferred from either installation or scoring",
+    "method": "the explicit-input scorer loaded from the exact pinned agent-delivery-harness source checkout over Athena's authority artifacts. The separately recorded production installation is not a launcher and the scorer creates no delivery, so this run establishes only the 0/3 incomplete result and creates no host session, projection, policy compilation, registration, or gate entry. No runtime or operator-intent claim is inferred from either installation or scoring",
     "compositionProfile": "production installed separately; source-checkout explicit scorer used for this observation",
     "observedAt": "2026-09-01T10:24:07Z",
     "observed": {
       "scorerAuthority": {
         "repository": "agent-delivery-harness",
-        "commit": "493d9509b35d7439a9122af07005626748619ac2",
+        "commit": "f942c278d143d7a622e95a964a8e0664d4ae06a1",
         "mode": "source-checkout explicit-input scorer"
       },
       "result": {
@@ -135,6 +135,6 @@
         }
       }
     },
-    "conclusion": "The current exact-pin observation is only an explicit Athena-input scorer result: it is incomplete with zero counted deliveries. The historical scope characterization remains clearly pinned to its own earlier product and cannot establish the current product's runtime, policy compilation, host callback, or M1 readiness. The consolidated generation supplies the host-neutral observation contract, Claude-qualified producer, repository-derived canonical target binding, and frozen first-report scoring semantics, but Athena remains at zero of three until real shadow deliveries produce qualified evidence."
+    "conclusion": "The current exact-pin observation is only an explicit Athena-input scorer result: it is incomplete with zero counted deliveries. The historical scope characterization remains pinned to its earlier product and cannot establish the current product's runtime, policy compilation, host observation, or M1 readiness. The current generation supplies the host-neutral exact-read observation contract, the qualified Claude adapter, candidate-bound evidence, and frozen first-report scoring semantics. Athena remains at zero of three until the coding host manually runs real code, docs, and operations shadows and records only the narrow facts the host and repository gates prove. V26-1527 is deferred to a future higher-assurance trust tier."
   }
 }

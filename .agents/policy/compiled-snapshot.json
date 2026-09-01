@@ -2,7 +2,7 @@
   "schemaVersion": "athena-compiled-policy-snapshot/1",
   "compiledWith": {
     "repository": "agent-delivery-harness",
-    "commit": "493d9509b35d7439a9122af07005626748619ac2",
+    "commit": "f942c278d143d7a622e95a964a8e0664d4ae06a1",
     "module": "packages/kernel/src/policy/compile.ts",
     "productTrustRevocationEpoch": 0,
     "repositoryAuthorityRevocationEpoch": 0,
@@ -14,7 +14,7 @@
     }
   },
   "inputDigests": {
-    "repository-policy.json": "664f34eaaea9258e5f1e8891c8baa4087391df217456326b2cbf6715eb8b1c97",
+    "repository-policy.json": "779e7e81e272fc9af15926ffb6e70aae6020947c519e0d2f378018b5378aea5c",
     "adapters.json": "5f8aa52add535acf9d41696b2766e6891d64f3beff85712aa8727d0cbb334238"
   },
   "compiled": {
@@ -287,74 +287,6 @@
     "approvals": [],
     "tracker": "absent",
     "trackerAbsenceFallback": "proceed-without-tracker",
-    "admission": {
-      "gateId": "athena.managed-shadow-admission",
-      "baseRef": "origin/main",
-      "storageNamespace": "delivery-harness/",
-      "acceptedEnvelopeSpecs": ["delivery-evidence/1"],
-      "identityVersions": ["deliverable-tree/v1"],
-      "computingIdentityVersion": "deliverable-tree/v1",
-      "reviewNeutral": [
-        { "prefix": "docs/reports/" },
-        { "prefix": "docs/solutions/" },
-        { "prefix": "telemetry/delivery-runs/" }
-      ],
-      "recordNeutral": [{ "prefix": "telemetry/delivery-runs/" }],
-      "pathClassification": {
-        "generated": [{ "kind": "prefix", "value": "graphify-out/" }],
-        "test": [{ "kind": "glob", "value": "**/*.test.ts" }],
-        "lockfile": [{ "kind": "glob", "value": "bun.lockb" }]
-      },
-      "sensitivePaths": [],
-      "activationThreshold": 1,
-      "providers": [{ "id": "claude-code.ce-code-review", "findingCodes": [] }],
-      "agentEnvSignals": ["CLAUDE_CODE", "CLAUDECODE"],
-      "ciPolicies": [],
-      "ciPolicyEnvKey": "ATHENA_MANAGED_SHADOW_CI_POLICY",
-      "preparationWiringPaths": [
-        "scripts/athena-preparation-sensor.mjs",
-        "scripts/pr-athena-prepare.ts"
-      ],
-      "obligations": [
-        {
-          "id": "review.green",
-          "activation": { "kind": "always" },
-          "freshness": "exact_candidate",
-          "providers": ["claude-code.ce-code-review"],
-          "acceptedPayloadSpecs": ["review.green/1"],
-          "allowedResolutionKinds": ["satisfied_evidence", "waived", "not_applicable"],
-          "humanWaiverAllowed": true,
-          "minimumAttestationLevel": "self",
-          "ciDelegationPolicyIds": [],
-          "remediation": {
-            "default": [
-              {
-                "id": "run-final-green-review",
-                "summary": "Complete the qualified Claude final-green review and submit its evidence.",
-                "kind": "manual_action"
-              }
-            ]
-          },
-          "waivableCodes": [
-            "review_evidence_missing",
-            "stale_evidence",
-            "evidence_not_green",
-            "unresolved_actionable_findings"
-          ],
-          "nonWaivableCodes": [
-            "ambiguous_records",
-            "malformed_record",
-            "unknown_provider",
-            "live_provider_missing",
-            "ambiguous_live_provider",
-            "live_provider_failed",
-            "resolution_not_allowed"
-          ]
-        }
-      ],
-      "deliveryRecordPath": "telemetry/delivery-runs/managed-delivery-record.json",
-      "deliveryRecordVerification": { "baseMovement": "stale" }
-    },
-    "compiledDigest": "5282b9f67b8647ccfdc11063c01ff13213c04af8ec60dabc2b8fa76fd31bd070"
+    "compiledDigest": "746b6d3a192037de687d5ddd33b1ead365fe19bd396a8685ff74e28133c015ee"
   }
 }

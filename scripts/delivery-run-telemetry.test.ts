@@ -645,21 +645,6 @@ describe("delivery run telemetry", () => {
       expect(findings[0]?.code).toBe("telemetry_record_malformed");
       expect(findings[0]?.message).toContain(brokenPath);
     });
-
-    it("does not parse managed product records as Athena run telemetry", () => {
-      const managedRecordPath =
-        "telemetry/delivery-runs/managed-delivery-record--aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json";
-      const findings = check({
-        changedPaths: ["scripts/some-change.ts", managedRecordPath],
-        changedRecordContents: new Map([
-          [managedRecordPath, { spec: "delivery-record/1" }],
-        ]),
-        trackedPaths: new Set([managedRecordPath]),
-      });
-
-      expect(findings).toHaveLength(1);
-      expect(findings[0]?.code).toBe("telemetry_record_missing");
-    });
   });
 
   it("keeps the telemetry tree out of the reviewed deliverable and the report fingerprint", () => {
