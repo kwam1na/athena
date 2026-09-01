@@ -4,15 +4,15 @@
   "comparisonAuthority": "bun run pr:athena (unchanged legacy aggregate)",
   "mode": "read-only",
   "inputs": {
-    "repository-policy.json": "779e7e81e272fc9af15926ffb6e70aae6020947c519e0d2f378018b5378aea5c",
+    "repository-policy.json": "c49f425be88ba67a6958e20ca8d68d52184f866d5fae748fce8dc08dedc05239",
     "adapters.json": "5f8aa52add535acf9d41696b2766e6891d64f3beff85712aa8727d0cbb334238",
     "pre-cutover-oracle.json": "76b3e7d79294ff910984435609e44c7fc80f0d52e7f1d2b9419df28488d29564",
-    "compiled-snapshot.json": "21385901410e5242f938753dbc524b08fd0a59ed9ec25fa5d2ee957c838b9ab7",
-    "compiledDigest": "746b6d3a192037de687d5ddd33b1ead365fe19bd396a8685ff74e28133c015ee"
+    "compiled-snapshot.json": "0194582ec54ec5333c5e2f2e67aaddda75a3056c620e7b7acbb90ab82f04fcf8",
+    "compiledDigest": "170269c54fbfcbe1fef2442fcb40bbdc2d9e7f130505f7b8be95fc5605b1e0f5"
   },
   "results": {
     "compile": "ok: the declarative document plus the twelve typed adapters compile through the harness policy compiler (agent-delivery-harness f942c27) with zero rejections, each lens resolving its reviewer charter by identity from the pinned composition archive 9ce12f12",
-    "mvpBoundary": "ok: the projection describes reusable workflow, policy, review, validation, evidence, and finish-line decisions only; the coding host orchestrates, bun run pr:athena and GitHub remain authoritative, and registration/takeover/model-isolation claims are deferred",
+    "mvpBoundary": "ok: counting requires separately retained and independently verified operator evidence containing the complete projection-consumption-observation/1 artifact; the M1 entry holds only a derived source/affirmative/digest/marker summary plus candidate and GitHub evidence, and no automatic writer, registration, takeover, or model-isolation claim is projected",
     "phaseParity": "ok: oracle phase vector matches the live pr:athena phase order and package.json script chain",
     "obligationParity": "ok: every live gate obligation (review.green, documentation.current, telemetry.recorded) is activated by the declarative document with matching activation semantics",
     "leafMapping": "ok: each proposed leaf maps to exactly one adapter; no adapter is mapped twice; the pr:athena aggregate is registered as no leaf",
@@ -47,7 +47,7 @@
     {
       "id": "mvp-decision-evidence-only",
       "observed": "Athena's live delivery authority remains bun run pr:athena and GitHub, with the coding host orchestrating the workflow.",
-      "projection": "The MVP compares host-reported exact-read observations, exact candidate-bound evidence, and repository-policy results without claiming registration, takeover, trusted operator intent, or model isolation. V26-1527 is deferred to a future higher-assurance trust tier.",
+      "projection": "The MVP counts only after operator-held evidence independently verifies the complete host-neutral observation outside model grants; its M1 entry is a derived summary with candidate and GitHub evidence, not proof or storage of the full envelope. No automatic writer, registration, takeover, trusted operator intent, or model isolation is claimed. V26-1527 is deferred to a future higher-assurance trust tier.",
       "disposition": "accepted-projection",
       "blocking": false
     },

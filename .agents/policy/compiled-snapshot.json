@@ -14,7 +14,7 @@
     }
   },
   "inputDigests": {
-    "repository-policy.json": "779e7e81e272fc9af15926ffb6e70aae6020947c519e0d2f378018b5378aea5c",
+    "repository-policy.json": "c49f425be88ba67a6958e20ca8d68d52184f866d5fae748fce8dc08dedc05239",
     "adapters.json": "5f8aa52add535acf9d41696b2766e6891d64f3beff85712aa8727d0cbb334238"
   },
   "compiled": {
@@ -176,11 +176,7 @@
             "TodoWrite"
           ],
           "writablePaths": [
-            "packages",
-            "scripts",
-            "docs",
-            "telemetry",
-            ".github"
+            "docs"
           ],
           "protectedPaths": [
             ".git",
@@ -258,11 +254,7 @@
             "TodoWrite"
           ],
           "writablePaths": [
-            "packages",
-            "scripts",
-            "docs",
-            "telemetry",
-            ".github"
+            "docs"
           ],
           "protectedPaths": [
             ".git",
@@ -287,6 +279,6 @@
     "approvals": [],
     "tracker": "absent",
     "trackerAbsenceFallback": "proceed-without-tracker",
-    "compiledDigest": "746b6d3a192037de687d5ddd33b1ead365fe19bd396a8685ff74e28133c015ee"
+    "compiledDigest": "170269c54fbfcbe1fef2442fcb40bbdc2d9e7f130505f7b8be95fc5605b1e0f5"
   }
 }

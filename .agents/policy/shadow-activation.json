@@ -22,8 +22,9 @@
         "sha256": "cab3ac785e5f61cf921002073e3de0b09fd63437c94aa57f3696a48ed96eec55"
       },
       "closureVerified": true,
-      "maintenanceUpdate": "approved by the configured fresh OS-native assertion; sequence 2 is active, accepted, and pinned with high-water mark 2, while rollback retains sequence 1",
-      "runtimeEvidence": "none: installation activation and closure verification do not claim a delivery, materialized projection, host session, exact-read observation, registration, takeover, or runtime enforcement"
+      "maintenanceUpdate": "operator-observed local product-maintenance snapshot during this bootstrap: the configured fresh OS-native assertion approved the update; sequence 2 was active, accepted, and pinned with high-water mark 2, while rollback retained sequence 1",
+      "verificationScope": "this bootstrap-time local snapshot is not a repository sensor, durable guarantee, or future-drift detector; before every shadow the operator must re-read live active, accepted/high-water, closure, journal, rollback, and receipt state",
+      "runtimeEvidence": "none: this local installation snapshot and closure verification do not claim a delivery, materialized projection, host session, exact-read observation, registration, takeover, runtime enforcement, or automatic future-drift detection"
     },
     "qualificationRecords": [
       "qualifications/claude-code-integration.json",
@@ -72,13 +73,13 @@
     "beforeThatGate": "no tracked byte of the vendored discovery layout changes"
   },
   "consumptionRecord": {
-    "requiredSource": "projection-consumption-observation/1: the host-neutral normalized observation contract, accepted only when the qualified host reports a completed full Read of the direct receipt-derived canonical workflow path with the matching delivery, fence, host invocation, and projection digest",
+    "requiredSource": "projection-consumption-observation/1: the host-neutral normalized observation contract. The complete artifact — spec, canonical path, host invocation, observedAt, delivery, fence, and projection digest — is retained and independently verified in operator evidence outside model grants before counting",
     "producedBy": "the qualified Claude Code PostToolUse adapter produces projection-consumption-observation/1 now. A future qualified Codex native adapter must emit that same normalized contract; Codex is excluded from counting now because no qualified binding or producer exists, and unqualified hosts produce no affirmative evidence and remain excluded from M1",
     "agentSuppliedClaims": "rejected — a delivery carrying one is excluded from the comparison set and the guard reports a finding",
     "absentOrNegative": "excluded from the comparison set",
-    "writtenInto": ".agents/policy/shadow-milestone-gate-record.json",
-    "whatTheGuardChecks": "the record's declared source and shape. The guard does not reproduce the host observation, repository binding, or scorer; those remain the harness product and explicit scorer boundaries",
-    "whatProvenanceRestsOn": "the host-neutral observation contract, the Claude-qualified adapter that reports the exact full Read, and an operator recording the observation outside model grants together with immutable candidate and pr:athena evidence. The bootstrap claims no facade or binding-side delivery writer, because no managed delivery was registered. .agents is an additionally protected path in every checkpoint grant of .agents/policy/repository-policy.json, so no execution grant may write the gate record"
+    "writtenInto": ".agents/policy/shadow-milestone-gate-record.json as a derived source/affirmative/projection-digest/marker summary plus candidate and GitHub evidence; it does not itself preserve or prove the complete observation envelope",
+    "whatTheGuardChecks": "the gate entry's declared source and shape only. It does not reproduce, preserve, or independently verify the complete host observation, repository binding, or scorer; those remain the separately retained operator evidence and explicit harness scorer boundaries",
+    "whatProvenanceRestsOn": "the separately retained complete host-neutral observation artifact, the Claude-qualified adapter that reports the exact full Read, and operator-held immutable candidate plus GitHub/pr:athena evidence outside model grants. Counting requires that full artifact; the gate summary alone is insufficient. The bootstrap claims no facade, registration, intent, isolation, or binding-side delivery writer, because no managed delivery was registered. .agents is an additionally protected path in every checkpoint grant of .agents/policy/repository-policy.json, so no execution grant may write the gate record"
   },
   "vendoredDiscoveryLayout": {
     "owner": "scripts/shadow-discovery-guard.ts",

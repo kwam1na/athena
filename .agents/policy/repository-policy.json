@@ -44,7 +44,7 @@
     {
       "stageId": "plan",
       "allowedCapabilities": ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Task", "TodoWrite"],
-      "writablePaths": ["packages", "scripts", "docs", "telemetry", ".github"],
+      "writablePaths": ["docs"],
       "credentials": [],
       "additionalProtectedPaths": [
         ".agents",
@@ -74,7 +74,7 @@
     {
       "stageId": "compound",
       "allowedCapabilities": ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Task", "TodoWrite"],
-      "writablePaths": ["packages", "scripts", "docs", "telemetry", ".github"],
+      "writablePaths": ["docs"],
       "credentials": [],
       "additionalProtectedPaths": [
         ".agents",

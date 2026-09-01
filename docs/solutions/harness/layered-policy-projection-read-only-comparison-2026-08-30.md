@@ -12,7 +12,7 @@ applies_when:
   - "A repository plans to hand delivery routing to an external policy compiler without changing its live authority yet"
   - "A migration needs an independent record of pre-cutover behavior that later parity claims can be judged against"
 tags: [delivery-harness, policy-projection, pre-cutover-oracle, read-only-comparison]
-delivery_diff_fingerprint: 183dbf1f9c7d3335226e70197af66c3cc59b70841f37271201f753e769d6f9f0
+delivery_diff_fingerprint: 008241bef8927723527c06e0d7e54775e714145665ed1f5cd5d1908da8a91086
 ---
 
 # Project delivery authority into a layered policy model with a frozen pre-cutover oracle
@@ -73,26 +73,31 @@ normalizes exact candidate-bound evidence, and returns deterministic decisions
 for comparison; it does not add a second admission system or preparation
 sensor inside Athena.
 
-A counting shadow claims only three things: a qualified host emitted
-`projection-consumption-observation/1` for the completed exact full Read of the
-canonical workflow path, exact candidate-bound evidence was recorded outside
-the model grant, and Athena's repository policy passed. The qualified Claude
-PostToolUse adapter produces that normalized contract now. A future qualified
-Codex native adapter must emit the same contract; Codex is excluded from
-counting now because it has no qualified binding or producer, and unqualified
-hosts remain excluded. The comparison does not claim trusted operator intent,
-delivery registration, takeover authority, or model isolation. V26-1527's
-opaque pre-registration confirmation is therefore deferred to a future
-higher-assurance trust tier.
+A counting shadow requires operator-held evidence outside model grants that
+retains and independently verifies the complete
+`projection-consumption-observation/1` artifact: spec, canonical path, host
+invocation, `observedAt`, delivery, fence, and projection digest, alongside
+immutable candidate and GitHub/`pr:athena` evidence. The M1 gate entry retains
+only a derived source/affirmative/digest/marker summary plus that candidate and
+GitHub evidence; it neither proves nor preserves the complete envelope. The
+qualified Claude PostToolUse adapter produces the normalized contract now. A
+future qualified Codex native adapter must emit the same contract; Codex is
+excluded from counting now because it has no qualified binding or producer,
+and unqualified hosts remain excluded. The comparison does not claim trusted
+operator intent, delivery registration, takeover authority, or model
+isolation. V26-1527's opaque pre-registration confirmation is therefore
+deferred to a future higher-assurance trust tier.
 
 The manual operator loop is: materialize the pinned projection, compose the
 qualified Claude PostToolUse adapter, let it emit
-`projection-consumption-observation/1` for the exact full Read, record that
-observation with immutable candidate and `pr:athena` evidence, then run the
-deterministic scorer. Repeat once each for a code, documentation, and
+`projection-consumption-observation/1` for the exact full Read, then after
+final immutable delivery evidence retain and independently verify the complete
+artifact outside the model grant and manually record only its derived M1
+summary with immutable candidate and GitHub/`pr:athena` evidence before running
+the deterministic scorer. Repeat once each for a code, documentation, and
 operations delivery. Do not add a launcher, registry, scheduler, daemon,
-callback framework, control plane, session manager, or automated scorer unless
-field data exposes a concrete failure.
+callback framework, control plane, session manager, automatic binding-side
+writer, or automated scorer unless field data exposes a concrete failure.
 
 ## Why This Matters
 
@@ -120,7 +125,9 @@ instead of being silently absorbed.
   today; a future qualified Codex native adapter must emit that same normalized
   contract. Codex currently has no qualified binding or producer, and hosts
   without a qualified producer remain excluded rather than emitting weaker
-  evidence.
+  evidence. Count only after separately retaining and independently verifying
+  the complete artifact outside model grants; the M1 summary does not replace
+  it. An automatic writer is a future non-MVP tier.
 - Add machinery only after one of the three real shadows demonstrates a named
   failure the existing workflow and evidence contracts cannot express.
 
