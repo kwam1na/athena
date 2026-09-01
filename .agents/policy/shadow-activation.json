@@ -39,22 +39,22 @@
     "scopeRule": "the projection root may exist only inside a managed delivery worktree; the repository root and every non-managed worktree must not carry one",
     "managedDeliveryWorktreePathShape": "the operator creates each managed delivery worktree at .worktrees/managed/<deliveryId> — a sibling path such as .worktrees/managed-<deliveryId> is not a managed delivery worktree and a projection there is a finding",
     "mechanism": "model-external and byte-neutral — the binding writes its session settings and the worktree-scoped excludes file into its own directory outside the working tree, points the managed worktree's worktree-scoped git configuration at them, and enables worktree configuration once in the shared repository config; no tracked byte of the vendored discovery layout is moved or edited, and the configuration takes effect in the managed worktree alone",
-    "whatIsNotSuppressed": "no unqualified or unsupported host is admitted to an M1 delivery lane. The proving Claude Code lane must use the qualified --restricted, empty-setting-sources binding profile, which scopes discovery to the run-pinned projection; the guard treats coexistence with the ambient vendored generation in a managed worktree as a finding"
+    "whatIsNotSuppressed": "Claude Code 2.1.252 is qualified for the strict exact-Read delivery lane, but its discovery-scoping exclusivity is current-version-unverified. During this read-only shadow window ambient vendored discovery may coexist with a managed projection as a non-blocking diagnostic observation; a later exclusivity regrade is required before this position becomes blocking"
   },
   "provingHost": "claude-code",
   "hosts": [
     {
       "hostId": "claude-code",
       "hostVersion": "2.1.252",
-      "exclusivityGrading": "exclusivity-graded",
-      "capability": "the qualified delivery lane uses --restricted and binding-composed settings with empty ambient setting sources, so its run-pinned projection is the only admitted discovery source",
-      "gradeSource": "agent-delivery-harness qualifications/claude-code-integration.json (authenticated exact-Read qualification) and qualifications/host-admission-capabilities.json (discoveryScopingExclusivity)"
+      "exclusivityGrading": "current-version-unverified",
+      "capability": "the qualified delivery lane proves a completed strict exact Read with --restricted and empty ambient setting sources; it does not regrade discovery-scoping exclusivity at Claude Code 2.1.252",
+      "gradeSource": "agent-delivery-harness qualifications/claude-code-integration.json (authenticated exact-Read qualification); the earlier discovery-scoping grade is not carried forward"
     }
   ],
   "exclusivityPosition": {
-    "duringShadowWindow": "blocking",
-    "reason": "the sole proving delivery host is Claude Code 2.1.252 under the qualified restricted, empty-setting-sources binding profile; coexistence with ambient vendored discovery in a managed delivery worktree would invalidate that lane rather than remain diagnostic",
-    "becomesBlockingAt": "this M1 proving-host lane; any later host requires its own qualified admission record",
+    "duringShadowWindow": "non-blocking",
+    "reason": "the strict exact-Read qualification at Claude Code 2.1.252 does not establish discovery-scoping exclusivity, so coexistence remains diagnostic while the shadow window has no delivery authority",
+    "becomesBlockingAt": "a future exact-version discovery-scoping regrade; any later host requires its own qualified admission record",
     "beforeThatGate": "no tracked byte of the vendored discovery layout changes"
   },
   "consumptionRecord": {

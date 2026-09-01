@@ -212,6 +212,17 @@ describe("the pinned product and the evidence recorded about it", () => {
     expect(codes(result)).toContain("characterization_pin_mismatch");
   });
 
+  test("an explicit scorer from another commit is a finding", async () => {
+    const policyDirCopy = await plantedTree({
+      activation: (value) => {
+        value.characterization.observed.scorerAuthority.commit =
+          "8635ea8aca18f27f660b3551b950ffb7e6ad22dd";
+      },
+    });
+    const result = await runShadowDiscoveryGuard(rootDir, { policyDir: policyDirCopy });
+    expect(codes(result)).toContain("characterization_pin_mismatch");
+  });
+
   test("a characterization that names no commit is a finding", async () => {
     const policyDirCopy = await plantedTree({
       activation: (value) => {
@@ -442,9 +453,9 @@ describe("projection scoping", () => {
     try {
       const result = await runShadowDiscoveryGuard(rootDir);
       expect(codes(result)).toContain("projection_outside_managed_worktree");
-      // The qualified proving-host lane makes ambient coexistence a finding,
-      // rather than treating it as a non-blocking diagnostic observation.
-      expect(codes(result)).toContain("discovery_exclusivity_violation");
+      expect(
+        result.observations.map((observation) => observation.code),
+      ).toContain("exclusivity_non_blocking");
     } finally {
       await rm(projection, { force: true });
     }
@@ -467,7 +478,7 @@ describe("projection scoping", () => {
 });
 
 describe("exactly-one-discovery exclusivity", () => {
-  test("coexisting roots on the qualified proving host are a finding", async () => {
+  test("coexisting roots on the current-version-unverified proving host are non-blocking", async () => {
     const result = await runShadowDiscoveryGuard(rootDir, {
       worktree: {
         dir: path.join(rootDir, ".worktrees", "managed", "delivery-1"),
@@ -475,7 +486,10 @@ describe("exactly-one-discovery exclusivity", () => {
         vendoredDiscoveryVisible: true,
       },
     });
-    expect(codes(result)).toContain("discovery_exclusivity_violation");
+    expect(codes(result)).not.toContain("discovery_exclusivity_violation");
+    expect(
+      result.observations.map((observation) => observation.code),
+    ).toContain("exclusivity_non_blocking");
   });
 
   test("coexisting roots stay non-blocking on any grading that is not the capable one", async () => {

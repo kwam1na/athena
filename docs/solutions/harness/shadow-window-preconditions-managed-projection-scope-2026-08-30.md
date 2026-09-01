@@ -94,12 +94,13 @@ The guard's four positions:
   itself, so Athena remains at zero of three and M1 remains incomplete.
 
 The sole proving delivery host is Claude Code 2.1.252 under the qualified
-`--restricted`, empty-setting-sources binding profile. That profile scopes the
-M1 lane to the run-pinned projection, so coexistence with ambient vendored
-discovery in a managed worktree is blocking evidence rather than a diagnostic
-observation. No other host is in Athena's M1 delivery lane: a capability-only
-host may be inventoried separately but cannot supply an affirmative record or a
-fallback discovery posture.
+`--restricted`, empty-setting-sources exact-Read binding profile. That
+qualification proves the model-external workflow Read; it does not regrade
+discovery-scoping exclusivity at that version. Coexistence with ambient vendored
+discovery in a managed worktree therefore remains a non-blocking diagnostic
+observation during this authority-free shadow window. A later exact-version
+exclusivity regrade is required before the guard can treat coexistence as
+blocking. No other host is in Athena's M1 delivery lane.
 
 One honest limit on the consumption position: the guard reads the gate-record
 artifact, so it checks only the record's *declared* source and shape. It does

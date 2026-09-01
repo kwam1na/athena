@@ -42,10 +42,12 @@ import { POLICY_PROJECTION_DIR } from "./policy-projection-check";
  *     path in every checkpoint grant, plus the binding-side writer the product
  *     supplies.
  *
- * The current sole proving host is exclusivity-graded under its qualified
- * restricted binding profile. Ambient vendored discovery alongside a managed
- * projection is therefore a finding in that M1 lane. Unsupported hosts remain
- * outside the lane; this guard neither admits them nor provides a fallback.
+ * The current sole proving host is qualified for strict exact Read but its
+ * current-version discovery exclusivity is unverified. Ambient vendored
+ * discovery alongside a managed projection is therefore diagnostic and
+ * non-blocking while the shadow window holds no authority. Unsupported hosts
+ * remain outside the lane; this guard neither admits them nor provides a
+ * fallback.
  *
  * Both consumers of the grading therefore key on that affirmative value rather
  * than on the absence of the ungraded one. Keying on the absence would read a
@@ -388,6 +390,17 @@ async function evaluateShadowArtifacts(input: {
       `the activation pins the product at ${pin} and records a characterization observed at ${JSON.stringify(
         characterizedPin,
       )}; the recorded evidence is about one commit and the installation is about another, so re-run the characterization at the pinned commit rather than carrying the old observation forward`,
+    );
+  }
+  if (
+    activation.characterization?.kind === "explicit-scorer" &&
+    activation.characterization?.observed?.scorerAuthority?.commit !== pin
+  ) {
+    emit(
+      "characterization_pin_mismatch",
+      `the activation pins the product at ${pin}, but its explicit scorer observation names ${JSON.stringify(
+        activation.characterization?.observed?.scorerAuthority?.commit,
+      )}; rerun the scorer from the pinned product before carrying its result into this activation`,
     );
   }
 
