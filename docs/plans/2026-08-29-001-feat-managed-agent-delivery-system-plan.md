@@ -89,6 +89,25 @@ The first three Athena shadows are manual, non-authoritative comparisons across 
 
 The manual operator loop is intentionally small: materialize the pinned workflow projection; compose the qualified Claude PostToolUse adapter, which produces `projection-consumption-observation/1`; let the host complete and report the exact full Read observation; after final immutable delivery evidence, independently verify and retain the complete artifact outside the model grant, then manually record only its derived summary with immutable candidate and GitHub/`pr:athena` evidence before running the deterministic scorer. The operator must not record unsupported-host, path-only, echoed, cross-repository, symlinked/hardlinked, or protected-target-mismatched evidence. Retention and provenance are manual admission assertions: the guard and scorer check only literal derived fields and cannot detect those underlying conditions or later artifact loss after a shape-valid summary is represented. A future qualified Codex native adapter must emit that same normalized contract; Codex is excluded from counting now because it has no qualified binding or producer, and unqualified hosts remain excluded. This delivery adds no launcher, registry, scheduler, daemon, callback framework, control plane, session manager, automatic binding-side writer, or automated shadow scorer. Additional machinery requires an observed failure from these three deliveries.
 
+### Re-anchored MVP finish line (2026-09-01)
+
+Operator decision, 2026-09-01: the manual shadow programme and baseline comparison described in the carve-out above are withdrawn as the MVP gate. The first field run showed the apparatus inverting the product. The operator performed a two-step launch ceremony, hand-carried the ticket contract into the prompt because the restricted grant excluded the tracker, and the qualified session never performed the exact projection read the gate counted. That apparatus measured trust in the host; it did not exercise the delivery system being productized.
+
+The system being productized is Athena's existing delivery flow, in which the operator's involvement ends once the plan is aligned:
+
+1. The operator and the repository's agents shape a plan from repository artifacts until they are aligned on the spec.
+2. The tracking skill decomposes the plan into atomic Linear tickets, each carrying scope, acceptance criteria, test scenarios, execution posture, and sensors.
+3. The coding host orchestrates subagents that deliver each ticket through the execute workflow under the ticket's posture.
+4. Review lenses converge on the exact candidate.
+5. The repository's authoritative gate runs (`bun run pr:athena` in Athena).
+6. A pull request opens carrying candidate-bound evidence.
+
+The product is that flow made adoptable by another repository. It has three parts: the workflow module from `agent-skills` (plan, track, execute, review, deliver, compound, and the reviewer persona set); the repository-policy overlay (gate command, sensors, review lenses and personas, posture vocabulary, granted finish line); and the evidence kernel from `agent-delivery-harness` (candidate-bound review records, tracked delivery record, admission, and verification at the merge boundary). The coding host orchestrates exactly as it does in Athena today. Host-native execution grants, binding attestations, projection receipts, exact-read observations, confirmation producers, capability tiers, and the shadow scorer are landed and tested, but they are not on the MVP path. They are retained as a future assurance tier and gate nothing.
+
+**MVP finish line.** The MVP is complete when, in Athena and in `agent-delivery-harness` as the second adopter, at least one ticket has gone from an aligned plan through tracker decomposition, host-orchestrated subagent execution with the execute workflow, review-lens convergence, the repository's authoritative gate, and an opened pull request, using the product's workflow module and policy overlay rather than repository-vendored copies, with the candidate-bound review record and tracked delivery record produced by the product. In Athena, the vendored copies of the productized workflow skills are replaced by the product's projection, with `pr:athena` unchanged and the vendored copies retained in git history as the rollback. No baseline comparison, intervention count, or consumption observation is required. The operations and documentation tickets scoped for the shadow programme (V26-1525, V26-1526) remain ordinary tickets and are the natural Athena proof candidates. The harness's self-hosted delivery loop is the second adopter's proof path.
+
+**Consequences.** M1's shadow set, gate record, verdict, and scorer are superseded and gate nothing. The Athena cutover unit reduces to replacing the vendored workflow skills with the product projection and proving one delivery through it. The second-host and disposable-repository requirements, control-plane coordination, separately authorized merge and deploy actions, and the bundled tracker extension stay deferred unless a delivery failure names one of them. The Observable Finish Line below remains the finish line for the complete product beyond the MVP.
+
 ## Product and Architecture Decisions
 
 ### D1. One product, mandatory internal modules
@@ -630,6 +649,8 @@ Dependencies below are direct. Each unit begins by adding or freezing the named 
 
 ## Delivery Milestones
 
+The M1 shadow set, its gate record and verdict, the M2 second-host requirement, and the M3 canary as written below are superseded for the MVP by the re-anchored finish line in the Execution Posture section. They are retained here as the full-product milestone structure beyond the MVP.
+
 ### M0. Thin disposable-repository walking skeleton
 
 After U2H proves native admission and U3V provides one minimal local composition generation, U2V implements the official thin V-slices of U4-U6, U7A, and U8-U10 and proves the core product bet with one already-scoped contract, one disposable policy/sensor, a native task on the first Tier 1-qualified host (Claude Code by default), cross-session checkpoint resume, outcome/review evidence, and merge-ready status. U3, U4-U6, U7A, and U8-U10 then harden those same substrates and modules; they do not replace the slice or create duplicate paths. No broad release lifecycle, capability matrix, or Athena integration can substitute for this proof. If the operator must manually orchestrate a later stage while the host can proceed, a green-but-unrelated change passes, or a resumed task cannot reconstruct the next trustworthy checkpoint, horizontal expansion stops.
@@ -831,6 +852,8 @@ An unavailable optional control plane does not block local qualification. At run
 
 ## Observable Finish Line
 
+The MVP finish line is the one stated in the Execution Posture section: one ticket delivered end to end through the product's workflow module, policy overlay, and evidence kernel in Athena and in the harness, with Athena's vendored workflow skills replaced by the product projection. The list below is the finish line for the complete product beyond the MVP.
+
 This plan's implementation is complete only when all of the following are true on exact released artifacts:
 
 - one managed product install exposes a composition manifest with inspectable exact module identities but no adopter-selectable skills/harness version split;
@@ -849,6 +872,8 @@ This plan's implementation is complete only when all of the following are true o
 - the Markdown plan has unanimous approval from every selected review lens before any same-basename HTML artifact is generated.
 
 ## Plan Review Status
+
+**Re-anchored 2026-09-01 — MVP finish line.** After the first manual Athena shadow, the operator withdrew the shadow programme and baseline comparison as the MVP gate and restated the outcome as productizing Athena's existing plan, track, execute, review, gate, and pull-request flow, with the coding host orchestrating and the operator's involvement ending at plan alignment. The MVP finish line, the three-part product definition, and the consequences for the milestones and the Athena cutover unit are recorded in the Execution Posture section. The host-trust apparatus landed under the earlier milestones is retained as a future assurance tier and gates nothing. This amendment requires re-review by the six lenses before tracking resumes.
 
 **Amended 2026-09-01 — host-owned operator-confirmation producer.** Delivery-harness PR #67 and the V26-1527 security/architecture audit disproved the earlier premise that a product-binding-owned facade channel could establish operator origin. D7 and D15 now place the interactive producer in the coding host, before registration or takeover and outside anything model-owned execution can invoke, observe, inherit, or interpose. The producer renders and receives the existing canonical challenge and submits one host-neutral observation; the kernel remains the decision and evidence layer and alone evaluates and consumes that observation. Claude and any future Codex adapter must produce the same contract. A host without a qualified producer remains Tier 0. This correction adds no launcher, registry, callback framework, daemon, control plane, session/worktree manager, or orchestration behavior. The prior review-history descriptions remain historical and are superseded wherever they assigned producer ownership to the product facade. Review discharge: architecture, coherence, feasibility, and security re-reviewed the amended boundary on 2026-09-01 and returned aligned; the same-basename HTML may be regenerated from this revision.
 
