@@ -1,12 +1,10 @@
 {
   "spec": "athena-shadow-milestone-gate-record/1",
   "repositoryId": "athena",
-  "purpose": "Athena's adopter-local V26-1467 M1 comparison authority: one entry per binding-admitted Athena shadow delivery, carrying the binding-sourced projection-consumption record alongside the intervention and blocked-share measurements compared against the frozen manual-choreography baseline. The harness repository's separate record is product self-dogfood evidence; it neither fills nor duplicates this record's three delivery slots. A measurement artifact, not a journal. Entries are written only by the installed binding after its host-neutral observation contract accepts a Claude-qualified full direct canonical workflow Read and its writer derives the delivery repository identity, then verifies the literal protected Athena target and record repositoryId before mutation. This list is empty because no binding-admitted Athena shadow delivery is recorded. Its location is outside every execution grant's writable paths: `.agents` is additionally protected in .agents/policy/repository-policy.json. Nothing here claims runtime enforcement, M1 success, or cutover readiness.",
+  "purpose": "Athena's adopter-local V26-1467 M1 comparison authority: one entry per manually run Athena shadow delivery with a qualified host-reported projection-consumption observation, carrying that exact observation alongside the intervention and blocked-share measurements compared against the frozen manual-choreography baseline. The harness repository's separate record is product self-dogfood evidence; it neither fills nor duplicates this record's three delivery slots. A measurement artifact, not a journal. The operator records an entry outside model execution grants only after the host-neutral observation contract accepts a completed exact Read from a qualified host adapter and the delivery repository identity, literal protected Athena target, and record repositoryId match. This list is empty because no qualifying Athena shadow observation is recorded. Its location is outside every execution grant's writable paths: `.agents` is additionally protected in .agents/policy/repository-policy.json. The correlation deliveryId and fence do not establish registration, takeover, trusted operator intent, or runtime authority. Nothing here claims model isolation, runtime enforcement, M1 success, or cutover readiness.",
   "recordedAt": "2026-09-01T07:15:00Z",
   "status": "awaiting-shadow-deliveries",
-  "openPreM1Blockers": [
-    "V26-1527"
-  ],
+  "openPreM1Blockers": [],
   "baseline": {
     "repository": "agent-delivery-harness",
     "path": "qualifications/manual-choreography-baseline.json",
@@ -14,7 +12,7 @@
     "provingHost": "claude-code"
   },
   "comparisonSetRequirement": {
-    "note": "the counted set must match the frozen baseline's mix and count; a delivery never counts without an affirmative binding-sourced record backed by a Claude-qualified model-external full Read of the direct canonical workflow path, written only after the target repository identity and literal protected record target are derived and matched, whatever its measurements say",
+    "note": "the counted set must match the frozen baseline's mix and count; a delivery never counts without an affirmative host-reported observation from a qualified adapter, backed by a completed exact Read of the direct canonical workflow path and recorded outside model execution grants only after the target repository identity and literal protected record target are derived and matched, whatever its measurements say",
     "mix": {
       "code": 1,
       "docs": 1,
@@ -30,7 +28,7 @@
     "policyRequiredInterruptions": "recorded and reported alongside interventions, never counted as interventions"
   },
   "consumptionRecordContract": {
-    "requiredSource": "binding, admitted only from the host-neutral projection-consumption observation contract when the Claude-qualified adapter reports a completed full Read of the direct canonical receipt-derived workflow path",
+    "requiredSource": "binding, where binding identifies the qualified host adapter producing the host-neutral projection-consumption observation and does not assert delivery registration authority; the observation is accepted only when that adapter reports a completed exact Read of the direct canonical receipt-derived workflow path",
     "shape": {
       "source": "binding",
       "affirmative": true,
