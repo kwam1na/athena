@@ -63,6 +63,8 @@ else.
 - `scripts/shadow-discovery-guard.ts` plus its suite — the pre-cutover
   exactly-one-discovery guard.
 
+> **Current MVP supersession — consumption and writer statements only (2026-09-01).** The historical writer/consumption assertions below do not describe the current Athena MVP. Its authority is [the activation metadata](../../../.agents/policy/shadow-activation.json), [the M1 gate record](../../../.agents/policy/shadow-milestone-gate-record.json), [the current policy-projection solution](layered-policy-projection-read-only-comparison-2026-08-30.md), and [the bootstrap report](../../reports/2026-09-01-athena-managed-shadow-bootstrap-report.html). The current MVP has no automatic binding-side writer. Before manually recording a derived summary, the operator independently verifies and retains the complete observation artifact outside model grants; unsupported provenance or path evidence is a manual admission prohibition. Once it is represented as a shape-valid derived summary, the guard and scorer cannot independently detect those underlying conditions.
+
 The guard's four positions:
 
 - **Posture.** The activation must still say shadow and must not claim delivery
@@ -79,7 +81,7 @@ The guard's four positions:
   worktree. The repository root and every non-managed worktree keep the vendored
   generation authoritative. What is checked is the root of the tree the guard
   runs in, not every directory beneath it.
-- **Consumption.** The marker alone remains diagnostic and cannot fill a
+- **Consumption — historical writer-era model, superseded for the current MVP.** The marker alone remains diagnostic and cannot fill a
   comparison slot. The pinned harness product now owns a host-neutral observation
   contract and admits affirmative evidence only when its Claude-qualified
   adapter reports a completed full Read of the direct receipt-derived canonical
@@ -102,7 +104,7 @@ observation during this authority-free shadow window. A later exact-version
 exclusivity regrade is required before the guard can treat coexistence as
 blocking. No other host is in Athena's M1 delivery lane.
 
-One honest limit on the consumption position: the guard reads the gate-record
+**Superseded writer-era limitation.** The guard reads the gate-record
 artifact, so it checks only the record's *declared* source and shape. It does
 not reproduce the host callback, the writer's repository/target checks, or the
 scorer's window computation. Those are installed-product boundaries. Athena's
@@ -117,7 +119,7 @@ The window's whole value is that it can run for as long as the migration takes
 without ever being able to damage the thing it runs beside. Byte-neutrality is
 what makes that reversible: the vendored generation is untouched, so abandoning
 the migration costs nothing but deleting an installation. Scoping is what keeps
-ordinary deliveries ordinary. Binding-sourced records preserve custody, but
+ordinary deliveries ordinary. **Historical writer-era conclusion, superseded for the current MVP:** Binding-sourced records preserve custody, but
 custody alone does not prove use. The eventual improvement claim becomes honest
 only when a model-external event proves the exact workflow-source read, the
 writer proves the record belongs to the same repository, and both cohorts stop
