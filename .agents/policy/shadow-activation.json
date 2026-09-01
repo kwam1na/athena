@@ -1,7 +1,7 @@
 {
   "spec": "athena-shadow-activation/1",
   "repositoryId": "athena",
-  "recordedAt": "2026-09-01T10:24:07Z",
+  "recordedAt": "2026-09-01T16:53:49Z",
   "purpose": "Athena's activation metadata for three manual, non-authoritative shadow comparisons. The product supplies workflow definitions plus candidate-bound decision and evidence contracts; the coding host orchestrates, `bun run pr:athena` remains repository policy authority, and GitHub remains merge authority. This record makes no claim of trusted operator intent, registration or takeover authority, model isolation, or runtime enforcement.",
   "installationMode": "shadow",
   "deliveryAuthority": "none",
@@ -10,8 +10,8 @@
     "repository": "agent-delivery-harness",
     "commit": "f942c278d143d7a622e95a964a8e0664d4ae06a1",
     "compositionProfile": "production",
-    "compositionProfileNote": "the installed generation carries the production profile. The read-only posture comes from this document's shadow installation mode and deliveryAuthority none, not from the profile",
-    "productionInstallation": {
+    "compositionProfileNote": "the active generation carries the production profile. The read-only posture comes from this document's shadow installation mode and deliveryAuthority none, not from the profile",
+    "activeProductionInstallation": {
       "generationDigest": "425e400c9b22826abb597cbeb90ce1d18378a4dda2b76fff21f88db01fac0074",
       "installationId": "install-35dbe7efb798bc5cca3cc1933fcb7924",
       "compositionSequence": 2,
@@ -22,7 +22,8 @@
         "sha256": "cab3ac785e5f61cf921002073e3de0b09fd63437c94aa57f3696a48ed96eec55"
       },
       "closureVerified": true,
-      "runtimeEvidence": "none: installation and closure verification do not claim a delivery, materialized projection, host session, exact-read observation, registration, takeover, or runtime enforcement"
+      "maintenanceUpdate": "approved by the configured fresh OS-native assertion; sequence 2 is active, accepted, and pinned with high-water mark 2, while rollback retains sequence 1",
+      "runtimeEvidence": "none: installation activation and closure verification do not claim a delivery, materialized projection, host session, exact-read observation, registration, takeover, or runtime enforcement"
     },
     "qualificationRecords": [
       "qualifications/claude-code-integration.json",

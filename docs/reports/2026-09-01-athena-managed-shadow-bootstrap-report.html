@@ -5,7 +5,7 @@
   <title>Athena manual-shadow bootstrap</title>
 </head>
 <body>
-<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="deb70d96637491814598e19f3a1648d1edb617832983ed3f1d40c77be1e75b41">
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="f04711719aea31e068ed7b2cea62605dfc1b1980d5abc8cf2568a999a1ca7726">
   <header data-report-section="header">
     <h1>Athena manual-shadow bootstrap</h1>
     <p>Productizing Athena's existing delivery workflow as a reusable decision and evidence layer</p>
@@ -25,7 +25,7 @@
 
   <section data-report-section="summary">
     <h2>Executive summary</h2>
-    <p>This bootstrap pins Athena to the current product generation and preserves the useful core already present in Athena: portable workflow definitions, repository-policy overlays, normalized candidate-bound evidence, review and validation records, and deterministic finish-line decisions.</p>
+    <p>This bootstrap activates and closure-verifies the current product generation for Athena's manual shadows and preserves the useful core already present in Athena: portable workflow definitions, repository-policy overlays, normalized candidate-bound evidence, review and validation records, and deterministic finish-line decisions. A fresh OS-native authorization approved the existing maintenance update, making sequence 2 active, accepted, and pinned while retaining sequence 1 as the rollback target.</p>
     <p>It deliberately removes the attempted managed-admission and preparation-sensor layer. The coding host still orchestrates the work, <code>bun run pr:athena</code> remains repository-policy authority, and GitHub remains merge authority. The next evidence comes from three manual Athena shadows, not more machinery.</p>
   </section>
 
@@ -37,7 +37,7 @@
 
   <section data-report-section="mental-model">
     <h2>Mental model: compare decisions, do not replace delivery</h2>
-    <p>The coding host runs the delivery exactly as Athena does today. In parallel, the product materializes the pinned portable workflow, normalizes the host observation and candidate evidence, and produces a deterministic decision for comparison. Athena and GitHub still decide whether the candidate is merge-ready and merged.</p>
+    <p>The coding host runs the delivery exactly as Athena does today. The operator uses the product's existing primitives to materialize the pinned portable workflow, retain the qualified host observation with candidate evidence, and evaluate the deterministic comparison. Athena and GitHub still decide whether the candidate is merge-ready and merged.</p>
   </section>
 
   <section data-report-section="before-after">
@@ -55,7 +55,7 @@
     <ul>
       <li>The policy and compiled snapshot no longer carry a Claude-only managed admission member or managed delivery-record path.</li>
       <li>The PR-only preparation sensor, telemetry exception, and admission/session-grant assertions are removed.</li>
-      <li>The activation record pins harness commit <code>f942c278…</code>, composition sequence 2, generation <code>425e400c…</code>, and distribution <code>adb64360…</code>, without fabricating an updated receipt or runtime proof.</li>
+      <li>The activation record reports the product-packed, closure-verified sequence-2 generation <code>425e400c…</code> / distribution <code>adb64360…</code> as active after the configured OS-native assertion approved the existing maintenance update. Sequence 2 is accepted and pinned at high-water mark 2; the rollback pointer retains accepted sequence 1.</li>
       <li>The plan, comparison record, operator guidance, and report now state the same narrow MVP claims.</li>
       <li>No launcher, registry, scheduler, daemon, callback framework, control plane, session manager, or automated shadow scorer was added.</li>
     </ul>
@@ -72,8 +72,10 @@
     <ul>
       <li>The current harness compiler accepts the Athena document and twelve typed adapters and produces compiled digest <code>746b6d3a…</code>.</li>
       <li>The read-only projection sensor and focused tests verify the policy, oracle, adapters, and recorded compile remain coherent.</li>
+      <li>The sequence-2 maintenance update succeeded through the existing product primitive with the configured OS-native assertion. The active pointer and trust pin select sequence 2; the accepted set contains sequences 1 and 2, high-water mark is 2, the maintenance journal records update start and completion, the rollback pointer retains sequence 1, and the install receipt is unchanged.</li>
       <li>The paired plan HTML validates as static, local-only HTML.</li>
       <li>M1 remains honestly incomplete at 0/3 until real code, documentation, and operations shadows record qualified exact-read evidence.</li>
+      <li>The existing product installation was activated through its maintenance lane; that is distinct from deployment. No Athena web deployment occurs in this policy-and-documentation bootstrap, and deployment of this report remains a separate post-merge step under the repository's normal report-delivery rule.</li>
       <li>Final <code>bun run pr:athena</code>, hosted checks, squash merge, and root-main alignment remain pending.</li>
     </ul>
   </section>
@@ -81,7 +83,8 @@
   <section data-report-section="guidance">
     <h2>Manual operator checklist</h2>
     <ol>
-      <li>Materialize the exact pinned workflow projection for the candidate.</li>
+      <li>Before a shadow, use the active accepted sequence-2 generation.</li>
+      <li>For any later update, use the existing maintenance update and approve its fresh OS-native prompt; then verify the active pointer, accepted set/high-water mark, journal, rollback pointer, and receipt before treating that generation as eligible.</li>
       <li>Compose the qualified Claude adapter; hosts without a qualified producer remain excluded.</li>
       <li>Let the host complete and report the exact full Read of the canonical workflow path.</li>
       <li>Outside the model grant, record that observation with immutable candidate identity and exact <code>pr:athena</code> evidence.</li>
