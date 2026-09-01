@@ -12,7 +12,7 @@ applies_when:
   - "A repository plans to hand delivery routing to an external policy compiler without changing its live authority yet"
   - "A migration needs an independent record of pre-cutover behavior that later parity claims can be judged against"
 tags: [delivery-harness, policy-projection, pre-cutover-oracle, read-only-comparison]
-delivery_diff_fingerprint: a67a50b2ec1ed67b812ba962fcb1195dd35c8c572aa7c8ceaa7b611e4ad0dfd8
+delivery_diff_fingerprint: 7210788959f36dedc5c6f851abbd5d0881c4d0ed5c4c553382cacd995c6a56d1
 ---
 
 # Project delivery authority into a layered policy model with a frozen pre-cutover oracle
@@ -73,14 +73,17 @@ normalizes exact candidate-bound evidence, and returns deterministic decisions
 for comparison; it does not add a second admission system or preparation
 sensor inside Athena.
 
-A counting shadow requires operator-held evidence outside model grants that
-retains and independently verifies the complete
+A counting shadow uses a manual operator admission condition: before recording
+a counted derived summary, the operator independently verifies and retains the complete
 `projection-consumption-observation/1` artifact: `spec`, `deliveryId`,
 `fence`, `entry` `workflows/delivery-v1.json`, `canonicalProjectionPath`,
 `projectionDigest`, `hostInvocationId`, and `observedAt`, alongside
 immutable candidate and GitHub/`pr:athena` evidence. The M1 gate entry retains
 only a derived source/affirmative/digest/marker summary plus that candidate and
-GitHub evidence; it neither proves nor preserves the complete envelope. The
+GitHub evidence. The guard and scorer validate those recorded inputs, not
+external artifact retention; an accepted entry means the operator asserted the
+manual precondition and the tools accepted the derived input, and neither proves
+nor preserves the complete envelope. The
 qualified Claude PostToolUse adapter produces the normalized contract now. A
 future qualified Codex native adapter must emit the same contract; Codex is
 excluded from counting now because it has no qualified binding or producer,
@@ -92,10 +95,12 @@ deferred to a future higher-assurance trust tier.
 The manual operator loop is: materialize the pinned projection, compose the
 qualified Claude PostToolUse adapter, let it emit
 `projection-consumption-observation/1` for the exact full Read, then after
-final immutable delivery evidence retain and independently verify the complete
+final immutable delivery evidence independently verify and retain the complete
 artifact outside the model grant and manually record only its derived M1
 summary with immutable candidate and GitHub/`pr:athena` evidence before running
-the deterministic scorer. Repeat once each for a code, documentation, and
+the deterministic scorer. This remains an operator assertion: the guard and
+scorer do not inspect external retention or exclude a summary solely because
+the artifact is later lost or unavailable. Repeat once each for a code, documentation, and
 operations delivery. Do not add a launcher, registry, scheduler, daemon,
 callback framework, control plane, session manager, automatic binding-side
 writer, or automated scorer unless field data exposes a concrete failure.
@@ -126,9 +131,11 @@ instead of being silently absorbed.
   today; a future qualified Codex native adapter must emit that same normalized
   contract. Codex currently has no qualified binding or producer, and hosts
   without a qualified producer remain excluded rather than emitting weaker
-  evidence. Count only after separately retaining and independently verifying
-  the complete artifact outside model grants; the M1 summary does not replace
-  it. An automatic writer is a future non-MVP tier.
+  evidence. Before recording a counted summary, the operator independently
+  verifies and retains the complete artifact outside model grants; this is a
+  manual admission condition, while the guard and scorer validate only derived
+  and candidate/GitHub inputs. The M1 summary does not replace or independently
+  prove the full artifact. An automatic writer is a future non-MVP tier.
 - Add machinery only after one of the three real shadows demonstrates a named
   failure the existing workflow and evidence contracts cannot express.
 

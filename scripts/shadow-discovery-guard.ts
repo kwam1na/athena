@@ -40,9 +40,12 @@ import { POLICY_PROJECTION_DIR } from "./policy-projection-check";
  *     is empty, the existing per-entry source and shape checks govern. What
  *     keeps a session from writing the record is that `.agents` is a protected
  *     path in every checkpoint grant. After separately retaining and
- *     independently verifying the full observation artifact, the operator
- *     manually records only its derived summary outside those grants; this MVP
- *     has no binding-side writer.
+ *     independently verifying and retaining the full observation artifact, the
+ *     operator manually records only its derived summary outside those grants.
+ *     That is a manual admission condition and operator assertion: this guard
+ *     inspects only the recorded derived fields, not external retention, and
+ *     cannot reject a summary solely because the external artifact is lost or
+ *     unavailable. This MVP has no binding-side writer.
  *
  * The current sole proving host is qualified for strict exact Read but its
  * current-version discovery exclusivity is unverified. Ambient vendored
@@ -529,7 +532,7 @@ async function evaluateShadowArtifacts(input: {
     }
   }
 
-  // ── Manually recorded projection-consumption summaries ───────────────────
+  // ── Derived summaries only; external artifact retention is not inspected ──
   const requirement = gateRecord.comparisonSetRequirement ?? {};
   const requiredMix: Record<string, number> = requirement.mix ?? {};
   const deliveries: any[] = Array.isArray(gateRecord.deliveries)
@@ -568,7 +571,7 @@ async function evaluateShadowArtifacts(input: {
     } else if (record.source !== "binding") {
       emit(
         "agent_supplied_consumption_claim",
-        `delivery ${id} carries a projection-consumption record sourced from ${JSON.stringify(
+        `delivery ${id} carries a derived projection-consumption summary sourced from ${JSON.stringify(
           record.source,
         )}; only a manually recorded derived summary that identifies the qualified adapter as binding is accepted, so the claim is rejected and the delivery is excluded`,
       );

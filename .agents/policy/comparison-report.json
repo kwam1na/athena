@@ -12,7 +12,7 @@
   },
   "results": {
     "compile": "ok: the declarative document plus the twelve typed adapters compile through the harness policy compiler (agent-delivery-harness f942c27) with zero rejections, each lens resolving its reviewer charter by identity from the pinned composition archive 9ce12f12",
-    "mvpBoundary": "ok: counting requires separately retained and independently verified operator evidence containing the complete projection-consumption-observation/1 artifact; the M1 entry holds only a derived source/affirmative/digest/marker summary plus candidate and GitHub evidence, and no automatic writer, registration, takeover, or model-isolation claim is projected",
+    "mvpBoundary": "ok: before manually recording a counted derived summary, the operator independently verifies and retains the complete projection-consumption-observation/1 artifact outside model grants. This is a manual admission condition and operator evidence assertion; the guard and scorer validate only the derived source/affirmative/digest/marker and candidate/GitHub input, not external retention, so an accepted entry does not independently prove the full envelope, trusted intent, registration, isolation, or writer provenance",
     "phaseParity": "ok: oracle phase vector matches the live pr:athena phase order and package.json script chain",
     "obligationParity": "ok: every live gate obligation (review.green, documentation.current, telemetry.recorded) is activated by the declarative document with matching activation semantics",
     "leafMapping": "ok: each proposed leaf maps to exactly one adapter; no adapter is mapped twice; the pr:athena aggregate is registered as no leaf",
@@ -47,7 +47,7 @@
     {
       "id": "mvp-decision-evidence-only",
       "observed": "Athena's live delivery authority remains bun run pr:athena and GitHub, with the coding host orchestrating the workflow.",
-      "projection": "The MVP counts only after operator-held evidence independently verifies the complete host-neutral observation outside model grants; its M1 entry is a derived summary with candidate and GitHub evidence, not proof or storage of the full envelope. No automatic writer, registration, takeover, trusted operator intent, or model isolation is claimed. V26-1527 is deferred to a future higher-assurance trust tier.",
+      "projection": "Before manually recording a counted derived summary, the operator independently verifies and retains the complete host-neutral observation outside model grants. This is a manual admission condition and operator evidence assertion; the guard and scorer validate only the derived source/affirmative/digest/marker and candidate/GitHub input, not external retention, so an accepted entry is not proof or storage of the full envelope. No automatic writer, registration, takeover, trusted operator intent, or model isolation is claimed. V26-1527 is deferred to a future higher-assurance trust tier.",
       "disposition": "accepted-projection",
       "blocking": false
     },

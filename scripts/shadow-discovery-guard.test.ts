@@ -60,7 +60,7 @@ async function plantedTree(edit: {
   return dir;
 }
 
-/** An affirmative manually recorded derived summary with a qualified adapter source. */
+/** A derived summary the guard can accept without inspecting an external artifact. */
 function bindingSourcedDelivery(overrides: Record<string, unknown> = {}) {
   return {
     id: "athena-shadow-1",
@@ -597,7 +597,7 @@ describe("exactly-one-discovery exclusivity", () => {
   });
 });
 
-describe("manually recorded projection-consumption summaries", () => {
+describe("derived projection-consumption summaries without external-artifact inspection", () => {
   test("open pre-M1 blockers reject a marker-only entry before it can count", async () => {
     const policyDirCopy = await plantedTree({
       gateRecord: (value) => {
@@ -613,7 +613,7 @@ describe("manually recorded projection-consumption summaries", () => {
     ).toContain("comparison_set_incomplete");
   });
 
-  test("an affirmative manually recorded derived summary counts toward the comparison set", async () => {
+  test("an affirmative manually recorded derived summary is accepted without external-artifact inspection", async () => {
     const policyDirCopy = await plantedTree({
       gateRecord: (value) => {
         value.deliveries = [bindingSourcedDelivery()];
