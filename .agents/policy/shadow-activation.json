@@ -73,7 +73,7 @@
     "beforeThatGate": "no tracked byte of the vendored discovery layout changes"
   },
   "consumptionRecord": {
-    "requiredSource": "projection-consumption-observation/1: the host-neutral normalized observation contract. The complete artifact — spec, canonical path, host invocation, observedAt, delivery, fence, and projection digest — is retained and independently verified in operator evidence outside model grants before counting",
+    "requiredSource": "projection-consumption-observation/1: the host-neutral normalized observation contract. The complete artifact — spec, deliveryId, fence, entry workflows/delivery-v1.json, canonicalProjectionPath, projectionDigest, hostInvocationId, and observedAt — is retained and independently verified in operator evidence outside model grants before counting",
     "producedBy": "the qualified Claude Code PostToolUse adapter produces projection-consumption-observation/1 now. A future qualified Codex native adapter must emit that same normalized contract; Codex is excluded from counting now because no qualified binding or producer exists, and unqualified hosts produce no affirmative evidence and remain excluded from M1",
     "agentSuppliedClaims": "rejected — a delivery carrying one is excluded from the comparison set and the guard reports a finding",
     "absentOrNegative": "excluded from the comparison set",

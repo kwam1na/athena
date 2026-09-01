@@ -60,7 +60,7 @@ async function plantedTree(edit: {
   return dir;
 }
 
-/** An affirmative record in exactly the shape the binding produces. */
+/** An affirmative manually recorded derived summary with a qualified adapter source. */
 function bindingSourcedDelivery(overrides: Record<string, unknown> = {}) {
   return {
     id: "athena-shadow-1",
@@ -597,7 +597,7 @@ describe("exactly-one-discovery exclusivity", () => {
   });
 });
 
-describe("binding-sourced projection-consumption records", () => {
+describe("manually recorded projection-consumption summaries", () => {
   test("open pre-M1 blockers reject a marker-only entry before it can count", async () => {
     const policyDirCopy = await plantedTree({
       gateRecord: (value) => {
@@ -613,7 +613,7 @@ describe("binding-sourced projection-consumption records", () => {
     ).toContain("comparison_set_incomplete");
   });
 
-  test("an affirmative binding-sourced record counts toward the comparison set", async () => {
+  test("an affirmative manually recorded derived summary counts toward the comparison set", async () => {
     const policyDirCopy = await plantedTree({
       gateRecord: (value) => {
         value.deliveries = [bindingSourcedDelivery()];

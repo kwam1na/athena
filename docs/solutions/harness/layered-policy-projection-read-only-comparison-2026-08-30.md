@@ -12,7 +12,7 @@ applies_when:
   - "A repository plans to hand delivery routing to an external policy compiler without changing its live authority yet"
   - "A migration needs an independent record of pre-cutover behavior that later parity claims can be judged against"
 tags: [delivery-harness, policy-projection, pre-cutover-oracle, read-only-comparison]
-delivery_diff_fingerprint: 008241bef8927723527c06e0d7e54775e714145665ed1f5cd5d1908da8a91086
+delivery_diff_fingerprint: a67a50b2ec1ed67b812ba962fcb1195dd35c8c572aa7c8ceaa7b611e4ad0dfd8
 ---
 
 # Project delivery authority into a layered policy model with a frozen pre-cutover oracle
@@ -75,8 +75,9 @@ sensor inside Athena.
 
 A counting shadow requires operator-held evidence outside model grants that
 retains and independently verifies the complete
-`projection-consumption-observation/1` artifact: spec, canonical path, host
-invocation, `observedAt`, delivery, fence, and projection digest, alongside
+`projection-consumption-observation/1` artifact: `spec`, `deliveryId`,
+`fence`, `entry` `workflows/delivery-v1.json`, `canonicalProjectionPath`,
+`projectionDigest`, `hostInvocationId`, and `observedAt`, alongside
 immutable candidate and GitHub/`pr:athena` evidence. The M1 gate entry retains
 only a derived source/affirmative/digest/marker summary plus that candidate and
 GitHub evidence; it neither proves nor preserves the complete envelope. The

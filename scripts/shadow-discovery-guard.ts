@@ -39,8 +39,10 @@ import { POLICY_PROJECTION_DIR } from "./policy-projection-check";
  *     delivery is rejected before its marker can be considered. Once that list
  *     is empty, the existing per-entry source and shape checks govern. What
  *     keeps a session from writing the record is that `.agents` is a protected
- *     path in every checkpoint grant, plus the binding-side writer the product
- *     supplies.
+ *     path in every checkpoint grant. After separately retaining and
+ *     independently verifying the full observation artifact, the operator
+ *     manually records only its derived summary outside those grants; this MVP
+ *     has no binding-side writer.
  *
  * The current sole proving host is qualified for strict exact Read but its
  * current-version discovery exclusivity is unverified. Ambient vendored
@@ -527,7 +529,7 @@ async function evaluateShadowArtifacts(input: {
     }
   }
 
-  // ── Binding-sourced projection-consumption records ────────────────────────
+  // ── Manually recorded projection-consumption summaries ───────────────────
   const requirement = gateRecord.comparisonSetRequirement ?? {};
   const requiredMix: Record<string, number> = requirement.mix ?? {};
   const deliveries: any[] = Array.isArray(gateRecord.deliveries)
@@ -568,7 +570,7 @@ async function evaluateShadowArtifacts(input: {
         "agent_supplied_consumption_claim",
         `delivery ${id} carries a projection-consumption record sourced from ${JSON.stringify(
           record.source,
-        )}; only the binding's own per-run marker is accepted, so the claim is rejected and the delivery is excluded`,
+        )}; only a manually recorded derived summary that identifies the qualified adapter as binding is accepted, so the claim is rejected and the delivery is excluded`,
       );
     } else if (record.affirmative === false) {
       // An honest negative: the run did not consume the run-pinned projection.
@@ -583,7 +585,7 @@ async function evaluateShadowArtifacts(input: {
     } else if (!isHex64(record.projectionDigest)) {
       emit(
         "consumption_record_shape",
-        `delivery ${id} affirms consumption without the projection digest the binding receipted at materialization`,
+        `delivery ${id} affirms consumption without the projection digest derived from the separately retained and independently verified full artifact`,
       );
     } else if (typeof delivery?.id !== "string" || delivery.id.length === 0) {
       emit(
@@ -618,7 +620,7 @@ async function evaluateShadowArtifacts(input: {
       if (!admissible) {
         emit(
           "comparison_set_admission_defect",
-          `delivery ${id} is counted in the comparison set without an affirmative binding-sourced consumption record`,
+          `delivery ${id} is counted in the comparison set without an affirmative manually recorded derived consumption summary sourced from the qualified adapter`,
         );
       } else if (countedDeliveryIds.includes(id)) {
         // One run counted twice fills the comparison set without measuring a

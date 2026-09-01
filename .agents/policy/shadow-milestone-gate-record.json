@@ -1,7 +1,7 @@
 {
   "spec": "athena-shadow-milestone-gate-record/1",
   "repositoryId": "athena",
-  "purpose": "Athena's adopter-local V26-1467 M1 comparison authority: one entry per manually run Athena shadow delivery with a qualified host-reported projection-consumption observation, carrying that exact observation alongside the intervention and blocked-share measurements compared against the frozen manual-choreography baseline. The harness repository's separate record is product self-dogfood evidence; it neither fills nor duplicates this record's three delivery slots. A measurement artifact, not a journal. The operator records an entry outside model execution grants only after the host-neutral observation contract accepts a completed exact Read from a qualified host adapter and the delivery repository identity, literal protected Athena target, and record repositoryId match. This list is empty because no qualifying Athena shadow observation is recorded. Its location is outside every execution grant's writable paths: `.agents` is additionally protected in .agents/policy/repository-policy.json. The correlation deliveryId and fence do not establish registration, takeover, trusted operator intent, or runtime authority. Nothing here claims model isolation, runtime enforcement, M1 success, or cutover readiness.",
+  "purpose": "Athena's adopter-local V26-1467 M1 comparison authority: one entry per manually run Athena shadow delivery, carrying the derived source/affirmative/projectionDigest/marker summary alongside intervention and blocked-share measurements compared against the frozen manual-choreography baseline. The harness repository's separate record is product self-dogfood evidence; it neither fills nor duplicates this record's three delivery slots. A measurement artifact, not a journal. After final immutable delivery evidence, the operator manually records this derived summary outside model execution grants only after separately retaining and independently verifying the complete qualified-host projection-consumption-observation/1 artifact — spec, deliveryId, fence, entry workflows/delivery-v1.json, canonicalProjectionPath, projectionDigest, hostInvocationId, and observedAt — and immutable candidate plus GitHub evidence. The gate entry itself neither preserves nor proves that full envelope; a missing retained artifact excludes the delivery. No automatic binding-side writer or registered-delivery assumption is part of this MVP. This list is empty because no qualifying Athena shadow observation is recorded. Its location is outside every execution grant's writable paths: `.agents` is additionally protected in .agents/policy/repository-policy.json. The correlation deliveryId and fence do not establish registration, takeover, trusted operator intent, or runtime authority. Nothing here claims model isolation, runtime enforcement, M1 success, or cutover readiness.",
   "recordedAt": "2026-09-01T07:15:00Z",
   "status": "awaiting-shadow-deliveries",
   "openPreM1Blockers": [],
@@ -12,7 +12,7 @@
     "provingHost": "claude-code"
   },
   "comparisonSetRequirement": {
-    "note": "the counted set must match the frozen baseline's mix and count; a delivery never counts without an affirmative host-reported observation from a qualified adapter, backed by a completed exact Read of the direct canonical workflow path and recorded outside model execution grants only after the target repository identity and literal protected record target are derived and matched, whatever its measurements say",
+    "note": "the counted set must match the frozen baseline's mix and count; a delivery never counts without the operator separately retaining and independently verifying the complete qualified-host projection-consumption-observation/1 artifact — including entry workflows/delivery-v1.json — from a completed exact Read of the direct canonical workflow path, plus immutable candidate and GitHub evidence, then manually recording only its derived summary outside model execution grants. The gate entry does not preserve or prove the full envelope; a missing retained artifact excludes the delivery whatever its measurements say",
     "mix": {
       "code": 1,
       "docs": 1,
@@ -28,18 +28,18 @@
     "policyRequiredInterruptions": "recorded and reported alongside interventions, never counted as interventions"
   },
   "consumptionRecordContract": {
-    "requiredSource": "binding, where binding identifies the qualified host adapter producing the host-neutral projection-consumption observation and does not assert delivery registration authority; the observation is accepted only when that adapter reports a completed exact Read of the direct canonical receipt-derived workflow path",
+    "requiredSource": "binding identifies the qualified host adapter as the source of the host-neutral projection-consumption observation; after separately retaining and independently verifying that complete artifact (including entry workflows/delivery-v1.json) and immutable candidate plus GitHub evidence, the operator manually records only this derived summary. The gate entry does not preserve or prove the full envelope, asserts no delivery registration authority, and has no automatic binding-side writer",
     "shape": {
       "source": "binding",
       "affirmative": true,
-      "projectionDigest": "the digest the binding receipted at materialization",
+      "projectionDigest": "the digest derived from the separately retained and independently verified full artifact",
       "marker": {
-        "deliveryId": "the delivery the projection was materialized for",
-        "fence": "the invocation fence the marker binds",
-        "consumed": "the pinned generation archive proved loaded or read as the run's workflow source by the model-external event; a path name or echoed marker alone cannot satisfy this field"
+        "deliveryId": "the delivery identity from the separately retained full artifact",
+        "fence": "the invocation fence from that artifact",
+        "consumed": "the pinned generation archive proved loaded or read as the run's workflow source by the separately retained model-external event; a path name or echoed marker alone cannot satisfy this field"
       }
     },
-    "rejected": "any record whose source is not the binding, whose only evidence is a path name or echoed marker, whose host is unsupported, or whose writer has not derived and matched the target repository identity and literal protected target — a session-authored, otherwise agent-supplied, non-consuming, cross-repository, symlinked, or hardlinked claim is excluded and must leave the record unchanged"
+    "rejected": "any record whose source is not the binding, whose full artifact was not separately retained and independently verified, whose only evidence is a path name or echoed marker, whose host is unsupported, or whose delivery identity or literal protected target does not match — a session-authored, otherwise agent-supplied, non-consuming, cross-repository, symlinked, or hardlinked claim is excluded and must leave the record unchanged"
   },
   "deliveries": []
 }
