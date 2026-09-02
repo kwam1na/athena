@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-02T23:18:05.348Z",
+  "branch": "codex/v26-1577-four-round-release",
+  "headSha": "e4acd6cc5a80dccead7b7386f17932b27166b4e0",
+  "deliverableDiffFingerprint": "020ef455bac3c98e4ac9be6fb1d1a427faa94bb682664e54fc7e464b5e26b479",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 0,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 890906.8594989999
+  },
+  "reviewLoop": {
+    "providerId": "ce-code-review",
+    "runId": "20260902-v26-1577-r1",
+    "finalPassId": "20260902-v26-1577-r1-pass-3",
+    "recordedAt": "2026-09-02T23:03:11.451Z",
+    "iterationCount": 3,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 4,
+      "P3": 3
+    },
+    "deferredExpansionCount": 2,
+    "deferredIssueIds": [
+      "V26-1591",
+      "V26-1592"
+    ]
+  }
+}
