@@ -407,10 +407,10 @@ describe("github-pr-merge", () => {
     expect(() => parseArgs(["343", "344"])).toThrow("Unexpected extra argument");
   });
 
-  it("keeps the execute workflow pointed at the worktree-safe merge helper", async () => {
+  it("keeps the repository delivery guidance pointed at the worktree-safe merge helper", async () => {
     const rootDir = path.resolve(import.meta.dirname, "..");
-    const [executeSkill, reportSkill, compoundSkill, packageJson] = await Promise.all([
-      readFile(path.join(rootDir, ".agents/skills/execute/SKILL.md"), "utf8"),
+    const [agentsGuide, reportSkill, compoundSkill, packageJson] = await Promise.all([
+      readFile(path.join(rootDir, "AGENTS.md"), "utf8"),
       readFile(
         path.join(rootDir, ".agents/skills/ce-landed-change-report/SKILL.md"),
         "utf8"
@@ -422,28 +422,28 @@ describe("github-pr-merge", () => {
     expect(JSON.parse(packageJson).scripts["github:pr-merge"]).toBe(
       "bun scripts/github-pr-merge.ts"
     );
-    expect(executeSkill).toContain("bun run github:pr-merge -- <pr-number-or-url>");
-    expect(executeSkill).toContain("instead of raw `gh pr merge`");
-    expect(executeSkill).toContain("Delivery always includes remote merge and local fast-forward");
-    expect(executeSkill).toContain("fast-forward the local root checkout to `origin/main`");
-    expect(executeSkill).toContain("Treat the merge as incomplete until the remote merge is confirmed");
-    expect(executeSkill).toContain(
+    expect(agentsGuide).toContain("bun run github:pr-merge -- <pr-number-or-url>");
+    expect(agentsGuide).toContain("instead of raw `gh pr merge`");
+    expect(agentsGuide).toContain("Delivery always includes remote merge and local fast-forward");
+    expect(agentsGuide).toContain("fast-forward the local root checkout to `origin/main`");
+    expect(agentsGuide).toContain("Treat the merge as incomplete until the remote merge is confirmed");
+    expect(agentsGuide).toContain(
       "do not defer the report to a post-merge follow-up PR"
     );
-    const artifactsSection = executeSkill.indexOf(
+    const artifactsSection = agentsGuide.indexOf(
       "### 8. Complete Delivery Artifacts + Compound The Learning"
     );
-    const reviewSection = executeSkill.indexOf(
+    const reviewSection = agentsGuide.indexOf(
       "### 9. Run The Review + Merge Loop"
     );
-    const finalLinearComment = executeSkill.indexOf(
+    const finalLinearComment = agentsGuide.indexOf(
       "After the review loop is unanimously green"
     );
-    const mergeInstruction = executeSkill.indexOf(
+    const mergeInstruction = agentsGuide.indexOf(
       "arm auto-merge with `bun run github:pr-merge",
       finalLinearComment
     );
-    const postMergeSection = executeSkill.indexOf(
+    const postMergeSection = agentsGuide.indexOf(
       "### 10. Post-Merge: Align Root + Run Non-Deferred Production Deploys"
     );
 
@@ -452,22 +452,22 @@ describe("github-pr-merge", () => {
     expect(finalLinearComment).toBeGreaterThan(reviewSection);
     expect(mergeInstruction).toBeGreaterThan(finalLinearComment);
     expect(postMergeSection).toBeGreaterThan(mergeInstruction);
-    expect(executeSkill.slice(artifactsSection, reviewSection)).toContain(
+    expect(agentsGuide.slice(artifactsSection, reviewSection)).toContain(
       "Use the repo-local `$ce-compound` skill"
     );
-    expect(executeSkill.slice(artifactsSection, reviewSection)).toContain(
+    expect(agentsGuide.slice(artifactsSection, reviewSection)).toContain(
       "commit the approved report to the delivery branch"
     );
-    expect(executeSkill.slice(reviewSection, postMergeSection)).toContain(
+    expect(agentsGuide.slice(reviewSection, postMergeSection)).toContain(
       "post or refresh the merge-ready Linear comment"
     );
-    expect(executeSkill.slice(postMergeSection)).toContain(
+    expect(agentsGuide.slice(postMergeSection)).toContain(
       "Do not generate or refresh landed-change reports, solution notes, skills, PR descriptions, or Linear closeout comments after merge"
     );
-    expect(executeSkill).not.toContain(
+    expect(agentsGuide).not.toContain(
       "Post-merge report work is limited to an explicitly requested metadata refresh"
     );
-    expect(executeSkill).not.toContain(
+    expect(agentsGuide).not.toContain(
       "After merge, run repo-local `$ce-landed-change-report`"
     );
     expect(reportSkill).toContain(

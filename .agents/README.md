@@ -1,12 +1,12 @@
 # Athena Local Agent Skills
 
-This directory vendors the local agent skill system used to deliver Athena work.
+This directory holds the local agent skill system used to deliver Athena work: repo-local vendored skills under `skills/`, alongside symlinked members of the generation installed by the `agent-skills` lifecycle under `.agent-skills/`.
 
 ## Source of Truth
 
 Athena agents should resolve workflow behavior from this directory first. When a skill exists under `skills/`, use that repo-local copy instead of any matching global Codex skill, plugin-cache skill, marketplace skill, or Superpowers skill.
 
-Linear planning and ticket execution use the repo-local `track` and `execute` skills.
+Linear decomposition uses the repo-local `create-linear-ticket` skill and ticket execution uses `execute-linear-ticket`, with `deliver-work` as the general workflow entry point. Athena's repository-specific delivery rules live in the root `AGENTS.md`.
 
 Global connectors and platform tools may still provide runtime capabilities, but they are not the source of Athena workflow policy.
 

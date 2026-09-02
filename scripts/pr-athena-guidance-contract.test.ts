@@ -10,21 +10,21 @@ async function readRepoFile(relativePath: string) {
 
 describe("Athena merge-ready validation guidance", () => {
   it("requires approved review workflows to issue exact-candidate evidence before validation", async () => {
-    const [executeSkill, codeReviewSkill] = await Promise.all([
-      readRepoFile(".agents/skills/execute/SKILL.md"),
+    const [agentsGuide, codeReviewSkill] = await Promise.all([
+      readRepoFile("AGENTS.md"),
       readRepoFile(".agents/skills/ce-code-review/SKILL.md"),
     ]);
 
-    for (const skill of [executeSkill, codeReviewSkill]) {
+    for (const skill of [agentsGuide, codeReviewSkill]) {
       expect(skill).toContain("bun run pr:athena:prepare");
       expect(skill).toContain("bun run harness:review-context");
       expect(skill).toContain("final-manifest.json");
       expect(skill).toContain("bun run harness:review-evidence --");
     }
     expect(
-      executeSkill.indexOf("bun run harness:review-evidence --"),
+      agentsGuide.indexOf("bun run harness:review-evidence --"),
     ).toBeLessThan(
-      executeSkill.indexOf("For Athena, run the full `bun run pr:athena` gate"),
+      agentsGuide.indexOf("For Athena, run the full `bun run pr:athena` gate"),
     );
   });
 
@@ -64,10 +64,10 @@ describe("Athena merge-ready validation guidance", () => {
   });
 
   it("classifies the in-app docs corpus as an Athena production deploy surface", async () => {
-    const executeSkill = await readRepoFile(".agents/skills/execute/SKILL.md");
+    const agentsGuide = await readRepoFile("AGENTS.md");
 
-    expect(executeSkill).toContain("`docs/solutions/**`");
-    expect(executeSkill).toContain("`docs/reports/**`");
-    expect(executeSkill).toContain("`scripts/deploy-vps.sh athena-local`");
+    expect(agentsGuide).toContain("`docs/solutions/**`");
+    expect(agentsGuide).toContain("`docs/reports/**`");
+    expect(agentsGuide).toContain("`scripts/deploy-vps.sh athena-local`");
   });
 });

@@ -818,13 +818,13 @@ describe("pre-push validation proof", () => {
 
   it("reruns pre-push when an approved review adapter changes", async () => {
     const rootDir = await createFixtureRoot();
-    await write(rootDir, ".agents/skills/execute/SKILL.md", "review adapter v1\n");
+    await write(rootDir, "AGENTS.md", "review adapter v1\n");
     await recordPrePushValidationProof(rootDir, {
       spawn: createSpawn({}),
       logger: { log() {}, warn() {} },
     });
 
-    await write(rootDir, ".agents/skills/execute/SKILL.md", "review adapter v2\n");
+    await write(rootDir, "AGENTS.md", "review adapter v2\n");
 
     await expect(
       evaluatePrePushValidationProof(rootDir, { spawn: createSpawn({}) }),
