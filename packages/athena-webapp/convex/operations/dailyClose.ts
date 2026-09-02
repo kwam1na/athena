@@ -1593,7 +1593,14 @@ async function listOpenPosSessions(
   },
 ): Promise<DailyCloseSourceRead<Doc<"posSession">>> {
   const range = { startAt: args.startAt, endAt: args.endAt };
+  // A POS session counts for an operating day when it intersects that day's
+  // range. On a day that is still in progress, sessions whose hold has already
+  // lapsed are additionally suppressed, because an operator can no longer act
+  // on them. That suppression is anchored to the requested day, not to the
+  // reader's clock: for a day that has already ended, the wall clock is past
+  // every session's expiry and would erase the day's blockers entirely.
   const now = Date.now();
+  const requestedDayIsInProgress = isInRange(now, range.startAt, range.endAt);
   const sessionPages = await Promise.all(
     OPEN_POS_SESSION_STATUSES.map((status) =>
       ctx.db
@@ -1610,7 +1617,8 @@ async function listOpenPosSessions(
       .flat()
       .filter(
         (session) =>
-          session.expiresAt >= now && posSessionIntersectsRange(session, args),
+          (!requestedDayIsInProgress || session.expiresAt >= now) &&
+          posSessionIntersectsRange(session, args),
       ),
     completeness: sourceCompletenessEntry({
       source: "pos_session",
