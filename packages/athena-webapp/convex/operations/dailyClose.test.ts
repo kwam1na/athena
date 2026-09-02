@@ -1863,6 +1863,54 @@ describe("end-of-day review backend foundation", () => {
     );
   });
 
+  it("keeps open POS session blockers on a historic operating date long after the sessions expired", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 6, 19, 12));
+
+    const { db } = createDb({
+      posSession: [
+        {
+          _id: "pos-historic-held",
+          createdAt: Date.UTC(2026, 4, 7, 14),
+          expiresAt: Date.UTC(2026, 4, 7, 20),
+          registerNumber: "A1",
+          sessionNumber: "SES-HIST",
+          status: "held",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          updatedAt: Date.UTC(2026, 4, 7, 14),
+        },
+        {
+          _id: "pos-other-day",
+          createdAt: Date.UTC(2026, 4, 9, 14),
+          expiresAt: Date.UTC(2026, 4, 9, 20),
+          sessionNumber: "SES-OTHER",
+          status: "held",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          updatedAt: Date.UTC(2026, 4, 9, 14),
+        },
+      ],
+      posTerminal: [
+        {
+          _id: "terminal-1",
+          displayName: "Front counter terminal",
+          storeId: "store-1",
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.blockers.map((item) => item.key)).toEqual([
+      "pos_session:pos-historic-held:held",
+    ]);
+    expect(snapshot.readiness.blockerCount).toBeGreaterThan(0);
+    expect(snapshot.readiness.status).not.toBe("ready");
+  });
   it("preserves active register blocker context on the exported snapshot query", async () => {
     mockDailyCloseSnapshotAccess("pos_only");
     const { db } = createDb({
