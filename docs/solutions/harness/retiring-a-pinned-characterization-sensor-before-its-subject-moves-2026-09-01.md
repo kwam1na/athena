@@ -12,7 +12,7 @@ applies_when:
   - "A planned cutover would turn a green suite red for reasons that are correct-by-construction rather than defects"
   - "Removing a sensor also removes the only mechanical detection of drift on some path, and someone must decide whether to accept that residual"
 tags: [delivery-harness, characterization-sensor, pinned-digest, sensor-retirement, deletion-candidate, coverage-floor]
-delivery_diff_fingerprint: 37c9a5b9c73c2528e2454bdba2d866edf45efefe3db27b7a6825fbcec39fe593
+delivery_diff_fingerprint: dad7735c7be45b8c463dc1c0a397bebac152c64835d96065b6efb8bd9077e880
 ---
 
 # Retire a pinned characterization sensor in its own candidate before the subject it pins moves
