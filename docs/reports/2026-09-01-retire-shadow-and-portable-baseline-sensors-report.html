@@ -1,0 +1,853 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Retiring the shadow guard and portable-baseline sensors</title>
+  </head>
+  <body>
+    <article
+      data-athena-landed-change-report="v2"
+      data-athena-report-diff-fingerprint="dad7735c7be45b8c463dc1c0a397bebac152c64835d96065b6efb8bd9077e880"
+      data-athena-report-base="f03bb44ba2399b09838c98451170de20b752bb79"
+      data-athena-report-head="34a2913c53d457e4cb1ff0d218a789871c9bc088"
+    >
+      <header data-report-section="header">
+        <h1>Retiring the shadow guard and portable-baseline sensors</h1>
+        <ul data-report-pills>
+          <li>Delivery candidate</li>
+          <li>Branch claude/v26-1532-retire-athena-shadow-sensors</li>
+          <li>Pure deletion — 18 files, 140 tests, no behavior change</li>
+          <li>harness:test 1659 pass / 0 fail</li>
+        </ul>
+        <dl data-report-meta>
+          <dt>Linear issue</dt>
+          <dd>V26-1532 — Retire Athena's shadow guard and portable-baseline characterization sensors</dd>
+          <dt>Status</dt>
+          <dd>Delivery candidate — not merged, not deployed, Linear not Done</dd>
+          <dt>Candidate head</dt>
+          <dd>34a2913c53d457e4cb1ff0d218a789871c9bc088 — the deletion commit; see the branch for the documentation commits that follow it</dd>
+          <dt>Base</dt>
+          <dd>origin/main at f03bb44ba2399b09838c98451170de20b752bb79</dd>
+          <dt>Execution posture</dt>
+          <dd>sensor-only</dd>
+          <dt>Blocks</dt>
+          <dd>V26-1484 — the projection swap, which must not open until this lands</dd>
+        </dl>
+      </header>
+
+      <section data-report-section="summary">
+        <h2>Executive summary</h2>
+        <p>
+          This candidate deletes two families of sensors, plus two adjacent
+          release-pinned checks, and nothing else. It adds no code, changes no
+          application behavior, repoints no test, and lowers no coverage floor.
+          Eighteen files and 9,955 lines leave the repository, taking 140 tests
+          with them.
+        </p>
+        <p>
+          The reason is sequencing. Each deleted sensor pins something exactly —
+          a byte digest over Athena's vendored agent-skill layout, a hardcoded
+          list of required normative sources including
+          <code>.agents/skills/track</code> and
+          <code>.agents/skills/execute</code>, a <code>core-v1</code> release id.
+          A planned projection swap is about to replace precisely those pinned
+          subjects. Left in place, every one of these sensors would turn
+          <code>bun run harness:test</code> red at that swap, and each failure
+          would be the sensor working correctly rather than reporting a defect.
+        </p>
+        <p>
+          The alternative — re-pinning the digests inside the swap candidate —
+          would bury a deliberate architectural change inside a digest bump.
+          So the retirement gets its own candidate, reviewable on the narrow
+          question of whether anything still references the deleted code, and it
+          lands first.
+        </p>
+        <p>
+          <strong>This removes real detection capability.</strong> The
+          portable-baseline sensor was the repository's only mechanical
+          detection of unreviewed change under <code>.agents/skills</code> and
+          <code>.agents/agents</code>. Athena's <code>main</code> has no required
+          pull-request review rule, so after this lands those paths are protected
+          by operator practice. That residual was accepted by the operator and
+          recorded on the ticket before the work began. It is not an executor's
+          call, and this report does not present it as a free removal.
+        </p>
+      </section>
+
+      <section data-report-section="problem">
+        <h2>The problem in plain language</h2>
+        <p>
+          A characterization sensor is a tripwire stretched across something you
+          have decided should not move. It works by recording exactly what that
+          thing looks like today — a hash of every byte, a count of every file,
+          a list of every path that must be present — and shouting whenever the
+          observed shape stops matching the recorded shape.
+        </p>
+        <p>
+          That exactness is the entire value. It is also the entire problem the
+          moment a plan decides the thing should move.
+        </p>
+        <p>
+          Athena spent late August building a shadow programme: a managed
+          delivery product running side by side with the repository's existing
+          vendored agent tooling, so the two could be compared before any
+          cutover. Three sensor stacks grew up around it. The shadow-discovery
+          guard froze the vendored skill layout byte for byte, so that
+          abandoning the migration would cost nothing but deleting an
+          installation. The portable-baseline sensor pinned the content of the
+          skill closure against a captured characterization. Two adoption
+          sensors pinned migration records against the <code>core-v1</code>
+          release.
+        </p>
+        <p>
+          Then the plan re-anchored. The shadow programme is withdrawn, and the
+          projection swap will replace the vendored <code>track</code> and
+          <code>execute</code> skills with a product projection — moving the
+          exact bytes the guard froze, at the exact paths the baseline sensor
+          hardcoded, past the exact release the adoption sensors pinned.
+        </p>
+        <p>
+          Every tripwire is now stretched across a doorway someone is about to
+          walk through on purpose. The question is not whether they will fire.
+          It is who cuts them, when, and in whose candidate.
+        </p>
+      </section>
+
+      <section data-report-section="mental-model">
+        <h2>The intuition</h2>
+        <p>
+          Think of a museum alarm wired to a specific painting hanging in a
+          specific spot. It is excellent security right up until the curator
+          schedules the painting for relocation.
+        </p>
+        <p>
+          At that point there are three moves, and only one of them is honest.
+        </p>
+        <ol>
+          <li>
+            <strong>Move the painting and re-arm the alarm to its new spot, in
+            one motion.</strong> The alarm log shows a brief alert and then
+            green. Anyone reading the log later sees a configuration change, not
+            a relocation. This is the re-pinning move, and it is the one that
+            destroys the evidence.
+          </li>
+          <li>
+            <strong>Move the painting and leave the alarm screaming.</strong>
+            Someone eventually silences it under time pressure, without deciding
+            anything.
+          </li>
+          <li>
+            <strong>Decide the alarm's future first, in its own work order,
+            before anyone touches the painting.</strong> The decommission is
+            reviewable on its own terms: is anything still wired to this alarm,
+            and what stops being watched when it goes? Then the relocation is
+            reviewable on its own terms too.
+          </li>
+        </ol>
+        <p>
+          This candidate is the third move. It is deliberately boring — the
+          entire review question is "does anything still reference this, and did
+          the floors hold" — and that boringness is the point. The interesting
+          decision, that losing this detection is acceptable, was made by the
+          operator and recorded on the ticket. The interesting change, the swap
+          itself, arrives in a separate candidate that will be readable as an
+          architectural change rather than as digest churn.
+        </p>
+      </section>
+
+      <section data-report-section="before-after">
+        <h2>Before and after</h2>
+        <h3>Before</h3>
+        <p>
+          Three independent sensor stacks, each invoked manually through a
+          <code>package.json</code> script — none of them wired into a GitHub
+          workflow directly, though their test suites ran inside
+          <code>bun run harness:test</code>, which is where the swap would have
+          hit.
+        </p>
+        <ul>
+          <li>
+            <strong>The shadow-discovery guard</strong> held five positions:
+            posture (the activation record must still declare shadow mode and
+            claim no delivery authority), byte-neutrality (the vendored layout
+            hashes to a pinned digest, checked over the git index
+            <em>and</em> against the working tree), scope (a projection may exist
+            only inside a managed delivery worktree), pin evidence, and
+            consumption.
+          </li>
+          <li>
+            <strong>The portable-baseline sensor</strong> swept the skill
+            closure: per-file SHA-256 over each normative source, per-bundle file
+            counts and tree digests over each bounded member, realpath
+            containment on every path, and outright rejection of symlinked
+            members and inventory symlinks.
+          </li>
+          <li>
+            <strong>The canary and batch adoption sensors</strong> checked two
+            migration records against <code>RELEASE_ID = "core-v1"</code>, a
+            source commit SHA, and a map of per-workflow content hashes.
+          </li>
+        </ul>
+        <h3>After</h3>
+        <p>
+          Nothing replaces the byte-freeze, the scope check, or the closure
+          sweep. The only survivor in this area is
+          <code>scripts/portable-shadow-observation.ts</code>, untouched, which
+          validates that a recorded shadow <em>comparison record</em> is
+          well-shaped and fingerprint-matched.
+          <code>scripts/delivery-run-telemetry.ts</code> consumes it as an
+          optional attachment: it attaches a shadow comparison to a telemetry
+          record only when the comparison's candidate fingerprint equals the
+          current one, and re-validates on read-back. It gates nothing, and it
+          never reads a byte under <code>.agents/skills</code>.
+        </p>
+        <p>
+          So the surviving coverage is one narrow slice — "a recorded comparison
+          is well-shaped and bound to this candidate" — and none of the
+          filesystem positions. That is the accepted residual, stated plainly.
+        </p>
+      </section>
+
+      <section data-report-section="key-files">
+        <h2>Key files</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Path</th>
+              <th>Disposition</th>
+              <th>Why it matters</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>scripts/shadow-discovery-guard.ts</code></td>
+              <td>Deleted (695 lines)</td>
+              <td>
+                Held the pinned constant
+                <code>VENDORED_DISCOVERY_LAYOUT_DIGEST</code> over the tracked
+                vendored layout plus its exposure symlinks. The swap moves those
+                exact bytes, so this constant is the single loudest thing that
+                would have gone red.
+              </td>
+            </tr>
+            <tr>
+              <td><code>scripts/shadow-discovery-guard.test.ts</code></td>
+              <td>Deleted (885 lines, 63 test declarations)</td>
+              <td>
+                Ran inside <code>harness:test</code>, which is the gate the swap
+                would have turned red.
+              </td>
+            </tr>
+            <tr>
+              <td><code>scripts/portable-baseline-contracts.ts</code></td>
+              <td>Deleted (1,176 lines)</td>
+              <td>
+                Carried the hardcoded expectations, including the normative
+                source entries for <code>.agents/skills/track/SKILL.md</code>
+                and <code>.agents/skills/execute/SKILL.md</code> and the bounded
+                member entries for those two bundles. These are the paths the
+                projection swap replaces.
+              </td>
+            </tr>
+            <tr>
+              <td><code>scripts/portable-baseline-check.ts</code></td>
+              <td>Deleted (2,412 lines)</td>
+              <td>
+                The audit driver over the characterization baseline and overlay
+                map. Its symlink and containment rejections are exactly the
+                shape a projection introduces.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>scripts/portable-baseline-filesystem.ts</code>,
+                <code>scripts/portable-baseline-schema.ts</code>,
+                <code>scripts/portable-baseline-fixtures/</code>
+              </td>
+              <td>Deleted (122 + 762 lines, 7 fixtures)</td>
+              <td>
+                Path containment, shape validation, and scenario fixtures used
+                only by the deleted driver and its suite.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>scripts/portable-canary-adoption.ts</code>,
+                <code>scripts/portable-batch-adoption.ts</code>
+              </td>
+              <td>Deleted (629 + 462 lines, plus 19 test declarations)</td>
+              <td>
+                Both pin <code>RELEASE_ID = "core-v1"</code> and per-workflow
+                content hashes, so both go red after the profile switch.
+              </td>
+            </tr>
+            <tr>
+              <td><code>package.json</code></td>
+              <td>Three scripts removed</td>
+              <td>
+                <code>portable-baseline:check</code>,
+                <code>portable-canary:check</code>, and
+                <code>portable-batches:check</code>. A dangling package script
+                fails a gate as loudly as a dangling import, so these had to go
+                with the files.
+              </td>
+            </tr>
+            <tr>
+              <td><code>.agents/policy/shadow-activation.json</code></td>
+              <td>Two members removed</td>
+              <td>
+                The <code>vendoredDiscoveryLayout</code> block, whose owner field
+                literally named the deleted guard, and the managed-worktree scope
+                rule the guard enforced. Everything else stays, because a policy
+                record is history as much as configuration.
+              </td>
+            </tr>
+            <tr>
+              <td><code>scripts/portable-shadow-observation.ts</code></td>
+              <td>Kept, untouched</td>
+              <td>
+                Deliberately survives. Its reader stays wired into delivery
+                telemetry as an optional attachment that gates nothing.
+              </td>
+            </tr>
+            <tr>
+              <td><code>scripts/coverage-summary.ts</code></td>
+              <td>Kept, untouched</td>
+              <td>
+                The floors were measured, not adjusted. Repo-scripts line
+                coverage came in at 62.55% against a pinned floor of 57.76%, and
+                functions at 89.86% against 88.07%.
+              </td>
+            </tr>
+            <tr>
+              <td><code>graphify-out/</code></td>
+              <td>Regenerated</td>
+              <td>
+                Mechanical re-emission after the source nodes disappeared,
+                produced by <code>bun run graphify:rebuild</code> and verified
+                fresh by <code>graphify:check</code> — not hand-edited.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section data-report-section="changes">
+        <h2>What changed, and what deliberately did not</h2>
+        <h3>Changed</h3>
+        <ul>
+          <li>
+            Eighteen files deleted: the shadow guard and its suite; the
+            portable-baseline driver, contracts, filesystem helper, schema,
+            seven fixtures, and its suite; the canary and batch adoption sensors
+            and their suites.
+          </li>
+          <li>Three package scripts removed.</li>
+          <li>
+            Two members removed from the shadow activation record — the layout
+            digest ownership pointer and the managed-worktree scope rule.
+          </li>
+          <li>Graph artifacts regenerated.</li>
+        </ul>
+        <h3>Deliberately unchanged</h3>
+        <ul>
+          <li>
+            <strong>The four historical records.</strong>
+            <code>.agents/characterization-baseline.json</code>,
+            <code>.agents/portable-overlay-map.json</code>,
+            <code>.agents/migrations/portable-kernel-canary.json</code>, and
+            <code>.agents/migrations/portable-workflow-batches.json</code> are
+            byte-identical to <code>main</code>. They are evidence of what was
+            captured and decided, not configuration. They will now go unverified
+            by any sensor, and they will keep naming deleted files. That is what
+            a historical record does.
+          </li>
+          <li>
+            <strong>The activation record's history.</strong> Only the two
+            guard-owned members went. The posture, product pin, host
+            qualification, exclusivity position, consumption record, and
+            characterization observation all remain exactly as recorded.
+          </li>
+          <li>
+            <strong><code>AGENTS.md</code></strong> and the package agent guides.
+          </li>
+          <li>
+            <strong>Every coverage floor.</strong> Measured, reported, not
+            touched.
+          </li>
+          <li>
+            <strong>Every test.</strong> No test was repointed or weakened; four
+            test files were deleted whole along with their subjects.
+          </li>
+          <li>
+            <strong>The projection swap itself</strong>, which is a separate
+            ticket and a separate candidate.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="failure-boundaries">
+        <h2>What would have gone red at the swap</h2>
+        <p>
+          This is the evidence that justifies the removal, gathered from the
+          deleted files before they were deleted.
+        </p>
+        <ol>
+          <li>
+            <strong>The pinned layout digest.</strong>
+            <code>VENDORED_DISCOVERY_LAYOUT_DIGEST</code> in the guard hashes
+            the tracked manifest of the vendored generation tree plus the
+            exposure symlinks. Replacing the vendored skills changes that
+            manifest, raising <code>vendored_layout_drift</code>. The
+            working-tree half fires independently, since the pathspec includes
+            the exposure symlinks and catches an unstaged retarget the index
+            cannot see.
+          </li>
+          <li>
+            <strong>Bounded member drift.</strong> The contracts pin the
+            <code>track</code> and <code>execute</code> skill bundles by file
+            count and tree digest, both classified as retained overlays. A
+            projection changes both, raising
+            <code>bounded-member-count-drift</code> and
+            <code>bounded-member-digest-drift</code>.
+          </li>
+          <li>
+            <strong>Normative source drift.</strong> The same two skills are
+            pinned per-file by SHA-256 as required normative sources, raising
+            <code>source-digest-drift</code>.
+          </li>
+          <li>
+            <strong>Symlink rejection.</strong> A projection that exposes those
+            skills as links trips
+            <code>bounded-member-symlink-unsupported</code> and
+            <code>source-reference-target-symlink-unsupported</code>. These
+            cannot be satisfied by re-pinning a digest at all — the checker
+            rejects the shape, not the content.
+          </li>
+          <li>
+            <strong>Discovery root state.</strong> The required roots demand
+            <code>.agents/skills</code> present and <code>.claude/skills</code>
+            absent; a materialized projection root raises
+            <code>discovery-root-required-state-mismatch</code> or
+            <code>discovery-root-unexpected</code>.
+          </li>
+          <li>
+            <strong>Assertion semantic digests</strong> over the routing
+            assertions whose citation selectors quote the track and execute
+            skill text.
+          </li>
+          <li>
+            <strong>The release pins.</strong> Both adoption sensors hardcode
+            <code>RELEASE_ID = "core-v1"</code>, its archive and metadata paths,
+            a source commit SHA, and a per-workflow content-hash map — all
+            pinned to the pre-swap release.
+          </li>
+          <li>
+            <strong>The scope rule.</strong> The guard required any projection
+            root to sit inside a managed delivery worktree, treating a
+            sibling-shaped path as a finding.
+          </li>
+        </ol>
+        <p>
+          Items 4 and 5 are the ones that matter most for the argument. A digest
+          drift can be answered by re-pinning, however unwise that would be. A
+          symlink rejection and a required-absent discovery root cannot: the swap
+          produces exactly the shape those assertions exist to refuse, so the
+          sensor's contract would have to be rewritten, not re-pinned. A contract
+          that must be rewritten to describe the opposite of what it was written
+          to enforce is a contract that has ended.
+        </p>
+      </section>
+
+      <section data-report-section="validation">
+        <h2>Validation and review evidence</h2>
+        <h3>Characterization, before any deletion</h3>
+        <ul>
+          <li>
+            <code>bun run harness:test</code> on the untouched worktree: 1,799
+            passing, 0 failing, across 77 files.
+          </li>
+          <li>
+            Each retiring sensor run individually and green, so its working state
+            is on the record rather than inferred.
+          </li>
+          <li>
+            The import graph closed by <code>grep</code>: every inbound
+            reference to the delete set came from inside the delete set, so the
+            family was safe to remove whole.
+          </li>
+        </ul>
+        <h3>After the deletion</h3>
+        <ul>
+          <li>
+            <code>bun run harness:test</code>: 1,659 passing, 0 failing, across
+            73 files — exactly 140 tests and 4 files fewer, with no failures and
+            nothing repointed.
+          </li>
+          <li>
+            <code>bun run graphify:rebuild</code> then
+            <code>bun run graphify:check</code>: artifacts fresh.
+          </li>
+          <li>
+            <code>bun run test:coverage:scripts</code> with the summary's own
+            floor comparison: repo-scripts lines 62.55% against a floor of
+            57.76%, functions 89.86% against 88.07%. Above every floor, none
+            lowered. Coverage improved because the deleted code was less covered
+            than the average — which could as easily have gone the other way,
+            and is the reason to measure rather than assume.
+          </li>
+          <li>
+            <code>bun run pr:athena:prepare</code> clean, including the
+            mechanical lint and typecheck stage.
+          </li>
+          <li>
+            <code>bun run compound:check</code> and
+            <code>bun run docs:links:check</code> pass.
+          </li>
+        </ul>
+        <h3>Independent review</h3>
+        <p>
+          Two independent review lenses were dispatched against the exact
+          prepared candidate, neither of which wrote any part of the change: a
+          correctness lens and a project-standards lens. Both confirmed the diff
+          is mechanically clean — nothing extra deleted, nothing enumerated left
+          behind, no dangling import or package script or workflow reference, the
+          activation-record edit scoped exactly to what the deleted guard owned
+          or read, and the historical records, agent guides, and coverage floors
+          untouched.
+        </p>
+        <p>
+          Both lenses returned the same blocking finding: the repository's
+          always-on documentation gates fail on a deletion this large, because
+          they count additions plus deletions and have no deletion-only
+          exemption. That finding is what produced the solution note and this
+          report. A re-review round on the corrected candidate is what authorizes
+          the final gate run.
+        </p>
+        <h3>Status</h3>
+        <ul>
+          <li><strong>Merge:</strong> pending — this is a delivery candidate.</li>
+          <li>
+            <strong>Deploy:</strong> pending. The candidate adds documents under
+            <code>docs/solutions</code> and <code>docs/reports</code>, which the
+            webapp compiles into its bundle, so this is not a no-deploy change.
+          </li>
+          <li><strong>Root alignment:</strong> pending.</li>
+          <li><strong>Linear:</strong> In Progress, not Done.</li>
+        </ul>
+      </section>
+
+      <section data-report-section="guidance">
+        <h2>Next time</h2>
+        <ul>
+          <li>
+            When a plan proposes moving something a sensor pins, schedule that
+            sensor's retirement or rewrite as its own ticket, sequenced before
+            the move. Do not let it surface as a surprise red suite inside the
+            moving candidate.
+          </li>
+          <li>
+            Treat "re-pin the digest so the suite goes green" as a review
+            finding, not a fix — unless the re-pin is itself the deliberate,
+            reviewed change.
+          </li>
+          <li>
+            Before deleting a script family, close its import graph
+            <em>and</em> grep the package scripts, CI workflow steps, and harness
+            registries. The compiler catches only the first of those.
+          </li>
+          <li>
+            Characterize on the untouched tree first. "The suite was green before
+            and after, and here are both numbers" is a much stronger claim than
+            "the suite is green."
+          </li>
+          <li>
+            Measure coverage against the pinned floors after a deletion and
+            report real numbers. Never lower a floor to absorb a removal; a
+            broken floor is a finding for an operator, not a value to edit.
+          </li>
+          <li>
+            Expect a large pure deletion to trip the documentation gates.
+            <code>compound:check</code> and <code>landed-report:check</code>
+            count additions plus deletions, so a deletion-only candidate owes the
+            same solution note and landed-change report a feature would.
+          </li>
+          <li>
+            When a removal costs detection capability, name the capability and
+            the paths it covered, and get the residual accepted by an operator
+            before the deletion lands. An executor performs the deletion; it does
+            not decide the residual is acceptable.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="quiz" data-quiz-pass-threshold="8">
+        <h2>Comprehension quiz</h2>
+        <p>
+          Ten questions on why this deletion is sequenced the way it is. Eight
+          correct to pass.
+        </p>
+        <ol data-quiz>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why were these sensors deleted rather than updated to match the
+              coming projection swap?
+            </p>
+            <ol data-quiz-options>
+              <li>They had been failing intermittently and nobody could fix them.</li>
+              <li>They were slow enough to matter in the harness suite.</li>
+              <li data-quiz-correct>
+                Their contracts pin the exact subject the swap replaces, so
+                updating them inside the swap candidate would bury an
+                architectural change inside a digest bump.
+              </li>
+              <li>They duplicated coverage that another sensor already provided.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The sensors worked correctly. The problem is that their pinned
+              subject is scheduled to move, and re-pinning during the move
+              destroys the reviewability of both changes at once.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Which two assertion kinds could not have been satisfied by
+              re-pinning a digest at all?
+            </p>
+            <ol data-quiz-options>
+              <li>The per-file source digests and the bounded member tree digests.</li>
+              <li data-quiz-correct>
+                The symlink rejections and the required-absent discovery root,
+                because they refuse a shape rather than a content hash — and the
+                swap produces exactly that shape.
+              </li>
+              <li>The release id pin and the source commit SHA.</li>
+              <li>The posture checks on installation mode and delivery authority.</li>
+            </ol>
+            <p data-quiz-explanation>
+              A digest can always be re-pinned to a new value. A rule that says
+              "this member must not be a symlink" or "this root must be absent"
+              has to be rewritten into its own opposite, which is the sign the
+              contract has ended rather than drifted.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              What detection capability does the repository lose when this lands?
+            </p>
+            <ol data-quiz-options>
+              <li>Nothing — an equivalent check replaces it in the same candidate.</li>
+              <li>Runtime validation of the operator app's Convex boundaries.</li>
+              <li data-quiz-correct>
+                The only mechanical detection of unreviewed change under
+                <code>.agents/skills</code> and <code>.agents/agents</code>,
+                leaving those paths protected by operator practice.
+              </li>
+              <li>Coverage floor enforcement for the repo scripts.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Because Athena's main branch requires status checks but no
+              approving review, that detection had no fallback gate behind it.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Who decided that losing that detection was acceptable?
+            </p>
+            <ol data-quiz-options>
+              <li>The executing agent, after confirming the suite stayed green.</li>
+              <li>The review lenses, by approving the candidate.</li>
+              <li>Nobody — it is an open question tracked for later.</li>
+              <li data-quiz-correct>
+                The operator, recorded on the ticket before the work began; the
+                executor performs the deletion and neither makes nor records that
+                decision.
+              </li>
+            </ol>
+            <p data-quiz-explanation>
+              Accepting a residual risk is an operator decision. An agent that
+              accepts it on its own has quietly changed the repository's safety
+              posture without authority.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              What happened to the four historical records the deleted sensors
+              read?
+            </p>
+            <ol data-quiz-options>
+              <li>They were deleted alongside the sensors that validated them.</li>
+              <li>They were rewritten to remove references to the deleted files.</li>
+              <li data-quiz-correct>
+                They were left byte-identical to main, even though they still
+                name deleted files and are now unverified by any sensor.
+              </li>
+              <li>They were moved under docs/reports as historical artifacts.</li>
+            </ol>
+            <p data-quiz-explanation>
+              They are evidence of what was captured and decided, not live
+              configuration. Editing them to tidy up after a deletion would
+              rewrite the audit trail they exist to hold.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Which two members were removed from the shadow activation record,
+              and why only those?
+            </p>
+            <ol data-quiz-options>
+              <li>The product pin and the host qualification, because the product moved.</li>
+              <li data-quiz-correct>
+                The layout digest ownership pointer, whose owner field named the
+                deleted guard, and the managed-worktree scope rule the guard
+                enforced — the only members the deleted code owned or read.
+              </li>
+              <li>The characterization observation and its historical scope block.</li>
+              <li>The consumption record, because nothing consumes it now.</li>
+            </ol>
+            <p data-quiz-explanation>
+              The edit was scoped to what the deleted guard owned or read.
+              Everything descriptive of the recorded posture stayed, because the
+              record is history as much as configuration.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              What did the pre-deletion characterization step establish?
+            </p>
+            <ol data-quiz-options>
+              <li>That the deleted sensors were redundant with the harness suite.</li>
+              <li data-quiz-correct>
+                A green baseline on the untouched tree — 1,799 tests passing
+                across 77 files, each retiring sensor green individually, and a
+                closed import graph — so the after-state could be compared
+                against a recorded before-state.
+              </li>
+              <li>That coverage floors would need re-derivation after removal.</li>
+              <li>That the projection swap could proceed without this ticket.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Under a sensor-only posture there is no new behavior to test, so
+              the evidence is the before-and-after comparison, which requires
+              actually capturing the before.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why did the coverage percentages go up after deleting well-tested
+              code?
+            </p>
+            <ol data-quiz-options>
+              <li>The floors were re-derived against the smaller code base.</li>
+              <li>Deleted files are excluded from the coverage denominator by rule.</li>
+              <li data-quiz-correct>
+                The removed code happened to be less covered than the repository
+                average, so the surviving ratio improved — an outcome that had to
+                be measured rather than assumed.
+              </li>
+              <li>The coverage tool ignores scripts without a matching test file.</li>
+            </ol>
+            <p data-quiz-explanation>
+              A deletion moves coverage in whichever direction the deleted code's
+              own coverage ran. It could as easily have breached a floor, which
+              would have been a finding for an operator rather than a value to
+              edit.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Which sensor deliberately survives this candidate, and what is its
+              role afterwards?
+            </p>
+            <ol data-quiz-options>
+              <li>The shadow discovery guard, reduced to its posture checks.</li>
+              <li>The portable-baseline schema validator, kept for the swap candidate.</li>
+              <li data-quiz-correct>
+                The portable shadow observation reader, which stays wired into
+                delivery telemetry as an optional, fingerprint-matched attachment
+                that gates nothing.
+              </li>
+              <li>The canary adoption sensor, re-pinned to the next release.</li>
+            </ol>
+            <p data-quiz-explanation>
+              It validates the shape and candidate-binding of a recorded
+              comparison. It never reads a byte under the skill paths, so the
+              swap does not affect it.
+            </p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>
+              Why did a pure deletion still require a solution note and this
+              report?
+            </p>
+            <ol data-quiz-options>
+              <li>Every candidate in the repository requires both, without exception.</li>
+              <li data-quiz-correct>
+                The documentation gates count additions plus deletions with no
+                deletion-only exemption, so a large removal clears their
+                thresholds exactly as a feature would.
+              </li>
+              <li>Because the change touched the agents policy directory.</li>
+              <li>Because two independent review lenses requested them as a courtesy.</li>
+            </ol>
+            <p data-quiz-explanation>
+              Both lenses independently ran the gates and found them failing on
+              changed-line count, which is what turned the documentation
+              obligation into a blocking finding on this candidate.
+            </p>
+          </li>
+        </ol>
+      </section>
+
+      <section data-report-section="subagent-evidence">
+        <h2>Subagent evidence</h2>
+        <p>
+          Four subagents contributed to this delivery. None of them wrote the
+          implementation, and the two review lenses were dispatched against the
+          exact prepared candidate rather than a description of it.
+        </p>
+        <dl>
+          <dt>Delivered-diff analyst (read-only)</dt>
+          <dd>
+            Reconstructed the deleted files from git history and produced the
+            changed-file map, the before/after sensor topology, the precise
+            list of assertions that would have gone red at the swap with their
+            identifier names, and the confirmation that no application or runtime
+            behavior is affected. Supplied the line counts, the count of deleted
+            test declarations across the four suites, and the surviving
+            telemetry wiring detail. A review lens later established that the
+            140 tests the harness actually stops running exceed the 130 static
+            declarations, because three parameterized blocks expand at runtime;
+            this report quotes the executed count throughout.
+          </dd>
+          <dt>Session and decision historian (read-only)</dt>
+          <dd>
+            Traced the shadow programme arc through the commit history and the
+            prior landed-change reports, recovered the original framing for why
+            each deleted sensor family existed, and confirmed why the four
+            historical records are retained rather than deleted.
+          </dd>
+          <dt>Correctness review lens (independent)</dt>
+          <dd>
+            Verified the delete set against the ticket enumeration in both
+            directions, closed the reference graph across scripts, package
+            scripts, CI workflows, registries and JSON members, confirmed the
+            activation-record edit was neither over- nor under-scoped, and
+            confirmed the historical records, agent guides and coverage floors
+            were untouched. Raised the documentation-gate failure as its single
+            blocking finding.
+          </dd>
+          <dt>Project-standards review lens (independent)</dt>
+          <dd>
+            Checked the candidate against the repository's written authority,
+            confirmed the commit convention and the absence of introduced
+            hard-coded dates or hand-edited generated artifacts, verified the
+            remaining activation JSON is coherent with no prose referring to
+            removed keys, and ran the documentation gates directly to establish
+            what the repository actually demands of this diff.
+          </dd>
+        </dl>
+      </section>
+    </article>
+  </body>
+</html>
