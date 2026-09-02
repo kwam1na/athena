@@ -16,7 +16,7 @@
         <ul data-report-pills>
           <li>Delivery candidate</li>
           <li>Branch claude/v26-1532-retire-athena-shadow-sensors</li>
-          <li>Pure deletion — 18 files, 130 tests, no behavior change</li>
+          <li>Pure deletion — 18 files, 140 tests, no behavior change</li>
           <li>harness:test 1659 pass / 0 fail</li>
         </ul>
         <dl data-report-meta>
@@ -41,8 +41,8 @@
           This candidate deletes two families of sensors, plus two adjacent
           release-pinned checks, and nothing else. It adds no code, changes no
           application behavior, repoints no test, and lowers no coverage floor.
-          Eighteen files and about 10,900 lines leave the repository, taking
-          130 tests with them.
+          Eighteen files and 9,955 lines leave the repository, taking 140 tests
+          with them.
         </p>
         <p>
           The reason is sequencing. Each deleted sensor pins something exactly —
@@ -232,7 +232,7 @@
             </tr>
             <tr>
               <td><code>scripts/shadow-discovery-guard.test.ts</code></td>
-              <td>Deleted (885 lines, 63 tests)</td>
+              <td>Deleted (885 lines, 63 test declarations)</td>
               <td>
                 Ran inside <code>harness:test</code>, which is the gate the swap
                 would have turned red.
@@ -275,7 +275,7 @@
                 <code>scripts/portable-canary-adoption.ts</code>,
                 <code>scripts/portable-batch-adoption.ts</code>
               </td>
-              <td>Deleted (629 + 462 lines, plus 19 tests)</td>
+              <td>Deleted (629 + 462 lines, plus 19 test declarations)</td>
               <td>
                 Both pin <code>RELEASE_ID = "core-v1"</code> and per-workflow
                 content hashes, so both go red after the profile switch.
@@ -813,8 +813,12 @@
             changed-file map, the before/after sensor topology, the precise
             list of assertions that would have gone red at the swap with their
             identifier names, and the confirmation that no application or runtime
-            behavior is affected. Supplied the line counts, the 130-test total
-            across four suites, and the surviving telemetry wiring detail.
+            behavior is affected. Supplied the line counts, the count of deleted
+            test declarations across the four suites, and the surviving
+            telemetry wiring detail. A review lens later established that the
+            140 tests the harness actually stops running exceed the 130 static
+            declarations, because three parameterized blocks expand at runtime;
+            this report quotes the executed count throughout.
           </dd>
           <dt>Session and decision historian (read-only)</dt>
           <dd>
