@@ -32,10 +32,10 @@ describe("Athena merge-ready validation guidance", () => {
     const agentsGuide = await readRepoFile("AGENTS.md");
 
     expect(agentsGuide).toContain(
-      "`<node-tmpdir>/compound-engineering/execute/<run-id>`, where `<node-tmpdir>` is Node's `os.tmpdir()`",
+      "`<node-tmpdir-realpath>/compound-engineering/execute/<run-id>`, where `<node-tmpdir-realpath>` is the realpath of Node's `os.tmpdir()`",
     );
     expect(agentsGuide).toContain(
-      "On macOS that is the per-user `$TMPDIR` directory (`/var/folders/.../T`), not `/tmp`",
+      "On macOS that is the per-user `$TMPDIR` directory resolved through the `/var` symlink (`/private/var/folders/.../T`) \u2014 neither `/tmp` nor the raw `/var/folders/...` form `os.tmpdir()` prints",
     );
     expect(agentsGuide).not.toContain("/tmp/compound-engineering/execute/");
   });
