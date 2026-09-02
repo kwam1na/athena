@@ -1,0 +1,24 @@
+{
+  "labels": [
+    "Bug",
+    "Feature",
+    "Improvement",
+    "athena-webapp",
+    "checkout",
+    "security",
+    "storefront-ssr",
+    "storefront-webapp",
+    "valkey-proxy-server"
+  ],
+  "project": "athena",
+  "statuses": {
+    "backlog": "Backlog",
+    "canceled": "Canceled",
+    "done": "Done",
+    "inProgress": "In Progress",
+    "inReview": "In Review",
+    "todo": "Todo"
+  },
+  "team": "yaegars",
+  "template": null
+}

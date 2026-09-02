@@ -137,7 +137,7 @@ make that path unreachable in practice.
   or build-pipeline edits" harness validation scenario in
   `scripts/harness-app-registry.ts`, or the harness contract preflight will
   flag it as an uncovered surface.
-- Keep `.agents/skills/execute/SKILL.md` and
+- Keep `AGENTS.md` and
   `scripts/pr-athena-guidance-contract.test.ts` explicit that
   `docs/solutions/**` and `docs/reports/**` require the Athena static-app
   production deploy. File location alone is not a safe deployment classifier

@@ -184,4 +184,4 @@ afterComment.deliverableTreeSha === reviewed.deliverableTreeSha; // false
 
 - `docs/harness.md` — gate ladder, mechanical stage, and identity contract
 - [Athena Reporting Counts Tender Use by Participation Identity](../architecture/athena-reporting-payment-participation-identity-2026-08-12.md) — the delivery whose review rounds produced this evidence
-- `.agents/skills/execute/SKILL.md` and `.agents/skills/ce-code-review/SKILL.md` — the delivery order both providers follow
+- `AGENTS.md` and `.agents/skills/ce-code-review/SKILL.md` — the delivery order both providers follow

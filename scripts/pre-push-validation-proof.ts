@@ -337,7 +337,7 @@ async function collectValidationFingerprintPaths(
     "scripts/coverage-summary.ts",
     "scripts/coverage-toolchain-parity.ts",
     ".agents/skills/ce-code-review/SKILL.md",
-    ".agents/skills/execute/SKILL.md",
+    "AGENTS.md",
     ...(await collectFilesUnder(rootDir, "scripts", options)).filter(
       (filePath) =>
         /^scripts\/(?:harness-|graphify-|pre-commit-generated-artifacts)/.test(

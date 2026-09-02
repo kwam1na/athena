@@ -158,8 +158,8 @@ describe("preview-worktree", () => {
       path.join(import.meta.dirname, "../.agents/skills/deliver-work/SKILL.md"),
       "utf8"
     );
-    const execute = await readFile(
-      path.join(import.meta.dirname, "../.agents/skills/execute/SKILL.md"),
+    const agentsGuide = await readFile(
+      path.join(import.meta.dirname, "../AGENTS.md"),
       "utf8"
     );
     const kernel = await readFile(
@@ -169,7 +169,7 @@ describe("preview-worktree", () => {
 
     const oldRequirementPhrase = ["preview", "url"].join(" ");
 
-    for (const skill of [deliverWork, execute, kernel]) {
+    for (const skill of [deliverWork, agentsGuide, kernel]) {
       expect(skill.toLowerCase()).not.toContain(oldRequirementPhrase);
     }
   });
