@@ -28,6 +28,44 @@ describe("Athena merge-ready validation guidance", () => {
     );
   });
 
+  it("names the review run root the evidence recorder actually resolves", async () => {
+    const agentsGuide = await readRepoFile("AGENTS.md");
+
+    expect(agentsGuide).toContain(
+      "`<node-tmpdir>/compound-engineering/execute/<run-id>`, where `<node-tmpdir>` is Node's `os.tmpdir()`",
+    );
+    expect(agentsGuide).toContain(
+      "On macOS that is the per-user `$TMPDIR` directory (`/var/folders/.../T`), not `/tmp`",
+    );
+    expect(agentsGuide).not.toContain("/tmp/compound-engineering/execute/");
+  });
+
+  it("names the reviewer set and the generated-payload review treatment", async () => {
+    const [agentsGuide, codeReviewSkill] = await Promise.all([
+      readRepoFile("AGENTS.md"),
+      readRepoFile(".agents/skills/ce-code-review/SKILL.md"),
+    ]);
+
+    const alwaysOnReviewers = [
+      "ce-correctness-reviewer",
+      "ce-testing-reviewer",
+      "ce-maintainability-reviewer",
+      "ce-project-standards-reviewer",
+      "ce-agent-native-reviewer",
+      "ce-learnings-researcher",
+    ];
+    for (const reviewer of alwaysOnReviewers) {
+      expect(agentsGuide).toContain(`\`${reviewer}\``);
+      expect(codeReviewSkill).toContain(`\`${reviewer}\``);
+    }
+    expect(agentsGuide).toContain(
+      "extended by every cross-cutting, stack-specific, and CE conditional reviewer whose declared selection condition the candidate's diff meets",
+    );
+    expect(agentsGuide).toContain(
+      "Review `.agent-skills/**` as generated release payload rather than authored code",
+    );
+  });
+
   it("routes every delivery entrypoint through pr:athena before broad validation", async () => {
     const [
       rootGuide,
