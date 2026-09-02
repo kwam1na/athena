@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-02T01:48:44.903Z",
+  "branch": "claude/v26-1532-retire-athena-shadow-sensors",
+  "headSha": "20d41fc5968a2b7309156b47385bcb831a5ecb0c",
+  "deliverableDiffFingerprint": "dad7735c7be45b8c463dc1c0a397bebac152c64835d96065b6efb8bd9077e880",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 0,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 796372.299041
+  },
+  "reviewLoop": {
+    "providerId": "execute",
+    "runId": "v26-1532-1788307971-r2",
+    "finalPassId": "pass-4",
+    "recordedAt": "2026-09-02T01:15:03.579Z",
+    "iterationCount": 4,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 2,
+      "P2": 3,
+      "P3": 2
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": [],
+    "reviewCost": {
+      "unit": "subagent_tokens",
+      "total": 585233,
+      "reportedBy": "claude-code",
+      "byReviewer": {
+        "correctness-lens": 294238,
+        "project-standards-lens": 290995
+      }
+    }
+  }
+}
