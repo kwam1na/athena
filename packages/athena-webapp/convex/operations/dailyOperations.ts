@@ -292,21 +292,17 @@ function resolveRange(args: {
   return operatingDateRange(args.operatingDate);
 }
 
+// A pending approval belongs to an operating day when it already existed
+// before that day ended. There is deliberately no lower bound: an approval
+// raised earlier and still unanswered was pending during the day too, and it
+// is what an operator working that day actually saw in the queue. The rule
+// reads no clock, so replaying a past day returns the set operators saw live
+// rather than a smaller one.
 function approvalRequestBelongsToOperationsDay(args: {
-  currentTime: number;
   endAt: number;
   request: Pick<Doc<"approvalRequest">, "createdAt">;
-  startAt: number;
 }) {
-  const isCurrentOperatingDay =
-    args.currentTime >= args.startAt && args.currentTime < args.endAt;
-  const requestIsBeforeDayEnd = args.request.createdAt < args.endAt;
-
-  if (isCurrentOperatingDay) {
-    return requestIsBeforeDayEnd;
-  }
-
-  return requestIsBeforeDayEnd && args.request.createdAt >= args.startAt;
+  return args.request.createdAt < args.endAt;
 }
 
 function pluralize(value: number, singular: string, plural = `${singular}s`) {
@@ -755,11 +751,15 @@ export async function listPendingApprovalRequestsSnapshot(
       q.eq("storeId", args.storeId).eq("status", "pending"),
     )
     .take(MAX_OPERATIONS_LOOKAHEAD_LIMIT);
-  const currentTime = Date.now();
+  // The lookahead is spent on the store-wide pending index, which is ordered
+  // by creation rather than by `createdAt`, so a truncated read can hide rows
+  // that belong to the requested day. Report the read as incomplete instead of
+  // presenting the surviving rows as the whole day.
+  const sourceReadIncomplete =
+    pendingApprovalRequests.length > MAX_OPERATIONS_QUERY_LIMIT;
   const dayApprovalRequests = pendingApprovalRequests.filter((request) =>
     approvalRequestBelongsToOperationsDay({
       ...args,
-      currentTime,
       request,
     }),
   );
@@ -768,12 +768,13 @@ export async function listPendingApprovalRequestsSnapshot(
     MAX_OPERATIONS_QUERY_LIMIT,
   );
   const hasMoreApprovalRequests =
+    sourceReadIncomplete ||
     dayApprovalRequests.length > MAX_OPERATIONS_QUERY_LIMIT;
 
   return {
     approvalRequests,
     approvalRequestsCountLabel: hasMoreApprovalRequests
-      ? `${MAX_OPERATIONS_QUERY_LIMIT}+`
+      ? `${approvalRequests.length}+`
       : String(approvalRequests.length),
     hasMoreApprovalRequests,
   };
