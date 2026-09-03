@@ -82,7 +82,9 @@ error inside a dependency. Neither names the shell or the runtime as the cause.
 
 ## Examples
 
-Before — payload destroyed by brace expansion:
+Before — payload destroyed by brace expansion. This is the naive wrapper, before
+it grew the `--json` guard; the delivered wrapper now refuses this invocation
+outright:
 
 ```
 $ bun run delivery:emit -- decision.recorded --json '{"fork":"x","choice":"y"}'
