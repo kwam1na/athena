@@ -255,7 +255,7 @@
             published <code>dist.integrity</code> for <code>0.2.0</code>.
           </li>
           <li>
-            <strong>Tests.</strong> 24 cases across the two new script tests and the guidance
+            <strong>Tests.</strong> 26 cases across the two new script tests and the guidance
             contract test, all passing.
           </li>
           <li>
@@ -265,8 +265,12 @@
             in-scope P1 findings, all fixed in the same delivery: an unlegible spawn failure, a
             discarded lifecycle diagnostic, a silently overridden <code>--json</code>, a usage
             error exiting 1 instead of 2, and the over-trimmed churn-control rule. Because those
-            fixes changed the candidate, a verification round over the delivered tree is required
-            and follows this report; round 1 alone does not cover what is being merged.
+            fixes changed the candidate, each fix round was followed by a full verification round
+            over the new tree. Round 2 found four more in-scope P1s — an entrypoint no sensor
+            pinned, a dangling reference left by the trim, a factually wrong sentence in the
+            solution note, and a type error the mechanical gate cannot see — and round 3 found two
+            more, including a stale count in this very section. All are fixed. The delivery's
+            round-by-round candidates, findings, and costs are in the run journal.
           </li>
           <li>
             <strong>Repository gates.</strong> <code>compound:check</code> and

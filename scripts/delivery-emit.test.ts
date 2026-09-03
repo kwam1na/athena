@@ -61,8 +61,13 @@ describe("the wrapper's declared entrypoints", () => {
     // `.`, so this deep path is the wrapper's real coupling to the dependency.
     // A pin bump that relocates the module would otherwise fail only at
     // runtime, and silently: the CLI's own direct-invocation guard exits 0
-    // without emitting when it is loaded through any other module path.
-    expect(existsSync(path.join(repoRoot, HARNESS_CLI_ENTRY))).toBe(true);
+    // without emitting when it is loaded through any other module path. Assert
+    // the guard, not just the file — the likeliest wrong entry is the package's
+    // own `src/index.ts`, which exists and would satisfy a bare existence check
+    // while emitting nothing.
+    expect(
+      readFileSync(path.join(repoRoot, HARNESS_CLI_ENTRY), "utf8")
+    ).toContain("invokedDirectly(process.argv[1]");
   });
 
   it("registers both delivery commands AGENTS.md tells agents to run", () => {
