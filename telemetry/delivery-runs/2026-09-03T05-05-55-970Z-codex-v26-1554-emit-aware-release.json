@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-03T05:05:55.970Z",
+  "branch": "codex/v26-1554-emit-aware-release",
+  "headSha": "e12506a5b52675f5e64d1b5446266d912eadee09",
+  "deliverableDiffFingerprint": "1e625455089f49bbc138ada7bab657a53e8da980933d62d3140c797479d0dd60",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 0,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 706495.489459
+  },
+  "reviewLoop": {
+    "providerId": "execute",
+    "runId": "v26-1554-r4",
+    "finalPassId": "v26-1554-pass-4",
+    "recordedAt": "2026-09-03T04:54:06.485Z",
+    "iterationCount": 4,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 11,
+      "P2": 0,
+      "P3": 0
+    },
+    "deferredExpansionCount": 0,
+    "deferredIssueIds": [],
+    "reviewCost": {
+      "unit": "subagent_tokens",
+      "total": 2768741,
+      "reportedBy": "claude-code"
+    }
+  }
+}

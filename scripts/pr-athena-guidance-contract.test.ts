@@ -66,6 +66,34 @@ describe("Athena merge-ready validation guidance", () => {
     );
   });
 
+  it("declares how a release is installed and how a run event is emitted", async () => {
+    const agentsGuide = await readRepoFile("AGENTS.md");
+
+    expect(agentsGuide).toContain(
+      "`AGENT_SKILLS_CHECKOUT=<agent-skills checkout> bun run agent-skills:install -- <release-id> --profile <profile>`",
+    );
+    expect(agentsGuide).toContain(
+      "Athena's run-event command is `DELIVERY_EVENT='<json payload>' bun run delivery:emit -- <kind>`",
+    );
+    expect(agentsGuide).toContain(
+      "Athena's two mandated lens ids are `lens.outcome-correctness` and `lens.adversarial-testing`",
+    );
+  });
+
+  it("references the installed workflow for the review rules it no longer restates", async () => {
+    const agentsGuide = await readRepoFile("AGENTS.md");
+
+    expect(agentsGuide).toContain(
+      "The installed `review-work` workflow owns that bound and Athena does not narrow it.",
+    );
+    expect(agentsGuide).toContain(
+      "The delivery's round bound, its grace round, and the typed blocker raised when the bound is reached are the installed `review-work` and `execute-work` workflows'",
+    );
+    expect(agentsGuide).toContain(
+      "The installed `obtain-review` and `review-work` workflows own which findings are actionable and when a deferral is discharged",
+    );
+  });
+
   it("routes every delivery entrypoint through pr:athena before broad validation", async () => {
     const [
       rootGuide,
