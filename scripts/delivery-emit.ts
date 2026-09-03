@@ -27,6 +27,14 @@ export function buildEmitArgs(
     );
   }
 
+  // The wrapper supplies `--json` itself and the CLI's parser is last-wins, so
+  // a caller's own `--json` would be silently replaced rather than honoured.
+  if (argv.includes("--json")) {
+    throw new Error(
+      `The payload travels in ${PAYLOAD_ENV_VAR}, not in --json.`
+    );
+  }
+
   const text = payload?.trim();
   if (text) {
     try {
@@ -51,6 +59,8 @@ if (import.meta.main) {
     process.exit(await proc.exited);
   } catch (error: unknown) {
     console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    // The CLI's own exit policy reserves 2 for a usage error and 1 for a
+    // refused event; a bad invocation here is the former.
+    process.exit(2);
   }
 }

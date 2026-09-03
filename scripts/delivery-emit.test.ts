@@ -33,6 +33,12 @@ describe("buildEmitArgs", () => {
     expect(() => buildEmitArgs([], "{}")).toThrow(/Usage:/);
   });
 
+  it("rejects a caller-supplied --json rather than silently overriding it", () => {
+    expect(() =>
+      buildEmitArgs(["run.started", "--json", '{"host":"x"}'], undefined)
+    ).toThrow(`The payload travels in ${PAYLOAD_ENV_VAR}, not in --json.`);
+  });
+
   it("rejects a payload that is not JSON", () => {
     expect(() => buildEmitArgs(["run.started"], "posture=sensor-only")).toThrow(
       `${PAYLOAD_ENV_VAR} is not valid JSON.`

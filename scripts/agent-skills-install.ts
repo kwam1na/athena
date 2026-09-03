@@ -125,12 +125,26 @@ async function run(
   command: readonly string[],
   cwd: string
 ): Promise<{ stdout: string }> {
-  const proc = Bun.spawn(command, { cwd, stdout: "pipe", stderr: "inherit" });
+  let proc;
+  try {
+    proc = Bun.spawn(command, { cwd, stdout: "pipe", stderr: "inherit" });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `\`${command.join(" ")}\` could not start in ${cwd}: ${message}`
+    );
+  }
+
+  // The lifecycle CLI writes its typed failure document to stdout, so the
+  // captured text is the diagnostic, not noise.
   const stdout = await new Response(proc.stdout).text();
   const exitCode = await proc.exited;
 
   if (exitCode !== 0) {
-    throw new Error(`\`${command.join(" ")}\` failed with exit code ${exitCode}.`);
+    const detail = stdout.trim();
+    throw new Error(
+      `\`${command.join(" ")}\` failed with exit code ${exitCode}.${detail ? `\n${detail}` : ""}`
+    );
   }
 
   return { stdout };
