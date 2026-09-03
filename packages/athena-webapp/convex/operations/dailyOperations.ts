@@ -295,9 +295,10 @@ function resolveRange(args: {
 // A pending approval belongs to an operating day when it already existed
 // before that day ended. There is deliberately no lower bound: an approval
 // raised earlier and still unanswered was pending during the day too, and it
-// is what an operator working that day actually saw in the queue. The rule
-// reads no clock, so replaying a past day returns the set operators saw live
-// rather than a smaller one.
+// is what an operator working that day saw in the queue. The rule reads no
+// clock, so the day's membership test is the same whenever it runs -- the rows
+// it is applied to are still today's pending set, so a day is reconstructed
+// from what is pending now rather than replayed as it stood.
 function approvalRequestBelongsToOperationsDay(args: {
   endAt: number;
   request: Pick<Doc<"approvalRequest">, "createdAt">;
@@ -741,7 +742,6 @@ export async function listPendingApprovalRequestsSnapshot(
   ctx: Pick<QueryCtx, "db">,
   args: {
     endAt: number;
-    startAt: number;
     storeId: Id<"store">;
   },
 ) {
@@ -767,9 +767,7 @@ export async function listPendingApprovalRequestsSnapshot(
     0,
     MAX_OPERATIONS_QUERY_LIMIT,
   );
-  const hasMoreApprovalRequests =
-    sourceReadIncomplete ||
-    dayApprovalRequests.length > MAX_OPERATIONS_QUERY_LIMIT;
+  const hasMoreApprovalRequests = sourceReadIncomplete;
 
   return {
     approvalRequests,
@@ -2370,6 +2368,7 @@ function buildLanes(args: {
   queueCounts: {
     approvalCount: number;
     approvalCountLabel: string;
+    approvalReadIncomplete: boolean;
     workItemCount: number;
     workItemCountLabel: string;
   };
@@ -2442,6 +2441,7 @@ function buildLanes(args: {
     buildApprovalsLane({
       approvalCount: args.queueCounts.approvalCount,
       approvalCountLabel: args.queueCounts.approvalCountLabel,
+      approvalReadIncomplete: args.queueCounts.approvalReadIncomplete,
     }),
     {
       count: args.closeBlockerCounts.registerCount,
@@ -2484,19 +2484,32 @@ function buildLanes(args: {
 function buildApprovalsLane(args: {
   approvalCount: number;
   approvalCountLabel: string;
+  approvalReadIncomplete: boolean;
 }): DailyOperationsLane {
+  // An incomplete read must never render as an all-clear day: with the pending
+  // index truncated, "no approvals found" and "no approvals" are different
+  // answers, and only the first one still needs an operator.
+  const description =
+    args.approvalCount > 0
+      ? `${args.approvalCountLabel} approval${
+          args.approvalCount === 1 ? "" : "s"
+        } pending.`
+      : args.approvalReadIncomplete
+        ? "Pending approvals could not be read in full for this day."
+        : "No pending approvals.";
+
   return {
     count: args.approvalCount,
     countLabel: args.approvalCountLabel,
-    description:
-      args.approvalCount > 0
-        ? `${args.approvalCountLabel} approval${
-            args.approvalCount === 1 ? "" : "s"
-          } pending.`
-        : "No pending approvals.",
+    description,
     key: "approvals",
     label: "Approvals",
-    status: args.approvalCount > 0 ? "blocked" : "ready",
+    status:
+      args.approvalCount > 0
+        ? "blocked"
+        : args.approvalReadIncomplete
+          ? "needs_attention"
+          : "ready",
     to: "/$orgUrlSlug/store/$storeUrlSlug/operations/approvals",
   };
 }
@@ -2721,6 +2734,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
       queueCounts: {
         approvalCount: queueCounts.approvalRequests.length,
         approvalCountLabel: queueCounts.approvalRequestsCountLabel,
+        approvalReadIncomplete: queueCounts.hasMoreApprovalRequests,
         workItemCount: queueCounts.openWorkProjection.observedCount,
         workItemCountLabel: queueCounts.openWorkItemsCountLabel,
       },
@@ -2956,6 +2970,7 @@ export const getDailyOperationsStoreRequestsSnapshot = query({
         approvalsLane: buildApprovalsLane({
           approvalCount: approvals.approvalRequests.length,
           approvalCountLabel: approvals.approvalRequestsCountLabel,
+          approvalReadIncomplete: approvals.hasMoreApprovalRequests,
         }),
         operatingDate: args.operatingDate,
       };

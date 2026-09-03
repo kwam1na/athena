@@ -186,7 +186,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     },
     "cap_dailyops_approvals": {
       "binding": {
-        "implementationVersion": "1",
+        "implementationVersion": "2",
         "portKey": "operations.approvals",
         "readIntents": [
           "daily_operations.view",
@@ -332,7 +332,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     },
     "cap_dailyops_attention": {
       "binding": {
-        "implementationVersion": "1",
+        "implementationVersion": "2",
         "portKey": "operations.attention",
         "readIntents": [
           "daily_operations.view",
@@ -2703,7 +2703,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       }
     }
   },
-  "compatibilityDigest": "fnv1a64:5f6c323f38546281",
+  "compatibilityDigest": "fnv1a64:c09342d06ca88d7f",
   "contractVersion": 1,
   "enablement": {
     "capabilities": {
@@ -2793,12 +2793,12 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       "sourceDigest": "sha256:747d4b970a8719ef00556e131e4f8fdf076b21a21ed27c6a13866cbb6c0563f0"
     },
     "operations.approvals": {
-      "implementationVersion": "1",
-      "sourceDigest": "sha256:7ccd467b056f418ac887f86afd1b036d4822e224cf1076a93054d5b7a706d6dc"
+      "implementationVersion": "2",
+      "sourceDigest": "sha256:0af207c6ac01a732cdeb5bebc8b2a6ad6e7944bf9e6bb62d197cfe899a87c981"
     },
     "operations.attention": {
-      "implementationVersion": "1",
-      "sourceDigest": "sha256:7ccd467b056f418ac887f86afd1b036d4822e224cf1076a93054d5b7a706d6dc"
+      "implementationVersion": "2",
+      "sourceDigest": "sha256:0af207c6ac01a732cdeb5bebc8b2a6ad6e7944bf9e6bb62d197cfe899a87c981"
     },
     "operations.storeDay": {
       "implementationVersion": "1",
@@ -3383,7 +3383,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "functionPath": "operations/agentCapabilities/workPorts:listApprovals",
         "kind": "internal_query"
       },
-      "implementationVersion": "1",
+      "implementationVersion": "2",
       "portKey": "operations.approvals",
       "projections": [
         "approvalProof"
@@ -3415,7 +3415,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "functionPath": "operations/agentCapabilities/workPorts:listAttention",
         "kind": "internal_query"
       },
-      "implementationVersion": "1",
+      "implementationVersion": "2",
       "portKey": "operations.attention",
       "projections": [
         "managerReasons"
@@ -3557,7 +3557,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       ]
     }
   },
-  "registryDigest": "fnv1a64:b1e8f08897c36532",
+  "registryDigest": "fnv1a64:b532f08d43e93f20",
   "sdkView": {
     "contractVersion": 1,
     "packages": {
@@ -3708,7 +3708,7 @@ export const AGENT_GENERATED_SOURCE_KEYS: readonly string[] = [
 ];
 
 /** What a run pins; the deployment epoch fence compares it with the durable epoch digest. */
-export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:5f6c323f38546281";
+export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:c09342d06ca88d7f";
 
 /** Schema identity only; unchanged when a capability is enabled or disabled. */
-export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:b1e8f08897c36532";
+export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:b532f08d43e93f20";

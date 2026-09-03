@@ -3962,7 +3962,43 @@ describe("daily operations overview read model", () => {
     expect(
       snapshot.lanes.find((lane) => lane.key === "approvals"),
     ).toMatchObject({
+      count: 0,
       countLabel: "0+",
+      description: "Pending approvals could not be read in full for this day.",
+      status: "needs_attention",
+    });
+  });
+
+  it("reports the pending-approval read as complete at exactly the store-wide limit", async () => {
+    vi.setSystemTime(new Date("2026-06-20T09:00:00.000Z"));
+
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        approvalRequest: Array.from({ length: 200 }, (_, index) => ({
+          _creationTime: index + 1,
+          _id: `approval-bulk-${index}`,
+          createdAt: Date.UTC(2026, 4, 20, 0) + index,
+          reason: "Bulk variance review",
+          requestType: "variance_review",
+          status: "pending",
+          storeId: "store-1",
+          subjectId: `register-bulk-${index}`,
+          subjectType: "register_session",
+        })),
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(
+      snapshot.lanes.find((lane) => lane.key === "approvals"),
+    ).toMatchObject({
+      count: 0,
+      countLabel: "0",
+      description: "No pending approvals.",
+      status: "ready",
     });
   });
 
