@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Installing the emit-aware workflow release</title>
+  </head>
+  <body>
+    <article
+      data-athena-landed-change-report="v2"
+      data-athena-report-diff-fingerprint="4e246dd36f4737f8ef3f0e089816edabcbf12e31596be9b688014d6e07af9659"
+      data-athena-report-base="129f0d89bddaf57353f7f232ee0b45c80c456200"
+    >
+      <header data-report-section="header">
+        <h1>Installing the emit-aware workflow release</h1>
+        <ul data-report-pills>
+          <li>Delivery candidate</li>
+          <li>Branch codex/v26-1554-emit-aware-release</li>
+          <li>Posture sensor-only</li>
+          <li>309 new runtime script lines</li>
+        </ul>
+        <dl data-report-meta>
+          <dt>PR</dt><dd>#830</dd>
+          <dt>Linear</dt><dd>V26-1554</dd>
+          <dt>Status</dt><dd>Delivery candidate — not merged</dd>
+          <dt>Deploy</dt><dd>Pending — deploy applies because docs/solutions and docs/reports compile into the webapp bundle</dd>
+          <dt>Root alignment</dt><dd>Pending</dd>
+        </dl>
+      </header>
+
+      <section data-report-section="summary">
+        <h2>Executive summary</h2>
+        <p>
+          Athena now runs the <code>linear-v2</code> agent-skills release, pins the published
+          delivery-harness CLI at exactly <code>0.2.0</code>, and declares the run-event command
+          that release asks an adopting repository to name. A second command, this one Athena's
+          own, installs the next release and proves it converged. Root <code>AGENTS.md</code> loses
+          its restatements of the review round bound, the grace round, and the deferral rules, and
+          points at the installed workflow for them instead.
+        </p>
+        <p>
+          Nothing in <code>pr:athena</code> changed, and no product runtime surface changed. The
+          nine authored files are repository tooling and documentation.
+        </p>
+      </section>
+
+      <section data-report-section="problem">
+        <h2>The problem</h2>
+        <p>
+          The most valuable thing about a delivery is invisible after it ends. Which review lenses
+          the executor chose and why, how many rounds it took, which candidate each round bound to,
+          what each round cost, where the executor decided something by judgement rather than by a
+          rule — all of it lives in a coding host's transcript and nowhere else. The operator
+          learned those facts about the last two deliveries by reading three transcripts by hand.
+        </p>
+        <p>
+          The delivery product's answer is a run journal that the executor writes as it goes. The
+          workflow release cut for it names the moments to emit and leaves the command itself to
+          the adopting repository: every emission rule in the installed skills reads <em>through
+          the run-event command the repository's root instruction file declares, when it declares
+          one</em>. Athena declared none, so every one of those rules was inert here.
+        </p>
+        <p>
+          A second, quieter problem: installing an agent-skills release in Athena was a multi-step
+          operator procedure whose success check lived in a human's eyes. Each release meant
+          re-deriving the same sequence.
+        </p>
+      </section>
+
+      <section data-report-section="mental-model">
+        <h2>The mental model</h2>
+        <p>
+          Think of the delivery workflow as a product Athena installs, the way an application
+          installs a library. Three surfaces, with a clear owner each:
+        </p>
+        <dl>
+          <dt>The installed workflow (<code>.agent-skills/current/skills/</code>)</dt>
+          <dd>
+            Owns portable delivery semantics: what an actionable finding is, how many review rounds
+            a delivery gets, when a grace round is available, how a deferral is discharged, which
+            moments produce a run event. Generated payload — Athena reads it, never edits it.
+          </dd>
+          <dt>The overlay (root <code>AGENTS.md</code>)</dt>
+          <dd>
+            Owns what Athena adds: the <code>pr:athena</code> gate, the review run root, the
+            reviewer set, worktree bootstrap, branch and PR conventions, and now the two commands
+            below. Every rule the workflow already carries is <em>referenced</em>, not repeated.
+          </dd>
+          <dt>The commands (<code>package.json</code> scripts)</dt>
+          <dd>
+            The sockets the workflow plugs into. <code>delivery:emit</code> is the run-event
+            command the skills look for; <code>agent-skills:install</code> is how the next release
+            arrives.
+          </dd>
+        </dl>
+        <p>
+          The rule that keeps this honest: a run event is observability, never evidence. No gate,
+          approval, or finish-line decision reads the journal, and a refused emission never changes
+          a command's outcome.
+        </p>
+      </section>
+
+      <section data-report-section="before-after">
+        <h2>Before and after</h2>
+        <table>
+          <thead>
+            <tr><th>Concern</th><th>Before</th><th>After</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Run events</td>
+              <td>No command existed; every emission rule in the installed skills was inert.</td>
+              <td><code>DELIVERY_EVENT='&lt;json&gt;' bun run delivery:emit -- &lt;kind&gt;</code>, declared in <code>AGENTS.md</code>. The vocabulary the installed <code>execute-work</code> asks for is <code>run.started</code>, <code>ticket.read</code>, <code>posture.declared</code>, <code>decision.recorded</code>, <code>gate.reported</code>, <code>pr.opened</code>, <code>blocker.recorded</code>, and <code>run.ended</code>.</td>
+            </tr>
+            <tr>
+              <td>Release install</td>
+              <td>A hand-run sequence of build, lifecycle update, and an eyeballed status read.</td>
+              <td>One command that fails unless the lifecycle sensor reports <code>lifecycle: current</code>, no blockers, and the release it just built as active.</td>
+            </tr>
+            <tr>
+              <td>Review semantics</td>
+              <td><code>AGENTS.md</code> restated the four-round bound, the grace round, and the deferral rules alongside the installed copies.</td>
+              <td>Those sentences reference the installed <code>review-work</code>, <code>obtain-review</code>, and <code>execute-work</code>. Athena keeps only its own addition: one bound counted across both review stages.</td>
+            </tr>
+            <tr>
+              <td>Installed generation</td>
+              <td><code>linear-v1</code>.</td>
+              <td><code>linear-v2</code> (<code>daeffd60…</code>). No skill was added or removed; five changed — <code>deliver-work</code>, <code>execute-work</code>, <code>review-work</code>, <code>obtain-review</code>, and <code>compound-learning</code> — which is where the emission points and the review-loop rules now live.</td>
+            </tr>
+            <tr>
+              <td>Harness CLI</td>
+              <td>Not a declared dependency.</td>
+              <td><code>@agent-delivery-harness/cli</code> pinned at exactly <code>0.2.0</code>, integrity in the frozen lockfile.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section data-report-section="key-files">
+        <h2>Key files</h2>
+        <table>
+          <thead>
+            <tr><th>File</th><th>Why it matters</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>scripts/delivery-emit.ts</code></td>
+              <td>Athena's run-event command. Carries the payload from <code>DELIVERY_EVENT</code> into a single <code>--json</code> argv element via <code>Bun.spawn</code>, so no shell touches it, and spawns with <code>stdin: "ignore"</code> because the CLI's stdin payload path fails under bun with <code>EBADF</code> inside the run store. Rejects a caller-supplied <code>--json</code>, and exits 2 for its own usage errors to match the CLI's exit policy.</td>
+            </tr>
+            <tr>
+              <td><code>scripts/agent-skills-install.ts</code></td>
+              <td>The install command. Reads the checkout from <code>AGENT_SKILLS_CHECKOUT</code>, which must be an absolute path; builds the release into a temporary directory it always removes; runs the lifecycle update with <code>--maintenance</code>; then <code>assertInstalled</code>, which accumulates every reason the status sensor disagrees so one run names the whole gap.</td>
+            </tr>
+            <tr>
+              <td><code>AGENTS.md</code></td>
+              <td>Declares both commands, the current-run pointer, and Athena's two mandated lens ids. Its trimmed review section now references the installed workflow rather than restating it.</td>
+            </tr>
+            <tr>
+              <td><code>scripts/pr-athena-guidance-contract.test.ts</code></td>
+              <td>Pins the exact command spellings, the lens ids, and the three delegation sentences, so a later edit that breaks discoverability fails a test.</td>
+            </tr>
+            <tr>
+              <td><code>package.json</code>, <code>bun.lockb</code></td>
+              <td>The two script registrations and the exact CLI pin with its published integrity.</td>
+            </tr>
+            <tr>
+              <td><code>.agent-skills/active.json</code></td>
+              <td>The install receipt, and the declared review scope for a release install. Everything else under <code>.agent-skills/</code> is generated payload.</td>
+            </tr>
+            <tr>
+              <td><code>docs/solutions/harness/wrapping-a-node-cli-behind-a-bun-run-script-2026-09-02.md</code></td>
+              <td>The compounded learning: why the payload travels in an environment variable rather than on the command line.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section data-report-section="changes">
+        <h2>What changed, and what did not</h2>
+        <h3>Changed</h3>
+        <ul>
+          <li>Two new root scripts with unit tests for their pure argument, environment, and status logic.</li>
+          <li>Two new <code>package.json</code> scripts and one exactly pinned devDependency.</li>
+          <li>Two new <code>AGENTS.md</code> paragraphs; three restated review rules replaced by references.</li>
+          <li>
+            The installed generation moved from <code>linear-v1</code> to <code>linear-v2</code>.
+            Most of the <code>.agent-skills/**</code> churn is retention, not authored work: the
+            new generation was added, the oldest was pruned, and <code>previous</code> in the
+            receipt rolled forward to <code>linear-v1</code>.
+          </li>
+          <li>Regenerated graph artifacts, reflecting only the four new files.</li>
+        </ul>
+        <h3>Intentionally unchanged</h3>
+        <ul>
+          <li><code>pr:athena</code> and every one of its sub-scripts. Neither new command joins the merge gate.</li>
+          <li>All product code: nothing under <code>packages/</code>, no Convex function, no deploy tooling.</li>
+          <li>Athena's overlay structure and step numbering. Only the rules the installed workflow now owns were removed.</li>
+          <li>The reviewer churn-control rule, which was removed during drafting and restored: no installed workflow carries it, so removing it would have retired an Athena rule under cover of a product-ownership trim.</li>
+        </ul>
+      </section>
+
+      <section data-report-section="failure-boundaries">
+        <h2>Failure boundaries a reader should know</h2>
+        <ul>
+          <li>
+            <strong>The install is not hermetic.</strong> It shells out to <code>python3</code> and
+            <code>build-release.py</code> inside a checkout outside this repository, named by
+            <code>AGENT_SKILLS_CHECKOUT</code>. It cannot run in CI, and its invocation is itself
+            the repository authority for a lifecycle mutation.
+          </li>
+          <li>
+            <strong>The CLI entry is a deep path.</strong> <code>src/main.ts</code> sits outside the
+            package's <code>exports</code> map, because <code>0.2.0</code> publishes no
+            <code>bin</code>. The exact pin bounds that coupling; a repackaging upstream would break
+            it.
+          </li>
+          <li>
+            <strong>Emission has no sensor of its own.</strong> Because a failed emission may never
+            change an outcome, an emission path that quietly stops working produces no signal.
+          </li>
+          <li>
+            <strong>Review semantics now arrive through payload.</strong> A future release that
+            changes the bound changes Athena's delivery policy with no diff to
+            <code>AGENTS.md</code>. The contract test pins the delegation sentences, not the rules.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="validation">
+        <h2>Validation and review evidence</h2>
+        <ul>
+          <li>
+            <strong>Install proven by running it.</strong>
+            <code>AGENT_SKILLS_CHECKOUT=/absolute/path/to/agent-skills bun run agent-skills:install -- linear-v2 --profile linear</code>
+            converged; the lifecycle status sensor reports <code>lifecycle: current</code>, empty
+            <code>blockers</code>, <code>linear-v2</code> active, and the host projection
+            <code>current</code>. The installed archive digest
+            <code>daeffd60a59a4b5254da33442cdf0a43ac066a336a2a8ff2766739e7ec836896</code> and
+            metadata digest <code>9c70a5861e39e72612259e5eaa1eaa9d995c47db57a2325364b89796ddcbfe44</code>
+            match the release qualification in the agent-skills checkout.
+          </li>
+          <li>
+            <strong>Emission proven by running it.</strong> <code>run.started</code> emitted from
+            this worktree with no <code>harness.config.ts</code>; the run journal carries
+            <code>run.started</code>, <code>ticket.read</code>, <code>posture.declared</code>,
+            <code>decision.recorded</code>, <code>lens.selected</code>,
+            <code>review.round.opened</code>, <code>review.round.closed</code>, and
+            <code>pr.opened</code>. <code>gate.reported</code> and <code>run.ended</code> follow at
+            the end of the delivery and are not in the journal at the moment this report was
+            written. The journal itself lives in the run store under the repository's git common
+            directory, so it is not part of this diff and cannot be reviewed from the PR.
+          </li>
+          <li>
+            <strong>Pin proven by the frozen lockfile.</strong>
+            <code>bun install --frozen-lockfile</code> is clean and the lockfile carries the
+            published <code>dist.integrity</code> for <code>0.2.0</code>.
+          </li>
+          <li>
+            <strong>Tests.</strong> 24 cases across the two new script tests and the guidance
+            contract test, all passing.
+          </li>
+          <li>
+            <strong>Review.</strong> Round 1 dispatched ten lenses against candidate tree
+            <code>86bb7096…</code>: correctness, testing, maintainability, project-standards,
+            agent-native, learnings, adversarial, CLI-readiness, TypeScript, reliability. Five
+            in-scope P1 findings, all fixed in the same delivery: an unlegible spawn failure, a
+            discarded lifecycle diagnostic, a silently overridden <code>--json</code>, a usage
+            error exiting 1 instead of 2, and the over-trimmed churn-control rule. Because those
+            fixes changed the candidate, a verification round over the delivered tree is required
+            and follows this report; round 1 alone does not cover what is being merged.
+          </li>
+          <li>
+            <strong>Repository gates.</strong> <code>compound:check</code> and
+            <code>docs:links:check</code> pass. <code>pr:athena</code> runs on this candidate; its
+            outcome is reported on the PR.
+          </li>
+          <li>
+            <strong>Merge, deploy, root alignment.</strong> All pending. The operator asked that
+            this pull request not be merged.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="guidance">
+        <h2>Next time</h2>
+        <ul>
+          <li>
+            Never route a structured argument through <code>bun run &lt;script&gt; -- &lt;args&gt;</code>.
+            Bun concatenates trailing arguments into a string it hands to <code>bash -c</code>, so a
+            JSON object is brace-expanded before the program parses it. Carry it in an environment
+            variable and forward it with <code>Bun.spawn([...])</code>.
+          </li>
+          <li>
+            Prove a wrapper by running it. Both failures behind this design — the brace expansion
+            and the CLI's stdin path failing under bun with <code>EBADF</code> — are invisible to a
+            unit test of the argument builder.
+          </li>
+          <li>
+            When trimming an overlay against an installed product, check that the product actually
+            carries each rule you delete. Three of the four rules trimmed here were genuinely
+            duplicated; the fourth was Athena's alone and had to come back.
+          </li>
+          <li>
+            Install a release with the command, not by hand. If it reports anything other than a
+            converged status, the install did not happen.
+          </li>
+        </ul>
+      </section>
+
+      <section data-report-section="quiz" data-quiz-pass-threshold="8">
+        <h2>Comprehension quiz</h2>
+        <p>Ten questions. Eight correct to pass.</p>
+        <ol data-quiz>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Why did the run-event payload have to travel in an environment variable rather than on the command line?</p>
+            <ol data-quiz-options>
+              <li>Reading a payload on stdin fails under bun with <code>EBADF</code> in the run store.</li>
+              <li data-quiz-correct><code>bun run … -- &lt;args&gt;</code> hands the trailing arguments to <code>bash -c</code>, which brace-expands the JSON.</li>
+              <li>An argument longer than the operating system's limit is silently truncated.</li>
+              <li>The harness CLI refuses a payload supplied as an argument.</li>
+            </ol>
+            <p data-quiz-explanation>Original quoting is gone by the time bash sees the string, so <code>{"a":1,"b":2}</code> becomes two words and the CLI reports that <code>emit</code> takes one kind. The stdin failure is real too, but it is why the wrapper never reads stdin — not why the payload travels in an environment variable.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What does the install command treat as proof that the install actually happened?</p>
+            <ol data-quiz-options>
+              <li>The lifecycle update exiting zero.</li>
+              <li>The built archive's digest matching the release qualification file.</li>
+              <li data-quiz-correct>A status read showing <code>lifecycle: current</code>, no blockers, and the just-built release active.</li>
+              <li>The host projection symlinks resolving to the new generation.</li>
+            </ol>
+            <p data-quiz-explanation><code>assertInstalled</code> reads the lifecycle's own status sensor, so the check does not live in a human's eyes. The other options are necessary conditions the sensor already accounts for, not the proof itself.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What happens to a delivery when a run-event emission is refused or fails?</p>
+            <ol data-quiz-options>
+              <li>The delivery is recorded as <code>partial</code> with a typed blocker.</li>
+              <li>The current review round is invalidated and must be re-obtained.</li>
+              <li data-quiz-correct>Nothing. Emission is observability, and no gate, approval, or finish-line decision reads it.</li>
+              <li>The gate fails closed until the journal is repaired.</li>
+            </ol>
+            <p data-quiz-explanation>A failed emission never changes a command's outcome or the delivery's result.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Why was the reviewer churn-control rule restored to <code>AGENTS.md</code> after being trimmed?</p>
+            <ol data-quiz-options>
+              <li>A repository sensor asserted its exact text.</li>
+              <li data-quiz-correct>No installed workflow carries it, so removing it would have retired an Athena-owned rule under cover of a product-ownership trim.</li>
+              <li>It was restored only to keep the diff smaller.</li>
+              <li>The grace round depends on it mechanically.</li>
+            </ol>
+            <p data-quiz-explanation>The trim's whole principle is to remove only what the installed product now owns.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Which three rules did <code>AGENTS.md</code> stop restating and start referencing?</p>
+            <ol data-quiz-options>
+              <li>The <code>pr:athena</code> gate, the review run root, and the reviewer set.</li>
+              <li data-quiz-correct>The review round bound, the grace round, and the deferral rules.</li>
+              <li>Branch naming, PR body sections, and commit message format.</li>
+              <li>Worktree bootstrap, generated-artifact repair, and deploy classification.</li>
+            </ol>
+            <p data-quiz-explanation>The first option lists things Athena still owns and still states itself.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Why does the emit wrapper reject a caller-supplied <code>--json</code> instead of passing it through?</p>
+            <ol data-quiz-options>
+              <li>The CLI rejects a duplicated flag with an unhelpful error.</li>
+              <li data-quiz-correct>The wrapper appends its own <code>--json</code> last and the CLI's parser is last-wins, so the caller's payload would be silently discarded while the command still exited zero.</li>
+              <li>A payload on the command line would be brace-expanded before the wrapper sees it.</li>
+              <li>The flag is reserved for the CLI's own internal invocations.</li>
+            </ol>
+            <p data-quiz-explanation>The caller's object would lose to whatever <code>DELIVERY_EVENT</code> held, or to <code>{}</code> when it held nothing — and a silently empty run event is indistinguishable from a genuinely empty one.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>What is the declared review scope for a release install?</p>
+            <ol data-quiz-options>
+              <li>The whole <code>.agent-skills/</code> directory.</li>
+              <li data-quiz-correct><code>.agent-skills/active.json</code>; the rest is generated payload.</li>
+              <li>Only the <code>.agent-skills/current</code> symlink.</li>
+              <li>Nothing — a release install is exempt from review.</li>
+            </ol>
+            <p data-quiz-explanation>Reviewers check the payload's internal consistency and whether it supports the overlay's claims, not its style or structure.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Where does the current-run pointer live?</p>
+            <ol data-quiz-options>
+              <li>In a <code>harness.config.ts</code> at the repository root.</li>
+              <li>In an environment variable the executor keeps for the session.</li>
+              <li data-quiz-correct>In the run store under the git common directory, keyed by worktree.</li>
+              <li>In <code>.agent-skills/active.json</code>.</li>
+            </ol>
+            <p data-quiz-explanation><code>run.started</code> allocates a run and points the invoking worktree at it; <code>--run</code> names another.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Which surface did the two new commands deliberately not join?</p>
+            <ol data-quiz-options>
+              <li>The repository's <code>package.json</code> scripts.</li>
+              <li>The frozen lockfile.</li>
+              <li data-quiz-correct>The <code>pr:athena</code> merge gate, whose sub-scripts are byte-identical to <code>origin/main</code>.</li>
+              <li>The root <code>AGENTS.md</code> overlay.</li>
+            </ol>
+            <p data-quiz-explanation>They are standalone operator commands; the other three surfaces all changed to admit them.</p>
+          </li>
+          <li data-quiz-question>
+            <p data-quiz-prompt>Who decides which review lenses a round runs?</p>
+            <ol data-quiz-options>
+              <li>The repository, which fixes the full reviewer set in <code>AGENTS.md</code>.</li>
+              <li>The executor alone, with no lens mandated by anyone.</li>
+              <li data-quiz-correct>The product mandates a correctness and a testing lens; Athena declares the two ids for them; every other lens in a round is the executor's own selection.</li>
+              <li>The installed release, which enumerates every lens a round must run.</li>
+            </ol>
+            <p data-quiz-explanation>Round 1 here ran ten lenses: the two mandated ones plus eight the executor chose for this change.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section data-report-section="subagent-evidence">
+        <h2>Subagent evidence</h2>
+        <ul>
+          <li>
+            <strong>Delivered diff subagent</strong> — produced the changed-file map separating nine
+            authored files from the generated payload, the architectural before/after across
+            installed release, emission, and install policy, and the failure boundaries reproduced
+            above (non-hermetic install, deep CLI entry path, unsensed emission, review semantics
+            arriving through payload). It also confirmed that every <code>pr:athena</code>
+            sub-script is byte-identical to <code>origin/main</code>.
+          </li>
+          <li>
+            <strong>Session context subagent</strong> — located the aligned run-surface plan and
+            this ticket's unit within it, its predecessors and the dogfood run that depends on it,
+            and the four prior <code>AGENTS.md</code> commits showing the overlay progressively
+            narrowing itself. It supplied the durable lessons this delivery had to honour, in
+            particular that repository policy stays on repository-owned ground.
+          </li>
+          <li>
+            <strong>Review lenses (ten)</strong> — correctness, testing, maintainability,
+            project-standards, agent-native, learnings, adversarial, CLI-readiness, TypeScript, and
+            reliability, each realized as one read-only subagent given its charter verbatim. Five
+            in-scope P1 findings, all fixed in this candidate.
+          </li>
+          <li>
+            <strong>Report reviewer subagent</strong> — reviewed this draft against the diff, the
+            two installed generations, and the run journal. It caught a false claim that the new
+            release added skills (it changed five and added none), an overstatement that the
+            release asks a repository for an install command (it asks only for the run-event
+            command), an install command line missing its required environment variable, a review
+            section that did not disclose that round 1 predates the delivered tree, and three quiz
+            questions with a giveaway or a second defensible answer. All are corrected above.
+          </li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>
