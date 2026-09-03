@@ -3827,6 +3827,181 @@ describe("daily operations overview read model", () => {
     );
   });
 
+  it("returns the same pending approvals for an operating date whenever it is read", async () => {
+    const approvalRequest = [
+      {
+        _id: "approval-prior-day",
+        createdAt: Date.UTC(2026, 4, 7, 20),
+        reason: "Prior day variance review",
+        requestType: "variance_review",
+        status: "pending",
+        storeId: "store-1",
+        subjectId: "register-prior",
+        subjectType: "register_session",
+      },
+      {
+        _id: "approval-current-day",
+        createdAt: Date.UTC(2026, 4, 8, 10),
+        reason: "Current day variance review",
+        requestType: "variance_review",
+        status: "pending",
+        storeId: "store-1",
+        subjectId: "register-current",
+        subjectType: "register_session",
+      },
+    ];
+
+    const readAt = async (now: string) => {
+      vi.setSystemTime(new Date(now));
+      const snapshot = await buildDailyOperationsSnapshotWithCtx(
+        buildCtx({
+          approvalRequest,
+          dailyClose: [priorClose],
+          dailyOpening: [startedOpening],
+          store: [store],
+        }),
+        { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+      );
+
+      return {
+        approvalAttentionIds: snapshot.attentionItems
+          .map((item) => item.id)
+          .filter((id) => id.startsWith("approval_request:")),
+        lane: snapshot.lanes.find((lane) => lane.key === "approvals"),
+      };
+    };
+
+    const readLive = await readAt("2026-05-08T12:00:00.000Z");
+    const readWeeksLater = await readAt("2026-06-20T09:00:00.000Z");
+
+    expect(readWeeksLater).toEqual(readLive);
+    expect(readLive.lane).toMatchObject({ count: 2, countLabel: "2" });
+  });
+
+  it("counts an approval created exactly at the day's start and excludes one created exactly at its end", async () => {
+    vi.setSystemTime(new Date("2026-06-20T09:00:00.000Z"));
+
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        approvalRequest: [
+          {
+            _id: "approval-at-day-start",
+            createdAt: Date.UTC(2026, 4, 8, 0),
+            reason: "At day start",
+            requestType: "variance_review",
+            status: "pending",
+            storeId: "store-1",
+            subjectId: "register-start",
+            subjectType: "register_session",
+          },
+          {
+            _id: "approval-at-day-end",
+            createdAt: Date.UTC(2026, 4, 9, 0),
+            reason: "At day end",
+            requestType: "variance_review",
+            status: "pending",
+            storeId: "store-1",
+            subjectId: "register-end",
+            subjectType: "register_session",
+          },
+        ],
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.attentionItems.map((item) => item.id)).toContain(
+      "approval_request:approval-at-day-start:pending",
+    );
+    expect(snapshot.attentionItems.map((item) => item.id)).not.toContain(
+      "approval_request:approval-at-day-end:pending",
+    );
+  });
+
+  it("reports the pending-approval read as incomplete when the store-wide read is truncated", async () => {
+    vi.setSystemTime(new Date("2026-06-20T09:00:00.000Z"));
+
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        approvalRequest: [
+          // The index this read walks is ordered by creation, not by
+          // `createdAt`, so a row backdated into the requested day can sit
+          // past the store-wide lookahead prefix.
+          ...Array.from({ length: 201 }, (_, index) => ({
+            _creationTime: index + 1,
+            _id: `approval-bulk-${index}`,
+            createdAt: Date.UTC(2026, 4, 20, 0) + index,
+            reason: "Bulk variance review",
+            requestType: "variance_review",
+            status: "pending",
+            storeId: "store-1",
+            subjectId: `register-bulk-${index}`,
+            subjectType: "register_session",
+          })),
+          {
+            _creationTime: 1_000,
+            _id: "approval-beyond-prefix",
+            createdAt: Date.UTC(2026, 4, 8, 10),
+            reason: "Beyond the lookahead prefix",
+            requestType: "variance_review",
+            status: "pending",
+            storeId: "store-1",
+            subjectId: "register-beyond",
+            subjectType: "register_session",
+          },
+        ],
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(
+      snapshot.lanes.find((lane) => lane.key === "approvals"),
+    ).toMatchObject({
+      count: 0,
+      countLabel: "0+",
+      description: "Pending approvals could not be read in full for this day.",
+      status: "needs_attention",
+    });
+  });
+
+  it("reports the pending-approval read as complete at exactly the store-wide limit", async () => {
+    vi.setSystemTime(new Date("2026-06-20T09:00:00.000Z"));
+
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        approvalRequest: Array.from({ length: 200 }, (_, index) => ({
+          _creationTime: index + 1,
+          _id: `approval-bulk-${index}`,
+          createdAt: Date.UTC(2026, 4, 20, 0) + index,
+          reason: "Bulk variance review",
+          requestType: "variance_review",
+          status: "pending",
+          storeId: "store-1",
+          subjectId: `register-bulk-${index}`,
+          subjectType: "register_session",
+        })),
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(
+      snapshot.lanes.find((lane) => lane.key === "approvals"),
+    ).toMatchObject({
+      count: 0,
+      countLabel: "0",
+      description: "No pending approvals.",
+      status: "ready",
+    });
+  });
+
   it("returns pending approval requests through a separate store requests snapshot", async () => {
     vi.setSystemTime(new Date("2026-05-08T12:00:00.000Z"));
     vi.mocked(

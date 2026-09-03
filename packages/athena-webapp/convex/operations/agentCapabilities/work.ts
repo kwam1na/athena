@@ -102,7 +102,7 @@ export const ATTENTION_MANIFEST = defineCapabilityManifest({
   binding: {
     readIntents: ["daily_operations.view", "operations.workItems.view"],
     portKey: ATTENTION_PORT_KEY,
-    implementationVersion: "1",
+    implementationVersion: "2",
   },
 });
 
@@ -176,7 +176,7 @@ export const APPROVALS_MANIFEST = defineCapabilityManifest({
   binding: {
     readIntents: ["daily_operations.view", "operations.workItems.view"],
     portKey: APPROVALS_PORT_KEY,
-    implementationVersion: "1",
+    implementationVersion: "2",
   },
 });
 
@@ -192,7 +192,7 @@ export const WORK_READ_PORTS: AgentReadPortIndex = {
       verbs: ["list"],
       scopeKind: "store",
       readIntents: ATTENTION_MANIFEST.binding.readIntents,
-      implementationVersion: "1",
+      implementationVersion: "2",
       declaredCost: AGENT_PAGE_COST,
       handler: { kind: "internal_query", functionPath: "operations/agentCapabilities/workPorts:listAttention" },
       projections: ["managerReasons"],
@@ -205,7 +205,7 @@ export const WORK_READ_PORTS: AgentReadPortIndex = {
       verbs: ["list"],
       scopeKind: "store",
       readIntents: APPROVALS_MANIFEST.binding.readIntents,
-      implementationVersion: "1",
+      implementationVersion: "2",
       declaredCost: AGENT_PAGE_COST,
       handler: { kind: "internal_query", functionPath: "operations/agentCapabilities/workPorts:listApprovals" },
       projections: ["approvalProof"],

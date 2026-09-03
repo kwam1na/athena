@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-03T06:44:29.858Z",
+  "branch": "codex/v26-1083-daily-operations-approval-day-filter",
+  "headSha": "48470acfd2cdb2b5cc8b08a26dc2479df9107f77",
+  "deliverableDiffFingerprint": "ab45038cb080c5ba097087910b59d7f02c624fce1f73c829131b8fa865f176fe",
+  "status": "pass",
+  "proofState": "proof_recorded",
+  "summary": {
+    "commandCount": 5,
+    "failedCommandCount": 0,
+    "duplicateCommandCount": 0,
+    "duplicatePackageSuiteCount": 0,
+    "providerSkippedCount": 5,
+    "gateDecisionCount": 2,
+    "totalDurationMs": 886016.0535009999
+  },
+  "reviewLoop": {
+    "providerId": "execute",
+    "runId": "20260903-v26-1083",
+    "finalPassId": "round2",
+    "recordedAt": "2026-09-03T06:19:28.962Z",
+    "iterationCount": 2,
+    "findingCounts": {
+      "P0": 0,
+      "P1": 1,
+      "P2": 3,
+      "P3": 6
+    },
+    "deferredExpansionCount": 1,
+    "deferredIssueIds": [
+      "V26-1657"
+    ],
+    "reviewCost": {
+      "unit": "subagent-tokens",
+      "total": 1390024,
+      "reportedBy": "claude-code-subagent-usage"
+    }
+  }
+}

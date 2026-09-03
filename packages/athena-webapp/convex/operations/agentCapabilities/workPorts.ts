@@ -153,7 +153,6 @@ export const listApprovalsHandler: AgentReadPortHandler = async (ctx, input): Pr
 
   const snapshot = await listPendingApprovalRequestsSnapshot(ctx, {
     endAt: window.endAt,
-    startAt: window.startAt,
     storeId,
   });
   const ordered = [...snapshot.approvalRequests].sort((left, right) => right.createdAt - left.createdAt);

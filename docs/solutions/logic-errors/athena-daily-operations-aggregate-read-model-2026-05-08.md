@@ -9,6 +9,8 @@ symptoms:
   - "A store-day overview can obscure whether Daily Opening, Daily Close, or the operations queue owns the next action"
   - "Broad queue scans can let terminal work hide current open work when capped"
   - "Timeline caps can return old operational events if ordering is applied after limiting"
+  - "A wall-clock read inside a snapshot predicate makes a historic operating day answer differently than it did live"
+  - "A capped scan filtered afterwards can render an empty truncated read as an all-clear day"
 root_cause: overview_surface_was_missing_a_bounded_source_owned_read_model
 resolution_type: aggregate_snapshot_over_source_workflows
 severity: medium
@@ -68,6 +70,18 @@ workflow that owns the command.
   available.
 - Do not sort timeline rows in memory after `.take()`; order the indexed query
   before limiting.
+- Do not read `Date.now()` inside a query predicate that decides which rows a
+  store-day snapshot contains. A read handler may stamp the current time onto
+  what it returns; the moment the clock selects rows or switches filtering
+  mode, the same store and operating date answer differently depending on when
+  the question is asked, and a historic day reads smaller — or empty — than it
+  was. Anchor the rule to the requested date instead.
+- When a capped scan is filtered afterwards, report the day as incomplete
+  whenever the cap itself was reached, not only when the surviving rows exceed
+  the display limit. The index order need not match the filter's ordering key,
+  so a qualifying row can sit past the prefix; and carry that incompleteness
+  into the lane's status, not only into its count label, or an empty truncated
+  read still renders as an all-clear day.
 - Keep harness registry entries aligned with the route and read model when
   changing Daily Operations so generated validation docs keep pointing at the
   focused test set.
