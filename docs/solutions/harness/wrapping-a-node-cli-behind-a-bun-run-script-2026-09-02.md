@@ -43,8 +43,12 @@ The command is then `DELIVERY_EVENT='<json>' bun run delivery:emit -- <kind>`.
 The outer shell owns the quoting, so the JSON reaches the wrapper intact.
 
 Reject a caller-supplied `--json` rather than appending a second one: the
-harness CLI's parser is last-wins, so a wrapper that appends its own flag would
-silently replace the caller's payload with `{}` and still exit 0.
+harness CLI's parser is last-wins, so a wrapper that appends its own flag
+discards the caller's payload. When the environment variable also holds a valid
+payload the command still exits 0, having recorded the wrong object — the
+failure the caller can never see. When it holds nothing the CLI refuses the
+resulting `{}` for its missing members and exits 1, which is loud but blames the
+wrong input.
 
 ## Why This Matters
 

@@ -368,7 +368,7 @@
               <li>A payload on the command line would be brace-expanded before the wrapper sees it.</li>
               <li>The flag is reserved for the CLI's own internal invocations.</li>
             </ol>
-            <p data-quiz-explanation>The caller's object would lose to whatever <code>DELIVERY_EVENT</code> held, or to <code>{}</code> when it held nothing — and a silently empty run event is indistinguishable from a genuinely empty one.</p>
+            <p data-quiz-explanation>The caller's object loses to whatever <code>DELIVERY_EVENT</code> held. With a valid payload there the command exits 0 having recorded the wrong object, which the caller can never see; with nothing there the CLI refuses the empty object and blames the wrong input.</p>
           </li>
           <li data-quiz-question>
             <p data-quiz-prompt>What is the declared review scope for a release install?</p>

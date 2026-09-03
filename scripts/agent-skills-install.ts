@@ -127,7 +127,7 @@ async function run(
 ): Promise<{ stdout: string }> {
   let proc;
   try {
-    proc = Bun.spawn(command, { cwd, stdout: "pipe", stderr: "inherit" });
+    proc = Bun.spawn([...command], { cwd, stdout: "pipe", stderr: "inherit" });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(
