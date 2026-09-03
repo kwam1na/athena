@@ -12,7 +12,7 @@ applies_when:
   - "Any argument that is JSON, or that contains braces, commas, spaces, or globs"
   - "The CLI offers a stdin payload path as an alternative to a flag"
 tags: [bun, cli-wrapper, run-events, delivery-harness, argument-passing]
-delivery_diff_fingerprint: 4e246dd36f4737f8ef3f0e089816edabcbf12e31596be9b688014d6e07af9659
+delivery_diff_fingerprint: e700449f3c5a422b38ca375542fe95046f4d0466e84aa70c8c857f943fee260f
 ---
 
 # Wrapping a CLI behind a bun run script needs an env-var payload channel
