@@ -40,7 +40,7 @@ async function activeStore(t: ReturnType<typeof convexTest>) {
 }
 
 describe("reports isolated day work", () => {
-  it("dispatches four close-evidence jobs independently without reclaiming leases", async () => {
+  it.each(["close-evidence", "rollup"] as const)("dispatches four %s jobs independently without reclaiming leases", async (kind) => {
     const t = convexTest(schema, modules);
     const seeded = await t.run((ctx) => seedStore(ctx, "UTC"));
     vi.stubEnv(REPORTS_SWEEP_STORE_ALLOWLIST_ENV, String(seeded.storeId));
@@ -52,14 +52,18 @@ describe("reports isolated day work", () => {
         const closeId = await seedDailyClose(ctx, seeded, {
           operatingDate: `2026-07-0${day}`, completedAt: 100, salesTotal: 100,
         });
-        await enqueueReportWork(ctx, { storeId: seeded.storeId, kind: "close-evidence", closeId }, 100);
+        await enqueueReportWork(ctx, kind === "close-evidence"
+          ? { storeId: seeded.storeId, kind, closeId }
+          : { storeId: seeded.storeId, kind, operatingDate: `2026-07-0${day}` }, 100);
       }
     });
     const runAfter = vi.fn().mockResolvedValue("scheduled");
     const dispatch = () => t.run((ctx) => dispatchProjectionWorkWithCtx(
       { ...ctx, scheduler: { ...ctx.scheduler, runAfter } },
-      "close-evidence",
-      makeFunctionReference<"action", PipelineWorkerClaim>("reports/pipelineWorkers:runCloseEvidence"),
+      kind,
+      makeFunctionReference<"action", PipelineWorkerClaim>(kind === "close-evidence"
+        ? "reports/pipelineWorkers:runCloseEvidence"
+        : "reports/rollupWorkers:runRollup"),
       101,
     ));
     expect((await dispatch()).scheduled).toBe(4);

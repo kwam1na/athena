@@ -99,8 +99,8 @@ export async function dispatchProjectionWorkWithCtx(
     const result = await claimReportWorkWithCtx(ctx, {
       storeId,
       kind,
-      // Close hydration remains one source per worker transaction.
-      limit: kind === "close-evidence" ? REPORT_WORK_CLAIM_LIMIT : 1,
+      // Each claim still runs in its own bounded worker transaction.
+      limit: kind === "close-evidence" || kind === "rollup" ? REPORT_WORK_CLAIM_LIMIT : 1,
     }, now);
     if (result.oldestAgeMs !== null) {
       await recordPipelineBacklogWithCtx(ctx, {
