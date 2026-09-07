@@ -9,7 +9,7 @@ import {
 import { readStoreAllowlist } from "./pipelineAllowlist";
 import { claimDayWorkWithCtx, type ReportDayClaim } from "./pipelineDays";
 import { readPipelineControl } from "./pipelineControl";
-import { claimReportWorkWithCtx, type ReportWorkKind } from "./pipelineWork";
+import { claimReportWorkWithCtx, REPORT_WORK_CLAIM_LIMIT, type ReportWorkKind } from "./pipelineWork";
 import type { PipelineWorkerClaim } from "./pipelineWorkers";
 import { recordPipelineBacklogWithCtx } from "./pipelineEvidence";
 import { dispatchSummaryRangesWithCtx } from "./pipelineRange";
@@ -96,7 +96,12 @@ export async function dispatchProjectionWorkWithCtx(
       continue;
     const store = await ctx.db.get("store", storeId);
     if (!store || store.reportingReseedStartedAt !== undefined) continue;
-    const result = await claimReportWorkWithCtx(ctx, { storeId, kind }, now);
+    const result = await claimReportWorkWithCtx(ctx, {
+      storeId,
+      kind,
+      // Close hydration remains one source per worker transaction.
+      limit: kind === "close-evidence" ? REPORT_WORK_CLAIM_LIMIT : 1,
+    }, now);
     if (result.oldestAgeMs !== null) {
       await recordPipelineBacklogWithCtx(ctx, {
         storeId,
