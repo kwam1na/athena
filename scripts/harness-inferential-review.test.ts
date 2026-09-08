@@ -819,6 +819,27 @@ describe("runHarnessInferentialReview", () => {
     expect(result.humanReport).toContain("No actionable inferential findings.");
   });
 
+  it("defaults to deterministic review when no semantic mode is configured", async () => {
+    const rootDir = await createFixtureRepo();
+    const previousMode = process.env.HARNESS_INFERENTIAL_SEMANTIC_MODE;
+    delete process.env.HARNESS_INFERENTIAL_SEMANTIC_MODE;
+
+    try {
+      const result = await runHarnessInferentialReview(rootDir, {
+        getChangedFiles: async () => ["package.json"],
+        nowIso: () => "2026-04-12T05:00:00.000Z",
+      });
+
+      expect(result.machine.reviewMode).toBe("deterministic-only");
+    } finally {
+      if (previousMode === undefined) {
+        delete process.env.HARNESS_INFERENTIAL_SEMANTIC_MODE;
+      } else {
+        process.env.HARNESS_INFERENTIAL_SEMANTIC_MODE = previousMode;
+      }
+    }
+  });
+
   it("records semantic shadow findings without changing the blocking result", async () => {
     const rootDir = await createFixtureRepo();
 

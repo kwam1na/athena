@@ -12,7 +12,7 @@ root_cause: logic_error
 resolution_type: code_fix
 severity: high
 tags: [delivery, telemetry, git, portability, evidence]
-delivery_diff_fingerprint: 2526e6480d1c0b529cd576cb1f14dcf289317d493b02efe21e888c403dbed806
+delivery_diff_fingerprint: 1b4fe6216ae0ec2e51dc5cbc5c9df4466e1515456f654ed574fc944f1e364687
 ---
 
 # Verify transported gate telemetry without the original staged Git tree
