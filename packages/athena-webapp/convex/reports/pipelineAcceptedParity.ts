@@ -20,6 +20,7 @@ import {
 } from "./closeEvidence";
 import { readPipelineControl } from "./pipelineControl";
 import { storedCloseEvidenceConsistent } from "./verify";
+import { readWigclubCorrectionCandidate } from "./weeklyAcceptedRepair";
 import { stableStringHash } from "./fingerprint";
 
 type Accepted = Doc<"reportWeekAccepted">;
@@ -147,6 +148,45 @@ function atCutoff(
   return true;
 }
 
+/** Revalidate only the supported repair authority; this never patches accepted history. */
+export async function verifySealedCorrectionWithCtx(
+  ctx: QueryCtx,
+  row: Accepted,
+  charge: (value: unknown) => void,
+): Promise<AcceptedParityReason | null> {
+  if (!row.correction) return "unsupported_legacy_evidence";
+  // Only the existing sealed repair contract can certify this old shape.
+  // Rebuild it read-only and compare all evidence, not just supplied hashes.
+  if (
+    row.cycleStartDate !== "2026-08-03" ||
+    row.cycleEndDate !== "2026-08-09" ||
+    row.correction.contractVersion !== 1 ||
+    !Number.isFinite(row.correction.appliedAt) ||
+    row.correction.appliedAt < row.cutoffObservedAt
+  )
+    return "unsupported_legacy_evidence";
+  try {
+    const proof = await readWigclubCorrectionCandidate(
+      ctx,
+      row.correction.appliedAt,
+      (value) => {
+        charge(value);
+      },
+    );
+    if (
+      proof.accepted._id !== row._id ||
+      !same(proof.candidate.correction, row.correction)
+    )
+      return "unsupported_legacy_evidence";
+  } catch (error) {
+    return error instanceof Error &&
+      error.message === "accepted_capacity_exceeded"
+      ? "capacity_exceeded"
+      : "unsupported_legacy_evidence";
+  }
+  return null;
+}
+
 async function verifyOne(
   ctx: QueryCtx,
   row: Accepted,
@@ -163,23 +203,31 @@ async function verifyOne(
       row.cutoffObservedAt <= control.acceptedReplayUnavailableBefore)
   )
     return "cutoff_evidence_unavailable";
-  // A set-once correction can depend on an external sealed source manifest.
-  // This migration cannot silently certify or replace that repair authority.
+  let readBytes = bytes(row) + bytes(store) + bytes(control);
+  if (row.correction) {
+    const reason = await verifySealedCorrectionWithCtx(ctx, row, (value) => {
+      readBytes += bytes(value);
+      if (readBytes + BYTE_RESERVE > BYTE_BUDGET)
+        throw new Error("accepted_capacity_exceeded");
+    });
+    if (reason) return reason;
+  }
+  // Uncorrected baselines still require the complete frozen evidence contract.
   if (
-    row.correction ||
-    !row.paymentMix ||
-    !row.outsideSchedulePaymentMix ||
-    !row.closeEvidence ||
-    !row.closeEvidence.transactions ||
+    (!row.correction &&
+      (!row.paymentMix ||
+        !row.outsideSchedulePaymentMix ||
+        !row.closeEvidence ||
+        !row.closeEvidence.transactions)) ||
     !row.topSkuLeaders ||
     !row.inventoryAttention ||
     row.scheduleLineage.some((day) => day.dayClosed === undefined) ||
-    row.topSkuLeaders.some(
-      (leader) => !leader.productName || !leader.productSku,
-    )
+    (!row.correction &&
+      row.topSkuLeaders.some(
+        (leader) => !leader.productName || !leader.productSku,
+      ))
   )
     return "unsupported_legacy_evidence";
-  let readBytes = bytes(row) + bytes(store) + bytes(control);
   // Resolve only the frozen version cohort, never today's schedule history.
   // A missing, foreign, or changed reference is not evidence of the original
   // membership and must block instead of reclassifying an accepted baseline.
@@ -256,14 +304,32 @@ async function verifyOne(
     factsByDate,
   });
   if (!expected.completeness.complete) return "cutoff_evidence_unavailable";
+  // Optional coverage added later must not rewrite immutable metricVersion1.
+  // Every field present in the original still has to match replay exactly.
+  const originalMetrics = (
+    stored: Accepted["included"],
+    replay: Accepted["included"],
+  ) => {
+    const { transactionCount, ...legacy } = replay;
+    return stored.transactionCount === undefined
+      ? legacy
+      : { ...legacy, transactionCount };
+  };
+  const included = originalMetrics(row.included, expected.included);
+  const outsideSchedule = originalMetrics(
+    row.outsideSchedule,
+    expected.outsideSchedule,
+  );
   if (
-    !same(row.included, expected.included) ||
-    !same(row.outsideSchedule, expected.outsideSchedule)
+    !same(row.included, included) ||
+    !same(row.outsideSchedule, outsideSchedule)
   )
     return "financial_mismatch";
   if (
-    !same(row.paymentMix, expected.includedPaymentMix) ||
-    !same(row.outsideSchedulePaymentMix, expected.outsideSchedulePaymentMix)
+    (row.paymentMix !== undefined &&
+      !same(row.paymentMix, expected.includedPaymentMix)) ||
+    (row.outsideSchedulePaymentMix !== undefined &&
+      !same(row.outsideSchedulePaymentMix, expected.outsideSchedulePaymentMix))
   )
     return "payment_mismatch";
   if (
@@ -276,7 +342,10 @@ async function verifyOne(
     )
   )
     return "leader_mismatch";
-  if (!storedCloseEvidenceConsistent(row, period.includedDates.length))
+  if (
+    !row.correction &&
+    !storedCloseEvidenceConsistent(row, period.includedDates.length)
+  )
     return "close_evidence_mismatch";
 
   const snapshots = new Map<string, CloseSnapshot>();
@@ -287,7 +356,7 @@ async function verifyOne(
         { status: "ready" }
       >
     | undefined;
-  for (const day of row.scheduleLineage) {
+  for (const day of row.correction?.scheduleLineage ?? row.scheduleLineage) {
     if (!day.included) continue;
     const headers = await ctx.db
       .query("reportCloseEvidence")
@@ -299,7 +368,11 @@ async function verifyOne(
     if (headers.length > 8) return "capacity_exceeded";
     const eligibility = headers.map((header) => ({
       header,
-      active: atCutoff(header, headers, row.cutoffObservedAt),
+      active: atCutoff(
+        header,
+        headers,
+        row.correction?.appliedAt ?? row.cutoffObservedAt,
+      ),
     }));
     if (eligibility.some((value) => value.active === null))
       return "unsupported_legacy_evidence";
@@ -353,7 +426,8 @@ async function verifyOne(
     days,
     scheduledDates: period.includedDates,
   });
-  if (!same(row.closeEvidence, closeEvidence)) return "close_evidence_mismatch";
+  if (!row.correction && !same(row.closeEvidence, closeEvidence))
+    return "close_evidence_mismatch";
   if (
     !same(
       row.inventoryAttention,
@@ -367,8 +441,8 @@ async function verifyOne(
   const fingerprint = stableStringHash(
     JSON.stringify({
       cutoffObservedAt: row.cutoffObservedAt,
-      included: expected.included,
-      outsideSchedule: expected.outsideSchedule,
+      included,
+      outsideSchedule,
       scheduleLineage: row.scheduleLineage.map((day) => ({
         localDate: day.localDate,
         included: day.included,
@@ -384,7 +458,7 @@ async function verifyOne(
         productName: leader.productName,
         productSku: leader.productSku,
       })),
-      closeEvidence,
+      closeEvidence: row.correction ? row.closeEvidence : closeEvidence,
     }),
   );
   return fingerprint === row.baselineFingerprint

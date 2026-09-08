@@ -1,7 +1,8 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import schema from "../schema";
+import * as fingerprint from "./fingerprint";
 import { seedStore, seedDailyClose } from "./reseedTestSupport";
 import {
   publishCloseLifecycleWithCtx,
@@ -182,6 +183,40 @@ describe("bounded immutable accepted-baseline parity", () => {
       });
     });
     expect((await verify()).issues).toEqual([]);
+  });
+
+  it("verifies the historical metrics shape without adding transaction counts", async () => {
+    const hash = vi.spyOn(fingerprint, "stableStringHash");
+    const { t, seeded, verify } = await fixture();
+    const payload = hash.mock.calls
+      .map(([text]) => {
+        try {
+          return JSON.parse(text);
+        } catch {
+          return null;
+        }
+      })
+      .find((value) => value?.cutoffObservedAt === NOW && value.closeEvidence);
+    hash.mockRestore();
+    expect(payload).toBeDefined();
+    delete payload.included.transactionCount;
+    delete payload.outsideSchedule.transactionCount;
+    await t.run(async (ctx) => {
+      await ctx.db.patch("reportWeekAccepted", seeded.acceptedId, {
+        included: payload.included,
+        outsideSchedule: payload.outsideSchedule,
+        baselineFingerprint: fingerprint.stableStringHash(
+          JSON.stringify(payload),
+        ),
+      });
+    });
+    const before = await t.run((ctx) =>
+      ctx.db.get("reportWeekAccepted", seeded.acceptedId),
+    );
+    expect((await verify()).issues).toEqual([]);
+    expect(
+      await t.run((ctx) => ctx.db.get("reportWeekAccepted", seeded.acceptedId)),
+    ).toEqual(before);
   });
 
   it.each(["financial", "payment", "leader", "close"] as const)(

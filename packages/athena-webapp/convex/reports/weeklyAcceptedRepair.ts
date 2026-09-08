@@ -263,6 +263,7 @@ async function uniqueByIndex<T>(rows: Promise<T[]>, message: string) {
 async function reconstructExpenseEvidenceForClose(
   ctx: Pick<QueryCtx, "db">,
   close: Doc<"dailyClose">,
+  charge: (value: unknown) => void,
 ) {
   const metadata = close.reportSnapshot?.closeMetadata;
   if (!metadata) throw new Error("Repair close is missing its frozen window.");
@@ -276,6 +277,7 @@ async function reconstructExpenseEvidenceForClose(
         .lt("completedAt", metadata.endAt),
     )
     .take(REPAIR_TRANSACTION_PROBE_LIMIT);
+  charge(transactions);
   if (transactions.length >= REPAIR_TRANSACTION_PROBE_LIMIT) {
     throw new Error(
       "Repair expense transaction probe exceeded its sealed bound.",
@@ -293,6 +295,7 @@ async function reconstructExpenseEvidenceForClose(
         q.eq("transactionId", transaction._id),
       )
       .take(remaining);
+    charge(items);
     itemsWithTransactions.push(...items.map((item) => ({ item, transaction })));
     if (itemsWithTransactions.length >= REPAIR_ITEM_PROBE_LIMIT) {
       throw new Error("Repair expense item probe exceeded its sealed bound.");
@@ -337,6 +340,7 @@ async function reconstructTopSkuLeaderIdentity(
     productSkuId: Id<"productSku">;
     unitsSold: number;
   }[],
+  charge: (value: unknown) => void,
 ): Promise<ReportWeekTopSkuLeader[] | undefined> {
   // No retained leaders means the section is legitimately absent; nothing is
   // fabricated to fill it.
@@ -352,10 +356,12 @@ async function reconstructTopSkuLeaderIdentity(
       );
     };
     const sku = await ctx.db.get("productSku", leader.productSkuId);
+    charge(sku);
     if (!sku || sku.storeId !== storeId) {
       refuse("has no catalog SKU in the sealed store");
     }
     const product = await ctx.db.get("product", sku!.productId);
+    charge(product);
     const productSku = frozenCatalogLabel(sku!.sku);
     const productName =
       (product?.storeId === storeId
@@ -374,9 +380,10 @@ async function reconstructTopSkuLeaderIdentity(
   return resolved;
 }
 
-async function readWigclubCorrectionCandidate(
+export async function readWigclubCorrectionCandidate(
   ctx: Pick<QueryCtx, "db">,
   appliedAt: number,
+  charge: (value: unknown) => void = () => {},
 ) {
   const organization = await uniqueByIndex(
     ctx.db
@@ -385,6 +392,7 @@ async function readWigclubCorrectionCandidate(
       .take(2),
     "Sealed Wigclub organization lookup was not unique.",
   );
+  charge(organization);
   const store = await uniqueByIndex(
     ctx.db
       .query("store")
@@ -394,6 +402,7 @@ async function readWigclubCorrectionCandidate(
       .take(2),
     "Sealed Wigclub store lookup was not unique.",
   );
+  charge(store);
   const accepted = await uniqueByIndex(
     ctx.db
       .query("reportWeekAccepted")
@@ -403,6 +412,7 @@ async function readWigclubCorrectionCandidate(
       .take(2),
     "Sealed accepted weekly report lookup was not unique.",
   );
+  charge(accepted);
   const reportDays = await ctx.db
     .query("reportDay")
     .withIndex("by_storeId_operatingDate", (q) =>
@@ -412,6 +422,7 @@ async function readWigclubCorrectionCandidate(
         .lte("operatingDate", TARGET_CYCLE_END),
     )
     .take(8);
+  charge(reportDays);
   const scheduledDays = TARGET_SCHEDULED_DATES.map((operatingDate) => {
     const matches = reportDays.filter(
       (day) => day.operatingDate === operatingDate && day.closeId,
@@ -441,6 +452,7 @@ async function readWigclubCorrectionCandidate(
   let transactionCount = 0;
   for (const day of scheduledDays) {
     const close = await ctx.db.get("dailyClose", day.closeId);
+    charge(close);
     if (
       !close ||
       close.storeId !== store._id ||
@@ -453,7 +465,11 @@ async function readWigclubCorrectionCandidate(
         `Repair date ${day.operatingDate} has invalid close evidence.`,
       );
     }
-    const reconstructed = await reconstructExpenseEvidenceForClose(ctx, close);
+    const reconstructed = await reconstructExpenseEvidenceForClose(
+      ctx,
+      close,
+      charge,
+    );
     transactionCount += reconstructed.transactions.length;
     const paymentTotals = Array.isArray(
       close.reportSnapshot?.summary.paymentTotals,
@@ -525,6 +541,7 @@ async function readWigclubCorrectionCandidate(
     ctx,
     store._id,
     accepted.topSkuLeaders ?? [],
+    charge,
   );
   const sourceManifestFingerprint = `v1:${stableStringHash(
     JSON.stringify({
