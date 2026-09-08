@@ -2218,21 +2218,782 @@
         "durationMs": 930011,
         "digest": "80b69a42f4092f372af6e440a9f982ab922df3eb6c281046fbd40ff4ec5871ae"
       }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 87,
+      "at": "2026-09-08T03:33:58Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 826
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 88,
+      "at": "2026-09-08T03:34:12Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "record",
+        "outcome": "ok",
+        "durationMs": 13356
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 89,
+      "at": "2026-09-08T03:34:13Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 802
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 90,
+      "at": "2026-09-08T03:34:26Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "verify",
+        "outcome": "ok",
+        "durationMs": 12923
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 91,
+      "at": "2026-09-08T03:35:37Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "verify",
+        "outcome": "ok",
+        "durationMs": 5921
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 92,
+      "at": "2026-09-08T03:37:00Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 34225
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 93,
+      "at": "2026-09-08T03:38:11Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "verify",
+        "outcome": "ok",
+        "durationMs": 11473
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 94,
+      "at": "2026-09-08T03:39:15Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "1ad4889369acecb0e41cb74738164a2f56954a61",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Replace Athena delivery machinery with the installed delivery product, preserving the stated acceptance criteria and simple host-native execution.",
+          "finishLine": "merge-root-alignment-and-field-acceptance; Athena deployment explicitly deferred by user",
+          "acceptanceCriteria": [
+            "Athena's existing required outcomes and blocking cases remain covered.",
+            "Duplicate candidate, preparation, evidence, review, and accounting implementations are removed.",
+            "Local admission and CI verify the same candidate and policy.",
+            "Claude Code and Codex each complete a real delivery through Athena's configured finish line.",
+            "Interrupted work can resume from recorded state without inheriting stale evidence.",
+            "Installation, update, and rollback work without depending on the product's source checkout."
+          ]
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "1ad4889369acecb0e41cb74738164a2f56954a61",
+        "candidateBinding": {
+          "deliverableDigest": "2508c7b8888086becc869bf3975b80e89078f65e9ed63e6620b35a5d182abb9f",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "69d96aa0507d163c79dbb706b62b0fe1992cd107",
+          "mergeBaseSha": "69d96aa0507d163c79dbb706b62b0fe1992cd107",
+          "workspaceId": "cccda8fd5068e80d11d4301d3b500dc72c05383be06b0505333be40a1685cb99"
+        },
+        "policyDigest": "b7adad134ae6f0cf6bfeda92f7ed6253c2440932272a8016a23be49b3017f59d",
+        "release": {
+          "runtimeVersion": "0.2.0",
+          "releaseId": "linear-product-v1",
+          "profile": "linear",
+          "archiveSha256": "21cccc879804e186330a6a2087248d685c47b37a1ea06e4f7dd5e799ccbdf064"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 95,
+      "at": "2026-09-08T03:39:26Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "ok",
+        "durationMs": 10664,
+        "digest": "80b69a42f4092f372af6e440a9f982ab922df3eb6c281046fbd40ff4ec5871ae"
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 96,
+      "at": "2026-09-08T04:06:10Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "blocker.recorded",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "code": "hosted_ci_semantic_mode_fixture_mismatch",
+        "summary": "Executed run34184055858 failed deterministic fixture: inherited shadow mode; exact local reproduction and one-line fixture correction retained. No billing waiver."
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 97,
+      "at": "2026-09-08T04:06:10Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "decision.recorded",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "fork": "Required fixture correction after final-head hosted validation failure with all nine review rounds retained.",
+        "choice": "Authorize bounded correction and complete round10 under effective bound10 using standing user judgment authority. Originalbound4, consumedgrace8 and allhistory preserved; no secondgrace or reset.",
+        "cited": "/private/var/folders/ch/xhf_9c0n7x9cncpqgw6jwl0c0000gn/T/delivery-product-reviews/operator-directed-continuation-4.json"
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 98,
+      "at": "2026-09-08T04:12:44Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 34367
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 99,
+      "at": "2026-09-08T04:13:07Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 395
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 100,
+      "at": "2026-09-08T04:14:04Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "d39a0e322ed836c8ca1b1631f9ed25b4ec3396de",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Replace Athena delivery machinery with the installed delivery product, preserving the stated acceptance criteria and simple host-native execution.",
+          "finishLine": "merge-root-alignment-and-field-acceptance; Athena deployment explicitly deferred by user",
+          "acceptanceCriteria": [
+            "Athena's existing required outcomes and blocking cases remain covered.",
+            "Duplicate candidate, preparation, evidence, review, and accounting implementations are removed.",
+            "Local admission and CI verify the same candidate and policy.",
+            "Claude Code and Codex each complete a real delivery through Athena's configured finish line.",
+            "Interrupted work can resume from recorded state without inheriting stale evidence.",
+            "Installation, update, and rollback work without depending on the product's source checkout."
+          ]
+        },
+        "stage": "review-round-10",
+        "candidateTreeSha": "d39a0e322ed836c8ca1b1631f9ed25b4ec3396de",
+        "candidateBinding": {
+          "deliverableDigest": "ca5bd6984869d7675f66730de5dd53e0a5cb1387c77cfd11912281e93fa3e8cb",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "69d96aa0507d163c79dbb706b62b0fe1992cd107",
+          "mergeBaseSha": "69d96aa0507d163c79dbb706b62b0fe1992cd107",
+          "workspaceId": "cccda8fd5068e80d11d4301d3b500dc72c05383be06b0505333be40a1685cb99"
+        },
+        "policyDigest": "b7adad134ae6f0cf6bfeda92f7ed6253c2440932272a8016a23be49b3017f59d",
+        "release": {
+          "runtimeVersion": "0.2.0",
+          "releaseId": "linear-product-v1",
+          "profile": "linear",
+          "archiveSha256": "21cccc879804e186330a6a2087248d685c47b37a1ea06e4f7dd5e799ccbdf064"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 101,
+      "at": "2026-09-08T04:14:04Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.opened",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "d39a0e322ed836c8ca1b1631f9ed25b4ec3396de",
+      "attestation": "self",
+      "payload": {
+        "round": 10,
+        "candidateTreeSha": "d39a0e322ed836c8ca1b1631f9ed25b4ec3396de",
+        "lenses": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing",
+          "athena.ce-correctness-reviewer",
+          "athena.ce-testing-reviewer",
+          "athena.ce-maintainability-reviewer",
+          "athena.ce-project-standards-reviewer",
+          "athena.ce-agent-native-reviewer",
+          "athena.ce-learnings-researcher",
+          "athena.ce-security-reviewer",
+          "athena.ce-performance-reviewer",
+          "athena.ce-api-contract-reviewer",
+          "athena.ce-reliability-reviewer",
+          "athena.ce-adversarial-reviewer",
+          "athena.ce-cli-readiness-reviewer",
+          "athena.ce-kieran-typescript-reviewer"
+        ]
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 102,
+      "at": "2026-09-08T04:47:59Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "decision.recorded",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "fork": "Whether to continue queued acquisition against round10 candidate with confirmed TP-017 blocking coverage regression",
+        "choice": "Stop launching queued round10 reviews after confirmed blocking TP-017; let running reviews finish on frozen candidate, then retain honest incomplete/failed acquisition and close without green evidence.",
+        "cited": "/private/var/folders/ch/xhf_9c0n7x9cncpqgw6jwl0c0000gn/T/delivery-product-reviews/athena-cutover-round-10/stop-queued-acquisition-decision.json"
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 103,
+      "at": "2026-09-08T05:03:57Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.closed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "d39a0e322ed836c8ca1b1631f9ed25b4ec3396de",
+      "attestation": "self",
+      "payload": {
+        "round": 10,
+        "candidateTreeSha": "d39a0e322ed836c8ca1b1631f9ed25b4ec3396de",
+        "outcome": "blocked",
+        "findings": {
+          "P0": 0,
+          "P1": 1,
+          "P2": 1,
+          "P3": 3
+        },
+        "cost": {
+          "unit": "tokens",
+          "total": 32417024,
+          "reportedBy": "claude-code",
+          "coverage": "partial"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 104,
+      "at": "2026-09-08T05:03:57Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "blocker.recorded",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "code": "review-acquisition-failed",
+        "summary": "Actual installed round10 reduction blocked: eight root-stopped/unacquired lenses retained as typed acquisition failures; completed testing-policy retains TP-017 P1 default-mode coverage regression. No green review evidence emitted."
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 105,
+      "at": "2026-09-08T05:03:57Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "decision.recorded",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "fork": "How round10 finding counts represent the five actual originating findings",
+        "choice": "Record all five newly raised findings by original severity: TP-017 P1, CLI-009 P2 with additive correction, three P3 advisories. One active convergence finding remains TP-017. Prior event counts are retained as originally emitted; they represented active convergence counts and must not be read as absence of advisory reports. Full raw reports and differing assessments remain preserved.",
+        "cited": "/private/var/folders/ch/xhf_9c0n7x9cncpqgw6jwl0c0000gn/T/delivery-product-reviews/athena-cutover-round-10/partial-normalization.json"
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 106,
+      "at": "2026-09-08T05:04:46Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "decision.recorded",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "fork": "How to complete the demonstrated TP-017 correction after failed partial round10",
+        "choice": "Apply one default-resolution regression test and acquire the full relevant round11 under standing delegated judgment authority. Preserve originalbound4, all ten rounds, eight canceled acquisition failures and consumedgrace8; no reset, secondgrace or invented approval.",
+        "cited": "/private/var/folders/ch/xhf_9c0n7x9cncpqgw6jwl0c0000gn/T/delivery-product-reviews/operator-directed-continuation-5.json"
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 107,
+      "at": "2026-09-08T05:14:08Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 34937
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 108,
+      "at": "2026-09-08T05:14:54Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 487
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 109,
+      "at": "2026-09-08T05:15:45Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "e382454ca74dc4f7c1da4b4c1f3c5754b4f38734",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Replace Athena delivery machinery with the installed delivery product, preserving the stated acceptance criteria and simple host-native execution.",
+          "finishLine": "merge-root-alignment-and-field-acceptance; Athena deployment explicitly deferred by user",
+          "acceptanceCriteria": [
+            "Athena's existing required outcomes and blocking cases remain covered.",
+            "Duplicate candidate, preparation, evidence, review, and accounting implementations are removed.",
+            "Local admission and CI verify the same candidate and policy.",
+            "Claude Code and Codex each complete a real delivery through Athena's configured finish line.",
+            "Interrupted work can resume from recorded state without inheriting stale evidence.",
+            "Installation, update, and rollback work without depending on the product's source checkout."
+          ]
+        },
+        "stage": "review-round-11",
+        "candidateTreeSha": "e382454ca74dc4f7c1da4b4c1f3c5754b4f38734",
+        "candidateBinding": {
+          "deliverableDigest": "50b205135b6a48b4d943485c72d6d3fc56cc0a51eb71a4ecae8cd9cd70e63523",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "69d96aa0507d163c79dbb706b62b0fe1992cd107",
+          "mergeBaseSha": "69d96aa0507d163c79dbb706b62b0fe1992cd107",
+          "workspaceId": "cccda8fd5068e80d11d4301d3b500dc72c05383be06b0505333be40a1685cb99"
+        },
+        "policyDigest": "b7adad134ae6f0cf6bfeda92f7ed6253c2440932272a8016a23be49b3017f59d",
+        "release": {
+          "runtimeVersion": "0.2.0",
+          "releaseId": "linear-product-v1",
+          "profile": "linear",
+          "archiveSha256": "21cccc879804e186330a6a2087248d685c47b37a1ea06e4f7dd5e799ccbdf064"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 110,
+      "at": "2026-09-08T05:15:46Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.opened",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "e382454ca74dc4f7c1da4b4c1f3c5754b4f38734",
+      "attestation": "self",
+      "payload": {
+        "round": 11,
+        "candidateTreeSha": "e382454ca74dc4f7c1da4b4c1f3c5754b4f38734",
+        "lenses": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing",
+          "athena.ce-correctness-reviewer",
+          "athena.ce-testing-reviewer",
+          "athena.ce-maintainability-reviewer",
+          "athena.ce-project-standards-reviewer",
+          "athena.ce-agent-native-reviewer",
+          "athena.ce-learnings-researcher",
+          "athena.ce-security-reviewer",
+          "athena.ce-performance-reviewer",
+          "athena.ce-api-contract-reviewer",
+          "athena.ce-reliability-reviewer",
+          "athena.ce-adversarial-reviewer",
+          "athena.ce-cli-readiness-reviewer",
+          "athena.ce-kieran-typescript-reviewer"
+        ]
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 111,
+      "at": "2026-09-08T06:52:50Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 34535
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 112,
+      "at": "2026-09-08T06:53:04Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 420
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 113,
+      "at": "2026-09-08T07:14:03Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.closed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "e382454ca74dc4f7c1da4b4c1f3c5754b4f38734",
+      "attestation": "self",
+      "payload": {
+        "round": 11,
+        "candidateTreeSha": "e382454ca74dc4f7c1da4b4c1f3c5754b4f38734",
+        "outcome": "aligned",
+        "findings": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 0,
+          "P3": 9
+        },
+        "cost": {
+          "unit": "tokens",
+          "total": 77457272,
+          "reportedBy": "claude-code",
+          "coverage": "partial"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 114,
+      "at": "2026-09-08T07:15:59Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "ok",
+        "durationMs": 508
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 115,
+      "at": "2026-09-08T07:16:55Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "submit-evidence",
+        "outcome": "ok",
+        "durationMs": 709
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 116,
+      "at": "2026-09-08T07:17:05Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2d18b6ed14689a41ca1b81434ecb7cc15eba8ba3",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Replace Athena delivery machinery with the installed delivery product, preserving the stated acceptance criteria and simple host-native execution.",
+          "finishLine": "merge-root-alignment-and-field-acceptance; Athena deployment explicitly deferred by user",
+          "acceptanceCriteria": [
+            "Athena's existing required outcomes and blocking cases remain covered.",
+            "Duplicate candidate, preparation, evidence, review, and accounting implementations are removed.",
+            "Local admission and CI verify the same candidate and policy.",
+            "Claude Code and Codex each complete a real delivery through Athena's configured finish line.",
+            "Interrupted work can resume from recorded state without inheriting stale evidence.",
+            "Installation, update, and rollback work without depending on the product's source checkout."
+          ]
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "2d18b6ed14689a41ca1b81434ecb7cc15eba8ba3",
+        "candidateBinding": {
+          "deliverableDigest": "50b205135b6a48b4d943485c72d6d3fc56cc0a51eb71a4ecae8cd9cd70e63523",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "69d96aa0507d163c79dbb706b62b0fe1992cd107",
+          "mergeBaseSha": "69d96aa0507d163c79dbb706b62b0fe1992cd107",
+          "workspaceId": "cccda8fd5068e80d11d4301d3b500dc72c05383be06b0505333be40a1685cb99"
+        },
+        "policyDigest": "b7adad134ae6f0cf6bfeda92f7ed6253c2440932272a8016a23be49b3017f59d",
+        "release": {
+          "runtimeVersion": "0.2.0",
+          "releaseId": "linear-product-v1",
+          "profile": "linear",
+          "archiveSha256": "21cccc879804e186330a6a2087248d685c47b37a1ea06e4f7dd5e799ccbdf064"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-3d892592f9a162c1",
+      "seq": 117,
+      "at": "2026-09-08T07:33:00Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "ok",
+        "durationMs": 954157,
+        "digest": "9d8f44c40748405015a8f3830400c2bf8c988b96f116101525903b668fcb60b5"
+      }
     }
   ],
   "summary": {
     "ticket": "V26-1849",
     "open": true,
     "startedAt": "2026-09-06T04:54:19Z",
-    "lastAt": "2026-09-08T03:33:56Z",
-    "durationSeconds": 167977,
-    "roundsOpened": 9,
-    "roundsClosed": 9,
+    "lastAt": "2026-09-08T07:33:00Z",
+    "durationSeconds": 182321,
+    "roundsOpened": 11,
+    "roundsClosed": 11,
     "findings": {
       "P0": 1,
-      "P1": 18,
-      "P2": 9,
-      "P3": 0
+      "P1": 19,
+      "P2": 10,
+      "P3": 12
     },
     "gate": {
       "outcome": "ok",
@@ -2255,7 +3016,7 @@
         },
         {
           "unit": "tokens",
-          "total": 520868745,
+          "total": 630743041,
           "reportedBy": "claude-code"
         }
       ]
