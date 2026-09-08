@@ -1302,6 +1302,11 @@ async function createFixtureRepo() {
     rootDir,
   );
   await write(
+    "packages/athena-webapp/bunfig.toml",
+    "[test]\n",
+    rootDir,
+  );
+  await write(
     "packages/athena-webapp/src/tests/app.test.tsx",
     "export {};\n",
     rootDir,
@@ -1864,6 +1869,11 @@ async function createFixtureRepo() {
   await write(
     "packages/storefront-webapp/vitest.config.ts",
     "export default {};\n",
+    rootDir,
+  );
+  await write(
+    "packages/storefront-webapp/bunfig.toml",
+    "[test]\n",
     rootDir,
   );
   await write(

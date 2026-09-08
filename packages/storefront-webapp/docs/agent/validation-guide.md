@@ -16,7 +16,7 @@ Start here for most layout, component, and route behavior changes that do not al
 
 ## Route runtime or build-pipeline edits
 
-Touched surfaces: `index.html`, `package.json`, `tsconfig.json`, `src/main.tsx`, `src/router.tsx`, `src/routeTree.gen.ts`, `vitest.config.ts`, `vite.config.ts`
+Touched surfaces: `index.html`, `package.json`, `tsconfig.json`, `bunfig.toml`, `src/main.tsx`, `src/router.tsx`, `src/routeTree.gen.ts`, `vitest.config.ts`, `vite.config.ts`
 
 Run:
 
@@ -28,7 +28,7 @@ Behavior scenarios:
 
 - `storefront-backend-first-load`
 
-Use this when the Vite browser bootstrap, package manifest, generated router state, or TypeScript/build wiring changes.
+Use this when the Vite browser bootstrap, package manifest, generated router state, or TypeScript/build wiring changes. `bunfig.toml` only preloads the repo-root `bun test` runner guard, so a change there must still leave the package Vitest suite running normally.
 
 ## Shared-lib, utility, or API-wrapper edits
 

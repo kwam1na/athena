@@ -31,6 +31,7 @@
         "packages/storefront-webapp/index.html",
         "packages/storefront-webapp/package.json",
         "packages/storefront-webapp/tsconfig.json",
+        "packages/storefront-webapp/bunfig.toml",
         "packages/storefront-webapp/src/main.tsx",
         "packages/storefront-webapp/src/router.tsx",
         "packages/storefront-webapp/src/routeTree.gen.ts",
