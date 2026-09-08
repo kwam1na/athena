@@ -12,7 +12,7 @@ root_cause: logic_error
 resolution_type: code_fix
 severity: high
 tags: [reports, migration, immutable-history, parity]
-delivery_diff_fingerprint: 73b7ce2f4c1ed11bdf1bc3491ab2790b46fae227ae9a23e0ff58d472f4ede755
+delivery_diff_fingerprint: a192428bfe2e3408f35b364300457cdc8208f108f7457fffcaf5d0e4146346b3
 ---
 
 # Verify historical accepted Reports in their original format

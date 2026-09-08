@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -32,6 +32,28 @@ const runHarnessReview: typeof runCompleteHarnessReview = (rootDir, options = {}
 });
 
 const tempRoots: string[] = [];
+
+describe("validation output transport", () => {
+  for (const exitCode of [0, 7]) {
+    it(`retains verbose stdout and stderr and propagates exit ${exitCode}`, async () => {
+      const runner = path.resolve(import.meta.dir, "harness-review.ts");
+      const fixture = `import { spawnLoggedValidation } from ${JSON.stringify(runner)};
+        const child = spawnLoggedValidation(["bun", "-e", ${JSON.stringify('process.stdout.write("x".repeat(1200000)); process.stderr.write("stderr-marker"); process.exit(')} + ${exitCode} + ");"], { cwd: process.cwd() });
+        process.exit(await child.exited);`;
+      const result = spawnSync("bun", ["-e", fixture], { encoding: "utf8", maxBuffer: 1024 * 1024 });
+      // Bun 1.1 also reports a nonzero child status as a spawnSync error.
+      expect(result.error ? String(result.error.code) : undefined).toBe(exitCode === 0 ? undefined : String(exitCode));
+      expect(result.status).toBe(exitCode);
+      expect(result.stdout.length + result.stderr.length).toBeLessThan(4096);
+      const logPath = result.stdout.match(/Validation log: (.+)/)?.[1];
+      expect(logPath).toBeTruthy();
+      if (!logPath) throw new Error("Missing retained validation log");
+      tempRoots.push(path.dirname(logPath));
+      const output = await readFile(logPath, "utf8");
+      expect(output).toBe("x".repeat(1200000) + "stderr-marker");
+    });
+  }
+});
 
 async function write(relativePath: string, contents: string, rootDir: string) {
   const filePath = path.join(rootDir, relativePath);

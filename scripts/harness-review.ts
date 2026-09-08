@@ -1,5 +1,6 @@
-import { existsSync } from "node:fs";
+import { closeSync, existsSync, mkdtempSync, openSync } from "node:fs";
 import { access, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { HARNESS_APP_REGISTRY, type ValidationCommand } from "./harness-app-registry";
@@ -544,12 +545,34 @@ export async function getChangedFilesForHarnessReview(
   ]);
 }
 
+// The delivery product captures this runner's output with a bounded buffer.
+// Keep verbose sensor output on disk while preserving the child's exit status.
+export function spawnLoggedValidation(command: string[], options: { cwd: string }) {
+  const logPath = path.join(mkdtempSync(path.join(tmpdir(), "athena-validation-")), "output.log");
+  const descriptor = openSync(logPath, "w", 0o600);
+  console.log(`Validation log: ${logPath}`);
+  let subprocess;
+  try {
+    subprocess = Bun.spawn(command, {
+      cwd: options.cwd,
+      stdout: descriptor,
+      stderr: descriptor,
+    });
+  } finally {
+    closeSync(descriptor);
+  }
+  return {
+    exited: subprocess.exited.then((exitCode) => {
+      console.log(`Validation exited ${exitCode}; full output: ${logPath}`);
+      return exitCode;
+    }),
+  };
+}
+
 async function runPackageScript(rootDir: string, workspace: string, script: string) {
   const command = ["bun", "run", "--filter", workspace, script];
-  const subprocess = Bun.spawn(command, {
+  const subprocess = spawnLoggedValidation(command, {
     cwd: rootDir,
-    stdout: "inherit",
-    stderr: "inherit",
   });
   const exitCode = await subprocess.exited;
 
@@ -593,7 +616,7 @@ export async function runRawCommand(rootDir: string, command: string, options: {
     (options.logger ?? console).log(`Coverage worker limit: ${env.ATHENA_COVERAGE_MAX_WORKERS || "2"}`);
   }
   const argv = [shellPath, "-lc", command];
-  const subprocess = (options.spawn ?? Bun.spawn)(timedCoverage ? ["/usr/bin/time", "-v", ...argv] : argv, {
+  const subprocess = (options.spawn ?? spawnLoggedValidation)(timedCoverage ? ["/usr/bin/time", "-v", ...argv] : argv, {
     cwd: rootDir,
     stdout: "inherit",
     stderr: "inherit",
@@ -607,10 +630,8 @@ export async function runRawCommand(rootDir: string, command: string, options: {
 
 async function runHarnessBehaviorScenario(rootDir: string, scenario: string) {
   const command = ["bun", "run", "harness:behavior", "--scenario", scenario];
-  const subprocess = Bun.spawn(command, {
+  const subprocess = spawnLoggedValidation(command, {
     cwd: rootDir,
-    stdout: "inherit",
-    stderr: "inherit",
   });
   const exitCode = await subprocess.exited;
 
