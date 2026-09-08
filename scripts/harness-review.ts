@@ -1,4 +1,4 @@
-import { closeSync, existsSync, mkdtempSync, openSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { access, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -549,18 +549,14 @@ export async function getChangedFilesForHarnessReview(
 // Keep verbose sensor output on disk while preserving the child's exit status.
 export function spawnLoggedValidation(command: string[], options: { cwd: string }) {
   const logPath = path.join(mkdtempSync(path.join(tmpdir(), "athena-validation-")), "output.log");
-  const descriptor = openSync(logPath, "w", 0o600);
+  writeFileSync(logPath, "", { mode: 0o600 });
   console.log(`Validation log: ${logPath}`);
-  let subprocess;
-  try {
-    subprocess = Bun.spawn(command, {
-      cwd: options.cwd,
-      stdout: descriptor,
-      stderr: descriptor,
-    });
-  } finally {
-    closeSync(descriptor);
-  }
+  // Repeated numeric-stdio launches can fail with EBADF on the pinned Bun 1.1.
+  // Let the exec shell own redirection; positional arguments preserve argv.
+  const subprocess = Bun.spawn([
+    "/bin/sh", "-c", 'log_path="$1"; shift; exec "$@" > "$log_path" 2>&1',
+    "athena-validation", logPath, ...command,
+  ], { cwd: options.cwd, stdout: "inherit", stderr: "inherit" });
   return {
     exited: subprocess.exited.then((exitCode) => {
       console.log(`Validation exited ${exitCode}; full output: ${logPath}`);

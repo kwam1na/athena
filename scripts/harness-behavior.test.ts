@@ -87,7 +87,6 @@ describe("runHarnessBehaviorScenario", () => {
     await write(
       "fixtures/runtime-app.ts",
       [
-        'console.log("APP_READY");',
         'console.log("RUNTIME_SIGNAL:booted");',
         "const stopFile = process.env.STOP_FILE;",
         "setInterval(() => {",
@@ -99,6 +98,7 @@ describe("runHarnessBehaviorScenario", () => {
         "  }",
         "  process.exit(0);",
         "});",
+        'console.log("APP_READY");',
       ].join("\n"),
       rootDir
     );
@@ -208,7 +208,6 @@ describe("runHarnessBehaviorScenario", () => {
     await write(
       "fixtures/runtime-app.ts",
       [
-        'console.log("APP_READY");',
         "const stopFile = process.env.STOP_FILE;",
         "setInterval(() => {}, 50);",
         "process.on(\"SIGTERM\", async () => {",
@@ -217,6 +216,7 @@ describe("runHarnessBehaviorScenario", () => {
         "  }",
         "  process.exit(0);",
         "});",
+        'console.log("APP_READY");',
       ].join("\n"),
       rootDir
     );
@@ -268,7 +268,6 @@ describe("runHarnessBehaviorScenario", () => {
     await write(
       "fixtures/runtime-app.ts",
       [
-        'console.log("APP_READY");',
         "const stopFile = process.env.STOP_FILE;",
         "setInterval(() => {}, 50);",
         "process.on(\"SIGTERM\", async () => {",
@@ -277,6 +276,7 @@ describe("runHarnessBehaviorScenario", () => {
         "  }",
         "  process.exit(0);",
         "});",
+        'console.log("APP_READY");',
       ].join("\n"),
       rootDir
     );
@@ -322,7 +322,6 @@ describe("runHarnessBehaviorScenario", () => {
     await write(
       "fixtures/runtime-app.ts",
       [
-        'console.log("APP_READY");',
         'console.error("RUNTIME_ERROR:boom");',
         "const stopFile = process.env.STOP_FILE;",
         "setInterval(() => {}, 50);",
@@ -332,6 +331,7 @@ describe("runHarnessBehaviorScenario", () => {
         "  }",
         "  process.exit(0);",
         "});",
+        'console.log("APP_READY");',
       ].join("\n"),
       rootDir
     );

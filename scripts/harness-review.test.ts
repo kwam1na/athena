@@ -34,6 +34,28 @@ const runHarnessReview: typeof runCompleteHarnessReview = (rootDir, options = {}
 const tempRoots: string[] = [];
 
 describe("validation output transport", () => {
+  it("preserves repeated mixed launches and literal arguments in one process", async () => {
+    const rootDir = await createFixtureRepo();
+    await write("probe.ts", 'process.stdout.write(JSON.stringify(Bun.argv.slice(2))); process.stderr.write("stderr-marker");', rootDir);
+    const argument = 'spaces ; $(touch SHOULD_NOT_EXIST) "quoted"';
+    const runner = path.resolve(import.meta.dir, "harness-review.ts");
+    const fixture = `import { spawnLoggedValidation } from ${JSON.stringify(runner)};
+      const argv = ["bun", ${JSON.stringify(path.join(rootDir, "probe.ts"))}, ${JSON.stringify(argument)}];
+      for (let index = 0; index < 40; index++) {
+        const command = index % 2 ? argv : ["/bin/sh", "-c", 'exec "$@"', "fixture", ...argv];
+        if (await spawnLoggedValidation(command, {cwd:${JSON.stringify(rootDir)}}).exited !== 0) process.exit(1);
+      }`;
+    const result = spawnSync("bun", ["-e", fixture], { encoding: "utf8", maxBuffer: 1024 * 1024 });
+    const logs = [...result.stdout.matchAll(/Validation log: (.+)/g)].map(match => match[1]);
+    tempRoots.push(...logs.map(logPath => path.dirname(logPath)));
+    expect(result.status).toBe(0);
+    expect(logs).toHaveLength(40);
+    for (const logPath of logs) {
+      expect(await readFile(logPath, "utf8")).toBe(JSON.stringify([argument]) + "stderr-marker");
+    }
+    await expect(readFile(path.join(rootDir, "SHOULD_NOT_EXIST"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   for (const launcher of ["raw", "package", "behavior"] as const) {
     for (const exitCode of [0, 7]) {
       it(`retains verbose ${launcher} output and propagates exit ${exitCode}`, async () => {

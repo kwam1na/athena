@@ -30263,7 +30263,7 @@
       "relation": "calls",
       "source": "harness_review_fileexists",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L597",
+      "source_location": "L593",
       "target": "harness_review_resolveharnessreviewshell",
       "weight": 1
     },
@@ -30287,7 +30287,7 @@
       "relation": "calls",
       "source": "harness_review_spawnloggedvalidation",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L633",
+      "source_location": "L629",
       "target": "harness_review_runharnessbehaviorscenario",
       "weight": 1
     },
@@ -30299,7 +30299,7 @@
       "relation": "calls",
       "source": "harness_review_collectcommandsforchangedfiles",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L665",
+      "source_location": "L661",
       "target": "harness_review_runharnessreview",
       "weight": 1
     },
@@ -30311,7 +30311,7 @@
       "relation": "calls",
       "source": "harness_review_loadreviewtargets",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L658",
+      "source_location": "L654",
       "target": "harness_review_runharnessreview",
       "weight": 1
     },
@@ -30323,7 +30323,7 @@
       "relation": "calls",
       "source": "harness_review_harnessreviewblockedblocker",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L822",
+      "source_location": "L818",
       "target": "harness_review_runharnessreviewcli",
       "weight": 1
     },
@@ -30335,7 +30335,7 @@
       "relation": "calls",
       "source": "harness_review_parseharnessreviewargs",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L815",
+      "source_location": "L811",
       "target": "harness_review_runharnessreviewcli",
       "weight": 1
     },
@@ -30347,7 +30347,7 @@
       "relation": "calls",
       "source": "harness_review_runharnessreview",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L816",
+      "source_location": "L812",
       "target": "harness_review_runharnessreviewcli",
       "weight": 1
     },
@@ -30359,7 +30359,7 @@
       "relation": "calls",
       "source": "harness_review_spawnloggedvalidation",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L574",
+      "source_location": "L570",
       "target": "harness_review_runpackagescript",
       "weight": 1
     },
@@ -30371,7 +30371,7 @@
       "relation": "calls",
       "source": "harness_review_resolveharnessreviewshell",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L611",
+      "source_location": "L607",
       "target": "harness_review_runrawcommand",
       "weight": 1
     },
@@ -30383,7 +30383,7 @@
       "relation": "calls",
       "source": "harness_review_test_write",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L83",
+      "source_location": "L105",
       "target": "harness_review_test_createfixturerepo",
       "weight": 1
     },
@@ -30395,7 +30395,7 @@
       "relation": "calls",
       "source": "harness_review_test_rungit",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L317",
+      "source_location": "L339",
       "target": "harness_review_test_initializegithistory",
       "weight": 1
     },
@@ -192179,7 +192179,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_test_ts",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L79",
+      "source_location": "L101",
       "target": "harness_review_test_createfixturerepo",
       "weight": 1
     },
@@ -192191,7 +192191,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_test_ts",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L1266",
+      "source_location": "L1288",
       "target": "harness_review_test_error",
       "weight": 1
     },
@@ -192203,7 +192203,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_test_ts",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L316",
+      "source_location": "L338",
       "target": "harness_review_test_initializegithistory",
       "weight": 1
     },
@@ -192215,7 +192215,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_test_ts",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L1289",
+      "source_location": "L1311",
       "target": "harness_review_test_log",
       "weight": 1
     },
@@ -192227,7 +192227,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_test_ts",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L302",
+      "source_location": "L324",
       "target": "harness_review_test_rungit",
       "weight": 1
     },
@@ -192251,7 +192251,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_test_ts",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L73",
+      "source_location": "L95",
       "target": "harness_review_test_write",
       "weight": 1
     },
@@ -192323,7 +192323,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L785",
+      "source_location": "L781",
       "target": "harness_review_harnessreviewblockedblocker",
       "weight": 1
     },
@@ -192419,7 +192419,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L734",
+      "source_location": "L730",
       "target": "harness_review_parseharnessreviewargs",
       "weight": 1
     },
@@ -192443,7 +192443,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L584",
+      "source_location": "L580",
       "target": "harness_review_resolveharnessreviewshell",
       "weight": 1
     },
@@ -192467,7 +192467,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L631",
+      "source_location": "L627",
       "target": "harness_review_runharnessbehaviorscenario",
       "weight": 1
     },
@@ -192479,7 +192479,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L643",
+      "source_location": "L639",
       "target": "harness_review_runharnessreview",
       "weight": 1
     },
@@ -192491,7 +192491,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L813",
+      "source_location": "L809",
       "target": "harness_review_runharnessreviewcli",
       "weight": 1
     },
@@ -192503,7 +192503,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L572",
+      "source_location": "L568",
       "target": "harness_review_runpackagescript",
       "weight": 1
     },
@@ -192515,7 +192515,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L605",
+      "source_location": "L601",
       "target": "harness_review_runrawcommand",
       "weight": 1
     },
@@ -306562,7 +306562,7 @@
       "label": "createFixtureRepo()",
       "norm_label": "createfixturerepo()",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L79"
+      "source_location": "L101"
     },
     {
       "community": 455,
@@ -306571,7 +306571,7 @@
       "label": "error()",
       "norm_label": "error()",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L347"
+      "source_location": "L369"
     },
     {
       "community": 455,
@@ -306580,7 +306580,7 @@
       "label": "initializeGitHistory()",
       "norm_label": "initializegithistory()",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L316"
+      "source_location": "L338"
     },
     {
       "community": 455,
@@ -306589,7 +306589,7 @@
       "label": "log()",
       "norm_label": "log()",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L346"
+      "source_location": "L368"
     },
     {
       "community": 455,
@@ -306598,7 +306598,7 @@
       "label": "runGit()",
       "norm_label": "rungit()",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L302"
+      "source_location": "L324"
     },
     {
       "community": 455,
@@ -306616,7 +306616,7 @@
       "label": "write()",
       "norm_label": "write()",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L73"
+      "source_location": "L95"
     },
     {
       "community": 455,
@@ -331978,7 +331978,7 @@
       "label": "harnessReviewBlockedBlocker()",
       "norm_label": "harnessreviewblockedblocker()",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L785"
+      "source_location": "L781"
     },
     {
       "community": 75,
@@ -332050,7 +332050,7 @@
       "label": "parseHarnessReviewArgs()",
       "norm_label": "parseharnessreviewargs()",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L734"
+      "source_location": "L730"
     },
     {
       "community": 75,
@@ -332068,7 +332068,7 @@
       "label": "resolveHarnessReviewShell()",
       "norm_label": "resolveharnessreviewshell()",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L584"
+      "source_location": "L580"
     },
     {
       "community": 75,
@@ -332086,7 +332086,7 @@
       "label": "runHarnessBehaviorScenario()",
       "norm_label": "runharnessbehaviorscenario()",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L631"
+      "source_location": "L627"
     },
     {
       "community": 75,
@@ -332095,7 +332095,7 @@
       "label": "runHarnessReview()",
       "norm_label": "runharnessreview()",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L643"
+      "source_location": "L639"
     },
     {
       "community": 75,
@@ -332104,7 +332104,7 @@
       "label": "runHarnessReviewCli()",
       "norm_label": "runharnessreviewcli()",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L813"
+      "source_location": "L809"
     },
     {
       "community": 75,
@@ -332113,7 +332113,7 @@
       "label": "runPackageScript()",
       "norm_label": "runpackagescript()",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L572"
+      "source_location": "L568"
     },
     {
       "community": 75,
@@ -332122,7 +332122,7 @@
       "label": "runRawCommand()",
       "norm_label": "runrawcommand()",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L605"
+      "source_location": "L601"
     },
     {
       "community": 75,
