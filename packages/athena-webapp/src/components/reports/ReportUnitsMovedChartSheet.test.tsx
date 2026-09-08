@@ -1153,7 +1153,7 @@ describe("cross-navigation continuity (U6)", () => {
       ).toHaveFocus(),
     );
     expect(
-      within(dialog).getByTestId("units-moved-restore-status"),
+      await within(dialog).findByTestId("units-moved-restore-status"),
     ).toHaveTextContent(
       "Your previous item is no longer in this view. Showing page 1 of 1.",
     );

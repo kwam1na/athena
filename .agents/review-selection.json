@@ -42,5 +42,9 @@
   {
     "reviewerId": "ce-api-contract-reviewer",
     "reason": "Removed internal exports and shared helper signature"
+  },
+  {
+    "reviewerId": "ce-julik-frontend-races-reviewer",
+    "reason": "Async focus-restoration announcement assertions in frontend tests"
   }
 ]
