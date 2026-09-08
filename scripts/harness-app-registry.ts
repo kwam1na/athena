@@ -1101,6 +1101,7 @@ export const HARNESS_APP_REGISTRY = [
           "src/main.tsx",
           "src/routeTree.gen.ts",
           "src/routeTree.browser-boundary.test.ts",
+          "bunfig.toml",
           "vitest.config.ts",
           "vite.config.ts",
           "vite-docs-content-plugin.ts",
@@ -1120,7 +1121,7 @@ export const HARNESS_APP_REGISTRY = [
           { kind: "script", script: "build" },
         ],
         behaviorScenarios: ["athena-admin-shell-boot"],
-        note: "Run these when bootstrap, generated router state, or package build configuration changes so browser-entry regressions fail before the route tree reaches Arc.",
+        note: "Run these when bootstrap, generated router state, or package build configuration changes so browser-entry regressions fail before the route tree reaches Arc. `bunfig.toml` only preloads the repo-root `bun test` runner guard, so a change there must still leave the package Vitest suite running normally.",
       },
       {
         id: "athena.storybook-frontend-tooling",
@@ -1248,6 +1249,7 @@ export const HARNESS_APP_REGISTRY = [
           "index.html",
           "package.json",
           "tsconfig.json",
+          "bunfig.toml",
           "src/main.tsx",
           "src/router.tsx",
           "src/routeTree.gen.ts",
@@ -1264,7 +1266,7 @@ export const HARNESS_APP_REGISTRY = [
           },
         ],
         behaviorScenarios: ["storefront-backend-first-load"],
-        note: "Use this when the Vite browser bootstrap, package manifest, generated router state, or TypeScript/build wiring changes.",
+        note: "Use this when the Vite browser bootstrap, package manifest, generated router state, or TypeScript/build wiring changes. `bunfig.toml` only preloads the repo-root `bun test` runner guard, so a change there must still leave the package Vitest suite running normally.",
       },
       {
         id: "storefront.shared-lib-api-wrapper",

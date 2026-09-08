@@ -1,0 +1,4 @@
+# `bunfig.toml` is read from the working directory only, so the repo-root guard
+# is repeated here for `bun test` runs started inside this package.
+[test]
+preload = ["../../scripts/bun-test-runner-guard.ts"]

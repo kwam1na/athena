@@ -373,7 +373,7 @@ Any change that can affect Convex HTTP wiring, serviceOps schemas and workflows,
 
 ## Route runtime or build-pipeline edits
 
-Touched surfaces: `src/main.tsx`, `src/routeTree.gen.ts`, `src/routeTree.browser-boundary.test.ts`, `vitest.config.ts`, `vite.config.ts`, `vite-docs-content-plugin.ts`, `tsconfig.json`
+Touched surfaces: `src/main.tsx`, `src/routeTree.gen.ts`, `src/routeTree.browser-boundary.test.ts`, `bunfig.toml`, `vitest.config.ts`, `vite.config.ts`, `vite-docs-content-plugin.ts`, `tsconfig.json`
 
 Run:
 
@@ -385,7 +385,7 @@ Behavior scenarios:
 
 - `athena-admin-shell-boot`
 
-Run these when bootstrap, generated router state, or package build configuration changes so browser-entry regressions fail before the route tree reaches Arc.
+Run these when bootstrap, generated router state, or package build configuration changes so browser-entry regressions fail before the route tree reaches Arc. `bunfig.toml` only preloads the repo-root `bun test` runner guard, so a change there must still leave the package Vitest suite running normally.
 
 ## Storybook and frontend tooling edits
 

@@ -1,0 +1,4 @@
+# Raw `bun test` on a Vitest-owned package fails with unrelated jsdom/`vi`
+# errors, so preload the guard that names the intended package runner instead.
+[test]
+preload = ["./scripts/bun-test-runner-guard.ts"]
