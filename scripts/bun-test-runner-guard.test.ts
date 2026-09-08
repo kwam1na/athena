@@ -169,8 +169,8 @@ describe("raw bun test on an Athena frontend file", () => {
     expect(exitCode).not.toBe(0);
   }, 60_000);
 
-  // Bun reports only the first test file of a run to a preload, so a selection
-  // whose first entry is a root script test must still be caught.
+  // A preload sees only one file of the run through `Bun.main`, so a selection
+  // that also names a root script test must still be caught.
   it("reports the package runner for a frontend file that is not the first target", () => {
     const { exitCode, output } = runBunTest([ROOT_SCRIPT_TEST, FRONTEND_TSX_TEST], repoRoot);
 

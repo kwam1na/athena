@@ -7,10 +7,10 @@ import path from "node:path";
  * belongs to a Vitest package stops with an explicit runner diagnostic instead
  * of unrelated jsdom/`vi` failures.
  *
- * Bun evaluates a preload once per process and reports only the first test file
- * of the run, so the guard classifies files through an `onLoad` hook instead:
- * that fires for every test file Bun executes, including the second and later
- * targets of a multi-target or bare `bun test`.
+ * Bun evaluates a preload once per process and reports only one file of the run
+ * through `Bun.main`, so the guard classifies files through an `onLoad` hook
+ * instead: that fires for every test file Bun executes, so a multi-target or
+ * bare `bun test` is caught whichever file `Bun.main` happens to name.
  */
 
 export type VitestPackage = {

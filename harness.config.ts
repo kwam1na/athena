@@ -57,8 +57,9 @@ export default defineHarnessConfig({
   ],
   // The roster beyond the product's two mandated lenses is the executor's
   // selection for the candidate, declared in `.agents/review-selection.json`.
-  // AGENTS describes how an ordinary Athena delivery populates it; an empty
-  // file means this candidate selected no reviewer beyond the mandated two.
+  // `.agents/skills/ce-code-review/SKILL.md` describes how an ordinary Athena
+  // delivery populates that file; an empty file means this candidate selected
+  // no reviewer beyond the mandated two.
   additionalReviewLenses: conditionalReviewers
     .map(entry => {
       if (!entry || Object.keys(entry).sort().join(",") !== "reason,reviewerId" || typeof entry.reason !== "string" || !entry.reason.trim()) {

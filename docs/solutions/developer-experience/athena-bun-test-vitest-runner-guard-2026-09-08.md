@@ -12,7 +12,7 @@ applies_when:
   - A test run fails on missing browser globals or a missing mocking API rather than on the code under test
   - Adding a new package whose own test script runs Vitest
 tags: [bun, vitest, test-runner, bunfig, harness, agent-affordance]
-delivery_diff_fingerprint: e6c89f718576a4f3638010088cf17b84b3f444499a30a6b1b96a365c86482dde
+delivery_diff_fingerprint: ac0f0a36d10d31bb7a8d0b7db594a919dca3e3c833d12f356a4f8aafb8742e65
 ---
 
 # Raw `bun test` on a Vitest Package Needs a Runner Diagnostic, Not a Doc
@@ -41,8 +41,8 @@ before it produces a misleading failure:
   `test` script runs Vitest, and registers one `Bun.plugin` per package with an
   `onLoad` filter scoped to that package's directory. When Bun loads a test file
   under one of them, the guard prints the intended command and exits non-zero.
-- A preload runs once per process and `Bun.main` names only the first test file
-  of the run, so classifying that one file would miss every later target. The
+- A preload runs once per process and `Bun.main` names only one file of the
+  run, so classifying that one file would miss every other target. The
   `onLoad` hook fires per file, so a multi-target or bare `bun test` is caught
   even when a root script test sorts first.
 - `bunfig.toml` at the repo root wires the preload in through `[test] preload`.
