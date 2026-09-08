@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { HARNESS_BEHAVIOR_SCENARIOS } from "./harness-behavior-scenarios";
 import { collectHarnessScorecard } from "./harness-scorecard";
+import { productRunFixture } from "./delivery-run-telemetry.fixtures";
 
 const tempRoots: string[] = [];
 
@@ -195,84 +196,7 @@ async function createFixtureRepo(
   );
 
   if (includeArtifacts) {
-    await write(
-      "artifacts/harness-delivery-runs/latest.json",
-      JSON.stringify(
-        {
-          version: "1.0",
-          generatedAt: "2026-06-18T12:00:00.000Z",
-          status: "pass",
-          proofState: "proof_recorded",
-          commandSpans: [
-            {
-              phase: "prepare",
-              command: "bun run pr:athena:prepare",
-              startedAt: "2026-06-18T12:00:00.000Z",
-              endedAt: "2026-06-18T12:00:01.000Z",
-              durationMs: 1000,
-              status: "pass",
-              exitCode: 0,
-            },
-          ],
-          duplicateCommands: [],
-          duplicatePackageSuites: [],
-          providerSkippedEvents: [],
-          summary: {
-            commandCount: 1,
-            failedCommandCount: 0,
-            duplicateCommandCount: 0,
-            duplicatePackageSuiteCount: 0,
-            providerSkippedCount: 0,
-            totalDurationMs: 1000,
-          },
-        },
-        null,
-        2
-      ),
-      rootDir
-    );
-    await write(
-      "artifacts/harness-delivery-runs/baseline.json",
-      JSON.stringify(
-        {
-          version: "1.0",
-          generatedAt: "2026-06-17T12:00:00.000Z",
-          status: "pass",
-          proofState: "proof_recorded",
-          commandSpans: [
-            "prepare",
-            "preflight",
-            "validate",
-            "record-proof",
-            "scorecard",
-          ].map((phase, index) => ({
-            phase,
-            command: `bun run pr:athena:${phase}`,
-            startedAt: `2026-06-17T12:00:0${index}.000Z`,
-            endedAt: `2026-06-17T12:00:0${index + 1}.000Z`,
-            durationMs: 1000,
-            status: "pass",
-            exitCode: 0,
-          })),
-          duplicateCommands: [],
-          duplicatePackageSuites: [],
-          providerSkippedEvents: [],
-          gateDecisionEvents: [],
-          summary: {
-            commandCount: 5,
-            failedCommandCount: 0,
-            duplicateCommandCount: 0,
-            duplicatePackageSuiteCount: 0,
-            providerSkippedCount: 0,
-            gateDecisionCount: 0,
-            totalDurationMs: 5000,
-          },
-        },
-        null,
-        2
-      ),
-      rootDir
-    );
+    await write("telemetry/delivery-runs/run-1234567890abcdef.json", JSON.stringify(productRunFixture()), rootDir);
     await write(
       "artifacts/harness-inferential-review/latest.json",
       JSON.stringify(createInferentialArtifact(inferentialStatus), null, 2),
@@ -494,15 +418,9 @@ describe("collectHarnessScorecard", () => {
     });
     expect(first.metrics.deliveryRun).toMatchObject({
       present: true,
-      status: "pass",
-      proofState: "proof_recorded",
-      commandCount: 1,
-      duplicateCommandCount: 0,
-      baseline: {
-        present: true,
-        status: "pass",
-        proofState: "proof_recorded",
-      },
+      status: "ok",
+      summary: { gate: { outcome: "ok", writer: "cli" }, durationSeconds: 1, open: true },
+      costs: { review: { coverage: "unreported", totals: [] }, run: { coverage: "unreported" } },
     });
     expect(first.metrics.runtimeTrends.history).toMatchObject({
       present: true,
@@ -541,7 +459,7 @@ describe("collectHarnessScorecard", () => {
       missingSignals: 0,
     });
     expect(result.summary.note).toContain(
-      "Delivery-run ledger pass with recorded proof."
+      "Product run export reports a successful CLI gate"
     );
     expect(result.summary.note).toContain("Inferential artifact pass.");
   });
@@ -556,53 +474,29 @@ describe("collectHarnessScorecard", () => {
     expect(result.metrics.inferential.status).toBe("missing");
     expect(result.metrics.runtimeTrends.status).toBe("missing");
     expect(result.metrics.deliveryRun.status).toBe("missing");
-    expect(result.metrics.deliveryRun.baseline.present).toBe(false);
+    expect(result.metrics.deliveryRun.summary).toBeNull();
+    expect(result.metrics.deliveryRun.costs).toBeNull();
     expect(result.metrics.graphify.status).toBe("missing");
     expect(result.summary.status).toBe("degraded");
     expect(result.summary.missingSignals).toBeGreaterThan(0);
   });
 
-  it("counts blocked delivery-run ledgers as degraded scorecard signals", async () => {
+  it("counts a product run with a refused gate as a degraded signal", async () => {
     const rootDir = await createFixtureRepo(true, "pass");
-    await write(
-      "artifacts/harness-delivery-runs/latest.json",
-      JSON.stringify(
-        {
-          version: "1.0",
-          generatedAt: "2026-06-18T12:00:00.000Z",
-          status: "blocked",
-          proofState: "proof_not_recorded",
-          commandSpans: [],
-          duplicateCommands: [],
-          duplicatePackageSuites: [],
-          providerSkippedEvents: [],
-          summary: {
-            commandCount: 0,
-            failedCommandCount: 1,
-            duplicateCommandCount: 0,
-            duplicatePackageSuiteCount: 0,
-            providerSkippedCount: 0,
-            totalDurationMs: 0,
-          },
-        },
-        null,
-        2
-      ),
-      rootDir
-    );
+    await write("telemetry/delivery-runs/run-1234567890abcdef.json", JSON.stringify(productRunFixture({ outcome: "policy" })), rootDir);
 
     const result = await collectHarnessScorecard(rootDir, {
       nowIso: () => "2026-04-12T05:00:00.000Z",
     });
 
-    expect(result.metrics.deliveryRun.status).toBe("blocked");
+    expect(result.metrics.deliveryRun.status).toBe("policy");
     expect(result.summary).toMatchObject({
       status: "mixed",
       degradedSignals: 1,
       missingSignals: 0,
     });
     expect(result.summary.note).toContain(
-      "Delivery-run ledger blocked with proof proof_not_recorded."
+      "Product run export reports policy (self-attested observability)."
     );
   });
 

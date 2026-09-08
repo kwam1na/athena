@@ -11,7 +11,6 @@ import {
 } from "./harness-blockers";
 import { runHarnessCheck } from "./harness-check";
 import {
-  collectHarnessRepoValidationCapabilities,
   collectHarnessRepoValidationSelection,
 } from "./harness-repo-validation";
 
@@ -22,6 +21,28 @@ const REVIEW_TARGETS = HARNESS_APP_REGISTRY.map((app) => ({
   testingDocPath: app.harnessDocs.testingPath,
   validationMapPath: app.harnessDocs.validationMapPath,
 }));
+
+/** Required Athena sensors run for every candidate; mapped sensors extend this set. */
+export const ATHENA_ALWAYS_VALIDATION_COMMANDS = [
+  // Preflight already runs the audit, self-review, contract fixtures and sibling policy.
+  { kind: "raw", command: "bun run pr:athena:preflight" },
+  { kind: "raw", command: "bun run reports:presentation:check" },
+  { kind: "raw", command: "bun run docs:links:check" },
+  { kind: "raw", command: "bun run workflow:check" },
+  { kind: "script", workspace: "@athena/webapp", script: "audit:convex" },
+  { kind: "script", workspace: "@athena/webapp", script: "lint:convex:changed" },
+  { kind: "script", workspace: "@athena/webapp", script: "lint:frontend:changed" },
+  { kind: "raw", command: "bun run architecture:check" },
+  { kind: "raw", command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json" },
+  { kind: "raw", command: "bun run test:coverage" },
+] as const;
+
+/** Run after mapped checks and behavior scenarios, once each. */
+export const ATHENA_FINAL_VALIDATION_COMMANDS = [
+  { kind: "raw", command: "bun run harness:inferential-review" },
+  { kind: "raw", command: "bun run graphify:check" },
+  { kind: "raw", command: "bun run pr:athena:scorecard" },
+] as const;
 
 type ValidationSurface = {
   name: string;
@@ -45,36 +66,8 @@ type LoadedReviewTarget = {
 
 type HarnessReviewLogger = Pick<Console, "log" | "error">;
 
-/**
- * Two parent runners can tell harness review that some commands already ran.
- * They are separate flags because they suppress different scopes, and the
- * narrower one is the local flag despite having the longer name.
- *
- * `--repo-validation-provided-by pr:athena` (narrow, local):
- *   Suppresses only the repo-owned validation set selected for repo-owned
- *   changed files. Package validation commands still run, because `pr:athena`
- *   runs the repo-owned commands directly but leaves package selection to
- *   review.
- *
- * `--validation-provided-by athena-pr-tests` (broad, CI):
- *   Suppresses the repo-owned set *and* prunes the package commands that the
- *   PR workflow already runs as separate jobs — see
- *   `isAthenaPrTestsProvidedCommand`. Only validation-map checks and behavior
- *   scenarios are left.
- *
- * Neither flag is a legacy alias of the other; passing the wrong one silently
- * changes how much work review skips. Standalone review passes neither and
- * stays fail-closed.
- */
-type ParsedHarnessReviewArgs = {
-  baseRef?: string;
-  /** Narrow: repo-owned commands only. Set by the local `pr:athena` ladder. */
-  repoValidationProvidedBy?: "pr:athena";
-  /** Broad: repo-owned commands plus workflow-provided package commands. */
-  validationProvidedBy?: "athena-pr-tests";
-  providerEvidencePath?: string;
-};
-
+/** Athena selects repository sensors; the product owns evidence reuse. */
+type ParsedHarnessReviewArgs = { baseRef?: string };
 type HarnessReviewOptions = {
   baseRef?: string;
   getChangedFiles?: (rootDir: string, baseRef?: string) => Promise<string[]>;
@@ -83,67 +76,6 @@ type HarnessReviewOptions = {
   runPackageScript?: (workspace: string, script: string) => Promise<void>;
   runRawCommand?: (command: string) => Promise<void>;
   runHarnessBehaviorScenario?: (scenario: string) => Promise<void>;
-  /** See {@link ParsedHarnessReviewArgs} for how these two flags differ. */
-  repoValidationProvidedBy?: "pr:athena";
-  validationProvidedBy?: "athena-pr-tests";
-  providerEvidencePath?: string;
-};
-
-/**
- * Both flags suppress the repo-owned validation set. Read as: "a parent runner
- * already ran `harness:test`, `delivery:documentation-check`, `test:coverage`,
- * and `harness:inferential-review` for this same head and base."
- */
-export function repoOwnedValidationIsProvided(options: {
-  repoValidationProvidedBy?: "pr:athena";
-  validationProvidedBy?: "athena-pr-tests";
-}) {
-  return (
-    options.repoValidationProvidedBy === "pr:athena" ||
-    options.validationProvidedBy === "athena-pr-tests"
-  );
-}
-
-/**
- * Only the CI flag additionally prunes package commands. The local `pr:athena`
- * ladder does not, so package validation still runs there.
- */
-export function packageValidationIsProvided(options: {
-  validationProvidedBy?: "athena-pr-tests";
-}) {
-  return options.validationProvidedBy === "athena-pr-tests";
-}
-
-type LocalProviderCapability =
-  | "harness-doc-freshness"
-  | "root-script-tests"
-  | "athena-webapp-vitest"
-  | "athena-webapp-typecheck";
-
-type LocalProviderEvidenceCapability = {
-  capability?: string;
-  command?: string;
-  coverage?: {
-    mode?: string;
-    files?: string[];
-  };
-};
-
-type LocalProviderEvidence = {
-  schemaVersion?: number;
-  provider?: string;
-  treeSha?: string;
-  capabilities?: LocalProviderEvidenceCapability[];
-};
-
-type LocalProviderSkip = {
-  type: "provider_skipped";
-  status: "covered_by_provider";
-  capability: LocalProviderCapability;
-  command: string;
-  providedBy: string;
-  coveredCapabilities: LocalProviderCapability[];
-  evidence: string;
 };
 
 function normalizeRepoPath(repoPath: string) {
@@ -174,268 +106,6 @@ function normalizeValidationCommand(
 
 function normalizeBehaviorScenarioName(scenario: string) {
   return scenario.trim();
-}
-
-function isAthenaPrTestsProvidedCommand(
-  command:
-    | { kind: "script"; workspace: string; script: string }
-    | { kind: "raw"; command: string }
-) {
-  if (command.kind === "script") {
-    if (command.workspace === "@athena/webapp") {
-      return new Set([
-        "audit:convex",
-        "build",
-        "lint:architecture",
-        "lint:convex:changed",
-        "lint:frontend:changed",
-        "test",
-      ]).has(command.script);
-    }
-
-    if (command.workspace === "@athena/storefront-webapp") {
-      return new Set(["build", "lint:architecture", "test"]).has(
-        command.script
-      );
-    }
-
-    return false;
-  }
-
-  const rawCommand = command.command.trim();
-
-  if (
-    rawCommand.startsWith("bun run --filter '@athena/webapp' test ") ||
-    rawCommand === "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
-  ) {
-    return true;
-  }
-
-  if (
-    rawCommand.startsWith("bun run --filter '@athena/storefront-webapp' test ") ||
-    rawCommand ===
-      "bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json"
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-function commandDisplayName(
-  command:
-    | { kind: "script"; workspace: string; script: string }
-    | { kind: "raw"; command: string }
-) {
-  return command.kind === "script"
-    ? `${command.workspace}:${command.script}`
-    : command.command;
-}
-
-function parseAthenaWebappFocusedVitestTargets(command: string) {
-  const prefix = "bun run --filter '@athena/webapp' test --";
-  const trimmed = command.trim();
-  if (!trimmed.startsWith(prefix)) {
-    return null;
-  }
-
-  return trimmed
-    .slice(prefix.length)
-    .trim()
-    .split(/\s+/)
-    .map((target) => target.trim())
-    .filter(Boolean);
-}
-
-function localCapabilityForCommand(
-  command:
-    | { kind: "script"; workspace: string; script: string }
-    | { kind: "raw"; command: string }
-): LocalProviderCapability | null {
-  if (
-    command.kind === "raw" &&
-    collectHarnessRepoValidationCapabilities().some((entry) =>
-      entry.commands.includes(command.command)
-    )
-  ) {
-    return "root-script-tests";
-  }
-
-  if (
-    command.kind === "script" &&
-    command.workspace === "@athena/webapp" &&
-    command.script === "test"
-  ) {
-    return "athena-webapp-vitest";
-  }
-
-  if (
-    command.kind === "raw" &&
-    command.command.trim().startsWith("bun run --filter '@athena/webapp' test ")
-  ) {
-    return "athena-webapp-vitest";
-  }
-
-  if (
-    command.kind === "raw" &&
-    command.command.trim() ===
-      "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
-  ) {
-    return "athena-webapp-typecheck";
-  }
-
-  return null;
-}
-
-async function readLocalProviderEvidence(
-  rootDir: string,
-  evidencePath?: string
-) {
-  if (!evidencePath) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(
-      await readFile(path.join(rootDir, evidencePath), "utf8")
-    ) as LocalProviderEvidence;
-
-    if (
-      parsed.schemaVersion !== 1 ||
-      !parsed.provider ||
-      !Array.isArray(parsed.capabilities)
-    ) {
-      return null;
-    }
-
-    if (parsed.treeSha) {
-      const unstaged = await runGitCommand(rootDir, [
-        "git",
-        "diff",
-        "--quiet",
-      ]);
-      const untracked = await runGitCommand(rootDir, [
-        "git",
-        "ls-files",
-        "--others",
-        "--exclude-standard",
-      ]);
-      const tree = await runGitCommand(rootDir, ["git", "write-tree"]);
-
-      if (
-        unstaged.exitCode !== 0 ||
-        untracked.exitCode !== 0 ||
-        untracked.stdout.trim() ||
-        tree.exitCode !== 0 ||
-        tree.stdout.trim() !== parsed.treeSha
-      ) {
-        return null;
-      }
-    }
-
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function hasCoveredCapability(
-  evidence: LocalProviderEvidence,
-  capability: LocalProviderCapability
-) {
-  return evidence.capabilities?.some((entry) => entry.capability === capability) ?? false;
-}
-
-function isAthenaWebappVitestCoveredByProvider(
-  command:
-    | { kind: "script"; workspace: string; script: string }
-    | { kind: "raw"; command: string },
-  evidence: LocalProviderEvidence
-) {
-  const coverageEntries =
-    evidence.capabilities?.filter(
-      (entry) => entry.capability === "athena-webapp-vitest"
-    ) ?? [];
-
-  if (coverageEntries.length === 0) {
-    return false;
-  }
-
-  if (
-    command.kind === "script" &&
-    command.workspace === "@athena/webapp" &&
-    command.script === "test"
-  ) {
-    return coverageEntries.some((entry) => entry.coverage?.mode === "full");
-  }
-
-  if (command.kind !== "raw") {
-    return false;
-  }
-
-  const focusedTargets = parseAthenaWebappFocusedVitestTargets(command.command);
-  if (!focusedTargets || focusedTargets.length === 0) {
-    return false;
-  }
-
-  return coverageEntries.some((entry) => {
-    if (entry.coverage?.mode === "full") {
-      return true;
-    }
-
-    const coveredFiles = new Set(entry.coverage?.files ?? []);
-    return focusedTargets.every((target) => coveredFiles.has(target));
-  });
-}
-
-function buildProviderSkip(
-  command:
-    | { kind: "script"; workspace: string; script: string }
-    | { kind: "raw"; command: string },
-  capability: LocalProviderCapability,
-  evidence: LocalProviderEvidence,
-  evidencePath: string
-): LocalProviderSkip {
-  return {
-    type: "provider_skipped",
-    status: "covered_by_provider",
-    capability,
-    command: commandDisplayName(command),
-    providedBy: evidence.provider ?? "unknown",
-    coveredCapabilities:
-      evidence.capabilities
-        ?.map((entry) => entry.capability)
-        .filter(
-          (entry): entry is LocalProviderCapability =>
-            entry === "harness-doc-freshness" ||
-            entry === "root-script-tests" ||
-            entry === "athena-webapp-vitest" ||
-            entry === "athena-webapp-typecheck"
-        ) ?? [],
-    evidence: evidencePath,
-  };
-}
-
-function isCoveredByLocalProvider(
-  command:
-    | { kind: "script"; workspace: string; script: string }
-    | { kind: "raw"; command: string },
-  evidence: LocalProviderEvidence | null
-) {
-  if (!evidence) {
-    return false;
-  }
-
-  const capability = localCapabilityForCommand(command);
-  if (!capability) {
-    return false;
-  }
-
-  if (capability === "athena-webapp-vitest") {
-    return isAthenaWebappVitestCoveredByProvider(command, evidence);
-  }
-
-  return hasCoveredCapability(evidence, capability);
 }
 
 function formatMissingPathPrefixError(
@@ -909,9 +579,21 @@ export function resolveHarnessReviewShell(options: {
   return "/bin/sh";
 }
 
-async function runRawCommand(rootDir: string, command: string) {
+export async function runRawCommand(rootDir: string, command: string, options: {
+  platform?: NodeJS.Platform;
+  env?: NodeJS.ProcessEnv;
+  logger?: Pick<Console, "log">;
+  spawn?: (command: string[], options: { cwd: string; stdout: "inherit"; stderr: "inherit" }) => { exited: Promise<number> };
+} = {}) {
   const shellPath = resolveHarnessReviewShell();
-  const subprocess = Bun.spawn([shellPath, "-lc", command], {
+  const env = options.env ?? process.env;
+  const timedCoverage = (options.platform ?? process.platform) === "linux" &&
+    env.GITHUB_ACTIONS === "true" && command === "bun run test:coverage";
+  if (timedCoverage) {
+    (options.logger ?? console).log(`Coverage worker limit: ${env.ATHENA_COVERAGE_MAX_WORKERS || "2"}`);
+  }
+  const argv = [shellPath, "-lc", command];
+  const subprocess = (options.spawn ?? Bun.spawn)(timedCoverage ? ["/usr/bin/time", "-v", ...argv] : argv, {
     cwd: rootDir,
     stdout: "inherit",
     stderr: "inherit",
@@ -961,10 +643,6 @@ export async function runHarnessReview(
   } =
     await collectCommandsForChangedFiles(rootDir, changedFiles, reviewTargets);
   const repoValidation = collectHarnessRepoValidationSelection(changedFiles);
-  const localProviderEvidence = await readLocalProviderEvidence(
-    rootDir,
-    options.providerEvidencePath
-  );
 
   if (uncoveredFiles.length > 0) {
     throw new Error(
@@ -982,68 +660,23 @@ export async function runHarnessReview(
     logger.log(
       `No target-app validations selected; no touched files under ${packageDirList.join(" or ")}.`
     );
-    return;
   }
 
-  const unprunedCommands = [
-    ...(repoOwnedValidationIsProvided(options)
-      ? []
-      : repoValidation.selectedCommands.map((command) => ({
-          kind: "raw" as const,
-          command,
-        }))),
+  const commands = [
+    ...ATHENA_ALWAYS_VALIDATION_COMMANDS,
+    ...repoValidation.selectedCommands.map(command => ({ kind: "raw" as const, command })),
     ...selectedCommands,
-  ].filter(
-    (command) =>
-      !packageValidationIsProvided(options) ||
-      !isAthenaPrTestsProvidedCommand(command)
-  );
+    ...ATHENA_FINAL_VALIDATION_COMMANDS,
+  ];
 
-  const providerSkips: LocalProviderSkip[] = [];
-  const combinedCommands = unprunedCommands.filter((command) => {
-    if (!isCoveredByLocalProvider(command, localProviderEvidence)) {
-      return true;
-    }
-
-    const capability = localCapabilityForCommand(command);
-    if (!capability || !options.providerEvidencePath || !localProviderEvidence) {
-      return true;
-    }
-
-    providerSkips.push(
-      buildProviderSkip(
-        command,
-        capability,
-        localProviderEvidence,
-        options.providerEvidencePath
-      )
-    );
-    return false;
+  const seen = new Set<string>();
+  const combinedCommands = commands.filter(command => {
+    const key = command.kind === "script" ? `${command.workspace}:${command.script}` : `raw:${command.command}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
-
-  if (
-    repoOwnedValidationIsProvided(options) &&
-    repoValidation.selectedCommands.length > 0
-  ) {
-    logger.log(
-      `Repo validation commands provided by ${options.validationProvidedBy ?? options.repoValidationProvidedBy} for ${repoValidation.matchedFiles.length} repo-owned changed file(s).`
-    );
-  }
-
-  if (
-    packageValidationIsProvided(options) &&
-    selectedCommands.length > unprunedCommands.length
-  ) {
-    logger.log(
-      `Package validation commands provided by athena-pr-tests for ${selectedCommands.length - unprunedCommands.length} selected command(s).`
-    );
-  }
-
-  for (const skip of providerSkips) {
-    logger.log(JSON.stringify(skip));
-  }
-
-  for (const command of combinedCommands) {
+  const runSelectedCommand = async (command: (typeof commands)[number]) => {
     if (command.kind === "script") {
       logger.log(`Running ${command.workspace}:${command.script}`);
       await (options.runPackageScript ?? ((nextWorkspace, nextScript) =>
@@ -1051,45 +684,41 @@ export async function runHarnessReview(
         command.workspace,
         command.script
       );
-      continue;
+      return;
     }
 
     logger.log(`Running raw command: ${command.command}`);
     await (options.runRawCommand ?? ((nextCommand) =>
       runRawCommand(rootDir, nextCommand)))(command.command);
+  };
+  const finalCommands = new Set<string>(ATHENA_FINAL_VALIDATION_COMMANDS.map(command => command.command));
+  for (const command of combinedCommands) {
+    if (command.kind !== "raw" || !finalCommands.has(command.command)) await runSelectedCommand(command);
   }
 
   if (selectedBehaviorScenarios.length === 0) {
     logger.log("No runtime behavior scenarios selected from touched surfaces.");
-    return;
+  } else {
+    logger.log(`Selected runtime behavior scenarios: ${selectedBehaviorScenarios.join(", ")}`);
   }
-
-  logger.log(
-    `Selected runtime behavior scenarios: ${selectedBehaviorScenarios.join(", ")}`
-  );
 
   for (const scenario of selectedBehaviorScenarios) {
     logger.log(`Running harness:behavior scenario: ${scenario}`);
     await (options.runHarnessBehaviorScenario ?? ((nextScenario) =>
       runHarnessBehaviorScenario(rootDir, nextScenario)))(scenario);
   }
+  for (const command of ATHENA_FINAL_VALIDATION_COMMANDS) await runSelectedCommand(command);
 }
 
 export function parseHarnessReviewArgs(
   argv: string[]
 ): ParsedHarnessReviewArgs {
   let baseRef: string | undefined;
-  let repoValidationProvidedBy: "pr:athena" | undefined;
-  let validationProvidedBy: "athena-pr-tests" | undefined;
-  let providerEvidencePath: string | undefined;
 
   const usage = {
     source: { kind: "command", id: "harness:review" } as const,
     validFlags: [
       "--base <ref>",
-      "--repo-validation-provided-by pr:athena",
-      "--validation-provided-by athena-pr-tests",
-      "--provider-evidence <path>",
     ],
   };
 
@@ -1123,99 +752,13 @@ export function parseHarnessReviewArgs(
       continue;
     }
 
-    if (arg === "--repo-validation-provided-by") {
-      const value = argv[index + 1]?.trim();
-      if (value !== "pr:athena") {
-        throw new HarnessUsageError({
-          ...usage,
-          message:
-            "Missing or invalid value for --repo-validation-provided-by. Supported value: pr:athena. This flag suppresses only the repo-owned validation set; package validation still runs. For the broader CI mode that also prunes workflow-provided package commands, use --validation-provided-by athena-pr-tests.",
-        });
-      }
-      repoValidationProvidedBy = value;
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith("--repo-validation-provided-by=")) {
-      const value = arg.slice("--repo-validation-provided-by=".length).trim();
-      if (value !== "pr:athena") {
-        throw new HarnessUsageError({
-          ...usage,
-          message:
-            "Missing or invalid value for --repo-validation-provided-by. Supported value: pr:athena. This flag suppresses only the repo-owned validation set; package validation still runs. For the broader CI mode that also prunes workflow-provided package commands, use --validation-provided-by athena-pr-tests.",
-        });
-      }
-      repoValidationProvidedBy = value;
-      continue;
-    }
-
-    if (arg === "--validation-provided-by") {
-      const value = argv[index + 1]?.trim();
-      if (value !== "athena-pr-tests") {
-        throw new HarnessUsageError({
-          ...usage,
-          message:
-            "Missing or invalid value for --validation-provided-by. Supported value: athena-pr-tests. This flag suppresses the repo-owned validation set and prunes package commands the PR workflow runs separately. For the narrower local pr:athena mode, use --repo-validation-provided-by pr:athena.",
-        });
-      }
-      validationProvidedBy = value;
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith("--validation-provided-by=")) {
-      const value = arg.slice("--validation-provided-by=".length).trim();
-      if (value !== "athena-pr-tests") {
-        throw new HarnessUsageError({
-          ...usage,
-          message:
-            "Missing or invalid value for --validation-provided-by. Supported value: athena-pr-tests. This flag suppresses the repo-owned validation set and prunes package commands the PR workflow runs separately. For the narrower local pr:athena mode, use --repo-validation-provided-by pr:athena.",
-        });
-      }
-      validationProvidedBy = value;
-      continue;
-    }
-
-    if (arg === "--provider-evidence") {
-      const value = argv[index + 1]?.trim();
-      if (!value) {
-        throw new HarnessUsageError({
-          ...usage,
-          message:
-            "Missing value for --provider-evidence. Usage: bun run harness:review --provider-evidence <path>",
-        });
-      }
-      providerEvidencePath = value;
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith("--provider-evidence=")) {
-      const value = arg.slice("--provider-evidence=".length).trim();
-      if (!value) {
-        throw new HarnessUsageError({
-          ...usage,
-          message:
-            "Missing value for --provider-evidence. Usage: bun run harness:review --provider-evidence <path>",
-        });
-      }
-      providerEvidencePath = value;
-      continue;
-    }
-
     throw new HarnessUsageError({
       ...usage,
-      message: `Unknown argument: ${arg}. Usage: bun run harness:review [--base <ref>] [--repo-validation-provided-by pr:athena] [--validation-provided-by athena-pr-tests] [--provider-evidence <path>]`,
+      message: `Unknown argument: ${arg}. Usage: bun run harness:review [--base <ref>]`,
     });
   }
 
-  return {
-    baseRef,
-    repoValidationProvidedBy,
-    validationProvidedBy,
-    providerEvidencePath,
-  };
+  return { baseRef };
 }
 
 export function harnessReviewBlockedBlocker(detail: string) {
@@ -1251,9 +794,6 @@ async function runHarnessReviewCli() {
     const parsed = parseHarnessReviewArgs(Bun.argv.slice(2));
     await runHarnessReview(process.cwd(), {
       baseRef: parsed.baseRef,
-      repoValidationProvidedBy: parsed.repoValidationProvidedBy,
-      validationProvidedBy: parsed.validationProvidedBy,
-      providerEvidencePath: parsed.providerEvidencePath,
     });
   } catch (error) {
     if (error instanceof HarnessBlockedError) throw error;

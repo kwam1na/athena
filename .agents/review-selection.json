@@ -1,0 +1,30 @@
+[
+  {
+    "reviewerId": "ce-security-reviewer",
+    "reason": "The cutover changes admission, human waiver boundaries, executable provider commands, and CI trust in installed delivery evidence."
+  },
+  {
+    "reviewerId": "ce-performance-reviewer",
+    "reason": "Validation orchestration and candidate/evidence I/O are replaced; inspect repeated expensive checks and run-store reads for regressions."
+  },
+  {
+    "reviewerId": "ce-api-contract-reviewer",
+    "reason": "Athena command aliases, exported TypeScript adapters, review evidence inputs, and delivery telemetry schemas change."
+  },
+  {
+    "reviewerId": "ce-reliability-reviewer",
+    "reason": "Subprocess interruption, failed preparation, gate failures, and durable telemetry/record ordering change."
+  },
+  {
+    "reviewerId": "ce-adversarial-reviewer",
+    "reason": "The executable harness diff exceeds 50 lines and changes evidence admission and external provider execution."
+  },
+  {
+    "reviewerId": "ce-cli-readiness-reviewer",
+    "reason": "CLI argument parsing, native command delegation, typed errors, and automation entrypoints change."
+  },
+  {
+    "reviewerId": "ce-kieran-typescript-reviewer",
+    "reason": "Authored TypeScript adapters, sensor orchestration, configuration, and their tests change substantially."
+  }
+]

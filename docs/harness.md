@@ -118,20 +118,20 @@ Freshness sensors catch stale generated artifacts.
 - `graphify:check` verifies tracked graphify outputs.
 - `pre-commit:generated-artifacts` runs `harness:generate` and
   `graphify:rebuild`, then stages tracked source changes and generated outputs.
-- `pre-push:review` can attempt a narrow repair once, then blocks so the repaired
-  files are reviewed and committed before push.
-- `pr:athena:prepare` runs generated-artifact repair, stages tracked changes
-  only, then blocks before heavy validation if unstaged or untracked files would
-  prevent reusable proof recording.
-- `pr:athena` runs the delivery-run wrapper, which records local run metrics for
-  the prepare, validate, record-proof, and scorecard phases. It writes same-tree
-  provider evidence only after provider commands pass, then runs the scorecard
-  against the current delivery-run ledger.
-- `pr:athena:validate` runs the heavy local PR ladder without recording proof.
-- `pr:athena:record-proof` records a git-private proof only when the branch
-  head or staged index, `origin/main`, validation wiring, Bun version, and
-  working tree state can be reused safely. A later `pre-push:review` may reuse
-  that proof instead of rerunning the whole local suite.
+- `pr:athena:prepare` invokes installed product preparation. Athena's configured
+  commands check Bun and dependency parity, repair generated artifacts, and run
+  mechanical validation before the product captures a candidate and publishes a
+  preparation receipt. Stage intended new files explicitly.
+- `pr:athena` runs the installed gate, exports and stages product run telemetry,
+  refreshes record-neutral preparation, writes and stages the portable delivery
+  record, refreshes preparation again, and verifies the resulting candidate.
+  Preparation and independent review are prerequisites to this sequence.
+- `pr:athena:validate` invokes the installed product's `gate` command.
+- `pr:athena:record-proof` invokes the installed product's `record` command,
+  which writes the tracked portable delivery record.
+- `pre-push:review` invokes installed product verification of the current
+  candidate and evidence. It neither repairs generated files nor reruns the
+  local validation suite.
 
 The important behavior is fail-closed repair. The harness may refresh files, but
 it does not silently push repaired evidence past review.
@@ -250,15 +250,11 @@ Both output forms must derive from the same blocker objects:
   same contract while removing control characters and redacting common secret
   shapes.
 
-Gate-decision events use schema v2 and carry blockers only in the required
-`blockerEnvelope`. This is a deliberate break, not a compatible extension: the
-event path moved from `codex/harness-obligations/v1/events` to `.../v2/events`,
-and the reader rejects a v1 event rather than degrading. Events written by an
-older checkout are not readable after the upgrade; rerun the gate to produce a
-current one. The removed `decision.findings` and
-`decision.remediation.machine/human` fields are not accepted by the
-delivery-run reader; waiver eligibility and ledger blocker codes come from the
-typed envelope.
+Delivery run events and exports use the installed product's schema and reader.
+Athena does not maintain a second gate-decision event directory or translate old
+wrapper ledgers into current evidence. Regenerate records through the installed
+commands when their binding is stale or their format is unreadable; journal
+observations do not themselves authorize admission.
 
 Do not throw or print a new operator-facing blocker as free-form prose. Create
 the blocker at the owning source, preserve it through orchestration, and choose
@@ -283,15 +279,14 @@ scenarios that should prove the change.
 Repo-owned harness surfaces are handled separately from package validation maps.
 Changes under `scripts/`, package `docs/agent` guidance, package `AGENTS.md`,
 top-level repo wiring, GitHub workflows, Husky hooks, and `README.md` select the
-repo validation command set: `harness:test`, `delivery:documentation-check`, `test:coverage`,
-and `harness:inferential-review`.
+repo validation command set: `workflow:check`, `harness:test`,
+`delivery:documentation-check`, `test:coverage`, and `harness:inferential-review`.
 
-Standalone `harness:review` runs that repo validation command set when those
-files change. Inside `pr:athena`, the same commands have already run directly,
-so `pr:athena` calls `harness:review` with an explicit parent-provider flag and
-`harness:review` reports that the repo validation commands were already
-provided. That removes duplicate expensive work without weakening standalone
-review or pre-push behavior.
+Standalone and provider-invoked `harness:review` use the same selection and
+required sensor set. Athena's validation provider invokes
+`harness:review --base origin/main`; the command accepts only `--base`, with no
+parent-provider skip mode. It deduplicates overlapping selected commands within
+that invocation.
 
 `bun run harness:inferential-review` adds a higher-level review pass. Its
 deterministic lane is blocking. Its semantic shadow mode can collect extra
@@ -340,23 +335,16 @@ For merge-ready Athena work, the broad command is:
 bun run pr:athena
 ```
 
-That command runs the delivery-run wrapper, which records local run metrics while
-composing explicit phases:
+Before `pr:athena`, run `pr:athena:prepare`, then establish current independent
+review evidence under AGENTS.md steps 6 and 9. The coordinator then sequences the
+installed gate, telemetry export, record-neutral preparation refreshes, portable
+record, and final verification described in [Delivery Ladder Phases](#delivery-ladder-phases).
 
-```sh
-bun run pr:athena:prepare
-bun run pr:athena:preflight
-bun run pr:athena:validate
-bun run pr:athena:record-proof
-bun run pr:athena:scorecard
-```
-
-`pr:athena:prepare` is one wrapper-owned preparation boundary. It checks Bun and
-dependency parity, repairs generated artifacts, stages tracked changes, rejects
-unstaged or untracked ambiguity, runs the mechanical checks, captures the
-complete candidate tree plus base tip and merge base, and only then publishes a
-worktree-local preparation receipt. It does not stage new files automatically;
-stage intended new files explicitly and rerun preparation.
+`pr:athena:prepare` delegates to the installed product. Athena config declares
+Bun and dependency checks, generated-artifact repair, and mechanical validation;
+the product owns candidate capture, preparation receipt publication and failure
+handling. Generated-artifact repair stages tracked changes. Stage intended new
+files explicitly before preparation.
 
 The mechanical stage (`pr:athena:mechanical`, also runnable on its own) runs the
 deterministic checks for the changed files: the per-package lint scripts the
@@ -380,15 +368,15 @@ here: it is deterministic, it is the class the ticket names alongside lint, and
 ~45s at prepare is far cheaper than the review round a late type error would
 invalidate.
 
-`pr:athena:preflight` then aggregates validation-map coverage, live harness
-audit, audit-fixture consistency, and harness-script sibling-test policy before
-provider validation starts. Its failure report names the registry source,
+`pr:athena:preflight` runs inside `harness:review` before its expensive checks.
+It aggregates validation-map coverage, live harness audit, audit-fixture
+consistency, and harness-script sibling-test policy. Its failure report names the registry source,
 generated-doc repair, fixture and sibling-test files, and the focused
 verification command, so a preflight failure is actionable without reading the
 sensor source.
 
-`pr:athena:validate` delegates to one guarded provider boundary. The gate
-registry declares reusable obligations, and a pure evaluator resolves each as a
+`pr:athena:validate` invokes the installed product gate. `harness.config.ts`
+declares the repository obligations, and the product resolves each as a
 live fact, exact-candidate evidence, human waiver, repository-authorized CI
 delegation, non-applicability, or a block. These are distinct outcomes: a waiver
 or delegation is never reported as provider-green evidence.
@@ -399,15 +387,15 @@ Recognized agents must present final-green evidence from `ce-code-review` or
 `execute`; a PTY does not make an agent human. Interactive humans may deliberately
 waive review for the exact worktree/candidate/base, while CI delegation requires
 the allowlisted `athena-pr-tests` workflow/job/event policy. The
-`documentation.current` obligation remains an always-on live fact, but an
-interactive human may deliberately waive both of its delivery-documentation
-policies — the solution note and landed-change report — for the current
-invocation. That waiver is recorded in the gate decision event and is evaluated
-again on the next run; agents and CI cannot use it.
+`documentation.current` obligation remains an always-on live fact. A human
+exception for its delivery-documentation policies — the solution note and
+landed-change report — requires the GitHub-backed approval described below,
+bound to a real pull request's candidate and base. The installed gate consumes
+the resulting documentation sensor result; Athena config does not permit a
+separate local product waiver for this live obligation.
 
-To carry the same deliberate human decision into CI, commit and push the exact
-candidate, rerun preparation against that clean commit, then request a
-candidate-bound waiver. A human or agent may dispatch the unprivileged request
+To request that candidate-bound documentation approval, commit and push the
+exact candidate and rerun preparation against that clean commit. A human or agent may dispatch the unprivileged request
 workflow; dispatch is not approval. That default-branch relay uses its
 job-scoped `GITHUB_TOKEN` to start the protected issuer as
 `github-actions[bot]`. Before it can dispatch the issuer, the relay asks Athena
@@ -465,29 +453,26 @@ head and base, and publishes both a check run and an immutable workflow artifact
 that record both GitHub identities and the passkey credential identifier, and
 bind the waived finding codes to the PR head, base tip, merge base, and
 deliverable-tree identity. CI downloads the artifact from that verified
-default-branch workflow run before resolving `documentation.current` as
-`waived`; it never trusts branch-authored JSON or check output by itself. A new
+default-branch workflow run before the documentation sensor accepts the human
+approval; it never trusts branch-authored JSON or check output by itself. A new
 commit, a moved base, an uncovered documentation finding, an unauthorized actor,
 or missing workflow, relay, or WebAuthn provenance makes the waiver stale and CI fails closed. The
-local invocation waiver remains available before a PR exists, but only the
-GitHub-backed attestation crosses the CI boundary.
+documentation exception requires a real pull request; the same verified
+GitHub-backed attestation is consumed by local and CI admission.
 
-The `telemetry.recorded` obligation asks a different question: did this delivery
-leave a durable record of how it ran? It is satisfied by a tracked
-`telemetry/delivery-runs/*.json` file whose `deliverableDiffFingerprint` matches
-the current deliverable diff. To satisfy it by hand:
+The `telemetry.recorded` obligation asks whether this delivery left a durable
+product run export under `telemetry/delivery-runs/`. Its successful gate event
+must match the current strict validation projection. The consumer compares the
+product-authored digest; it does not require the old staged Git tree to exist in
+a receiving clone.
 
-1. Run `bun run pr:athena` and let it pass. The gate writes its ledger at the end
-   of the run, so the first run in a fresh worktree has nothing to record yet and
-   the obligation stays quiet.
-2. Run `bun run delivery:telemetry-record`. This promotes that ledger into a
-   tracked record naming the branch, run outcome, duration, review-loop
-   iterations, and self-reported review cost.
-3. Commit the record. Only tracked records satisfy the obligation — one left
-   untracked in the worktree would not survive it — and
-   `telemetry/delivery-runs/` is review-neutral and fingerprint-neutral, so
-   committing costs a cheap `bun run pr:athena:prepare` rather than a re-review,
-   and never stales the landed-change report.
+`pr:athena` exports and stages telemetry after its gate succeeds, then stages the
+product delivery record and verifies the result. `delivery:telemetry-record`
+remains available to export the current run after a successful gate. If used
+separately, stage the export and request installed preparation with
+`--refresh-record-neutral` before recording and verifying. Commit the resulting
+artifacts with the delivery. The product run can remain open through the real
+finish line; exporting it does not assert `run.ended` or whole-run cost.
 
 The demand scales with the delivery: below 150 changed source lines — the same
 threshold `compound:check` uses for solution notes — no record is required at
@@ -495,32 +480,60 @@ all, though a record that is present and malformed is still reported at any
 size. Locally the demand waits until a *passing* gate run has completed against
 the current deliverable, because the record it asks for can only come from such a
 run; CI, the merge authority, has no such leniency.
-A record that describes an older deliverable diff is treated as stale, exactly as
-a stale report or solution note is, because telemetry that predates the final fix
-round misreports what actually merged, and only a record of a run that *passed*
-counts. An interactive human may waive it for that one
-invocation — a live obligation is re-evaluated every run, so unlike
-`review.green` the waiver does not persist across runs; agents cannot, since silently skipping the record is the failure
-the obligation exists to prevent. CI enforces it independently via
+An export for an older strict validation projection is stale. Only a
+successfully completed gate for the current projection satisfies this check;
+report and solution-note freshness have their own bindings. Athena config does
+not permit a product waiver for `telemetry.recorded`; repair and export the
+current telemetry instead. CI also enforces it through
 `bun run delivery:telemetry-check`.
 
-Approved review workflows run `pr:athena:prepare`, capture
-`harness:review-context`, complete an independent review of that exact candidate,
-and submit a provider-owned `final-manifest.json` through
-`harness:review-evidence`. Any review fix requires preparation and a complete
-re-review of the resulting candidate.
+Approved review workflows run `pr:athena:prepare`, then establish current
+independent review evidence under AGENTS.md steps 6 and 9. When acquisition is
+required, capture `harness:review-context`, complete the independent review and
+submit the manifest path the product returns through `harness:review-evidence -- --manifest <returned-path>`.
+For an active obligation eligible for reuse, retain the product's positive
+review-evidence resolution. An inactive `not_applicable` obligation requires
+neither acquisition nor evidence reuse. A review fix
+requires preparation again; it requires another complete review when the product
+reports missing or stale review evidence, or new actionable feedback requires it.
+
+`delivery:resume` requires a current delivery run with a saved accepted contract
+and stage. Preserve existing context before checking freshness; saving fresh
+context first would hide the drift the command is meant to observe. If it
+reports `resume_context_missing` because no context was saved, it emits no JSON.
+Recover the accepted contract from the work item, ensure the intended delivery
+run is current, and save it before retrying:
+
+```sh
+bun scripts/delivery-product.ts save-context --json '{"contract":{"objective":"<accepted objective>","acceptanceCriteria":["<accepted criterion>"],"finishLine":"<authorized finish line>"},"stage":"<current stage>"}'
+```
+
+Replace the placeholders with the actual accepted contract, including every
+criterion; do not invent a new contract to obtain admission. The product captures
+candidate, policy and release bindings itself. Empty output or a nonzero exit
+is never positive proof by itself; retain other admission or recovery blockers
+for their own stages.
+
+Use `bun run delivery:resume` and inspect `admission.decision.resolutions` for
+`obligationId: "review.green"` with `kind: "satisfied_evidence"`. Retain the
+resolution's record and candidate binding and require the full selected lens set,
+unanimous approval, discharged tracking and no new actionable review feedback.
+Only `satisfied_evidence` is positive review-reuse proof. A current product `not_applicable` resolution means `review.green` is inactive for this candidate and requires no acquisition; it is not evidence reuse. For an active review obligation, every other or missing resolution, including `waived`, requires complete acquisition. Overall
+`reuseAllowed` and exit status describe the entire resumed delivery: other
+admission or recovery blockers remain blocking for their own stages and do not
+by themselves require another review.
 
 Review evidence binds to the candidate's **deliverable identity**, not its raw
-tree SHA. The identity (`deliverable-tree/v1`, in
-`scripts/harness-review-identity.ts`) is a digest of every tracked path in the
-prepared tree except `docs/reports/`, `docs/solutions/`, and
-`telemetry/delivery-runs/`, together with the base ref, base tip, merge base, and
-worktree. The third prefix is the record directory specifically, not all of
-`telemetry/`, so a future sibling directory does not inherit the exemption. The consequence is narrow and
+tree SHA. The installed product computes `deliverable-tree/v1` using the
+review-neutral narration set declared in `harness.config.ts`; candidate binding
+also carries the base and workspace context. The separate `recordNeutral` rule
+is limited to JSON files under `telemetry/delivery-runs/`, so sibling telemetry
+directories do not inherit that exemption. The consequence is narrow and
 deliberate:
 
 - Committing a landed-change report or a solution note after the final pass does
-  **not** invalidate the recorded evidence. Preparation must be rerun, because
+  **not** invalidate the recorded review evidence. The configured telemetry
+  narration prefix is also review-neutral. Preparation must be rerun, because
   the receipt still binds to the raw tree, but the review does not.
 - Any other change does invalidate it, including a comment-only edit, a mode
   change, a rename with identical contents, and any edit under `_generated/`,
@@ -530,38 +543,25 @@ deliberate:
   (report freshness) and may exclude generated artifacts that nothing here
   re-derives.
 - Both the reviewed raw tree and the deliverable identity are written into the
-  gate decision event, so a past authorization stays interpretable. The raw tree
+  product evidence binding, so a past authorization stays interpretable. The raw tree
   is verified at recording time — `harness:review-evidence` still requires an
   exact `treeSha` match, because recording happens against the tree that was
   just prepared and reviewed. Only the later gate comparison is identity-only.
 - A record written before the identity existed stays readable and self-consistent
   but cannot match a current candidate, so it fails closed as stale evidence.
 
-The admission wrapper evaluates
-documentation once, reports all blockers together, records a correlated gate
-decision, rechecks the candidate immediately before spawning, and owns the
-heavy command list. `pr:athena:scorecard` runs after proof recording so it reads
-the current delivery-run ledger, including gate-decision outcomes and prevented
-cost class.
+The installed product gate evaluates Athena's configured obligations, including
+validation and documentation evidence. Athena's `harness:review` owns the heavy
+sensor command list and runs `pr:athena:scorecard` after inferential review and
+Graphify freshness, before the coordinator exports telemetry and writes the
+delivery record.
 
-After the final `graphify:check`, `pr:athena:record-proof` records a
-worktree-local proof for the current clean tree or staged index and
-`origin/main`. `pre-push:review` reuses that proof only when the pushed tree,
-base SHA, clean working tree, Bun version, `pr:athena` script, and validation
-wiring fingerprint still match. Any dirty file, generated-artifact repair,
-rebase, advanced `origin/main`, changed hook, changed harness script, or missing
-proof makes pre-push run the full validation suite normally and prints the
-reason. If `origin/main` or the base diff cannot be read, the hook blocks
-instead of treating the changed-file set as empty.
-
-The reusable proof is local-only git metadata, not a source artifact and not a
-remote CI substitute. Proof evaluation emits a structured status for local
-handoff and run-metrics ledgers: `reusable`, `missing`, `dirty`, `stale`,
-`base_changed`, `validation_wiring_changed`, `generated_repaired`, and
-`proof_not_recorded`, plus `source_registry_drift` for source-registry drift
-sensors when that drift is the modeled cause. The provider/ledger plumbing
-records what the local sensor observed; it does not make the proof portable
-across worktrees, machines, or a changed `origin/main`.
+`pr:athena:record-proof` is the compatibility entry point for installed product
+`record`; it writes portable evidence rather than a git-private pre-push cache.
+`pre-push:review` calls installed `verify` against the current candidate. A stale
+or missing binding blocks the push; it does not trigger an Athena proof-reuse
+path or an automatic validation/repair loop. Resolve the reported blockers and
+run the preparation, review or gate steps they require before pushing again.
 
 For harness-only changes, useful focused commands are:
 
@@ -573,12 +573,11 @@ bun run harness:inferential-review
 bun run graphify:check
 ```
 
-The Athena PR workflow may run `harness:review` with
-`--validation-provided-by athena-pr-tests`. That CI-only mode still checks the
-validation maps and selected runtime behavior scenarios, but it skips package
-test/build/lint commands already enforced elsewhere in the same workflow. Keep
-standalone local `harness:review --base origin/main` fail-closed so agents can
-still get the full touched-surface command list outside CI.
+Local validation and the Athena PR workflow both run
+`harness:review --base origin/main`. The command owns the repository sensors,
+mapped package validation, and selected runtime behavior scenarios. The installed
+product invokes it through Athena's declared validation provider during local
+admission; CI invokes the same command directly after its evidence checks.
 
 For runtime scenario work, use:
 
@@ -636,25 +635,21 @@ rerun the authoritative command. If the output reports
 `harness_internal_error`, inspect the retained log before retrying; its details
 are diagnostic context, not a substitute for the named reproduction command.
 
-`harness_internal_error` is reserved for genuinely unexpected exceptions. Two
-other non-zero exits carry their own stable codes: a malformed invocation
-renders `harness_usage_error` with a remediation naming the supported flags,
-and an interrupted `pr:athena` delivery run renders
-`delivery_run_interrupted` naming the signal, so a signaled run never looks
-like a crash at the terminal.
+`harness_internal_error` is reserved for unexpected exceptions in Athena's
+command boundary. Athena usage errors name the supported flags. Installed
+product commands retain their own typed failures and interruption outcomes;
+inspect the retained command output rather than expecting retired wrapper
+`delivery_run_interrupted` events.
 
 Avoid weakening the sensor to get past a failure. If the failure is noisy, fix
 the sensor's precision with a test so the repo learns from the false positive.
 
-Repeated validation work is noise only when a parent command has already
-provided the same repo-owned command set for the same head and base, or when
-`pre-push:review` prints that it reused a current `pr:athena` proof. It is not
-noise when the proof is missing or stale, when the working tree is dirty, when
-generated outputs were repaired, when `origin/main` advanced, or when the change
-touches validation wiring. In those cases rerunning is the fail-closed policy.
-The pre-push handoff line separates `validation=<passed|skipped>` from
-`proof=<status>` so a successful validation rerun is not confused with proof
-reuse.
+Repeated command execution within one `harness:review` invocation is avoided by
+deduplicating its selected and required commands. Receipt reuse is a separate
+installed-product decision: `prepare --refresh-record-neutral` reuses success
+only when strict validation, policy, wiring and base still match. Ordinary
+preparation runs its checks. Pre-push verification reports current admission;
+it does not report Athena-specific proof-cache statuses.
 
 ## Command And Artifact Reference
 
@@ -680,8 +675,9 @@ type and where the output lands.
 | `bun run harness:janitor` | Report drift; `--repair` applies safe repairs, then rechecks. |
 | `bun run architecture:check` | Run architecture boundary checks. |
 | `bun run compound:check` | Enforce the solution-note delivery guardrail. |
+| `bun run delivery:resume` | Read saved context and current admission resolutions, including `review.green`, without replaying actions. |
 | `bun run delivery:documentation-check` | Combined solution-note and landed-change-report policy check. |
-| `bun run delivery:telemetry-record` | Promote a passing delivery-run ledger into the tracked telemetry corpus. |
+| `bun run delivery:telemetry-record` | Export current product run telemetry after a successful gate. |
 | `bun run delivery:telemetry-check` | Enforce a current delivery-run telemetry record for substantial deliveries. |
 | `bun run reports:presentation:check` | Presentation contract for every `docs/reports/*.html`. |
 | `bun run docs:links:check` | Cross-references in `docs/solutions/**/*.md` resolve to servable docs. |
@@ -702,30 +698,26 @@ so CI and local harness runs read the same declared version.
 
 ### Delivery Ladder Phases
 
-`pr:athena` delegates to `pr:athena:delivery-run`, which composes:
+Prepare the candidate with `pr:athena:prepare`, then establish current independent
+review evidence under AGENTS.md steps 6 and 9: obtain and submit a complete review
+when required, or retain the product's positive review-evidence resolution. Run
+`pr:athena` only with its prerequisites satisfied. Preparation invokes the
+installed product's configured dependency, generated-artifact and mechanical checks.
 
-| Phase | Command | Notes |
+`pr:athena` delegates to `pr:athena:delivery-run`, which sequences installed
+product commands against the saved accepted delivery contract:
+
+| Phase | Owner | Notes |
 | --- | --- | --- |
-| Prepare | `pr:athena:prepare` | Dependency check, generated-artifact repair, mechanical lint and typecheck (`pr:athena:mechanical`), then blocks if unstaged or untracked files would prevent reusable proof. |
-| Preflight | `pr:athena:preflight` | Validation-map coverage, live harness audit, audit-fixture consistency, and harness-script sibling-test policy. |
-| Validate | `pr:athena:validate` | The guarded provider evaluates registered obligations before docs, workflow, Convex, frontend, architecture, typecheck, and coverage work; then writes same-tree provider evidence and runs harness review, inferential review, audit, and graphify check. |
-| Record proof | `pr:athena:record-proof` | Records the git-private proof for the validated tree. |
-| Scorecard | `pr:athena:scorecard` | Runs against the current delivery-run ledger. |
+| Admission | Installed product `gate` | Evaluates current obligations; Athena's declared validation provider runs `harness:review --base origin/main`. |
+| Durable telemetry | Athena export location | Exports and stages product run telemetry after the gate, then requests `prepare --refresh-record-neutral`. |
+| Delivery record | Installed product `record` | Writes the portable delivery record; the coordinator stages it and requests another record-neutral preparation refresh. |
+| Final verification | Installed product `verify` | Verifies the resulting candidate and its delivery evidence. |
 
-Inside the ladder, `harness:review` is called with
-`--repo-validation-provided-by pr:athena` plus a `--provider-evidence` path,
-because the repo-owned validation commands already ran directly.
-
-The two provider flags are similarly named but differ in **scope**, and passing
-the wrong one silently changes how much work review skips:
-
-| Flag | Scope |
-| --- | --- |
-| `--repo-validation-provided-by pr:athena` | Narrow. Suppresses only the repo-owned validation set. Package validation still runs, because `pr:athena` leaves package selection to review. |
-| `--validation-provided-by athena-pr-tests` | Broad. Suppresses the repo-owned set *and* prunes package commands the PR workflow runs as separate jobs, leaving validation-map checks and behavior scenarios. |
-
-Neither is a legacy alias of the other. Standalone `harness:review` and
-`pre-push:review` pass neither flag and stay fail-closed.
+`harness:review` owns preflight, the repository validation set, mapped package
+checks, and selected behavior scenarios, followed by inferential review,
+Graphify freshness, and `pr:athena:scorecard`. Its CLI accepts `--base`; there
+is no provider flag that skips these checks for the local ladder or CI.
 
 ### Inferential Review Modes
 
@@ -791,17 +783,14 @@ Tracked, freshness-gated graphify artifacts:
 `graphify-out/graph.html` is committed but sits outside the freshness gate. See
 [Graphify](./graphify.md) for the artifact and Python-runtime details.
 
-Tracked delivery-run telemetry, written by `delivery:telemetry-record`:
+Tracked delivery artifacts under `telemetry/delivery-runs/` include the product
+run export written by `delivery:telemetry-record` and the portable record written
+by installed `record`. Athena's coordinator stages both.
 
-- `telemetry/delivery-runs/<timestamp>-<branch>.json`
-
-This is machine-generated evidence that is deliberately tracked, unlike the
-`artifacts/harness-delivery-runs/` ledger it is promoted from. The ledger is
-git-ignored and per-worktree, and every ticket starts in a fresh worktree, so a
-trend across deliveries cannot live there. One small record per substantial
-delivery is committed instead, and `telemetry/delivery-runs/` is registered
-review-neutral and fingerprint-neutral so writing one never invalidates the
-review evidence or the landed-change report it describes.
+The journal is owned by the installed product under the repository's Git common
+directory; Athena consumes its export without maintaining a second ledger. The configured record-neutral JSON
+paths permit strict artifact-only preparation refresh without granting the
+same exception to arbitrary source, reports or other telemetry files.
 
 Local and CI evidence outputs, all git-ignored:
 
@@ -813,7 +802,6 @@ Local and CI evidence outputs, all git-ignored:
 | `artifacts/harness-behavior/trends/latest.json` | `harness:runtime-trends` |
 | `artifacts/harness-behavior/trends/history/<run-stamp>.json` | `harness:runtime-trends --persist-history` |
 | `artifacts/harness-behavior/videos/<scenario>/<run-stamp>/` | `harness:behavior --record-video` |
-| `artifacts/harness-delivery-runs/` | `pr:athena` delivery-run ledger and provider evidence |
 | `artifacts/harness-contract-preflight/latest.json` | `pr:athena:preflight` |
 | `graphify-out/cache/` | `graphify:rebuild` |
 
@@ -826,17 +814,25 @@ evidence, not reviewable source.
 `.github/workflows/athena-pr-tests.yml` runs on pull requests, on a weekly
 schedule (Mondays 14:00 UTC), and on manual dispatch.
 
-- The `harness-validation` job runs self-review, review with
-  `--validation-provided-by athena-pr-tests`, docs check, delivery-run telemetry
-  check, architecture check, audit, inferential review in `shadow` mode,
-  scorecard, and graphify freshness.
-- The `harness-janitor` job runs only on schedule or manual dispatch. It runs the
-  janitor in report mode, persists inferential history, persists runtime trend
-  history, and regenerates the telemetry scorecard.
+- On pull requests, `harness-validation` first verifies the installed product
+  and portable delivery evidence with `policy:check` and `delivery:verify`,
+  requiring Athena's two mandated review lenses. It checks delivery documentation
+  with `delivery:documentation-admission` and the delivery-run telemetry record
+  with `delivery:telemetry-check`, then installs the Graphify runtime and
+  Playwright browser. One `bun run harness:review --base origin/main` step owns
+  the repository sensor set and selected validation. That step sets
+  `HARNESS_INFERENTIAL_SEMANTIC_MODE=shadow` and `ATHENA_COVERAGE_MAX_WORKERS`.
+  Product/evidence verification is pull-request-only; the other steps also run
+  on the workflow's scheduled and manual triggers.
+- The `harness-janitor-report` job runs only on schedule or manual dispatch. It
+  runs the janitor in report mode, persists inferential history, persists runtime
+  trend history when behavior logs are available, and regenerates the telemetry
+  scorecard.
 - Manual dispatch accepts literal `[harness:behavior:report]` lines as an input,
   which the janitor job pipes into `harness:runtime-trends --persist-history`.
-- Both jobs upload their artifacts with `if: always()` so failures stay
-  inspectable.
+- The validation and janitor jobs upload their artifacts with `if: always()` so
+  failures stay inspectable. Separate jobs run harness implementation tests,
+  webapp builds, and production POS end-to-end tests.
 
 ### Git Hooks
 
@@ -848,12 +844,10 @@ tracked `.husky` directory avoids the missing generated shim problem that a
 - `pre-commit:generated-artifacts` runs `harness:generate` and
   `graphify:rebuild`, then stages the tracked generated outputs so the commit
   includes refreshed artifacts.
-- `pre-push:review` starts with `graphify:check`, then
-  `delivery:documentation-check`, then the rest of the local suite. If tracked
-  graphify artifacts are stale it rebuilds once, rechecks, and stops so the
-  repaired artifacts can be reviewed and committed. If `harness:self-review` or
-  `harness:review` is blocked by stale generated docs, it runs `harness:generate`
-  once, retries, and then blocks for the same reason.
+- `pre-push:review` delegates to installed product `verify`. The hook retains
+  bounded logging and interruption handling; candidate/evidence failures block
+  the push. Generated-artifact repair belongs to preparation or explicit repair
+  commands, whose changes must be reviewed and committed.
 
 For repo-harness edits such as `scripts/harness-app-registry.ts`, keep
 `bun run harness:review --base origin/main` and

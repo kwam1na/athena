@@ -31,14 +31,24 @@ jobs:
   harness-validation:
     name: Harness and Architecture Validation
     runs-on: ubuntu-latest
-    env:
-      ATHENA_HARNESS_CI_POLICY: athena-pr-tests
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Pin pull request base
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: git update-ref refs/remotes/origin/main "$PR_BASE_SHA"
+
+      - name: Setup delivery runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -48,8 +58,13 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Check GitHub workflow YAML
-        run: bun run workflow:check
+      - name: Verify installed product and portable delivery evidence
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bun run policy:check
+          bun run delivery:verify --mandated-lens lens.outcome-correctness --mandated-lens lens.adversarial-testing
 
       - name: Check delivery documentation
         env:
@@ -65,32 +80,12 @@ jobs:
       - name: Install Playwright browser
         run: bunx playwright install chromium
 
-      - name: Run harness self-review
-        run: bun run harness:self-review --base origin/main
-
       - name: Run harness review
-        run: bun run harness:review --base origin/main --validation-provided-by athena-pr-tests
-
-      - name: Check harness docs
-        run: bun run harness:check
-
-      - name: Check architecture boundaries
-        run: bun run architecture:check
-
-      - name: Audit harness coverage
-        run: bun run harness:audit
-
-      - name: Inferential harness review
         env:
           HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: bun run harness:inferential-review
-
-      - name: Generate harness scorecard
-        run: bun run harness:scorecard
-
-      - name: Check graphify freshness
-        run: bun run graphify:check
+          ATHENA_COVERAGE_MAX_WORKERS: ${{ inputs.coverage_workers || '2' }}
+        run: bun run harness:review --base origin/main
 
       - name: Upload harness validation artifacts
         if: always()
@@ -112,6 +107,18 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Pin pull request base
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: git update-ref refs/remotes/origin/main "$PR_BASE_SHA"
+
+      - name: Setup delivery runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -183,6 +190,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Pin pull request base
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: git update-ref refs/remotes/origin/main "$PR_BASE_SHA"
+
+      - name: Setup delivery runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -204,6 +225,18 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Pin pull request base
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: git update-ref refs/remotes/origin/main "$PR_BASE_SHA"
+
+      - name: Setup delivery runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -213,29 +246,11 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Audit Athena Convex baseline
-        run: bun run --filter '@athena/webapp' audit:convex
-
-      - name: Lint changed Athena Convex files
-        run: bun run --filter '@athena/webapp' lint:convex:changed
-
-      - name: Lint changed Athena frontend files
-        run: bun run --filter '@athena/webapp' lint:frontend:changed
-
       - name: Build Athena webapp
         run: bun run --filter '@athena/webapp' build
 
       - name: Build storefront webapp
         run: bun run --filter '@athena/storefront-webapp' build
-
-      - name: Run repo coverage policy
-        env:
-          # The default is the evidence-backed policy; workflow_dispatch can
-          # override it only for a controlled benchmark of the same full suite.
-          ATHENA_COVERAGE_MAX_WORKERS: ${{ inputs.coverage_workers || '2' }}
-        run: |
-          echo "Coverage worker limit: ${ATHENA_COVERAGE_MAX_WORKERS}"
-          /usr/bin/time -v bun run test:coverage
 
   athena-prod-pos-e2e:
     name: Athena POS E2E against Production Backend
@@ -250,6 +265,18 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Pin pull request base
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: git update-ref refs/remotes/origin/main "$PR_BASE_SHA"
+
+      - name: Setup delivery runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -296,7 +323,7 @@ jobs:
 
   storefront-webapp-validation-context:
     name: Storefront Webapp Validation Context
-    needs: athena-webapp-validation
+    needs: [harness-validation, athena-webapp-validation]
     if: always()
     runs-on: ubuntu-latest
 
@@ -305,9 +332,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ needs.athena-webapp-validation.result }}" != "success" ]; then
+          if [ "${{ needs.harness-validation.result }}" != "success" ] || [ "${{ needs.athena-webapp-validation.result }}" != "success" ]; then
             echo "Consolidated webapp validation did not pass; storefront context cannot pass."
             exit 1
           fi
 
-          echo "Storefront tests and build are covered by Athena and Storefront Webapp Validation."
+          echo "Storefront tests are covered by Harness and Architecture Validation; builds are covered by Athena and Storefront Webapp Validation."

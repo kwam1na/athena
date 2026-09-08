@@ -1415,7 +1415,7 @@ const NON_HARNESS_PACKAGE_REGISTRY = [
 
 export const HARNESS_PACKAGE_REGISTRY = [
   ...HARNESS_APP_REGISTRY.map((entry) => ({
-    kind: "harness-app",
+    kind: "harness-app" as const,
     appName: entry.appName,
     packageDir: entry.packageDir,
     requiredEntryDocs: entry.harnessDocs.requiredEntryDocs,

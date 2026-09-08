@@ -1,82 +1,56 @@
-import { existsSync, readFileSync } from "node:fs";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 
-import { describe, expect, it } from "vitest";
-
-import {
-  HARNESS_CLI_ENTRY,
-  PAYLOAD_ENV_VAR,
-  buildEmitArgs,
-} from "./delivery-emit";
-
-describe("buildEmitArgs", () => {
-  it("passes the payload to --json as one argument", () => {
-    expect(
-      buildEmitArgs(["decision.recorded"], '{"fork":"branch name","choice":"x"}')
-    ).toEqual([
-      "emit",
-      "decision.recorded",
-      "--json",
-      '{"fork":"branch name","choice":"x"}',
-    ]);
-  });
-
-  it("forwards the CLI's own flags after the kind", () => {
-    expect(buildEmitArgs(["run.ended", "--run", "run-abc"], undefined)).toEqual([
-      "emit",
-      "run.ended",
-      "--run",
-      "run-abc",
-      "--json",
-      "{}",
-    ]);
-  });
-
-  it("defaults an absent or blank payload to an empty object", () => {
-    expect(buildEmitArgs(["posture.declared"], "  ")).toContain("{}");
-  });
-
-  it("requires a kind", () => {
-    expect(() => buildEmitArgs([], "{}")).toThrow(/Usage:/);
-  });
-
-  it("rejects a caller-supplied --json rather than silently overriding it", () => {
-    expect(() =>
-      buildEmitArgs(["run.started", "--json", '{"host":"x"}'], undefined)
-    ).toThrow(`The payload travels in ${PAYLOAD_ENV_VAR}, not in --json.`);
-  });
-
-  it("rejects a payload that is not JSON", () => {
-    expect(() => buildEmitArgs(["run.started"], "posture=sensor-only")).toThrow(
-      `${PAYLOAD_ENV_VAR} is not valid JSON.`
-    );
-  });
+const repoRoot = path.resolve(import.meta.dirname, "..");
+const roots: string[] = [];
+afterEach(async () => {
+  await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
 });
 
-describe("the wrapper's declared entrypoints", () => {
-  const repoRoot = path.resolve(import.meta.dirname, "..");
+// The compatibility entry point only forwards arguments and the product's exit
+// status. Real installed event execution is covered by pr-athena-delivery-run.
+async function invokeAdapter(args: string[], exitCode: number) {
+  const root = await mkdtemp(path.join(tmpdir(), "athena-emit-adapter-"));
+  roots.push(root);
+  await cp(path.join(repoRoot, "scripts/delivery-emit.ts"), path.join(root, "delivery-emit.ts"));
+  await writeFile(path.join(root, "delivery-product.ts"), `
+export async function runDeliveryProduct(args: string[]) {
+  console.log(JSON.stringify(args));
+  return ${exitCode};
+}
+`);
+  const child = Bun.spawn(["bun", path.join(root, "delivery-emit.ts"), ...args], {
+    cwd: root, stdout: "pipe", stderr: "pipe",
+  });
+  const [code, stdout, stderr] = await Promise.all([
+    child.exited, new Response(child.stdout).text(), new Response(child.stderr).text(),
+  ]);
+  return { code, args: JSON.parse(stdout), stderr };
+}
 
-  it("resolves the harness CLI entry the wrapper spawns", () => {
-    // The pinned package publishes no `bin` and its exports map covers only
-    // `.`, so this deep path is the wrapper's real coupling to the dependency.
-    // A pin bump that relocates the module would otherwise fail only at
-    // runtime, and silently: the CLI's own direct-invocation guard exits 0
-    // without emitting when it is loaded through any other module path. Assert
-    // the guard, not just the file — the likeliest wrong entry is the package's
-    // own `src/index.ts`, which exists and would satisfy a bare existence check
-    // while emitting nothing.
-    expect(
-      readFileSync(path.join(repoRoot, HARNESS_CLI_ENTRY), "utf8")
-    ).toContain("invokedDirectly(process.argv[1]");
+describe("delivery emit compatibility entry point", () => {
+  it("forwards explicit JSON and run selection without rewriting argument boundaries", async () => {
+    const args = ["decision.recorded", "--run", "run-abc", "--json", '{"fork":"branch name","choice":"x"}'];
+    const result = await invokeAdapter(args, 0);
+    expect(result.args).toEqual(["emit", ...args]);
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe("");
   });
 
-  it("registers both delivery commands AGENTS.md tells agents to run", () => {
-    const scripts = JSON.parse(
-      readFileSync(path.join(repoRoot, "package.json"), "utf8")
-    ).scripts;
-    expect(scripts["delivery:emit"]).toBe("bun scripts/delivery-emit.ts");
-    expect(scripts["agent-skills:install"]).toBe(
-      "bun scripts/agent-skills-install.ts"
-    );
+  it.each([{ args: [] }, { args: ["run.started", "--json", "invalid-json"] }])(
+    "leaves invalid input validation and failure status to the product: %j",
+    async ({ args }) => {
+      const result = await invokeAdapter(args, 2);
+      expect(result.args).toEqual(["emit", ...args]);
+      expect(result.code).toBe(2);
+    },
+  );
+
+  it("routes the public command directly to the installed product adapter", async () => {
+    const { scripts } = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8"));
+    expect(scripts["delivery:emit"]).toBe("bun scripts/delivery-product.ts emit");
+    expect(scripts["agent-skills:install"]).toBe("bun scripts/agent-skills-install.ts");
   });
 });

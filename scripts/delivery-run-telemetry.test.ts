@@ -3,1003 +3,155 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-
-import {
-  buildDeliveryRunTelemetryRecord,
-  collectDeliveryRunTelemetryFindings,
-  evaluateDeliveryRunTelemetryCheck,
-  parseArgs,
-  recordDeliveryRunTelemetry,
-  deliveryRunTelemetryPath,
-  readDeliveryRunTelemetryRecords,
-  readLatestPassingDeliveryRunTelemetry,
-  writeDeliveryRunTelemetryRecord,
-  type DeliveryRunTelemetryRecord,
-} from "./delivery-run-telemetry";
-import { createDeliveryRunLedger } from "./harness-delivery-run-ledger";
-import { isReviewNeutralPath } from "./harness-review-identity";
-import {
-  collectDeliverableDiffFingerprint,
-  isDeliverableFingerprintPath,
-} from "./delivery-diff-fingerprint";
-import {
-  observePortableShadow,
-  portableShadowComparisonSha256,
-  type PortableShadowComparison,
-} from "./portable-shadow-observation";
+import { buildRunExport, parseRunExport } from "../.agent-skills/current/runtime/cli-api.mjs";
+import { computeDeliverableIdentity, createRunStore, resolveRunStoreLocation, runGitDirect, gitNamespaceClearedEnvironment, type RunEvent } from "../.agent-skills/current/runtime/kernel.mjs";
+import { collectDeliveryRunTelemetryFindings, deliveryRunTelemetryPath, parseArgs, parseDeliveryRunTelemetry, readDeliveryRunTelemetryRecords, readCurrentDeliveryRunExport, matchesCurrentGate, writeDeliveryRunTelemetryRecord, type DeliveryRunTelemetryCheckInput } from "./delivery-run-telemetry";
+import config from "../harness.config";
+import { productRunFixture } from "./delivery-run-telemetry.fixtures";
 
 const roots: string[] = [];
-const ROOT = path.resolve(import.meta.dirname, "..");
-
-async function createTempRoot() {
-  const rootDir = await mkdtemp(path.join(tmpdir(), "athena-delivery-tel-"));
-  roots.push(rootDir);
-  return rootDir;
+afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
+async function root() { const value = await mkdtemp(path.join(tmpdir(), "athena-product-telemetry-")); roots.push(value); return value; }
+const record = productRunFixture();
+const recordPath = deliveryRunTelemetryPath(record);
+function input(overrides: Partial<DeliveryRunTelemetryCheckInput> = {}): DeliveryRunTelemetryCheckInput {
+  return { changedPaths: [recordPath], sourceLineTotal: 150, changedRecordContents: new Map([[recordPath, record]]), trackedPaths: new Set([recordPath]), currentRecordPaths: new Set([recordPath]), localGateCompleted: true, ciMode: false, ...overrides };
 }
 
-afterEach(async () => {
-  await Promise.all(
-    roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
-  );
-});
-
-function ledger(
-  generatedAt: string,
-  status: "pass" | "blocked" = "pass",
-  reviewCost?: { unit: string; total: number; reportedBy?: string },
-) {
-  return createDeliveryRunLedger({
-    generatedAt,
-    status,
-    proofState: status === "pass" ? "proof_recorded" : "proof_not_recorded",
-    commandSpans: [
-      {
-        phase: "validate",
-        command: "bun run pr:athena:validate",
-        startedAt: generatedAt,
-        endedAt: generatedAt,
-        durationMs: 4000,
-        status: status === "pass" ? "pass" : "fail",
-        exitCode: status === "pass" ? 0 : 1,
-      },
-    ],
-    reviewLoop: {
-      providerId: "execute",
-      runId: "run-a",
-      finalPassId: "pass-a",
-      recordedAt: generatedAt,
-      iterationCount: 2,
-      deferredExpansionCount: 0,
-      deferredIssueIds: [],
-      ...(reviewCost ? { reviewCost } : {}),
-    },
+describe("product projection persistence", () => {
+  it("stores exactly the canonical product export without a second accounting schema", async () => {
+    const dir = await root(); const written = await writeDeliveryRunTelemetryRecord(dir, record);
+    const text = await readFile(path.join(dir, written.path), "utf8");
+    const parsed = parseRunExport(JSON.stringify(record));
+    if (!parsed.ok) throw new Error("Invalid fixture");
+    expect(JSON.parse(text)).toEqual(parsed.value);
+    expect(await readDeliveryRunTelemetryRecords(dir)).toEqual([record]);
+    expect(record.summary.open).toBe(true);
+    expect(record.costs).toEqual({ review: { coverage: "unreported", unreportedEntries: 0, totals: [] }, run: { coverage: "unreported" } });
   });
-}
-
-function shadowComparisonFixture(): PortableShadowComparison {
-  const comparison: Omit<PortableShadowComparison, "comparisonSha256"> = {
-    schemaVersion: "athena-portable-shadow-comparison/1",
-    observedAt: "2026-06-18T12:00:01.000Z",
-    workflow: "compound-delivery-kernel",
-    inputSha256:
-      "54b1e4afe4731d335afaf47602dbf6ae4089f9a1d0e36af7939d39c054dda22b",
-    candidateFingerprint: "7".repeat(64),
-    status: "match",
-    baseline: {
-      baselineId: "athena-portable-workflows-v1-2026-08-27",
-      sha256:
-        "d0f66ad0a48745d86f8cdb4d7c76bf4a644f074cfa7b5dfebcfbf5ccf9b09613",
-    },
-    source: {
-      releaseId: "core-v1",
-      profile: "core",
-      sourceCommitSha: "f0a058d7b40a38bbe43c007f8b11248ecd4bda6a",
-      archiveSha256:
-        "f8b39590bae786767cff1cfd849382884a0b66f12ef9978f752dbcb28c230f26",
-      metadataSha256:
-        "cd0094de0eba4077e05af0c12e10b2a692d93e30e58b7d6aa8495cb0a53899fe",
-      workflowSha256:
-        "d7a651c9392a36f923784771f24a532acca81fa223b865be46cba842c061e706",
-    },
-    athena: {
-      routing: { entryPoint: "deliver-work", workflow: "implement" },
-      posture: "characterization-first",
-      gate: { status: "blocked", blockers: ["gate failed"] },
-      evidence: ["focused sensor passed"],
-    },
-    portable: {
-      routing: { entryPoint: "deliver-work", workflow: "implement" },
-      posture: "characterization-first",
-      gate: { status: "blocked", blockers: ["gate failed"] },
-      evidence: ["focused sensor passed"],
-    },
-    portableMutationAttempts: [],
-    mismatches: [],
-    authority: {
-      authoritativePath: "athena",
-      influencedAuthoritativeResult: false,
-      authoritySwitchAllowed: false,
-      portableCapabilities: {
-        trackerMutation: false,
-        merge: false,
-        deploy: false,
-        statusMutation: false,
-      },
-    },
-  };
-  return {
-    ...comparison,
-    comparisonSha256: portableShadowComparisonSha256(comparison),
-  };
-}
-
-describe("delivery run telemetry", () => {
-  it("builds a durable record carrying run outcome, branch identity, and review telemetry", () => {
-    const sourceLedger = ledger("2026-06-18T12:00:00.000Z", "pass", {
-      unit: "tokens",
-      total: 512_345,
-      reportedBy: "claude-code",
-    });
-    const shadowComparison = shadowComparisonFixture();
-    const record = buildDeliveryRunTelemetryRecord(sourceLedger, {
-      branch: "codex/v26-1300-thing",
-      headSha: "abc123",
-      deliverableDiffFingerprint: shadowComparison.candidateFingerprint,
-      shadowComparison,
-    });
-
-    expect(record.shadowComparison).toEqual(shadowComparison);
-    expect(record).toMatchObject({
-      schemaVersion: 1,
-      generatedAt: "2026-06-18T12:00:00.000Z",
-      branch: "codex/v26-1300-thing",
-      headSha: "abc123",
-      status: "pass",
-      proofState: "proof_recorded",
-      summary: { totalDurationMs: 4000 },
-      reviewLoop: {
-        iterationCount: 2,
-        reviewCost: { unit: "tokens", total: 512_345 },
-      },
-      shadowComparison: {
-        schemaVersion: "athena-portable-shadow-comparison/1",
-        status: "match",
-        workflow: "compound-delivery-kernel",
-        athena: shadowComparison.athena,
-        portable: shadowComparison.portable,
-        portableMutationAttempts: [],
-        mismatches: [],
-        authority: {
-          authoritativePath: "athena",
-          influencedAuthoritativeResult: false,
-          authoritySwitchAllowed: false,
-          portableCapabilities: {
-            trackerMutation: false,
-            merge: false,
-            deploy: false,
-            statusMutation: false,
-          },
-        },
-      },
-    });
+  it("rejects tampered projected totals and unsafe run ids before writing", async () => {
+    const dir = await root();
+    const altered = { ...record, summary: { ...record.summary, durationSeconds: 900 } };
+    expect(parseDeliveryRunTelemetry(JSON.stringify(altered))).toBeNull();
+    await expect(writeDeliveryRunTelemetryRecord(dir, altered)).rejects.toThrow("Invalid product run export");
+    await expect(writeDeliveryRunTelemetryRecord(dir, { ...record, runId: "../outside" })).rejects.toThrow();
   });
-
-  it("refuses to build telemetry from a shadow comparison for another candidate", () => {
-    const shadowComparison = shadowComparisonFixture();
-
-    expect(() =>
-      buildDeliveryRunTelemetryRecord(
-        ledger("2026-06-18T12:00:00.000Z", "pass"),
-        {
-          branch: "codex/v26-1300-thing",
-          headSha: "abc123",
-          deliverableDiffFingerprint: "8".repeat(64),
-          shadowComparison,
-        },
-      ),
-    ).toThrow("different deliverable");
+  it("keeps historical Athena records on disk without treating them as product observations", async () => {
+    const dir = await root(); await mkdir(path.join(dir, "telemetry/delivery-runs"), { recursive: true });
+    const old = JSON.stringify({ schemaVersion: 1, status: "pass", summary: { totalDurationMs: 1000 } });
+    await writeFile(path.join(dir, "telemetry/delivery-runs/historical.json"), old);
+    expect(await readDeliveryRunTelemetryRecords(dir)).toEqual([]);
+    expect(await readFile(path.join(dir, "telemetry/delivery-runs/historical.json"), "utf8")).toBe(old);
   });
-
-  it("refuses fields outside the redacted shadow schema before persistence", () => {
-    const shadowComparison = {
-      ...shadowComparisonFixture(),
-      unredactedSecret: "leak-me",
-    };
-
-    expect(() =>
-      buildDeliveryRunTelemetryRecord(
-        ledger("2026-06-18T12:00:00.000Z", "pass"),
-        {
-          branch: "codex/v26-1300-thing",
-          headSha: "abc123",
-          deliverableDiffFingerprint: shadowComparison.candidateFingerprint,
-          shadowComparison,
-        },
-      ),
-    ).toThrow("not valid for telemetry");
-  });
-
-  it("names files by timestamp and branch so parallel ticket worktrees never collide", () => {
-    const forBranch = (branch: string) =>
-      deliveryRunTelemetryPath(
-        buildDeliveryRunTelemetryRecord(ledger("2026-06-18T12:00:00.000Z"), {
-          branch,
-          headSha: "abc123",
-          deliverableDiffFingerprint: "fingerprint-a",
-        }),
-      );
-
-    expect(forBranch("codex/v26-1300-thing")).toBe(
-      "telemetry/delivery-runs/2026-06-18T12-00-00-000Z-codex-v26-1300-thing.json",
-    );
-    expect(forBranch("codex/v26-1301-other")).not.toBe(
-      forBranch("codex/v26-1300-thing"),
-    );
-  });
-
-  it("round-trips records and returns them oldest-first", async () => {
-    const rootDir = await createTempRoot();
-    for (const stamp of [
-      "2026-06-20T12:00:00.000Z",
-      "2026-06-18T12:00:00.000Z",
-      "2026-06-19T12:00:00.000Z",
-    ]) {
-      await writeDeliveryRunTelemetryRecord(
-        rootDir,
-        buildDeliveryRunTelemetryRecord(ledger(stamp), {
-          branch: `codex/run-${stamp}`,
-          headSha: "abc123",
-          deliverableDiffFingerprint: "fingerprint-a",
-        }),
-      );
-    }
-
-    const records = await readDeliveryRunTelemetryRecords(rootDir);
-    expect(records.map((record) => record.generatedAt)).toEqual([
-      "2026-06-18T12:00:00.000Z",
-      "2026-06-19T12:00:00.000Z",
-      "2026-06-20T12:00:00.000Z",
-    ]);
-  });
-
-  it("retains structurally valid historical shadow evidence after release pins advance", async () => {
-    const rootDir = await createTempRoot();
-    const current = shadowComparisonFixture();
-    const historical = {
-      ...current,
-      inputSha256: "1".repeat(64),
-      baseline: {
-        baselineId: "athena-portable-workflows-v1-older",
-        sha256: "2".repeat(64),
-      },
-      source: {
-        ...current.source,
-        sourceCommitSha: "3".repeat(40),
-        archiveSha256: "4".repeat(64),
-        metadataSha256: "5".repeat(64),
-        workflowSha256: "6".repeat(64),
-      },
-    };
-    historical.comparisonSha256 = portableShadowComparisonSha256(historical);
-    const record: DeliveryRunTelemetryRecord = {
-      ...buildDeliveryRunTelemetryRecord(ledger("2026-06-18T12:00:00.000Z"), {
-        branch: "codex/historical-shadow",
-        headSha: "abc123",
-        deliverableDiffFingerprint: historical.candidateFingerprint,
-      }),
-      shadowComparison: historical,
-    };
-    await writeDeliveryRunTelemetryRecord(rootDir, record);
-
-    await expect(readDeliveryRunTelemetryRecords(rootDir)).resolves.toEqual([
-      record,
-    ]);
-  });
-
-  it("selects the newest passing record as the cross-delivery baseline", async () => {
-    const rootDir = await createTempRoot();
-    await writeDeliveryRunTelemetryRecord(
-      rootDir,
-      buildDeliveryRunTelemetryRecord(ledger("2026-06-18T12:00:00.000Z"), {
-        branch: "codex/passing",
-        headSha: "abc123",
-        deliverableDiffFingerprint: "fingerprint-a",
-      }),
-    );
-    await writeDeliveryRunTelemetryRecord(
-      rootDir,
-      buildDeliveryRunTelemetryRecord(
-        ledger("2026-06-19T12:00:00.000Z", "blocked"),
-        {
-          branch: "codex/blocked",
-          headSha: "def456",
-          deliverableDiffFingerprint: "fingerprint-a",
-        },
-      ),
-    );
-
-    await expect(
-      readLatestPassingDeliveryRunTelemetry(rootDir),
-    ).resolves.toMatchObject({
-      generatedAt: "2026-06-18T12:00:00.000Z",
-      status: "pass",
-    });
-  });
-
-  it("tolerates a missing directory, malformed files, and unknown schema versions", async () => {
-    const emptyRoot = await createTempRoot();
-    await expect(readDeliveryRunTelemetryRecords(emptyRoot)).resolves.toEqual(
-      [],
-    );
-    await expect(
-      readLatestPassingDeliveryRunTelemetry(emptyRoot),
-    ).resolves.toBeNull();
-
-    const rootDir = await createTempRoot();
-    const telemetryDir = path.join(rootDir, "telemetry/delivery-runs");
-    await mkdir(telemetryDir, { recursive: true });
-    await writeFile(path.join(telemetryDir, "broken.json"), "{not json");
-    await writeFile(
-      path.join(telemetryDir, "future.json"),
-      `${JSON.stringify({ schemaVersion: 99, generatedAt: "2026-06-18" })}\n`,
-    );
-    await writeFile(path.join(telemetryDir, "notes.txt"), "ignored\n");
-    await writeDeliveryRunTelemetryRecord(
-      rootDir,
-      buildDeliveryRunTelemetryRecord(ledger("2026-06-18T12:00:00.000Z"), {
-        branch: "codex/good",
-        headSha: "abc123",
-        deliverableDiffFingerprint: "fingerprint-a",
-      }),
-    );
-
-    const records = await readDeliveryRunTelemetryRecords(rootDir);
-    expect(records).toHaveLength(1);
-    expect(records[0]?.branch).toBe("codex/good");
-  });
-
-  it("writes records that pretty-print as JSON on disk", async () => {
-    const rootDir = await createTempRoot();
-    const record = buildDeliveryRunTelemetryRecord(
-      ledger("2026-06-18T12:00:00.000Z"),
-      {
-        branch: "codex/good",
-        headSha: "abc123",
-        deliverableDiffFingerprint: "fingerprint-a",
-      },
-    );
-    const written = await writeDeliveryRunTelemetryRecord(rootDir, record);
-    const onDisk = await readFile(path.join(rootDir, written.path), "utf8");
-
-    expect(onDisk.endsWith("\n")).toBe(true);
-    expect(JSON.parse(onDisk) as DeliveryRunTelemetryRecord).toEqual(record);
-  });
-
-  const costReviewLoopForRecord = {
-    providerId: "execute",
-    runId: "run-a",
-    finalPassId: "pass-a",
-    recordedAt: "2026-06-18T11:59:00.000Z",
-    iterationCount: 2,
-    deferredExpansionCount: 0,
-    deferredIssueIds: [] as string[],
-  };
-
-  describe("telemetry.recorded sensor", () => {
-    const recordPath =
-      "telemetry/delivery-runs/2026-06-18T12-00-00-000Z-codex-good.json";
-    const validRecord = buildDeliveryRunTelemetryRecord(
-      ledger("2026-06-18T12:00:00.000Z"),
-      {
-        branch: "codex/good",
-        headSha: "abc123",
-        deliverableDiffFingerprint: "fingerprint-a",
-      },
-    );
-
-    function check(
-      overrides: Partial<
-        Parameters<typeof collectDeliveryRunTelemetryFindings>[0]
-      >,
-    ) {
-      return collectDeliveryRunTelemetryFindings({
-        changedPaths: ["scripts/some-change.ts"],
-        sourceLineTotal: 500,
-        changedRecordContents: new Map(),
-        trackedPaths: new Set([recordPath]),
-        deliverableDiffFingerprint: "fingerprint-a",
-        // A run has completed against this exact deliverable, so a record is
-        // producible and the demand is satisfiable.
-        localLedgerFingerprint: "fingerprint-a",
-        ciMode: false,
-        ...overrides,
-      });
-    }
-
-    it("demands nothing from a small change, matching the solution-note threshold", () => {
-      // A one-line fix owes no telemetry: the artifact scales with the
-      // delivery, exactly as compound:check and landed-report:check do.
-      expect(check({ sourceLineTotal: 149 })).toEqual([]);
-      expect(check({ sourceLineTotal: 149, ciMode: true })).toEqual([]);
-      expect(check({ sourceLineTotal: 150 })).toHaveLength(1);
-    });
-
-    it("passes when a current record was committed with the delivery", () => {
-      expect(
-        check({
-          changedPaths: ["scripts/some-change.ts", recordPath],
-          changedRecordContents: new Map([[recordPath, validRecord]]),
-        }),
-      ).toEqual([]);
-    });
-
-    it("accepts strict telemetry for a reused proof with no command spans", () => {
-      const reusedProofRecord = buildDeliveryRunTelemetryRecord(
-        createDeliveryRunLedger({
-          generatedAt: "2026-06-18T12:00:00.000Z",
-          status: "pass",
-          proofState: "proof_reused",
-          commandSpans: [],
-        }),
-        {
-          branch: "codex/good",
-          headSha: "abc123",
-          deliverableDiffFingerprint: "fingerprint-a",
-        },
-      );
-
-      expect(
-        check({
-          changedPaths: ["scripts/some-change.ts", recordPath],
-          changedRecordContents: new Map([[recordPath, reusedProofRecord]]),
-        }),
-      ).toEqual([]);
-      expect(reusedProofRecord).toMatchObject({
-        proofState: "proof_reused",
-        summary: { commandCount: 0, totalDurationMs: 0 },
-      });
-    });
-
-    it("fails a substantial delivery with no record once a gate has run here", () => {
-      const findings = check({});
-      expect(findings).toHaveLength(1);
-      expect(findings[0]?.code).toBe("telemetry_record_missing");
-      expect(findings[0]?.message).toContain("delivery:telemetry-record");
-    });
-
-    it("fails a record that describes an older deliverable diff once a run has caught up", () => {
-      // Presence is not enough: telemetry recorded before later fix rounds
-      // would misreport what actually merges. The demand only fires once a run
-      // has completed against the new deliverable, so re-recording is possible.
-      const findings = check({
-        changedPaths: ["scripts/some-change.ts", recordPath],
-        changedRecordContents: new Map([[recordPath, validRecord]]),
-        deliverableDiffFingerprint: "fingerprint-b",
-        localLedgerFingerprint: "fingerprint-b",
-      });
-      expect(findings).toHaveLength(1);
-      expect(findings[0]?.message).toContain("older deliverable diff");
-    });
-
-    it("stays quiet until a run has completed for this exact deliverable, but never in CI", () => {
-      // No run yet: demanding a record would block the run that produces it.
-      expect(check({ localLedgerFingerprint: null })).toEqual([]);
-      // A run happened, but the deliverable has moved since — the only record
-      // producible now would describe a different tree, so stay quiet locally
-      // and let the next run re-establish currency.
-      expect(check({ localLedgerFingerprint: "fingerprint-older" })).toEqual(
-        [],
-      );
-      // CI is the merge authority: no bootstrap leniency.
-      expect(
-        check({ localLedgerFingerprint: null, ciMode: true }),
-      ).toHaveLength(1);
-    });
-
-    it("refuses a record whose run did not pass", () => {
-      const blockedRecord = buildDeliveryRunTelemetryRecord(
-        ledger("2026-06-18T12:00:00.000Z", "blocked"),
-        {
-          branch: "codex/good",
-          headSha: "abc123",
-          deliverableDiffFingerprint: "fingerprint-a",
-        },
-      );
-      const findings = check({
-        changedPaths: ["scripts/some-change.ts", recordPath],
-        changedRecordContents: new Map([[recordPath, blockedRecord]]),
-      });
-      expect(findings).toHaveLength(1);
-      expect(findings[0]?.message).toContain("did not pass");
-    });
-
-    it("refuses an untracked record, which would not survive the worktree", () => {
-      const findings = check({
-        changedPaths: ["scripts/some-change.ts", recordPath],
-        changedRecordContents: new Map([[recordPath, validRecord]]),
-        trackedPaths: new Set<string>(),
-      });
-      expect(findings).toHaveLength(1);
-      expect(findings[0]?.code).toBe("telemetry_record_missing");
-    });
-
-    it.each([
-      ["a non-ISO timestamp", { generatedAt: "18 June 2026" }],
-      ["an empty branch", { branch: "" }],
-      ["an empty head sha", { headSha: "" }],
-      ["an empty fingerprint", { deliverableDiffFingerprint: "" }],
-      ["an unknown status", { status: "mostly-fine" }],
-      ["an unknown proof state", { proofState: "probably" }],
-      [
-        "a non-finite summary number",
-        { summary: { ...validRecord.summary, totalDurationMs: Number.NaN } },
-      ],
-    ])("rejects a record with %s", (_label, override) => {
-      // These fields are read back from the tracked tree and rendered into the
-      // run summary, so a loose predicate turns a hand-authored file into
-      // printed output and into the cross-delivery baseline.
-      const findings = check({
-        changedPaths: ["scripts/some-change.ts", recordPath],
-        changedRecordContents: new Map([
-          [recordPath, { ...validRecord, ...override }],
-        ]),
-      });
-      expect(
-        findings.some((f) => f.code === "telemetry_record_malformed"),
-      ).toBe(true);
-    });
-
-    it("rejects a record whose review telemetry is structurally invalid", () => {
-      // Otherwise an unvalidated reviewLoop from a committed record reaches the
-      // summary formatter's string operations.
-      const poisoned = {
-        ...validRecord,
-        reviewLoop: {
-          ...costReviewLoopForRecord,
-          iterationCount: 0,
-          deferredExpansionCount: 1,
-          deferredIssueIds: [],
-        },
-      };
-      const findings = check({
-        changedPaths: ["scripts/some-change.ts", recordPath],
-        changedRecordContents: new Map([[recordPath, poisoned]]),
-      });
-      expect(
-        findings.some((f) => f.code === "telemetry_record_malformed"),
-      ).toBe(true);
-    });
-
-    it("rejects shadow telemetry that claims authority to switch", () => {
-      const validShadow = shadowComparisonFixture();
-      const poisoned = {
-        ...validRecord,
-        shadowComparison: {
-          ...validShadow,
-          authority: {
-            ...validShadow.authority,
-            authoritySwitchAllowed: true,
-          },
-        },
-      };
-      const findings = check({
-        changedPaths: ["scripts/some-change.ts", recordPath],
-        changedRecordContents: new Map([[recordPath, poisoned]]),
-      });
-
-      expect(
-        findings.some((f) => f.code === "telemetry_record_malformed"),
-      ).toBe(true);
-    });
-
-    it("rejects tracked shadow telemetry when comparison content no longer matches its hash", () => {
-      const validShadow = shadowComparisonFixture();
-      const poisoned = {
-        ...validRecord,
-        shadowComparison: {
-          ...validShadow,
-          portable: {
-            ...validShadow.portable!,
-            evidence: ["tampered evidence"],
-          },
-        },
-      };
-      const findings = check({
-        changedPaths: ["scripts/some-change.ts", recordPath],
-        changedRecordContents: new Map([[recordPath, poisoned]]),
-      });
-
-      expect(
-        findings.some((f) => f.code === "telemetry_record_malformed"),
-      ).toBe(true);
-    });
-
-    it("rejects tracked shadow telemetry for another delivery fingerprint", () => {
-      const poisoned = {
-        ...validRecord,
-        shadowComparison: shadowComparisonFixture(),
-      };
-      const findings = check({
-        changedPaths: ["scripts/some-change.ts", recordPath],
-        changedRecordContents: new Map([[recordPath, poisoned]]),
-      });
-
-      expect(
-        findings.some((f) => f.code === "telemetry_record_malformed"),
-      ).toBe(true);
-    });
-
-    it("flags a hand-edited or malformed record even when another valid one exists", () => {
-      const brokenPath =
-        "telemetry/delivery-runs/2026-06-19T12-00-00-000Z-codex-bad.json";
-      const findings = check({
-        changedPaths: ["scripts/some-change.ts", recordPath, brokenPath],
-        changedRecordContents: new Map<string, unknown>([
-          [recordPath, validRecord],
-          [brokenPath, { schemaVersion: 99 }],
-        ]),
-      });
-      expect(findings).toHaveLength(1);
-      // A distinct code matters: only a missing record is waivable, so a
-      // malformed one must not arrive wearing the waivable code.
-      expect(findings[0]?.code).toBe("telemetry_record_malformed");
-      expect(findings[0]?.message).toContain(brokenPath);
-    });
-  });
-
-  it("keeps the telemetry tree out of the reviewed deliverable and the report fingerprint", () => {
-    const telemetryFile =
-      "telemetry/delivery-runs/2026-06-18T12-00-00-000Z-codex-good.json";
-
-    // Recording a run describes work already reviewed; counting it as reviewed
-    // content would let the observability write invalidate its own evidence.
-    expect(isReviewNeutralPath(telemetryFile)).toBe(true);
-    expect(isDeliverableFingerprintPath(telemetryFile)).toBe(false);
-    expect(isReviewNeutralPath("scripts/harness-delivery-run-ledger.ts")).toBe(
-      false,
-    );
+  it("retains separate partial review and whole-run costs from product projection", () => {
+    const review: RunEvent = { ...record.events[1]!, kind: "review.round.closed", candidateTreeSha: "a".repeat(40), actor: { role: "executor" }, seq: 3, payload: { round: 1, candidateTreeSha: "a".repeat(40), outcome: "aligned", findings: { P0: 0, P1: 0, P2: 0, P3: 0 }, cost: { coverage: "partial", reportedBy: "codex", unit: "subagent-tokens", total: 17 } } };
+    const ended: RunEvent = { ...record.events[1]!, kind: "run.ended", seq: 4, payload: { result: "complete", cost: { coverage: "unreported", reportedBy: "codex" } } };
+    const export_ = buildRunExport({ runId: record.runId, events: [...record.events, review, ended] });
+    const parsed = parseDeliveryRunTelemetry(JSON.stringify(export_));
+    expect(parsed?.costs.review.coverage).toBe("partial");
+    expect(parsed?.costs.review.totals).toEqual([{ unit: "subagent-tokens", reportedBy: "codex", total: 17 }]);
+    expect(parsed?.costs.run).toEqual({ coverage: "unreported", reportedBy: "codex" });
   });
 });
 
-describe("delivery run telemetry against a real repository", () => {
-  function git(rootDir: string, args: string[]) {
-    const result = spawnSync("git", args, {
-      cwd: rootDir,
-      encoding: "utf8",
-      env: Object.fromEntries(
-        Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
-      ),
-    });
-    if (result.status !== 0) {
-      throw new Error(result.stderr.trim() || `git ${args.join(" ")} failed`);
-    }
+describe("Athena artifact directory policy", () => {
+  it("accepts a tracked current product export", () => expect(collectDeliveryRunTelemetryFindings(input())).toEqual([]));
+  it("accepts a product delivery record sibling without counting it as run telemetry", () => {
+    const deliveryPath = "telemetry/delivery-runs/delivery-record.json";
+    const delivery = { version: "delivery-record/2", gateId: "fixture", identityToken: "deliverable-tree/v1", workspaceId: "fixture", claims: [], manifestDigest: null, attestation: { level: "self" },
+      candidateBinding: { treeSha: "a".repeat(40), deliverableDigest: "b".repeat(64), identityToken: "deliverable-tree/v1", baseRef: "main", baseTipSha: "c".repeat(40), mergeBaseSha: "c".repeat(40), workspaceId: "fixture" } };
+    expect(collectDeliveryRunTelemetryFindings(input({ changedPaths: [recordPath, deliveryPath], changedRecordContents: new Map<string, unknown>([[recordPath, record], [deliveryPath, delivery]]) }))).toEqual([]);
+    expect(collectDeliveryRunTelemetryFindings(input({ changedPaths: [deliveryPath], changedRecordContents: new Map([[deliveryPath, delivery]]), trackedPaths: new Set([deliveryPath]) })).map(f => f.code)).toEqual(["telemetry_record_missing"]);
+  });
+  it.each([false, true])("blocks malformed siblings even with valid current export (CI %s)", ciMode => {
+    const broken = "telemetry/delivery-runs/broken.json";
+    const result = collectDeliveryRunTelemetryFindings(input({ ciMode, changedPaths: [recordPath, broken], changedRecordContents: new Map<string, unknown>([[recordPath, record], [broken, {}]]) }));
+    expect(result.map(f => f.code)).toEqual(["telemetry_record_malformed"]);
+  });
+  it("blocks malformed files below the size threshold and before the first gate", () => {
+    expect(collectDeliveryRunTelemetryFindings(input({ sourceLineTotal: 1, localGateCompleted: false, changedRecordContents: new Map([[recordPath, null]]) }))[0]?.code).toBe("telemetry_record_malformed");
+  });
+  it("does not allow an untracked or stale export to satisfy required telemetry", () => {
+    expect(collectDeliveryRunTelemetryFindings(input({ trackedPaths: new Set() }))[0]?.code).toBe("telemetry_record_missing");
+    expect(collectDeliveryRunTelemetryFindings(input({ currentRecordPaths: new Set() }))[0]?.code).toBe("telemetry_record_missing");
+  });
+  it("allows first local gate bootstrap but requires current telemetry in CI", () => {
+    const absent = input({ changedPaths: [], localGateCompleted: false });
+    expect(collectDeliveryRunTelemetryFindings(absent)).toEqual([]);
+    expect(collectDeliveryRunTelemetryFindings({ ...absent, ciMode: true })[0]?.code).toBe("telemetry_record_missing");
+  });
+  it("treats deleted artifacts as removals and refuses historical changed records", () => {
+    expect(collectDeliveryRunTelemetryFindings(input({ sourceLineTotal: 1, changedRecordContents: new Map() }))).toEqual([]);
+    expect(collectDeliveryRunTelemetryFindings(input({ changedRecordContents: new Map([[recordPath, { schemaVersion: 1, status: "pass" }]]) })).map(f => f.code)).toContain("telemetry_record_malformed");
+  });
+});
+
+it("exports a real product journal without allocating a second run or ending it", async () => {
+  const dir = await root(); spawnSync("git", ["init", "-q"], { cwd: dir });
+  const location = await resolveRunStoreLocation({ cwd: dir, run: runGitDirect, env: gitNamespaceClearedEnvironment() }); if (!location.ok) throw new Error(location.reason);
+  const store = createRunStore(location.commonDir); const allocation = await store.allocate(); if (!allocation.ok) throw new Error("allocation failed");
+  const fixture = productRunFixture({ runId: allocation.runId });
+  for (const { seq, ...event } of fixture.events) expect((await store.append(allocation.runId, { ...event, repo: { commonDir: location.commonDir } })).ok).toBe(true);
+  expect((await store.setCurrent(location.worktreeKey, allocation.runId)).ok).toBe(true);
+  const exported = await readCurrentDeliveryRunExport(dir);
+  expect(exported?.runId).toBe(allocation.runId); expect(exported?.summary.open).toBe(true);
+  expect(await store.list()).toEqual([allocation.runId]);
+});
+
+it("parses only supported invocation arguments", () => {
+  expect(parseArgs(["record", "--run", "run-1234567890abcdef"])).toMatchObject({ command: "record", runId: "run-1234567890abcdef" });
+  expect(() => parseArgs(["check", "--run", "id"])).toThrow();
+  expect(() => parseArgs(["record", "--base"])).toThrow();
+});
+
+
+it("binds only an adjacent successful CLI gate context and permits record-neutral transport", async () => {
+  const dir = await root();
+  function git(...args: string[]) {
+    const result = spawnSync("git", args, { cwd: dir, encoding: "utf8" });
+    if (result.status !== 0) throw new Error(result.stderr);
     return result.stdout.trim();
   }
-
-  async function repoFixture() {
-    const rootDir = await createTempRoot();
-    git(rootDir, ["init", "--initial-branch=main"]);
-    git(rootDir, ["config", "user.email", "fixture@example.com"]);
-    git(rootDir, ["config", "user.name", "Fixture"]);
-    await writeFile(path.join(rootDir, "seed.txt"), "seed\n");
-    git(rootDir, ["add", "."]);
-    git(rootDir, ["commit", "-m", "seed"]);
-    git(rootDir, ["branch", "base-ref"]);
-    git(rootDir, ["checkout", "-b", "codex/delivery"]);
-    return rootDir;
-  }
-
-  async function writeLedger(
-    rootDir: string,
-    status: "pass" | "blocked",
-    fingerprint?: string,
-  ) {
-    const ledger = createDeliveryRunLedger({
-      generatedAt: "2026-06-18T12:00:00.000Z",
-      status,
-      proofState: status === "pass" ? "proof_recorded" : "proof_not_recorded",
-      commandSpans: [],
-      ...(fingerprint ? { deliverableDiffFingerprint: fingerprint } : {}),
-    });
-    await mkdir(path.join(rootDir, "artifacts/harness-delivery-runs"), {
-      recursive: true,
-    });
-    await writeFile(
-      path.join(rootDir, "artifacts/harness-delivery-runs/latest.json"),
-      `${JSON.stringify(ledger, null, 2)}\n`,
-    );
-  }
-
-  it("records a real run: branch, head, and the fingerprint it measured", async () => {
-    const rootDir = await repoFixture();
-    await writeFile(path.join(rootDir, "src.ts"), "export const a = 1;\n");
-    git(rootDir, ["add", "."]);
-    git(rootDir, ["commit", "-m", "work"]);
-    const shadowComparison = await observePortableShadow(ROOT, {
-      observedAt: "2026-06-18T12:00:01.000Z",
-      candidateFingerprint: collectDeliverableDiffFingerprint(
-        rootDir,
-        "base-ref",
-        changedPathsForFixture(rootDir),
-      ),
-    });
-    await mkdir(path.join(rootDir, "artifacts/harness-delivery-runs"), {
-      recursive: true,
-    });
-    await writeFile(
-      path.join(
-        rootDir,
-        "artifacts/harness-delivery-runs/shadow-comparison.json",
-      ),
-      `${JSON.stringify(shadowComparison, null, 2)}\n`,
-    );
-    await writeLedger(
-      rootDir,
-      "pass",
-      collectDeliverableDiffFingerprint(
-        rootDir,
-        "base-ref",
-        changedPathsForFixture(rootDir),
-      ),
-    );
-
-    const written = await recordDeliveryRunTelemetry(rootDir, {
-      baseRef: "base-ref",
-    });
-
-    expect(written.record.branch).toBe("codex/delivery");
-    expect(written.record.headSha).toBe(git(rootDir, ["rev-parse", "HEAD"]));
-    expect(written.record.deliverableDiffFingerprint).toMatch(/^[a-f0-9]{64}$/);
-    expect(written.record.shadowComparison).toMatchObject({
-      status: "match",
-      comparisonSha256: shadowComparison.comparisonSha256,
-      baseline: shadowComparison.baseline,
-      source: {
-        workflowSha256: shadowComparison.source.workflowSha256,
-      },
-      mismatches: [],
-      authority: { authoritySwitchAllowed: false },
-    });
-    expect(written.path).toContain("telemetry/delivery-runs/");
-    expect(
-      JSON.parse(await readFile(path.join(rootDir, written.path), "utf8")),
-    ).toMatchObject({ status: "pass" });
-  });
-
-  it("refuses to record a passing run that measured a different tree", async () => {
-    // Otherwise the record would stamp the current deliverable onto a run of an
-    // older one — telemetry claiming a tree it never measured.
-    const rootDir = await repoFixture();
-    await writeFile(path.join(rootDir, "src.ts"), "export const a = 1;\n");
-    git(rootDir, ["add", "."]);
-    git(rootDir, ["commit", "-m", "work"]);
-    await writeLedger(rootDir, "pass", "fingerprint-of-an-older-tree");
-
-    await expect(
-      recordDeliveryRunTelemetry(rootDir, { baseRef: "base-ref" }),
-    ).rejects.toThrow(/measured a different deliverable/);
-  });
-
-  it("refuses to join a stale shadow artifact to a current passing run", async () => {
-    const rootDir = await repoFixture();
-    await writeFile(path.join(rootDir, "src.ts"), "export const a = 1;\n");
-    git(rootDir, ["add", "."]);
-    git(rootDir, ["commit", "-m", "work"]);
-    const shadowComparison = await observePortableShadow(ROOT, {
-      observedAt: "2026-06-18T12:00:01.000Z",
-      candidateFingerprint: "a".repeat(64),
-    });
-    await mkdir(path.join(rootDir, "artifacts/harness-delivery-runs"), {
-      recursive: true,
-    });
-    await writeFile(
-      path.join(
-        rootDir,
-        "artifacts/harness-delivery-runs/shadow-comparison.json",
-      ),
-      `${JSON.stringify(shadowComparison, null, 2)}\n`,
-    );
-    await writeLedger(
-      rootDir,
-      "pass",
-      collectDeliverableDiffFingerprint(
-        rootDir,
-        "base-ref",
-        changedPathsForFixture(rootDir),
-      ),
-    );
-
-    await expect(
-      recordDeliveryRunTelemetry(rootDir, { baseRef: "base-ref" }),
-    ).rejects.toThrow(/shadow artifact describes a different deliverable/);
-  });
-
-  it("refuses to record a run that did not pass", async () => {
-    const rootDir = await repoFixture();
-    await writeLedger(rootDir, "blocked");
-
-    await expect(
-      recordDeliveryRunTelemetry(rootDir, { baseRef: "base-ref" }),
-    ).rejects.toThrow(/describes a blocked run/);
-  });
-
-  it("refuses to record with no ledger at all", async () => {
-    const rootDir = await repoFixture();
-
-    await expect(
-      recordDeliveryRunTelemetry(rootDir, { baseRef: "base-ref" }),
-    ).rejects.toThrow(/No delivery-run ledger to record/);
-  });
-
-  // Real Git commits and repeated source scans need an outer integration budget.
-  it("evaluates end to end: quiet, then demanding, then satisfied by a committed record", async () => {
-    const rootDir = await repoFixture();
-    // Must live where the shared source-line counter looks, or it is not
-    // "considerable" and the threshold is never reached.
-    await mkdir(path.join(rootDir, "scripts"), { recursive: true });
-    await writeFile(
-      path.join(rootDir, "scripts/big.ts"),
-      Array.from(
-        { length: 400 },
-        (_, index) => `export const v${index} = ${index};`,
-      ).join("\n"),
-    );
-    git(rootDir, ["add", "."]);
-    git(rootDir, ["commit", "-m", "substantial"]);
-
-    // No ledger: the demand would block the run that satisfies it. ciMode is
-    // explicit because the default reads process.env.CI, which is set in CI —
-    // a local-behavior assertion must not depend on where it runs.
-    expect(
-      evaluateDeliveryRunTelemetryCheck(rootDir, {
-        baseRef: "base-ref",
-        ciMode: false,
-      }),
-    ).toMatchObject({ status: "pass" });
-
-    // CI has no bootstrap leniency.
-    const inCi = evaluateDeliveryRunTelemetryCheck(rootDir, {
-      baseRef: "base-ref",
-      ciMode: true,
-    });
-    expect(inCi.status).toBe("fail");
-    expect(inCi.findings[0]?.code).toBe("telemetry_record_missing");
-
-    // A run completed for this exact deliverable: now the demand is fair.
-    const fingerprint = await recordAfterLedger(rootDir);
-    expect(fingerprint).toMatch(/^[a-f0-9]{64}$/);
-
-    // Recorded but uncommitted: does not survive the worktree, so no pass.
-    expect(
-      evaluateDeliveryRunTelemetryCheck(rootDir, {
-        baseRef: "base-ref",
-        ciMode: true,
-      }).status,
-    ).toBe("fail");
-
-    git(rootDir, ["add", "."]);
-    git(rootDir, ["commit", "-m", "telemetry"]);
-    expect(
-      evaluateDeliveryRunTelemetryCheck(rootDir, {
-        baseRef: "base-ref",
-        ciMode: true,
-      }),
-    ).toMatchObject({ status: "pass" });
-  }, 20_000);
-
-  async function recordAfterLedger(rootDir: string) {
-    const fingerprint = collectDeliverableDiffFingerprint(
-      rootDir,
-      "base-ref",
-      changedPathsForFixture(rootDir),
-    );
-    await writeLedger(rootDir, "pass", fingerprint);
-    await recordDeliveryRunTelemetry(rootDir, { baseRef: "base-ref" });
-    return fingerprint;
-  }
-
-  function changedPathsForFixture(rootDir: string) {
-    return [
-      ...new Set([
-        ...git(rootDir, ["diff", "--name-only", "base-ref...HEAD"]).split("\n"),
-        ...git(rootDir, ["ls-files", "--others", "--exclude-standard"]).split(
-          "\n",
-        ),
-      ]),
-    ]
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .sort();
-  }
-
-  it("stays quiet when only a non-passing run reached this deliverable", async () => {
-    // A blocked run stamps the current fingerprint too. If that counted, the
-    // sensor would enforce while recordDeliveryRunTelemetry refuses non-passing
-    // ledgers — nothing could satisfy it and a non-interactive agent would be
-    // stuck. This drives the real ledger-reading path, not a hand-built input.
-    const rootDir = await repoFixture();
-    await mkdir(path.join(rootDir, "scripts"), { recursive: true });
-    await writeFile(
-      path.join(rootDir, "scripts/big.ts"),
-      Array.from(
-        { length: 400 },
-        (_, index) => `export const v${index} = ${index};`,
-      ).join("\n"),
-    );
-    git(rootDir, ["add", "."]);
-    git(rootDir, ["commit", "-m", "substantial"]);
-    const fingerprint = collectDeliverableDiffFingerprint(
-      rootDir,
-      "base-ref",
-      changedPathsForFixture(rootDir),
-    );
-
-    await writeLedger(rootDir, "blocked", fingerprint);
-    expect(
-      evaluateDeliveryRunTelemetryCheck(rootDir, {
-        baseRef: "base-ref",
-        ciMode: false,
-      }),
-    ).toMatchObject({ status: "pass" });
-
-    // The same fingerprint from a *passing* run does make the demand fair.
-    await writeLedger(rootDir, "pass", fingerprint);
-    expect(
-      evaluateDeliveryRunTelemetryCheck(rootDir, {
-        baseRef: "base-ref",
-        ciMode: false,
-      }).status,
-    ).toBe("fail");
-  });
-
-  it("honors an explicit local mode even when the CI env var is set", async () => {
-    // The gate passes ciMode:false explicitly. An agent sandbox that exports CI
-    // must not flip the in-gate evaluation into strict mode, which would
-    // disable the bootstrap leniency and leave no legal move.
-    const rootDir = await repoFixture();
-    await mkdir(path.join(rootDir, "scripts"), { recursive: true });
-    await writeFile(
-      path.join(rootDir, "scripts/big.ts"),
-      Array.from(
-        { length: 400 },
-        (_, index) => `export const v${index} = ${index};`,
-      ).join("\n"),
-    );
-    git(rootDir, ["add", "."]);
-    git(rootDir, ["commit", "-m", "substantial"]);
-
-    const previous = process.env.CI;
-    process.env.CI = "true";
-    try {
-      expect(
-        evaluateDeliveryRunTelemetryCheck(rootDir, {
-          baseRef: "base-ref",
-          ciMode: false,
-        }),
-      ).toMatchObject({ status: "pass" });
-      // Without the explicit flag the env var decides, and it demands a record.
-      expect(
-        evaluateDeliveryRunTelemetryCheck(rootDir, { baseRef: "base-ref" })
-          .status,
-      ).toBe("fail");
-    } finally {
-      if (previous === undefined) delete process.env.CI;
-      else process.env.CI = previous;
-    }
-  });
-
-  it("parses the sensor CLI options like its sibling sensors", () => {
-    expect(parseArgs(["check"])).toEqual({
-      command: "check",
-      baseRef: "origin/main",
-    });
-    expect(parseArgs(["record", "--base", "origin/release"])).toEqual({
-      command: "record",
-      baseRef: "origin/release",
-    });
-    expect(() => parseArgs([])).toThrow(/Usage/);
-    expect(() => parseArgs(["publish"])).toThrow(/Usage/);
-    expect(() => parseArgs(["check", "--base"])).toThrow(/Missing value/);
-    expect(() => parseArgs(["check", "--nope"])).toThrow(/Unknown argument/);
-  });
+  git("init", "-q");
+  await writeFile(path.join(dir, "source.ts"), "export const value = 0;\n");
+  git("add", ".");
+  git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "base");
+  await writeFile(path.join(dir, "source.ts"), "export const value = 1;\n");
+  git("add", "."); const sourceTree = git("write-tree");
+  const saved: RunEvent = { ...record.events[0]!, seq: 2, kind: "context.saved", candidateTreeSha: sourceTree, payload: {
+    spec: "ordinary-run-context/1", stage: "athena-gate", candidateTreeSha: sourceTree,
+    contract: { objective: "Deliver change", acceptanceCriteria: ["Change works"], finishLine: "merge-ready" },
+    candidateBinding: { deliverableDigest: "a".repeat(64), identity: "deliverable-tree/v1", baseRef: "main", baseTipSha: "b".repeat(40), mergeBaseSha: "b".repeat(40), workspaceId: "fixture" },
+    policyDigest: "c".repeat(64), release: { runtimeVersion: "1", releaseId: "product", profile: "linear", archiveSha256: "d".repeat(64) },
+  } };
+  const digest = await computeDeliverableIdentity({ rootDir: dir, treeSha: sourceTree, config: { ...config, computingIdentityVersion: "validation-tree/v1", reviewNeutral: config.recordNeutral } });
+  const gate = { ...record.events[1]!, seq: 3, payload: { ...record.events[1]!.payload, digest } };
+  const withEvents = (events: RunEvent[]) => buildRunExport({ runId: record.runId, events });
+  const export_ = withEvents([record.events[0]!, saved, gate]);
+  expect(parseDeliveryRunTelemetry(JSON.stringify(export_))).not.toBeNull();
+  expect(await matchesCurrentGate(dir, config, sourceTree, export_)).toBe(true);
+  expect(await matchesCurrentGate(dir, config, sourceTree, record)).toBe(false);
+  expect(await matchesCurrentGate(dir, config, sourceTree, withEvents([record.events[0]!, saved, { ...record.events[1]!, seq: 3 }]))).toBe(false);
+  expect(await matchesCurrentGate(dir, config, sourceTree, withEvents([record.events[0]!, saved, { ...gate, actor: { role: "executor" } }]))).toBe(false);
+  expect(await matchesCurrentGate(dir, config, sourceTree, withEvents([...export_.events, { ...gate, seq: 4, payload: { ...gate.payload, outcome: "policy" } }]))).toBe(false);
+  // A second successful completion cannot borrow the earlier context.
+  expect(await matchesCurrentGate(dir, config, sourceTree, withEvents([...export_.events, { ...gate, seq: 4 }]))).toBe(false);
+  await mkdir(path.join(dir, "telemetry/delivery-runs"), { recursive: true });
+  await writeFile(path.join(dir, "telemetry/delivery-runs/export.json"), JSON.stringify(export_));
+  git("add", "."); expect(await matchesCurrentGate(dir, config, git("write-tree"), export_)).toBe(true);
+  git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "source and telemetry together");
+  const clone = await root();
+  const cloned = spawnSync("git", ["clone", "--no-local", dir, clone], { encoding: "utf8" });
+  expect(cloned.status, cloned.stderr).toBe(0);
+  expect(spawnSync("git", ["cat-file", "-e", sourceTree], { cwd: clone }).status).not.toBe(0);
+  const cloneTree = spawnSync("git", ["rev-parse", "HEAD^{tree}"], { cwd: clone, encoding: "utf8" }).stdout.trim();
+  const transported = parseDeliveryRunTelemetry(await readFile(path.join(clone, "telemetry/delivery-runs/export.json"), "utf8"));
+  expect(transported).not.toBeNull();
+  expect(await matchesCurrentGate(clone, config, cloneTree, transported!)).toBe(true);
+  await mkdir(path.join(dir, "docs/reports"), { recursive: true });
+  await writeFile(path.join(dir, "docs/reports/report.html"), "Report change");
+  git("add", "."); expect(await matchesCurrentGate(dir, config, git("write-tree"), export_)).toBe(false);
+  git("rm", "--cached", "docs/reports/report.html");
+  await writeFile(path.join(dir, "source.ts"), "export const value = 2;\n");
+  git("add", "source.ts"); expect(await matchesCurrentGate(dir, config, git("write-tree"), export_)).toBe(false);
 });

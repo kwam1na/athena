@@ -6,12 +6,13 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   auditHarnessGateObligationContract,
+  DELIVERY_PRODUCT_SCRIPTS,
   runHarnessAudit,
 } from "./harness-audit";
 import { HarnessBlockedError } from "./harness-blockers";
 import { writeGeneratedHarnessDocs } from "./harness-generate";
 import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
-import { HARNESS_GATE_REGISTRY } from "./harness-gate-registry";
+import harnessConfig from "../harness.config";
 
 const tempRoots: string[] = [];
 
@@ -1980,68 +1981,115 @@ afterEach(async () => {
   );
 });
 
+async function createDeliveryFixture(config = harnessConfig) {
+  const rootDir = await createFixtureRepo();
+  await write(
+    "package.json",
+    JSON.stringify({ scripts: DELIVERY_PRODUCT_SCRIPTS }),
+    rootDir,
+  );
+  await write(
+    "harness.config.ts",
+    `export default ${JSON.stringify(config)};`,
+    rootDir,
+  );
+  for (const file of [
+    "scripts/delivery-product.ts",
+    ".agent-skills/current/runtime/kernel.mjs",
+    ".agent-skills/current/runtime/cli-api.mjs",
+  ])
+    await write(file, "// fixture surface\n", rootDir);
+  await write(
+    ".github/workflows/athena-pr-tests.yml",
+    "ref: ${{ github.event.pull_request.head.sha }}\nrun: bun run delivery:verify\n",
+    rootDir,
+  );
+  return rootDir;
+}
+
 describe("runHarnessAudit", () => {
-  it("fails closed when a public guarded gate bypasses the admission wrapper", async () => {
-    const rootDir = await createFixtureRepo();
-    await write(
-      "package.json",
-      JSON.stringify({
-        scripts: {
-          "pr:athena": "bun run pr:athena:delivery-run",
-          "pr:athena:validate": "bun run pr:athena:validate-provider",
-          "pr:athena:prepare": "bun scripts/pr-athena-prepare.ts",
-          "pr:athena:validate-provider": "bun run test:coverage",
-          "harness:review-context":
-            "bun scripts/harness-review-evidence.ts context",
-          "harness:review-evidence":
-            "bun scripts/harness-review-evidence.ts record",
-        },
-      }),
-      rootDir,
-    );
-    expect(await auditHarnessGateObligationContract(rootDir)).toContain(
-      "Public gate script pr:athena:validate-provider must be exactly: bun scripts/harness-gate-admission.ts",
-    );
+  it("accepts product policy and the ordinary installed command aliases", async () => {
+    expect(
+      await auditHarnessGateObligationContract(await createDeliveryFixture()),
+    ).toEqual([]);
   });
 
   it.each([
-    {
-      publicGate: "pr:athena",
-      script: "bun run test:coverage && bun run pr:athena:delivery-run",
-      finding:
-        "Public gate pr:athena must delegate immediately and exactly to pr:athena:delivery-run before guarded work",
-    },
-    {
-      publicGate: "pr:athena:validate",
-      script: "bun run test:coverage && bun run pr:athena:validate-provider",
-      finding:
-        "Public gate pr:athena:validate must delegate immediately to pr:athena:validate-provider before guarded work",
-    },
+    "pr:athena",
+    "pr:athena:validate",
+    "pr:athena:prepare",
+    "harness:review-context",
+    "delivery:verify",
   ])(
-    "rejects a guarded-work sentinel before $publicGate reaches the shared wrapper",
-    async ({ publicGate, script, finding }) => {
-      const rootDir = await createFixtureRepo();
-      const packageJson = {
-        scripts: {
-          "pr:athena": "bun run pr:athena:delivery-run",
-          "pr:athena:validate": "bun run pr:athena:validate-provider",
-          "pr:athena:prepare": "bun scripts/pr-athena-prepare.ts",
-          "pr:athena:validate-provider":
-            "bun scripts/harness-gate-admission.ts",
-          "harness:review-context":
-            "bun scripts/harness-review-evidence.ts context",
-          "harness:review-evidence":
-            "bun scripts/harness-review-evidence.ts record",
-        } as Record<string, string>,
-      };
-      packageJson.scripts[publicGate] = script;
-      await write("package.json", JSON.stringify(packageJson), rootDir);
-
+    "rejects guarded work inserted before %s reaches the product",
+    async (publicGate) => {
+      const rootDir = await createDeliveryFixture();
+      await write(
+        "package.json",
+        JSON.stringify({
+          scripts: {
+            ...DELIVERY_PRODUCT_SCRIPTS,
+            [publicGate]: `bun run test:coverage && ${DELIVERY_PRODUCT_SCRIPTS[publicGate]}`,
+          },
+        }),
+        rootDir,
+      );
       expect(await auditHarnessGateObligationContract(rootDir)).toContain(
-        finding,
+        `Public gate script ${publicGate} must be exactly: ${DELIVERY_PRODUCT_SCRIPTS[publicGate]}`,
       );
     },
   );
+
+  it("rejects a retired candidate engine", async () => {
+    const rootDir = await createDeliveryFixture();
+    await write(
+      "scripts/harness-candidate.ts",
+      "export const bypass = true;",
+      rootDir,
+    );
+    expect(await auditHarnessGateObligationContract(rootDir)).toContain(
+      "Retired delivery engine must be absent: scripts/harness-candidate.ts",
+    );
+  });
+
+  it("rejects missing sensitive groups without reimplementing activation", async () => {
+    const rootDir = await createDeliveryFixture({
+      ...harnessConfig,
+      sensitivePaths: [],
+    });
+    expect(await auditHarnessGateObligationContract(rootDir)).toContain(
+      "Product sensitive groups must exactly cover Athena review-sensitive scenarios.",
+    );
+  });
+
+  it("rejects removed mechanical preparation", async () => {
+    const rootDir = await createDeliveryFixture({
+      ...harnessConfig,
+      preparationCommands: [],
+    });
+    expect(await auditHarnessGateObligationContract(rootDir)).toContain(
+      "Product preparation must execute Athena mechanical checks before review.",
+    );
+  });
+
+  it("rejects CI delegation and missing actual-head record verification", async () => {
+    const rootDir = await createDeliveryFixture();
+    await write(
+      ".github/workflows/athena-pr-tests.yml",
+      "env:\n  ATHENA_HARNESS_CI_POLICY: athena-pr-tests\n",
+      rootDir,
+    );
+    const findings = await auditHarnessGateObligationContract(rootDir);
+    expect(findings).toContain(
+      "Retired CI delegation bypass must be absent: ATHENA_HARNESS_CI_POLICY",
+    );
+    expect(findings).toContain(
+      "Athena CI product verification is missing github.event.pull_request.head.sha",
+    );
+    expect(findings).toContain(
+      "Athena CI product verification is missing bun run delivery:verify",
+    );
+  });
   it("passes when current app surfaces are fully mapped", async () => {
     const rootDir = await createFixtureRepo();
 
@@ -2266,8 +2314,7 @@ describe("agent harness merge gate", () => {
     expect(scenario).toBeDefined();
     expect(scenario!.reviewSensitive).toBe(true);
     expect(
-      HARNESS_GATE_REGISTRY.obligations["review.green"].activation.kind === "review_projection" &&
-        HARNESS_GATE_REGISTRY.obligations["review.green"].activation.sensitiveScenarioIds,
+      harnessConfig.sensitivePaths.map((group) => group.id),
     ).toContain("athena.agent-harness");
   });
 

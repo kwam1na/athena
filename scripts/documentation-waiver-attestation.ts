@@ -1,8 +1,5 @@
 import type { DeliveryDocumentationFinding } from "./delivery-documentation-check";
-import {
-  HARNESS_REVIEW_IDENTITY_VERSION,
-  type HarnessReviewIdentityVersion,
-} from "./harness-review-identity";
+import { DELIVERABLE_TREE_V1 } from "../.agent-skills/current/runtime/kernel.mjs";
 
 export const DOCUMENTATION_WAIVER_SCHEMA_VERSION = 4 as const;
 export const DOCUMENTATION_WAIVER_DISPATCHER =
@@ -24,7 +21,7 @@ export type DocumentationWaiverCandidate = {
   prNumber: number;
   headSha: string;
   deliverableTreeSha: string;
-  identityVersion: HarnessReviewIdentityVersion;
+  identityVersion: string;
   baseRef: string;
   baseTipSha: string;
   diffBaseSha: string;
@@ -107,7 +104,7 @@ export function parseDocumentationWaiverAttestation(
     record.schemaVersion !== DOCUMENTATION_WAIVER_SCHEMA_VERSION ||
     record.kind !== "documentation_waiver" ||
     record.obligationId !== "documentation.current" ||
-    record.identityVersion !== HARNESS_REVIEW_IDENTITY_VERSION ||
+    record.identityVersion !== DELIVERABLE_TREE_V1 ||
     !Number.isInteger(record.prNumber) ||
     (record.prNumber as number) < 1 ||
     !Number.isInteger(record.workflowRunId) ||

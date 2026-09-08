@@ -43,6 +43,10 @@ Remote CI can still diverge if local pre-push routing does not select the same c
 
 Generated outputs, test files, route tree generation, coverage output, and Convex generated files stay excluded in the package coverage configs.
 
+Root-script LCOV aggregation also excludes installed release payload under the repository's `.agent-skills/generations/` directory. Importing the delivery product otherwise adds its generated runtime bundles to Athena's coverage denominator. Keep every other imported source record, including application modules and `harness.config.ts`, and leave the characterized baselines unchanged. The record-aware filter in `scripts/coverage-summary.ts` resolves paths against the current checkout; its regression test proves that similarly named directories and uncovered authored dependencies still count and fail the gate.
+
+The root-script function baseline currently depends on instrumented temporary-fixture copies outside the repository: the retained cutover sample measures 89.43% with those copies and 86.97% without them against the unchanged 88.07% baseline (line coverage still passes either way). [V26-1952](https://linear.app/v26-labs/issue/V26-1952) tracks excluding those records together with an evidence-based baseline characterization; coordinate any instrumented fixture-count changes in V26-1908 with that work. This limitation remains unimplemented and is separate from the installed-generation exclusion.
+
 `packages/valkey-proxy-server` is not included yet because it uses `node --test` and has no coverage provider or summary artifact in the current toolchain. Treat that as a staged coverage gap, not as hidden compliance.
 
 ## Prevention

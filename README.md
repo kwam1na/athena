@@ -69,7 +69,7 @@ the harness validates the exact delivery candidate.
 | --- | --- |
 | `bun run harness:check` | Quick repo health check. |
 | `bun run harness:test` | After changing anything under `scripts/`. |
-| `bun run pr:athena` | The full delivery ladder; records reusable pre-push proof. |
+| `bun run pr:athena` | Run the installed gate, stage product telemetry and delivery record, then verify; preparation and review are prerequisites. |
 | `bun run graphify:check` | Freshness gate for tracked graph artifacts. |
 
 Three behaviors are worth knowing up front:

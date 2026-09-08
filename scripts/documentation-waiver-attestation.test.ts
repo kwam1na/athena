@@ -5,7 +5,7 @@ import {
   verifyDocumentationWaiverAttestation,
   type DocumentationWaiverAttestation,
 } from "./documentation-waiver-attestation";
-import { HARNESS_REVIEW_IDENTITY_VERSION } from "./harness-review-identity";
+import { DELIVERABLE_TREE_V1 as HARNESS_REVIEW_IDENTITY_VERSION } from "../.agent-skills/current/runtime/kernel.mjs";
 
 const expected = {
   repository: "v26-labs/athena",

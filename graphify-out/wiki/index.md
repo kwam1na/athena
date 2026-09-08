@@ -7,15 +7,15 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - [packages/AGENTS.md](../../packages/AGENTS.md) - package router plus the operational guides for each harnessed package
 
 ## Repo Summary
-- Code files discovered: 3321
-- Graph nodes: 14839
-- Graph edges: 18493
-- Communities: 3245
+- Code files discovered: 3309
+- Graph nodes: 14570
+- Graph edges: 18024
+- Communities: 3232
 
 ## Graph Hotspots
 - `dailyClose.ts` (103 edges, Community 0) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
 - `convex-operation-admission-check.ts` (102 edges, Community 1) - [`scripts/convex-operation-admission-check.ts`](../../scripts/convex-operation-admission-check.ts)
-- `harness-inferential-review.ts` (89 edges, Community 3) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
+- `harness-inferential-review.ts` (91 edges, Community 3) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
 - `posLocalStore.ts` (88 edges, Community 2) - [`packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts`](../../packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts)
 - `terminalHealthPresentation.ts` (80 edges, Community 4) - [`packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts`](../../packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts)
 - `dailyOperations.ts` (76 edges, Community 5) - [`packages/athena-webapp/convex/operations/dailyOperations.ts`](../../packages/athena-webapp/convex/operations/dailyOperations.ts)

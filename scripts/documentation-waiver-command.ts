@@ -3,23 +3,20 @@ import {
   type DeliveryDocumentationFinding,
 } from "./delivery-documentation-check";
 import type { DocumentationWaiverFindingCode } from "./documentation-waiver-attestation";
+import { HarnessUsageError, runHarnessCliBoundary } from "./harness-blockers";
 import {
-  HarnessBlockedError,
-  HarnessUsageError,
-  runHarnessCliBoundary,
-} from "./harness-blockers";
-import type { HarnessCandidate } from "./harness-candidate";
-import { evaluatePrAthenaPreparationReceipt } from "./pr-athena-prepare";
+  importHarnessConfig,
+  wireRepo,
+} from "../.agent-skills/current/runtime/cli-api.mjs";
+import {
+  evaluatePreparationReceipt,
+  renderBlockers,
+  type CapturedCandidate,
+} from "../.agent-skills/current/runtime/kernel.mjs";
 
 type WaiverCandidate = Pick<
-  HarnessCandidate,
-  | "headSha"
-  | "deliverableTreeSha"
-  | "identityVersion"
-  | "baseRef"
-  | "baseTipSha"
-  | "diffBaseSha"
-  | "mode"
+  CapturedCandidate,
+  "headSha" | "deliverable" | "base" | "mode"
 >;
 
 type PullRequestIdentity = {
@@ -56,8 +53,8 @@ export function buildDocumentationWaiverRequest(input: {
   }
   if (
     input.candidate.headSha !== input.pullRequest.headSha ||
-    input.candidate.baseTipSha !== input.pullRequest.baseSha ||
-    input.candidate.baseRef !== `origin/${input.pullRequest.baseRef}`
+    input.candidate.base.tipSha !== input.pullRequest.baseSha ||
+    input.candidate.base.ref !== `origin/${input.pullRequest.baseRef}`
   ) {
     throw new Error(
       "The prepared candidate does not match the pull request head and base.",
@@ -67,19 +64,23 @@ export function buildDocumentationWaiverRequest(input: {
     throw new Error("Repository and waiver reason are required.");
   }
   if (input.findingCodes.length === 0) {
-    throw new Error("The current candidate has no documentation findings to waive.");
+    throw new Error(
+      "The current candidate has no documentation findings to waive.",
+    );
   }
 
   return {
     repository: input.repository,
     pr_number: String(input.pullRequest.number),
     head_sha: input.candidate.headSha,
-    base_ref: input.candidate.baseRef,
-    base_sha: input.candidate.baseTipSha,
-    diff_base_sha: input.candidate.diffBaseSha,
-    deliverable_tree_sha: input.candidate.deliverableTreeSha,
-    identity_version: input.candidate.identityVersion,
-    waived_finding_codes: JSON.stringify([...new Set(input.findingCodes)].sort()),
+    base_ref: input.candidate.base.ref,
+    base_sha: input.candidate.base.tipSha,
+    diff_base_sha: input.candidate.base.mergeBaseSha,
+    deliverable_tree_sha: input.candidate.deliverable.digest,
+    identity_version: input.candidate.deliverable.identity,
+    waived_finding_codes: JSON.stringify(
+      [...new Set(input.findingCodes)].sort(),
+    ),
     reason: input.reason.trim(),
   };
 }
@@ -95,7 +96,9 @@ async function runGh(args: string[]) {
     child.exited,
   ]);
   if (exitCode !== 0) {
-    throw new Error(stderr.trim() || stdout.trim() || `gh ${args.join(" ")} failed`);
+    throw new Error(
+      stderr.trim() || stdout.trim() || `gh ${args.join(" ")} failed`,
+    );
   }
   return stdout.trim();
 }
@@ -145,11 +148,11 @@ export function parseDocumentationWaiverArgs(argv: string[]) {
     if (argv[index] === "--pr") pr = readValue("--pr", index++);
     else if (argv[index] === "--reason") {
       reason = readValue("--reason", index++);
-    }
-    else throw new HarnessUsageError({
-      ...usage,
-      message: `Unknown argument: ${argv[index]}`,
-    });
+    } else
+      throw new HarnessUsageError({
+        ...usage,
+        message: `Unknown argument: ${argv[index]}`,
+      });
   }
   if (!reason.trim()) {
     throw new HarnessUsageError({
@@ -161,7 +164,10 @@ export function parseDocumentationWaiverArgs(argv: string[]) {
 }
 
 export function buildDocumentationWaiverRequestReceipt(
-  input: Pick<DocumentationWaiverWorkflowInputs, "repository" | "pr_number" | "head_sha">,
+  input: Pick<
+    DocumentationWaiverWorkflowInputs,
+    "repository" | "pr_number" | "head_sha"
+  >,
 ) {
   return {
     status: "requested" as const,
@@ -185,13 +191,21 @@ async function main() {
     return;
   }
   const rootDir = process.cwd();
-  const prepared = await evaluatePrAthenaPreparationReceipt(rootDir);
-  if (prepared.prepared === false) {
-    throw new HarnessBlockedError([prepared.blocker]);
-  }
+  const config = await importHarnessConfig(rootDir);
+  const wiring = await wireRepo(rootDir, config);
+  const capture = await wiring.captureCandidate();
+  if (capture.ok === false) throw new Error(renderBlockers(capture.blockers));
+  const prepared = await evaluatePreparationReceipt(
+    rootDir,
+    { config, candidate: capture.candidate },
+    wiring.storageOptions,
+  );
+  if (prepared.prepared === false) throw new Error(renderBlockers(prepared.blockers));
   const documentation = evaluateDeliveryDocumentationCheck(rootDir);
   if (documentation.status === "pass") {
-    throw new Error("Delivery documentation is already current; no waiver is needed.");
+    throw new Error(
+      "Delivery documentation is already current; no waiver is needed.",
+    );
   }
 
   const repository = await ghJson(["repo", "view", "--json", "nameWithOwner"]);
@@ -204,7 +218,7 @@ async function main() {
   ];
   const pullRequest = await ghJson(prArgs);
   const inputs = buildDocumentationWaiverRequest({
-    candidate: prepared.candidate,
+    candidate: capture.candidate,
     repository: String(repository.nameWithOwner ?? ""),
     pullRequest: {
       number: Number(pullRequest.number),

@@ -7,8 +7,8 @@ import {
   HARNESS_PACKAGE_REGISTRY,
   getHarnessPackageRegistration,
 } from "./harness-app-registry";
-import { projectReviewActivation } from "./harness-candidate";
-import { HARNESS_GATE_REGISTRY } from "./harness-gate-registry";
+import { projectReviewActivation } from "../.agent-skills/current/runtime/kernel.mjs";
+import harnessConfig from "../harness.config";
 
 const reviewSensitiveActivationCases = [
   {
@@ -152,12 +152,9 @@ describe("HARNESS_APP_REGISTRY", () => {
         .filter((scenario) => scenario.reviewSensitive)
         .map((scenario) => scenario.id),
     ).sort();
-    const activation =
-      HARNESS_GATE_REGISTRY.obligations["review.green"].activation;
-
-    expect(activation.kind).toBe("review_projection");
-    if (activation.kind !== "review_projection") return;
-    expect([...activation.sensitiveScenarioIds].sort()).toEqual(declared);
+    const activation = harnessConfig.obligations.find((obligation) => obligation.id === "review.green")!.activation;
+    expect(activation.kind).toBe("relevant_change");
+    expect(harnessConfig.sensitivePaths.map((group) => group.id).sort()).toEqual(declared);
     expect(
       reviewSensitiveActivationCases.map(({ scenarioId }) => scenarioId).sort(),
     ).toEqual(declared);
@@ -166,15 +163,8 @@ describe("HARNESS_APP_REGISTRY", () => {
   it.each(reviewSensitiveActivationCases)(
     "$name",
     ({ entry, expectedScenarioIds }) => {
-      const scenarios = HARNESS_APP_REGISTRY.flatMap((app) =>
-        app.validationScenarios.map((scenario) => ({
-          ...scenario,
-          packageDir: app.packageDir,
-        })),
-      );
-
-      expect(projectReviewActivation([entry], scenarios)).toMatchObject({
-        sensitiveScenarioIds: expectedScenarioIds,
+      expect(projectReviewActivation([{ ...entry, binary: false }], harnessConfig)).toMatchObject({
+        sensitivePathIds: expectedScenarioIds,
       });
     },
   );

@@ -1,5 +1,9 @@
-import { createHash } from "node:crypto";
-import { existsSync, lstatSync, readFileSync, readlinkSync } from "node:fs";
+import {
+  digestCanonical,
+  digestDeliverableEntries,
+  type DeliverableTreeEntry,
+} from "../.agent-skills/current/runtime/kernel.mjs";
+import { lstatSync, readFileSync, readlinkSync } from "node:fs";
 import path from "node:path";
 
 export function normalizeRepoPath(repoPath: string) {
@@ -13,7 +17,7 @@ export function sortUniquePaths(paths: string[]) {
 }
 
 export function isDeliverableFingerprintPath(repoPath: string) {
-  const normalizedPath = normalizeRepoPath(repoPath);
+  const normalizedPath = repoPath.replace(/^\.\//, "");
 
   if (
     normalizedPath.startsWith("docs/reports/") ||
@@ -32,7 +36,7 @@ export function isDeliverableFingerprintPath(repoPath: string) {
   return true;
 }
 
-function runGit(rootDir: string, args: string[], allowFailure = false) {
+function runGit(rootDir: string, args: string[]) {
   const result = Bun.spawnSync(["git", ...args], {
     cwd: rootDir,
     env: gitEnv(),
@@ -40,13 +44,13 @@ function runGit(rootDir: string, args: string[], allowFailure = false) {
     stdout: "pipe",
   });
 
-  if (result.exitCode !== 0 && !allowFailure) {
+  if (result.exitCode !== 0) {
     throw new Error(
       `git ${args.join(" ")} failed: ${result.stderr.toString().trim()}`,
     );
   }
 
-  return result.exitCode === 0 ? result.stdout.toString() : "";
+  return result.stdout.toString();
 }
 
 function gitEnv() {
@@ -62,52 +66,70 @@ export function collectDeliverableDiffFingerprint(
   baseRef: string,
   changedFiles: string[],
 ) {
-  const fingerprintFiles = sortUniquePaths(
-    changedFiles.filter((filePath) => isDeliverableFingerprintPath(filePath)),
-  );
-  const hash = createHash("sha256");
-  const mergeBase = runGit(
-    rootDir,
-    ["merge-base", baseRef, "HEAD"],
-    true,
-  ).trim();
-
-  hash.update(`base:${mergeBase || baseRef}\n`);
-
-  for (const filePath of fingerprintFiles) {
+  // This is Athena's report projection, not its review or validation identity.
+  // Git paths are exact bytes: do not trim or rewrite backslashes here.
+  const fingerprintFiles = [...new Set(changedFiles)]
+    .filter(isDeliverableFingerprintPath)
+    .sort();
+  const mergeBase = runGit(rootDir, ["merge-base", baseRef, "HEAD"]).trim();
+  const entries: DeliverableTreeEntry[] = fingerprintFiles.map((filePath) => {
     const absolutePath = path.join(rootDir, filePath);
-    hash.update(`file:${filePath}\n`);
-
-    if (!existsSync(absolutePath)) {
-      hash.update("deleted\n");
-      continue;
+    let stat;
+    try {
+      stat = lstatSync(absolutePath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      return { path: filePath, mode: "000000", objectSha: "0".repeat(40) };
     }
-
-    if (lstatSync(absolutePath).isSymbolicLink()) {
-      hash.update(`symlink:${readlinkSync(absolutePath)}\n`);
-      continue;
+    if (!stat.isFile() && !stat.isSymbolicLink()) {
+      throw new Error(`Unsupported deliverable path: ${filePath}`);
     }
-
-    hash.update(readFileSync(absolutePath));
-    hash.update("\n");
-  }
-
-  return hash.digest("hex");
+    const bytes = stat.isSymbolicLink()
+      ? Buffer.from(readlinkSync(absolutePath))
+      : readFileSync(absolutePath);
+    const result = Bun.spawnSync(["git", "hash-object", "--stdin"], {
+      cwd: rootDir,
+      env: gitEnv(),
+      stdin: bytes,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (result.exitCode !== 0) throw new Error(result.stderr.toString());
+    return {
+      path: filePath,
+      mode: stat.isSymbolicLink()
+        ? "120000"
+        : stat.mode & 0o111
+          ? "100755"
+          : "100644",
+      objectSha: result.stdout.toString().trim(),
+    };
+  });
+  return digestCanonical({
+    version: "athena-report-diff/v2",
+    base: mergeBase,
+    deliverable: digestDeliverableEntries(entries, {
+      identityToken: "athena-report-tree/v2",
+      reviewNeutral: [],
+    }),
+  });
 }
 
 export function collectChangedPathsForDiff(rootDir: string, baseRef: string) {
-  const gitLines = (args: string[]) =>
-    runGit(rootDir, args)
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
-
+  const gitPaths = (args: string[]) =>
+    runGit(rootDir, args).split("\0").filter(Boolean);
   return [
     ...new Set([
-      ...gitLines(["diff", "--name-only", `${baseRef}...HEAD`]),
-      ...gitLines(["diff", "--name-only"]),
-      ...gitLines(["diff", "--cached", "--name-only"]),
-      ...gitLines(["ls-files", "--others", "--exclude-standard"]),
+      ...gitPaths([
+        "diff",
+        "--name-only",
+        "-z",
+        "--no-renames",
+        `${baseRef}...HEAD`,
+      ]),
+      ...gitPaths(["diff", "--name-only", "-z", "--no-renames"]),
+      ...gitPaths(["diff", "--cached", "--name-only", "-z", "--no-renames"]),
+      ...gitPaths(["ls-files", "--others", "--exclude-standard", "-z"]),
     ]),
   ].sort();
 }

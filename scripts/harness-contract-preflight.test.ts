@@ -68,6 +68,21 @@ async function createRealAuditFixtureDrift() {
   await cp(path.join(process.cwd(), "scripts"), path.join(rootDir, "scripts"), {
     recursive: true,
   });
+  await cp(
+    path.join(process.cwd(), "harness.config.ts"),
+    path.join(rootDir, "harness.config.ts"),
+  );
+  await mkdir(path.join(rootDir, ".agents"), { recursive: true });
+  await cp(
+    path.join(process.cwd(), ".agents/review-selection.json"),
+    path.join(rootDir, ".agents/review-selection.json"),
+  );
+  await mkdir(path.join(rootDir, ".agent-skills/current"), { recursive: true });
+  await cp(
+    path.join(process.cwd(), ".agent-skills/current/runtime"),
+    path.join(rootDir, ".agent-skills/current/runtime"),
+    { recursive: true },
+  );
   await mkdir(path.join(rootDir, "packages/athena-webapp/scripts"), {
     recursive: true,
   });
@@ -223,7 +238,7 @@ describe("runHarnessContractPreflight", () => {
 
     try {
       await expect(runFocusedContractTests(rootDir)).rejects.toThrow(
-        /Focused harness contract tests exited with code 1/,
+        /Focused harness contract tests exited with code 1[\s\S]*__harness_contract_fixture_drift__/,
       );
 
       await writeFile(registryPath, baselineRegistry);
@@ -271,6 +286,7 @@ describe("runHarnessContractPreflight", () => {
       ]);
       expect(failed.humanReport).toContain("unmapped-contract.ts");
       expect(failed.humanReport).toContain("Focused harness contract tests exited");
+      expect(failed.humanReport).toContain("__harness_contract_fixture_drift__");
       expect(failed.humanReport).toContain("harness-app-registry.test.ts");
 
       await writeFile(

@@ -1,105 +1,98 @@
-import { describe, expect, it } from "vitest";
-
+import { afterEach, describe, expect, it } from "vitest";
 import {
-  CHECKOUT_ENV_VAR,
-  assertInstalled,
-  parseArgs,
-  resolveCheckout,
-  type BuiltRelease,
-} from "./agent-skills-install";
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
-const built: BuiltRelease = {
-  releaseId: "linear-v2",
-  profile: "linear",
-  archiveSha256: "a".repeat(64),
-};
-
-const cleanStatus = {
-  lifecycle: "current",
-  blockers: [],
-  active: {
-    releaseId: built.releaseId,
-    profile: built.profile,
-    archiveSha256: built.archiveSha256,
-  },
-};
-
-describe("resolveCheckout", () => {
-  it("names the environment variable when the checkout is not declared", () => {
-    expect(() => resolveCheckout({})).toThrow(CHECKOUT_ENV_VAR);
-    expect(() => resolveCheckout({ [CHECKOUT_ENV_VAR]: "  " })).toThrow(
-      CHECKOUT_ENV_VAR
-    );
-  });
-
-  it("rejects a relative checkout path", () => {
-    expect(() => resolveCheckout({ [CHECKOUT_ENV_VAR]: "../skills" })).toThrow(
-      /absolute path/
-    );
-  });
-
-  it("returns the declared absolute checkout", () => {
-    expect(resolveCheckout({ [CHECKOUT_ENV_VAR]: "/srv/agent-skills" })).toBe(
-      "/srv/agent-skills"
-    );
-  });
+const roots: string[] = [];
+afterEach(async () => {
+  for (const root of roots.splice(0))
+    await rm(root, { recursive: true, force: true });
 });
-
-describe("assertInstalled", () => {
-  it("accepts a status that reports the built release as current", () => {
-    expect(() => assertInstalled(cleanStatus, built)).not.toThrow();
+async function fixture() {
+  const root = await mkdtemp(
+    path.join(tmpdir(), "athena-installed-lifecycle-"),
+  );
+  roots.push(root);
+  const git = Bun.spawnSync(["git", "init", root], {
+    stdout: "pipe",
+    stderr: "pipe",
   });
+  if (git.exitCode !== 0) throw new Error(git.stderr.toString());
+  await mkdir(path.join(root, ".agent-skills"));
+  await symlink(
+    path.resolve(import.meta.dir, "../.agent-skills/current"),
+    path.join(root, ".agent-skills/current"),
+  );
+  await writeFile(
+    path.join(root, ".agent-skills/active.json"),
+    '{"untouched":"existing-generation"}\n',
+  );
+  return root;
+}
+function invoke(root: string, argv: string[]) {
+  return Bun.spawnSync(
+    ["bun", path.join(import.meta.dir, "agent-skills-install.ts"), ...argv],
+    {
+      cwd: root,
+      env: {
+        ...process.env,
+        AGENT_SKILLS_CHECKOUT: path.join(
+          root,
+          "producer-checkout-does-not-exist",
+        ),
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+}
 
-  it("fails when the lifecycle is not current", () => {
-    expect(() =>
-      assertInstalled({ ...cleanStatus, lifecycle: "recovering" }, built)
-    ).toThrow(/lifecycle is "recovering", expected "current"/);
+describe("installed agent-skills update boundary", () => {
+  it("uses the installed lifecycle help without a producer checkout", async () => {
+    const root = await fixture();
+    const result = invoke(root, ["--help"]);
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(result.stdout.toString()).toContain("agent-skills update");
+    expect(result.stdout.toString()).toContain("--archive");
+    expect(result.stdout.toString()).toContain("--metadata");
   });
-
-  it("fails when status reports blockers", () => {
-    expect(() =>
-      assertInstalled({ ...cleanStatus, blockers: [{ code: "drift" }] }, built)
-    ).toThrow(/1 blocker\(s\)/);
+  it("preserves the lifecycle's usage failure for missing artifact metadata", async () => {
+    const root = await fixture();
+    const result = invoke(root, [
+      "--archive",
+      path.join(root, "candidate.zip"),
+    ]);
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr.toString()).toContain("--metadata");
+    expect(
+      await readFile(path.join(root, ".agent-skills/active.json"), "utf8"),
+    ).toBe('{"untouched":"existing-generation"}\n');
   });
-
-  it("fails when a different release is active", () => {
-    expect(() =>
-      assertInstalled(
-        { ...cleanStatus, active: { ...cleanStatus.active, releaseId: "linear-v1" } },
-        built
-      )
-    ).toThrow(/active release is "linear-v1"/);
-  });
-
-  it("fails when the active archive is not the one just built", () => {
-    expect(() =>
-      assertInstalled(
-        {
-          ...cleanStatus,
-          active: { ...cleanStatus.active, archiveSha256: "b".repeat(64) },
-        },
-        built
-      )
-    ).toThrow(/active archive is/);
-  });
-
-  it("reports every reason the install did not converge", () => {
-    expect(() => assertInstalled({}, built)).toThrow(
-      /lifecycle is[\s\S]*active release is[\s\S]*active archive is/
-    );
-  });
-});
-
-describe("parseArgs", () => {
-  it("reads the release id and profile", () => {
-    expect(parseArgs(["linear-v2", "--profile", "linear"])).toEqual({
-      releaseId: "linear-v2",
-      profile: "linear",
+  it("propagates an unavailable artifact refusal without executing shell text or switching generations", async () => {
+    const root = await fixture();
+    const result = invoke(root, [
+      "--archive",
+      "missing archive; touch unexpected-marker",
+      "--metadata",
+      "missing metadata.json",
+    ]);
+    expect(result.exitCode).toBe(1);
+    expect(JSON.parse(result.stdout.toString())).toMatchObject({
+      ok: false,
+      error: { code: "source-unavailable" },
     });
-  });
-
-  it("requires both the release id and the profile", () => {
-    expect(() => parseArgs(["linear-v2"])).toThrow(/Usage:/);
-    expect(() => parseArgs(["--profile", "linear"])).toThrow(/Usage:/);
+    expect(await Bun.file(path.join(root, "unexpected-marker")).exists()).toBe(
+      false,
+    );
+    expect(
+      await readFile(path.join(root, ".agent-skills/active.json"), "utf8"),
+    ).toBe('{"untouched":"existing-generation"}\n');
   });
 });

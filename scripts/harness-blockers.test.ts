@@ -502,7 +502,7 @@ describe("harness blockers", () => {
   it("derives structured and terminal output from the same blocker objects", () => {
     const blocker = createHarnessBlocker({
       code: "documentation-current",
-      source: { kind: "provider", id: "delivery-documentation-check" },
+      source: { kind: "provider", id: "athena.documentation" },
       summary: "Delivery documentation is incomplete.",
       remediations: [
         {
@@ -601,17 +601,8 @@ describe("harness blockers", () => {
   });
 
   it("has a producer for every preparation blocker source", async () => {
-    // The union is meant to describe the boundaries that actually exist, so
-    // every id must be named at a site that produces a preparation blocker.
-    // The only producers are the receipt evaluation in pr-athena-prepare.ts
-    // and the candidate capture it delegates to.
-    const producerText = (
-      await Promise.all(
-        ["pr-athena-prepare.ts", "harness-candidate.ts"].map((file) =>
-          readFile(new URL(`./${file}`, import.meta.url), "utf8"),
-        ),
-      )
-    ).join("\n");
+    // Preparation failures now originate in the installed product runtime.
+    const producerText = await readFile(new URL("../.agent-skills/current/runtime/kernel.mjs", import.meta.url), "utf8");
     const orphaned = HARNESS_PREPARATION_SOURCE_IDS.filter(
       (id) => !producerText.includes(`"${id}"`),
     );
