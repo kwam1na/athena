@@ -15,7 +15,7 @@ import { recordReadCosts } from "./readCostTestSupport";
 const modules = import.meta.glob("../**/*.ts");
 const NOW = Date.parse("2026-08-29T20:00:00Z");
 
-async function fixture() {
+async function fixture(extraSkuCount = 0) {
   const t = convexTest(schema, modules);
   const seeded = await t.run(async (ctx) => {
     const store = await seedStore(ctx, "UTC");
@@ -67,6 +67,25 @@ async function fixture() {
       discountAmountMinor: 0,
       quantity: 1,
     });
+    for (let i = 0; i < extraSkuCount; i++) {
+      const sku = (await ctx.db.get("productSku", store.skuId))!;
+      const { _id: _skuId, _creationTime: _createdAt, ...skuFields } = sku;
+      const productSkuId = await ctx.db.insert("productSku", {
+        ...skuFields,
+        sku: `extra-${i}`,
+      });
+      const fact = (await ctx.db.get("reportFact", factId))!;
+      const {
+        _id: _factId,
+        _creationTime: _factCreatedAt,
+        ...factFields
+      } = fact;
+      await ctx.db.insert("reportFact", {
+        ...factFields,
+        productSkuId,
+        sourceId: `extra-${i}`,
+      });
+    }
     const closeId = await seedDailyClose(ctx, store, {
       operatingDate: "2026-08-29",
       completedAt: NOW,
@@ -218,6 +237,65 @@ describe("bounded immutable accepted-baseline parity", () => {
       await t.run((ctx) => ctx.db.get("reportWeekAccepted", seeded.acceptedId)),
     ).toEqual(before);
   });
+
+  it.each(["legacy-three", "unknown-four", "unsealed-truncation"] as const)(
+    "verifies historical leader width: %s",
+    async (scenario) => {
+      const hash = vi.spyOn(fingerprint, "stableStringHash");
+      const { t, seeded, verify } = await fixture(5);
+      const payload = hash.mock.calls
+        .map(([text]) => {
+          try {
+            return JSON.parse(text);
+          } catch {
+            return null;
+          }
+        })
+        .find(
+          (value) => value?.cutoffObservedAt === NOW && value.closeEvidence,
+        );
+      hash.mockRestore();
+      expect(payload.topSkuLeaders).toHaveLength(5);
+      payload.topSkuLeaders = payload.topSkuLeaders.slice(
+        0,
+        scenario === "unknown-four" ? 4 : 3,
+      );
+      await t.run(async (ctx) => {
+        await ctx.db.patch("reportWeekAccepted", seeded.acceptedId, {
+          topSkuLeaders: payload.topSkuLeaders,
+          ...(scenario === "unsealed-truncation"
+            ? {}
+            : {
+                baselineFingerprint: fingerprint.stableStringHash(
+                  JSON.stringify(payload),
+                ),
+              }),
+        });
+      });
+      const before = await t.run((ctx) =>
+        ctx.db.get("reportWeekAccepted", seeded.acceptedId),
+      );
+      const result = await verify();
+      expect(result.issues).toEqual(
+        scenario === "legacy-three"
+          ? []
+          : [
+              {
+                acceptedWeekId: seeded.acceptedId,
+                reason:
+                  scenario === "unknown-four"
+                    ? "leader_mismatch"
+                    : "unsupported_legacy_evidence",
+              },
+            ],
+      );
+      expect(
+        await t.run((ctx) =>
+          ctx.db.get("reportWeekAccepted", seeded.acceptedId),
+        ),
+      ).toEqual(before);
+    },
+  );
 
   it.each(["financial", "payment", "leader", "close"] as const)(
     "blocks a mismatched %s baseline without repairing it",

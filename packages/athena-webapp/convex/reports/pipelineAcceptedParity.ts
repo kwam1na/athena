@@ -338,7 +338,13 @@ async function verifyOne(
         productSkuId,
         unitsSold,
       })),
-      acceptedTopSkuLeaders({ currency: row.currency, factsByDate }),
+      // The original metricVersion1 producer retained three leaders; later
+      // producers retain five. Verify the historical prefix, then require the
+      // original fingerprint below so truncating a newer row cannot pass.
+      acceptedTopSkuLeaders({ currency: row.currency, factsByDate }).slice(
+        0,
+        row.topSkuLeaders.length === 3 ? 3 : 5,
+      ),
     )
   )
     return "leader_mismatch";
