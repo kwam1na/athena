@@ -55,17 +55,20 @@ export default defineHarnessConfig({
     { id: "athena-generated-artifacts", command: ["bun", "run", "pre-commit:generated-artifacts"], timeoutMs: 600000 },
     { id: "athena-mechanical", command: ["bun", "run", "pr:athena:mechanical"], timeoutMs: 600000 },
   ],
-  additionalReviewLenses: [
-    "ce-correctness-reviewer", "ce-testing-reviewer", "ce-maintainability-reviewer", "ce-project-standards-reviewer", "ce-agent-native-reviewer", "ce-learnings-researcher",
-    ...conditionalReviewers.map(entry => {
+  // The roster beyond the product's two mandated lenses is the executor's
+  // selection for the candidate, declared in `.agents/review-selection.json`.
+  // AGENTS describes how an ordinary Athena delivery populates it; an empty
+  // file means this candidate selected no reviewer beyond the mandated two.
+  additionalReviewLenses: conditionalReviewers
+    .map(entry => {
       if (!entry || Object.keys(entry).sort().join(",") !== "reason,reviewerId" || typeof entry.reason !== "string" || !entry.reason.trim()) {
         throw new Error("Each .agents/review-selection.json entry must name reviewerId and a nonempty selection reason.");
       }
       return entry.reviewerId;
-    }),
-  ].map(id => ({
-    lensId: `athena.${id}`, reviewerId: id, charterPath: `.agents/agents/${id}.agent.md`,
-  })),
+    })
+    .map(id => ({
+      lensId: `athena.${id}`, reviewerId: id, charterPath: `.agents/agents/${id}.agent.md`,
+    })),
   providers: [
     { id: "athena.independent-review", findingCodes: [] },
     { id: "athena.validation", findingCodes: [], check: { command: ["bun", "run", "harness:review", "--base", "origin/main"], timeoutMs: 3600000 } },

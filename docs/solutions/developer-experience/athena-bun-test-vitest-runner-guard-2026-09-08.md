@@ -12,7 +12,7 @@ applies_when:
   - A test run fails on missing browser globals or a missing mocking API rather than on the code under test
   - Adding a new package whose own test script runs Vitest
 tags: [bun, vitest, test-runner, bunfig, harness, agent-affordance]
-delivery_diff_fingerprint: bd07b14240eb09080457f56f7a1051cc7641e790531307e7f932f3e956abc96d
+delivery_diff_fingerprint: e6c89f718576a4f3638010088cf17b84b3f444499a30a6b1b96a365c86482dde
 ---
 
 # Raw `bun test` on a Vitest Package Needs a Runner Diagnostic, Not a Doc
@@ -37,10 +37,15 @@ which command to run, and it reads as a defect in the code being validated.
 Preload a guard through Bun's own test configuration so the wrong runner stops
 before it produces a misleading failure:
 
-- `scripts/bun-test-runner-guard.ts` resolves the nearest `package.json` above
-  the file Bun is about to execute (`Bun.main`). When that package's own `test`
-  script runs Vitest, it prints the intended command and exits non-zero.
-- `bunfig.toml` at the repo root wires it in through `[test] preload`.
+- `scripts/bun-test-runner-guard.ts` finds every workspace package whose own
+  `test` script runs Vitest, and registers one `Bun.plugin` per package with an
+  `onLoad` filter scoped to that package's directory. When Bun loads a test file
+  under one of them, the guard prints the intended command and exits non-zero.
+- A preload runs once per process and `Bun.main` names only the first test file
+  of the run, so classifying that one file would miss every later target. The
+  `onLoad` hook fires per file, so a multi-target or bare `bun test` is caught
+  even when a root script test sorts first.
+- `bunfig.toml` at the repo root wires the preload in through `[test] preload`.
 - `bunfig.toml` is read from the **working directory only** — Bun does not walk
   up to a repo root — so each Vitest-owned package carries its own two-line
   `bunfig.toml` pointing at the same guard. Without those, a package-relative
@@ -76,9 +81,11 @@ keeps running all 68 root script test files unchanged.
   `../../scripts/bun-test-runner-guard.ts`, and register that path in
   `scripts/harness-app-registry.ts` so `bun run pr:athena:preflight` stays
   green.
-- `scripts/bun-test-runner-guard.test.ts` spawns real `bun test` runs from both
-  the repo root and the package directory, and asserts a root script test still
-  passes under the preload. Keep those three cases when changing the guard.
+- `scripts/bun-test-runner-guard.test.ts` spawns real `bun test` runs from the
+  repo root and from each Vitest package directory, passes a frontend file as a
+  later target behind a root script test, and asserts a root script test still
+  passes under the preload. Each spawn row asserts the run aborted before any
+  test executed, so keep those cases when changing the guard.
 
 ## Examples
 

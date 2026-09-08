@@ -1,11 +1,23 @@
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { resolveVitestRunnerDiagnostic } from "./bun-test-runner-guard";
+import {
+  resolveVitestRunnerDiagnostic,
+  testFileFilter,
+  vitestPackages,
+} from "./bun-test-runner-guard";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
+
+// Named rather than discovered, so a row that stops covering its case fails
+// instead of silently retargeting whatever sorts first.
+const FRONTEND_TSX_TEST = "packages/athena-webapp/src/App.test.tsx";
+const FRONTEND_TS_TEST = "packages/athena-webapp/src/routeTree.browser-boundary.test.ts";
+const STOREFRONT_TEST = "src/hooks/useQueryEnabled.test.ts";
+const ROOT_SCRIPT_TEST = "scripts/bun-version-check.test.ts";
+
 const tempRoots: string[] = [];
 
 async function createFixtureRoot() {
@@ -21,34 +33,8 @@ async function write(rootDir: string, relativePath: string, contents: string) {
   return filePath;
 }
 
-async function firstFrontendTestFile() {
-  const searchRoot = path.join(repoRoot, "packages/athena-webapp/src");
-  const stack = [searchRoot];
-
-  while (stack.length > 0) {
-    const dir = stack.shift()!;
-    const entries = (await readdir(dir, { withFileTypes: true })).sort((left, right) =>
-      left.name.localeCompare(right.name)
-    );
-
-    for (const entry of entries) {
-      if (entry.isFile() && entry.name.endsWith(".test.tsx")) {
-        return path.join(dir, entry.name);
-      }
-    }
-
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        stack.push(path.join(dir, entry.name));
-      }
-    }
-  }
-
-  throw new Error(`No *.test.tsx file found under ${searchRoot}`);
-}
-
-function runBunTest(target: string, cwd: string) {
-  const proc = Bun.spawnSync(["bun", "test", target], {
+function runBunTest(targets: string[], cwd: string) {
+  const proc = Bun.spawnSync(["bun", "test", ...targets], {
     cwd,
     env: { ...process.env, FORCE_COLOR: "0" },
   });
@@ -107,20 +93,30 @@ describe("resolveVitestRunnerDiagnostic", () => {
     );
   });
 
-  it("leaves a package whose test script is not Vitest alone", async () => {
+  // The note claims any future Vitest package is covered as soon as it exists,
+  // so the match must survive a wrapper in front of `vitest` and must still
+  // reject a script that only mentions vitest inside another word or path.
+  it.each([
+    ["vitest run", true],
+    ["cross-env CI=1 vitest run", true],
+    ["tsc -b && vitest run --coverage", true],
+    ["bun test", false],
+    ["node --test app.test.js", false],
+    ["bun test ./vitest-shim.ts", false],
+  ])("classifies the test script %j as Vitest: %s", async (testScript, expected) => {
     const rootDir = await createFixtureRoot();
     await write(
       rootDir,
-      "packages/proxy/package.json",
-      JSON.stringify({ name: "@athena/proxy", scripts: { test: "bun test" } })
+      "packages/candidate/package.json",
+      JSON.stringify({ name: "@athena/candidate", scripts: { test: testScript } })
     );
-    const testFile = await write(rootDir, "packages/proxy/src/server.test.ts", "export {};\n");
+    const testFile = await write(rootDir, "packages/candidate/src/unit.test.ts", "export {};\n");
 
-    expect(resolveVitestRunnerDiagnostic(testFile, { cwd: rootDir })).toBeNull();
+    expect(resolveVitestRunnerDiagnostic(testFile, { cwd: rootDir }) !== null).toBe(expected);
   });
 
   it("leaves the repo's own root script tests alone", () => {
-    const testFile = path.join(repoRoot, "scripts/bun-version-check.test.ts");
+    const testFile = path.join(repoRoot, ROOT_SCRIPT_TEST);
 
     expect(resolveVitestRunnerDiagnostic(testFile, { cwd: repoRoot })).toBeNull();
   });
@@ -130,34 +126,77 @@ describe("resolveVitestRunnerDiagnostic", () => {
   });
 });
 
+describe("vitestPackages", () => {
+  it("finds exactly the workspace packages whose own test script runs Vitest", () => {
+    const found = vitestPackages(repoRoot).map((entry) => entry.name).sort();
+
+    expect(found).toEqual(["@athena/storefront-webapp", "@athena/webapp"]);
+  });
+
+  it("matches the test files Bun executes under a package, and nothing outside it", () => {
+    const filter = testFileFilter("/repo/packages/webapp");
+
+    expect(filter.test("/repo/packages/webapp/src/App.test.tsx")).toBe(true);
+    expect(filter.test("/repo/packages/webapp/convex/app.test.ts")).toBe(true);
+    expect(filter.test("/repo/packages/webapp/src/route.spec.ts")).toBe(true);
+    expect(filter.test("/repo/packages/webapp/src/legacy_test.ts")).toBe(true);
+    expect(filter.test("/repo/packages/webapp/src/App.tsx")).toBe(false);
+    expect(filter.test("/repo/scripts/bun-version-check.test.ts")).toBe(false);
+    expect(filter.test("/repo/packages/webapp-extra/src/App.test.tsx")).toBe(false);
+  });
+});
+
 describe("raw bun test on an Athena frontend file", () => {
-  it("reports the package runner instead of missing browser globals (root-relative)", async () => {
-    const frontendTest = await firstFrontendTestFile();
-    const target = path.relative(repoRoot, frontendTest);
-
-    const { exitCode, output } = runBunTest(target, repoRoot);
+  it("reports the package runner and runs nothing (root-relative)", () => {
+    const { exitCode, output } = runBunTest([FRONTEND_TSX_TEST], repoRoot);
 
     expect(output).toContain("`bun test` is not the test runner for @athena/webapp");
-    expect(output).toContain("bun run --filter '@athena/webapp' test --");
-    expect(output).not.toContain("ReferenceError");
+    expect(output).toContain(
+      "bun run --filter '@athena/webapp' test -- src/App.test.tsx"
+    );
+    // The guard must abort before the file executes; any test row that ran
+    // means the misleading failure path is still reachable.
+    expect(output).not.toContain("(pass)");
+    expect(output).not.toContain("Ran ");
     expect(exitCode).not.toBe(0);
   }, 60_000);
 
-  it("reports the package runner instead of missing browser globals (package-relative)", async () => {
-    const packageDir = path.join(repoRoot, "packages/athena-webapp");
-    const frontendTest = await firstFrontendTestFile();
-    const target = path.relative(packageDir, frontendTest);
-
-    const { exitCode, output } = runBunTest(target, packageDir);
+  it("reports the package runner for a .ts frontend target too", () => {
+    const { exitCode, output } = runBunTest([FRONTEND_TS_TEST], repoRoot);
 
     expect(output).toContain("`bun test` is not the test runner for @athena/webapp");
-    expect(output).toContain(`bun run --filter '@athena/webapp' test -- ${target}`);
-    expect(output).not.toContain("ReferenceError");
+    expect(output).not.toContain("(pass)");
     expect(exitCode).not.toBe(0);
   }, 60_000);
+
+  // Bun reports only the first test file of a run to a preload, so a selection
+  // whose first entry is a root script test must still be caught.
+  it("reports the package runner for a frontend file that is not the first target", () => {
+    const { exitCode, output } = runBunTest([ROOT_SCRIPT_TEST, FRONTEND_TSX_TEST], repoRoot);
+
+    expect(output).toContain("`bun test` is not the test runner for @athena/webapp");
+    expect(output).not.toContain("Cannot find package");
+    expect(exitCode).not.toBe(0);
+  }, 60_000);
+
+  it.each([
+    ["packages/athena-webapp", "@athena/webapp", "src/App.test.tsx"],
+    ["packages/storefront-webapp", "@athena/storefront-webapp", STOREFRONT_TEST],
+  ])(
+    "reports the package runner from inside %s (package-relative)",
+    (packageDir, packageName, target) => {
+      const { exitCode, output } = runBunTest([target], path.join(repoRoot, packageDir));
+
+      expect(output).toContain(`\`bun test\` is not the test runner for ${packageName}`);
+      expect(output).toContain(`bun run --filter '${packageName}' test -- ${target}`);
+      expect(output).not.toContain("(pass)");
+      expect(exitCode).not.toBe(0);
+    },
+    60_000
+  );
 
   it("still runs the repo's root Bun script tests", () => {
-    const { exitCode, output } = runBunTest("scripts/bun-version-check.test.ts", repoRoot);
+    const { exitCode, output } = runBunTest([ROOT_SCRIPT_TEST], repoRoot);
 
     expect(output).not.toContain("is not the test runner");
     expect(output).toContain("pass");

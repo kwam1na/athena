@@ -25,19 +25,41 @@ const readRepository = async (relativePath: string) => {
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
 };
 
-it("binds the selected conditional charters alongside six Athena and two installed defaults", async () => {
-  const config = await loadSelection(selection);
+// The selection file is the whole additional roster: an ordinary Athena
+// delivery lists the always-on reviewers in it alongside its conditionals.
+const ORDINARY_SELECTION = [
+  "ce-correctness-reviewer",
+  "ce-testing-reviewer",
+  "ce-maintainability-reviewer",
+  "ce-project-standards-reviewer",
+  "ce-agent-native-reviewer",
+  "ce-learnings-researcher",
+  "ce-security-reviewer",
+].map(reviewerId => ({ reviewerId, reason: "ordinary Athena selection" }));
+
+it("binds exactly the selected charters alongside the two installed defaults", async () => {
+  const config = await loadSelection(ORDINARY_SELECTION);
   const charters = await resolveReviewCharters(readRepository, config);
   expect(charters.filter(charter => charter.origin === "composition")).toHaveLength(2);
-  expect(charters.filter(charter => charter.origin === "repository")).toHaveLength(6 + selection.length);
+  expect(charters.filter(charter => charter.origin === "repository")).toHaveLength(ORDINARY_SELECTION.length);
   expect(new Set(charters.map(charter => charter.reviewerId)).size).toBe(charters.length);
   expect(config.preparationWiringPaths).toContain(".agents/review-selection.json");
   expect(charters.every(charter => /^[a-f0-9]{64}$/.test(charter.digest))).toBe(true);
 });
 
-it("permits an empty conditional selection without dropping the always-on reviewers", async () => {
+it("adds no reviewer the selection file does not name", async () => {
+  const config = await loadSelection(selection);
+  const charters = await resolveReviewCharters(readRepository, config);
+  expect(charters.filter(charter => charter.origin === "repository").map(charter => charter.reviewerId))
+    .toEqual(selection.map(entry => entry.reviewerId));
+});
+
+// An empty selection is a deliberate choice to review under the product's two
+// mandated lenses alone, so nothing may be reinstated behind it.
+it("reduces an empty selection to the two installed default lenses", async () => {
   const charters = await resolveReviewCharters(readRepository, await loadSelection([]));
-  expect(charters).toHaveLength(8);
+  expect(charters).toHaveLength(2);
+  expect(charters.every(charter => charter.origin === "composition")).toBe(true);
 });
 
 it.each([
@@ -49,9 +71,9 @@ it.each([
   await expect(loadSelection(value)).rejects.toThrow();
 });
 
-it("uses product validation to reject duplicate selected and always-on reviewer ids", async () => {
-  await expect(loadSelection([selection[0], selection[0]])).rejects.toThrow();
-  await expect(loadSelection([{ reviewerId: "ce-testing-reviewer", reason: "duplicate always-on" }])).rejects.toThrow();
+it("uses product validation to reject a reviewer id selected twice", async () => {
+  const entry = { reviewerId: "ce-testing-reviewer", reason: "selected twice" };
+  await expect(loadSelection([entry, entry])).rejects.toThrow();
 });
 
 it("refuses an unknown reviewer whose repository charter does not exist", async () => {
@@ -60,7 +82,7 @@ it("refuses an unknown reviewer whose repository charter does not exist", async 
 });
 
 it("requires the exact selected reviewer coverage at the product outcome boundary", async () => {
-  const charters = await resolveReviewCharters(readRepository, await loadSelection(selection));
+  const charters = await resolveReviewCharters(readRepository, await loadSelection(ORDINARY_SELECTION));
   const ids = charters.map(charter => charter.reviewerId);
   const outcome = { spec: "review-outcome/1", verdict: "green", findings: [], reviewers: ids.map(id => ({ id, result: "approved" })) };
   expect(parseReviewOutcome(outcome, ids).reviewers).toHaveLength(ids.length);
