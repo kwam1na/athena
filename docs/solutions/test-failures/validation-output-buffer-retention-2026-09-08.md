@@ -11,7 +11,7 @@ root_cause: config_error
 resolution_type: code_fix
 severity: medium
 tags: [validation, delivery, subprocess, logs]
-delivery_diff_fingerprint: ca80d78241f22fe08304b33529d82aa5533c422b2241df8375ff40036dc54b8d
+delivery_diff_fingerprint: 4c547bd304e5d73fd769fe05b1f648253916847f4449e457143e4b5af6049963
 ---
 
 # Retain verbose validation logs outside the delivery runner buffer
@@ -38,7 +38,7 @@ Package scripts, raw validation commands, and behavior scenarios selected by `ha
 
 ## Why This Works
 
-Verbose sensor output no longer accumulates in the product's captured console buffer. No checks, assertions, or exit statuses are discarded. Regression cases drive the real raw, package-script, and behavior-scenario launchers. They produce 1,200,000 stdout bytes plus a stderr marker, retain the exact content, bound the aggregate console output below 16 KiB, and verify exit statuses 0 and 7. Each intentional launcher-wiring reversion fails exactly its two regression cases. An additional regression performs 40 mixed launches in one process and preserves literal shell metacharacters; it fails with the numeric-descriptor implementation. All 49 focused launcher tests pass. The broader harness suite also exposed a fixture readiness race: four process fixtures announced readiness before registering their SIGTERM handlers. Their readiness markers now follow handler registration, preserving the existing cleanup assertions. Both focused files pass all 73 tests. These regressions do not replace a successful full gate.
+Verbose sensor output no longer accumulates in the product's captured console buffer. No checks, assertions, or exit statuses are discarded. Regression cases drive the real raw, package-script, and behavior-scenario launchers. They produce 1,200,000 stdout bytes plus a stderr marker, retain the exact content, bound the aggregate console output below 16 KiB, and verify exit statuses 0 and 7. Each intentional launcher-wiring reversion fails exactly its two regression cases. An additional regression performs 40 mixed launches in one process and preserves literal shell metacharacters; it fails with the numeric-descriptor implementation. All 49 focused launcher tests pass. The broader harness suite also exposed a fixture readiness race: four process fixtures announced readiness before registering their SIGTERM handlers. Their readiness markers now follow handler registration, preserving the existing cleanup assertions. Both focused files pass all 73 tests. Under coverage, the 40-process regression approached and exceeded the default five-second test timeout. Its child process now has a 15-second timeout and its containing test a 20-second timeout; all 49 launcher tests pass with coverage, while a hung child remains bounded. These regressions do not replace a successful full gate.
 
 ## Prevention
 

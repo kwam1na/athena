@@ -45,7 +45,7 @@ describe("validation output transport", () => {
         const command = index % 2 ? argv : ["/bin/sh", "-c", 'exec "$@"', "fixture", ...argv];
         if (await spawnLoggedValidation(command, {cwd:${JSON.stringify(rootDir)}}).exited !== 0) process.exit(1);
       }`;
-    const result = spawnSync("bun", ["-e", fixture], { encoding: "utf8", maxBuffer: 1024 * 1024 });
+    const result = spawnSync("bun", ["-e", fixture], { encoding: "utf8", maxBuffer: 1024 * 1024, timeout: 15_000 });
     const logs = [...result.stdout.matchAll(/Validation log: (.+)/g)].map(match => match[1]);
     tempRoots.push(...logs.map(logPath => path.dirname(logPath)));
     expect(result.status).toBe(0);
@@ -54,7 +54,7 @@ describe("validation output transport", () => {
       expect(await readFile(logPath, "utf8")).toBe(JSON.stringify([argument]) + "stderr-marker");
     }
     await expect(readFile(path.join(rootDir, "SHOULD_NOT_EXIST"))).rejects.toMatchObject({ code: "ENOENT" });
-  });
+  }, 20_000);
 
   for (const launcher of ["raw", "package", "behavior"] as const) {
     for (const exitCode of [0, 7]) {
