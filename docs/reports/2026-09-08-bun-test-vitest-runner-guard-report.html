@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Guiding raw bun test to the package Vitest runner</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="ac0f0a36d10d31bb7a8d0b7db594a919dca3e3c833d12f356a4f8aafb8742e65">
+  <header data-report-section="header">
+    <h1>Guiding raw bun test to the package Vitest runner</h1>
+    <p>A preload-registered Bun plugin that stops the wrong runner with the right command, and the reviewer-roster wiring that changed alongside it</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>V26-594</li>
+      <li>Branch codex/v26-594-vitest-runner-diagnostic</li>
+      <li>1300 root script tests green</li>
+      <li>10964 package Vitest tests green</li>
+      <li>Two review rounds, two lenses</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Linear issue</dt><dd>V26-594</dd>
+      <dt>Branch</dt><dd>codex/v26-594-vitest-runner-diagnostic</dd>
+      <dt>Base</dt><dd>origin/main @ 59c9ad9d</dd>
+      <dt>Candidate head</dt><dd>dc078903</dd>
+      <dt>PR</dt><dd>Pending — not yet opened</dd>
+      <dt>Merge</dt><dd>Pending</dd>
+      <dt>Production deploy</dt><dd>Deferred by the operator; not part of this delivery</dd>
+      <dt>Root alignment</dt><dd>Pending until after merge</dd>
+      <dt>Delivery run</dt><dd>run-858efdda516af53e</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+      <p>An agent asked to validate an Athena frontend test file reaches for `bun test &lt;file&gt;`. That is the wrong runner. The file needs Vitest&#x27;s jsdom environment and its `vi` mocking API, so under Bun it dies on `Can&#x27;t find variable: document`, a missing `vi.mock`, or an unresolved Vite-only module. None of those errors mention the runner. They read as defects in the code being validated, which is why the mistake survived documentation that already named the right command.</p>
+      <p>This delivery adds a guard that intercepts the mistake at the moment it is made. A Bun test preload registers one `Bun.plugin` per Vitest-owned workspace package; each plugin&#x27;s `onLoad` hook fires when Bun loads a test file inside that package, prints a diagnostic naming the owning package and the exact replacement command, and exits non-zero before any test body runs.</p>
+      <p>A second, unrelated change rides along because the delivery could not proceed without it. The operator required this delivery to be reviewed by exactly two independent reviewers. Athena&#x27;s configuration hard-coded six additional reviewers on top, so the prepared review context bound charters no reviewer would answer for. Rather than leave bound charters unreviewed, the roster wiring was changed: `harness.config.ts` now reads the additional roster only from `.agents/review-selection.json`, and this candidate sets that file to `[]`.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Why this mattered</h2>
+      <p>Athena is a Bun workspace monorepo. Root-level tooling under `scripts/` is tested with `bun test`. The two frontend packages, `@athena/webapp` and `@athena/storefront-webapp`, are tested with Vitest. Both kinds of file end in `.test.ts`, sit in the same repository, and are opened by the same agents.</p>
+      <p>The ticket was filed from a real incident. During an unrelated POS delivery a subagent reported: &quot;The direct bun test command is not the repo&#x27;s React/Vitest path: it failed on missing document and vi.mock APIs rather than on the code under review.&quot; That subagent recovered, but only after spending its budget diagnosing a failure that had nothing to do with the code it was reviewing.</p>
+      <p>Documentation was not the gap. `AGENTS.md` and `packages/athena-webapp/docs/agent/testing.md` already named the Vitest command, and still do — this delivery did not rewrite them. The gap is one of timing: the misleading failure arrives *after* the command has been chosen, and it looks like evidence about the code rather than about the invocation. A reader who trusts the error text draws exactly the wrong conclusion.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>The mental model</h2>
+      <p>Think of it as a wrong-platform announcement rather than a signpost. A signpost at the station entrance (documentation) only helps someone who reads it before choosing a platform. An announcement on the train you just boarded reaches you at the moment the mistake is still cheap to reverse, and it tells you which platform you actually wanted.</p>
+      <p>The guard is that announcement. It runs inside the process that is about to make the mistake, and it names the destination:</p>
+      <ul>
+        <li>Ownership is derived, not listed. A package is Vitest-owned if its own `package.json` `test` script runs Vitest. No hardcoded package names.</li>
+        <li>The remedy is a command the reader can paste, scoped to the one file they were trying to run.</li>
+        <li>The run exits non-zero and executes nothing, so a guarded invocation can never be mistaken for a passing run.</li>
+      </ul>
+      <pre><code>[athena] `bun test` is not the test runner for @athena/webapp.
+  file:   packages/athena-webapp/src/App.test.tsx
+  reason: this package runs Vitest, so its tests rely on the jsdom environment and the
+          `vi` mocking API. Under `bun test` they fail on unrelated errors such as
+          &quot;Can&#x27;t find variable: document&quot;, a missing `vi.mock`, or an unresolved
+          Vite-only module.
+  run:    bun run --filter &#x27;@athena/webapp&#x27; test -- src/App.test.tsx</code></pre>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+      <p>The mechanism changed once during the delivery, and the difference between the two versions is the most instructive part of this report.</p>
+      <p>The first implementation asked Bun which file it was about to run, via `Bun.main`, and classified that one path. It worked for the case anyone would test by hand — a single named frontend file — and independent review proved it insufficient. A preload is evaluated once per process, and `Bun.main` names only one file of the whole discovered set. Pass two targets, or run bare `bun test`, and the other files walk straight into the failure the ticket exists to remove.</p>
+      <p>The second implementation classifies files instead of runs. It registers a `Bun.plugin` per Vitest package whose `onLoad` filter is anchored to that package&#x27;s directory. `onLoad` fires for every file Bun loads, so target count and argument order stop mattering.</p>
+      <ul>
+        <li>Before: one classification per process, keyed on `Bun.main`. Multi-target and bare runs escaped.</li>
+        <li>After: one classification per loaded file, keyed on an `onLoad` filter per package. No escape by ordering or target count.</li>
+        <li>`build.onResolve` was tried and ruled out empirically: it does not fire for entry-point test files.</li>
+        <li>An `onLoad` handler that returns `undefined` makes Bun throw `TypeError: onLoad() expects an object returned`, so the filter is scoped narrowly enough that the handler always exits and never needs a pass-through return.</li>
+      </ul>
+  </section>
+  <section data-report-section="mechanics">
+    <h2>How it is wired, layer by layer</h2>
+      <p>There are only two moving parts: where the preload is found, and what it registers.</p>
+      <ul>
+        <li>**Discovery.** Bun reads `bunfig.toml` from the working directory only — it does not walk up to a repository root. That single fact is why three near-identical `bunfig.toml` files exist: one at the repo root for root-relative runs, and one in each Vitest package for runs started inside that package. Without the package-level files, `cd packages/athena-webapp &amp;&amp; bun test src/App.test.tsx` bypasses the guard entirely.</li>
+        <li>**Package detection.** `vitestPackages(repoRoot)` reads the root `package.json` `workspaces` globs, keeps those ending in `/*`, and for each directory beneath them keeps packages whose own `test` script matches `/(?:^|[^\w-])vitest(?:[^\w-]|$)/`. Today that is exactly `@athena/webapp` and `@athena/storefront-webapp`. The root package is excluded because its `test` script delegates via `bun run --filter`, and `valkey-proxy-server` is excluded because it runs `node --test`.</li>
+        <li>**Registration.** For each such package the module calls `Bun.plugin` with an `onLoad` filter of `^&lt;package dir&gt;/.*[._](?:test|spec)\.[cm]?[jt]sx?$`. The filter is anchored on the absolute package directory, so a sibling package with a longer name — `packages/webapp-extra` against `packages/webapp` — cannot match.</li>
+        <li>**The repo root is derived from the module&#x27;s own location** (`path.resolve(import.meta.dir, &quot;..&quot;)`), not from `process.cwd()`, so detection is identical whether the run started at the root or inside a package.</li>
+      </ul>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>What the guard covers, and what it does not</h2>
+      <p>The guard&#x27;s coverage is exactly &quot;the working directory has a `bunfig.toml` that preloads it&quot;. Everything below was executed against this candidate rather than reasoned about.</p>
+      <ul>
+        <li>`bun test packages/athena-webapp/src/App.test.tsx` from the repo root — **fires**, exit 1, nothing executed.</li>
+        <li>`bun test scripts/bun-version-check.test.ts packages/athena-webapp/src/App.test.tsx` — **fires** on the frontend file after the root script rows pass. Reversing the argument order gives byte-identical output; Bun reorders targets, and the guard is order-independent either way.</li>
+        <li>Bare `bun test` at the repo root — **fires**. All root script files run, then the run aborts at the first frontend file with exit 1. A bare run is therefore no longer a &quot;run everything&quot; command; that is intentional, and `bun run harness:test` is unaffected because it passes explicit `scripts/*.test.ts` targets.</li>
+        <li>`cd packages/storefront-webapp &amp;&amp; bun test src/hooks/useQueryEnabled.test.ts` — **fires**, naming `@athena/storefront-webapp`.</li>
+        <li>`cd packages/athena-webapp/src &amp;&amp; bun test App.test.tsx` — **does not fire**. A nested working directory has no `bunfig.toml` and Bun does not walk up, so the original misleading failure returns. This is a known, documented boundary, not an oversight: closing it would mean a `bunfig.toml` per directory.</li>
+        <li>`bun test scripts/bun-version-check.test.ts` — **does not fire**, and still passes. The root package&#x27;s `test` script is not Vitest, so no plugin is registered for it.</li>
+        <li>`bunx vitest run &lt;path&gt;` and `bun run --filter &#x27;@athena/webapp&#x27; test -- &lt;path&gt;` — **do not fire**. `[test] preload` applies to `bun test` only; these are the commands the diagnostic recommends.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+      <p>The files that carry the behavior, in the order a reader should meet them.</p>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed, and what deliberately did not</h2>
+      <p>The delivery has two halves. The first is the runner guard and the harness wiring it needs. The second is the reviewer-roster policy change, which exists only because the operator required a two-reviewer review of this candidate and the configuration would otherwise have bound thirteen additional charters that no reviewer would answer for.</p>
+      <p>On the roster half: `harness.config.ts` previously listed six always-on reviewer ids inline and appended the contents of `.agents/review-selection.json`. It now takes the roster only from that file. The six are not abolished as policy — responsibility for naming them moved into the file, which is why `AGENTS.md` and `.agents/skills/ce-code-review/SKILL.md` had to change in the same commit. Leaving `AGENTS.md` as it was would have left two tracked policies disagreeing, and an executor following the older one would hit a hard `no activated review lens defines` refusal at the evidence boundary.</p>
+      <ul>
+        <li>**Not changed: any product or runtime behavior.** Nothing under `packages/*/src` or `convex/` was touched. The guard is development tooling.</li>
+        <li>**Not changed: package test scripts, `vitest.config.ts`, or `harness:test`.** `bun run --filter … test` and `bun run harness:test` behave exactly as before.</li>
+        <li>**Not changed: the existing runner documentation.** `packages/athena-webapp/docs/agent/testing.md` still instructs `CI=1 bunx vitest run &lt;paths&gt;`. The ticket asked for no redundant documentation; the guard exists because that documentation did not stop the misuse, not to replace it.</li>
+        <li>**Not changed: the reviewer charters themselves.** `.agents/agents/*.agent.md` are untouched. Only which of them get activated changed.</li>
+        <li>**Not added: any new override machinery.** The roster change reuses the selection file that already existed and already sat in `preparationWiringPaths`.</li>
+      </ul>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and review evidence</h2>
+      <p>Every sensor below was run in this worktree with its exit status captured directly (`cmd &gt; log 2&gt;&amp;1; rc=$?`), not read from a pipeline&#x27;s last stage.</p>
+      <p>Review ran under the two product-mandated lenses, `lens.outcome-correctness` and `lens.adversarial-testing`, for two rounds against delivery run `run-858efdda516af53e`. Round 1 (tree `2cb5508e`) returned aligned and changes-requested respectively, with one P0, one P1, three P2 and one P3. The P0 is the `Bun.main` reach hole described above; both lenses reached it independently. Round 2 (tree `fad8e7b2`) returned changes-requested and aligned. The adversarial-testing lens verified all five of its carried-forward findings by mutating the product in a scratchpad copy — reverting the fire site to `Bun.main`, narrowing the filter to `.tsx`, and making the hook print without aborting — and confirmed the new rows fail under each mutation. It filed nothing further. The outcome-correctness lens confirmed its own finding resolved and filed two new ones: a P1 that `AGENTS.md` still declared the six always-on reviewers as the mandatory set, and a P3 that three comments described `Bun.main` as naming &quot;the first test file&quot; when a fixture shows it names one file irrespective of argument order. Both are fixed in commit `dc078903`.</p>
+      <p>Reviewer cost is as the host reported it: round 1, 87130 and 88466 subagent tokens; round 2, 100688 and 117546. No cost is estimated or converted.</p>
+      <p>Both lenses also declined findings, with reasons recorded in their reports: a sub-package-root invocation bypassing the guard (a documented boundary of the granted scope), a hypothetical misclassified package that does not exist in the repo, a full 68-file suite row that duplicates an existing case with no distinguishable mutation, and `not.toBe(0)` versus `toBe(1)` as a preference rather than a defect. Declining them is part of the evidence, not an omission from it.</p>
+      <p>One `harness:test` run failed on `scripts/harness-behavior.test.ts`, a file this delivery does not touch, with an `ENOENT` on a spawned fixture&#x27;s `stop.log`. It passed three times out of three in isolation and the full suite passed on re-run. It is recorded here as a pre-existing flake rather than silently re-run away.</p>
+      <ul>
+        <li>`bun run harness:test` — exit 0, 1300 pass / 0 fail across 68 files</li>
+        <li>`bun run --filter &#x27;@athena/webapp&#x27; test` — exit 0, 10760 pass across 887 files</li>
+        <li>`bun run --filter &#x27;@athena/storefront-webapp&#x27; test` — exit 0, 204 pass across 37 files</li>
+        <li>`bun test scripts/bun-test-runner-guard.test.ts` — exit 0, 18 pass, 45 expect() calls</li>
+        <li>`bun run pr:athena:preflight` — exit 0</li>
+        <li>`bun run harness:check` — exit 0</li>
+        <li>`bun run compound:check` — exit 0</li>
+        <li>`bun run policy:check` — exit 0</li>
+        <li>`bun run docs:links:check` — exit 0, 282 solution docs cross-referenced</li>
+        <li>`bun run landed-report:check` — exit 0 (184 reportable source lines against a threshold of 300)</li>
+        <li>`bun run pre-commit:generated-artifacts` — exit 0</li>
+        <li>**Production deploy: deferred by the operator.** Not attempted, not scheduled by this delivery.</li>
+        <li>**Merge and root alignment: pending.** This report is written in delivery-candidate mode; no merge, no Linear `Done`, no root fast-forward has occurred.</li>
+      </ul>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Next time</h2>
+      <p>Three things in this delivery generalize.</p>
+      <ul>
+        <li>**Adding a Vitest package.** Root-relative coverage is automatic once the package&#x27;s `test` script runs Vitest. The package-relative case is not: add a two-line `bunfig.toml` beside its `package.json` pointing at `../../scripts/bun-test-runner-guard.ts`, and register that path in `scripts/harness-app-registry.ts` so `pr:athena:preflight` stays green. The `vitestPackages` equality assertion in the guard&#x27;s own suite fails loudly if you forget the first part.</li>
+        <li>**Testing a process-level guard.** A row that asserts the absence of an error string is usually vacuous — the target may fail earlier for an unrelated reason and satisfy the assertion without the guard existing. Assert the positive instead: that the run aborted before any test executed (`not.toContain(&quot;(pass)&quot;)`, `not.toContain(&quot;Ran &quot;)`). That assertion fails under a hook that prints but does not abort; the one it replaced did not.</li>
+        <li>**Choosing a Bun hook.** A `[test] preload` runs once per process and can see only one file of the run. If behavior must apply per test file, use `Bun.plugin` with `onLoad`. `onResolve` does not fire for entry-point test files, and an `onLoad` handler must return an object or Bun throws — so scope the filter narrowly enough that the handler always terminates.</li>
+        <li>**A caveat on the roster file.** `.agents/review-selection.json` lands on main as `[]`. It is the sole machine-readable source of the additional review roster, so a later delivery that forgets to repopulate it will get a two-lens review that still passes the gate. The enforcement is prose in `AGENTS.md` and `.agents/skills/ce-code-review/SKILL.md`; there is no sensor for an under-populated roster, and adding one was explicitly out of scope here.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>scripts/bun-test-runner-guard.ts</code></td><td>The guard. Finds Vitest-owned workspace packages, registers one Bun.plugin per package, and aborts with the runner diagnostic on any test file loaded inside one.</td></tr>
+        <tr><td><code>bunfig.toml</code></td><td>Wires the guard into `bun test` runs started at the repo root, via `[test] preload`.</td></tr>
+        <tr><td><code>packages/athena-webapp/bunfig.toml</code></td><td>The same preload for runs started inside the package. Required because Bun reads bunfig.toml from the working directory only.</td></tr>
+        <tr><td><code>packages/storefront-webapp/bunfig.toml</code></td><td>The same, for the storefront package. Pinned by a parameterized spawn row so it cannot silently rot.</td></tr>
+        <tr><td><code>scripts/bun-test-runner-guard.test.ts</code></td><td>Six real `bun test` spawns plus unit rows. Covers root-relative, package-relative from both packages, a `.ts` target, a frontend file behind a root script test, and the non-regression case that root script tests still pass.</td></tr>
+        <tr><td><code>scripts/harness-app-registry.ts</code></td><td>Validation-map source of truth. The new `bunfig.toml` paths had to be mapped onto each package&#x27;s route-runtime scenario or `pr:athena:preflight` reports a coverage gap.</td></tr>
+        <tr><td><code>harness.config.ts</code></td><td>The additional review roster now comes only from `.agents/review-selection.json`; the six always-on reviewer ids are no longer hard-coded here.</td></tr>
+        <tr><td><code>.agents/review-selection.json</code></td><td>The whole additional review roster. `[]` for this candidate, by explicit operator instruction.</td></tr>
+        <tr><td><code>AGENTS.md</code></td><td>The delivery overlay&#x27;s reviewer-set rule now points at the selection file, so the repository no longer carries two disagreeing roster policies.</td></tr>
+        <tr><td><code>docs/solutions/developer-experience/athena-bun-test-vitest-runner-guard-2026-09-08.md</code></td><td>The Knowledge Track record of the pitfall, the mechanism, and the bunfig discovery rule.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why did documentation alone fail to stop agents from running `bun test` on frontend files?</p>
+        <ol data-quiz-options>
+          <li>The documentation was inaccurate about which runner to use.</li>
+          <li data-quiz-correct>The misleading failure arrives after the command is chosen, and reads as a defect in the code under test rather than in the invocation.</li>
+          <li>The documentation was not committed to the repository.</li>
+          <li>Agents are not permitted to read `AGENTS.md`.</li>
+        </ol>
+        <p data-quiz-explanation>The runner docs were correct and remain unchanged by this delivery. The problem is timing and framing: `Can&#x27;t find variable: document` looks like evidence about the code being validated, so a reader who trusts it draws the wrong conclusion.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>The first implementation classified the file named by `Bun.main`. What did independent review prove was wrong with that?</p>
+        <ol data-quiz-options>
+          <li>`Bun.main` is undefined during a preload.</li>
+          <li data-quiz-correct>A preload runs once per process and `Bun.main` names only one file of the run, so multi-target and bare runs still reached the frontend files.</li>
+          <li>`Bun.main` returns a relative path that cannot be resolved.</li>
+          <li>`Bun.main` is only set when the run fails.</li>
+        </ol>
+        <p data-quiz-explanation>The preload is evaluated once per process. Classifying that single path covered the hand-tested case — one named file — while a bare `bun test` or any multi-target run walked into exactly the failure the ticket exists to remove.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does the repository contain three nearly identical `bunfig.toml` files?</p>
+        <ol data-quiz-options>
+          <li>Each package needs different preload settings.</li>
+          <li data-quiz-correct>Bun reads `bunfig.toml` from the working directory only and does not walk up to a repository root, so a run started inside a package would otherwise miss the preload.</li>
+          <li>Bun merges all `bunfig.toml` files it finds in the workspace.</li>
+          <li>The root file is a fallback used only when the package files are absent.</li>
+        </ol>
+        <p data-quiz-explanation>Working-directory-only discovery is the whole reason. Without the package-level files, `cd packages/athena-webapp &amp;&amp; bun test src/App.test.tsx` bypasses the guard and reproduces the original failure.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How does the guard decide that a package is Vitest-owned?</p>
+        <ol data-quiz-options>
+          <li>It reads a hardcoded list of package names in the guard.</li>
+          <li>It checks whether the package directory contains a `vitest.config.ts`.</li>
+          <li data-quiz-correct>It reads each workspace package&#x27;s own `package.json` `test` script and matches `vitest` on word boundaries.</li>
+          <li>It asks Bun which runner is configured for the file.</li>
+        </ol>
+        <p data-quiz-explanation>Deriving ownership from the package&#x27;s own `test` script means a new Vitest package is covered root-relative as soon as it exists, and the root package — whose `test` script delegates via `bun run --filter` — stays inert.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which invocation is a known, documented gap that the guard does not cover?</p>
+        <ol data-quiz-options>
+          <li>A bare `bun test` at the repository root.</li>
+          <li>A multi-target run whose first target is a root script test.</li>
+          <li data-quiz-correct>`cd packages/athena-webapp/src &amp;&amp; bun test App.test.tsx`, from a directory nested below the package root.</li>
+          <li>`cd packages/storefront-webapp &amp;&amp; bun test src/hooks/useQueryEnabled.test.ts`.</li>
+        </ol>
+        <p data-quiz-explanation>Coverage is exactly &quot;the working directory has a `bunfig.toml` that preloads the guard&quot;. A nested working directory has none, and closing that would require a `bunfig.toml` per directory.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A test asserted `expect(output).not.toContain(&quot;ReferenceError&quot;)` to prove the guard stopped the run. Why was that flagged as a defect?</p>
+        <ol data-quiz-options>
+          <li>`ReferenceError` is not a real JavaScript error type.</li>
+          <li data-quiz-correct>The target emits no ReferenceError even when unguarded — it fails earlier on an unresolved module — so the assertion passes whether or not the guard exists.</li>
+          <li>The assertion should have used `toContain` instead.</li>
+          <li>String assertions are forbidden by repository policy.</li>
+        </ol>
+        <p data-quiz-explanation>An assertion that cannot fail proves nothing. The replacement asserts the run aborted before any test executed, which does fail under a hook that prints its diagnostic but neglects to exit.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why did `AGENTS.md` have to change in the same delivery as `harness.config.ts`?</p>
+        <ol data-quiz-options>
+          <li>`AGENTS.md` is a generated artifact that must be regenerated after any config change.</li>
+          <li data-quiz-correct>It declared the six always-on reviewers as the mandatory set, so once the config stopped adding them the repository carried two disagreeing policies, and following the older one fails at the evidence boundary.</li>
+          <li>`AGENTS.md` contains the list of Vitest packages.</li>
+          <li>A sensor requires every `harness.config.ts` change to touch `AGENTS.md`.</li>
+        </ol>
+        <p data-quiz-explanation>The reviewer-set rule became stranded. An executor dispatching the AGENTS-mandated reviewers without naming them in the selection file gets a hard `no activated review lens defines` refusal from the outcome parser.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the standing risk of committing `.agents/review-selection.json` as `[]`?</p>
+        <ol data-quiz-options>
+          <li>The gate will refuse every future delivery until the file is repopulated.</li>
+          <li>The two mandated product lenses are also disabled.</li>
+          <li data-quiz-correct>A later delivery that forgets to repopulate it gets a two-lens review that still passes the gate, and only prose enforces repopulation.</li>
+          <li>Reviewer charters under `.agents/agents/` are deleted.</li>
+        </ol>
+        <p data-quiz-explanation>The file is now the sole machine-readable roster. The product&#x27;s two mandated lenses always remain, so review still succeeds — quietly narrower than intended. No sensor detects an under-populated roster; adding one was out of scope.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>One `harness:test` run failed on `scripts/harness-behavior.test.ts`. How was that handled?</p>
+        <ol data-quiz-options>
+          <li>The failing assertion was relaxed so the suite would pass.</li>
+          <li data-quiz-correct>The file was confirmed untouched by this delivery, re-run three times in isolation with three passes, and recorded as a pre-existing flake rather than quietly re-run away.</li>
+          <li>The test was skipped for this branch.</li>
+          <li>The delivery was blocked until the flake was fixed.</li>
+        </ol>
+        <p data-quiz-explanation>The file is not in the delivery&#x27;s diff and the failure was an ENOENT on a spawned fixture&#x27;s teardown log — a race, not a regression. Reporting it is the honest outcome; suppressing it would not be.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the current finish-line status of this delivery?</p>
+        <ol data-quiz-options>
+          <li>Merged, root-aligned, and deployed to production.</li>
+          <li>Merged and root-aligned, with deployment deferred.</li>
+          <li data-quiz-correct>A delivery candidate: PR, merge, and root alignment are pending, and production deployment is deferred by the operator.</li>
+          <li>Abandoned in favor of a documentation-only fix.</li>
+        </ol>
+        <p data-quiz-explanation>The report is written in delivery-candidate mode. Nothing claims merge, Linear `Done`, root alignment, or a deploy, because none of those has happened.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>delivered diff (read-only explorer)</dt><dd>Produced the changed-file map, the per-invocation coverage table, the reviewer-charter before/after, and the risk list — including the observations that a bare `bun test` at the root now aborts by design, that a nested working directory remains uncovered, and that `[]` landing on main is enforced only by prose.</dd>
+      <dt>session context (read-only explorer)</dt><dd>Reconstructed the decision history from the delivery run journal and the session transcript: the abandoned `Bun.main` mechanism and the three-file probe that falsified it, `onResolve` ruled out empirically, both review rounds with every finding id, severity and disposition including the ones each lens declined and why, the six refused run-event appends and their exact grammar errors, and the validation-map and compound-check failures with their root causes.</dd>
+      <dt>lens.outcome-correctness (independent reviewer, rounds 1-2)</dt><dd>Filed the solution-note over-read in round 1, then in round 2 confirmed it resolved and found the stranded `AGENTS.md` roster rule (P1) and the incorrect `Bun.main` narration (P3).</dd>
+      <dt>lens.adversarial-testing (independent reviewer, rounds 1-2)</dt><dd>Proved the round-1 P0 reach hole with a concrete multi-target invocation, then in round 2 re-verified all five carried-forward findings by mutating the product rather than trusting the disposition table, and confirmed the recommended command actually works.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>
