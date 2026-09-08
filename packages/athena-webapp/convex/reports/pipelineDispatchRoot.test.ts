@@ -9,7 +9,7 @@ import { recordReadCosts } from "./readCostTestSupport";
 
 const modules = import.meta.glob("../**/*.ts");
 
-it("schedules the same fourteen independent lanes with no database reads or extra dispatcher hop", async () => {
+it("schedules thirteen independent lanes with no database reads or extra dispatcher hop", async () => {
   const t = convexTest(schema, modules);
   await t.run(async (ctx) => {
     const scheduled: string[] = [];
@@ -26,11 +26,10 @@ it("schedules the same fourteen independent lanes with no database reads or extr
       },
     });
     expect(await dispatchReportPipeline(recorder.ctx)).toEqual({
-      lanesScheduled: 14,
+      lanesScheduled: 13,
     });
     expect(scheduled).toEqual([
       "reports/pipelineDispatch:dispatchDays",
-      "reports/pipelineDispatch:dispatchLegacy",
       "reports/pipelineDispatch:dispatchCloseEvidence",
       "reports/pipelineDispatch:dispatchOverview",
       "reports/pipelineDispatch:maintenance",

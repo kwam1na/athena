@@ -6,7 +6,7 @@ This candidate changes development only. Production deployment, backfill, activa
 
 ## Ownership and liveness
 
-The existing reports cron dispatches 14 independent lanes: day folds, legacy stores, compact close evidence, overview, maintenance, weekly date resolution/current/accept/refresh, inventory companion, rollups, weekly recovery, summary ranges and retention. Store admission uses `REPORTS_SWEEP_STORE_ALLOWLIST`; unset/empty admits nothing. Store-scoped lanes rotate through at most four stores; maintenance performs global bounded expiry. Exact work is durable before dispatch, and leases recover dropped continuations. A failed data mutation rolls back; a separate mutation records bounded retry evidence.
+The existing reports cron dispatches 13 independent lanes: day folds, compact close evidence, overview, maintenance, weekly date resolution/current/accept/refresh, inventory companion, rollups, weekly recovery, summary ranges and retention. Store admission uses `REPORTS_SWEEP_STORE_ALLOWLIST`; unset/empty admits nothing. Store-scoped lanes rotate through at most four stores; maintenance performs global bounded expiry. Exact work is durable before dispatch, and leases recover dropped continuations. A failed data mutation rolls back; a separate mutation records bounded retry evidence.
 
 | Source / output | Owner and boundary |
 | --- | --- |
@@ -46,7 +46,7 @@ The day fixture measured 1,803,397 bytes / 4,007 documents. The 4,000-fact / sev
 
 ## Additive rollout and coverage
 
-1. Preserve old schemas/readers and the existing allowlist. Deploy additive code/schema only after approval and repository gates. Source transactions dual-write compact handoffs; stores without active control continue isolated legacy consumption.
+1. Preserve old schemas/readers and the existing allowlist. Deploy additive code/schema only after approval and repository gates. Source transactions dual-write compact handoffs. The legacy store sweep and its dispatcher were retired after Wigclub activated; stores without active control must complete migration before pipeline consumption begins.
 2. Read `reports/pipelineMigration:migrationStatus` for the exact store. Confirm no reseed, current source integrity and the intended deployment. A missing/ambiguous target is a hold.
 3. Preview with `reports/pipelineMigration:beginMigration` and `{ "storeId": "<validated-store-id>", "epoch": "<fresh-unique-epoch>" }`. Default `dryRun` is true and writes/schedules nothing.
 4. After approval, call the same function with `dryRun:false, autoContinue:true`. Retain its generation. Epoch names permit letters, digits, dot, underscore and dash, maximum 64 characters. Never reuse an old active/retired epoch.

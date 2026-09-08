@@ -3,16 +3,13 @@ import type { MutationCtx } from "../_generated/server";
 
 /**
  * The cron's lightweight scheduling root must not import lane implementations.
- * Canonical folding and legacy maintenance can share this root without pulling
+ * Canonical folding and shared maintenance can share this root without pulling
  * their worker callers back into a backend dependency cycle.
  */
 export async function dispatchReportPipeline(ctx: MutationCtx) {
   const lanes = [
     makeFunctionReference<"mutation", Record<string, never>>(
       "reports/pipelineDispatch:dispatchDays",
-    ),
-    makeFunctionReference<"mutation", Record<string, never>>(
-      "reports/pipelineDispatch:dispatchLegacy",
     ),
     makeFunctionReference<"mutation", Record<string, never>>(
       "reports/pipelineDispatch:dispatchCloseEvidence",

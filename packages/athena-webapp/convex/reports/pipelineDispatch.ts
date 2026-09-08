@@ -2,10 +2,7 @@ import { makeFunctionReference, type FunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
-import {
-  sweepWithCtx,
-  maintainReportsWithCtx,
-} from "./sweeper";
+import { maintainReportsWithCtx } from "./sweeper";
 import { readStoreAllowlist } from "./pipelineAllowlist";
 import { claimDayWorkWithCtx, type ReportDayClaim } from "./pipelineDays";
 import { readPipelineControl } from "./pipelineControl";
@@ -289,51 +286,6 @@ export const dispatchOverview = internalMutation({
       ),
       Date.now(),
     ),
-});
-
-export const dispatchLegacy = internalMutation({
-  args: {},
-  returns: v.number(),
-  handler: async (ctx) => {
-    let scheduled = 0;
-    for (const storeId of await selectPipelineStores(
-      ctx,
-      "legacy",
-      Date.now(),
-    )) {
-      const control = await readPipelineControl(ctx, storeId);
-      if (control?.mode === "active" || control?.mode === "paused") continue;
-      const store = await ctx.db.get("store", storeId);
-      if (!store || store.reportingReseedStartedAt !== undefined) continue;
-      await ctx.scheduler.runAfter(
-        0,
-        makeFunctionReference<"mutation", { storeId: Id<"store"> }>(
-          "reports/pipelineDispatch:legacyStoreSweep",
-        ),
-        { storeId },
-      );
-      scheduled += 1;
-    }
-    return scheduled;
-  },
-});
-
-export const legacyStoreSweep = internalMutation({
-  args: { storeId: v.id("store") },
-  returns: v.null(),
-  handler: async (ctx, { storeId }) => {
-    const control = await readPipelineControl(ctx, storeId);
-    if (
-      control?.mode === "active" ||
-      control?.mode === "paused" ||
-      !readStoreAllowlist().has(String(storeId))
-    )
-      return null;
-    const store = await ctx.db.get("store", storeId);
-    if (!store || store.reportingReseedStartedAt !== undefined) return null;
-    await sweepWithCtx(ctx, { storeId, skipMaintenance: true });
-    return null;
-  },
 });
 
 export const maintenance = internalMutation({
