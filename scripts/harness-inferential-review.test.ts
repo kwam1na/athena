@@ -801,6 +801,7 @@ describe("runHarnessInferentialReview", () => {
     const rootDir = await createFixtureRepo();
 
     const result = await runHarnessInferentialReview(rootDir, {
+      semanticMode: "off",
       getChangedFiles: async () => [
         "package.json",
         ".github/workflows/athena-pr-tests.yml",

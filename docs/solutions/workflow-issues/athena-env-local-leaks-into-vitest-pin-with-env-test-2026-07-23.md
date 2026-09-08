@@ -92,6 +92,14 @@ deterministic without a mock that would make the derivation assertion tautologic
 per-developer, gitignored file; if it can flip a committed test, the suite is not
 reproducible across machines. Pinning the relevant keys in `.env.test` restores that.
 
+## Process environment in consolidated harness steps
+
+The reverse mismatch appeared in [V26-1849](https://linear.app/v26-labs/issue/V26-1849): local validation passed, but consolidated CI inherited `HARNESS_INFERENTIAL_SEMANTIC_MODE=shadow`. The deterministic success test in `scripts/harness-inferential-review.test.ts` therefore received `semantic-shadow` while asserting `deterministic-only`.
+
+That function already accepts an explicit `semanticMode` option. Setting `semanticMode: "off"` in the deterministic-path fixture fixes its input without changing the assertion, runtime environment selection, or CI shadow behavior. Unlike the Vite import-time example above, this call-time input needs no `.env.test` change or global environment reset. The exact failure was reproduced under the CI variable; afterward all 89 tests in the affected file passed under both the default and shadow environments, with 243 assertions in each run. Existing shadow-path tests remain intact.
+
+When consolidating workflow steps, check which environment variables now reach unrelated tests. [V26-1953](https://linear.app/v26-labs/issue/V26-1953) tracks adding this bounded environment variant to an existing local sensor; the fixture correction alone does not implement that follow-up.
+
 ## Prevention
 
 - When a test asserts a value derived from `import.meta.env`, pin the inputs it
