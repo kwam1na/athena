@@ -9,27 +9,31 @@
     "personaSource": {
       "form": "shipped-by-identity",
       "composition": "qualifications/fixtures/agent-skills-core-v1-composition.zip",
-      "archiveSha256": "9ce12f12c4096e346154ef377fc89187c9168944d6e59b9d6596feb98e57d2ed",
+      "archiveSha256": "21cccc879804e186330a6a2087248d685c47b37a1ea06e4f7dd5e799ccbdf064",
       "manifest": "personas/manifest.json"
     }
   },
   "inputDigests": {
-    "repository-policy.json": "c49f425be88ba67a6958e20ca8d68d52184f866d5fae748fce8dc08dedc05239",
+    "repository-policy.json": "c61c20328a802a39d8bafe81ed1323936c58790454d2bc05bf67f2419306397a",
     "adapters.json": "5f8aa52add535acf9d41696b2766e6891d64f3beff85712aa8727d0cbb334238"
   },
   "compiled": {
     "spec": "compiled-repository-policy/1",
-    "policyGeneration": 1,
+    "policyGeneration": 2,
     "snapshot": {
       "spec": "policy-snapshot/1",
       "repositoryId": "athena",
       "productTrustRevocationEpoch": 0,
       "repositoryAuthorityRevocationEpoch": 0,
       "grantedFinishLines": [
-        "merge-ready"
+        "merge-ready",
+        "merge",
+        "deploy"
       ],
       "grantedAuthority": [
-        "pr-creation"
+        "pr-creation",
+        "merge",
+        "deploy"
       ],
       "reviewLenses": [
         {
@@ -41,34 +45,28 @@
         {
           "lensId": "lens.adversarial-testing",
           "category": "testing-policy",
-          "personaId": "persona.adversarial",
-          "personaDigest": "ae9969a9835d66a8fd0b4dca434915f23e2904b5f3865035f887583338571b0d"
+          "personaId": "persona.testing-policy",
+          "personaDigest": "ad8a1577e9a5f6de5b0bc431b704dcb72aecd67652b8cd97f8d5706a61864aff"
         }
       ],
       "obligations": [
         {
-          "obligationId": "preparation.current"
-        },
-        {
-          "obligationId": "contract.preflight"
-        },
-        {
           "obligationId": "review.green"
+        },
+        {
+          "obligationId": "validation.passed"
+        },
+        {
+          "obligationId": "documentation.accepted"
         },
         {
           "obligationId": "documentation.current"
         },
         {
           "obligationId": "telemetry.recorded"
-        },
-        {
-          "obligationId": "validation.proof-recorded"
-        },
-        {
-          "obligationId": "delivery.scorecard"
         }
       ],
-      "policyDigest": "795c6433691852debe5b24c1e234735c90f3ed5481582945645adbf199d34236"
+      "policyDigest": "404aa481eb6710e221d2462301611690ce7b65732aacc79afd5d2bab39089537"
     },
     "capabilities": [
       {
@@ -279,6 +277,6 @@
     "approvals": [],
     "tracker": "absent",
     "trackerAbsenceFallback": "proceed-without-tracker",
-    "compiledDigest": "170269c54fbfcbe1fef2442fcb40bbdc2d9e7f130505f7b8be95fc5605b1e0f5"
+    "compiledDigest": "2c8df3950b91d10e7593b06fcb7a0c9880f857c177f5438824fbe2ac4bc22fbb"
   }
 }

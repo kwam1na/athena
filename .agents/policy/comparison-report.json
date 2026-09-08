@@ -1,97 +1,29 @@
 {
-  "schemaVersion": "athena-policy-comparison-report/1",
-  "comparedAt": "2026-09-01",
-  "comparisonAuthority": "bun run pr:athena (unchanged legacy aggregate)",
-  "mode": "read-only",
+  "schemaVersion": "athena-policy-comparison-report/2",
+  "mode": "delivery-candidate",
+  "comparisonAuthority": "installed delivery product and Athena repository sensors",
   "inputs": {
-    "repository-policy.json": "c49f425be88ba67a6958e20ca8d68d52184f866d5fae748fce8dc08dedc05239",
+    "repository-policy.json": "c61c20328a802a39d8bafe81ed1323936c58790454d2bc05bf67f2419306397a",
     "adapters.json": "5f8aa52add535acf9d41696b2766e6891d64f3beff85712aa8727d0cbb334238",
-    "pre-cutover-oracle.json": "76b3e7d79294ff910984435609e44c7fc80f0d52e7f1d2b9419df28488d29564",
-    "compiled-snapshot.json": "0194582ec54ec5333c5e2f2e67aaddda75a3056c620e7b7acbb90ab82f04fcf8",
-    "compiledDigest": "170269c54fbfcbe1fef2442fcb40bbdc2d9e7f130505f7b8be95fc5605b1e0f5"
+    "compiled-snapshot.json": "c3578ad027f106af12f9e6e4de165e5e018468bb063af2f6907ee743aa436716",
+    "compiledDigest": "2c8df3950b91d10e7593b06fcb7a0c9880f857c177f5438824fbe2ac4bc22fbb"
   },
-  "results": {
-    "compile": "ok: the declarative document plus the twelve typed adapters compile through the harness policy compiler (agent-delivery-harness f942c27) with zero rejections, each lens resolving its reviewer charter by identity from the pinned composition archive 9ce12f12",
-    "mvpBoundary": "ok: before manually recording a counted derived summary, the operator independently verifies and retains the complete projection-consumption-observation/1 artifact outside model grants and must not record unsupported-host, path-only, echoed, cross-repository, symlinked/hardlinked, or protected-target-mismatched evidence. These are manual admission conditions and operator assertions; the guard and scorer validate only literal derived source/affirmative/digest/marker and candidate/GitHub input, not external retention or underlying provenance/path conditions, so an accepted entry does not independently prove the full envelope, trusted intent, registration, isolation, or writer provenance",
-    "phaseParity": "ok: oracle phase vector matches the live pr:athena phase order and package.json script chain",
-    "obligationParity": "ok: every live gate obligation (review.green, documentation.current, telemetry.recorded) is activated by the declarative document with matching activation semantics",
-    "leafMapping": "ok: each proposed leaf maps to exactly one adapter; no adapter is mapped twice; the pr:athena aggregate is registered as no leaf",
-    "activationScenarios": "ok: docs-only, script, webapp code, Convex, and storefront candidates all select the identical authoritative phase set; mechanical selection matches the frozen oracle vectors",
-    "authority": "ok: merge-ready is the only granted finish line; pr-creation is the only granted authority; merge and deploy remain ungranted (explicitly forbidden) with their adapters registered discovery-only",
-    "generatedArtifactOwnership": "ok: every generated artifact group is owned by its generator behind stage.generated-artifact-repair, and the non-docs generated trees are protected paths in every checkpoint grant",
-    "plantedCompileRejections": {
-      "duplicate-obligation": ["duplicate_obligation"],
-      "contradictory-merge-authority": ["contradictory_authority"],
-      "merge-finish-line-without-authority": ["contradictory_finish_line"],
-      "required-capability-without-adapter": ["capability_unavailable"],
-      "privileged-credential-in-model-grant": ["privileged_credential_in_model_grant"],
-      "unknown-document-member": ["unknown_member"],
-      "duplicate-capability": ["duplicate_capability"]
+  "decisions": [
+    {
+      "id": "ordinary-product-cutover",
+      "basis": "User-approved V26-1849 contract and requirements addendum",
+      "scope": "Ordinary host-native delivery through merge, root alignment and applicable deploy; no new managed host authority."
+    },
+    {
+      "id": "single-gate-implementation",
+      "basis": "harness.config.ts declares the installed product gate; Athena retains sensors and content rules.",
+      "scope": "Legacy candidate, evidence, gate and accounting engines are retired in this candidate."
+    },
+    {
+      "id": "historical-shadow",
+      "basis": "history/pre-cutover retains exact origin/main policy and oracle bytes.",
+      "scope": "Historical artifacts have no active runtime authority; managed checkpoint restrictions are unchanged."
     }
-  },
-  "adjudications": [
-    {
-      "id": "adversarial-lens-category",
-      "observed": "Athena's delivery review runs an outcome-correctness lens and an adversarial lens; the compiled policy vocabulary has no adversarial category.",
-      "projection": "lens.adversarial-testing is declared under the testing-policy category, which is the mandatory category its probing (tests, edge cases, policy compliance) satisfies.",
-      "disposition": "accepted-projection",
-      "blocking": false
-    },
-    {
-      "id": "tracker-host-provided",
-      "observed": "Linear tracking is performed by the host session (MCP), not by any repository-owned command; bun run pr:athena has no tracker dependency.",
-      "projection": "No tracker adapter is registered and trackerAbsenceFallback is proceed-without-tracker, so tracker absence never blocks delivery - matching current behavior.",
-      "disposition": "accepted-projection",
-      "blocking": false
-    },
-    {
-      "id": "mvp-decision-evidence-only",
-      "observed": "Athena's live delivery authority remains bun run pr:athena and GitHub, with the coding host orchestrating the workflow.",
-      "projection": "Before manually recording a counted derived summary, the operator independently verifies and retains the complete host-neutral observation outside model grants and must not record unsupported-host, path-only, echoed, cross-repository, symlinked/hardlinked, or protected-target-mismatched evidence. These are manual admission conditions and operator assertions; the guard and scorer validate only literal derived source/affirmative/digest/marker and candidate/GitHub input, not external retention or underlying provenance/path conditions, so an accepted entry is not proof or storage of the full envelope. No automatic writer, registration, takeover, trusted operator intent, or model isolation is claimed. V26-1527 is deferred to a future higher-assurance trust tier.",
-      "disposition": "accepted-projection",
-      "blocking": false
-    },
-    {
-      "id": "generator-invocation-surface",
-      "observed": "Generators (graphify:rebuild, convex codegen, agent-sdk:generate, harness:generate) are invoked today through the model-driven shell during preparation.",
-      "projection": "The projected model assigns generated trees to stage.generated-artifact-repair (a mutation-stage leaf) and protects the non-docs generated paths from model-driven stages. Ownership of the bytes is unchanged: generators produce them, sensors verify them.",
-      "disposition": "accepted-projection",
-      "blocking": false
-    },
-    {
-      "id": "preparation-admission-two-adapters",
-      "observed": "The ticket names harness preparation/admission as one proposed leaf surface.",
-      "projection": "It maps to two typed adapters - stage.harness-preparation (publishes the candidate receipt) and sensor.harness-admission (judges the prepared candidate) - because one mutates local state and the other only reads. Each still maps exactly once.",
-      "disposition": "recorded",
-      "blocking": false
-    },
-    {
-      "id": "reporting-leaf-granularity",
-      "observed": "Report-shaped enforcement is split across delivery:documentation-check (obligation provider) and reports:presentation:check (an admission provider command).",
-      "projection": "sensor.delivery-reporting binds delivery:documentation-check as the obligation-level authority; reports:presentation:check stays inside the admission provider command graph rather than becoming a second reporting leaf.",
-      "disposition": "recorded",
-      "blocking": false
-    },
-    {
-      "id": "hosted-check-observation-unscripted",
-      "observed": "Hosted required checks (athena-pr-tests) are observed today via gh pr checks by the operator or agent; no repository script owns that observation.",
-      "projection": "status.hosted-checks is a status-reconciliation adapter (read-only by kind); it grants nothing and mutates nothing, mirroring the observation-only reality.",
-      "disposition": "recorded",
-      "blocking": false
-    },
-    {
-      "id": "branch-push-outside-model-grant",
-      "observed": "Under the legacy authority the agent pushes delivery branches itself after the gates pass.",
-      "projection": "The portable execution grant forbids git.push in every model-driven stage; in the managed model the push happens behind operation.pr-creation outside the model grant. Legacy behavior is unchanged until cutover; this difference is between projections, not a change to current authority.",
-      "disposition": "accepted-projection",
-      "blocking": false
-    },
-    {
-      "id": "lens-persona-by-identity",
-      "observed": "Each lens must now name the reviewer charter it hands its reviewer. Athena's delivery review runs a correctness reviewer and an adversarial reviewer (ce-correctness-reviewer and ce-adversarial-reviewer in .agents/skills/ce-code-review/references/persona-catalog.md), and the review telemetry keys those two as correctness and adversarial.",
-      "projection": "lens.outcome-correctness references persona.outcome-correctness and lens.adversarial-testing references persona.adversarial, both by identity alone, so advancing the shipped charter set never edits this document. The charter bytes are bound in the compiled snapshot instead. lens.adversarial-testing keeps the testing-policy category, which remains a taxonomy slot forced by the closed category vocabulary and not a statement about which charter the lens hands out - see adversarial-lens-category.",
-      "disposition": "accepted-projection",
-      "blocking": false
-    }
-  ]
+  ],
+  "validation": "Candidate implementation; final characterization, review, hosted checks and delivery acceptance remain pending."
 }

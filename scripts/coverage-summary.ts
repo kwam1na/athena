@@ -106,10 +106,24 @@ export function readVitestJsonSummary(summaryPath: string): CoverageSummary {
   return toCoverageSummary(JSON.parse(readFileSync(summaryPath, "utf8")));
 }
 
-export function parseLcovSummary(lcovContents: string): CoverageSummary {
+export function parseLcovSummary(lcovContents: string, rootDir = process.cwd()): CoverageSummary {
   const summary = emptySummary();
+  let installedGeneration = false;
 
   for (const line of lcovContents.split("\n")) {
+    if (line.startsWith("SF:")) {
+      const relativePath = path.relative(rootDir, path.resolve(rootDir, line.slice(3).trim()));
+      // Installed dependency payload is outside Athena-owned coverage. Keep all
+      // other imported code in Athena's existing coverage baseline.
+      installedGeneration = relativePath.startsWith(`.agent-skills${path.sep}generations${path.sep}`);
+      continue;
+    }
+    if (line.trim() === "end_of_record") {
+      installedGeneration = false;
+      continue;
+    }
+    if (installedGeneration) continue;
+
     const [key, value] = line.split(":");
     const numericValue = Number(value);
 
@@ -153,7 +167,7 @@ function resolveSourceSummary(rootDir: string, source: CoverageSource) {
     return readVitestJsonSummary(path.join(rootDir, source.summaryPath));
   }
 
-  return parseLcovSummary(readFileSync(path.join(rootDir, source.lcovPath), "utf8"));
+  return parseLcovSummary(readFileSync(path.join(rootDir, source.lcovPath), "utf8"), rootDir);
 }
 
 function checkSourceThresholds(source: CoverageSource, summary: CoverageSummary) {

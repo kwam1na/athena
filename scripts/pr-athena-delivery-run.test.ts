@@ -1,1751 +1,197 @@
-import { spawnSync } from "node:child_process";
-import {
-  mkdir,
-  mkdtemp,
-  readFile,
-  readdir,
-  rm,
-  writeFile,
-} from "node:fs/promises";
+import { chmod, cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { afterEach, expect, it } from "vitest";
+import { computeDeliverableIdentity, defineHarnessConfig, GATE_STRUCTURAL_FINDING_CODES, parseDeliveryRecord } from "../.agent-skills/current/runtime/kernel.mjs";
 
-import { describe, expect, it } from "vitest";
+import { evaluateDeliveryDocumentationAdmission } from "./delivery-documentation-admission";
+import { readCurrentDeliveryRunExport } from "./delivery-run-telemetry";
 
-import {
-  consumeHarnessGateDecisionEvents,
-  parseProviderSkippedEvents,
-  resolveSummaryBaseline,
-  runPrAthenaDeliveryRun,
-  writePrAthenaProviderEvidence,
-  runPrAthenaDeliveryRunCli,
-} from "./pr-athena-delivery-run";
-import {
-  buildPartialDeliveryRunBaseline,
-  createDeliveryRunLedger,
-  writeDeliveryRunLedger,
-} from "./harness-delivery-run-ledger";
-import {
-  buildDeliveryRunTelemetryRecord,
-  writeDeliveryRunTelemetryRecord,
-} from "./delivery-run-telemetry";
 
-const candidate = {
-  treeSha: "tree-a",
-  baseRef: "origin/main",
-  baseTipSha: "base-a",
-  diffBaseSha: "merge-base-a",
-  worktreeId: "worktree-a",
-};
+const roots: string[] = [];
+afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
 
-const expectedPrAthenaCommands = [
-  ["bun", "run", "pr:athena:prepare"],
-  ["bun", "run", "pr:athena:preflight"],
-  ["bun", "run", "pr:athena:validate"],
-  ["bun", "run", "pr:athena:record-proof"],
-  ["bun", "run", "pr:athena:scorecard"],
-];
-
-function ledgerEvent(
-  expected: {
-    invocationId: string;
-    parentStartToken: string;
-    gateId: string;
-    candidate: typeof candidate;
-  },
-  sequence: "evaluated" | "candidate_changed" | "provider_failed" | "completed",
-  admitted: boolean,
-) {
-  return {
-    invocationId: expected.invocationId,
-    invocationMode: "outer" as const,
-    parentIdentity: "pr:athena:delivery-run" as const,
-    parentStartToken: expected.parentStartToken,
-    sequence,
-    gateId: expected.gateId,
-    ...expected.candidate,
-    context: "agent",
-    admitted,
-    preventedCostClass: "merge_grade_validation",
-    resolutionKinds: admitted ? ["satisfied_evidence"] : ["blocked"],
-    blockerCodes: admitted ? [] : ["review_evidence_missing"],
-    timestamp:
-      sequence === "evaluated"
-        ? "2026-08-11T00:00:00.000Z"
-        : "2026-08-11T00:00:01.000Z",
+async function fixture(withWaiver = false) {
+  const temporary = await mkdtemp(path.join(tmpdir(), "athena-coordinator-")); roots.push(temporary);
+  const root = path.join(temporary, "repo"); await mkdir(root);
+  const repositoryRoot = path.resolve(import.meta.dirname, "..");
+  const git = (...args: string[]) => {
+    const result = Bun.spawnSync(["git", ...args], { cwd: root, env: Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_"))), stdout: "pipe", stderr: "pipe" });
+    if (result.exitCode !== 0) throw new Error(result.stderr.toString());
+    return result.stdout.toString().trim();
   };
-}
-
-function gateEventHarness() {
-  return {
-    logger: { log: () => undefined },
-    evaluateValidationProof: async () => ({
-      reusable: false as const,
-      status: "proof_not_recorded" as const,
-      reason: "test proof disabled",
-    }),
-    resolveGateDecisionExpectation: async (
-      _rootDir: string,
-      invocationId: string,
-      parentStartToken: string,
-    ) => ({
-      invocationId,
-      parentStartToken,
-      gateId: "athena.pr-validation",
-      candidate,
-    }),
-    consumeGateDecisionEvents: async (
-      _rootDir: string,
-      expected: Parameters<typeof ledgerEvent>[0],
-      providerExitCode: number,
-    ) =>
-      providerExitCode === 0
-        ? [
-            ledgerEvent(expected, "evaluated", true),
-            ledgerEvent(expected, "completed", true),
-          ]
-        : [ledgerEvent(expected, "evaluated", false)],
-  };
-}
-
-function reusableProof(proofPath = "/repo/.git/current-proof.json") {
-  return {
-    reusable: true as const,
-    status: "reusable" as const,
-    proofPath,
-    proof: {
-      schemaVersion: 2 as const,
-      recordedHeadSha: "head-a",
-      validatedTreeSha: "tree-a",
-      recordedStatusMode: "clean" as const,
-      baseRef: "origin/main" as const,
-      baseSha: "base-a",
-      bunVersion: "1.1.29",
-      prAthenaScript: "bun run pr:athena:delivery-run",
-      validationFingerprint: "validation-a",
-    },
-  };
-}
-
-function authoritativeLedger(deliverableDiffFingerprint = "fingerprint-a") {
-  const phases = [
-    "prepare",
-    "preflight",
-    "validate",
-    "record-proof",
-    "scorecard",
-  ] as const;
-  return createDeliveryRunLedger({
-    generatedAt: "2026-08-28T20:00:00.000Z",
-    status: "pass",
-    proofState: "proof_recorded",
-    deliverableDiffFingerprint,
-    commandSpans: phases.map((phase) => ({
-      phase,
-      command: `bun run pr:athena:${phase}`,
-      startedAt: "2026-08-28T19:50:00.000Z",
-      endedAt: "2026-08-28T20:00:00.000Z",
-      durationMs: 1,
-      status: "pass" as const,
-      exitCode: 0,
-    })),
-    gateDecisionEvents: [
-      ledgerEvent(
-        {
-          invocationId: "invocation-a",
-          parentStartToken: "start-a",
-          gateId: "athena.pr-validation",
-          candidate,
-        },
-        "evaluated",
-        true,
-      ),
-      ledgerEvent(
-        {
-          invocationId: "invocation-a",
-          parentStartToken: "start-a",
-          gateId: "athena.pr-validation",
-          candidate,
-        },
-        "completed",
-        true,
-      ),
-    ],
+  const write = async (name: string, value: string) => { await mkdir(path.dirname(path.join(root, name)), { recursive: true }); await writeFile(path.join(root, name), value); };
+  const baseConfig = defineHarnessConfig({
+    gateId: "fixture.validation", acceptedEnvelopeSpecs: ["delivery-evidence/1"], identityVersions: ["deliverable-tree/v1"], computingIdentityVersion: "deliverable-tree/v1",
+    reviewNeutral: [{ prefix: "docs/reports/" }, { prefix: "docs/solutions/" }, { prefix: "telemetry/delivery-runs/" }], recordNeutral: [{ prefix: "telemetry/delivery-runs/", suffix: ".json" }],
+    pathClassification: { generated: [], test: [], lockfile: [] }, sensitivePaths: [], activationThreshold: 150,
+    providers: [{ id: "native-review", findingCodes: [] }], obligations: [{ id: "review.green", activation: { kind: "relevant_change" }, freshness: "exact_candidate", providers: ["native-review"], acceptedPayloadSpecs: ["review.green/1"], allowedResolutionKinds: ["satisfied_evidence", "not_applicable"], humanWaiverAllowed: false, minimumAttestationLevel: "self", ciDelegationPolicyIds: [], waivableCodes: [], nonWaivableCodes: [...GATE_STRUCTURAL_FINDING_CODES], remediation: { default: [{ id: "review", kind: "manual_action", summary: "Complete review." }] } }], agentEnvSignals: ["TEST_AGENT"], ciPolicies: [], ciPolicyEnvKey: "TEST_CI_POLICY",
+    preparationWiringPaths: ["harness.config.ts"], preparationCommands: [{ id: "mechanical", command: ["bun", "-e", 'require("node:fs").appendFileSync(".git/mechanical-runs", "prepared\\n")'], timeoutMs: 10000 }], deliveryRecordPath: "telemetry/delivery-runs/record.json",
   });
-}
-
-function persistedEvent(
-  expected: Parameters<typeof ledgerEvent>[0],
-  sequence: "evaluated" | "candidate_changed" | "provider_failed" | "completed",
-  admitted: boolean,
-) {
-  return {
-    schemaVersion: 2,
-    kind: "gate_decision",
-    invocationId: expected.invocationId,
-    invocationMode: "outer",
-    parentIdentity: "pr:athena:delivery-run",
-    parentStartToken: expected.parentStartToken,
-    sequence,
-    gateId: expected.gateId,
-    candidate: expected.candidate,
-    context: "agent",
-    admitted,
-    preventedCostClass: "merge_grade_validation",
-    timestamp:
-      sequence === "evaluated"
-        ? "2026-08-11T00:00:00.000Z"
-        : "2026-08-11T00:00:01.000Z",
-    decision: {
-      gateId: expected.gateId,
-      candidate: expected.candidate,
-      preventedCostClass: "merge_grade_validation",
-      admitted,
-      resolutions: [
-        {
-          kind: admitted ? "satisfied_evidence" : "blocked",
-          gateId: expected.gateId,
-          obligationId: "review.green",
-        },
-      ],
-      diagnostics: [],
-    },
-    blockerEnvelope: {
-      schemaVersion: 1,
-      blockers: admitted
-        ? []
-        : [
-            {
-              code: "review_evidence_missing",
-              source: { kind: "obligation", id: "review.green" },
-              summary: "Review evidence is missing.",
-              remediations: [
-                {
-                  id: "complete-review",
-                  kind: "manual_action",
-                  summary: "Complete review.",
-                },
-              ],
-            },
-          ],
-    },
-  };
-}
-
-function runGit(rootDir: string, args: string[]) {
-  const result = spawnSync("git", args, {
-    cwd: rootDir,
-    encoding: "utf8",
-    env: gitFixtureEnv(),
-  });
-
-  if (result.status !== 0) {
-    throw new Error(result.stderr.trim() || `git ${args.join(" ")} failed`);
+  const config = withWaiver ? defineHarnessConfig({
+    ...baseConfig,
+    providers: [...baseConfig.providers, { id: "fixture.documentation", findingCodes: [], command: ["bun", path.join(temporary, "waiver-check.ts")] }],
+    obligations: [...baseConfig.obligations, { id: "documentation.current", activation: { kind: "always" }, freshness: "live", providers: ["fixture.documentation"], acceptedPayloadSpecs: ["checks.passed/1"], allowedResolutionKinds: ["satisfied_live_fact", "not_applicable"], humanWaiverAllowed: false, minimumAttestationLevel: "self", ciDelegationPolicyIds: [], waivableCodes: [], nonWaivableCodes: [...GATE_STRUCTURAL_FINDING_CODES], remediation: { default: [{ id: "documentation", kind: "manual_action", summary: "Repair documentation." }] } }],
+  }) : baseConfig;
+  await write("harness.config.ts", `export default ${JSON.stringify(config)};`);
+  for (const name of [".agent-skills", ".agents/skills", ".claude/skills"]) {
+    await cp(path.join(repositoryRoot, name), path.join(root, name), { recursive: true, verbatimSymlinks: true });
   }
-
-  return result.stdout.trim();
-}
-
-function gitFixtureEnv() {
-  return Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
-  );
-}
-
-async function createDecisionEventFixture() {
-  const rootDir = await mkdtemp(path.join(tmpdir(), "athena-gate-events-"));
-  runGit(rootDir, ["init"]);
-  const eventsDir = path.resolve(
-    rootDir,
-    runGit(rootDir, [
-      "rev-parse",
-      "--git-path",
-      "codex/harness-obligations/v2/events",
-    ]),
-  );
-  await mkdir(eventsDir, { recursive: true });
-  const expected = {
-    invocationId: "invocation-a",
-    parentStartToken: "start-a",
-    gateId: "athena.pr-validation",
-    candidate,
+  await write("source.ts", "export const value = 1;\n");
+  git("init", "-q"); git("config", "user.name", "Fixture"); git("config", "user.email", "fixture@example.invalid"); git("add", "."); git("-c", "commit.gpgsign=false", "commit", "-qm", "base"); git("branch", "origin/main");
+  const errors: string[] = [];
+  const native = async (script: string, args: readonly string[] = [], extraEnv: Record<string, string> = {}) => {
+    const child = Bun.spawn(["bun", path.join(repositoryRoot, "scripts", script), ...args], { cwd: root, env: { ...process.env, TEST_AGENT: "1", ...extraEnv }, stdout: "pipe", stderr: "pipe" });
+    const [code, out, err] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
+    errors.push(out, err); return code;
   };
-  return { rootDir, eventsDir, expected };
+  const run = (args: readonly string[]) => native("delivery-product.ts", args);
+  const coordinate = async (failPhase?: string) => {
+    // Test-only launcher delegates to the actual immutable installed product.
+    // Failures are real candidate refusals, introduced just before a phase.
+    const python = Bun.spawnSync(["python3", "-c", "import sys; print(sys.executable)"], { stdout: "pipe" }).stdout.toString().trim();
+    const bin = path.join(temporary, "bin"); await mkdir(bin, { recursive: true });
+    const launcher = path.join(bin, "python3");
+    const checker = path.join(temporary, "waiver-check.ts");
+    await writeFile(checker, `import { evaluateDeliveryDocumentationAdmission } from ${JSON.stringify(path.join(repositoryRoot, "scripts/delivery-documentation-admission.ts"))};
+import { importHarnessConfig, wireRepo } from ${JSON.stringify(path.join(repositoryRoot, "scripts/delivery-product.ts"))};
+import { appendFileSync } from "node:fs";
+import { computeDeliverableIdentity, DELIVERY_PROVIDER_RAILS_VERSION } from ${JSON.stringify(path.join(repositoryRoot, ".agent-skills/current/runtime/kernel.mjs"))};
+import { createInterface } from "node:readline";
+const input = createInterface({ input: process.stdin });
+for await (const line of input) {
+const message = JSON.parse(line);
+if (message.kind === "negotiate") {
+  console.log(JSON.stringify({ kind: "negotiation", outcome: "supported", selectedVersion: DELIVERY_PROVIDER_RAILS_VERSION, supportedVersions: [DELIVERY_PROVIDER_RAILS_VERSION] })); continue;
+}
+const root = process.cwd(); const config = await importHarnessConfig(root); const capture = await (await wireRepo(root, config)).captureCandidate();
+if (!capture.ok) throw new Error("Fixture capture failed");
+const headSha = ${JSON.stringify(git("rev-parse", "HEAD"))};
+const approvedDigest = await computeDeliverableIdentity({ rootDir: root, treeSha: headSha, config });
+const result = await evaluateDeliveryDocumentationAdmission(root, {
+  evaluateDocumentation: () => ({ status: "fail", findings: [{ policy: "compound-solution", label: "Solution notes", message: "missing" }] }),
+  captureCandidate: async () => capture, repository: "fixture/repo", pullRequest: { number: 1, pull_request: { head: { sha: headSha }, base: { ref: "main", sha: headSha } } },
+  discoverWaiver: async request => {
+    if (request.expected.headSha !== headSha || request.expected.baseTipSha !== headSha || request.expected.deliverableTreeSha !== approvedDigest || request.expected.identityVersion !== config.computingIdentityVersion || request.findingCodes.join() !== "compound-solution") throw new Error("Waiver binding changed");
+    return { recordId: "github-check:123", approvedBy: "human", attestationUrl: "https://github.com/fixture/repo/actions/runs/1", attestation: {} as never };
+  },
+});
+if (result.status !== "pass") throw new Error("Waiver admission refused " + capture.candidate.mode);
+appendFileSync(${JSON.stringify(path.join(temporary, "waiver-modes"))}, capture.candidate.mode + "\\n");
+console.log(JSON.stringify({ kind: "terminal", version: DELIVERY_PROVIDER_RAILS_VERSION, requestId: message.requestId, sequence: 1, outcome: "success", summary: "Trusted waiver admission passed", result: {} }));
+break;
+}
+input.close();
+`);
+    await writeFile(launcher, `#!${python}
+import os, sys
+args = sys.argv[1:]
+phase = args[args.index("harness") + 1] if "harness" in args else ""
+if phase == os.environ.get("FIXTURE_FAIL_PHASE"):
+    open("unexpected.ts", "w").write("export {};\\n")
+os.execv(${JSON.stringify(python)}, [${JSON.stringify(python)}] + args)
+`);
+    await chmod(launcher, 0o755);
+    if (failPhase === "stage") {
+      const realGit = Bun.spawnSync(["which", "git"], { stdout: "pipe" }).stdout.toString().trim();
+      const gitLauncher = path.join(bin, "git");
+      await writeFile(gitLauncher, `#!${python}
+import os, sys
+if sys.argv[1:3] == ["add", "--"]:
+    sys.exit(7)
+os.execv(${JSON.stringify(realGit)}, [${JSON.stringify(realGit)}] + sys.argv[1:])
+`);
+      await chmod(gitLauncher, 0o755);
+    }
+    return native("pr-athena-delivery-run.ts", [], { PATH: bin + path.delimiter + process.env.PATH, FIXTURE_FAIL_PHASE: failPhase ?? "" });
+  };
+  const start = async () => {
+    expect(await run(["emit", "run.started", "--json", JSON.stringify({ host: "codex", workflow: { releaseId: "fixture", profile: "linear" } })]), errors.join("\n")).toBe(0);
+    expect(await run(["save-context", "--json", JSON.stringify({ contract: { objective: "Exercise the coordinator", acceptanceCriteria: ["Export verified evidence"], finishLine: "merge-ready" }, stage: "work" })]), errors.join("\n")).toBe(0);
+    expect(await run(["prepare"]), errors.join("\n")).toBe(0);
+  };
+  const staged = () => git("diff", "--cached", "--name-only").split("\n").filter(Boolean);
+  return { root, temporary, git, write, config, run, start, staged, coordinate, errors };
 }
 
-async function writeDecisionEvent(
-  eventsDir: string,
-  event: ReturnType<typeof persistedEvent> | Record<string, unknown>,
-  fileName = `${String(event.invocationId)}--${String(event.sequence)}.json`,
-) {
-  await Bun.write(path.join(eventsDir, fileName), `${JSON.stringify(event)}\n`);
-}
+it("refuses a missing accepted context before producing any artifacts", async () => {
+  const f = await fixture();
+  expect(await f.coordinate()).toBe(1);
+  expect(f.errors.join("\n")).toContain("delivery_context_missing");
+  expect(f.staged()).toEqual([]);
+  expect(await readCurrentDeliveryRunExport(f.root)).toBeNull();
+}, 30000);
 
-describe("pr-athena delivery run wrapper", () => {
-  it("reuses an exact current proof without running delivery phases", async () => {
-    const commands: string[][] = [];
-    const logs: string[] = [];
-    let evaluationMode: string | undefined;
+it("runs the real product through gate, staged export, record and final verification, preserving unrelated staging", async () => {
+  const f = await fixture();
+  await f.write("unrelated.txt", "already staged\n"); f.git("add", "unrelated.txt");
+  const before = f.git("rev-parse", ":unrelated.txt");
+  await f.start();
+  expect(await f.coordinate(), f.errors.join("\n")).toBe(0);
+  expect(f.git("rev-parse", ":unrelated.txt")).toBe(before);
+  expect(await readFile(path.join(f.root, ".git/mechanical-runs"), "utf8")).toBe("prepared\n");
+  const artifacts = f.staged().filter(file => file.startsWith("telemetry/"));
+  expect(artifacts).toHaveLength(2);
+  const recordPath = artifacts.find(file => file.includes("record"))!;
+  expect(parseDeliveryRecord(await readFile(path.join(f.root, recordPath), "utf8")).ok).toBe(true);
+  const run = await readCurrentDeliveryRunExport(f.root);
+  const gate = run?.events.findLast(event => event.kind === "command.completed" && event.payload.command === "gate");
+  const digest = await computeDeliverableIdentity({ rootDir: f.root, treeSha: f.git("write-tree"), config: { ...f.config, computingIdentityVersion: "validation-tree/v1", reviewNeutral: f.config.recordNeutral } });
+  expect(gate?.payload.digest).toBe(digest);
+  console.log(JSON.stringify({ nativeCoordinator: "verified", gateDigest: digest, mechanicalExecutions: 1 }));
+  expect(run?.events.filter(event => event.kind === "command.completed").at(-1)?.payload).toMatchObject({ command: "verify", outcome: "ok" });
+}, 30000);
 
-    const result = await runPrAthenaDeliveryRun("/repo", {
-      ...gateEventHarness(),
-      writeLedger: false,
-      resolveDeliverableFingerprint: () => "fingerprint-a",
-      logger: { log: (line: string) => logs.push(line) },
-      evaluateValidationProof: async (_rootDir, options) => {
-        evaluationMode = options?.evaluationMode;
-        return reusableProof();
-      },
-      readAuthoritativeLedger: async () => authoritativeLedger(),
-      runCommand: async (command) => {
-        commands.push(command);
-        return { exitCode: 0 };
-      },
-    });
+it.each(["save-context", "gate", "prepare", "record", "verify"])("propagates a real product %s failure and leaves only artifacts already produced", async phase => {
+  const f = await fixture(); await f.start();
+  expect(await f.coordinate(phase)).toBe(1);
+  const artifacts = f.staged().filter(file => file.startsWith("telemetry/"));
+  expect(artifacts).toHaveLength(["save-context", "gate"].includes(phase) ? 0 : phase === "verify" ? 2 : 1);
+  if (phase === "gate") expect((await readCurrentDeliveryRunExport(f.root))?.summary.gate?.outcome).not.toBe("ok");
+  expect(f.git("ls-files", "--others", "--exclude-standard")).toContain("unexpected.ts");
+}, 30000);
 
-    expect(result.exitCode).toBe(0);
-    expect(evaluationMode).toBe("allow-staged-index");
-    expect(commands).toEqual([]);
-    expect(result.ledger).toMatchObject({
-      status: "pass",
-      proofState: "proof_reused",
-      commandSpans: [],
-      summary: { commandCount: 0, failedCommandCount: 0 },
-    });
-    expect(logs).toEqual([
-      "[pr:athena] Reusing current validation proof for tree tree-a. Merge-grade phases skipped.",
-    ]);
+it("returns a Git staging failure without creating a delivery record or staging unrelated work", async () => {
+  const f = await fixture(); await f.start();
+  expect(await f.coordinate("stage")).toBe(7);
+  expect(f.staged()).toEqual([]);
+  const untracked = f.git("ls-files", "--others", "--exclude-standard").split("\n");
+  expect(untracked).toHaveLength(1);
+  expect(untracked[0]).toMatch(/^telemetry\/delivery-runs\/run-[a-f0-9]+\.json$/);
+}, 30000);
+
+it("retains the same exact-head waiver through the coordinator's staged export and delivery record", async () => {
+  const f = await fixture(true); await f.start();
+  expect(await f.coordinate(), f.errors.join("\n")).toBe(0);
+  expect((await readFile(path.join(f.temporary, "waiver-modes"), "utf8")).trim().split("\n")).toEqual(["clean", "staged-index", "staged-index"]);
+  expect(f.staged()).toHaveLength(2);
+}, 30000);
+
+it.each(["source.ts", "docs/reports/changed.html", "docs/solutions/changed.md", "graphify-out/graph.json", "telemetry/delivery-runs/not-a-record.ts"])("refuses staged non-record differences from an approved head: %s", async file => {
+  const f = await fixture(); const headSha = f.git("rev-parse", "HEAD");
+  await f.write(file, "changed\n"); f.git("add", file);
+  let discovered = false;
+  const result = await evaluateDeliveryDocumentationAdmission(f.root, {
+    evaluateDocumentation: () => ({ status: "fail", findings: [{ policy: "compound-solution", label: "Solution notes", message: "missing" }] }),
+    repository: "fixture/repo", pullRequest: { number: 1, pull_request: { head: { sha: headSha }, base: { ref: "main", sha: headSha } } },
+    discoverWaiver: async () => { discovered = true; return undefined; },
   });
+  expect(result.status).toBe("fail"); expect(discovered).toBe(false);
+}, 30000);
 
-  it.each<
-    [
-      string,
-      (ledger: ReturnType<typeof authoritativeLedger>) => void,
-      string | undefined,
-    ]
-  >([
-    ["a missing current fingerprint", () => undefined, undefined],
-    [
-      "a missing ledger fingerprint",
-      (ledger) => {
-        delete ledger.deliverableDiffFingerprint;
-      },
-      "fingerprint-a",
-    ],
-    [
-      "a mismatched ledger fingerprint",
-      (ledger) => {
-        ledger.deliverableDiffFingerprint = "fingerprint-b";
-      },
-      "fingerprint-a",
-    ],
-    [
-      "a blocked ledger status",
-      (ledger) => {
-        ledger.status = "blocked";
-      },
-      "fingerprint-a",
-    ],
-    [
-      "a contradictory blocked reason",
-      (ledger) => {
-        ledger.blockedReason = "should not exist on a pass";
-      },
-      "fingerprint-a",
-    ],
-    [
-      "an invalid proof state",
-      (ledger) => {
-        ledger.proofState = "proof_not_recorded";
-      },
-      "fingerprint-a",
-    ],
-    [
-      "a missing phase span",
-      (ledger) => {
-        ledger.commandSpans.pop();
-      },
-      "fingerprint-a",
-    ],
-    [
-      "an extra phase span",
-      (ledger) => {
-        ledger.commandSpans.push({ ...ledger.commandSpans[4] });
-      },
-      "fingerprint-a",
-    ],
-    [
-      "a duplicate phase span",
-      (ledger) => {
-        ledger.commandSpans[3] = { ...ledger.commandSpans[2] };
-      },
-      "fingerprint-a",
-    ],
-    [
-      "a failed phase span",
-      (ledger) => {
-        ledger.commandSpans[2] = {
-          ...ledger.commandSpans[2],
-          status: "fail",
-          exitCode: 1,
-        };
-      },
-      "fingerprint-a",
-    ],
-    [
-      "a forged canonical summary",
-      (ledger) => {
-        ledger.summary.commandCount = 4;
-      },
-      "fingerprint-a",
-    ],
-    [
-      "forged duplicate metadata",
-      (ledger) => {
-        ledger.duplicateCommands.push({ command: "bun run fake", count: 2 });
-      },
-      "fingerprint-a",
-    ],
-    [
-      "malformed provider metadata",
-      (ledger) => {
-        ledger.providerSkippedEvents.push({
-          providerName: "",
-          status: "covered_by_provider",
-          coveredBy: "bun run provider",
-          reason: "coverage",
-        });
-      },
-      "fingerprint-a",
-    ],
-    [
-      "out-of-order phase spans",
-      (ledger) => {
-        [ledger.commandSpans[1], ledger.commandSpans[2]] = [
-          ledger.commandSpans[2],
-          ledger.commandSpans[1],
-        ];
-      },
-      "fingerprint-a",
-    ],
-    [
-      "a missing gate event",
-      (ledger) => {
-        ledger.gateDecisionEvents.pop();
-      },
-      "fingerprint-a",
-    ],
-    [
-      "missing gate resolution metadata",
-      (ledger) => {
-        delete (
-          ledger.gateDecisionEvents[0] as Partial<
-            (typeof ledger.gateDecisionEvents)[number]
-          >
-        ).resolutionKinds;
-      },
-      "fingerprint-a",
-    ],
-    [
-      "an extra gate event",
-      (ledger) => {
-        ledger.gateDecisionEvents.push({ ...ledger.gateDecisionEvents[1] });
-      },
-      "fingerprint-a",
-    ],
-    [
-      "a contradictory gate decision",
-      (ledger) => {
-        ledger.gateDecisionEvents[1] = {
-          ...ledger.gateDecisionEvents[1],
-          admitted: false,
-        };
-      },
-      "fingerprint-a",
-    ],
-    [
-      "an unknown gate resolution kind",
-      (ledger) => {
-        ledger.gateDecisionEvents[0].resolutionKinds = ["invented_pass"];
-      },
-      "fingerprint-a",
-    ],
-    [
-      "a wrong terminal sequence",
-      (ledger) => {
-        ledger.gateDecisionEvents[1] = {
-          ...ledger.gateDecisionEvents[1],
-          sequence: "provider_failed",
-        };
-      },
-      "fingerprint-a",
-    ],
-    [
-      "out-of-order gate events",
-      (ledger) => {
-        ledger.gateDecisionEvents.reverse();
-      },
-      "fingerprint-a",
-    ],
-    [
-      "a mismatched gate invocation",
-      (ledger) => {
-        ledger.gateDecisionEvents[1] = {
-          ...ledger.gateDecisionEvents[1],
-          invocationId: "invocation-b",
-        };
-      },
-      "fingerprint-a",
-    ],
-    [
-      "a mismatched gate parent",
-      (ledger) => {
-        ledger.gateDecisionEvents[1] = {
-          ...ledger.gateDecisionEvents[1],
-          parentStartToken: "start-b",
-        };
-      },
-      "fingerprint-a",
-    ],
-    [
-      "a mismatched validated candidate",
-      (ledger) => {
-        ledger.gateDecisionEvents[0] = {
-          ...ledger.gateDecisionEvents[0],
-          treeSha: "tree-b",
-        };
-      },
-      "fingerprint-a",
-    ],
-    [
-      "a mismatched terminal candidate",
-      (ledger) => {
-        ledger.gateDecisionEvents[1] = {
-          ...ledger.gateDecisionEvents[1],
-          diffBaseSha: "merge-base-b",
-        };
-      },
-      "fingerprint-a",
-    ],
-    [
-      "a mismatched gate context",
-      (ledger) => {
-        ledger.gateDecisionEvents[1] = {
-          ...ledger.gateDecisionEvents[1],
-          context: "ci",
-        };
-      },
-      "fingerprint-a",
-    ],
-    [
-      "a mismatched gate cost class",
-      (ledger) => {
-        ledger.gateDecisionEvents[1] = {
-          ...ledger.gateDecisionEvents[1],
-          preventedCostClass: "other",
-        };
-      },
-      "fingerprint-a",
-    ],
-    [
-      "a backwards gate timestamp",
-      (ledger) => {
-        ledger.gateDecisionEvents[1] = {
-          ...ledger.gateDecisionEvents[1],
-          timestamp: "2026-08-10T23:59:59.000Z",
-        };
-      },
-      "fingerprint-a",
-    ],
-  ])(
-    "runs all five phases instead of reusing a proof with %s",
-    async (_label, mutateLedger, currentFingerprint) => {
-      const commands: string[][] = [];
-      const ledger = authoritativeLedger();
-      mutateLedger(ledger);
-
-      const result = await runPrAthenaDeliveryRun("/repo", {
-        ...gateEventHarness(),
-        writeLedger: false,
-        resolveDeliverableFingerprint: () => currentFingerprint,
-        evaluateValidationProof: async () => reusableProof(),
-        readAuthoritativeLedger: async () => ledger,
-        runCommand: async (command) => {
-          commands.push(command);
-          return { exitCode: 0 };
-        },
-      });
-
-      expect(commands).toEqual(expectedPrAthenaCommands);
-      expect(result.ledger.proofState).not.toBe("proof_reused");
+it.each(["run.json", "delivery-record.json"])("admits only record-neutral staged JSON with unchanged exact approval binding: %s", async name => {
+  const f = await fixture(); const headSha = f.git("rev-parse", "HEAD");
+  await f.write(`telemetry/delivery-runs/${name}`, "{}\n"); f.git("add", ".");
+  let discovered = false;
+  const result = await evaluateDeliveryDocumentationAdmission(f.root, {
+    evaluateDocumentation: () => ({ status: "fail", findings: [{ policy: "compound-solution", label: "Solution notes", message: "missing" }] }),
+    repository: "fixture/repo", pullRequest: { number: 1, pull_request: { head: { sha: headSha }, base: { ref: "main", sha: headSha } } },
+    discoverWaiver: async request => {
+      discovered = true;
+      expect(request.expected).toMatchObject({ headSha, baseRef: "origin/main", baseTipSha: headSha });
+      expect(request.findingCodes).toEqual(["compound-solution"]);
+      return { recordId: "github-check:123", approvedBy: "human", attestationUrl: "https://github.com/fixture/repo/actions/runs/1", attestation: {} as never };
     },
-  );
-
-  it("runs the full gate when the authoritative ledger reader throws", async () => {
-    const commands: string[][] = [];
-
-    const result = await runPrAthenaDeliveryRun("/repo", {
-      ...gateEventHarness(),
-      writeLedger: false,
-      resolveDeliverableFingerprint: () => "fingerprint-a",
-      evaluateValidationProof: async () => reusableProof(),
-      readAuthoritativeLedger: async () => {
-        throw new Error("ledger unavailable");
-      },
-      runCommand: async (command) => {
-        commands.push(command);
-        return { exitCode: 0 };
-      },
-    });
-
-    expect(commands).toEqual(expectedPrAthenaCommands);
-    expect(result.ledger.proofState).not.toBe("proof_reused");
   });
-
-  it("runs the full gate when the authoritative ledger bytes are revoked during proof evaluation", async () => {
-    const commands: string[][] = [];
-    const bytes = `${JSON.stringify(authoritativeLedger())}\n`;
-    let ledgerReads = 0;
-
-    const result = await runPrAthenaDeliveryRun("/repo", {
-      ...gateEventHarness(),
-      writeLedger: false,
-      resolveDeliverableFingerprint: () => "fingerprint-a",
-      readAuthoritativeLedgerBytes: async () => {
-        ledgerReads += 1;
-        return ledgerReads === 1 ? bytes : null;
-      },
-      evaluateValidationProof: async (_rootDir, options) =>
-        (await options?.verifyStability?.())
-          ? reusableProof()
-          : {
-              reusable: false as const,
-              status: "stale" as const,
-              reason: "corroborating evidence changed during proof evaluation",
-            },
-      runCommand: async (command) => {
-        commands.push(command);
-        return { exitCode: 0 };
-      },
-    });
-
-    expect(ledgerReads).toBe(2);
-    expect(commands).toEqual(expectedPrAthenaCommands);
-    expect(result.ledger.proofState).not.toBe("proof_reused");
-  });
-
-  it("rejects a schema-incomplete ledger even when its visible pass fields look valid", async () => {
-    const commands: string[][] = [];
-    const complete = authoritativeLedger();
-    const maliciousPartial = {
-      status: complete.status,
-      proofState: complete.proofState,
-      deliverableDiffFingerprint: complete.deliverableDiffFingerprint,
-      commandSpans: complete.commandSpans,
-      gateDecisionEvents: complete.gateDecisionEvents,
-      providerSkippedEvents: [],
-      duplicateCommands: [],
-      duplicatePackageSuites: [],
-      summary: complete.summary,
-    } as unknown as ReturnType<typeof authoritativeLedger>;
-
-    const result = await runPrAthenaDeliveryRun("/repo", {
-      ...gateEventHarness(),
-      writeLedger: false,
-      resolveDeliverableFingerprint: () => "fingerprint-a",
-      evaluateValidationProof: async () => reusableProof(),
-      readAuthoritativeLedger: async () => maliciousPartial,
-      runCommand: async (command) => {
-        commands.push(command);
-        return { exitCode: 0 };
-      },
-    });
-
-    expect(commands).toEqual(expectedPrAthenaCommands);
-    expect(result.ledger.proofState).not.toBe("proof_reused");
-  });
-
-  it("performs evidence reads before the final proof evaluation", async () => {
-    const order: string[] = [];
-
-    const result = await runPrAthenaDeliveryRun("/repo", {
-      ...gateEventHarness(),
-      writeLedger: false,
-      resolveDeliverableFingerprint: () => "fingerprint-a",
-      readAuthoritativeLedger: async () => {
-        order.push("ledger:start");
-        await Promise.resolve();
-        order.push("ledger:end");
-        return authoritativeLedger();
-      },
-      resolveReviewLoopSummary: async () => {
-        order.push("review-loop:start");
-        await Promise.resolve();
-        order.push("review-loop:end");
-        return undefined;
-      },
-      evaluateValidationProof: async () => {
-        order.push("proof:evaluate");
-        return reusableProof();
-      },
-      runCommand: async () => {
-        throw new Error("delivery phases must not run");
-      },
-    });
-
-    expect(result.ledger.proofState).toBe("proof_reused");
-    expect(order).toEqual([
-      "ledger:start",
-      "ledger:end",
-      "review-loop:start",
-      "review-loop:end",
-      "proof:evaluate",
-    ]);
-  });
-
-  it("runs the full gate when a reusable proof has no corroborating full-run ledger", async () => {
-    const commands: string[][] = [];
-    const logs: string[] = [];
-
-    const result = await runPrAthenaDeliveryRun("/repo", {
-      ...gateEventHarness(),
-      writeLedger: false,
-      resolveDeliverableFingerprint: () => "fingerprint-a",
-      logger: { log: (line: string) => logs.push(line) },
-      evaluateValidationProof: async () => reusableProof(),
-      readAuthoritativeLedger: async () => null,
-      runCommand: async (command) => {
-        commands.push(command);
-        return { exitCode: 0 };
-      },
-    });
-
-    expect(result.exitCode).toBe(0);
-    expect(commands).toHaveLength(5);
-    expect(result.ledger.proofState).toBe("proof_recorded");
-    expect(logs).toEqual([
-      "[pr:athena] Current validation proof not reusable (proof_not_recorded): authoritative full delivery ledger is missing. Running full delivery gate.",
-    ]);
-  });
-
-  it("runs the full gate when the current proof is not reusable", async () => {
-    const commands: string[][] = [];
-    const logs: string[] = [];
-
-    const result = await runPrAthenaDeliveryRun("/repo", {
-      ...gateEventHarness(),
-      writeLedger: false,
-      logger: { log: (line: string) => logs.push(line) },
-      evaluateValidationProof: async () => ({
-        reusable: false,
-        status: "validation_wiring_changed",
-        reason: "validation wiring changed since proof recording",
-      }),
-      runCommand: async (command) => {
-        commands.push(command);
-        return { exitCode: 0 };
-      },
-    });
-
-    expect(result.exitCode).toBe(0);
-    expect(commands).toEqual([
-      ["bun", "run", "pr:athena:prepare"],
-      ["bun", "run", "pr:athena:preflight"],
-      ["bun", "run", "pr:athena:validate"],
-      ["bun", "run", "pr:athena:record-proof"],
-      ["bun", "run", "pr:athena:scorecard"],
-    ]);
-    expect(result.ledger.proofState).toBe("proof_recorded");
-    expect(logs).toEqual([
-      "[pr:athena] Current validation proof not reusable (validation_wiring_changed): validation wiring changed since proof recording. Running full delivery gate.",
-    ]);
-  });
-
-  it("runs the full gate when proof evaluation fails", async () => {
-    const commands: string[][] = [];
-    const logs: string[] = [];
-
-    const result = await runPrAthenaDeliveryRun("/repo", {
-      ...gateEventHarness(),
-      writeLedger: false,
-      logger: { log: (line: string) => logs.push(line) },
-      evaluateValidationProof: async () => {
-        throw new Error("proof reader unavailable");
-      },
-      runCommand: async (command) => {
-        commands.push(command);
-        return { exitCode: 0 };
-      },
-    });
-
-    expect(result.exitCode).toBe(0);
-    expect(commands).toHaveLength(5);
-    expect(result.ledger.proofState).toBe("proof_recorded");
-    expect(logs).toEqual([
-      "[pr:athena] Current validation proof not reusable (proof_not_recorded): proof evaluation failed: proof reader unavailable. Running full delivery gate.",
-    ]);
-  });
-
-  it("runs prepare, static preflight, validate, and record-proof phases while recording spans", async () => {
-    const commands: string[][] = [];
-    let tick = 0;
-
-    const result = await runPrAthenaDeliveryRun("/repo", {
-      ...gateEventHarness(),
-      nowIso: () => `2026-06-18T12:00:0${tick}.000Z`,
-      monotonicMs: () => tick++ * 1000,
-      writeLedger: false,
-      runCommand: async (command) => {
-        commands.push(command);
-        return { exitCode: 0 };
-      },
-    });
-
-    expect(result.exitCode).toBe(0);
-    expect(commands).toEqual([
-      ["bun", "run", "pr:athena:prepare"],
-      ["bun", "run", "pr:athena:preflight"],
-      ["bun", "run", "pr:athena:validate"],
-      ["bun", "run", "pr:athena:record-proof"],
-      ["bun", "run", "pr:athena:scorecard"],
-    ]);
-    expect(result.ledger).toMatchObject({
-      status: "pass",
-      proofState: "proof_recorded",
-      summary: {
-        commandCount: 5,
-        failedCommandCount: 0,
-      },
-      commandSpans: [
-        { phase: "prepare", status: "pass", exitCode: 0 },
-        { phase: "preflight", status: "pass", exitCode: 0 },
-        { phase: "validate", status: "pass", exitCode: 0 },
-        { phase: "record-proof", status: "pass", exitCode: 0 },
-        { phase: "scorecard", status: "pass", exitCode: 0 },
-      ],
-    });
-  });
-
-  it("records a preflight failure before provider validation or proof recording", async () => {
-    const commands: string[][] = [];
-    let tick = 0;
-
-    const result = await runPrAthenaDeliveryRun("/repo", {
-      ...gateEventHarness(),
-      nowIso: () => `2026-06-18T12:00:0${tick}.000Z`,
-      monotonicMs: () => tick++ * 1000,
-      writeLedger: false,
-      runCommand: async (command) => {
-        commands.push(command);
-        return { exitCode: command.includes("pr:athena:preflight") ? 23 : 0 };
-      },
-    });
-
-    expect(result.exitCode).toBe(23);
-    expect(commands).toEqual([
-      ["bun", "run", "pr:athena:prepare"],
-      ["bun", "run", "pr:athena:preflight"],
-    ]);
-    expect(result.ledger).toMatchObject({
-      status: "blocked",
-      proofState: "proof_not_recorded",
-      blockedReason: "pr:athena:preflight exited with code 23",
-      commandSpans: [
-        { phase: "prepare", status: "pass", exitCode: 0 },
-        { phase: "preflight", status: "fail", exitCode: 23 },
-      ],
-      providerSkippedEvents: [],
-    });
-  });
-
-  it("records provider skip events emitted during validation", async () => {
-    let tick = 0;
-
-    const result = await runPrAthenaDeliveryRun("/repo", {
-      ...gateEventHarness(),
-      nowIso: () => `2026-06-18T12:00:0${tick}.000Z`,
-      monotonicMs: () => tick++ * 1000,
-      writeLedger: false,
-      runCommand: async (command) => ({
-        exitCode: 0,
-        providerSkippedEvents: command.includes("pr:athena:validate")
-          ? [
-              {
-                providerName: "pr:athena:delivery-run",
-                coveredBy: "@athena/webapp:test",
-                reason: "athena-webapp-vitest",
-              },
-            ]
-          : [],
-      }),
-    });
-
-    expect(result.ledger.providerSkippedEvents).toEqual([
-      {
-        providerName: "pr:athena:delivery-run",
-        status: "covered_by_provider",
-        coveredBy: "@athena/webapp:test",
-        reason: "athena-webapp-vitest",
-      },
-    ]);
-    expect(result.ledger.summary.providerSkippedCount).toBe(1);
-  });
-
-  it("parses provider skip events from mixed command output", () => {
-    expect(
-      parseProviderSkippedEvents(
-        [
-          "Running @athena/webapp:test",
-          JSON.stringify({
-            type: "provider_skipped",
-            status: "covered_by_provider",
-            capability: "athena-webapp-vitest",
-            command: "@athena/webapp:test",
-            providedBy: "pr:athena:delivery-run",
-          }),
-          "{not-json",
-        ].join("\n"),
-      ),
-    ).toEqual([
-      {
-        providerName: "pr:athena:delivery-run",
-        coveredBy: "@athena/webapp:test",
-        reason: "athena-webapp-vitest",
-      },
-    ]);
-  });
-
-  it("passes one invocation id and parent token to the Git-private event consumer", async () => {
-    let tick = 0;
-    let observedExpectation: Parameters<typeof ledgerEvent>[0] | undefined;
-    const result = await runPrAthenaDeliveryRun("/repo", {
-      ...gateEventHarness(),
-      nowIso: () => `2026-08-11T00:00:0${tick}.000Z`,
-      monotonicMs: () => tick++ * 1000,
-      writeLedger: false,
-      runCommand: async (command, options) => {
-        if (!command.includes("pr:athena:validate")) return { exitCode: 0 };
-        expect(options.env?.ATHENA_HARNESS_INVOCATION_ID).toBeTruthy();
-        expect(options.env?.ATHENA_HARNESS_PARENT_START_TOKEN).toBeTruthy();
-        return { exitCode: 0 };
-      },
-      consumeGateDecisionEvents: async (_rootDir, expected) => {
-        observedExpectation = expected;
-        return [ledgerEvent(expected, "evaluated", true)];
-      },
-    });
-    expect(observedExpectation).toMatchObject({
-      invocationId: expect.any(String),
-      parentStartToken: expect.any(String),
-      candidate,
-    });
-    expect(result.ledger.gateDecisionEvents).toHaveLength(1);
-    expect(result.ledger.summary.gateDecisionCount).toBe(1);
-  });
-
-  it("ingests the exact successful Git-private event sequence once", async () => {
-    const { rootDir, eventsDir, expected } = await createDecisionEventFixture();
-    try {
-      await writeDecisionEvent(
-        eventsDir,
-        persistedEvent(expected, "evaluated", true),
-      );
-      await writeDecisionEvent(
-        eventsDir,
-        persistedEvent(expected, "completed", true),
-      );
-      await writeDecisionEvent(
-        eventsDir,
-        persistedEvent(
-          { ...expected, invocationId: "stale-invocation" },
-          "evaluated",
-          false,
-        ),
-      );
-
-      await expect(
-        consumeHarnessGateDecisionEvents(rootDir, expected, 0),
-      ).resolves.toMatchObject([
-        { sequence: "evaluated", worktreeId: "worktree-a" },
-        { sequence: "completed", worktreeId: "worktree-a" },
-      ]);
-      await expect(
-        consumeHarnessGateDecisionEvents(rootDir, expected, 0),
-      ).rejects.toThrow(/already consumed/i);
-      await expect(
-        readFile(
-          path.join(eventsDir, "consumed/invocation-a--evaluated.json"),
-          "utf8",
-        ),
-      ).resolves.toContain('"invocationId":"invocation-a"');
-    } finally {
-      await rm(rootDir, { recursive: true, force: true });
-    }
-  });
-
-  it("rejects legacy gate-decision schemas and string projections", async () => {
-    const v1 = await createDecisionEventFixture();
-    const projected = await createDecisionEventFixture();
-    try {
-      await writeDecisionEvent(v1.eventsDir, {
-        ...persistedEvent(v1.expected, "evaluated", false),
-        schemaVersion: 1,
-      });
-      await expect(
-        consumeHarnessGateDecisionEvents(v1.rootDir, v1.expected, 1),
-      ).rejects.toThrow(/correlation validation/i);
-
-      const legacy = persistedEvent(projected.expected, "evaluated", false);
-      await writeDecisionEvent(projected.eventsDir, {
-        ...legacy,
-        decision: {
-          ...legacy.decision,
-          findings: [{ code: "review_evidence_missing" }],
-          remediation: { machine: [], human: [] },
-        },
-      });
-      await expect(
-        consumeHarnessGateDecisionEvents(
-          projected.rootDir,
-          projected.expected,
-          1,
-        ),
-      ).rejects.toThrow(/correlation validation/i);
-    } finally {
-      await Promise.all([
-        rm(v1.rootDir, { recursive: true, force: true }),
-        rm(projected.rootDir, { recursive: true, force: true }),
-      ]);
-    }
-  });
-
-  it("rejects missing, partial, duplicate, and forged event sequences", async () => {
-    const missing = await createDecisionEventFixture();
-    const partial = await createDecisionEventFixture();
-    const duplicate = await createDecisionEventFixture();
-    try {
-      await expect(
-        consumeHarnessGateDecisionEvents(missing.rootDir, missing.expected, 0),
-      ).rejects.toThrow(/missing/i);
-
-      await writeDecisionEvent(
-        partial.eventsDir,
-        persistedEvent(partial.expected, "evaluated", true),
-      );
-      await expect(
-        consumeHarnessGateDecisionEvents(partial.rootDir, partial.expected, 0),
-      ).rejects.toThrow(/provider outcome/i);
-
-      const evaluated = persistedEvent(duplicate.expected, "evaluated", true);
-      await writeDecisionEvent(duplicate.eventsDir, evaluated);
-      await writeDecisionEvent(
-        duplicate.eventsDir,
-        evaluated,
-        "invocation-a--evaluated-copy.json",
-      );
-      await writeDecisionEvent(
-        duplicate.eventsDir,
-        persistedEvent(duplicate.expected, "completed", true),
-      );
-      await expect(
-        consumeHarnessGateDecisionEvents(
-          duplicate.rootDir,
-          duplicate.expected,
-          0,
-        ),
-      ).rejects.toThrow(/filename|cardinality/i);
-    } finally {
-      await Promise.all(
-        [missing.rootDir, partial.rootDir, duplicate.rootDir].map((rootDir) =>
-          rm(rootDir, { recursive: true, force: true }),
-        ),
-      );
-    }
-  });
-
-  it.each([
-    ["invocation mode", { invocationMode: "standalone" }],
-    ["parent identity", { parentIdentity: "direct" }],
-    ["parent start token", { parentStartToken: "forged-start" }],
-    ["gate", { gateId: "other.gate" }],
-  ])("rejects a correlated event with forged %s", async (_label, overrides) => {
-    const { rootDir, eventsDir, expected } = await createDecisionEventFixture();
-    try {
-      await writeDecisionEvent(eventsDir, {
-        ...persistedEvent(expected, "evaluated", false),
-        ...overrides,
-      });
-      await expect(
-        consumeHarnessGateDecisionEvents(rootDir, expected, 1),
-      ).rejects.toThrow(/correlation/i);
-    } finally {
-      await rm(rootDir, { recursive: true, force: true });
-    }
-  });
-
-  it.each([
-    ["candidate", { treeSha: "wrong-tree" }],
-    ["base", { baseTipSha: "wrong-base" }],
-    ["worktree", { worktreeId: "wrong-worktree" }],
-  ])("rejects an event for the wrong %s", async (_label, candidateOverride) => {
-    const { rootDir, eventsDir, expected } = await createDecisionEventFixture();
-    try {
-      await writeDecisionEvent(eventsDir, {
-        ...persistedEvent(expected, "evaluated", false),
-        candidate: { ...candidate, ...candidateOverride },
-      });
-      await expect(
-        consumeHarnessGateDecisionEvents(rootDir, expected, 1),
-      ).rejects.toThrow(/correlation/i);
-    } finally {
-      await rm(rootDir, { recursive: true, force: true });
-    }
-  });
-
-  it("preserves the failing phase exit code and does not record proof after validation failure", async () => {
-    const commands: string[][] = [];
-    let tick = 0;
-
-    const result = await runPrAthenaDeliveryRun("/repo", {
-      ...gateEventHarness(),
-      nowIso: () => `2026-06-18T12:00:0${tick}.000Z`,
-      monotonicMs: () => tick++ * 1000,
-      writeLedger: false,
-      runCommand: async (command) => {
-        commands.push(command);
-        return { exitCode: command.includes("pr:athena:validate") ? 42 : 0 };
-      },
-    });
-
-    expect(result.exitCode).toBe(42);
-    expect(commands).toEqual([
-      ["bun", "run", "pr:athena:prepare"],
-      ["bun", "run", "pr:athena:preflight"],
-      ["bun", "run", "pr:athena:validate"],
-    ]);
-    expect(result.ledger).toMatchObject({
-      status: "blocked",
-      proofState: "proof_not_recorded",
-      blockedReason: "pr:athena:validate exited with code 42",
-      commandSpans: [
-        { phase: "prepare", status: "pass", exitCode: 0 },
-        { phase: "preflight", status: "pass", exitCode: 0 },
-        { phase: "validate", status: "fail", exitCode: 42 },
-      ],
-    });
-  });
-
-  it("does not mark proof recorded when record-proof fails", async () => {
-    const commands: string[][] = [];
-    let tick = 0;
-
-    const result = await runPrAthenaDeliveryRun("/repo", {
-      ...gateEventHarness(),
-      nowIso: () => `2026-06-18T12:00:0${tick}.000Z`,
-      monotonicMs: () => tick++ * 1000,
-      writeLedger: false,
-      runCommand: async (command) => {
-        commands.push(command);
-        return { exitCode: command.includes("pr:athena:record-proof") ? 1 : 0 };
-      },
-    });
-
-    expect(result.exitCode).toBe(1);
-    expect(commands).toEqual([
-      ["bun", "run", "pr:athena:prepare"],
-      ["bun", "run", "pr:athena:preflight"],
-      ["bun", "run", "pr:athena:validate"],
-      ["bun", "run", "pr:athena:record-proof"],
-    ]);
-    expect(result.ledger).toMatchObject({
-      status: "blocked",
-      proofState: "proof_not_recorded",
-      blockedReason: "pr:athena:record-proof exited with code 1",
-      commandSpans: [
-        { phase: "prepare", status: "pass", exitCode: 0 },
-        { phase: "preflight", status: "pass", exitCode: 0 },
-        { phase: "validate", status: "pass", exitCode: 0 },
-        { phase: "record-proof", status: "fail", exitCode: 1 },
-      ],
-    });
-  });
-
-  it("records interrupted runs distinctly from blocked command failures", async () => {
-    let tick = 0;
-
-    const result = await runPrAthenaDeliveryRun("/repo", {
-      ...gateEventHarness(),
-      nowIso: () => `2026-06-18T12:00:0${tick}.000Z`,
-      monotonicMs: () => tick++ * 1000,
-      writeLedger: false,
-      runCommand: async () => {
-        throw Object.assign(new Error("SIGINT"), { signal: "SIGINT" });
-      },
-    });
-
-    expect(result.exitCode).toBe(130);
-    expect(result.ledger).toMatchObject({
-      status: "interrupted",
-      proofState: "proof_not_recorded",
-      interruptedReason: "SIGINT",
-      commandSpans: [
-        {
-          phase: "prepare",
-          status: "interrupted",
-          exitCode: 130,
-        },
-      ],
-    });
-  });
-
-  it("writes the default latest ledger artifact", async () => {
-    const rootDir = await mkdtemp(path.join(tmpdir(), "athena-pr-ledger-"));
-    let tick = 0;
-
-    try {
-      await runPrAthenaDeliveryRun(rootDir, {
-        ...gateEventHarness(),
-        nowIso: () => `2026-06-18T12:00:0${tick}.000Z`,
-        monotonicMs: () => tick++ * 1000,
-        runCommand: async () => ({ exitCode: 0 }),
-      });
-
-      const latest = JSON.parse(
-        await readFile(
-          path.join(rootDir, "artifacts/harness-delivery-runs/latest.json"),
-          "utf8",
-        ),
-      );
-
-      expect(latest).toMatchObject({
-        status: "pass",
-        proofState: "proof_recorded",
-        summary: { commandCount: 5 },
-      });
-    } finally {
-      await rm(rootDir, { recursive: true, force: true });
-    }
-  });
-
-  it("replaces a malformed latest ledger after all five phases pass", async () => {
-    const rootDir = await mkdtemp(path.join(tmpdir(), "athena-pr-malformed-"));
-    const commands: string[][] = [];
-    let tick = 0;
-
-    try {
-      const latestPath = path.join(
-        rootDir,
-        "artifacts/harness-delivery-runs/latest.json",
-      );
-      await mkdir(path.dirname(latestPath), { recursive: true });
-      await Bun.write(latestPath, "{ malformed\n");
-
-      const result = await runPrAthenaDeliveryRun(rootDir, {
-        ...gateEventHarness(),
-        nowIso: () => `2026-06-18T12:00:0${tick}.000Z`,
-        monotonicMs: () => tick++ * 1000,
-        runCommand: async (command) => {
-          commands.push(command);
-          return { exitCode: 0 };
-        },
-      });
-
-      expect(result.exitCode).toBe(0);
-      expect(commands).toEqual(expectedPrAthenaCommands);
-      expect(JSON.parse(await readFile(latestPath, "utf8"))).toMatchObject({
-        version: "1.0",
-        status: "pass",
-        proofState: "proof_recorded",
-        summary: { commandCount: 5 },
-      });
-    } finally {
-      await rm(rootDir, { recursive: true, force: true });
-    }
-  });
-
-  it("recovers from an invalid baseline across repeated successful fallbacks", async () => {
-    const rootDir = await mkdtemp(path.join(tmpdir(), "athena-pr-partial-"));
-    const commands: string[][] = [];
-    let tick = 0;
-
-    try {
-      const latestPath = path.join(
-        rootDir,
-        "artifacts/harness-delivery-runs/latest.json",
-      );
-      const baselinePath = path.join(
-        rootDir,
-        "artifacts/harness-delivery-runs/baseline.json",
-      );
-      await mkdir(path.dirname(latestPath), { recursive: true });
-      await writeFile(latestPath, `${JSON.stringify({ status: "pass" })}\n`);
-      await writeFile(baselinePath, "{ malformed\n");
-      const baselineSummaries: Array<{ present: boolean; status: string }> = [];
-
-      const run = () =>
-        runPrAthenaDeliveryRun(rootDir, {
-          ...gateEventHarness(),
-          nowIso: () =>
-            `2026-06-18T12:00:${String(tick).padStart(2, "0")}.000Z`,
-          monotonicMs: () => tick++ * 1000,
-          evaluateValidationProof: async () => ({
-            reusable: false,
-            status: "stale",
-            reason: "test fallback",
-          }),
-          runCommand: async (command) => {
-            commands.push(command);
-            if (command.join(" ") === "bun run pr:athena:scorecard") {
-              const baseline = await buildPartialDeliveryRunBaseline(rootDir);
-              baselineSummaries.push(baseline);
-            }
-            return { exitCode: 0 };
-          },
-        });
-
-      const first = await run();
-      expect(first.exitCode).toBe(0);
-      expect(first.ledger.summary.commandCount).toBe(5);
-      expect(JSON.parse(await readFile(latestPath, "utf8"))).toMatchObject({
-        version: "1.0",
-        status: "pass",
-        proofState: "proof_recorded",
-        summary: { commandCount: 5 },
-      });
-
-      const second = await run();
-      expect(second.exitCode).toBe(0);
-      expect(second.ledger.summary.commandCount).toBe(5);
-      expect(commands).toEqual([
-        ...expectedPrAthenaCommands,
-        ...expectedPrAthenaCommands,
-      ]);
-      expect(baselineSummaries).toEqual([
-        expect.objectContaining({ present: false, status: "missing" }),
-        expect.objectContaining({ present: true, status: "pass" }),
-      ]);
-      expect(JSON.parse(await readFile(baselinePath, "utf8"))).toMatchObject({
-        version: "1.0",
-        status: "pass",
-        summary: { commandCount: 5 },
-      });
-    } finally {
-      await rm(rootDir, { recursive: true, force: true });
-    }
-  });
-
-  it("does not replace the authoritative latest ledger when proof is reused", async () => {
-    const rootDir = await mkdtemp(path.join(tmpdir(), "athena-pr-reuse-"));
-    const authoritative = authoritativeLedger();
-
-    try {
-      await writeDeliveryRunLedger(rootDir, authoritative);
-      const historyDir = path.join(
-        rootDir,
-        "artifacts/harness-delivery-runs/history",
-      );
-      await mkdir(historyDir, { recursive: true });
-      await Bun.write(path.join(historyDir, "older.json"), "older history\n");
-      await Bun.write(path.join(historyDir, "newer.json"), "newer history\n");
-      const historyBefore = await Promise.all(
-        (await readdir(historyDir))
-          .sort()
-          .map(async (entry) => [
-            entry,
-            await readFile(path.join(historyDir, entry), "utf8"),
-          ]),
-      );
-
-      const result = await runPrAthenaDeliveryRun(rootDir, {
-        resolveDeliverableFingerprint: () => "fingerprint-a",
-        resolveReviewLoopSummary: async () => undefined,
-        evaluateValidationProof: async () =>
-          reusableProof(path.join(rootDir, ".git/current-proof.json")),
-        logger: { log: () => undefined },
-      });
-
-      expect(result.ledger.proofState).toBe("proof_reused");
-      const latest = JSON.parse(
-        await readFile(
-          path.join(rootDir, "artifacts/harness-delivery-runs/latest.json"),
-          "utf8",
-        ),
-      );
-      expect(latest).toEqual(authoritative);
-      const historyAfter = await Promise.all(
-        (await readdir(historyDir))
-          .sort()
-          .map(async (entry) => [
-            entry,
-            await readFile(path.join(historyDir, entry), "utf8"),
-          ]),
-      );
-      expect(historyAfter).toEqual(historyBefore);
-    } finally {
-      await rm(rootDir, { recursive: true, force: true });
-    }
-  });
-
-  it("promotes a passing previous latest to baseline, appends history, and folds review-loop telemetry", async () => {
-    const rootDir = await mkdtemp(path.join(tmpdir(), "athena-pr-baseline-"));
-    let tick = 0;
-    const reviewLoop = {
-      providerId: "execute",
-      runId: "run-a",
-      finalPassId: "pass-a",
-      recordedAt: "2026-06-17T12:00:00.000Z",
-      iterationCount: 2,
-      deferredExpansionCount: 1,
-      deferredIssueIds: ["V26-1300"],
-    };
-
-    try {
-      const run = () =>
-        runPrAthenaDeliveryRun(rootDir, {
-          ...gateEventHarness(),
-          nowIso: () =>
-            new Date(
-              Date.parse("2026-06-18T12:00:00.000Z") + tick * 1000,
-            ).toISOString(),
-          monotonicMs: () => tick++ * 1000,
-          runCommand: async () => ({ exitCode: 0 }),
-          resolveReviewLoopSummary: async () => reviewLoop,
-        });
-
-      const first = await run();
-      expect(first.ledger.reviewLoop).toMatchObject({
-        iterationCount: 2,
-        deferredExpansionCount: 1,
-        deferredIssueIds: ["V26-1300"],
-      });
-      const firstGeneratedAt = first.ledger.generatedAt;
-
-      const second = await run();
-
-      const baseline = JSON.parse(
-        await readFile(
-          path.join(rootDir, "artifacts/harness-delivery-runs/baseline.json"),
-          "utf8",
-        ),
-      );
-      expect(baseline).toMatchObject({
-        status: "pass",
-        generatedAt: firstGeneratedAt,
-      });
-
-      const historyDir = path.join(
-        rootDir,
-        "artifacts/harness-delivery-runs/history",
-      );
-      const historyEntries = (await readdir(historyDir)).sort();
-      expect(historyEntries).toHaveLength(2);
-      expect(historyEntries.at(-1)).toBe(
-        `${second.ledger.generatedAt.replace(/[:.]/g, "-")}.json`,
-      );
-    } finally {
-      await rm(rootDir, { recursive: true, force: true });
-    }
-  });
-
-  it("prefers the tracked telemetry corpus over the worktree baseline", async () => {
-    const rootDir = await mkdtemp(path.join(tmpdir(), "athena-pr-tracked-"));
-
-    try {
-      const ledger = authoritativeLedger();
-
-      await expect(resolveSummaryBaseline(rootDir)).resolves.toEqual({
-        baseline: null,
-      });
-
-      await writeDeliveryRunLedger(rootDir, ledger, {
-        baselinePath: "artifacts/harness-delivery-runs/baseline.json",
-      });
-      await expect(resolveSummaryBaseline(rootDir)).resolves.toMatchObject({
-        baselineSource: "worktree",
-      });
-
-      await writeDeliveryRunTelemetryRecord(
-        rootDir,
-        buildDeliveryRunTelemetryRecord(
-          createDeliveryRunLedger({
-            generatedAt: "2026-06-18T12:00:00.000Z",
-            status: "pass",
-            proofState: "proof_recorded",
-            commandSpans: [],
-          }),
-          {
-            branch: "codex/landed",
-            headSha: "abc123",
-            deliverableDiffFingerprint: "fingerprint-a",
-          },
-        ),
-      );
-      await expect(resolveSummaryBaseline(rootDir)).resolves.toMatchObject({
-        baselineSource: "tracked",
-        baseline: { generatedAt: "2026-06-18T12:00:00.000Z" },
-      });
-
-      // A branch must not compare against its own committed record: that is a
-      // near-zero self-delta dressed as a cross-delivery trend.
-      await expect(
-        resolveSummaryBaseline(rootDir, { currentBranch: "codex/landed" }),
-      ).resolves.toMatchObject({ baselineSource: "worktree" });
-    } finally {
-      await rm(rootDir, { recursive: true, force: true });
-    }
-  });
-
-  it("writes provider evidence for the current index tree", async () => {
-    const rootDir = await mkdtemp(path.join(tmpdir(), "athena-pr-provider-"));
-
-    try {
-      runGit(rootDir, ["init"]);
-      await Bun.write(path.join(rootDir, "package.json"), "{}\n");
-      runGit(rootDir, ["add", "package.json"]);
-      const treeSha = runGit(rootDir, ["write-tree"]);
-
-      await writePrAthenaProviderEvidence(rootDir);
-
-      const evidence = JSON.parse(
-        await readFile(
-          path.join(
-            rootDir,
-            "artifacts/harness-delivery-runs/provider-evidence.json",
-          ),
-          "utf8",
-        ),
-      );
-
-      expect(evidence).toMatchObject({
-        schemaVersion: 1,
-        provider: "pr:athena:delivery-run",
-        treeSha,
-        capabilities: [
-          {
-            capability: "root-script-tests",
-            command: "bun run test:coverage:scripts",
-          },
-          {
-            capability: "athena-webapp-vitest",
-            command: "bun run --filter '@athena/webapp' test:coverage",
-            coverage: { mode: "full" },
-          },
-          {
-            capability: "athena-webapp-typecheck",
-            command:
-              "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
-          },
-        ],
-      });
-    } finally {
-      await rm(rootDir, { recursive: true, force: true });
-    }
-  });
-
-  it("persists a blocked ledger when the scorecard phase fails after proof recording", async () => {
-    const rootDir = await mkdtemp(path.join(tmpdir(), "athena-pr-scorecard-"));
-    let tick = 0;
-
-    try {
-      runGit(rootDir, ["init"]);
-      const proofPath = path.join(
-        rootDir,
-        runGit(rootDir, [
-          "rev-parse",
-          "--git-path",
-          "codex/pre-push-pr-athena-proof.json",
-        ]),
-      );
-      await mkdir(path.dirname(proofPath), { recursive: true });
-      await Bun.write(proofPath, "{}\n");
-
-      const result = await runPrAthenaDeliveryRun(rootDir, {
-        ...gateEventHarness(),
-        nowIso: () => `2026-06-18T12:00:0${tick}.000Z`,
-        monotonicMs: () => tick++ * 1000,
-        runCommand: async (command) => ({
-          exitCode: command.includes("pr:athena:scorecard") ? 7 : 0,
-        }),
-      });
-
-      expect(result.exitCode).toBe(7);
-      expect(result.ledger).toMatchObject({
-        status: "blocked",
-        proofState: "proof_not_recorded",
-        blockedReason: "pr:athena:scorecard exited with code 7",
-        commandSpans: [
-          { phase: "prepare", status: "pass", exitCode: 0 },
-          { phase: "preflight", status: "pass", exitCode: 0 },
-          { phase: "validate", status: "pass", exitCode: 0 },
-          { phase: "record-proof", status: "pass", exitCode: 0 },
-          { phase: "scorecard", status: "fail", exitCode: 7 },
-        ],
-      });
-
-      const latest = JSON.parse(
-        await readFile(
-          path.join(rootDir, "artifacts/harness-delivery-runs/latest.json"),
-          "utf8",
-        ),
-      );
-      expect(latest).toMatchObject({
-        status: "blocked",
-        proofState: "proof_not_recorded",
-        blockedReason: "pr:athena:scorecard exited with code 7",
-      });
-      await expect(readFile(proofPath, "utf8")).rejects.toThrow();
-    } finally {
-      await rm(rootDir, { recursive: true, force: true });
-    }
-  });
-
-  it("clears a stored proof after any failed fallback so a retry runs the full gate", async () => {
-    const rootDir = await mkdtemp(path.join(tmpdir(), "athena-pr-retry-"));
-    const commands: string[][] = [];
-    let attempt = 0;
-
-    try {
-      runGit(rootDir, ["init"]);
-      const proofPath = path.join(
-        rootDir,
-        runGit(rootDir, [
-          "rev-parse",
-          "--git-path",
-          "codex/pre-push-pr-athena-proof.json",
-        ]),
-      );
-      await mkdir(path.dirname(proofPath), { recursive: true });
-      await Bun.write(proofPath, "{}\n");
-
-      const run = () =>
-        runPrAthenaDeliveryRun(rootDir, {
-          ...gateEventHarness(),
-          writeLedger: false,
-          resolveDeliverableFingerprint: () => "fingerprint-a",
-          readAuthoritativeLedger: async () => null,
-          evaluateValidationProof: async () =>
-            readFile(proofPath, "utf8").then(
-              () => reusableProof(proofPath),
-              () => ({
-                reusable: false as const,
-                status: "missing" as const,
-                reason: "no current pr:athena proof was found",
-              }),
-            ),
-          runCommand: async (command) => {
-            commands.push(command);
-            if (attempt === 0 && command.includes("pr:athena:preflight")) {
-              return { exitCode: 23 };
-            }
-            return { exitCode: 0 };
-          },
-        });
-
-      const first = await run();
-      expect(first.exitCode).toBe(23);
-      await expect(readFile(proofPath, "utf8")).rejects.toThrow();
-
-      attempt += 1;
-      commands.length = 0;
-      const retry = await run();
-      expect(retry.exitCode).toBe(0);
-      expect(commands).toEqual([
-        ["bun", "run", "pr:athena:prepare"],
-        ["bun", "run", "pr:athena:preflight"],
-        ["bun", "run", "pr:athena:validate"],
-        ["bun", "run", "pr:athena:record-proof"],
-        ["bun", "run", "pr:athena:scorecard"],
-      ]);
-    } finally {
-      await rm(rootDir, { recursive: true, force: true });
-    }
-  });
-});
-
-describe("runPrAthenaDeliveryRunCli", () => {
-  it("renders a typed blocker when the block originates in the orchestrator", async () => {
-    const errors: string[] = [];
-
-    const exitCode = await runPrAthenaDeliveryRunCli(
-      [],
-      {
-        writeLedger: false,
-        // A gate decision event written by an older checkout: the v1 -> v2
-        // break makes this an expected upgrade condition, and runStep swallows
-        // it into blockedReason rather than rethrowing.
-        resolveGateDecisionExpectation: async () => {
-          throw new Error(
-            "Harness gate decision event failed correlation validation.",
-          );
-        },
-        runCommand: async () => ({ exitCode: 0 }),
-      } as never,
-      { error: (line: string) => errors.push(line) },
-    );
-
-    const rendered = errors.join("\n");
-
-    // Before this, the only operator-facing output was the prose run summary:
-    // no code, no source, no remediation, on the spine itself.
-    expect(exitCode).not.toBe(0);
-    expect(rendered).toContain("delivery_run_blocked");
-    expect(rendered).toContain("command:pr:athena:delivery-run");
-    expect(rendered).toContain("rerun-delivery-run");
-    expect(rendered).toContain(
-      "Harness gate decision event failed correlation validation.",
-    );
-  });
-
-  it("renders delivery_run_interrupted when a phase is killed by a non-SIGINT signal", async () => {
-    const errors: string[] = [];
-
-    const exitCode = await runPrAthenaDeliveryRunCli(
-      [],
-      {
-        writeLedger: false,
-        runCommand: async () => {
-          throw Object.assign(new Error("child terminated"), {
-            signal: "SIGTERM",
-          });
-        },
-      } as never,
-      { error: (line: string) => errors.push(line) },
-    );
-
-    const rendered = errors.join("\n");
-
-    // Before this, a signaled run printed only the prose summary and exited
-    // non-zero with no contract-form output at all - indistinguishable from a
-    // crash at the terminal.
-    expect(exitCode).toBe(1);
-    expect(rendered).toContain("delivery_run_interrupted");
-    expect(rendered).toContain("command:pr:athena:delivery-run");
-    expect(rendered).toContain("rerun-interrupted-delivery-run");
-    expect(rendered).toContain("SIGTERM");
-  });
-
-  it("renders delivery_run_interrupted for SIGINT so the terminal can tell interruption from a crash", async () => {
-    const errors: string[] = [];
-
-    const exitCode = await runPrAthenaDeliveryRunCli(
-      [],
-      {
-        writeLedger: false,
-        runCommand: async () => {
-          throw Object.assign(new Error("child interrupted"), {
-            signal: "SIGINT",
-          });
-        },
-      } as never,
-      { error: (line: string) => errors.push(line) },
-    );
-
-    const rendered = errors.join("\n");
-
-    expect(exitCode).toBe(130);
-    expect(rendered).toContain("delivery_run_interrupted");
-    expect(rendered).toContain("command:pr:athena:delivery-run");
-    expect(rendered).toContain("rerun-interrupted-delivery-run");
-    expect(rendered).not.toContain("harness_internal_error");
-  });
-});
+  expect(result.status).toBe("pass"); expect(discovered).toBe(true);
+}, 30000);

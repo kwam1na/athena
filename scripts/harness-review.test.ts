@@ -6,16 +6,30 @@ import { afterEach, describe, expect, it } from "vitest";
 // CLI boundary coverage is centralized in harness-blocker-inventory.test.ts.
 
 import {
+  ATHENA_ALWAYS_VALIDATION_COMMANDS,
+  ATHENA_FINAL_VALIDATION_COMMANDS,
   buildGitProcessEnv,
   getChangedFilesForHarnessReview,
-  packageValidationIsProvided,
   parseHarnessReviewArgs,
-  repoOwnedValidationIsProvided,
   resolveHarnessReviewShell,
-  runHarnessReview,
+  runRawCommand,
+  runHarnessReview as runCompleteHarnessReview,
 } from "./harness-review";
 import { harnessReviewBlockedBlocker } from "./harness-review";
 import { HarnessUsageError } from "./harness-blockers";
+
+// These retained rows characterize map selection. Required sensors are asserted separately.
+const alwaysRaw = new Set<string>([...ATHENA_ALWAYS_VALIDATION_COMMANDS, ...ATHENA_FINAL_VALIDATION_COMMANDS].filter(c => c.kind === "raw").map(c => c.command));
+const alwaysScripts = new Set<string>([...ATHENA_ALWAYS_VALIDATION_COMMANDS, ...ATHENA_FINAL_VALIDATION_COMMANDS].filter(c => c.kind === "script").map(c => `${c.workspace}:${c.script}`));
+const runHarnessReview: typeof runCompleteHarnessReview = (rootDir, options = {}) => runCompleteHarnessReview(rootDir, {
+  ...options,
+  runRawCommand: async command => {
+    if (!alwaysRaw.has(command)) await options.runRawCommand?.(command);
+  },
+  runPackageScript: async (workspace, script) => {
+    if (!alwaysScripts.has(`${workspace}:${script}`)) await options.runPackageScript?.(workspace, script);
+  },
+});
 
 const tempRoots: string[] = [];
 
@@ -299,8 +313,6 @@ describe("runHarnessReview", () => {
 
     expect(steps).toEqual([
       "harness:check",
-      "@athena/webapp:audit:convex",
-      "@athena/webapp:lint:convex:changed",
       "@athena/webapp:test",
     ]);
   });
@@ -418,8 +430,6 @@ describe("runHarnessReview", () => {
 
     expect(steps).toEqual([
       "harness:check",
-      "@athena/webapp:audit:convex",
-      "@athena/webapp:lint:convex:changed",
       "@athena/webapp:test",
       "@athena/storefront-webapp:test",
     ]);
@@ -445,11 +455,8 @@ describe("runHarnessReview", () => {
 
     expect(steps).toEqual([
       "harness:check",
-      "bun run workflow:check",
       "bun run harness:test",
       "bun run delivery:documentation-check",
-      "bun run test:coverage",
-      "bun run harness:inferential-review",
     ]);
   });
 
@@ -673,689 +680,21 @@ describe("runHarnessReview", () => {
 
     expect(steps).toEqual([
       "harness:check",
-      "raw:bun run workflow:check",
       "raw:bun run harness:test",
       "raw:bun run delivery:documentation-check",
-      "raw:bun run test:coverage",
-      "raw:bun run harness:inferential-review",
     ]);
   });
 
-  it("does not rerun repo-level validations when pr:athena already provides them", async () => {
-    const rootDir = await createFixtureRepo();
-    const steps: string[] = [
-      "raw:bun run workflow:check",
-      "raw:bun run delivery:documentation-check",
-      "raw:bun run test:coverage",
-      "raw:bun run harness:test",
-    ];
 
-    await runHarnessReview(rootDir, {
-      getChangedFiles: async () => ["scripts/harness-review.ts"],
-      repoValidationProvidedBy: "pr:athena",
-      runHarnessCheck: async () => {
-        steps.push("harness:check");
-      },
-      runRawCommand: async (command) => {
-        steps.push(`raw:${command}`);
-      },
-      logger: {
-        log() {},
-        error() {},
-      },
-    });
 
-    steps.push("raw:bun run harness:inferential-review");
 
-    expect(steps).toEqual([
-      "raw:bun run workflow:check",
-      "raw:bun run delivery:documentation-check",
-      "raw:bun run test:coverage",
-      "raw:bun run harness:test",
-      "harness:check",
-      "raw:bun run harness:inferential-review",
-    ]);
-  });
 
-  it("skips only root script tests when local provider evidence covers that capability", async () => {
-    const rootDir = await createFixtureRepo();
-    const steps: string[] = [];
-    const logLines: string[] = [];
 
-    await write(
-      "artifacts/harness-delivery-runs/provider-evidence.json",
-      JSON.stringify(
-        {
-          schemaVersion: 1,
-          provider: "local-pr-athena",
-          capabilities: [
-            {
-              capability: "root-script-tests",
-              command: "bun run test:coverage:scripts",
-            },
-          ],
-        },
-        null,
-        2
-      ),
-      rootDir
-    );
 
-    await runHarnessReview(rootDir, {
-      getChangedFiles: async () => ["scripts/harness-review.ts"],
-      providerEvidencePath: "artifacts/harness-delivery-runs/provider-evidence.json",
-      runHarnessCheck: async () => {
-        steps.push("harness:check");
-      },
-      runRawCommand: async (command) => {
-        steps.push(`raw:${command}`);
-      },
-      logger: {
-        log(line) {
-          logLines.push(line);
-        },
-        error() {},
-      },
-    });
 
-    expect(steps).toEqual([
-      "harness:check",
-      "raw:bun run workflow:check",
-      "raw:bun run delivery:documentation-check",
-      "raw:bun run test:coverage",
-      "raw:bun run harness:inferential-review",
-    ]);
-    expect(logLines).toContain(
-      JSON.stringify({
-        type: "provider_skipped",
-        status: "covered_by_provider",
-        capability: "root-script-tests",
-        command: "bun run harness:test",
-        providedBy: "local-pr-athena",
-        coveredCapabilities: ["root-script-tests"],
-        evidence: "artifacts/harness-delivery-runs/provider-evidence.json",
-      })
-    );
-  });
 
-  it("runs root script tests when local provider evidence is incomplete", async () => {
-    const rootDir = await createFixtureRepo();
-    const steps: string[] = [];
 
-    await write(
-      "artifacts/harness-delivery-runs/provider-evidence.json",
-      JSON.stringify(
-        {
-          schemaVersion: 1,
-          provider: "local-pr-athena",
-          capabilities: [],
-        },
-        null,
-        2
-      ),
-      rootDir
-    );
 
-    await runHarnessReview(rootDir, {
-      getChangedFiles: async () => ["scripts/harness-review.ts"],
-      providerEvidencePath: "artifacts/harness-delivery-runs/provider-evidence.json",
-      runHarnessCheck: async () => {
-        steps.push("harness:check");
-      },
-      runRawCommand: async (command) => {
-        steps.push(`raw:${command}`);
-      },
-      logger: {
-        log() {},
-        error() {},
-      },
-    });
-
-    expect(steps).toContain("raw:bun run harness:test");
-  });
-
-  it("skips full athena webapp Vitest when coverage evidence covers the package suite", async () => {
-    const rootDir = await createFixtureRepo();
-    const steps: string[] = [];
-    const logLines: string[] = [];
-
-    await write(
-      "artifacts/harness-delivery-runs/provider-evidence.json",
-      JSON.stringify(
-        {
-          schemaVersion: 1,
-          provider: "local-pr-athena",
-          capabilities: [
-            {
-              capability: "athena-webapp-vitest",
-              command: "bun run --filter '@athena/webapp' test:coverage",
-              coverage: { mode: "full" },
-            },
-            {
-              capability: "athena-webapp-typecheck",
-              command:
-                "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
-            },
-          ],
-        },
-        null,
-        2
-      ),
-      rootDir
-    );
-
-    await runHarnessReview(rootDir, {
-      getChangedFiles: async () => ["packages/athena-webapp/src/app.ts"],
-      providerEvidencePath: "artifacts/harness-delivery-runs/provider-evidence.json",
-      runHarnessCheck: async () => {
-        steps.push("harness:check");
-      },
-      runPackageScript: async (workspace, script) => {
-        steps.push(`${workspace}:${script}`);
-      },
-      logger: {
-        log(line) {
-          logLines.push(line);
-        },
-        error() {},
-      },
-    });
-
-    expect(steps).toEqual([
-      "harness:check",
-      "@athena/webapp:audit:convex",
-      "@athena/webapp:lint:convex:changed",
-    ]);
-    expect(logLines).toContain(
-      JSON.stringify({
-        type: "provider_skipped",
-        status: "covered_by_provider",
-        capability: "athena-webapp-vitest",
-        command: "@athena/webapp:test",
-        providedBy: "local-pr-athena",
-        coveredCapabilities: ["athena-webapp-vitest", "athena-webapp-typecheck"],
-        evidence: "artifacts/harness-delivery-runs/provider-evidence.json",
-      })
-    );
-  });
-
-  it("accepts same-index provider evidence for staged pr:athena changes", async () => {
-    const rootDir = await createFixtureRepo();
-    const steps: string[] = [];
-    await write(
-      ".gitignore",
-      "artifacts/harness-delivery-runs/\n",
-      rootDir
-    );
-    initializeGitHistory(rootDir);
-    await write(
-      "packages/athena-webapp/src/app.ts",
-      "export const app = 'changed';\n",
-      rootDir
-    );
-    runGit(rootDir, ["add", "packages/athena-webapp/src/app.ts"]);
-    const treeSha = runGit(rootDir, ["write-tree"]);
-
-    await write(
-      "artifacts/harness-delivery-runs/provider-evidence.json",
-      JSON.stringify(
-        {
-          schemaVersion: 1,
-          provider: "pr:athena:delivery-run",
-          treeSha,
-          capabilities: [
-            {
-              capability: "athena-webapp-vitest",
-              command: "bun run --filter '@athena/webapp' test:coverage",
-              coverage: { mode: "full" },
-            },
-          ],
-        },
-        null,
-        2
-      ),
-      rootDir
-    );
-
-    await runHarnessReview(rootDir, {
-      getChangedFiles: async () => ["packages/athena-webapp/src/app.ts"],
-      providerEvidencePath: "artifacts/harness-delivery-runs/provider-evidence.json",
-      runHarnessCheck: async () => {
-        steps.push("harness:check");
-      },
-      runPackageScript: async (workspace, script) => {
-        steps.push(`${workspace}:${script}`);
-      },
-      logger: {
-        log() {},
-        error() {},
-      },
-    });
-
-    expect(steps).toEqual([
-      "harness:check",
-      "@athena/webapp:audit:convex",
-      "@athena/webapp:lint:convex:changed",
-    ]);
-  });
-
-  it("runs selected validation when provider evidence has a stale tree", async () => {
-    const rootDir = await createFixtureRepo();
-    const steps: string[] = [];
-    const logLines: string[] = [];
-    await write(
-      ".gitignore",
-      "artifacts/harness-delivery-runs/\n",
-      rootDir
-    );
-    initializeGitHistory(rootDir);
-    const staleTreeSha = runGit(rootDir, ["rev-parse", "HEAD^{tree}"]);
-    await write(
-      "packages/athena-webapp/src/app.ts",
-      "export const app = 'changed';\n",
-      rootDir
-    );
-    runGit(rootDir, ["add", "packages/athena-webapp/src/app.ts"]);
-
-    await write(
-      "artifacts/harness-delivery-runs/provider-evidence.json",
-      JSON.stringify(
-        {
-          schemaVersion: 1,
-          provider: "pr:athena:delivery-run",
-          treeSha: staleTreeSha,
-          capabilities: [
-            {
-              capability: "athena-webapp-vitest",
-              command: "bun run --filter '@athena/webapp' test:coverage",
-              coverage: { mode: "full" },
-            },
-          ],
-        },
-        null,
-        2
-      ),
-      rootDir
-    );
-
-    await runHarnessReview(rootDir, {
-      getChangedFiles: async () => ["packages/athena-webapp/src/app.ts"],
-      providerEvidencePath: "artifacts/harness-delivery-runs/provider-evidence.json",
-      runHarnessCheck: async () => {
-        steps.push("harness:check");
-      },
-      runPackageScript: async (workspace, script) => {
-        steps.push(`${workspace}:${script}`);
-      },
-      logger: {
-        log(line) {
-          logLines.push(line);
-        },
-        error() {},
-      },
-    });
-
-    expect(steps).toContain("@athena/webapp:test");
-    expect(logLines.some((line) => line.includes("provider_skipped"))).toBe(false);
-  });
-
-  it("runs selected validation when provider evidence tree has unstaged changes", async () => {
-    const rootDir = await createFixtureRepo();
-    const steps: string[] = [];
-    await write(
-      ".gitignore",
-      "artifacts/harness-delivery-runs/\n",
-      rootDir
-    );
-    initializeGitHistory(rootDir);
-    await write(
-      "packages/athena-webapp/src/app.ts",
-      "export const app = 'staged';\n",
-      rootDir
-    );
-    runGit(rootDir, ["add", "packages/athena-webapp/src/app.ts"]);
-    const treeSha = runGit(rootDir, ["write-tree"]);
-    await write(
-      "packages/athena-webapp/src/app.ts",
-      "export const app = 'unstaged';\n",
-      rootDir
-    );
-
-    await write(
-      "artifacts/harness-delivery-runs/provider-evidence.json",
-      JSON.stringify(
-        {
-          schemaVersion: 1,
-          provider: "pr:athena:delivery-run",
-          treeSha,
-          capabilities: [
-            {
-              capability: "athena-webapp-vitest",
-              command: "bun run --filter '@athena/webapp' test:coverage",
-              coverage: { mode: "full" },
-            },
-          ],
-        },
-        null,
-        2
-      ),
-      rootDir
-    );
-
-    await runHarnessReview(rootDir, {
-      getChangedFiles: async () => ["packages/athena-webapp/src/app.ts"],
-      providerEvidencePath: "artifacts/harness-delivery-runs/provider-evidence.json",
-      runHarnessCheck: async () => {
-        steps.push("harness:check");
-      },
-      runPackageScript: async (workspace, script) => {
-        steps.push(`${workspace}:${script}`);
-      },
-      logger: {
-        log() {},
-        error() {},
-      },
-    });
-
-    expect(steps).toContain("@athena/webapp:test");
-  });
-
-  it("runs selected validation when provider evidence tree has untracked files", async () => {
-    const rootDir = await createFixtureRepo();
-    const steps: string[] = [];
-    await write(
-      ".gitignore",
-      "artifacts/harness-delivery-runs/\n",
-      rootDir
-    );
-    initializeGitHistory(rootDir);
-    await write(
-      "packages/athena-webapp/src/app.ts",
-      "export const app = 'changed';\n",
-      rootDir
-    );
-    runGit(rootDir, ["add", "packages/athena-webapp/src/app.ts"]);
-    const treeSha = runGit(rootDir, ["write-tree"]);
-    await write("untracked-local-file.txt", "local\n", rootDir);
-
-    await write(
-      "artifacts/harness-delivery-runs/provider-evidence.json",
-      JSON.stringify(
-        {
-          schemaVersion: 1,
-          provider: "pr:athena:delivery-run",
-          treeSha,
-          capabilities: [
-            {
-              capability: "athena-webapp-vitest",
-              command: "bun run --filter '@athena/webapp' test:coverage",
-              coverage: { mode: "full" },
-            },
-          ],
-        },
-        null,
-        2
-      ),
-      rootDir
-    );
-
-    await runHarnessReview(rootDir, {
-      getChangedFiles: async () => ["packages/athena-webapp/src/app.ts"],
-      providerEvidencePath: "artifacts/harness-delivery-runs/provider-evidence.json",
-      runHarnessCheck: async () => {
-        steps.push("harness:check");
-      },
-      runPackageScript: async (workspace, script) => {
-        steps.push(`${workspace}:${script}`);
-      },
-      logger: {
-        log() {},
-        error() {},
-      },
-    });
-
-    expect(steps).toContain("@athena/webapp:test");
-  });
-
-  it("skips focused athena webapp Vitest only when coverage evidence includes every focused target", async () => {
-    const rootDir = await createFixtureRepo();
-    const steps: string[] = [];
-
-    await write(
-      "packages/athena-webapp/docs/agent/validation-map.json",
-      JSON.stringify(
-        {
-          workspace: "@athena/webapp",
-          packageDir: "packages/athena-webapp",
-          surfaces: [
-            {
-              name: "focused-app-test",
-              pathPrefixes: ["packages/athena-webapp/src/app.ts"],
-              commands: [
-                {
-                  kind: "raw",
-                  command:
-                    "bun run --filter '@athena/webapp' test -- src/app.test.ts src/other.test.ts",
-                },
-              ],
-            },
-          ],
-        },
-        null,
-        2
-      ),
-      rootDir
-    );
-    await write(
-      "artifacts/harness-delivery-runs/provider-evidence.json",
-      JSON.stringify(
-        {
-          schemaVersion: 1,
-          provider: "local-pr-athena",
-          capabilities: [
-            {
-              capability: "athena-webapp-vitest",
-              command: "bun run --filter '@athena/webapp' test:coverage",
-              coverage: { mode: "focused", files: ["src/app.test.ts"] },
-            },
-          ],
-        },
-        null,
-        2
-      ),
-      rootDir
-    );
-
-    await runHarnessReview(rootDir, {
-      getChangedFiles: async () => ["packages/athena-webapp/src/app.ts"],
-      providerEvidencePath: "artifacts/harness-delivery-runs/provider-evidence.json",
-      runHarnessCheck: async () => {
-        steps.push("harness:check");
-      },
-      runRawCommand: async (command) => {
-        steps.push(`raw:${command}`);
-      },
-      logger: {
-        log() {},
-        error() {},
-      },
-    });
-
-    expect(steps).toEqual([
-      "harness:check",
-      "raw:bun run --filter '@athena/webapp' test -- src/app.test.ts src/other.test.ts",
-    ]);
-  });
-
-  it("lets athena-pr-tests provide broad package commands while still running selected behavior", async () => {
-    const rootDir = await createFixtureRepo();
-    const steps: string[] = [];
-
-    await write(
-      "packages/athena-webapp/package.json",
-      JSON.stringify(
-        {
-          name: "@athena/webapp",
-          scripts: {
-            "audit:convex": "echo audit",
-            build: "echo build",
-            "lint:architecture": "echo architecture",
-            "lint:convex:changed": "echo lint convex",
-            "lint:frontend:changed": "echo lint frontend",
-            test: "echo test",
-          },
-        },
-        null,
-        2
-      ),
-      rootDir
-    );
-    await write(
-      "packages/athena-webapp/docs/agent/validation-map.json",
-      JSON.stringify(
-        {
-          workspace: "@athena/webapp",
-          packageDir: "packages/athena-webapp",
-          surfaces: [
-            {
-              name: "daily-store-operations-lifecycle-edits",
-              pathPrefixes: [
-                "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-              ],
-              commands: [
-                {
-                  kind: "raw",
-                  command:
-                    "bun run --filter '@athena/webapp' test -- src/components/operations/DailyCloseView.test.tsx",
-                },
-                { kind: "script", script: "audit:convex" },
-                { kind: "script", script: "lint:convex:changed" },
-                { kind: "script", script: "lint:frontend:changed" },
-                {
-                  kind: "raw",
-                  command:
-                    "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
-                },
-                { kind: "script", script: "build" },
-              ],
-              behaviorScenarios: ["athena-admin-shell-boot"],
-            },
-          ],
-        },
-        null,
-        2
-      ),
-      rootDir
-    );
-    await write(
-      "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "export const dailyClose = true;\n",
-      rootDir
-    );
-
-    await runHarnessReview(rootDir, {
-      getChangedFiles: async () => [
-        "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      ],
-      validationProvidedBy: "athena-pr-tests",
-      runHarnessCheck: async () => {
-        steps.push("harness:check");
-      },
-      runPackageScript: async (workspace, script) => {
-        steps.push(`${workspace}:${script}`);
-      },
-      runRawCommand: async (command) => {
-        steps.push(`raw:${command}`);
-      },
-      runHarnessBehaviorScenario: async (scenario) => {
-        steps.push(`behavior:${scenario}`);
-      },
-      logger: {
-        log() {},
-        error() {},
-      },
-    });
-
-    expect(steps).toEqual([
-      "harness:check",
-      "behavior:athena-admin-shell-boot",
-    ]);
-  });
-
-  it("does not skip package commands that athena-pr-tests does not provide", async () => {
-    const rootDir = await createFixtureRepo();
-    const steps: string[] = [];
-
-    await write(
-      "packages/storefront-webapp/package.json",
-      JSON.stringify(
-        {
-          name: "@athena/storefront-webapp",
-          scripts: {
-            test: "echo test",
-            "test:e2e": "echo e2e",
-          },
-        },
-        null,
-        2
-      ),
-      rootDir
-    );
-    await write(
-      "packages/storefront-webapp/docs/agent/validation-map.json",
-      JSON.stringify(
-        {
-          workspace: "@athena/storefront-webapp",
-          packageDir: "packages/storefront-webapp",
-          surfaces: [
-            {
-              name: "full-browser-journeys-and-payment-redirects",
-              pathPrefixes: ["packages/storefront-webapp/tests/e2e"],
-              commands: [
-                { kind: "script", script: "test" },
-                { kind: "script", script: "test:e2e" },
-              ],
-              behaviorScenarios: ["storefront-checkout-bootstrap"],
-            },
-          ],
-        },
-        null,
-        2
-      ),
-      rootDir
-    );
-    await write(
-      "packages/storefront-webapp/tests/e2e/checkout.spec.ts",
-      "export const checkout = true;\n",
-      rootDir
-    );
-
-    await runHarnessReview(rootDir, {
-      getChangedFiles: async () => [
-        "packages/storefront-webapp/tests/e2e/checkout.spec.ts",
-      ],
-      validationProvidedBy: "athena-pr-tests",
-      runHarnessCheck: async () => {
-        steps.push("harness:check");
-      },
-      runPackageScript: async (workspace, script) => {
-        steps.push(`${workspace}:${script}`);
-      },
-      runHarnessBehaviorScenario: async (scenario) => {
-        steps.push(`behavior:${scenario}`);
-      },
-      logger: {
-        log() {},
-        error() {},
-      },
-    });
-
-    expect(steps).toEqual([
-      "harness:check",
-      "@athena/storefront-webapp:test:e2e",
-      "behavior:storefront-checkout-bootstrap",
-    ]);
-  });
 
   it("runs command-based validation surfaces including raw repo-root commands", async () => {
     const rootDir = await createFixtureRepo();
@@ -1428,95 +767,9 @@ describe("runHarnessReview", () => {
     expect(steps).toEqual([
       "harness:check",
       "@athena/webapp:test",
-      "raw:bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
     ]);
   });
 
-  it("skips athena webapp typecheck when local provider evidence covers it", async () => {
-    const rootDir = await createFixtureRepo();
-    const steps: string[] = [];
-    const logLines: string[] = [];
-
-    await write(
-      "packages/athena-webapp/docs/agent/validation-map.json",
-      JSON.stringify(
-        {
-          workspace: "@athena/webapp",
-          packageDir: "packages/athena-webapp",
-          surfaces: [
-            {
-              name: "shared-lib-or-utility-edits",
-              pathPrefixes: ["packages/athena-webapp/src/lib"],
-              commands: [
-                {
-                  kind: "raw",
-                  command:
-                    "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
-                },
-              ],
-            },
-          ],
-        },
-        null,
-        2
-      ),
-      rootDir
-    );
-    await write(
-      "artifacts/harness-delivery-runs/provider-evidence.json",
-      JSON.stringify(
-        {
-          schemaVersion: 1,
-          provider: "local-pr-athena",
-          capabilities: [
-            {
-              capability: "athena-webapp-typecheck",
-              command:
-                "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
-            },
-          ],
-        },
-        null,
-        2
-      ),
-      rootDir
-    );
-    await write(
-      "packages/athena-webapp/src/lib/session.ts",
-      "export const session = true;\n",
-      rootDir
-    );
-
-    await runHarnessReview(rootDir, {
-      getChangedFiles: async () => ["packages/athena-webapp/src/lib/session.ts"],
-      providerEvidencePath: "artifacts/harness-delivery-runs/provider-evidence.json",
-      runHarnessCheck: async () => {
-        steps.push("harness:check");
-      },
-      runRawCommand: async (command) => {
-        steps.push(`raw:${command}`);
-      },
-      logger: {
-        log(line) {
-          logLines.push(line);
-        },
-        error() {},
-      },
-    });
-
-    expect(steps).toEqual(["harness:check"]);
-    expect(logLines).toContain(
-      JSON.stringify({
-        type: "provider_skipped",
-        status: "covered_by_provider",
-        capability: "athena-webapp-typecheck",
-        command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
-        providedBy: "local-pr-athena",
-        coveredCapabilities: ["athena-webapp-typecheck"],
-        evidence: "artifacts/harness-delivery-runs/provider-evidence.json",
-      })
-    );
-  });
 
   it("runs mapped storefront behavior scenarios for checkout-critical surfaces", async () => {
     const rootDir = await createFixtureRepo();
@@ -1746,11 +999,8 @@ describe("runHarnessReview", () => {
 
     expect(steps).toEqual([
       "harness:check",
-      "raw:bun run workflow:check",
       "raw:bun run harness:test",
       "raw:bun run delivery:documentation-check",
-      "raw:bun run test:coverage",
-      "raw:bun run harness:inferential-review",
     ]);
   });
 
@@ -1780,47 +1030,12 @@ describe("runHarnessReview", () => {
     expect(observedBaseRefs).toEqual(["origin/main"]);
     expect(steps).toEqual([
       "harness:check",
-      "@athena/webapp:audit:convex",
-      "@athena/webapp:lint:convex:changed",
       "@athena/webapp:test",
     ]);
   });
 });
 
-describe("validation provider scopes", () => {
-  it("treats both providers as covering the repo-owned validation set", () => {
-    expect(
-      repoOwnedValidationIsProvided({ repoValidationProvidedBy: "pr:athena" })
-    ).toBe(true);
-    expect(
-      repoOwnedValidationIsProvided({
-        validationProvidedBy: "athena-pr-tests",
-      })
-    ).toBe(true);
-  });
 
-  it("treats only the workflow provider as covering package validation", () => {
-    expect(
-      packageValidationIsProvided({ validationProvidedBy: "athena-pr-tests" })
-    ).toBe(true);
-    expect(packageValidationIsProvided({})).toBe(false);
-  });
-
-  it("keeps package validation running under the local pr:athena provider", () => {
-    // This is the distinction between the two near-identically named flags:
-    // pr:athena runs the repo-owned commands itself, but still delegates
-    // package selection to review. Only the CI provider prunes both scopes.
-    const localProvider = { repoValidationProvidedBy: "pr:athena" } as const;
-
-    expect(repoOwnedValidationIsProvided(localProvider)).toBe(true);
-    expect(packageValidationIsProvided(localProvider)).toBe(false);
-  });
-
-  it("suppresses neither scope for standalone fail-closed review", () => {
-    expect(repoOwnedValidationIsProvided({})).toBe(false);
-    expect(packageValidationIsProvided({})).toBe(false);
-  });
-});
 
 describe("parseHarnessReviewArgs", () => {
   it("accepts --base <ref>", () => {
@@ -1835,46 +1050,8 @@ describe("parseHarnessReviewArgs", () => {
     });
   });
 
-  it("accepts pr:athena as the parent repo-validation provider", () => {
-    expect(
-      parseHarnessReviewArgs([
-        "--base",
-        "origin/main",
-        "--repo-validation-provided-by",
-        "pr:athena",
-      ])
-    ).toEqual({
-      baseRef: "origin/main",
-      repoValidationProvidedBy: "pr:athena",
-    });
-  });
 
-  it("accepts athena-pr-tests as the workflow validation provider", () => {
-    expect(
-      parseHarnessReviewArgs([
-        "--base=origin/main",
-        "--validation-provided-by",
-        "athena-pr-tests",
-      ])
-    ).toEqual({
-      baseRef: "origin/main",
-      validationProvidedBy: "athena-pr-tests",
-    });
-  });
 
-  it("accepts a local provider evidence path", () => {
-    expect(
-      parseHarnessReviewArgs([
-        "--base=origin/main",
-        "--provider-evidence",
-        "artifacts/harness-delivery-runs/provider-evidence.json",
-      ])
-    ).toEqual({
-      baseRef: "origin/main",
-      providerEvidencePath:
-        "artifacts/harness-delivery-runs/provider-evidence.json",
-    });
-  });
 
   it("rejects missing --base values", () => {
     expect(() => parseHarnessReviewArgs(["--base"])).toThrow(
@@ -1882,21 +1059,7 @@ describe("parseHarnessReviewArgs", () => {
     );
   });
 
-  it("rejects unknown parent repo-validation providers", () => {
-    expect(() =>
-      parseHarnessReviewArgs(["--repo-validation-provided-by", "custom"])
-    ).toThrow(
-      "Missing or invalid value for --repo-validation-provided-by. Supported value: pr:athena"
-    );
-  });
 
-  it("rejects unknown workflow validation providers", () => {
-    expect(() =>
-      parseHarnessReviewArgs(["--validation-provided-by", "custom"])
-    ).toThrow(
-      "Missing or invalid value for --validation-provided-by. Supported value: athena-pr-tests"
-    );
-  });
 
   it("rejects an unknown argument as a typed usage error", () => {
     // A malformed invocation is expected, not a crash: it must not reach the
@@ -2011,5 +1174,97 @@ describe("harnessReviewBlockedBlocker", () => {
       "repair-harness-review-finding",
       "rerun-harness-review",
     ]);
+  });
+});
+
+it.each(["--repo-validation-provided-by", "--validation-provided-by", "--provider-evidence"])("rejects retired evidence shortcut %s", flag => {
+  expect(() => parseHarnessReviewArgs([flag, "claimed-parent-success"])).toThrow(HarnessUsageError);
+});
+
+it("runs every required Athena sensor once even without selected package files", async () => {
+  const root = await createFixtureRepo();
+  const steps: string[] = [];
+  await runCompleteHarnessReview(root, {
+    getChangedFiles: async () => [], runHarnessCheck: async () => {},
+    runRawCommand: async command => { steps.push(command); },
+    runPackageScript: async (workspace, script) => { steps.push(`${workspace}:${script}`); },
+    logger: { log() {}, error() {} },
+  });
+  expect(steps).toEqual([...ATHENA_ALWAYS_VALIDATION_COMMANDS, ...ATHENA_FINAL_VALIDATION_COMMANDS].map(command => command.kind === "raw" ? command.command : `${command.workspace}:${command.script}`));
+  expect(new Set(steps).size).toBe(13);
+});
+
+it("deduplicates required sensors also selected by repository validation", async () => {
+  const root = await createFixtureRepo();
+  const steps: string[] = [];
+  await runCompleteHarnessReview(root, {
+    getChangedFiles: async () => ["scripts/harness-review.ts"], runHarnessCheck: async () => {},
+    runRawCommand: async command => { steps.push(command); },
+    runPackageScript: async (workspace, script) => { steps.push(`${workspace}:${script}`); },
+    logger: { log() {}, error() {} },
+  });
+  expect(steps.filter(command => command === "bun run workflow:check")).toHaveLength(1);
+  expect(steps.filter(command => command === "bun run test:coverage")).toHaveLength(1);
+  expect(steps).toContain("bun run harness:test");
+});
+
+it("retains preflight, inferential, graph and scorecard checks in the complete validation chain", async () => {
+  const root = await createFixtureRepo(); const steps: string[] = [];
+  await runCompleteHarnessReview(root, {
+    getChangedFiles: async () => ["scripts/harness-review.ts"], runHarnessCheck: async () => { steps.push("harness:check"); },
+    runRawCommand: async command => { steps.push(command); }, runPackageScript: async (workspace, script) => { steps.push(`${workspace}:${script}`); },
+    logger: { log() {}, error() {} },
+  });
+  expect(steps[1]).toBe("bun run pr:athena:preflight");
+  expect(steps.filter(command => command === "bun run harness:inferential-review")).toHaveLength(1);
+  expect(steps).not.toContain("bun run harness:audit"); // Preflight includes the audit.
+  expect(steps.slice(-3)).toEqual(["bun run harness:inferential-review", "bun run graphify:check", "bun run pr:athena:scorecard"]);
+});
+
+it("a preflight rejection stops expensive validation and scorecard generation", async () => {
+  const root = await createFixtureRepo(); const steps: string[] = [];
+  await expect(runCompleteHarnessReview(root, {
+    getChangedFiles: async () => [], runHarnessCheck: async () => {},
+    runRawCommand: async command => { steps.push(command); if (command === "bun run pr:athena:preflight") throw new Error("preflight refused"); },
+    runPackageScript: async (workspace, script) => { steps.push(`${workspace}:${script}`); }, logger: { log() {}, error() {} },
+  })).rejects.toThrow("preflight refused");
+  expect(steps).toEqual(["bun run pr:athena:preflight"]);
+});
+
+describe("consolidated coverage resource diagnostics", () => {
+  it.each(["1", "4", undefined])("times the sole hosted coverage execution and logs worker limit %s", async (workers) => {
+    const calls: string[][] = []; const logs: string[] = [];
+    await runRawCommand("/consumer", "bun run test:coverage", {
+      platform: "linux", env: { GITHUB_ACTIONS: "true", ATHENA_COVERAGE_MAX_WORKERS: workers },
+      logger: { log: message => logs.push(message) },
+      spawn: (argv, options) => {
+        calls.push(argv);
+        expect(options).toEqual({ cwd: "/consumer", stdout: "inherit", stderr: "inherit" });
+        return { exited: Promise.resolve(0) };
+      },
+    });
+    expect(calls).toEqual([["/usr/bin/time", "-v", resolveHarnessReviewShell(), "-lc", "bun run test:coverage"]]);
+    expect(logs).toEqual([`Coverage worker limit: ${workers ?? "2"}`]);
+  });
+
+  it("preserves a failing timed coverage exit", async () => {
+    await expect(runRawCommand("/consumer", "bun run test:coverage", {
+      platform: "linux", env: { GITHUB_ACTIONS: "true" }, logger: { log() {} },
+      spawn: () => ({ exited: Promise.resolve(17) }),
+    })).rejects.toThrow("Command failed (17): bun run test:coverage");
+  });
+
+  it.each([
+    { platform: "darwin" as const, env: { GITHUB_ACTIONS: "true" }, command: "bun run test:coverage" },
+    { platform: "linux" as const, env: {}, command: "bun run test:coverage" },
+    { platform: "linux" as const, env: { GITHUB_ACTIONS: "true" }, command: "bun run harness:test" },
+  ])("leaves other execution unchanged: $platform $command $env", async ({ platform, env, command }) => {
+    const calls: string[][] = []; const logs: string[] = [];
+    await runRawCommand("/consumer", command, {
+      platform, env, logger: { log: message => logs.push(message) },
+      spawn: argv => { calls.push(argv); return { exited: Promise.resolve(0) }; },
+    });
+    expect(calls).toEqual([[resolveHarnessReviewShell(), "-lc", command]]);
+    expect(logs).toEqual([]);
   });
 });

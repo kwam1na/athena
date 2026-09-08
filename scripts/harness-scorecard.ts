@@ -7,14 +7,7 @@ import {
 } from "./harness-app-registry";
 import { HARNESS_BEHAVIOR_SCENARIOS } from "./harness-behavior-scenarios";
 import { runHarnessCliBoundary } from "./harness-blockers";
-import {
-  buildPartialDeliveryRunBaseline,
-  readDeliveryRunLedger,
-  summarizeDeliveryRunBaseline,
-  type DeliveryRunBaselineSummary,
-  type DeliveryRunProofState,
-  type DeliveryRunStatus,
-} from "./harness-delivery-run-ledger";
+import { readDeliveryRunTelemetryRecords, DELIVERY_RUN_TELEMETRY_DIR, type DeliveryRunTelemetryRecord } from "./delivery-run-telemetry";
 
 const DEFAULT_OUTPUT_PATH = "artifacts/harness-scorecard/latest.json";
 const REQUIRED_TESTING_SNIPPETS = [
@@ -167,18 +160,12 @@ type HarnessScorecardOutput = {
     deliveryRun: {
       definition: string;
       artifactPath: string;
-      baselinePath: string;
       present: boolean;
-      status: DeliveryRunStatus | "missing";
+      status: string;
       generatedAt: string | null;
-      proofState: DeliveryRunProofState | null;
-      commandCount: number;
-      failedCommandCount: number;
-      duplicateCommandCount: number;
-      duplicatePackageSuiteCount: number;
-      providerSkippedCount: number;
-      totalDurationMs: number;
-      baseline: DeliveryRunBaselineSummary;
+      summary: DeliveryRunTelemetryRecord["summary"] | null;
+      costs: DeliveryRunTelemetryRecord["costs"] | null;
+      readout: DeliveryRunTelemetryRecord["readout"] | null;
     };
     graphify: {
       definition: string;
@@ -357,7 +344,7 @@ function buildSummary(
   graphify: HarnessScorecardOutput["metrics"]["graphify"]
 ): HarnessScorecardOutput["summary"] {
   const deliveryRunHealthy =
-    deliveryRun.status === "pass" && deliveryRun.proofState === "proof_recorded";
+    deliveryRun.summary?.gate?.writer === "cli" && deliveryRun.summary.gate.outcome === "ok";
   const healthySignals =
     documentation.healthyAppCount +
     (isHealthyInferentialStatus(inferential.status) ? 1 : 0) +
@@ -402,10 +389,10 @@ function buildSummary(
   );
   noteParts.push(
     !deliveryRun.present
-      ? "Delivery-run ledger missing."
+      ? "Product run export missing; historical ledgers are not current observations."
       : deliveryRunHealthy
-      ? "Delivery-run ledger pass with recorded proof."
-      : `Delivery-run ledger ${deliveryRun.status} with proof ${deliveryRun.proofState ?? "unknown"}.`
+      ? "Product run export reports a successful CLI gate (self-attested observability)."
+      : `Product run export reports ${deliveryRun.status} (self-attested observability).`
   );
   noteParts.push(
     graphify.status === "paired"
@@ -760,30 +747,16 @@ async function inspectRuntimeTrendHistory(
 }
 
 async function inspectDeliveryRunArtifact(rootDir: string) {
-  const artifactPath = "artifacts/harness-delivery-runs/latest.json";
-  const baselinePath = "artifacts/harness-delivery-runs/baseline.json";
-  const [latest, baseline] = await Promise.all([
-    readDeliveryRunLedger(rootDir, artifactPath),
-    buildPartialDeliveryRunBaseline(rootDir, baselinePath),
-  ]);
-
-  const latestSummary = summarizeDeliveryRunBaseline(latest);
+  const latest = (await readDeliveryRunTelemetryRecords(rootDir)).at(-1) ?? null;
   return {
-    definition:
-      "Latest pr:athena delivery-run ledger state from artifacts/harness-delivery-runs/latest.json, with optional baseline comparison.",
-    artifactPath,
-    baselinePath,
-    present: latestSummary.present,
-    status: latestSummary.status,
-    generatedAt: latestSummary.generatedAt,
-    proofState: latestSummary.proofState,
-    commandCount: latestSummary.commandCount,
-    failedCommandCount: latest?.summary.failedCommandCount ?? 0,
-    duplicateCommandCount: latestSummary.duplicateCommandCount,
-    duplicatePackageSuiteCount: latestSummary.duplicatePackageSuiteCount,
-    providerSkippedCount: latestSummary.providerSkippedCount,
-    totalDurationMs: latestSummary.totalDurationMs,
-    baseline,
+    definition: "Installed product run projection; review and whole-run costs remain separate. Historical Athena ledgers are not reinterpreted as product evidence.",
+    artifactPath: latest ? `${DELIVERY_RUN_TELEMETRY_DIR}/${latest.runId}.json` : DELIVERY_RUN_TELEMETRY_DIR,
+    present: latest !== null,
+    status: latest?.summary.gate?.outcome ?? (latest ? "open" : "missing"),
+    generatedAt: latest?.summary.lastAt ?? null,
+    summary: latest?.summary ?? null,
+    costs: latest?.costs ?? null,
+    readout: latest?.readout ?? null,
   };
 }
 

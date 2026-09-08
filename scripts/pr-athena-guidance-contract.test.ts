@@ -9,7 +9,7 @@ async function readRepoFile(relativePath: string) {
 }
 
 describe("Athena merge-ready validation guidance", () => {
-  it("requires approved review workflows to issue exact-candidate evidence before validation", async () => {
+  it("requires prepared review outcomes to use product-emitted evidence before validation", async () => {
     const [agentsGuide, codeReviewSkill] = await Promise.all([
       readRepoFile("AGENTS.md"),
       readRepoFile(".agents/skills/ce-code-review/SKILL.md"),
@@ -18,9 +18,13 @@ describe("Athena merge-ready validation guidance", () => {
     for (const skill of [agentsGuide, codeReviewSkill]) {
       expect(skill).toContain("bun run pr:athena:prepare");
       expect(skill).toContain("bun run harness:review-context");
-      expect(skill).toContain("final-manifest.json");
+      expect(skill).toContain("review-outcome/1");
       expect(skill).toContain("bun run harness:review-evidence --");
     }
+    expect(agentsGuide).toContain("emit-review-evidence --context <review-context.json>");
+    expect(agentsGuide).toContain("Do not hand-edit the emitted manifest.");
+    expect(codeReviewSkill).toContain("returns the product manifest path");
+    expect(codeReviewSkill).toContain("--manifest <returned-path>");
     expect(
       agentsGuide.indexOf("bun run harness:review-evidence --"),
     ).toBeLessThan(
@@ -28,14 +32,25 @@ describe("Athena merge-ready validation guidance", () => {
     );
   });
 
-  it("names the review run root the evidence recorder actually resolves", async () => {
-    const agentsGuide = await readRepoFile("AGENTS.md");
+  it("delegates evidence storage and manifest paths to the installed product", async () => {
+    const [agentsGuide, codeReviewSkill] = await Promise.all([
+      readRepoFile("AGENTS.md"),
+      readRepoFile(".agents/skills/ce-code-review/SKILL.md"),
+    ]);
 
     expect(agentsGuide).toContain(
-      "`<node-tmpdir-realpath>/compound-engineering/execute/<run-id>`, where `<node-tmpdir-realpath>` is the realpath of Node's `os.tmpdir()`",
+      "The installed product owns review contexts, outcome validation, evidence emission, candidate binding, freshness, and storage.",
     );
-    expect(agentsGuide).toContain(
-      "On macOS that is the per-user `$TMPDIR` directory resolved through the `/var` symlink (`/private/var/folders/.../T`) \u2014 neither `/tmp` nor the raw `/var/folders/...` form `os.tmpdir()` prints",
+    expect(agentsGuide).toContain("do not author a second Athena evidence manifest");
+    expect(agentsGuide).toContain("Submit the manifest path returned by that command");
+    expect(codeReviewSkill).toContain(
+      "Keep the reviewer results and round history under the review run root.",
+    );
+    expect(codeReviewSkill).toContain(
+      "Never hand-author the retired Athena `final-manifest.json` envelope",
+    );
+    expect(agentsGuide).not.toContain(
+      "<node-tmpdir-realpath>/compound-engineering/execute/<run-id>",
     );
     expect(agentsGuide).not.toContain("/tmp/compound-engineering/execute/");
   });
@@ -70,27 +85,58 @@ describe("Athena merge-ready validation guidance", () => {
     const agentsGuide = await readRepoFile("AGENTS.md");
 
     expect(agentsGuide).toContain(
-      "`AGENT_SKILLS_CHECKOUT=<agent-skills checkout> bun run agent-skills:install -- <release-id> --profile <profile>`",
+      "`bun run agent-skills:install -- --archive <archive.zip> --metadata <release.json>`",
     );
     expect(agentsGuide).toContain(
-      "Athena's run-event command is `DELIVERY_EVENT='<json payload>' bun run delivery:emit -- <kind>`",
+      "invoke `bun scripts/delivery-product.ts emit <kind> --json '<payload>'` directly",
     );
+    expect(agentsGuide).toContain("no producer checkout is required");
+    expect(agentsGuide).not.toContain("AGENT_SKILLS_CHECKOUT=");
+    expect(agentsGuide).not.toContain("DELIVERY_EVENT=");
     expect(agentsGuide).toContain(
-      "Athena's two mandated lens ids are `lens.outcome-correctness` and `lens.adversarial-testing`",
+      "The two mandated lens ids are `lens.outcome-correctness` and `lens.adversarial-testing`",
     );
   });
 
   it("references the installed workflow for the review rules it no longer restates", async () => {
     const agentsGuide = await readRepoFile("AGENTS.md");
+    const harnessGuide = await readRepoFile("docs/harness.md");
 
     expect(agentsGuide).toContain(
-      "The installed `review-work` workflow owns that bound and Athena does not narrow it.",
+      "The installed `review-work` and `execute-work` workflows own the original bound, constrained grace eligibility, and terminal blockers",
     );
     expect(agentsGuide).toContain(
       "The delivery's round bound, its grace round, and the typed blocker raised when the bound is reached are the installed `review-work` and `execute-work` workflows'",
     );
     expect(agentsGuide).toContain(
-      "The installed `obtain-review` and `review-work` workflows own which findings are actionable and when a deferral is discharged",
+      "Preserve finding dispositions, filed deferral issue ids, every round, and host-reported costs.",
+    );
+    expect(agentsGuide).toContain(
+      '`obligationId: "review.green"` and `kind: "satisfied_evidence"`',
+    );
+    expect(agentsGuide).toContain(
+      "coverage of every currently selected lens, with unanimous approval",
+    );
+    expect(agentsGuide).toContain(
+      "For an active review obligation, every other or missing resolution, including `waived`, requires complete acquisition.",
+    );
+    expect(agentsGuide).toContain(
+      "no undischarged actionable findings or tracking obligations",
+    );
+    expect(agentsGuide).toContain(
+      "New actionable review feedback requires a complete review",
+    );
+    expect(agentsGuide).toContain(
+      "other admission or recovery blockers remain blocking for their own stages and do not by themselves require another review",
+    );
+    expect(agentsGuide).toContain(
+      "continue to validation without another acquisition or emission",
+    );
+    expect(agentsGuide).toContain(
+      "A product-verified reuse does not create a round, reset history, or create grace eligibility.",
+    );
+    expect(harnessGuide.replace(/\s+/g, " ")).not.toContain(
+      "Any review fix requires preparation and a complete re-review",
     );
   });
 

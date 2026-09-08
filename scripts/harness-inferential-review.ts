@@ -1,7 +1,9 @@
+import { importHarnessConfig } from "./delivery-product";
 import Anthropic from "@anthropic-ai/sdk";
 import { spawn as spawnChildProcess } from "node:child_process";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { collectConvexReturnValidatorContractFindings as collectSharedConvexReturnValidatorContractFindings } from "./convex-return-validator-contract-check";
 import { runHarnessCliBoundary, HarnessUsageError } from "./harness-blockers";
@@ -343,7 +345,7 @@ function buildShellCommandPattern(commandBody: string) {
 
 function hasHarnessReviewCommand(value: string, baseRef: string) {
   const pattern = buildShellCommandPattern(
-    `bun\\s+run\\s+harness:review\\s+--base(?:\\s+|=)${escapeRegExp(baseRef)}(?:\\s+--repo-validation-provided-by\\s+pr:athena)?(?:\\s+--validation-provided-by\\s+athena-pr-tests)?(?:\\s+--[\\w-]+(?:\\s+|=)\\S+)*`,
+    `bun\\s+run\\s+harness:review(?:\\s+--base(?:\\s+|=)${escapeRegExp(baseRef)})?`,
   );
   return pattern.test(value);
 }
@@ -369,27 +371,33 @@ function expandPackageScriptChain(
     .map((match) => match[1])
     .filter((name) => scripts?.[name]);
 
-  if (
-    (scriptName === "pr:athena" || scriptName === "pr:athena:delivery-run") &&
-    /\bbun\s+scripts\/pr-athena-delivery-run\.ts\b/.test(script)
-  ) {
-    childScripts.push(
-      ...[
-        "pr:athena:prepare",
-        "pr:athena:preflight",
-        "pr:athena:validate",
-        "pr:athena:record-proof",
-        "pr:athena:scorecard",
-      ].filter((name) => scripts?.[name]),
-    );
-  }
-
   return [
     script,
     ...childScripts.map((name) =>
       expandPackageScriptChain(scripts, name, seen),
     ),
   ].join(" && ");
+}
+
+async function expandProductValidationWiring(rootDir: string, scripts: Record<string, string> | undefined) {
+  let prAthenaScript = expandPackageScriptChain(scripts, "pr:athena");
+  // Installed gate wiring is declared by provider checks, not inferred from
+  // retired wrapper phases or flags which skip repository validation.
+  if (/\bbun\s+scripts\/(?:pr-athena-delivery-run|delivery-product)\.ts\b/.test(prAthenaScript)) {
+    const config = await importHarnessConfig(rootDir);
+    const declaredCommands = config.providers.flatMap(provider => provider.check ? [provider.check.command.join(" ")] : []);
+    if (declaredCommands.some(command => /\bbun\s+run\s+harness:review\b/.test(command))) {
+      const validation = await import(pathToFileURL(path.join(rootDir, "scripts/harness-review.ts")).href);
+      for (const command of [...(validation.ATHENA_ALWAYS_VALIDATION_COMMANDS ?? []), ...(validation.ATHENA_FINAL_VALIDATION_COMMANDS ?? [])]) {
+        if (command.kind === "raw") declaredCommands.push(command.command);
+      }
+    }
+    prAthenaScript += " && " + declaredCommands.map(command => command.replace(/\bbun\s+run\s+([\w:-]+)/g, (match, name) => {
+      const expanded = expandPackageScriptChain(scripts, name);
+      return expanded ? `${match} && ${expanded}` : match;
+    })).join(" && ");
+  }
+  return prAthenaScript;
 }
 
 function extractWorkflowJobSection(workflowContents: string, jobName: string) {
@@ -435,6 +443,21 @@ function extractWorkflowRunCommands(workflowContents: string, jobName: string) {
     .filter((line) => line.startsWith("run:"))
     .map((line) => line.slice("run:".length).trim())
     .filter(Boolean);
+}
+
+async function expandWorkflowValidationCommands(rootDir: string, workflowContents: string) {
+  const commands = extractWorkflowRunCommands(workflowContents, "harness-validation");
+  const validationPath = path.join(rootDir, "scripts/harness-review.ts");
+  if (!commands.some(command => hasHarnessReviewCommand(command, DEFAULT_BASE_REF)) ||
+      !(await fileExists(validationPath))) {
+    return { commands, delegated: false };
+  }
+  const validation = await import(pathToFileURL(validationPath).href);
+  const delegated = [...(validation.ATHENA_ALWAYS_VALIDATION_COMMANDS ?? []),
+    ...(validation.ATHENA_FINAL_VALIDATION_COMMANDS ?? [])]
+    .filter(command => command.kind === "raw")
+    .map(command => command.command as string);
+  return { commands: [...commands, ...delegated], delegated: true };
 }
 
 function workflowJobHasEnvSetting(
@@ -620,12 +643,32 @@ async function collectHarnessSafetySignalFindings(
       continue;
     }
 
-    const contents = await readUtf8OrNull(path.join(rootDir, rule.filePath));
+    let contents = await readUtf8OrNull(path.join(rootDir, rule.filePath));
     if (!contents) {
       continue;
     }
 
-    const missingSignals = rule.requiredSignals.filter(
+    let requiredSignals = rule.requiredSignals;
+    if (rule.filePath === "package.json") {
+      try {
+        const scripts = JSON.parse(contents).scripts;
+        contents = await expandProductValidationWiring(rootDir, scripts);
+        // The current preflight owns audit; its own contract sensor verifies that call.
+        if (contents.includes("bun scripts/pr-athena-delivery-run.ts") || contents.includes("bun scripts/delivery-product.ts")) {
+          requiredSignals = ["bun run pr:athena:preflight", "bun run graphify:check"];
+        }
+      } catch { /* Configuration failures are reported by the wiring inspection. */ }
+    }
+    if (rule.filePath === ".github/workflows/athena-pr-tests.yml") {
+      const validation = await expandWorkflowValidationCommands(rootDir, contents);
+      contents = validation.commands.map(command => `run: ${command}`).join("\n");
+      if (validation.delegated) {
+        // Review owns harness check directly; preflight owns the audit, as in
+        // the package-script rule above. Both remain required through review.
+        requiredSignals = ["run: bun run pr:athena:preflight", "run: bun run graphify:check"];
+      }
+    }
+    const missingSignals = requiredSignals.filter(
       (signal) => !includesCaseInsensitive(contents, signal),
     );
 
@@ -1989,15 +2032,16 @@ export async function runDeterministicInferentialProvider(
         scripts?: Record<string, string>;
       };
       prAthenaScript = expandPackageScriptChain(parsed.scripts, "pr:athena");
-    } catch {
+      prAthenaScript = await expandProductValidationWiring(input.rootDir, parsed.scripts);
+    } catch (error) {
       findings.push(
         buildFinding(
           "invalid-package-json",
           "high",
-          "Invalid package.json format",
+          "Invalid PR validation wiring",
           "package.json",
-          "Inferential gate policy could not parse package.json to inspect pr:athena wiring.",
-          "Fix package.json JSON syntax and ensure pr:athena includes `bun run harness:inferential-review`.",
+          `Inferential gate policy could not inspect pr:athena wiring: ${error instanceof Error ? error.message : String(error)}`,
+          "Restore valid package scripts, product configuration, and the declared inferential-review sensor.",
         ),
       );
     }
@@ -2060,7 +2104,7 @@ export async function runDeterministicInferentialProvider(
 
   if (
     workflowContents &&
-    !extractWorkflowRunCommands(workflowContents, workflowJobName).some(
+    !(await expandWorkflowValidationCommands(input.rootDir, workflowContents)).commands.some(
       hasHarnessInferentialCommand,
     )
   ) {

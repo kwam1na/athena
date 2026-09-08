@@ -1,3 +1,4 @@
+import productConfig from "../harness.config";
 import { spawn } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -12,6 +13,7 @@ import {
   stripTypeScriptNonCode,
 } from "./harness-inferential-review";
 import { HarnessUsageError } from "./harness-blockers";
+import { ATHENA_ALWAYS_VALIDATION_COMMANDS, ATHENA_FINAL_VALIDATION_COMMANDS } from "./harness-review";
 
 const tempRoots: string[] = [];
 
@@ -352,7 +354,7 @@ describe("runHarnessInferentialReview", () => {
     expect(result.machine.findings).toEqual([]);
   });
 
-  it("accepts the pr:athena parent provider flag on harness review", async () => {
+  it("accepts a direct harness review command without skip flags", async () => {
     const rootDir = await createFixtureRepo();
     await write(
       "package.json",
@@ -360,7 +362,7 @@ describe("runHarnessInferentialReview", () => {
         {
           scripts: {
             "pr:athena":
-              "bun run harness:check && bun run harness:review --base origin/main --repo-validation-provided-by pr:athena && bun run harness:inferential-review && bun run harness:audit && bun run graphify:check",
+              "bun run harness:check && bun run harness:review --base origin/main && bun run harness:inferential-review && bun run harness:audit && bun run graphify:check",
           },
         },
         null,
@@ -387,7 +389,7 @@ describe("runHarnessInferentialReview", () => {
         {
           scripts: {
             "pr:athena":
-              "bun run harness:review --base origin/main --repo-validation-provided-by pr:athena && bun run harness:inferential-review && bun run harness:audit && bun run graphify:check",
+              "bun run harness:review --base origin/main && bun run harness:inferential-review && bun run harness:audit && bun run graphify:check",
           },
         },
         null,
@@ -418,7 +420,7 @@ describe("runHarnessInferentialReview", () => {
             "pr:athena:prepare": "bun run pre-commit:generated-artifacts",
             "pr:athena:preflight": "bun scripts/harness-contract-preflight.ts",
             "pr:athena:validate":
-              "bun run harness:check && bun run harness:review --base origin/main --repo-validation-provided-by pr:athena && bun run harness:inferential-review && bun run harness:audit && bun run graphify:check",
+              "bun run harness:check && bun run harness:review --base origin/main && bun run harness:inferential-review && bun run harness:audit && bun run graphify:check",
             "pr:athena:record-proof":
               "bun scripts/pre-push-validation-proof.ts record-pr-athena",
           },
@@ -439,41 +441,21 @@ describe("runHarnessInferentialReview", () => {
     expect(result.machine.findings).toEqual([]);
   });
 
-  it("accepts harness review and inferential review through the delivery-run wrapper", async () => {
+  it.each([true, false])("inspects actual product check wiring and required sensors (inference %s)", async inference => {
     const rootDir = await createFixtureRepo();
-    await write(
-      "package.json",
-      JSON.stringify(
-        {
-          scripts: {
-            "pr:athena": "bun run pr:athena:delivery-run",
-            "pr:athena:delivery-run": "bun scripts/pr-athena-delivery-run.ts",
-            "pr:athena:prepare": "bun run pre-commit:generated-artifacts",
-            "pr:athena:preflight": "bun scripts/harness-contract-preflight.ts",
-            "pr:athena:validate":
-              "bun run pr:athena:validate-provider && bun scripts/pr-athena-delivery-run.ts write-provider-evidence && bun run pr:athena:validate-review",
-            "pr:athena:validate-provider": "bun run test:coverage",
-            "pr:athena:validate-review":
-              "bun run harness:review --base origin/main --repo-validation-provided-by pr:athena --provider-evidence artifacts/harness-delivery-runs/provider-evidence.json && bun run harness:inferential-review && bun run harness:audit && bun run graphify:check",
-            "pr:athena:record-proof":
-              "bun scripts/pre-push-validation-proof.ts record-pr-athena",
-            "pr:athena:scorecard": "bun run harness:scorecard",
-          },
-        },
-        null,
-        2,
-      ),
-      rootDir,
-    );
+    await write("package.json", JSON.stringify({ scripts: { "pr:athena": "bun scripts/pr-athena-delivery-run.ts" } }), rootDir);
+    await write("harness.config.ts", `export default ${JSON.stringify({ ...productConfig, providers: productConfig.providers.map(provider => provider.id === "athena.validation" ? { ...provider, check: { command: ["bun", "run", "harness:review", "--base", "origin/main"], timeoutMs: 1000 } } : provider) })}`, rootDir);
+    await write("scripts/harness-review.ts", `export const ATHENA_ALWAYS_VALIDATION_COMMANDS = ${JSON.stringify(inference ? [{kind: "raw", command: "bun run harness:inferential-review"}] : [])};`, rootDir);
+    const result = await runHarnessInferentialReview(rootDir, { getChangedFiles: async () => ["package.json"], nowIso: () => "2026-04-12T05:00:00.000Z" });
+    expect(result.machine.findings.some(finding => finding.id === "missing-pr-athena-inferential-step"), JSON.stringify(result.machine.findings)).toBe(!inference);
+    expect(result.machine.findings.some(finding => finding.id === "missing-pr-athena-review-step")).toBe(false);
+  });
 
-    const result = await runHarnessInferentialReview(rootDir, {
-      getChangedFiles: async () => ["package.json"],
-      nowIso: () => "2026-04-12T05:00:00.000Z",
-    });
-
-    expect(result.exitCode).toBe(0);
-    expect(result.machine.status).toBe("pass");
-    expect(result.machine.findings).toEqual([]);
+  it("rejects obsolete provider-skip flags as evidence of validation wiring", async () => {
+    const rootDir = await createFixtureRepo();
+    await write("package.json", JSON.stringify({ scripts: { "pr:athena": "bun run harness:review --base origin/main --repo-validation-provided-by pr:athena && bun run harness:inferential-review" } }), rootDir);
+    const result = await runHarnessInferentialReview(rootDir, { getChangedFiles: async () => ["package.json"] });
+    expect(result.machine.findings.some(finding => finding.id === "missing-pr-athena-review-step")).toBe(true);
   });
 
   it("does not treat echoed harness review text as a real pr:athena gate", async () => {
@@ -665,7 +647,39 @@ describe("runHarnessInferentialReview", () => {
     expect(result.machine.findings).toEqual([]);
   });
 
-  it("accepts the athena-pr-tests validation provider flag in the PR workflow", async () => {
+  it.each([null, "bun run pr:athena:preflight", "bun run graphify:check", "bun run harness:inferential-review"])(
+    "checks consolidated workflow delegation with missing command %s", async (missingCommand) => {
+      const rootDir = await createFixtureRepo();
+      const retained = (commands: readonly { kind: string; command?: string }[]) =>
+        commands.filter(command => command.command !== missingCommand);
+      await write("scripts/harness-review.ts", [
+        `export const ATHENA_ALWAYS_VALIDATION_COMMANDS = ${JSON.stringify(retained(ATHENA_ALWAYS_VALIDATION_COMMANDS))};`,
+        `export const ATHENA_FINAL_VALIDATION_COMMANDS = ${JSON.stringify(retained(ATHENA_FINAL_VALIDATION_COMMANDS))};`,
+      ].join("\n"), rootDir);
+      await write(".github/workflows/athena-pr-tests.yml", [
+        "name: Athena PR Tests", "jobs:", "  harness-validation:", "    steps:",
+        "      - name: Consolidated validation", "        env:",
+        "          HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow",
+        "        run: bun run harness:review --base origin/main",
+      ].join("\n"), rootDir);
+      const result = await runHarnessInferentialReview(rootDir, {
+        getChangedFiles: async () => [".github/workflows/athena-pr-tests.yml"],
+        nowIso: () => "2026-04-12T05:00:00.000Z",
+      });
+      if (missingCommand === null) {
+        expect(result.exitCode).toBe(0);
+        expect(result.machine.findings).toEqual([]);
+      } else {
+        expect(result.exitCode).toBe(1);
+        expect(result.machine.findings).toContainEqual(expect.objectContaining({
+          title: missingCommand === "bun run harness:inferential-review"
+            ? "CI omits inferential review" : "Athena PR workflow lost harness safety wiring",
+        }));
+      }
+    },
+  );
+
+  it("accepts direct validation in the PR workflow", async () => {
     const rootDir = await createFixtureRepo();
     await write(
       ".github/workflows/athena-pr-tests.yml",
@@ -677,7 +691,7 @@ describe("runHarnessInferentialReview", () => {
         "      - name: Harness check",
         "        run: bun run harness:check",
         "      - name: Targeted harness review",
-        "        run: bun run harness:review --base origin/main --validation-provided-by athena-pr-tests",
+        "        run: bun run harness:review --base origin/main",
         "      - name: Inferential harness review",
         "        env:",
         "          HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow",
@@ -787,6 +801,7 @@ describe("runHarnessInferentialReview", () => {
     const rootDir = await createFixtureRepo();
 
     const result = await runHarnessInferentialReview(rootDir, {
+      semanticMode: "off",
       getChangedFiles: async () => [
         "package.json",
         ".github/workflows/athena-pr-tests.yml",
@@ -802,6 +817,27 @@ describe("runHarnessInferentialReview", () => {
     expect(result.machine.reviewMode).toBe("deterministic-only");
     expect(result.machine.findings).toEqual([]);
     expect(result.humanReport).toContain("No actionable inferential findings.");
+  });
+
+  it("defaults to deterministic review when no semantic mode is configured", async () => {
+    const rootDir = await createFixtureRepo();
+    const previousMode = process.env.HARNESS_INFERENTIAL_SEMANTIC_MODE;
+    delete process.env.HARNESS_INFERENTIAL_SEMANTIC_MODE;
+
+    try {
+      const result = await runHarnessInferentialReview(rootDir, {
+        getChangedFiles: async () => ["package.json"],
+        nowIso: () => "2026-04-12T05:00:00.000Z",
+      });
+
+      expect(result.machine.reviewMode).toBe("deterministic-only");
+    } finally {
+      if (previousMode === undefined) {
+        delete process.env.HARNESS_INFERENTIAL_SEMANTIC_MODE;
+      } else {
+        process.env.HARNESS_INFERENTIAL_SEMANTIC_MODE = previousMode;
+      }
+    }
   });
 
   it("records semantic shadow findings without changing the blocking result", async () => {

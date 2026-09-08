@@ -91,3 +91,23 @@ describe("runWorkflowCheck", () => {
     ).resolves.toBeUndefined();
   });
 });
+
+describe("hosted consolidated validation ownership", () => {
+  it("runs full coverage and equivalent harness sensors only through harness review while retaining build and production jobs", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const workflow = await readFile(path.resolve(import.meta.dirname, "../.github/workflows/athena-pr-tests.yml"), "utf8");
+    expect(workflow.match(/run: bun run harness:review --base origin\/main/g)).toHaveLength(1);
+    const validationJob = workflow.slice(workflow.indexOf("  harness-validation:"), workflow.indexOf("  harness-janitor-report:"));
+    for (const duplicate of ["run: bun run harness:self-review", "run: bun run harness:check", "run: bun run architecture:check", "run: bun run harness:audit", "run: bun run harness:inferential-review", "run: bun run harness:scorecard", "run: bun run graphify:check", "bun run test:coverage"]) expect(validationJob).not.toContain(duplicate);
+    expect(workflow).not.toContain("bun run test:coverage");
+    expect(workflow).toContain("ATHENA_COVERAGE_MAX_WORKERS: ${{ inputs.coverage_workers || '2' }}");
+    expect(workflow).toContain("HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow");
+    expect(workflow).toContain("name: Athena and Storefront Webapp Validation");
+    expect(workflow).toContain("name: Athena POS E2E against Production Backend");
+    expect(workflow).toContain("run: bun run --filter '@athena/webapp' build");
+    expect(workflow).toContain("run: bun run --filter '@athena/storefront-webapp' build");
+    expect(workflow).not.toContain("--validation-provided-by");
+    expect(workflow).toContain("needs: [harness-validation, athena-webapp-validation]");
+    expect(workflow).toContain('needs.harness-validation.result }}" != "success"');
+  });
+});

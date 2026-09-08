@@ -92,6 +92,16 @@ deterministic without a mock that would make the derivation assertion tautologic
 per-developer, gitignored file; if it can flip a committed test, the suite is not
 reproducible across machines. Pinning the relevant keys in `.env.test` restores that.
 
+## Process environment in consolidated harness steps
+
+The reverse mismatch appeared in [V26-1849](https://linear.app/v26-labs/issue/V26-1849): local validation passed, but consolidated CI inherited `HARNESS_INFERENTIAL_SEMANTIC_MODE=shadow`. The deterministic success test in `scripts/harness-inferential-review.test.ts` therefore received `semantic-shadow` while asserting `deterministic-only`.
+
+That function already accepts an explicit `semanticMode` option. Setting `semanticMode: "off"` in the deterministic-path fixture fixes its input without changing the assertion, runtime environment selection, or CI shadow behavior. Unlike the Vite import-time example above, this call-time input needs no `.env.test` change. The exact failure was reproduced under the CI variable; that first correction passed all 89 tests under both environments. Existing shadow-path tests remain intact.
+
+Keep default-resolution coverage separate from explicit-mode fixtures. Review demonstrated that the explicit option also removed the suite's only guard against changing the shipped default from `off` to `shadow`. One additional test omits the option, saves and clears the environment variable, asserts `deterministic-only`, and restores the variable in `finally`. The resulting 90-test file passes under both environments, while the default-flip mutation fails under both. This restores the lost guard without changing production behavior or adding an environment framework.
+
+When consolidating workflow steps, check which environment variables now reach unrelated tests. [V26-1953](https://linear.app/v26-labs/issue/V26-1953) tracks adding this bounded environment variant to an existing local sensor; the fixture correction alone does not implement that follow-up.
+
 ## Prevention
 
 - When a test asserts a value derived from `import.meta.env`, pin the inputs it

@@ -6,10 +6,7 @@ import {
   HARNESS_COMMAND_IDS,
   HARNESS_PREPARATION_SOURCE_IDS,
 } from "./harness-blockers";
-import {
-  ATHENA_PR_VALIDATION_GATE_ID,
-  HARNESS_GATE_REGISTRY,
-} from "./harness-gate-registry";
+import harnessConfig, { ATHENA_PR_VALIDATION_GATE_ID } from "../harness.config";
 
 export type HarnessBlockerCliInventoryEntry = {
   file: `scripts/${string}.ts`;
@@ -31,10 +28,6 @@ export const HARNESS_BLOCKER_CLI_INVENTORY = [
     file: "scripts/harness-contract-preflight.ts",
     commands: ["pr:athena:preflight"],
   },
-  {
-    file: "scripts/harness-gate-admission.ts",
-    commands: ["pr:athena:validate-provider"],
-  },
   { file: "scripts/harness-generate.ts", commands: ["harness:generate"] },
   {
     file: "scripts/harness-inferential-review.ts",
@@ -44,10 +37,6 @@ export const HARNESS_BLOCKER_CLI_INVENTORY = [
   {
     file: "scripts/harness-mechanical-check.ts",
     commands: ["pr:athena:mechanical"],
-  },
-  {
-    file: "scripts/harness-review-evidence.ts",
-    commands: ["harness:review-context", "harness:review-evidence"],
   },
   { file: "scripts/harness-review.ts", commands: ["harness:review"] },
   {
@@ -70,20 +59,19 @@ export const HARNESS_BLOCKER_CLI_INVENTORY = [
     commands: ["delivery:telemetry-check", "delivery:telemetry-record"],
   },
   {
-    file: "scripts/pre-push-validation-proof.ts",
-    commands: ["pr:athena:record-proof"],
-  },
-  {
     file: "scripts/pr-athena-delivery-run.ts",
-    // `pr:athena:validate` also targets this file directly, for the
-    // write-provider-evidence subcommand.
-    commands: ["pr:athena", "pr:athena:delivery-run", "pr:athena:validate"],
+    commands: ["pr:athena", "pr:athena:delivery-run"],
   },
-  { file: "scripts/pr-athena-prepare.ts", commands: ["pr:athena:prepare"] },
   {
     file: "scripts/documentation-waiver-command.ts",
     commands: ["harness:waive-documentation"],
   },
+  { file: "scripts/delivery-product.ts", commands: ["delivery:emit", "pr:athena:prepare", "pr:athena:validate", "pr:athena:validate-provider", "harness:review-context", "harness:review-evidence", "pr:athena:record-proof", "harness:review-outcome", "delivery:record", "delivery:verify", "delivery:resume"] },
+  { file: "scripts/delivery-documentation-admission.ts", commands: ["delivery:documentation-admission"] },
+  { file: "scripts/delivery-live-sensor.ts", commands: [] },
+  { file: "scripts/harness-gate-admission.ts", commands: [] },
+  { file: "scripts/harness-review-evidence.ts", commands: [] },
+  { file: "scripts/policy-projection-check.ts", commands: ["policy:check"] },
 ] as const satisfies readonly HarnessBlockerCliInventoryEntry[];
 
 export type HarnessBlockerInventoryDiscovery = {
@@ -115,7 +103,7 @@ export type HarnessBlockerInventoryFinding = {
 const SCRIPT_TARGET_PATTERN =
   /\bbun\s+(?:--\S+\s+)*((?:\.\/)?scripts\/[\w./-]+\.ts)\b/g;
 const SCRIPT_ALIAS_PATTERN = /\bbun\s+run\s+(?:--\S+\s+)*([\w:-]+)\b/g;
-const MAIN_BOUNDARY_PATTERN = /if\s*\(\s*import\.meta\.main\s*\)\s*{/;
+const MAIN_BOUNDARY_PATTERN = /if\s*\(\s*import\.meta\.main\s*\)/;
 
 function normalizeScriptTarget(target: string) {
   return target.replace(/^\.\//, "");
@@ -241,6 +229,20 @@ export function inspectHarnessCliBoundary(
   file: string,
   source: string,
 ): HarnessBlockerInventoryFinding[] {
+  // Product CLI and provider rails own their serialization and exit protocol.
+  // These exact adapters still need a live delegation/protocol boundary.
+  if (file === "scripts/delivery-product.ts") {
+    return /from ["'][^"']*current\/runtime\/cli-api\.mjs["']/.test(source) && /return await runCli\(/.test(source) && /process\.exitCode = await runDeliveryProduct\(/.test(source)
+      ? [] : [{ code: "boundary-runner-missing", file, message: "Product aliases must preserve the installed CLI boundary and exit result." }];
+  }
+  if (file === "scripts/delivery-live-sensor.ts") {
+    return /DELIVERY_PROVIDER_RAILS_VERSION/.test(source) && /kind: "terminal"/.test(source) && /outcome: "failed"/.test(source)
+      ? [] : [{ code: "boundary-runner-missing", file, message: "Live sensor adapters must emit the product rails terminal success/failure protocol." }];
+  }
+  if (["scripts/harness-gate-admission.ts", "scripts/harness-review-evidence.ts", "scripts/pre-push-review.ts"].includes(file)) {
+    return /import { runDeliveryProduct } from "\.\/delivery-product"/.test(source) && /runDeliveryProduct\(/.test(source) && /process\.exitCode = await /.test(source) && !/console\.(?:error|warn)|process\.exit\(/.test(source)
+      ? [] : [{ code: "boundary-runner-missing", file, message: "Compatibility aliases must delegate outcomes to the installed product boundary." }];
+  }
   const boundary = boundarySource(source);
   if (!boundary) {
     return [
@@ -293,9 +295,9 @@ function isRegistryOwnedSource(kind: string, id: string) {
     case "gate":
       return id === ATHENA_PR_VALIDATION_GATE_ID;
     case "obligation":
-      return Object.hasOwn(HARNESS_GATE_REGISTRY.obligations, id);
+      return harnessConfig.obligations.some(obligation => obligation.id === id);
     case "provider":
-      return Object.hasOwn(HARNESS_GATE_REGISTRY.providers, id);
+      return harnessConfig.providers.some(provider => provider.id === id);
     case "preparation":
       return (HARNESS_PREPARATION_SOURCE_IDS as readonly string[]).includes(id);
     case "candidate":

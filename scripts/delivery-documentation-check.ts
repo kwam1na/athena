@@ -4,7 +4,7 @@ import {
 import {
   assertLandedChangeReportCheck,
 } from "./landed-change-report-check";
-import { collectDeliverableDiffFingerprint } from "./delivery-diff-fingerprint";
+import { collectDeliverableDiffFingerprint, collectChangedPathsForDiff } from "./delivery-diff-fingerprint";
 import { runHarnessCliBoundary, HarnessUsageError } from "./harness-blockers";
 
 export type DocumentationPolicyCheckOptions = {
@@ -139,20 +139,6 @@ export function parseArgs(argv: string[]) {
   return { baseRef, threshold, printFingerprint };
 }
 
-function changedFiles(rootDir: string, baseRef: string) {
-  const runGit = (args: string[]) => {
-    const result = Bun.spawnSync(["git", ...args], { cwd: rootDir, stdout: "pipe" });
-    if (result.exitCode !== 0) throw new Error(`git ${args.join(" ")} failed`);
-    return result.stdout.toString().split("\n").map((line) => line.trim()).filter(Boolean);
-  };
-
-  return [...new Set([
-    ...runGit(["diff", "--name-only", `${baseRef}...HEAD`]),
-    ...runGit(["diff", "--name-only"]),
-    ...runGit(["diff", "--cached", "--name-only"]),
-    ...runGit(["ls-files", "--others", "--exclude-standard"]),
-  ])].sort();
-}
 
 if (import.meta.main) {
   process.exitCode = await runHarnessCliBoundary({
@@ -173,7 +159,7 @@ if (import.meta.main) {
         collectDeliverableDiffFingerprint(
           process.cwd(),
           options.baseRef,
-          changedFiles(process.cwd(), options.baseRef),
+          collectChangedPathsForDiff(process.cwd(), options.baseRef),
         ),
       );
     },

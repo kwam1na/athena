@@ -40,27 +40,25 @@ afterEach(async () => {
 
 describe("HARNESS_BLOCKER_CLI_INVENTORY", () => {
   it("keeps every direct harness boundary in the explicit inventory", () => {
-    expect(HARNESS_BLOCKER_CLI_INVENTORY).toHaveLength(22);
+    expect(HARNESS_BLOCKER_CLI_INVENTORY).toHaveLength(24);
     expect(
       HARNESS_BLOCKER_CLI_INVENTORY.flatMap((entry) => entry.commands),
-    ).toHaveLength(26);
+    ).toHaveLength(33);
     expect(
       new Set(HARNESS_BLOCKER_CLI_INVENTORY.map((entry) => entry.file)).size,
-    ).toBe(22);
+    ).toBe(24);
     expect(
       new Set(HARNESS_BLOCKER_CLI_INVENTORY.flatMap((entry) => entry.commands))
         .size,
-    ).toBe(26);
+    ).toBe(33);
   });
 });
 
-// The two live-gate provider CLIs and the pr:athena record-proof step were the
-// last three package-reachable CLIs outside the blocker contract; these checks
-// keep any of them from regressing to free-form prose and process.exit.
+// Athena domain CLIs retain their typed blocker boundary after the product cutover.
 const MIGRATED_CONTRACT_FILES = [
   "scripts/delivery-documentation-check.ts",
   "scripts/delivery-run-telemetry.ts",
-  "scripts/pre-push-validation-proof.ts",
+  "scripts/delivery-documentation-admission.ts",
 ] as const;
 
 describe("formerly excluded harness CLIs", () => {
@@ -174,6 +172,22 @@ describe("inspectHarnessCliBoundary", () => {
       "boundary-process-exit",
       "boundary-throw",
     ]);
+  });
+});
+
+describe("product-owned boundaries", () => {
+  it("requires installed CLI delegation and retained exit status", async () => {
+    const file = "scripts/delivery-product.ts";
+    const source = await readFile(path.resolve(import.meta.dirname, "..", file), "utf8");
+    expect(inspectHarnessCliBoundary(file, source)).toEqual([]);
+    expect(inspectHarnessCliBoundary(file, source.replace("return await runCli(", "return await pretendCli("))[0]?.code).toBe("boundary-runner-missing");
+    expect(inspectHarnessCliBoundary(file, source.replace("process.exitCode = await runDeliveryProduct(", "await runDeliveryProduct("))[0]?.code).toBe("boundary-runner-missing");
+  });
+  it("requires a failed terminal outcome from live provider adapters", async () => {
+    const file = "scripts/delivery-live-sensor.ts";
+    const source = await readFile(path.resolve(import.meta.dirname, "..", file), "utf8");
+    expect(inspectHarnessCliBoundary(file, source)).toEqual([]);
+    expect(inspectHarnessCliBoundary(file, source.replace('outcome: "failed"', 'outcome: "success"'))[0]?.code).toBe("boundary-runner-missing");
   });
 });
 
@@ -295,24 +309,6 @@ describe("inspectRenderNonZeroSuppression", () => {
 
     expect(
       inspectRenderNonZeroSuppression("scripts/harness-fixture.ts", source),
-    ).toEqual([]);
-  });
-});
-
-describe("live renderNonZero suppression sites", () => {
-  it.each([
-    "scripts/harness-gate-admission.ts",
-    "scripts/pr-athena-delivery-run.ts",
-  ])("backs each suppression in %s with a typed blocker", async (file) => {
-    const source = await readFile(
-      path.resolve(import.meta.dirname, "..", file),
-      "utf8",
-    );
-    expect(source).toMatch(/renderNonZero:\s*false/);
-    const findings = inspectRenderNonZeroSuppression(file, source);
-    expect(
-      findings,
-      findings.map((finding) => finding.message).join("\n"),
     ).toEqual([]);
   });
 });

@@ -7,16 +7,21 @@ import {
   buildDocumentationWaiverRequestReceipt,
   parseDocumentationWaiverArgs,
 } from "./documentation-waiver-command";
-import { HARNESS_REVIEW_IDENTITY_VERSION } from "./harness-review-identity";
+import { DELIVERABLE_TREE_V1 as HARNESS_REVIEW_IDENTITY_VERSION } from "../.agent-skills/current/runtime/kernel.mjs";
 
 const candidate = {
+  vcs: "git" as const,
+  workspaceId: "workspace-1",
   headSha: "head-1",
-  deliverableTreeSha: "deliverable-1",
-  identityVersion: HARNESS_REVIEW_IDENTITY_VERSION,
-  baseRef: "origin/main",
-  baseTipSha: "base-1",
-  diffBaseSha: "merge-base-1",
+  treeSha: "tree-1",
+  deliverable: {
+    digest: "deliverable-1",
+    identity: HARNESS_REVIEW_IDENTITY_VERSION,
+  },
+  base: { ref: "origin/main", tipSha: "base-1", mergeBaseSha: "merge-base-1" },
   mode: "clean" as const,
+  statusEntries: [],
+  untrackedFiles: [],
 };
 
 describe("buildDocumentationWaiverRequest", () => {
@@ -39,8 +44,7 @@ describe("buildDocumentationWaiverRequest", () => {
       head_sha: "head-1",
       base_sha: "base-1",
       deliverable_tree_sha: "deliverable-1",
-      waived_finding_codes:
-        '["compound-solution","landed-change-report"]',
+      waived_finding_codes: '["compound-solution","landed-change-report"]',
     });
   });
 
@@ -121,12 +125,12 @@ describe("buildDocumentationWaiverDispatchArgs", () => {
       reason: "Accepted.",
     });
     expect(args.slice(0, 5)).toEqual([
-        "workflow",
-        "run",
-        "athena-documentation-waiver-request.yml",
-        "--ref",
-        "main",
-      ]);
+      "workflow",
+      "run",
+      "athena-documentation-waiver-request.yml",
+      "--ref",
+      "main",
+    ]);
     expect(args).toContain("repository=v26-labs/athena");
   });
 });

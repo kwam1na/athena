@@ -3,6 +3,7 @@ import path from "node:path";
 
 import {
   collectDeliverableDiffFingerprint,
+  collectChangedPathsForDiff,
   normalizeRepoPath,
   sortUniquePaths,
 } from "./delivery-diff-fingerprint";
@@ -436,14 +437,7 @@ function countFileLines(filePath: string) {
   return readFileSync(filePath, "utf8").split("\n").length;
 }
 
-function collectChangedFiles(rootDir: string, baseRef: string) {
-  return sortUniquePaths([
-    ...parseChangedFiles(runGit(rootDir, ["diff", "--name-only", `${baseRef}...HEAD`])),
-    ...parseChangedFiles(runGit(rootDir, ["diff", "--name-only"])),
-    ...parseChangedFiles(runGit(rootDir, ["diff", "--cached", "--name-only"])),
-    ...parseChangedFiles(runGit(rootDir, ["ls-files", "--others", "--exclude-standard"])),
-  ]);
-}
+const collectChangedFiles = collectChangedPathsForDiff;
 
 export function collectSourceLineChanges(rootDir: string, baseRef: string, changedFiles: string[]) {
   const changes = new Map<string, LineChange>();

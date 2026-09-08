@@ -1,0 +1,89 @@
+[
+  {
+    "spec": "adapter-capability/1",
+    "capabilityId": "sensor.focused-tests",
+    "kind": "sensor",
+    "version": "1",
+    "resultSpec": "sensor-result/1"
+  },
+  {
+    "spec": "adapter-capability/1",
+    "capabilityId": "stage.generated-artifact-repair",
+    "kind": "mutation-stage",
+    "version": "1",
+    "resultSpec": "operation-result/1"
+  },
+  {
+    "spec": "adapter-capability/1",
+    "capabilityId": "stage.harness-preparation",
+    "kind": "mutation-stage",
+    "version": "1",
+    "resultSpec": "operation-result/1"
+  },
+  {
+    "spec": "adapter-capability/1",
+    "capabilityId": "sensor.harness-admission",
+    "kind": "sensor",
+    "version": "1",
+    "resultSpec": "sensor-result/1"
+  },
+  {
+    "spec": "adapter-capability/1",
+    "capabilityId": "sensor.graphify",
+    "kind": "sensor",
+    "version": "1",
+    "resultSpec": "sensor-result/1"
+  },
+  {
+    "spec": "adapter-capability/1",
+    "capabilityId": "sensor.convex-admission",
+    "kind": "sensor",
+    "version": "1",
+    "resultSpec": "sensor-result/1"
+  },
+  {
+    "spec": "adapter-capability/1",
+    "capabilityId": "sensor.delivery-reporting",
+    "kind": "sensor",
+    "version": "1",
+    "resultSpec": "sensor-result/1"
+  },
+  {
+    "spec": "adapter-capability/1",
+    "capabilityId": "sensor.telemetry",
+    "kind": "sensor",
+    "version": "1",
+    "resultSpec": "sensor-result/1"
+  },
+  {
+    "spec": "adapter-capability/1",
+    "capabilityId": "status.hosted-checks",
+    "kind": "status-reconciliation",
+    "version": "1",
+    "resultSpec": "operation-result/1"
+  },
+  {
+    "spec": "adapter-capability/1",
+    "capabilityId": "operation.pr-creation",
+    "kind": "pr-creation",
+    "version": "1",
+    "resultSpec": "operation-result/1",
+    "credentialId": "credential.pr-creation"
+  },
+  {
+    "spec": "adapter-capability/1",
+    "capabilityId": "operation.merge",
+    "kind": "merge",
+    "version": "1",
+    "resultSpec": "operation-result/1",
+    "credentialId": "credential.merge"
+  },
+  {
+    "spec": "adapter-capability/1",
+    "capabilityId": "operation.deploy",
+    "kind": "deploy",
+    "version": "1",
+    "resultSpec": "operation-result/1",
+    "credentialId": "credential.deploy"
+  }
+]

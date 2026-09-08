@@ -124,6 +124,41 @@ describe("parseLcovSummary", () => {
 });
 
 describe("buildCoverageReport", () => {
+  it("excludes installed generations while retaining authored dependencies and lookalike paths", async () => {
+    const rootDir = await createFixtureRoot();
+    await writePackageSummaries(rootDir, { covered: 100, total: 100 });
+    const record = (source: string, covered: number) => [
+      `SF:${source}`, "FNF:100", `FNH:${covered}`, "LF:100", `LH:${covered}`, "end_of_record",
+    ].join("\n");
+    const generated = [
+      record(".agent-skills/generations/release/runtime/kernel.mjs", 0),
+      record(path.join(rootDir, ".agent-skills/generations/release/runtime/cli-api.mjs"), 0),
+      record("./.agent-skills/generations/release/runtime/other.mjs", 0),
+    ];
+    const lcovPath = "coverage/root-scripts/lcov.info";
+    await write(lcovPath, [record("scripts/a.ts", 100), ...generated].join("\n"), rootDir);
+
+    const passing = buildCoverageReport(rootDir);
+    expect(passing.failures).toEqual([]);
+    expect(passing.sourceReports.find((source) => source.name === "repo scripts")?.summary.lines)
+      .toEqual({ covered: 100, total: 100 });
+
+    for (const authored of [
+      "packages/athena-webapp/src/imported.ts",
+      "harness.config.ts",
+      ".agent-skills/generations-lookalike/authored.ts",
+      "scripts/.agent-skills/generations/authored.ts",
+      ".agent-skills/generations/../../authored.ts",
+    ]) {
+      await write(lcovPath, [record("scripts/a.ts", 100), ...generated, record(authored, 0)].join("\n"), rootDir);
+      const failing = buildCoverageReport(rootDir);
+      expect(failing.sourceReports.find((source) => source.name === "repo scripts")?.summary.lines)
+        .toEqual({ covered: 100, total: 200 });
+      expect(failing.failures).toContain("repo scripts lines coverage 50.00% is below the current baseline 57.76%.");
+      expect(failing.failures).toContain("repo scripts functions coverage 50.00% is below the current baseline 88.07%.");
+    }
+  });
+
   it("reads package summaries from the current checkout root", async () => {
     const rootDir = await createFixtureRoot();
     await writePackageSummaries(rootDir, { covered: 100, total: 100 });

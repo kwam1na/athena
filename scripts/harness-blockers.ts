@@ -1,10 +1,8 @@
-import {
-  ATHENA_PR_VALIDATION_GATE_ID,
-  HARNESS_GATE_REGISTRY,
-  type HarnessGateId,
-  type HarnessObligationId,
-  type HarnessProviderId,
-} from "./harness-gate-registry";
+import harnessConfig, { ATHENA_PR_VALIDATION_GATE_ID } from "../harness.config";
+
+type HarnessGateId = typeof ATHENA_PR_VALIDATION_GATE_ID;
+type HarnessObligationId = string;
+type HarnessProviderId = string;
 
 export const HARNESS_BLOCKER_SCHEMA_VERSION = 1 as const;
 
@@ -17,8 +15,16 @@ export const HARNESS_BLOCKER_SCHEMA_VERSION = 1 as const;
 export const MAX_BLOCKER_DETAIL_LENGTH = 8_000;
 
 export const HARNESS_COMMAND_IDS = [
+  "policy:check",
+  "delivery:status",
+  "delivery:verify",
+  "delivery:record",
+  "delivery:resume",
+  "delivery:emit",
+  "harness:review-outcome",
   "architecture:check",
   "delivery:documentation-check",
+  "delivery:documentation-admission",
   "delivery:telemetry-check",
   "graphify:check",
   "graphify:rebuild",
@@ -322,9 +328,9 @@ function validatedSource(source: HarnessBlockerSource) {
       case "gate":
         return source.id === ATHENA_PR_VALIDATION_GATE_ID;
       case "obligation":
-        return Object.hasOwn(HARNESS_GATE_REGISTRY.obligations, source.id);
+        return harnessConfig.obligations.some(obligation => obligation.id === source.id);
       case "provider":
-        return Object.hasOwn(HARNESS_GATE_REGISTRY.providers, source.id);
+        return harnessConfig.providers.some(provider => provider.id === source.id);
       case "preparation":
         return (HARNESS_PREPARATION_SOURCE_IDS as readonly string[]).includes(
           source.id,

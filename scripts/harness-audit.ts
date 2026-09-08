@@ -6,10 +6,8 @@ import {
   type HarnessAppName,
   type ValidationCommand,
 } from "./harness-app-registry";
-import {
-  HARNESS_GATE_REGISTRY,
-  validateHarnessGateRegistry,
-} from "./harness-gate-registry";
+import { importHarnessConfig } from "../.agent-skills/current/runtime/cli-api.mjs";
+import { validateHarnessConfig } from "../.agent-skills/current/runtime/kernel.mjs";
 import {
   createHarnessBlocker,
   HarnessBlockedError,
@@ -33,113 +31,137 @@ type ValidationSurface = {
   behaviorScenarios?: string[];
 };
 
+export const DELIVERY_PRODUCT_SCRIPTS: Readonly<Record<string, string>> = {
+  "pr:athena": "bun run pr:athena:delivery-run",
+  "pr:athena:delivery-run": "bun scripts/pr-athena-delivery-run.ts",
+  "pr:athena:prepare": "bun scripts/delivery-product.ts prepare",
+  "pr:athena:validate": "bun scripts/delivery-product.ts gate",
+  "pr:athena:validate-provider": "bun scripts/delivery-product.ts gate",
+  "harness:review-context":
+    "bun scripts/delivery-product.ts review-context --json",
+  "harness:review-evidence": "bun scripts/delivery-product.ts submit-evidence",
+  "harness:review-outcome":
+    "bun scripts/delivery-product.ts emit-review-evidence",
+  "delivery:record": "bun scripts/delivery-product.ts record",
+  "delivery:verify": "bun scripts/delivery-product.ts verify",
+};
+
 export async function auditHarnessGateObligationContract(rootDir: string) {
-  const validationScenarios = HARNESS_APP_REGISTRY.flatMap((app) =>
-    app.validationScenarios.map((scenario) => scenario),
-  );
-  const findings = validateHarnessGateRegistry(
-    HARNESS_GATE_REGISTRY,
-    validationScenarios.map((scenario) => scenario.id),
-  );
-  const reviewActivation =
-    HARNESS_GATE_REGISTRY.obligations["review.green"].activation;
-  const registeredSensitiveScenarioIds = new Set(
-    reviewActivation.kind === "review_projection"
-      ? reviewActivation.sensitiveScenarioIds
-      : [],
-  );
-  const declaredSensitiveScenarioIds = new Set(
-    validationScenarios
-      .filter((scenario) => scenario.reviewSensitive)
-      .map((scenario) => scenario.id),
-  );
-  for (const scenarioId of declaredSensitiveScenarioIds) {
-    if (!registeredSensitiveScenarioIds.has(scenarioId)) {
-      findings.push(
-        `Review-sensitive scenario ${scenarioId} is missing from the gate sensitiveScenarioIds registry.`,
-      );
-    }
-  }
-  for (const scenarioId of registeredSensitiveScenarioIds) {
-    if (!declaredSensitiveScenarioIds.has(scenarioId)) {
-      findings.push(
-        `Gate sensitiveScenarioIds includes ${scenarioId}, but that app scenario is not reviewSensitive.`,
-      );
-    }
-  }
-  const requiredFiles = [
-    "scripts/harness-candidate.ts",
-    "scripts/pr-athena-prepare.ts",
-    "scripts/harness-gate-registry.ts",
-    "scripts/harness-gate-obligations.ts",
-    "scripts/harness-execution-context.ts",
-    "scripts/harness-obligation-records.ts",
-    "scripts/harness-review-evidence.ts",
-    "scripts/harness-gate-admission.ts",
-  ];
+  const findings: string[] = [];
   const packagePath = path.join(rootDir, "package.json");
+  // A package-only audit has no root delivery contract.
   if (!(await fileExists(packagePath))) return findings;
+  try {
+    const loaded = await importHarnessConfig(rootDir);
+    const validation = validateHarnessConfig(loaded);
+    if (validation.ok === false) {
+      findings.push(...validation.blockers.map((blocker) => blocker.summary));
+    } else {
+      const config = validation.config;
+      const declared = HARNESS_APP_REGISTRY.flatMap((app) =>
+        app.validationScenarios
+          .filter((scenario) => scenario.reviewSensitive)
+          .map((scenario) => scenario.id),
+      ).sort();
+      const configured = config.sensitivePaths.map((group) => group.id).sort();
+      if (JSON.stringify(declared) !== JSON.stringify(configured)) {
+        findings.push(
+          "Product sensitive groups must exactly cover Athena review-sensitive scenarios.",
+        );
+      }
+      if (config.activationThreshold !== 50)
+        findings.push("Athena review activation threshold must remain 50.");
+      for (const id of [
+        "review.green",
+        "validation.passed",
+        "documentation.accepted",
+        "documentation.current",
+        "telemetry.recorded",
+      ]) {
+        if (!config.obligations.some((obligation) => obligation.id === id))
+          findings.push(
+            `Product policy is missing required Athena obligation ${id}.`,
+          );
+      }
+      if (
+        !config.preparationCommands?.some(
+          (command) =>
+            JSON.stringify(command.command) ===
+            JSON.stringify(["bun", "run", "pr:athena:mechanical"]),
+        )
+      ) {
+        findings.push(
+          "Product preparation must execute Athena mechanical checks before review.",
+        );
+      }
+      if (config.ciPolicies.length !== 0)
+        findings.push(
+          "Athena CI must verify the product record rather than delegate obligations.",
+        );
+    }
+  } catch (error) {
+    findings.push(
+      `Installed product configuration could not be loaded: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
   const packageJson = await readJsonFile<{ scripts?: Record<string, string> }>(
     packagePath,
   );
   const scripts = packageJson.scripts ?? {};
-  const exactScripts: Record<string, string> = {
-    "pr:athena:prepare": "bun scripts/pr-athena-prepare.ts",
-    "pr:athena:validate-provider": "bun scripts/harness-gate-admission.ts",
-    "harness:review-context": "bun scripts/harness-review-evidence.ts context",
-    "harness:review-evidence": "bun scripts/harness-review-evidence.ts record",
-  };
-  for (const [script, expected] of Object.entries(exactScripts)) {
-    if (scripts[script] !== expected) {
+  for (const [script, expected] of Object.entries(DELIVERY_PRODUCT_SCRIPTS)) {
+    if (scripts[script] !== expected)
       findings.push(
         `Public gate script ${script} must be exactly: ${expected}`,
       );
-    }
   }
-  if (scripts["pr:athena"] !== "bun run pr:athena:delivery-run") {
-    findings.push(
-      "Public gate pr:athena must delegate immediately and exactly to pr:athena:delivery-run before guarded work",
-    );
+  for (const repoPath of [
+    "harness.config.ts",
+    "scripts/delivery-product.ts",
+    ".agent-skills/current/runtime/kernel.mjs",
+    ".agent-skills/current/runtime/cli-api.mjs",
+  ]) {
+    if (!(await fileExists(path.join(rootDir, repoPath))))
+      findings.push(`Installed delivery contract is missing ${repoPath}`);
   }
-  for (const gate of Object.values(HARNESS_GATE_REGISTRY.gates)) {
-    for (const publicEntrypoint of gate.publicEntrypoints) {
-      if (
-        publicEntrypoint === gate.admissionEntrypoint ||
-        publicEntrypoint === "pr:athena"
-      ) {
-        continue;
-      }
-      const expectedPrefix = `bun run ${gate.admissionEntrypoint}`;
-      const publicScript = scripts[publicEntrypoint] ?? "";
-      if (
-        publicScript !== expectedPrefix &&
-        !publicScript.startsWith(`${expectedPrefix} && `)
-      ) {
-        findings.push(
-          `Public gate ${publicEntrypoint} must delegate immediately to ${gate.admissionEntrypoint} before guarded work`,
-        );
-      }
-    }
-  }
-  for (const repoPath of requiredFiles) {
-    if (!(await fileExists(path.join(rootDir, repoPath)))) {
-      findings.push(`Harness gate contract is missing ${repoPath}`);
-    }
+  for (const name of [
+    "harness-candidate",
+    "harness-review-identity",
+    "harness-gate-registry",
+    "harness-gate-obligations",
+    "harness-obligation-records",
+    "harness-delivery-run-ledger",
+  ]) {
+    if (await fileExists(path.join(rootDir, `scripts/${name}.ts`)))
+      findings.push(
+        `Retired delivery engine must be absent: scripts/${name}.ts`,
+      );
   }
   const workflowPath = path.join(
     rootDir,
     ".github/workflows/athena-pr-tests.yml",
   );
-  if (await fileExists(workflowPath)) {
-    const workflow = await readFile(workflowPath, "utf8");
-    for (const token of [
-      "name: Athena PR Tests",
-      "harness-validation:",
-      "ATHENA_HARNESS_CI_POLICY: athena-pr-tests",
-    ]) {
-      if (!workflow.includes(token))
-        findings.push(`Athena CI delegation is missing ${token}`);
-    }
+  const hasWorkflow = await fileExists(workflowPath);
+  if (!hasWorkflow)
+    findings.push("Athena CI product verification workflow is missing.");
+  const workflow = hasWorkflow ? await readFile(workflowPath, "utf8") : "";
+  for (const token of [
+    "ATHENA_HARNESS_CI_POLICY",
+    "--repo-validation-provided-by",
+    "--provider-evidence",
+    "--validation-provided-by",
+  ]) {
+    if (
+      workflow.includes(token) ||
+      Object.values(scripts).some((script) => script.includes(token))
+    )
+      findings.push(`Retired CI delegation bypass must be absent: ${token}`);
+  }
+  for (const token of [
+    "github.event.pull_request.head.sha",
+    "bun run delivery:verify",
+  ]) {
+    if (!workflow.includes(token))
+      findings.push(`Athena CI product verification is missing ${token}`);
   }
   return findings.sort((left, right) => left.localeCompare(right));
 }

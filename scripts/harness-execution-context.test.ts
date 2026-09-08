@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { classifyHarnessExecutionContext } from "./harness-execution-context";
+import { classifyExecutionContext } from "../.agent-skills/current/runtime/kernel.mjs";
+import harnessConfig from "../harness.config";
 
-const target = {
-  gateId: "athena.pr-validation",
-  obligationId: "review.green",
-};
+const target = { config: harnessConfig };
 
 describe("harness execution context", () => {
   it.each([
@@ -15,7 +13,7 @@ describe("harness execution context", () => {
     "CLAUDE_CODE",
   ])("classifies %s as an agent even with a TTY", (signal) => {
     expect(
-      classifyHarnessExecutionContext({
+      classifyExecutionContext({
         ...target,
         env: { [signal]: "1" },
         stdinIsTTY: true,
@@ -26,7 +24,7 @@ describe("harness execution context", () => {
 
   it("does not treat IDE presentation hints as agent authority", () => {
     expect(
-      classifyHarnessExecutionContext({
+      classifyExecutionContext({
         ...target,
         env: { CURSOR_TRACE_ID: "trace", TERM_PROGRAM: "cursor" },
         stdinIsTTY: false,
@@ -35,9 +33,9 @@ describe("harness execution context", () => {
     ).toEqual({ kind: "unknown", reason: "noninteractive_unrecognized" });
   });
 
-  it("authorizes only the exact repository CI policy mapping", () => {
+  it("does not delegate the retired repository CI policy", () => {
     expect(
-      classifyHarnessExecutionContext({
+      classifyExecutionContext({
         ...target,
         env: {
           GITHUB_ACTIONS: "true",
@@ -48,8 +46,8 @@ describe("harness execution context", () => {
         },
         stdinIsTTY: false,
         stdoutIsTTY: false,
-      }),
-    ).toMatchObject({ kind: "ci", policyId: "athena-pr-tests" });
+      }).kind,
+    ).not.toBe("ci");
   });
 
   it.each([
@@ -71,7 +69,7 @@ describe("harness execution context", () => {
     },
   ])("does not delegate unsupported automation markers", (env) => {
     expect(
-      classifyHarnessExecutionContext({
+      classifyExecutionContext({
         ...target,
         env,
         stdinIsTTY: false,
@@ -80,27 +78,24 @@ describe("harness execution context", () => {
     ).not.toBe("ci");
   });
 
-  it("does not reuse a valid policy for another gate", () => {
-    expect(
-      classifyHarnessExecutionContext({
-        gateId: "another.gate",
-        obligationId: "review.green",
-        env: {
-          GITHUB_ACTIONS: "true",
-          GITHUB_WORKFLOW: "Athena PR Tests",
-          GITHUB_JOB: "harness-validation",
-          GITHUB_EVENT_NAME: "pull_request",
-          ATHENA_HARNESS_CI_POLICY: "athena-pr-tests",
-        },
-        stdinIsTTY: true,
-        stdoutIsTTY: true,
-      }),
-    ).toEqual({ kind: "unknown", reason: "unauthorized_automation" });
+  it.each([
+    { GITHUB_ACTIONS: "true" },
+    { ATHENA_HARNESS_CI_POLICY: "athena-pr-tests" },
+    { DELIVERY_HARNESS_CI_POLICY: "athena-pr-tests" },
+  ])("does not promote an automation claim into a human under a TTY", (env) => {
+    const context = classifyExecutionContext({
+      ...target,
+      env,
+      stdinIsTTY: true,
+      stdoutIsTTY: true,
+    });
+    expect(context.kind).not.toBe("human");
+    expect(context.kind).not.toBe("ci");
   });
 
   it("classifies only a fully interactive unmarked process as human", () => {
     expect(
-      classifyHarnessExecutionContext({
+      classifyExecutionContext({
         ...target,
         env: {},
         stdinIsTTY: true,
@@ -108,7 +103,7 @@ describe("harness execution context", () => {
       }),
     ).toEqual({ kind: "human", interactive: true });
     expect(
-      classifyHarnessExecutionContext({
+      classifyExecutionContext({
         ...target,
         env: {},
         stdinIsTTY: true,
