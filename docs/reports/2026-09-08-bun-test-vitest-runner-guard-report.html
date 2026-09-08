@@ -15,13 +15,12 @@
       <li>Branch codex/v26-594-vitest-runner-diagnostic</li>
       <li>1300 root script tests green</li>
       <li>10964 package Vitest tests green</li>
-      <li>Two review rounds, two lenses</li>
+      <li>Reviewed under two independent lenses</li>
     </ul>
     <dl data-report-meta>
       <dt>Linear issue</dt><dd>V26-594</dd>
       <dt>Branch</dt><dd>codex/v26-594-vitest-runner-diagnostic</dd>
       <dt>Base</dt><dd>origin/main @ 59c9ad9d</dd>
-      <dt>Candidate head</dt><dd>dc078903</dd>
       <dt>PR</dt><dd>Pending — not yet opened</dd>
       <dt>Merge</dt><dd>Pending</dd>
       <dt>Production deploy</dt><dd>Deferred by the operator; not part of this delivery</dd>
@@ -93,10 +92,6 @@
         <li>`bunx vitest run &lt;path&gt;` and `bun run --filter &#x27;@athena/webapp&#x27; test -- &lt;path&gt;` — **do not fire**. `[test] preload` applies to `bun test` only; these are the commands the diagnostic recommends.</li>
       </ul>
   </section>
-  <section data-report-section="key-files">
-    <h2>Key files</h2>
-      <p>The files that carry the behavior, in the order a reader should meet them.</p>
-  </section>
   <section data-report-section="changes">
     <h2>What changed, and what deliberately did not</h2>
       <p>The delivery has two halves. The first is the runner guard and the harness wiring it needs. The second is the reviewer-roster policy change, which exists only because the operator required a two-reviewer review of this candidate and the configuration would otherwise have bound thirteen additional charters that no reviewer would answer for.</p>
@@ -126,7 +121,7 @@
         <li>`bun run compound:check` — exit 0</li>
         <li>`bun run policy:check` — exit 0</li>
         <li>`bun run docs:links:check` — exit 0, 282 solution docs cross-referenced</li>
-        <li>`bun run landed-report:check` — exit 0 (184 reportable source lines against a threshold of 300)</li>
+        <li>`bun run landed-report:check` — exit 0 (176 reportable source lines against a threshold of 300)</li>
         <li>`bun run pre-commit:generated-artifacts` — exit 0</li>
         <li>**Production deploy: deferred by the operator.** Not attempted, not scheduled by this delivery.</li>
         <li>**Merge and root alignment: pending.** This report is written in delivery-candidate mode; no merge, no Linear `Done`, no root fast-forward has occurred.</li>
@@ -136,7 +131,7 @@
     <h2>Next time</h2>
       <p>Three things in this delivery generalize.</p>
       <ul>
-        <li>**Adding a Vitest package.** Root-relative coverage is automatic once the package&#x27;s `test` script runs Vitest. The package-relative case is not: add a two-line `bunfig.toml` beside its `package.json` pointing at `../../scripts/bun-test-runner-guard.ts`, and register that path in `scripts/harness-app-registry.ts` so `pr:athena:preflight` stays green. The `vitestPackages` equality assertion in the guard&#x27;s own suite fails loudly if you forget the first part.</li>
+        <li>**Adding a Vitest package.** Root-relative coverage is automatic once the package&#x27;s `test` script runs Vitest. The package-relative case is not: add a two-line `bunfig.toml` beside its `package.json` pointing at `../../scripts/bun-test-runner-guard.ts`, and register that path in `scripts/harness-app-registry.ts` so `pr:athena:preflight` stays green. The `vitestPackages` equality assertion in the guard&#x27;s own suite fails as soon as a third Vitest-owned package exists, which is the prompt to do both — but it reads only workspace globs and `test` scripts, so it cannot tell whether you actually added the `bunfig.toml`, and no row pins that.</li>
         <li>**Testing a process-level guard.** A row that asserts the absence of an error string is usually vacuous — the target may fail earlier for an unrelated reason and satisfy the assertion without the guard existing. Assert the positive instead: that the run aborted before any test executed (`not.toContain(&quot;(pass)&quot;)`, `not.toContain(&quot;Ran &quot;)`). That assertion fails under a hook that prints but does not abort; the one it replaced did not.</li>
         <li>**Choosing a Bun hook.** A `[test] preload` runs once per process and can see only one file of the run. If behavior must apply per test file, use `Bun.plugin` with `onLoad`. `onResolve` does not fire for entry-point test files, and an `onLoad` handler must return an object or Bun throws — so scope the filter narrowly enough that the handler always terminates.</li>
         <li>**A caveat on the roster file.** `.agents/review-selection.json` lands on main as `[]`. It is the sole machine-readable source of the additional review roster, so a later delivery that forgets to repopulate it will get a two-lens review that still passes the gate. The enforcement is prose in `AGENTS.md` and `.agents/skills/ce-code-review/SKILL.md`; there is no sensor for an under-populated roster, and adding one was explicitly out of scope here.</li>
