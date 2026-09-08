@@ -1,1 +1,46 @@
-[]
+[
+  {
+    "reviewerId": "ce-correctness-reviewer",
+    "reason": "Always-on logic and frozen report integrity"
+  },
+  {
+    "reviewerId": "ce-testing-reviewer",
+    "reason": "Always-on regression and refusal coverage"
+  },
+  {
+    "reviewerId": "ce-maintainability-reviewer",
+    "reason": "Always-on scope and coupling"
+  },
+  {
+    "reviewerId": "ce-project-standards-reviewer",
+    "reason": "Always-on Athena policy"
+  },
+  {
+    "reviewerId": "ce-agent-native-reviewer",
+    "reason": "Always-on internal operation parity"
+  },
+  {
+    "reviewerId": "ce-learnings-researcher",
+    "reason": "Always-on Reports guidance"
+  },
+  {
+    "reviewerId": "ce-performance-reviewer",
+    "reason": "Bounded reads and dispatch batching"
+  },
+  {
+    "reviewerId": "ce-reliability-reviewer",
+    "reason": "Durable worker claims and cron retirement"
+  },
+  {
+    "reviewerId": "ce-adversarial-reviewer",
+    "reason": "Historical financial evidence and substantial diff"
+  },
+  {
+    "reviewerId": "ce-kieran-typescript-reviewer",
+    "reason": "TypeScript backend and tests"
+  },
+  {
+    "reviewerId": "ce-api-contract-reviewer",
+    "reason": "Removed internal exports and shared helper signature"
+  }
+]
