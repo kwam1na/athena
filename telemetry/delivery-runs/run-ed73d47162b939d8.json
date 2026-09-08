@@ -1,0 +1,1863 @@
+{
+  "spec": "delivery-run-export/1",
+  "labels": "self-attested; observability, not evidence; unbound to a record",
+  "runId": "run-ed73d47162b939d8",
+  "events": [
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 1,
+      "at": "2026-09-07T19:07:30Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "run.started",
+      "actor": {
+        "role": "executor"
+      },
+      "ticket": "V26-1921",
+      "attestation": "self",
+      "payload": {
+        "host": "codex",
+        "workflow": {
+          "releaseId": "linear-v2",
+          "profile": "linear"
+        },
+        "ticket": "V26-1921"
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 2,
+      "at": "2026-09-07T19:09:06Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "ticket.read",
+      "actor": {
+        "role": "executor"
+      },
+      "ticket": "V26-1921",
+      "attestation": "self",
+      "payload": {
+        "ticket": "V26-1921",
+        "posture": "test-first",
+        "tracker": "linear"
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 3,
+      "at": "2026-09-07T19:09:06Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "posture.declared",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "posture": "test-first"
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 4,
+      "at": "2026-09-08T16:31:31Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "policy",
+        "durationMs": 599
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 5,
+      "at": "2026-09-08T16:34:44Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "policy",
+        "durationMs": 152028
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 6,
+      "at": "2026-09-08T16:36:46Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "e3d0c977013685c34212980f65d4bff3a1dc497c",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Land V26-1921 Reports migration fixes and legacy sweep retirement on current main",
+          "acceptanceCriteria": [
+            "Close-evidence and rollup dispatch use the existing maximum four claims while preserving worker budgets and fences",
+            "Historical accepted reports verify without rewriting accepted baselines or corrections",
+            "Legacy sweep exports remain retired and thirteen active lanes remain available",
+            "Required validation and independent review pass",
+            "PR merged, local root aligned with unrelated changes preserved, production deployed and Wigclub active"
+          ],
+          "finishLine": "Rebase, create PR, merge, align local root and deploy"
+        },
+        "stage": "validate",
+        "candidateTreeSha": "e3d0c977013685c34212980f65d4bff3a1dc497c",
+        "candidateBinding": {
+          "deliverableDigest": "250d87d7e17840074bce25d18758b54b2ff1878b372f41fa151c96502c5bffc1",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "0f3d4a2c40f9c0371d2da3e63efdd0e7e83450fc",
+          "mergeBaseSha": "0f3d4a2c40f9c0371d2da3e63efdd0e7e83450fc",
+          "workspaceId": "6c687b2f2b67b93941602f99df894c22ccc60618894d0d5434c0c96eca13f77e"
+        },
+        "policyDigest": "f07ffe6ebc5e2247e8905e7103eff0aac92805a45df95161e623b06444640183",
+        "release": {
+          "runtimeVersion": "0.2.0",
+          "releaseId": "linear-product-v1",
+          "profile": "linear",
+          "archiveSha256": "21cccc879804e186330a6a2087248d685c47b37a1ea06e4f7dd5e799ccbdf064"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 7,
+      "at": "2026-09-08T16:39:09Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 157492
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 8,
+      "at": "2026-09-08T16:39:36Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 571
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 9,
+      "at": "2026-09-08T16:40:22Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "ticket.read",
+      "actor": {
+        "role": "executor"
+      },
+      "ticket": "V26-1921",
+      "attestation": "self",
+      "payload": {
+        "ticket": "V26-1921",
+        "tracker": "linear",
+        "posture": "test-first"
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 10,
+      "at": "2026-09-08T16:40:22Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "posture.declared",
+      "actor": {
+        "role": "executor"
+      },
+      "ticket": "V26-1921",
+      "attestation": "self",
+      "payload": {
+        "posture": "test-first",
+        "ticket": "V26-1921"
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 11,
+      "at": "2026-09-08T16:40:23Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "lens.selected",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "mandated": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing"
+        ],
+        "selected": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing",
+          "athena.ce-correctness-reviewer",
+          "athena.ce-testing-reviewer",
+          "athena.ce-maintainability-reviewer",
+          "athena.ce-project-standards-reviewer",
+          "athena.ce-agent-native-reviewer",
+          "athena.ce-learnings-researcher",
+          "athena.ce-performance-reviewer",
+          "athena.ce-reliability-reviewer",
+          "athena.ce-adversarial-reviewer",
+          "athena.ce-kieran-typescript-reviewer",
+          "athena.ce-api-contract-reviewer"
+        ],
+        "rationale": "Retain retirement reviewer roster and add the current installed product mandated pair; historical formats, bounded workers, internal API removal and rebase integration."
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 12,
+      "at": "2026-09-08T16:40:23Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.opened",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "e3d0c977013685c34212980f65d4bff3a1dc497c",
+      "attestation": "self",
+      "payload": {
+        "round": 2,
+        "candidateTreeSha": "e3d0c977013685c34212980f65d4bff3a1dc497c",
+        "lenses": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing",
+          "athena.ce-correctness-reviewer",
+          "athena.ce-testing-reviewer",
+          "athena.ce-maintainability-reviewer",
+          "athena.ce-project-standards-reviewer",
+          "athena.ce-agent-native-reviewer",
+          "athena.ce-learnings-researcher",
+          "athena.ce-performance-reviewer",
+          "athena.ce-reliability-reviewer",
+          "athena.ce-adversarial-reviewer",
+          "athena.ce-kieran-typescript-reviewer",
+          "athena.ce-api-contract-reviewer"
+        ]
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 13,
+      "at": "2026-09-08T16:52:09Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "ok",
+        "durationMs": 682
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 14,
+      "at": "2026-09-08T16:52:27Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "submit-evidence",
+        "outcome": "policy",
+        "durationMs": 635
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 15,
+      "at": "2026-09-08T16:52:27Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.closed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "e3d0c977013685c34212980f65d4bff3a1dc497c",
+      "attestation": "self",
+      "payload": {
+        "round": 2,
+        "candidateTreeSha": "e3d0c977013685c34212980f65d4bff3a1dc497c",
+        "outcome": "aligned",
+        "findings": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 0,
+          "P3": 0
+        },
+        "cost": {
+          "coverage": "unreported",
+          "reportedBy": "Codex"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 16,
+      "at": "2026-09-08T16:53:00Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "ok",
+        "durationMs": 613
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 17,
+      "at": "2026-09-08T16:53:11Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "submit-evidence",
+        "outcome": "ok",
+        "durationMs": 693
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 18,
+      "at": "2026-09-08T16:53:25Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "e3d0c977013685c34212980f65d4bff3a1dc497c",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Land V26-1921 Reports migration fixes and legacy sweep retirement on current main",
+          "acceptanceCriteria": [
+            "Close-evidence and rollup dispatch use the existing maximum four claims while preserving worker budgets and fences",
+            "Historical accepted reports verify without rewriting accepted baselines or corrections",
+            "Legacy sweep exports remain retired and thirteen active lanes remain available",
+            "Required validation and independent review pass",
+            "PR merged, local root aligned with unrelated changes preserved, production deployed and Wigclub active"
+          ],
+          "finishLine": "Rebase, create PR, merge, align local root and deploy"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "e3d0c977013685c34212980f65d4bff3a1dc497c",
+        "candidateBinding": {
+          "deliverableDigest": "250d87d7e17840074bce25d18758b54b2ff1878b372f41fa151c96502c5bffc1",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "0f3d4a2c40f9c0371d2da3e63efdd0e7e83450fc",
+          "mergeBaseSha": "0f3d4a2c40f9c0371d2da3e63efdd0e7e83450fc",
+          "workspaceId": "6c687b2f2b67b93941602f99df894c22ccc60618894d0d5434c0c96eca13f77e"
+        },
+        "policyDigest": "f07ffe6ebc5e2247e8905e7103eff0aac92805a45df95161e623b06444640183",
+        "release": {
+          "runtimeVersion": "0.2.0",
+          "releaseId": "linear-product-v1",
+          "profile": "linear",
+          "archiveSha256": "21cccc879804e186330a6a2087248d685c47b37a1ea06e4f7dd5e799ccbdf064"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 19,
+      "at": "2026-09-08T17:13:27Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "policy",
+        "durationMs": 1201699
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 20,
+      "at": "2026-09-08T17:26:02Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 153572
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 21,
+      "at": "2026-09-08T17:26:41Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 568
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 22,
+      "at": "2026-09-08T17:27:02Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 583
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 23,
+      "at": "2026-09-08T17:27:02Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "lens.selected",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "mandated": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing"
+        ],
+        "selected": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing",
+          "athena.ce-correctness-reviewer",
+          "athena.ce-testing-reviewer",
+          "athena.ce-maintainability-reviewer",
+          "athena.ce-project-standards-reviewer",
+          "athena.ce-agent-native-reviewer",
+          "athena.ce-learnings-researcher",
+          "athena.ce-performance-reviewer",
+          "athena.ce-reliability-reviewer",
+          "athena.ce-adversarial-reviewer",
+          "athena.ce-kieran-typescript-reviewer",
+          "athena.ce-api-contract-reviewer"
+        ],
+        "rationale": "Complete round after bounded validation log transport repair"
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 24,
+      "at": "2026-09-08T17:27:49Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "decision.recorded",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "fork": "review round bound",
+        "choice": "Round 3 of original retirement bound 4; prior rounds retained",
+        "cited": "/tmp/wigclub-round3-review/contract.md"
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 25,
+      "at": "2026-09-08T17:27:50Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.opened",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "4bd730a47426464973609595cb7426d2d7945e20",
+      "attestation": "self",
+      "payload": {
+        "round": 3,
+        "candidateTreeSha": "4bd730a47426464973609595cb7426d2d7945e20",
+        "lenses": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing",
+          "athena.ce-correctness-reviewer",
+          "athena.ce-testing-reviewer",
+          "athena.ce-maintainability-reviewer",
+          "athena.ce-project-standards-reviewer",
+          "athena.ce-agent-native-reviewer",
+          "athena.ce-learnings-researcher",
+          "athena.ce-performance-reviewer",
+          "athena.ce-reliability-reviewer",
+          "athena.ce-adversarial-reviewer",
+          "athena.ce-kieran-typescript-reviewer",
+          "athena.ce-api-contract-reviewer"
+        ]
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 26,
+      "at": "2026-09-08T17:45:06Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.closed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "4bd730a47426464973609595cb7426d2d7945e20",
+      "attestation": "self",
+      "payload": {
+        "round": 3,
+        "candidateTreeSha": "4bd730a47426464973609595cb7426d2d7945e20",
+        "outcome": "unresolved",
+        "findings": {
+          "P0": 0,
+          "P1": 2,
+          "P2": 0,
+          "P3": 0
+        },
+        "cost": {
+          "coverage": "unreported",
+          "reportedBy": "Codex"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 27,
+      "at": "2026-09-08T17:55:01Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 154781
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 28,
+      "at": "2026-09-08T17:55:45Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 605
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 29,
+      "at": "2026-09-08T17:55:47Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "lens.selected",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "mandated": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing"
+        ],
+        "selected": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing",
+          "athena.ce-correctness-reviewer",
+          "athena.ce-testing-reviewer",
+          "athena.ce-maintainability-reviewer",
+          "athena.ce-project-standards-reviewer",
+          "athena.ce-agent-native-reviewer",
+          "athena.ce-learnings-researcher",
+          "athena.ce-performance-reviewer",
+          "athena.ce-reliability-reviewer",
+          "athena.ce-adversarial-reviewer",
+          "athena.ce-kieran-typescript-reviewer",
+          "athena.ce-api-contract-reviewer"
+        ],
+        "rationale": "Complete final verification round4 of original bound4 after round3 test and documentation corrections"
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 30,
+      "at": "2026-09-08T17:55:48Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.opened",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "d0d20b615bb06af2b1deab1bf0882b462db869fe",
+      "attestation": "self",
+      "payload": {
+        "round": 4,
+        "candidateTreeSha": "d0d20b615bb06af2b1deab1bf0882b462db869fe",
+        "lenses": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing",
+          "athena.ce-correctness-reviewer",
+          "athena.ce-testing-reviewer",
+          "athena.ce-maintainability-reviewer",
+          "athena.ce-project-standards-reviewer",
+          "athena.ce-agent-native-reviewer",
+          "athena.ce-learnings-researcher",
+          "athena.ce-performance-reviewer",
+          "athena.ce-reliability-reviewer",
+          "athena.ce-adversarial-reviewer",
+          "athena.ce-kieran-typescript-reviewer",
+          "athena.ce-api-contract-reviewer"
+        ]
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 31,
+      "at": "2026-09-08T18:19:41Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.closed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "d0d20b615bb06af2b1deab1bf0882b462db869fe",
+      "attestation": "self",
+      "payload": {
+        "round": 4,
+        "candidateTreeSha": "d0d20b615bb06af2b1deab1bf0882b462db869fe",
+        "outcome": "aligned",
+        "findings": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 0,
+          "P3": 0
+        },
+        "cost": {
+          "unit": "tokens",
+          "total": 3729860,
+          "reportedBy": "Codex CLI turn.completed",
+          "coverage": "partial"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 32,
+      "at": "2026-09-08T18:19:42Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "ok",
+        "durationMs": 675
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 33,
+      "at": "2026-09-08T18:20:12Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "submit-evidence",
+        "outcome": "ok",
+        "durationMs": 777
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 34,
+      "at": "2026-09-08T18:20:13Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "d0d20b615bb06af2b1deab1bf0882b462db869fe",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Land V26-1921 Reports migration fixes and legacy sweep retirement on current main",
+          "acceptanceCriteria": [
+            "Close-evidence and rollup dispatch use the existing maximum four claims while preserving worker budgets and fences",
+            "Historical accepted reports verify without rewriting accepted baselines or corrections",
+            "Legacy sweep exports remain retired and thirteen active lanes remain available",
+            "Required validation and independent review pass",
+            "PR merged, local root aligned with unrelated changes preserved, production deployed and Wigclub active"
+          ],
+          "finishLine": "Rebase, create PR, merge, align local root and deploy"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "d0d20b615bb06af2b1deab1bf0882b462db869fe",
+        "candidateBinding": {
+          "deliverableDigest": "5add6a9e47224ef8ce1c15c2949d1f3858a14f9c4489d1c90b9b40199743dcb1",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "0f3d4a2c40f9c0371d2da3e63efdd0e7e83450fc",
+          "mergeBaseSha": "0f3d4a2c40f9c0371d2da3e63efdd0e7e83450fc",
+          "workspaceId": "6c687b2f2b67b93941602f99df894c22ccc60618894d0d5434c0c96eca13f77e"
+        },
+        "policyDigest": "f07ffe6ebc5e2247e8905e7103eff0aac92805a45df95161e623b06444640183",
+        "release": {
+          "runtimeVersion": "0.2.0",
+          "releaseId": "linear-product-v1",
+          "profile": "linear",
+          "archiveSha256": "21cccc879804e186330a6a2087248d685c47b37a1ea06e4f7dd5e799ccbdf064"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 35,
+      "at": "2026-09-08T18:40:19Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "policy",
+        "durationMs": 1205605
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 36,
+      "at": "2026-09-08T19:09:52Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 150547
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 37,
+      "at": "2026-09-08T19:10:39Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 604
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 38,
+      "at": "2026-09-08T19:10:59Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "lens.selected",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "mandated": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing"
+        ],
+        "selected": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing",
+          "athena.ce-correctness-reviewer",
+          "athena.ce-testing-reviewer",
+          "athena.ce-maintainability-reviewer",
+          "athena.ce-project-standards-reviewer",
+          "athena.ce-agent-native-reviewer",
+          "athena.ce-learnings-researcher",
+          "athena.ce-performance-reviewer",
+          "athena.ce-reliability-reviewer",
+          "athena.ce-adversarial-reviewer",
+          "athena.ce-kieran-typescript-reviewer",
+          "athena.ce-api-contract-reviewer"
+        ],
+        "rationale": "Single grace verification outside original bound4 after unanimous round4. Required EBADF launcher correction and fixture readiness repair are proven by retained canonical gate failure and regressions; prior/current candidate refs and all history retained in grace contract."
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 39,
+      "at": "2026-09-08T19:10:59Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.opened",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "8bd9bf5d2d98f3040478a64ef5b55cc8fdc20281",
+      "attestation": "self",
+      "payload": {
+        "round": 5,
+        "candidateTreeSha": "8bd9bf5d2d98f3040478a64ef5b55cc8fdc20281",
+        "lenses": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing",
+          "athena.ce-correctness-reviewer",
+          "athena.ce-testing-reviewer",
+          "athena.ce-maintainability-reviewer",
+          "athena.ce-project-standards-reviewer",
+          "athena.ce-agent-native-reviewer",
+          "athena.ce-learnings-researcher",
+          "athena.ce-performance-reviewer",
+          "athena.ce-reliability-reviewer",
+          "athena.ce-adversarial-reviewer",
+          "athena.ce-kieran-typescript-reviewer",
+          "athena.ce-api-contract-reviewer"
+        ]
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 40,
+      "at": "2026-09-08T19:28:14Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 152109
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 41,
+      "at": "2026-09-08T19:28:26Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 585
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 42,
+      "at": "2026-09-08T19:29:24Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "ok",
+        "durationMs": 612
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 43,
+      "at": "2026-09-08T19:29:47Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.closed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "8bd9bf5d2d98f3040478a64ef5b55cc8fdc20281",
+      "attestation": "self",
+      "payload": {
+        "round": 5,
+        "candidateTreeSha": "8bd9bf5d2d98f3040478a64ef5b55cc8fdc20281",
+        "outcome": "aligned",
+        "findings": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 0,
+          "P3": 0
+        },
+        "cost": {
+          "unit": "tokens",
+          "total": 4783296,
+          "reportedBy": "Codex CLI turn.completed",
+          "coverage": "partial"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 44,
+      "at": "2026-09-08T19:29:48Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "submit-evidence",
+        "outcome": "ok",
+        "durationMs": 753
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 45,
+      "at": "2026-09-08T19:29:49Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "49e16601e0cf3f8ce277e715b286abdc97fd9998",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Land V26-1921 Reports migration fixes and legacy sweep retirement on current main",
+          "acceptanceCriteria": [
+            "Close-evidence and rollup dispatch use the existing maximum four claims while preserving worker budgets and fences",
+            "Historical accepted reports verify without rewriting accepted baselines or corrections",
+            "Legacy sweep exports remain retired and thirteen active lanes remain available",
+            "Required validation and independent review pass",
+            "PR merged, local root aligned with unrelated changes preserved, production deployed and Wigclub active"
+          ],
+          "finishLine": "Rebase, create PR, merge, align local root and deploy"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "49e16601e0cf3f8ce277e715b286abdc97fd9998",
+        "candidateBinding": {
+          "deliverableDigest": "6c76548169e97bdbadd58c16513fcb78ba48e0fa5c57841a39f153798bbace88",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "0f3d4a2c40f9c0371d2da3e63efdd0e7e83450fc",
+          "mergeBaseSha": "0f3d4a2c40f9c0371d2da3e63efdd0e7e83450fc",
+          "workspaceId": "6c687b2f2b67b93941602f99df894c22ccc60618894d0d5434c0c96eca13f77e"
+        },
+        "policyDigest": "f07ffe6ebc5e2247e8905e7103eff0aac92805a45df95161e623b06444640183",
+        "release": {
+          "runtimeVersion": "0.2.0",
+          "releaseId": "linear-product-v1",
+          "profile": "linear",
+          "archiveSha256": "21cccc879804e186330a6a2087248d685c47b37a1ea06e4f7dd5e799ccbdf064"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 46,
+      "at": "2026-09-08T19:47:21Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "policy",
+        "durationMs": 1050587
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 47,
+      "at": "2026-09-08T19:58:19Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 156262
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 48,
+      "at": "2026-09-08T19:59:02Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 536
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 49,
+      "at": "2026-09-08T19:59:32Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "blocker.recorded",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "code": "review.loop-bound-reached",
+        "summary": "Original retirement bound4 and its one grace verification are complete. The canonical gate then exposed the 40-launch fixture default timeout under coverage. Commit69786893 makes the bounded two-line test fix;49 focused and1307 tooling coverage tests pass, preparation and report review pass. Product requires fresh review. Await operator exception for one additional complete review round before full gate, PR, merge, alignment and deploy; preserve all prior round history."
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 50,
+      "at": "2026-09-08T19:59:51Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "8946d9ca30c63d569b2c86b574f7598515b0be43",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Land V26-1921 Reports migration fixes and legacy sweep retirement on current main",
+          "acceptanceCriteria": [
+            "Close-evidence and rollup dispatch use the existing maximum four claims while preserving worker budgets and fences",
+            "Historical accepted reports verify without rewriting accepted baselines or corrections",
+            "Legacy sweep exports remain retired and thirteen active lanes remain available",
+            "Required validation and independent review pass",
+            "PR merged, local root aligned with unrelated changes preserved, production deployed and Wigclub active"
+          ],
+          "finishLine": "Rebase, create PR, merge, align local root and deploy"
+        },
+        "stage": "awaiting-review-bound-exception",
+        "candidateTreeSha": "8946d9ca30c63d569b2c86b574f7598515b0be43",
+        "candidateBinding": {
+          "deliverableDigest": "460b10be05f24301c723f7ad6097a655444409164fcab0f0d1695dd64a048133",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "0f3d4a2c40f9c0371d2da3e63efdd0e7e83450fc",
+          "mergeBaseSha": "0f3d4a2c40f9c0371d2da3e63efdd0e7e83450fc",
+          "workspaceId": "6c687b2f2b67b93941602f99df894c22ccc60618894d0d5434c0c96eca13f77e"
+        },
+        "policyDigest": "f07ffe6ebc5e2247e8905e7103eff0aac92805a45df95161e623b06444640183",
+        "release": {
+          "runtimeVersion": "0.2.0",
+          "releaseId": "linear-product-v1",
+          "profile": "linear",
+          "archiveSha256": "21cccc879804e186330a6a2087248d685c47b37a1ea06e4f7dd5e799ccbdf064"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 51,
+      "at": "2026-09-08T22:28:10Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 438
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 52,
+      "at": "2026-09-08T22:28:11Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "decision.recorded",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "fork": "Review bound reached after validation-discovered timeout correction",
+        "choice": "User explicitly authorized one additional complete review round by replying proceed to the exception request. Retain original bound4, its grace round5, and record operator-authorized round6; no history reset.",
+        "cited": "Current user message: proceed"
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 53,
+      "at": "2026-09-08T22:28:11Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "lens.selected",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "mandated": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing"
+        ],
+        "selected": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing",
+          "athena.ce-correctness-reviewer",
+          "athena.ce-testing-reviewer",
+          "athena.ce-maintainability-reviewer",
+          "athena.ce-project-standards-reviewer",
+          "athena.ce-agent-native-reviewer",
+          "athena.ce-learnings-researcher",
+          "athena.ce-performance-reviewer",
+          "athena.ce-reliability-reviewer",
+          "athena.ce-adversarial-reviewer",
+          "athena.ce-kieran-typescript-reviewer",
+          "athena.ce-api-contract-reviewer"
+        ],
+        "rationale": "Operator-authorized additional round6 after original bound4 and grace5. Two-line regression timeout correction; complete selected review set and prior history retained."
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 54,
+      "at": "2026-09-08T22:28:11Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.opened",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "8946d9ca30c63d569b2c86b574f7598515b0be43",
+      "attestation": "self",
+      "payload": {
+        "round": 6,
+        "candidateTreeSha": "8946d9ca30c63d569b2c86b574f7598515b0be43",
+        "lenses": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing",
+          "athena.ce-correctness-reviewer",
+          "athena.ce-testing-reviewer",
+          "athena.ce-maintainability-reviewer",
+          "athena.ce-project-standards-reviewer",
+          "athena.ce-agent-native-reviewer",
+          "athena.ce-learnings-researcher",
+          "athena.ce-performance-reviewer",
+          "athena.ce-reliability-reviewer",
+          "athena.ce-adversarial-reviewer",
+          "athena.ce-kieran-typescript-reviewer",
+          "athena.ce-api-contract-reviewer"
+        ]
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 55,
+      "at": "2026-09-08T22:33:23Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "decision.recorded",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "fork": "Remaining delivery workflow decisions",
+        "choice": "User explicitly grants agency to make judgment calls and drive delivery end-to-end. Continue necessary fixes, verification and review iterations without further workflow-permission stops; retain actual history and evidence.",
+        "cited": "User: you have agency to make judgement calls to drive this delivery end-to-end"
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 56,
+      "at": "2026-09-08T22:38:39Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "ok",
+        "durationMs": 454
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 57,
+      "at": "2026-09-08T22:38:52Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.closed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "8946d9ca30c63d569b2c86b574f7598515b0be43",
+      "attestation": "self",
+      "payload": {
+        "round": 6,
+        "candidateTreeSha": "8946d9ca30c63d569b2c86b574f7598515b0be43",
+        "outcome": "aligned",
+        "findings": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 0,
+          "P3": 0
+        },
+        "cost": {
+          "unit": "tokens",
+          "total": 3069443,
+          "reportedBy": "Codex CLI turn.completed",
+          "coverage": "partial"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 58,
+      "at": "2026-09-08T22:38:53Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "submit-evidence",
+        "outcome": "ok",
+        "durationMs": 506
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 59,
+      "at": "2026-09-08T22:38:54Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "8946d9ca30c63d569b2c86b574f7598515b0be43",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Land V26-1921 Reports migration fixes and legacy sweep retirement on current main",
+          "acceptanceCriteria": [
+            "Close-evidence and rollup dispatch use the existing maximum four claims while preserving worker budgets and fences",
+            "Historical accepted reports verify without rewriting accepted baselines or corrections",
+            "Legacy sweep exports remain retired and thirteen active lanes remain available",
+            "Required validation and independent review pass",
+            "PR merged, local root aligned with unrelated changes preserved, production deployed and Wigclub active"
+          ],
+          "finishLine": "Rebase, create PR, merge, align local root and deploy"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "8946d9ca30c63d569b2c86b574f7598515b0be43",
+        "candidateBinding": {
+          "deliverableDigest": "460b10be05f24301c723f7ad6097a655444409164fcab0f0d1695dd64a048133",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "0f3d4a2c40f9c0371d2da3e63efdd0e7e83450fc",
+          "mergeBaseSha": "0f3d4a2c40f9c0371d2da3e63efdd0e7e83450fc",
+          "workspaceId": "6c687b2f2b67b93941602f99df894c22ccc60618894d0d5434c0c96eca13f77e"
+        },
+        "policyDigest": "f07ffe6ebc5e2247e8905e7103eff0aac92805a45df95161e623b06444640183",
+        "release": {
+          "runtimeVersion": "0.2.0",
+          "releaseId": "linear-product-v1",
+          "profile": "linear",
+          "archiveSha256": "21cccc879804e186330a6a2087248d685c47b37a1ea06e4f7dd5e799ccbdf064"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 60,
+      "at": "2026-09-08T22:59:22Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "policy",
+        "durationMs": 1228148
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 61,
+      "at": "2026-09-08T23:08:48Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 122434
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 62,
+      "at": "2026-09-08T23:10:43Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 468
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 63,
+      "at": "2026-09-08T23:11:14Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "decision.recorded",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "fork": "Validation-discovered asynchronous UI assertion race",
+        "choice": "Apply the existing daily Reports async-announcement pattern to two tests, add frontend-race review, and acquire round7 under the user explicit end-to-end agency. Original review history is retained.",
+        "cited": "User: you have agency to make judgement calls to drive this delivery end-to-end"
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 64,
+      "at": "2026-09-08T23:11:15Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "lens.selected",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "mandated": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing"
+        ],
+        "selected": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing",
+          "athena.ce-correctness-reviewer",
+          "athena.ce-testing-reviewer",
+          "athena.ce-maintainability-reviewer",
+          "athena.ce-project-standards-reviewer",
+          "athena.ce-agent-native-reviewer",
+          "athena.ce-learnings-researcher",
+          "athena.ce-performance-reviewer",
+          "athena.ce-reliability-reviewer",
+          "athena.ce-adversarial-reviewer",
+          "athena.ce-kieran-typescript-reviewer",
+          "athena.ce-api-contract-reviewer",
+          "athena.ce-julik-frontend-races-reviewer"
+        ],
+        "rationale": "Round7 under standing user agency;14lenses including newly applicable frontend-race reviewer. Two asynchronous test assertion fixes; no production code change."
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 65,
+      "at": "2026-09-08T23:11:15Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.opened",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "c6eb8a33c993cbeafc9842ea1cdc236a39563fae",
+      "attestation": "self",
+      "payload": {
+        "round": 7,
+        "candidateTreeSha": "c6eb8a33c993cbeafc9842ea1cdc236a39563fae",
+        "lenses": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing",
+          "athena.ce-correctness-reviewer",
+          "athena.ce-testing-reviewer",
+          "athena.ce-maintainability-reviewer",
+          "athena.ce-project-standards-reviewer",
+          "athena.ce-agent-native-reviewer",
+          "athena.ce-learnings-researcher",
+          "athena.ce-performance-reviewer",
+          "athena.ce-reliability-reviewer",
+          "athena.ce-adversarial-reviewer",
+          "athena.ce-kieran-typescript-reviewer",
+          "athena.ce-api-contract-reviewer",
+          "athena.ce-julik-frontend-races-reviewer"
+        ]
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 66,
+      "at": "2026-09-08T23:24:05Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "ok",
+        "durationMs": 435
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 67,
+      "at": "2026-09-08T23:24:18Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.closed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "c6eb8a33c993cbeafc9842ea1cdc236a39563fae",
+      "attestation": "self",
+      "payload": {
+        "round": 7,
+        "candidateTreeSha": "c6eb8a33c993cbeafc9842ea1cdc236a39563fae",
+        "outcome": "aligned",
+        "findings": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 0,
+          "P3": 0
+        },
+        "cost": {
+          "unit": "tokens",
+          "total": 5545357,
+          "reportedBy": "Codex CLI turn.completed",
+          "coverage": "partial"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 68,
+      "at": "2026-09-08T23:24:19Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "submit-evidence",
+        "outcome": "ok",
+        "durationMs": 547
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 69,
+      "at": "2026-09-08T23:24:19Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "c6eb8a33c993cbeafc9842ea1cdc236a39563fae",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Land V26-1921 Reports migration fixes and legacy sweep retirement on current main",
+          "acceptanceCriteria": [
+            "Close-evidence and rollup dispatch use the existing maximum four claims while preserving worker budgets and fences",
+            "Historical accepted reports verify without rewriting accepted baselines or corrections",
+            "Legacy sweep exports remain retired and thirteen active lanes remain available",
+            "Required validation and independent review pass",
+            "PR merged, local root aligned with unrelated changes preserved, production deployed and Wigclub active"
+          ],
+          "finishLine": "Rebase, create PR, merge, align local root and deploy"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "c6eb8a33c993cbeafc9842ea1cdc236a39563fae",
+        "candidateBinding": {
+          "deliverableDigest": "6c977d73e67addedd9487104b7f96bc316879f00e86a6c844c3ed3a8212b5234",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "0f3d4a2c40f9c0371d2da3e63efdd0e7e83450fc",
+          "mergeBaseSha": "0f3d4a2c40f9c0371d2da3e63efdd0e7e83450fc",
+          "workspaceId": "6c687b2f2b67b93941602f99df894c22ccc60618894d0d5434c0c96eca13f77e"
+        },
+        "policyDigest": "89e1b506a472ee6fbc32f5736b1e1c75a1bc38de4bfd38f1a3134585cf6c70a4",
+        "release": {
+          "runtimeVersion": "0.2.0",
+          "releaseId": "linear-product-v1",
+          "profile": "linear",
+          "archiveSha256": "21cccc879804e186330a6a2087248d685c47b37a1ea06e4f7dd5e799ccbdf064"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 70,
+      "at": "2026-09-08T23:46:18Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "ok",
+        "durationMs": 1317954,
+        "digest": "ef60008da7665876e3c08144fbc861fbf60eef8bbf36000b47a7f89525d3a4b0"
+      }
+    }
+  ],
+  "summary": {
+    "ticket": "V26-1921",
+    "open": true,
+    "startedAt": "2026-09-07T19:07:30Z",
+    "lastAt": "2026-09-08T23:46:18Z",
+    "durationSeconds": 103128,
+    "roundsOpened": 6,
+    "roundsClosed": 6,
+    "findings": {
+      "P0": 0,
+      "P1": 2,
+      "P2": 0,
+      "P3": 0
+    },
+    "gate": {
+      "outcome": "ok",
+      "writer": "cli"
+    }
+  },
+  "costs": {
+    "review": {
+      "coverage": "partial",
+      "unreportedEntries": 2,
+      "totals": [
+        {
+          "unit": "tokens",
+          "total": 17127956,
+          "reportedBy": "Codex CLI turn.completed"
+        }
+      ]
+    },
+    "run": {
+      "coverage": "unreported"
+    }
+  },
+  "readout": {
+    "status": "incomplete",
+    "present": [
+      "run.started",
+      "ticket.read",
+      "posture.declared",
+      "lens.selected",
+      "review.round.opened",
+      "review.round.closed",
+      "command.completed:gate"
+    ],
+    "missing": [
+      "command.completed:record",
+      "pr.opened",
+      "run.ended"
+    ],
+    "violations": []
+  },
+  "refusedAppends": [
+    {
+      "kind": "review.round.opened",
+      "code": "unknown_member",
+      "at": "2026-09-08T17:27:03Z"
+    },
+    {
+      "kind": "review.round.closed",
+      "code": "missing_member",
+      "at": "2026-09-08T17:44:03Z"
+    }
+  ]
+}
