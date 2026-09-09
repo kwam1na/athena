@@ -1,0 +1,680 @@
+{
+  "spec": "delivery-run-export/1",
+  "labels": "self-attested; observability, not evidence; unbound to a record",
+  "runId": "run-894345c2199075fa",
+  "events": [
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 1,
+      "at": "2026-09-09T04:27:14Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "run.started",
+      "actor": {
+        "role": "executor"
+      },
+      "ticket": "V26-1959",
+      "attestation": "self",
+      "payload": {
+        "host": "codex",
+        "workflow": {
+          "releaseId": "linear-product-v1",
+          "profile": "linear"
+        },
+        "ticket": "V26-1959",
+        "displacedRunId": "run-276d789c480d27fe"
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 2,
+      "at": "2026-09-09T04:27:15Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "f48648ce697bd1d62bf1843411d54158c668f293",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Update Athena to latest qualified delivery artifact and expose the live run via Cloudflare tunnel",
+          "acceptanceCriteria": [
+            "Verified archive ea74c8d00028343b4b6b2d2cf4b1f24d19723e27b596d3d2d73ef1e3317b8551 with current host exposures",
+            "Policy and Athena gate pass",
+            "Only two mandatory review lenses",
+            "Merge and align root",
+            "Live run surface accessible via tunnel"
+          ],
+          "finishLine": "Merged, root aligned, tunnel available"
+        },
+        "stage": "validation",
+        "candidateTreeSha": "f48648ce697bd1d62bf1843411d54158c668f293",
+        "candidateBinding": {
+          "deliverableDigest": "7ef31333da8735dceef0aa4c07488645d9a994159f10956cadd8372b1ffc096d",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "af1f233d6de9ed9560f79b449dc31036a955ff63",
+          "mergeBaseSha": "af1f233d6de9ed9560f79b449dc31036a955ff63",
+          "workspaceId": "2cc9a66a6a35b65758793f9cf76ac449b23baf7da59ce65168e5d81c706c8fcb"
+        },
+        "policyDigest": "b4469885df3d2df6f07a543c7d67b03af3c92a204bb2074e94592e7e156d6497",
+        "release": {
+          "runtimeVersion": "0.2.0",
+          "releaseId": "linear-product-v1",
+          "profile": "linear",
+          "archiveSha256": "ea74c8d00028343b4b6b2d2cf4b1f24d19723e27b596d3d2d73ef1e3317b8551"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 3,
+      "at": "2026-09-09T04:27:57Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "policy",
+        "durationMs": 541
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 4,
+      "at": "2026-09-09T04:28:29Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "ok",
+        "durationMs": 489
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 5,
+      "at": "2026-09-09T04:28:38Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "submit-evidence",
+        "outcome": "policy",
+        "durationMs": 500
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 6,
+      "at": "2026-09-09T04:28:39Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "f48648ce697bd1d62bf1843411d54158c668f293",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Update Athena to latest qualified delivery artifact and expose the live run via Cloudflare tunnel",
+          "acceptanceCriteria": [
+            "Verified archive ea74c8d00028343b4b6b2d2cf4b1f24d19723e27b596d3d2d73ef1e3317b8551 with current host exposures",
+            "Policy and Athena gate pass",
+            "Only two mandatory review lenses",
+            "Merge and align root",
+            "Live run surface accessible via tunnel"
+          ],
+          "finishLine": "Merged, root aligned, tunnel available"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "f48648ce697bd1d62bf1843411d54158c668f293",
+        "candidateBinding": {
+          "deliverableDigest": "7ef31333da8735dceef0aa4c07488645d9a994159f10956cadd8372b1ffc096d",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "af1f233d6de9ed9560f79b449dc31036a955ff63",
+          "mergeBaseSha": "af1f233d6de9ed9560f79b449dc31036a955ff63",
+          "workspaceId": "2cc9a66a6a35b65758793f9cf76ac449b23baf7da59ce65168e5d81c706c8fcb"
+        },
+        "policyDigest": "b4469885df3d2df6f07a543c7d67b03af3c92a204bb2074e94592e7e156d6497",
+        "release": {
+          "runtimeVersion": "0.2.0",
+          "releaseId": "linear-product-v1",
+          "profile": "linear",
+          "archiveSha256": "ea74c8d00028343b4b6b2d2cf4b1f24d19723e27b596d3d2d73ef1e3317b8551"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 7,
+      "at": "2026-09-09T04:28:45Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "policy",
+        "durationMs": 5160
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 8,
+      "at": "2026-09-09T04:28:57Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "ok",
+        "durationMs": 462
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 9,
+      "at": "2026-09-09T04:29:06Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "submit-evidence",
+        "outcome": "ok",
+        "durationMs": 546
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 10,
+      "at": "2026-09-09T04:29:07Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "f48648ce697bd1d62bf1843411d54158c668f293",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Update Athena to latest qualified delivery artifact and expose the live run via Cloudflare tunnel",
+          "acceptanceCriteria": [
+            "Verified archive ea74c8d00028343b4b6b2d2cf4b1f24d19723e27b596d3d2d73ef1e3317b8551 with current host exposures",
+            "Policy and Athena gate pass",
+            "Only two mandatory review lenses",
+            "Merge and align root",
+            "Live run surface accessible via tunnel"
+          ],
+          "finishLine": "Merged, root aligned, tunnel available"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "f48648ce697bd1d62bf1843411d54158c668f293",
+        "candidateBinding": {
+          "deliverableDigest": "7ef31333da8735dceef0aa4c07488645d9a994159f10956cadd8372b1ffc096d",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "af1f233d6de9ed9560f79b449dc31036a955ff63",
+          "mergeBaseSha": "af1f233d6de9ed9560f79b449dc31036a955ff63",
+          "workspaceId": "2cc9a66a6a35b65758793f9cf76ac449b23baf7da59ce65168e5d81c706c8fcb"
+        },
+        "policyDigest": "b4469885df3d2df6f07a543c7d67b03af3c92a204bb2074e94592e7e156d6497",
+        "release": {
+          "runtimeVersion": "0.2.0",
+          "releaseId": "linear-product-v1",
+          "profile": "linear",
+          "archiveSha256": "ea74c8d00028343b4b6b2d2cf4b1f24d19723e27b596d3d2d73ef1e3317b8551"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 11,
+      "at": "2026-09-09T04:29:52Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "decision.recorded",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "fork": "Review and event format continuity",
+        "choice": "Two native reviewers approved round 1 of 4 on f48648ce697bd1d62bf1843411d54158c668f293; retained original round in run-26a08c3d4548a3c1. Product evidence accepted. Continue v1 context after observed v2 save-context failure; V26-1960 tracks producer repair."
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 12,
+      "at": "2026-09-09T04:29:53Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "compounding.recorded",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "outcome": "required",
+        "reference": "V26-1960"
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 13,
+      "at": "2026-09-09T04:42:18Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "ok",
+        "durationMs": 789998,
+        "digest": "7fffe72ffc9bb423af92a8402d9347c451f2d14b2b0cd126e5c4e8175c6964d7"
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 14,
+      "at": "2026-09-09T04:42:46Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "f48648ce697bd1d62bf1843411d54158c668f293",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Update Athena to latest qualified delivery artifact and expose the live run via Cloudflare tunnel",
+          "acceptanceCriteria": [
+            "Verified archive ea74c8d00028343b4b6b2d2cf4b1f24d19723e27b596d3d2d73ef1e3317b8551 with current host exposures",
+            "Policy and Athena gate pass",
+            "Only two mandatory review lenses",
+            "Merge and align root",
+            "Live run surface accessible via tunnel"
+          ],
+          "finishLine": "Merged, root aligned, tunnel available"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "f48648ce697bd1d62bf1843411d54158c668f293",
+        "candidateBinding": {
+          "deliverableDigest": "7ef31333da8735dceef0aa4c07488645d9a994159f10956cadd8372b1ffc096d",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "af1f233d6de9ed9560f79b449dc31036a955ff63",
+          "mergeBaseSha": "af1f233d6de9ed9560f79b449dc31036a955ff63",
+          "workspaceId": "2cc9a66a6a35b65758793f9cf76ac449b23baf7da59ce65168e5d81c706c8fcb"
+        },
+        "policyDigest": "b4469885df3d2df6f07a543c7d67b03af3c92a204bb2074e94592e7e156d6497",
+        "release": {
+          "runtimeVersion": "0.2.0",
+          "releaseId": "linear-product-v1",
+          "profile": "linear",
+          "archiveSha256": "ea74c8d00028343b4b6b2d2cf4b1f24d19723e27b596d3d2d73ef1e3317b8551"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 15,
+      "at": "2026-09-09T04:42:52Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "ok",
+        "durationMs": 4813,
+        "digest": "7fffe72ffc9bb423af92a8402d9347c451f2d14b2b0cd126e5c4e8175c6964d7"
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 16,
+      "at": "2026-09-09T04:42:53Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 866
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 17,
+      "at": "2026-09-09T04:43:00Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "record",
+        "outcome": "ok",
+        "durationMs": 5977
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 18,
+      "at": "2026-09-09T04:43:01Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 854
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 19,
+      "at": "2026-09-09T04:43:07Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "verify",
+        "outcome": "ok",
+        "durationMs": 5516
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 20,
+      "at": "2026-09-09T04:44:41Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "verify",
+        "outcome": "ok",
+        "durationMs": 2612
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 21,
+      "at": "2026-09-09T04:45:34Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "pr.opened",
+      "actor": {
+        "role": "executor"
+      },
+      "ticket": "V26-1959",
+      "candidateTreeSha": "3e74da2cdff2c7bbcef06d61be9b7ed369751db7",
+      "attestation": "self",
+      "payload": {
+        "url": "https://github.com/kwam1na/athena/pull/835",
+        "candidateTreeSha": "3e74da2cdff2c7bbcef06d61be9b7ed369751db7",
+        "ticket": "V26-1959"
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 22,
+      "at": "2026-09-09T04:45:42Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 33910
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 23,
+      "at": "2026-09-09T04:46:45Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 34099
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 24,
+      "at": "2026-09-09T04:47:06Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "fad9955d2ee7d91fcf01ed10444c0c7db36918d6",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Update Athena to latest qualified delivery artifact and expose the live run via Cloudflare tunnel",
+          "acceptanceCriteria": [
+            "Verified archive ea74c8d00028343b4b6b2d2cf4b1f24d19723e27b596d3d2d73ef1e3317b8551 with current host exposures",
+            "Policy and Athena gate pass",
+            "Only two mandatory review lenses",
+            "Merge and align root",
+            "Live run surface accessible via tunnel"
+          ],
+          "finishLine": "Merged, root aligned, tunnel available"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "fad9955d2ee7d91fcf01ed10444c0c7db36918d6",
+        "candidateBinding": {
+          "deliverableDigest": "7ef31333da8735dceef0aa4c07488645d9a994159f10956cadd8372b1ffc096d",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "af1f233d6de9ed9560f79b449dc31036a955ff63",
+          "mergeBaseSha": "af1f233d6de9ed9560f79b449dc31036a955ff63",
+          "workspaceId": "2cc9a66a6a35b65758793f9cf76ac449b23baf7da59ce65168e5d81c706c8fcb"
+        },
+        "policyDigest": "b4469885df3d2df6f07a543c7d67b03af3c92a204bb2074e94592e7e156d6497",
+        "release": {
+          "runtimeVersion": "0.2.0",
+          "releaseId": "linear-product-v1",
+          "profile": "linear",
+          "archiveSha256": "ea74c8d00028343b4b6b2d2cf4b1f24d19723e27b596d3d2d73ef1e3317b8551"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-894345c2199075fa",
+      "seq": 25,
+      "at": "2026-09-09T05:00:15Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "ok",
+        "durationMs": 788427,
+        "digest": "7041d3d18903d4d7b529d34527314c72dd3bde794ded544735dd990e99252e47"
+      }
+    }
+  ],
+  "summary": {
+    "ticket": "V26-1959",
+    "open": true,
+    "startedAt": "2026-09-09T04:27:14Z",
+    "lastAt": "2026-09-09T05:00:15Z",
+    "durationSeconds": 1981,
+    "roundsOpened": 0,
+    "roundsClosed": 0,
+    "findings": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 0,
+      "P3": 0
+    },
+    "gate": {
+      "outcome": "ok",
+      "writer": "cli"
+    },
+    "record": {
+      "outcome": "ok",
+      "writer": "cli"
+    }
+  },
+  "costs": {
+    "review": {
+      "coverage": "unreported",
+      "unreportedEntries": 0,
+      "totals": []
+    },
+    "run": {
+      "coverage": "unreported"
+    }
+  },
+  "readout": {
+    "status": "incomplete",
+    "present": [
+      "run.started",
+      "command.completed:gate",
+      "command.completed:record",
+      "pr.opened"
+    ],
+    "missing": [
+      "ticket.read",
+      "posture.declared",
+      "lens.selected",
+      "review.round.opened",
+      "review.round.closed",
+      "run.ended"
+    ],
+    "violations": [
+      "gate-before-closed-round",
+      "record-before-gate"
+    ]
+  },
+  "refusedAppends": []
+}
