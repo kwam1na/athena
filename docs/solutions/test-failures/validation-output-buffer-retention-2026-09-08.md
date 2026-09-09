@@ -11,7 +11,7 @@ root_cause: config_error
 resolution_type: code_fix
 severity: medium
 tags: [validation, delivery, subprocess, logs]
-delivery_diff_fingerprint: 038786bae6feb43c55e4e2dcbe21971cb4c8613697eea9efef377b3bb772cddc
+delivery_diff_fingerprint: d12259966d64833c97ccd1bdfd5adfaf71b40c937ce25588e9d48e863ee24d9e
 ---
 
 # Retain verbose validation logs outside the delivery runner buffer
@@ -55,3 +55,9 @@ Verbose sensor output no longer accumulates in the product's captured console bu
 ## Hosted CI retention
 
 PR #834 run 34292308823 exposed a missing transport boundary: the coverage process failed on GitHub, but its private temporary log was not uploaded. The harness-validation artifact step now includes `/tmp/athena-validation-*/output.log` under its existing `if: always()` condition. Local retention alone is insufficient on disposable runners. The underlying coverage failure is not inferred from the exit code; use the retained artifact from the retry. V26-1954 tracks a local workflow guardrail for this upload contract.
+
+## Platform-sensitive fixture failures
+
+The retained artifact from CI run 34297518764 identified a sandbox heap test exceeding its 20-second deadline under coverage. A direct oversized array now exercises the same 8 MiB ceiling and still requires `memory_limit`, without repeated string-allocation GC. All 32 sandbox tests passed under coverage; raising the test ceiling to 64 MiB deliberately makes the assertion fail because allocation succeeds. Runtime limits and deadlines are unchanged.
+
+Separately, the actual harness transport tests reproduced two failures on pinned Bun 1.1.29 for Linux: immediate `process.exit()` truncated piped package output before flushing. Await `Bun.write` for both streams before the intended exit. Assert large payload presence with bounded boolean/length diagnostics rather than dumping megabytes on failure, and bound nested child waits. All 49 harness-review tests pass on both Linux and macOS after the correction. V26-1955 tracks an early hosted platform-sensitive smoke slice.

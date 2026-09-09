@@ -60,7 +60,7 @@ describe("validation output transport", () => {
     for (const exitCode of [0, 7]) {
       it(`retains verbose ${launcher} output and propagates exit ${exitCode}`, async () => {
         const rootDir = await createFixtureRepo();
-        await write("probe.ts", `process.stdout.write("x".repeat(1200000)); process.stderr.write("stderr-marker"); process.exit(${exitCode});`, rootDir);
+        await write("probe.ts", `await Bun.write(Bun.stdout, "x".repeat(1200000)); await Bun.write(Bun.stderr, "stderr-marker"); process.exit(${exitCode});`, rootDir);
         await write("package.json", JSON.stringify({ private: true, workspaces: ["packages/*"], scripts: { "harness:behavior": "bun probe.ts" } }), rootDir);
         const packagePath = path.join(rootDir, "packages/athena-webapp/package.json");
         const packageJson = JSON.parse(await readFile(packagePath, "utf8"));
@@ -76,7 +76,7 @@ describe("validation output transport", () => {
               ${launcher === "behavior" ? "runPackageScript: async () => {}," : ""}
             });`;
         const fixture = `import { runRawCommand, runHarnessReview } from ${JSON.stringify(runner)}; ${invocation}`;
-        const result = spawnSync("bun", ["-e", fixture], { encoding: "utf8", maxBuffer: 1024 * 1024 });
+        const result = spawnSync("bun", ["-e", fixture], { encoding: "utf8", maxBuffer: 1024 * 1024, timeout: 15_000 });
         expect(result.status).toBe(exitCode === 0 ? 0 : 1);
         expect(result.stdout.length + result.stderr.length).toBeLessThan(16384);
         if (exitCode !== 0) expect(result.stderr).toContain("Command failed (7)");
@@ -85,9 +85,10 @@ describe("validation output transport", () => {
         tempRoots.push(...logs.map(logPath => path.dirname(logPath)));
         const outputs = await Promise.all(logs.map(logPath => readFile(logPath, "utf8")));
         const probeOutput = outputs.find(output => output.includes("stderr-marker"));
-        expect(probeOutput).toContain("x".repeat(1200000));
+        expect(probeOutput?.length).toBeGreaterThanOrEqual(1200000);
+        expect(probeOutput?.includes("x".repeat(1200000))).toBe(true);
         expect(probeOutput).toContain("stderr-marker");
-      });
+      }, 20_000);
     }
   }
 });
