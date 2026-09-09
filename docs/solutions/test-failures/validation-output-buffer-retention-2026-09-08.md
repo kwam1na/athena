@@ -11,7 +11,7 @@ root_cause: config_error
 resolution_type: code_fix
 severity: medium
 tags: [validation, delivery, subprocess, logs]
-delivery_diff_fingerprint: bd94e79a9f59615c4396e827efb8de318c0b015f52d525a2a3a7cc757a60882c
+delivery_diff_fingerprint: d81393128a0e5bec185ceb6ae012836d09024d01caf29a2a9fcf97a2d534d472
 ---
 
 # Retain verbose validation logs outside the delivery runner buffer

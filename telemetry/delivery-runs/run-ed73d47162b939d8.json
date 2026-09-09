@@ -2748,14 +2748,278 @@
         "durationMs": 1346301,
         "digest": "8b7b132e33b943ccf61429c293a2b660e7d1741fe9bbac46b34f67292c462df9"
       }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 114,
+      "at": "2026-09-09T02:19:56Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 801
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 115,
+      "at": "2026-09-09T02:20:02Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "record",
+        "outcome": "ok",
+        "durationMs": 4798
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 116,
+      "at": "2026-09-09T02:20:03Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 823
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 117,
+      "at": "2026-09-09T02:20:07Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "verify",
+        "outcome": "ok",
+        "durationMs": 3981
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 118,
+      "at": "2026-09-09T02:21:26Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 774
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 119,
+      "at": "2026-09-09T02:21:33Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "verify",
+        "outcome": "policy",
+        "durationMs": 5128
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 120,
+      "at": "2026-09-09T02:22:28Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "30f4f319f3348b2ec826feb35b2bf78bae493be7",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Land V26-1921 Reports migration fixes and legacy sweep retirement on current main",
+          "acceptanceCriteria": [
+            "Close-evidence and rollup dispatch use the existing maximum four claims while preserving worker budgets and fences",
+            "Historical accepted reports verify without rewriting accepted baselines or corrections",
+            "Legacy sweep exports remain retired and thirteen active lanes remain available",
+            "Required validation and independent review pass",
+            "PR merged, local root aligned with unrelated changes preserved, production deployed and Wigclub active"
+          ],
+          "finishLine": "Rebase, create PR, merge, align local root and deploy"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "30f4f319f3348b2ec826feb35b2bf78bae493be7",
+        "candidateBinding": {
+          "deliverableDigest": "816f855db056a564e7b713dab14aae9a4f2278a83aef48dd53a47e788dd65904",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "0f3d4a2c40f9c0371d2da3e63efdd0e7e83450fc",
+          "mergeBaseSha": "0f3d4a2c40f9c0371d2da3e63efdd0e7e83450fc",
+          "workspaceId": "6c687b2f2b67b93941602f99df894c22ccc60618894d0d5434c0c96eca13f77e"
+        },
+        "policyDigest": "b4469885df3d2df6f07a543c7d67b03af3c92a204bb2074e94592e7e156d6497",
+        "release": {
+          "runtimeVersion": "0.2.0",
+          "releaseId": "linear-product-v1",
+          "profile": "linear",
+          "archiveSha256": "21cccc879804e186330a6a2087248d685c47b37a1ea06e4f7dd5e799ccbdf064"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 121,
+      "at": "2026-09-09T02:22:29Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "policy",
+        "durationMs": 835
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 122,
+      "at": "2026-09-09T02:24:12Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 115643
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 123,
+      "at": "2026-09-09T02:24:50Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "30f4f319f3348b2ec826feb35b2bf78bae493be7",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Land V26-1921 Reports migration fixes and legacy sweep retirement on current main",
+          "acceptanceCriteria": [
+            "Close-evidence and rollup dispatch use the existing maximum four claims while preserving worker budgets and fences",
+            "Historical accepted reports verify without rewriting accepted baselines or corrections",
+            "Legacy sweep exports remain retired and thirteen active lanes remain available",
+            "Required validation and independent review pass",
+            "PR merged, local root aligned with unrelated changes preserved, production deployed and Wigclub active"
+          ],
+          "finishLine": "Rebase, create PR, merge, align local root and deploy"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "30f4f319f3348b2ec826feb35b2bf78bae493be7",
+        "candidateBinding": {
+          "deliverableDigest": "816f855db056a564e7b713dab14aae9a4f2278a83aef48dd53a47e788dd65904",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "0f3d4a2c40f9c0371d2da3e63efdd0e7e83450fc",
+          "mergeBaseSha": "0f3d4a2c40f9c0371d2da3e63efdd0e7e83450fc",
+          "workspaceId": "6c687b2f2b67b93941602f99df894c22ccc60618894d0d5434c0c96eca13f77e"
+        },
+        "policyDigest": "b4469885df3d2df6f07a543c7d67b03af3c92a204bb2074e94592e7e156d6497",
+        "release": {
+          "runtimeVersion": "0.2.0",
+          "releaseId": "linear-product-v1",
+          "profile": "linear",
+          "archiveSha256": "21cccc879804e186330a6a2087248d685c47b37a1ea06e4f7dd5e799ccbdf064"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-ed73d47162b939d8",
+      "seq": 124,
+      "at": "2026-09-09T02:46:57Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "ok",
+        "durationMs": 1325725,
+        "digest": "6e7d96751327dfc5155a4c7c09cc34c07da3540dc4a49dd61ff4ce37e7f0b387"
+      }
     }
   ],
   "summary": {
     "ticket": "V26-1921",
     "open": true,
     "startedAt": "2026-09-07T19:07:30Z",
-    "lastAt": "2026-09-09T02:19:55Z",
-    "durationSeconds": 112345,
+    "lastAt": "2026-09-09T02:46:57Z",
+    "durationSeconds": 113967,
     "roundsOpened": 9,
     "roundsClosed": 7,
     "findings": {
