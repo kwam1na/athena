@@ -5,6 +5,19 @@ import { describe, expect, it } from "vitest";
 
 import { internal } from "../_generated/api";
 import schema from "../schema";
+import {
+  verifyAcceptedBaselinePageWithCtx,
+  verifySealedCorrectionWithCtx,
+} from "./pipelineAcceptedParity";
+import { recordReadCosts } from "./readCostTestSupport";
+import { ZERO_WEEK_METRICS } from "./weekly";
+import { stableStringHash } from "./fingerprint";
+import {
+  publishCloseLifecycleWithCtx,
+  materializeCloseEvidenceWithCtx,
+  readCloseEvidenceWithCtx,
+  compactFrozenInventoryAttention,
+} from "./closeEvidence";
 import type { Id } from "../_generated/dataModel";
 import {
   applyWeeklyAcceptedCorrection,
@@ -982,4 +995,264 @@ describe("sealed Wigclub Aug 3-9 repair commands", () => {
       )?.correction,
     ).toBeUndefined();
   });
+});
+
+describe("migration verification of the sealed repair", () => {
+  it.each([
+    "unchanged",
+    "payload",
+    "manifest",
+    "source",
+    "missing",
+    "foreign",
+    "capacity",
+  ] as const)(
+    "checks %s evidence without rewriting the accepted history",
+    async (scenario) => {
+      const t = convexTest(schema, modules);
+      const seeded = await seedWigclubWeek(t);
+      const candidate = await preview(t);
+      await apply(t, {
+        baselineFingerprint: candidate.baselineFingerprint,
+        candidateFingerprint: candidate.candidateFingerprint,
+      });
+      await t.run(async (ctx) => {
+        const row = (await ctx.db.get(
+          "reportWeekAccepted",
+          seeded.acceptedId!,
+        ))!;
+        if (scenario === "payload")
+          await ctx.db.patch("reportWeekAccepted", row._id, {
+            correction: {
+              ...row.correction!,
+              closeEvidence: {
+                ...row.correction!.closeEvidence,
+                cash: {
+                  ...row.correction!.closeEvidence.cash,
+                  cashVarianceMinor: 1,
+                },
+              },
+            },
+          });
+        if (scenario === "manifest")
+          await ctx.db.patch("reportWeekAccepted", row._id, {
+            correction: {
+              ...row.correction!,
+              sourceManifestFingerprint: "changed",
+            },
+          });
+        if (scenario === "source")
+          await ctx.db.patch("expenseTransactionItem", seeded.itemIds[0], {
+            productName: "Changed",
+          });
+        if (scenario === "missing")
+          await ctx.db.delete("dailyClose", seeded.closeIds[0]);
+      });
+      const before = await snapshotState(t);
+      const reason = await t.run(async (ctx) => {
+        const measured = recordReadCosts(ctx);
+        const row = (await ctx.db.get(
+          "reportWeekAccepted",
+          seeded.acceptedId!,
+        ))!;
+        const result = await verifySealedCorrectionWithCtx(
+          measured.ctx,
+          scenario === "foreign"
+            ? { ...row, _id: "other" as typeof row._id }
+            : row,
+          () => {
+            if (scenario === "capacity")
+              throw new Error("accepted_capacity_exceeded");
+          },
+        );
+        expect(measured.snapshot().total.serializedBytes).toBeLessThan(
+          4 * 1024 * 1024,
+        );
+        return result;
+      });
+      expect(reason).toBe(
+        scenario === "unchanged"
+          ? null
+          : scenario === "capacity"
+            ? "capacity_exceeded"
+            : "unsupported_legacy_evidence",
+      );
+      expect(await snapshotState(t)).toBe(before);
+    },
+  );
+});
+
+describe("corrected legacy baseline migration end to end", () => {
+  it.each([
+    "unchanged",
+    "financial",
+    "fingerprint",
+    "compact",
+    "under-budget",
+    "over-budget",
+  ] as const)(
+    "verifies %s through the complete accepted page",
+    async (scenario) => {
+      const t = convexTest(schema, modules);
+      const seeded = await seedWigclubWeek(t, { leaderCount: 0 });
+      await t.run(async (ctx) => {
+        await ctx.db.patch("store", seeded.storeId, {
+          weeklyObservedAtVerification: {
+            status: "complete",
+            missingCount: 0,
+            startedAt: ACCEPTED_AT,
+            completedAt: ACCEPTED_AT,
+          },
+        });
+        const scheduleVersionId = await ctx.db.insert("storeSchedule", {
+          storeId: seeded.storeId,
+          organizationId: seeded.organizationId,
+          timezone: "UTC",
+          weeklyWindows: [],
+          weeklyClosedDays: [0],
+          dateExceptions: [],
+          reportingCycleStartsOn: 1,
+          effectiveFrom: Date.parse("2026-01-01"),
+          status: "active",
+          source: "admin",
+          createdAt: ACCEPTED_AT,
+          updatedAt: ACCEPTED_AT,
+        });
+        for (const closeId of seeded.closeIds) {
+          let close = (await ctx.db.get("dailyClose", closeId))!;
+          if (scenario === "under-budget" || scenario === "over-budget") {
+            // Retained source-only payload drives the real accumulator, while
+            // each document remains below Convex's individual document limit.
+            await ctx.db.patch("dailyClose", closeId, {
+              reportSnapshot: {
+                ...close.reportSnapshot!,
+                summary: {
+                  ...close.reportSnapshot!.summary,
+                  retainedNote: "x".repeat(
+                    (scenario === "under-budget" ? 500 : 750) * 1024,
+                  ),
+                },
+              },
+            });
+            close = (await ctx.db.get("dailyClose", closeId))!;
+          }
+          const header = await publishCloseLifecycleWithCtx(
+            ctx,
+            close,
+            ACCEPTED_AT,
+          );
+          await materializeCloseEvidenceWithCtx(ctx, {
+            storeId: seeded.storeId,
+            closeId,
+            expectedGeneration: header.expectedGeneration,
+          });
+        }
+        const finalRead = await readCloseEvidenceWithCtx(
+          ctx,
+          seeded.storeId,
+          seeded.closeIds[5],
+        );
+        if (finalRead.status !== "ready")
+          throw new Error("fixture close not ready");
+        const row = (await ctx.db.get(
+          "reportWeekAccepted",
+          seeded.acceptedId!,
+        ))!;
+        const { transactionCount: _count, ...metrics } = ZERO_WEEK_METRICS;
+        const scheduleLineage = row.scheduleLineage.map((d) => ({
+          localDate: d.localDate,
+          included: d.included,
+          scheduleVersionId,
+          dayStatus: d.dayStatus,
+          dayAvailable: d.dayAvailable,
+          dayClosed: d.dayClosed,
+          activityPosture: d.activityPosture,
+        }));
+        const baselineFingerprint = stableStringHash(
+          JSON.stringify({
+            cutoffObservedAt: row.cutoffObservedAt,
+            included: metrics,
+            outsideSchedule: metrics,
+            scheduleLineage,
+            topSkuLeaders: [],
+          }),
+        );
+        await ctx.db.patch("reportWeekAccepted", row._id, {
+          included: metrics,
+          outsideSchedule: metrics,
+          scheduleLineage,
+          topSkuLeaders: [],
+          closeEvidence: undefined,
+          inventoryAttention: compactFrozenInventoryAttention(
+            finalRead,
+            dayStart("2026-08-03"),
+          ),
+          baselineFingerprint,
+        });
+      });
+      const candidate = await preview(t);
+      await apply(t, {
+        baselineFingerprint: candidate.baselineFingerprint,
+        candidateFingerprint: candidate.candidateFingerprint,
+      });
+      await t.run(async (ctx) => {
+        const row = (await ctx.db.get(
+          "reportWeekAccepted",
+          seeded.acceptedId!,
+        ))!;
+        if (scenario === "financial")
+          await ctx.db.patch("reportWeekAccepted", row._id, {
+            included: { ...row.included, netSalesMinor: 1 },
+          });
+        if (scenario === "fingerprint")
+          await ctx.db.patch("reportWeekAccepted", row._id, {
+            baselineFingerprint: "changed",
+          });
+        if (scenario === "compact") {
+          const header = await ctx.db.query("reportCloseEvidence").first();
+          await ctx.db.patch("reportCloseEvidence", header!._id, {
+            publishedGeneration: undefined,
+          });
+        }
+      });
+      const before = await snapshotState(t);
+      const page = await t.run(async (ctx) => {
+        const costs = recordReadCosts(ctx);
+        const result = await verifyAcceptedBaselinePageWithCtx(costs.ctx, {
+          storeId: seeded.storeId,
+          cursor: null,
+        });
+        expect(costs.snapshot().total.serializedBytes).toBeLessThan(
+          (scenario === "over-budget" ? 5 : 4) * 1024 * 1024,
+        );
+        if (scenario === "over-budget") {
+          expect(costs.snapshot().total.serializedBytes).toBeGreaterThan(
+            4 * 1024 * 1024,
+          );
+          // Refusal occurs during source reconstruction, before later compact/fact reads.
+          expect(costs.snapshot().byTable.reportFact).toBeUndefined();
+          expect(costs.snapshot().byTable.reportCloseEvidence).toBeUndefined();
+        }
+        return result;
+      });
+      expect(page.issues).toEqual(
+        scenario === "unchanged" || scenario === "under-budget"
+          ? []
+          : [
+              {
+                acceptedWeekId: seeded.acceptedId,
+                reason:
+                  scenario === "financial"
+                    ? "financial_mismatch"
+                    : scenario === "over-budget"
+                      ? "capacity_exceeded"
+                      : scenario === "compact"
+                        ? "missing_close_evidence"
+                        : "unsupported_legacy_evidence",
+              },
+            ],
+      );
+      expect(await snapshotState(t)).toBe(before);
+    },
+  );
 });

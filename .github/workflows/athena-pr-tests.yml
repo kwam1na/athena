@@ -95,6 +95,7 @@ jobs:
           path: |
             artifacts/harness-inferential-review
             artifacts/harness-scorecard/latest.json
+            /tmp/athena-validation-*/output.log
           if-no-files-found: ignore
 
   harness-janitor-report:

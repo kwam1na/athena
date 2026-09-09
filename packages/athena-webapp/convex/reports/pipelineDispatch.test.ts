@@ -1,11 +1,14 @@
 /// <reference types="vite/client" />
 
 import { convexTest } from "convex-test";
+import { makeFunctionReference } from "convex/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import schema from "../schema";
 import { markDirty } from "./marks";
-import { seedStore } from "./reseedTestSupport";
+import { seedStore, seedDailyClose } from "./reseedTestSupport";
+import { enqueueReportWork } from "./pipelineWork";
+import type { PipelineWorkerClaim } from "./pipelineWorkers";
 import {
   claimDayWorkWithCtx,
   failDayWorkWithCtx,
@@ -14,6 +17,7 @@ import {
 } from "./pipelineDays";
 import {
   selectPipelineStores,
+  dispatchProjectionWorkWithCtx,
   REPORT_PIPELINE_STORES_PER_LANE,
 } from "./pipelineDispatch";
 import { REPORTS_SWEEP_STORE_ALLOWLIST_ENV } from "./sweeper";
@@ -36,6 +40,74 @@ async function activeStore(t: ReturnType<typeof convexTest>) {
 }
 
 describe("reports isolated day work", () => {
+  it.each(["close-evidence", "rollup"] as const)("dispatches four %s jobs independently without reclaiming leases", async (kind) => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run((ctx) => seedStore(ctx, "UTC"));
+    vi.stubEnv(REPORTS_SWEEP_STORE_ALLOWLIST_ENV, String(seeded.storeId));
+    await t.run(async (ctx) => {
+      await ctx.db.insert("reportPipelineControl", {
+        storeId: seeded.storeId, mode: "shadow", fence: 1, sourceWatermark: 0,
+      });
+      for (let day = 1; day <= 5; day += 1) {
+        const closeId = await seedDailyClose(ctx, seeded, {
+          operatingDate: `2026-07-0${day}`, completedAt: 100, salesTotal: 100,
+        });
+        await enqueueReportWork(ctx, kind === "close-evidence"
+          ? { storeId: seeded.storeId, kind, closeId }
+          : { storeId: seeded.storeId, kind, operatingDate: `2026-07-0${day}` }, 100);
+      }
+    });
+    const runAfter = vi.fn().mockResolvedValue("scheduled");
+    const dispatch = () => t.run((ctx) => dispatchProjectionWorkWithCtx(
+      { ...ctx, scheduler: { ...ctx.scheduler, runAfter } },
+      kind,
+      makeFunctionReference<"action", PipelineWorkerClaim>(kind === "close-evidence"
+        ? "reports/pipelineWorkers:runCloseEvidence"
+        : "reports/rollupWorkers:runRollup"),
+      101,
+    ));
+    expect((await dispatch()).scheduled).toBe(4);
+    expect(runAfter).toHaveBeenCalledTimes(4);
+    expect((await dispatch()).scheduled).toBe(1);
+    expect((await dispatch()).scheduled).toBe(0);
+    const claims = runAfter.mock.calls.map((call) => call[2] as PipelineWorkerClaim);
+    expect(new Set(claims.map((claim) => claim.workId)).size).toBe(5);
+    expect(claims.every((claim) => claim.controlFence === 1 && claim.dispatchFence === 1)).toBe(true);
+    const leased = await t.run((ctx) => ctx.db.query("reportPipelineWork").take(6));
+    expect(leased).toHaveLength(5);
+    expect(leased.every((row) => row.leaseUntil! > 101)).toBe(true);
+  });
+
+  it.each(["paused", "reseed", "disallowed", "other-lane"] as const)(
+    "preserves dispatch admission and other lane limits: %s", async (scenario) => {
+      const t = convexTest(schema, modules);
+      const seeded = await activeStore(t);
+      vi.stubEnv(REPORTS_SWEEP_STORE_ALLOWLIST_ENV, scenario === "disallowed" ? "" : String(seeded.storeId));
+      const kind = scenario === "other-lane" ? "resolve-week-date" : "close-evidence";
+      await t.run(async (ctx) => {
+        if (scenario === "paused") {
+          const control = await ctx.db.query("reportPipelineControl").first();
+          await ctx.db.patch("reportPipelineControl", control!._id, { mode: "paused" });
+        }
+        if (scenario === "reseed") await ctx.db.patch("store", seeded.storeId, { reportingReseedStartedAt: 100 });
+        for (let day = 1; day <= 5; day += 1) {
+          const operatingDate = `2026-07-0${day}`;
+          const closeId = await seedDailyClose(ctx, seeded, { operatingDate, completedAt: 100, salesTotal: 100 });
+          await enqueueReportWork(ctx, kind === "close-evidence"
+            ? { storeId: seeded.storeId, kind, closeId }
+            : { storeId: seeded.storeId, kind, operatingDate }, 100);
+        }
+      });
+      const runAfter = vi.fn().mockResolvedValue("scheduled");
+      const result = await t.run((ctx) => dispatchProjectionWorkWithCtx(
+        { ...ctx, scheduler: { ...ctx.scheduler, runAfter } }, kind,
+        makeFunctionReference<"action", PipelineWorkerClaim>("reports/pipelineWorkers:runCloseEvidence"), 101,
+      ));
+      expect(result.scheduled).toBe(scenario === "other-lane" ? 1 : 0);
+      expect(runAfter).toHaveBeenCalledTimes(result.scheduled);
+    },
+  );
+
   it("retains the oldest obligation while fencing every new producer signal", async () => {
     const t = convexTest(schema, modules);
     await t.run(async (ctx) => {

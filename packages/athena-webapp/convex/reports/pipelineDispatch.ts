@@ -2,14 +2,11 @@ import { makeFunctionReference, type FunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
-import {
-  sweepWithCtx,
-  maintainReportsWithCtx,
-} from "./sweeper";
+import { maintainReportsWithCtx } from "./sweeper";
 import { readStoreAllowlist } from "./pipelineAllowlist";
 import { claimDayWorkWithCtx, type ReportDayClaim } from "./pipelineDays";
 import { readPipelineControl } from "./pipelineControl";
-import { claimReportWorkWithCtx, type ReportWorkKind } from "./pipelineWork";
+import { claimReportWorkWithCtx, REPORT_WORK_CLAIM_LIMIT, type ReportWorkKind } from "./pipelineWork";
 import type { PipelineWorkerClaim } from "./pipelineWorkers";
 import { recordPipelineBacklogWithCtx } from "./pipelineEvidence";
 import { dispatchSummaryRangesWithCtx } from "./pipelineRange";
@@ -96,7 +93,12 @@ export async function dispatchProjectionWorkWithCtx(
       continue;
     const store = await ctx.db.get("store", storeId);
     if (!store || store.reportingReseedStartedAt !== undefined) continue;
-    const result = await claimReportWorkWithCtx(ctx, { storeId, kind }, now);
+    const result = await claimReportWorkWithCtx(ctx, {
+      storeId,
+      kind,
+      // Each claim still runs in its own bounded worker transaction.
+      limit: kind === "close-evidence" || kind === "rollup" ? REPORT_WORK_CLAIM_LIMIT : 1,
+    }, now);
     if (result.oldestAgeMs !== null) {
       await recordPipelineBacklogWithCtx(ctx, {
         storeId,
@@ -284,51 +286,6 @@ export const dispatchOverview = internalMutation({
       ),
       Date.now(),
     ),
-});
-
-export const dispatchLegacy = internalMutation({
-  args: {},
-  returns: v.number(),
-  handler: async (ctx) => {
-    let scheduled = 0;
-    for (const storeId of await selectPipelineStores(
-      ctx,
-      "legacy",
-      Date.now(),
-    )) {
-      const control = await readPipelineControl(ctx, storeId);
-      if (control?.mode === "active" || control?.mode === "paused") continue;
-      const store = await ctx.db.get("store", storeId);
-      if (!store || store.reportingReseedStartedAt !== undefined) continue;
-      await ctx.scheduler.runAfter(
-        0,
-        makeFunctionReference<"mutation", { storeId: Id<"store"> }>(
-          "reports/pipelineDispatch:legacyStoreSweep",
-        ),
-        { storeId },
-      );
-      scheduled += 1;
-    }
-    return scheduled;
-  },
-});
-
-export const legacyStoreSweep = internalMutation({
-  args: { storeId: v.id("store") },
-  returns: v.null(),
-  handler: async (ctx, { storeId }) => {
-    const control = await readPipelineControl(ctx, storeId);
-    if (
-      control?.mode === "active" ||
-      control?.mode === "paused" ||
-      !readStoreAllowlist().has(String(storeId))
-    )
-      return null;
-    const store = await ctx.db.get("store", storeId);
-    if (!store || store.reportingReseedStartedAt !== undefined) return null;
-    await sweepWithCtx(ctx, { storeId, skipMaintenance: true });
-    return null;
-  },
 });
 
 export const maintenance = internalMutation({

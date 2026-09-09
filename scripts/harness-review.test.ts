@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -32,6 +32,66 @@ const runHarnessReview: typeof runCompleteHarnessReview = (rootDir, options = {}
 });
 
 const tempRoots: string[] = [];
+
+describe("validation output transport", () => {
+  it("preserves repeated mixed launches and literal arguments in one process", async () => {
+    const rootDir = await createFixtureRepo();
+    await write("probe.ts", 'process.stdout.write(JSON.stringify(Bun.argv.slice(2))); process.stderr.write("stderr-marker");', rootDir);
+    const argument = 'spaces ; $(touch SHOULD_NOT_EXIST) "quoted"';
+    const runner = path.resolve(import.meta.dir, "harness-review.ts");
+    const fixture = `import { spawnLoggedValidation } from ${JSON.stringify(runner)};
+      const argv = ["bun", ${JSON.stringify(path.join(rootDir, "probe.ts"))}, ${JSON.stringify(argument)}];
+      for (let index = 0; index < 40; index++) {
+        const command = index % 2 ? argv : ["/bin/sh", "-c", 'exec "$@"', "fixture", ...argv];
+        if (await spawnLoggedValidation(command, {cwd:${JSON.stringify(rootDir)}}).exited !== 0) process.exit(1);
+      }`;
+    const result = spawnSync("bun", ["-e", fixture], { encoding: "utf8", maxBuffer: 1024 * 1024, timeout: 15_000 });
+    const logs = [...result.stdout.matchAll(/Validation log: (.+)/g)].map(match => match[1]);
+    tempRoots.push(...logs.map(logPath => path.dirname(logPath)));
+    expect(result.status).toBe(0);
+    expect(logs).toHaveLength(40);
+    for (const logPath of logs) {
+      expect(await readFile(logPath, "utf8")).toBe(JSON.stringify([argument]) + "stderr-marker");
+    }
+    await expect(readFile(path.join(rootDir, "SHOULD_NOT_EXIST"))).rejects.toMatchObject({ code: "ENOENT" });
+  }, 20_000);
+
+  for (const launcher of ["raw", "package", "behavior"] as const) {
+    for (const exitCode of [0, 7]) {
+      it(`retains verbose ${launcher} output and propagates exit ${exitCode}`, async () => {
+        const rootDir = await createFixtureRepo();
+        await write("probe.ts", `await Bun.write(Bun.stdout, "x".repeat(1200000)); await Bun.write(Bun.stderr, "stderr-marker"); process.exit(${exitCode});`, rootDir);
+        await write("package.json", JSON.stringify({ private: true, workspaces: ["packages/*"], scripts: { "harness:behavior": "bun probe.ts" } }), rootDir);
+        const packagePath = path.join(rootDir, "packages/athena-webapp/package.json");
+        const packageJson = JSON.parse(await readFile(packagePath, "utf8"));
+        packageJson.scripts.test = "bun ../../probe.ts";
+        await writeFile(packagePath, JSON.stringify(packageJson));
+        const runner = path.resolve(import.meta.dir, "harness-review.ts");
+        const invocation = launcher === "raw"
+          ? `await runRawCommand(${JSON.stringify(rootDir)}, "bun probe.ts");`
+          : `await runHarnessReview(${JSON.stringify(rootDir)}, {
+              getChangedFiles: async () => [${JSON.stringify(launcher === "package" ? "packages/athena-webapp/src/app.ts" : "packages/valkey-proxy-server/app.js")}],
+              runHarnessCheck: async () => {},
+              runRawCommand: async () => {},
+              ${launcher === "behavior" ? "runPackageScript: async () => {}," : ""}
+            });`;
+        const fixture = `import { runRawCommand, runHarnessReview } from ${JSON.stringify(runner)}; ${invocation}`;
+        const result = spawnSync("bun", ["-e", fixture], { encoding: "utf8", maxBuffer: 1024 * 1024, timeout: 15_000 });
+        expect(result.status).toBe(exitCode === 0 ? 0 : 1);
+        expect(result.stdout.length + result.stderr.length).toBeLessThan(16384);
+        if (exitCode !== 0) expect(result.stderr).toContain("Command failed (7)");
+        const logs = [...result.stdout.matchAll(/Validation log: (.+)/g)].map(match => match[1]);
+        expect(logs.length).toBeGreaterThan(0);
+        tempRoots.push(...logs.map(logPath => path.dirname(logPath)));
+        const outputs = await Promise.all(logs.map(logPath => readFile(logPath, "utf8")));
+        const probeOutput = outputs.find(output => output.includes("stderr-marker"));
+        expect(probeOutput?.length).toBeGreaterThanOrEqual(1200000);
+        expect(probeOutput?.includes("x".repeat(1200000))).toBe(true);
+        expect(probeOutput).toContain("stderr-marker");
+      }, 20_000);
+    }
+  }
+});
 
 async function write(relativePath: string, contents: string, rootDir: string) {
   const filePath = path.join(rootDir, relativePath);

@@ -336,10 +336,10 @@ describe("sandbox limits terminate cleanly with typed diagnostics", () => {
   });
 
   it("stops allocation at the heap ceiling", async () => {
-    // QuickJS retries GC as it approaches the ceiling, so reaching OOM can take seconds; the elapsed
-    // ceiling still bounds the attempt either way.
+    // A direct oversized allocation reaches the same heap ceiling without repeated GC
+    // retries that can exhaust the hosted coverage test deadline.
     const outcome = await execute(
-      `const chunks: string[] = []; while (true) { chunks.push("x".repeat(1_000_000)); } return chunks.length;`,
+      `const oversized = new Array(2_000_000).fill(1); return oversized.length;`,
       { ceilings: { maxHeapBytes: 8 * 1024 * 1024, maxElapsedMs: 15_000 } },
     );
     expectFailed(outcome, "memory_limit");
