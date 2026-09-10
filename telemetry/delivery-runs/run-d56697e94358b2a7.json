@@ -594,16 +594,388 @@
         "durationMs": 1394047,
         "digest": "a9dd797c8618f40da210beeafdc4e461f1ba430b1995055a4b6879825f3d5796"
       }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-d56697e94358b2a7",
+      "seq": 26,
+      "at": "2026-09-10T02:44:59Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 842
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-d56697e94358b2a7",
+      "seq": 27,
+      "at": "2026-09-10T02:45:05Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "record",
+        "outcome": "ok",
+        "durationMs": 4834
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-d56697e94358b2a7",
+      "seq": 28,
+      "at": "2026-09-10T02:45:06Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 793
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-d56697e94358b2a7",
+      "seq": 29,
+      "at": "2026-09-10T02:45:10Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "verify",
+        "outcome": "ok",
+        "durationMs": 4078
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-d56697e94358b2a7",
+      "seq": 30,
+      "at": "2026-09-10T02:46:34Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "verify",
+        "outcome": "ok",
+        "durationMs": 2402
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-d56697e94358b2a7",
+      "seq": 31,
+      "at": "2026-09-10T02:49:27Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 98960
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-d56697e94358b2a7",
+      "seq": 32,
+      "at": "2026-09-10T02:49:56Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "920467e5635a67304ae6dfcf3cd090f8310c2b69",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Resolve shared demo product-detail and report-to-stock navigation crashes; sweep all shared-demo navigation and retain regression sensors.",
+          "acceptanceCriteria": [
+            "All eight seeded SKU product, report, transaction and stock destinations resolve safely, including refresh and previously emitted synthetic SKU bookmarks.",
+            "Validate all registered static demo destinations and available record details in the in-app browser, fixing demonstrated crashes and loading dead ends while preserving intentional unavailable surfaces.",
+            "Preserve ordinary operator analytics and real database-ID stock navigation.",
+            "Retain repeatable page and SKU journey regression sensors, explicit catalog coverage, and QA post-deployment and scheduled smoke wiring; run candidate sensors successfully."
+          ],
+          "finishLine": "Merge, fast-forward the local root, deploy affected applications as needed and verify live navigation."
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "920467e5635a67304ae6dfcf3cd090f8310c2b69",
+        "candidateBinding": {
+          "deliverableDigest": "88260f3be52d101a6605aa7593dce20cdb9db847c8d3ae01219da80776c50a62",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "5eec9b81b33dbd03ac35b2914f5b4f7979ee85cf",
+          "mergeBaseSha": "5eec9b81b33dbd03ac35b2914f5b4f7979ee85cf",
+          "workspaceId": "432343aac7dce87495efb1e52e844f9f365f5c892035c8e256d8465bdab85a56"
+        },
+        "policyDigest": "362d993302c010601eecfa155f0f79c7439f63e44ae6a8ed6002f981092c87d2",
+        "release": {
+          "runtimeVersion": "0.2.0",
+          "releaseId": "linear-product-v1",
+          "profile": "linear",
+          "archiveSha256": "ea74c8d00028343b4b6b2d2cf4b1f24d19723e27b596d3d2d73ef1e3317b8551"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-d56697e94358b2a7",
+      "seq": 33,
+      "at": "2026-09-10T03:10:46Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "policy",
+        "durationMs": 1249349
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-d56697e94358b2a7",
+      "seq": 34,
+      "at": "2026-09-10T03:19:44Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 99514
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-d56697e94358b2a7",
+      "seq": 35,
+      "at": "2026-09-10T03:20:40Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 435
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-d56697e94358b2a7",
+      "seq": 36,
+      "at": "2026-09-10T03:21:28Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.opened",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "612eddbcfd44683d7f8646ddf6c238cbc6af71f0",
+      "attestation": "self",
+      "payload": {
+        "round": 3,
+        "candidateTreeSha": "612eddbcfd44683d7f8646ddf6c238cbc6af71f0",
+        "lenses": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing"
+        ]
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-d56697e94358b2a7",
+      "seq": 37,
+      "at": "2026-09-10T03:23:44Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.closed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "612eddbcfd44683d7f8646ddf6c238cbc6af71f0",
+      "attestation": "self",
+      "payload": {
+        "round": 3,
+        "candidateTreeSha": "612eddbcfd44683d7f8646ddf6c238cbc6af71f0",
+        "outcome": "aligned",
+        "findings": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 0,
+          "P3": 0
+        },
+        "cost": {
+          "coverage": "unreported",
+          "reportedBy": "codex"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-d56697e94358b2a7",
+      "seq": 38,
+      "at": "2026-09-10T03:23:45Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "ok",
+        "durationMs": 435
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-d56697e94358b2a7",
+      "seq": 39,
+      "at": "2026-09-10T03:24:01Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "submit-evidence",
+        "outcome": "ok",
+        "durationMs": 507
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-d56697e94358b2a7",
+      "seq": 40,
+      "at": "2026-09-10T03:24:08Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "612eddbcfd44683d7f8646ddf6c238cbc6af71f0",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Resolve shared demo product-detail and report-to-stock navigation crashes; sweep all shared-demo navigation and retain regression sensors.",
+          "acceptanceCriteria": [
+            "All eight seeded SKU product, report, transaction and stock destinations resolve safely, including refresh and previously emitted synthetic SKU bookmarks.",
+            "Validate all registered static demo destinations and available record details in the in-app browser, fixing demonstrated crashes and loading dead ends while preserving intentional unavailable surfaces.",
+            "Preserve ordinary operator analytics and real database-ID stock navigation.",
+            "Retain repeatable page and SKU journey regression sensors, explicit catalog coverage, and QA post-deployment and scheduled smoke wiring; run candidate sensors successfully."
+          ],
+          "finishLine": "Merge, fast-forward the local root, deploy affected applications as needed and verify live navigation."
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "612eddbcfd44683d7f8646ddf6c238cbc6af71f0",
+        "candidateBinding": {
+          "deliverableDigest": "21a4d4829432f0a163380d7095bdb57176e37308f019896cf6f5e1b77d19fa20",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "5eec9b81b33dbd03ac35b2914f5b4f7979ee85cf",
+          "mergeBaseSha": "5eec9b81b33dbd03ac35b2914f5b4f7979ee85cf",
+          "workspaceId": "432343aac7dce87495efb1e52e844f9f365f5c892035c8e256d8465bdab85a56"
+        },
+        "policyDigest": "362d993302c010601eecfa155f0f79c7439f63e44ae6a8ed6002f981092c87d2",
+        "release": {
+          "runtimeVersion": "0.2.0",
+          "releaseId": "linear-product-v1",
+          "profile": "linear",
+          "archiveSha256": "ea74c8d00028343b4b6b2d2cf4b1f24d19723e27b596d3d2d73ef1e3317b8551"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-d56697e94358b2a7",
+      "seq": 41,
+      "at": "2026-09-10T03:47:24Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "ok",
+        "durationMs": 1395711,
+        "digest": "58ca2480c7328d62d09b0318133ba49efad253691d6349926bd8300b0be071c5"
+      }
     }
   ],
   "summary": {
     "ticket": "",
     "open": true,
     "startedAt": "2026-09-10T01:11:31Z",
-    "lastAt": "2026-09-10T02:44:57Z",
-    "durationSeconds": 5606,
-    "roundsOpened": 2,
-    "roundsClosed": 2,
+    "lastAt": "2026-09-10T03:47:24Z",
+    "durationSeconds": 9353,
+    "roundsOpened": 3,
+    "roundsClosed": 3,
     "findings": {
       "P0": 0,
       "P1": 2,
@@ -613,12 +985,16 @@
     "gate": {
       "outcome": "ok",
       "writer": "cli"
+    },
+    "record": {
+      "outcome": "ok",
+      "writer": "cli"
     }
   },
   "costs": {
     "review": {
       "coverage": "unreported",
-      "unreportedEntries": 2,
+      "unreportedEntries": 3,
       "totals": []
     },
     "run": {
@@ -632,16 +1008,18 @@
       "lens.selected",
       "review.round.opened",
       "review.round.closed",
-      "command.completed:gate"
+      "command.completed:gate",
+      "command.completed:record"
     ],
     "missing": [
       "ticket.read",
       "posture.declared",
-      "command.completed:record",
       "pr.opened",
       "run.ended"
     ],
-    "violations": []
+    "violations": [
+      "record-before-gate"
+    ]
   },
   "refusedAppends": []
 }
