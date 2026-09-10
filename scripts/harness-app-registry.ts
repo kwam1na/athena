@@ -318,6 +318,7 @@ export const HARNESS_APP_REGISTRY = [
           "convex/http.ts",
           "convex/operationAdmission",
           "src/components/shared-demo",
+          "playwright.demo.config.ts",
           "src/lib/errors/sharedDemoDenialObserver.ts",
           "src/routes/demo.tsx",
           "src/routes/_authed.tsx",
@@ -326,7 +327,7 @@ export const HARNESS_APP_REGISTRY = [
           {
             kind: "raw",
             command:
-              "bun run --filter '@athena/webapp' test -- convex/sharedDemo convex/contextTracking convex/operationAdmission src/components/shared-demo src/lib/errors/sharedDemoDenialObserver.test.ts src/routes/demo.test.tsx src/routes/_authed.test.tsx",
+              "bun run --filter '@athena/webapp' test -- convex/sharedDemo convex/contextTracking convex/operationAdmission src/components/shared-demo src/tests/demo/navigationCases.test.ts src/components/product/AnalyticsInsights.test.tsx src/components/reports/ReportsSkuDetailView.test.tsx src/components/operations/InventoryImportView.test.tsx src/lib/errors/sharedDemoDenialObserver.test.ts src/routes/demo.test.tsx src/routes/_authed.test.tsx",
           },
           { kind: "script", script: "audit:convex" },
           { kind: "script", script: "lint:convex:changed" },

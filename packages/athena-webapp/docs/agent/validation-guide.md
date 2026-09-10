@@ -6,11 +6,11 @@ Use this decision guide to answer “what should I run for this change?” based
 
 ## Shared demo admission, restore, and orientation edits
 
-Touched surfaces: `assets/shared-demo-products`, `docs/shared-demo-backend-coverage.md`, `convex/sharedDemo`, `convex/auth.ts`, `convex/auth/SharedDemoTicket.ts`, `convex/contextTracking`, `convex/crons.ts`, `convex/http.ts`, `convex/operationAdmission`, `src/components/shared-demo`, `src/lib/errors/sharedDemoDenialObserver.ts`, `src/routes/demo.tsx`, `src/routes/_authed.tsx`
+Touched surfaces: `assets/shared-demo-products`, `docs/shared-demo-backend-coverage.md`, `convex/sharedDemo`, `convex/auth.ts`, `convex/auth/SharedDemoTicket.ts`, `convex/contextTracking`, `convex/crons.ts`, `convex/http.ts`, `convex/operationAdmission`, `src/components/shared-demo`, `playwright.demo.config.ts`, `src/lib/errors/sharedDemoDenialObserver.ts`, `src/routes/demo.tsx`, `src/routes/_authed.tsx`
 
 Run:
 
-- `bun run --filter '@athena/webapp' test -- convex/sharedDemo convex/contextTracking convex/operationAdmission src/components/shared-demo src/lib/errors/sharedDemoDenialObserver.test.ts src/routes/demo.test.tsx src/routes/_authed.test.tsx`
+- `bun run --filter '@athena/webapp' test -- convex/sharedDemo convex/contextTracking convex/operationAdmission src/components/shared-demo src/tests/demo/navigationCases.test.ts src/components/product/AnalyticsInsights.test.tsx src/components/reports/ReportsSkuDetailView.test.tsx src/components/operations/InventoryImportView.test.tsx src/lib/errors/sharedDemoDenialObserver.test.ts src/routes/demo.test.tsx src/routes/_authed.test.tsx`
 - `bun run --filter '@athena/webapp' audit:convex`
 - `bun run --filter '@athena/webapp' lint:convex:changed`
 - `bun run --filter '@athena/webapp' lint:frontend:changed`

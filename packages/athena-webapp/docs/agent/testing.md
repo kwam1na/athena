@@ -54,6 +54,20 @@ Shared-demo product image assets under `assets/shared-demo-products` use the
 shared-demo validation slice so asset changes remain covered by the same seed,
 restore, frontend, typecheck, and build checks as the demo runtime.
 
+Shared-demo navigation has two regression sensors. `src/tests/demo/navigationCases.test.ts`
+requires an explicit expected page for every static authenticated route and checks that
+working pages cannot silently become demo restrictions. The live browser suite exercises
+those 67 destinations and all eight report SKU journeys through product detail, refresh,
+stock adjustment, old synthetic-ID bookmarks, and the stock-to-product link. It asserts
+page-specific content, catches page errors, and rejects unexpected login or restriction
+screens. From this package, run it against a running candidate with
+`ATHENA_DEMO_URL=http://127.0.0.1:5184 bunx playwright test --config playwright.demo.config.ts`.
+The URL is required; this suite uses the real shared-demo backend and is separate from
+mocked/offline Playwright specs. It records traces and screenshots on failure under
+`/tmp/athena-demo-navigation-results`. The existing Athena QA Smoke workflow runs it
+after successful QA deploys and every 30 minutes. These are navigation sensors, not
+proof of every stock, payment, or administration mutation.
+
 Convex artifact refresh rule:
 
 - If a change needs new `convex/_generated` artifacts or refreshed client refs, start `bunx convex dev` from `packages/athena-webapp` before validation.

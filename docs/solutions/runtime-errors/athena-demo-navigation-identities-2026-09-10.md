@@ -12,7 +12,7 @@ root_cause: logic_error
 resolution_type: code_fix
 severity: high
 tags: [shared-demo, product-detail, query-admission, sku-identity]
-delivery_diff_fingerprint: 88834fce8e064bb6782d5d7042d844a1019bf2f3098431a59621e166bc5532c1
+delivery_diff_fingerprint: 2f2179e622619b68ed9e8a4815482c5a953c6e65a2435e0d9ae12fc26f2fdfcc
 ---
 
 # Demo navigation must respect query admission and SKU identity boundaries
@@ -40,6 +40,8 @@ Demo context has three states: loading, normal operator, and shared demo. Waitin
 Test demo and cold-load query suppression, preserved normal operator reads, all eight story SKU translations, live IDs, unknown fixture references, and actual report link arguments. Browser navigation proves the real route transitions; mocked tests alone do not.
 
 Keep the visible-surface catalog aligned with backend admission. A page containing a forbidden read needs either a deliberately scoped admission change or an explicit unavailable state before subscription. A skipped query must not drive a perpetual loading state.
+
+`src/tests/demo/navigationCases.test.ts` now requires a reviewed expectation for every static application route and detects unintended restriction changes. `navigation.live.ts` checks real page content and error signals across the route catalog, eight report/transaction/product/stock journeys, old bookmarks, available operational records, and protected detail return paths. Run it with an explicit `ATHENA_DEMO_URL` using `playwright.demo.config.ts`. The QA smoke workflow runs it after successful QA deployment and on its existing schedule, retaining failure traces and screenshots. Keep live SKU assertions exact while tolerating harmless product-name capitalization differences. Do not count recovery/login redirects as success or mask them with automatic retries.
 
 ## Related Issues
 - V26-2023
