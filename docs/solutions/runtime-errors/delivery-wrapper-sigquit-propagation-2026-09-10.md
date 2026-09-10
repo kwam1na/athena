@@ -12,7 +12,7 @@ root_cause: logic_error
 resolution_type: code_fix
 severity: medium
 tags: [delivery-product, sigquit, process-signals, descendant-cleanup, installed-runtime]
-delivery_diff_fingerprint: 613cf61b4838ac396c01a6a0d79c6f9ba79a887f9dc17861e87c5709f6834a7d
+delivery_diff_fingerprint: e31c09b8d8cc7519d644f51d64c234737b6bb7a6108952514deab569ca14e6c6
 ---
 
 # Delivery wrappers must preserve SIGQUIT cleanup
