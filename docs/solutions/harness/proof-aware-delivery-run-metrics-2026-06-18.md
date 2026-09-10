@@ -1,7 +1,7 @@
 ---
 title: Proof-Aware Delivery Metrics Should Separate Validation Success From Proof Reuse
 date: 2026-06-18
-last_updated: 2026-08-28
+last_updated: 2026-09-10
 category: harness
 module: repo-harness
 problem_type: proof_telemetry_ambiguity
@@ -13,7 +13,7 @@ tags:
   - pre-push
   - pr-athena
   - proof-telemetry
-delivery_diff_fingerprint: 2a7a6ea7d2b63a3a50e6a178578c8b044a4e60ccb237604c6485e61c63491373
+delivery_diff_fingerprint: 23a76407126ceb57cfeea9d766c9afda72e0249ac59d98fd0e31ff83230e6fb7
 ---
 
 # Proof-Aware Delivery Metrics Should Separate Validation Success From Proof Reuse
@@ -98,3 +98,39 @@ authoritative evidence.
   second cache, proof record, or invalidation contract.
 - Treat proof evaluation uncertainty as a reason to run the full gate, never as
   permission to skip it.
+
+## Product preparation observations (V26-1888)
+
+The installed product now reports its actual preparation decision on successful
+version-2 `command.completed` events for `prepare`. The optional `preparation`
+member carries `checks` (`executed` or `reused`) and the product's `reason`.
+Athena's scorecard passes that member through from the latest CLI preparation
+completion; it never decides from a refresh flag, elapsed time, or a prior success.
+
+`validation-equivalent` identifies valid reuse. Ordinary preparation reports
+`ordinary`; an invalid receipt or changed preparation fingerprint reports
+`receipt-not-reusable` or `preparation-fingerprint-changed` with executed checks.
+The receipt, policy, base, wiring, workspace and ownership validators continue
+to authorize reuse. These event fields are observations only.
+
+Missing detail is `null` (unknown) in the scorecard. This includes legacy
+records and a later failed or interrupted preparation: selecting the latest
+successful preparation instead would incorrectly keep showing an older reuse.
+The frozen version-1 event format is not widened or rewritten.
+
+The consumer tests cover each product reason, a successful reuse followed by a
+failure/interruption or a completion without detail, and historical version-1
+preparation. Producer tests drive real preparation and export, including reuse,
+fallback, failure and ownership boundaries. Install and qualify the compatible
+product archive before using the new field; a source checkout is not an adopter
+upgrade.
+
+The first real adopter gate exposed a version boundary in telemetry attribution:
+version-2 CLI activity events and captured reports sit between the saved gate
+context and its successful completion. Requiring raw-event adjacency rejects
+that valid completion even when its strict validation digest matches. Ignore
+only the product's declared version-2 progress observations when locating the
+immediately preceding command context; a real intervening command or newer
+context still breaks attribution. Keep the CLI-success and current-digest
+checks. A fixture containing only version-1 events cannot prove this adopter
+path; retain the real failure and test valid version-2 interleavings as well.

@@ -166,6 +166,8 @@ type HarnessScorecardOutput = {
       summary: DeliveryRunTelemetryRecord["summary"] | null;
       costs: DeliveryRunTelemetryRecord["costs"] | null;
       readout: DeliveryRunTelemetryRecord["readout"] | null;
+      /** Product-owned decision; null means the latest preparation did not report it. */
+      preparation: DeliveryRunTelemetryRecord["events"][number]["payload"]["preparation"] | null;
     };
     graphify: {
       definition: string;
@@ -757,6 +759,7 @@ async function inspectDeliveryRunArtifact(rootDir: string) {
     summary: latest?.summary ?? null,
     costs: latest?.costs ?? null,
     readout: latest?.readout ?? null,
+    preparation: latest?.events.findLast(event => event.actor.role === "cli" && event.kind === "command.completed" && event.payload.command === "prepare")?.payload.preparation ?? null,
   };
 }
 

@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Know when preparation checks ran</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="23a76407126ceb57cfeea9d766c9afda72e0249ac59d98fd0e31ff83230e6fb7">
+  <header data-report-section="header">
+    <h1>Know when preparation checks ran</h1>
+    <p>V26-1888: product-owned preparation telemetry in Athena</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>V26-1888</li>
+      <li>Runtime 0.4.0</li>
+      <li>Merge pending</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Issue</dt><dd>https://linear.app/v26-labs/issue/V26-1888</dd>
+      <dt>Producer PR</dt><dd>https://github.com/kwam1na/agent-delivery-harness/pull/131 (merged e4866320)</dd>
+      <dt>Adopter PR</dt><dd>https://github.com/kwam1na/athena/pull/838</dd>
+      <dt>Validated candidate head</dt><dd>0875009258b6c8922757161d9defe0889598c2b1</dd>
+      <dt>Source branch</dt><dd>codex/v26-1888-preparation-telemetry</dd>
+      <dt>Source commit</dt><dd>369bfadc780c6520ce7e4fe861a77b66f8f1772e</dd>
+      <dt>Status</dt><dd>Candidate; independent review and canonical gate passed; merge pending</dd>
+      <dt>Archive</dt><dd>linear-run-surface-v1 / ed9eddbffe953181ef8ea21ea16f2e3848aff215bb766d69b2677566172f8dd2</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>What this delivers</h2>
+      <p>Athena exposes the installed delivery product’s preparation decision in its existing scorecard. It distinguishes checks that ran from checks reused under a valid receipt, and preserves the product’s reason.</p>
+      <p>Athena now carries the verified compatible 0.4.0 producer archive and the consumer regression tests. Both mandated review lenses align with no open findings or deferrals, and the canonical gate completed through export and record verification. Merge and ticket closure remain pending in this candidate report.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Why the extra field matters</h2>
+      <p>A successful preparation previously looked the same in durable telemetry whether checks ran or were reused. Terminal text exposed the difference, but later readers could not recover it safely from a command’s success or requested flags.</p>
+      <p>V26-1888 came from the Athena cutover’s review. The original receipt and ownership behavior was correct; this follow-up adds the missing durable observation.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>The decision travels with its receipt check</h2>
+      <p>The product makes the reuse decision where it validates the receipt. Its successful completion carries that decision into the run export. Athena reads the exported answer.</p>
+      <p>Telemetry describes what was observed. The existing candidate, base, policy, workspace, wiring and ownership checks continue to govern reuse and admission.</p>
+      <p>Ordinary prepare always runs checks. Only an explicit --refresh-record-neutral request evaluates reuse. The request is not proof: a reusable receipt and unchanged preparation fingerprint must survive the existing candidate, base, policy, wiring, workspace and ownership checks.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>From terminal clue to durable field</h2>
+      <p>Before: prepare executed or reused checks, emitted terminal narration, and recorded a generic successful command completion.</p>
+      <p>After: the installed 0.4.0 runtime returns a structured preparation object; successful version-2 command completion retains it; the existing export transports it; the Athena scorecard copies the latest retained CLI preparation completion.</p>
+      <pre><code>prepare → command.completed.payload.preparation → product run export → metrics.deliveryRun.preparation</code></pre>
+  </section>
+  <section data-report-section="changes">
+    <h2>The reported preparation states</h2>
+      <ul>
+        <li>executed / ordinary: an ordinary preparation ran its configured checks.</li>
+        <li>reused / validation-equivalent: the existing strict receipt validation permitted reuse.</li>
+        <li>executed / receipt-not-reusable: refresh could not reuse the retained receipt, so checks ran.</li>
+        <li>executed / preparation-fingerprint-changed: the preparation fingerprint changed, so checks ran.</li>
+        <li>null: the latest retained matching completion has no preparation detail; its execution/reuse status is unknown.</li>
+      </ul>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Absence stays unknown</h2>
+      <p>Failed or interrupted preparations do not receive a successful preparation object. When their completion is retained, it replaces the older completion and fieldless detail yields null. If the newer completion append is lost, the scorecard can only report the latest retained older completion.</p>
+      <p>Version-1 journals retain their frozen grammar. Older version-2 records and successful completions can also lack the optional field. None is relabeled as executed. The schema rejects the field on unsuccessful or non-prepare completions and rejects contradictory status/reason pairs.</p>
+      <p>Overlapping attempts retain the existing ownership rules: a newer attempt can supersede an older receipt, and a failed or interrupted command cannot report successful reuse.</p>
+      <p>The first real adopter gate exposed a compatibility gap: progress events now occur between the saved gate context and its completion. Athena now skips only declared version-2 progress observations, then requires the latest remaining event before the gate to be its athena-gate context. A real intervening command, a newer context, an unsuccessful or non-CLI gate, or a stale validation digest still prevents attribution.</p>
+      <p>Observation writes are best effort. If appending a completion fails, telemetry cannot reveal that missing completion. The scorecard reports the latest retained completion, which may be older; if that record has no detail it returns null. Missing telemetry never changes command authority.</p>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and delivery status</h2>
+      <p>The merged producer passed npm run check: 3,174 tests across 142 files. Focused preparation, ownership, interruption, export and closed-schema probes passed. The earlier checkpoint also passed standalone installation and packed-product qualification.</p>
+      <p>The final archive passed integrity verification and the product installation sensor, including fresh runtime-byte comparison, both skill exposures, installed preparation/context and missing-review refusal. Athena reports productReady=true, current lifecycle, no blockers and current compiled policy.</p>
+      <p>On the final installed archive, bun run harness:test passed 1,316 tests across 68 files, including all 14 scorecard tests. Disposable checkpoint mutations independently proved the CLI-author, command-name and event-kind selection guards. Canonical mechanical preparation passed. Both independent lenses approved the original adopter candidate. Its full gate admitted all obligations, then telemetry export exposed the version-2 adjacency gap described above. The repaired candidate passed fresh preparation and both mandated review lenses in round 3. The full canonical command then passed in 941 seconds, including telemetry export and delivery-record verification; coverage passed 10,804 webapp tests and 204 storefront tests. The verifier retains observational journal ordering and binding warnings from the run history; admission is based on the independently validated evidence, not those observations.</p>
+      <p>Merge, Linear Done and root alignment are pending. Production deployment is not applicable to the requested merged-changes finish line.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>How to read future runs</h2>
+      <ul>
+        <li>Read the latest retained event whose actor is cli, kind is command.completed, and command is prepare. Later executor, other-command or other-kind events cannot replace it.</li>
+        <li>Copy checks and reason together; do not infer reuse from flags or elapsed time.</li>
+        <li>Treat null as unknown: no retained matching completion or no field on the latest match. It does not prove that no newer command ran.</li>
+        <li>Verify the installed archive and runtime digests before relying on a new product field.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>scripts/delivery-run-telemetry.ts</code></td><td>Validates and persists the product export; matches the saved gate context across progress observations while retaining command and digest boundaries.</td></tr>
+        <tr><td><code>scripts/harness-scorecard.ts</code></td><td>Passes the latest product preparation field into the scorecard without a new decision.</td></tr>
+        <tr><td><code>scripts/harness-scorecard.test.ts</code></td><td>Holds the four product pairs, unknown states and event-selection behavior.</td></tr>
+        <tr><td><code>.agent-skills/current/runtime/</code></td><td>Verified runtime 0.4.0 and matching declarations installed from archive ed9eddbffe953181ef8ea21ea16f2e3848aff215bb766d69b2677566172f8dd2.</td></tr>
+        <tr><td><code>docs/solutions/harness/proof-aware-delivery-run-metrics-2026-06-18.md</code></td><td>Preserves the distinction between validation success and verified reuse.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Who decides whether preparation checks can be reused?</p>
+        <ol data-quiz-options>
+          <li>Athena’s scorecard</li>
+          <li data-quiz-correct>The product’s receipt/fingerprint decision for an explicit neutral refresh</li>
+          <li>The presence of a refresh flag</li>
+        </ol>
+        <p data-quiz-explanation>Ordinary prepare runs checks. A neutral refresh only requests the product to evaluate reuse; Athena observes the actual result.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does executed / receipt-not-reusable mean?</p>
+        <ol data-quiz-options>
+          <li>Preparation failed</li>
+          <li>Checks were skipped</li>
+          <li data-quiz-correct>Refresh could not reuse a receipt, so checks ran</li>
+        </ol>
+        <p data-quiz-explanation>Fallback execution can succeed. An unusable receipt is not itself a failed validation.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which reason accompanies reused?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>validation-equivalent</li>
+          <li>ordinary</li>
+          <li>preparation-fingerprint-changed</li>
+        </ol>
+        <p data-quiz-explanation>Only the validated reuse branch produces reused / validation-equivalent.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>A known reuse is followed by a retained prepare completion with no preparation member. What should Athena show?</p>
+        <ol data-quiz-options>
+          <li>The older reuse</li>
+          <li data-quiz-correct>null, meaning unknown</li>
+          <li>executed, because a completion alone proves checks ran</li>
+        </ol>
+        <p data-quiz-explanation>The latest retained completion wins even when its outcome is successful; a missing optional field is unknown.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>After a CLI preparation observation, which later event can update its scorecard field?</p>
+        <ol data-quiz-options>
+          <li>Any event whose command is prepare</li>
+          <li>Any product command completion</li>
+          <li data-quiz-correct>Only a CLI command.completed event whose command is prepare</li>
+        </ol>
+        <p data-quiz-explanation>The consumer checks actor, event kind and command together; executor reports and other commands cannot overwrite the product preparation detail.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where is the new decision retained durably?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>A version-2 command.completed payload and its product export</li>
+          <li>Only terminal stdout</li>
+          <li>A second Athena receipt</li>
+        </ol>
+        <p data-quiz-explanation>Existing event/export transport carries the product observation.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Does this telemetry field authorize a merge?</p>
+        <ol data-quiz-options>
+          <li>Yes, when checks says reused</li>
+          <li data-quiz-correct>No; existing gate evidence and candidate checks still decide admission</li>
+          <li>Yes, when the field is present</li>
+        </ol>
+        <p data-quiz-explanation>Run telemetry remains observation-only.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why replace and qualify Athena’s previously installed 0.2.0 archive before consuming this field?</p>
+        <ol data-quiz-options>
+          <li>Source edits automatically update every adopter</li>
+          <li>A matching release label proves identical bytes</li>
+          <li data-quiz-correct>That installed 0.2.0 reader rejects the new payload member</li>
+        </ol>
+        <p data-quiz-explanation>The compatible 0.4.0 archive must be installed and verified by actual runtime and archive bytes.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What can the scorecard say if a preparation completion cannot be appended to the journal?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Only the latest retained matching completion, which may be older</li>
+          <li>That checks ran, because the command returned zero</li>
+          <li>That checks were reused, because a refresh was requested</li>
+        </ol>
+        <p data-quiz-explanation>A lost newer append can leave an older known result visible. A retained fieldless latest match yields null. Neither observation grants authority.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does the delivery-candidate status establish?</p>
+        <ol data-quiz-options>
+          <li>The PR is merged and deployed</li>
+          <li data-quiz-correct>The report explains candidate work; merge and closure still need confirmation</li>
+          <li>Every referenced ticket is Done</li>
+        </ol>
+        <p data-quiz-explanation>Candidate artifacts must not claim finish-line events that have not happened.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+      <p>athena_export_diagnosis (gpt-5.6-sol high) diagnosed the real successful-gate/export mismatch and supplied the bounded consumer compatibility repair and regressions.</p>
+    <dl>
+      <dt>Session context — athena_report_context (GPT-5.6 Luna)</dt><dd>Traced the cutover review, prior proof-reuse decisions and delivery ownership from bounded ticket and repository sources.</dd>
+      <dt>Delivered diff — athena_report_diff (GPT-5.6 Luna)</dt><dd>Mapped producer-to-consumer data flow, legacy reader incompatibility, test evidence and generated artifact scope.</dd>
+      <dt>Producer implementation — telemetry (GPT-6 Astra)</dt><dd>Implemented and tested the actual product-owned decision and failure/ownership boundaries.</dd>
+      <dt>Report and quiz review — athena_report_review (GPT-5.6 Luna)</dt><dd>Checked comprehension and claims against source; prompted explicit refresh, fieldless-success and observation-loss boundaries.</dd>
+      <dt>Disposable adopter validation — athena_checkpoint_validation (GPT-5.6 Sol)</dt><dd>Installed and verified the checkpoint archive, ran the focused consumer tests, and proved all three selection guards with restored mutations.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

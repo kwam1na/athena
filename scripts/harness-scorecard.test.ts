@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { HARNESS_BEHAVIOR_SCENARIOS } from "./harness-behavior-scenarios";
 import { collectHarnessScorecard } from "./harness-scorecard";
 import { productRunFixture } from "./delivery-run-telemetry.fixtures";
+import { buildRunExport } from "../.agent-skills/current/runtime/cli-api.mjs";
+import type { RunEvent } from "../.agent-skills/current/runtime/kernel.mjs";
 
 const tempRoots: string[] = [];
 
@@ -476,9 +478,63 @@ describe("collectHarnessScorecard", () => {
     expect(result.metrics.deliveryRun.status).toBe("missing");
     expect(result.metrics.deliveryRun.summary).toBeNull();
     expect(result.metrics.deliveryRun.costs).toBeNull();
+    expect(result.metrics.deliveryRun.preparation).toBeNull();
     expect(result.metrics.graphify.status).toBe("missing");
     expect(result.summary.status).toBe("degraded");
     expect(result.summary.missingSignals).toBeGreaterThan(0);
+  });
+
+  it.each([
+    { checks: "executed", reason: "ordinary" },
+    { checks: "reused", reason: "validation-equivalent" },
+    { checks: "executed", reason: "receipt-not-reusable" },
+    { checks: "executed", reason: "preparation-fingerprint-changed" },
+  ])("displays the product preparation decision unchanged: $checks/$reason", async preparation => {
+    const rootDir = await createFixtureRepo(true, "pass");
+    const run = productRunFixture();
+    const events: RunEvent[] = run.events.map(event => ({ ...event, version: "run-event/2", eventId: `fixture-${event.seq}` }));
+    events.push({ ...events[1]!, seq: 3, eventId: "prepare-3", at: "2026-09-07T12:00:02Z", payload: { command: "prepare", outcome: "ok", durationMs: 50, preparation } });
+    await write(`telemetry/delivery-runs/${run.runId}.json`, JSON.stringify(buildRunExport({ runId: run.runId, events })), rootDir);
+    const result = await collectHarnessScorecard(rootDir);
+    expect(result.metrics.deliveryRun.preparation).toEqual(preparation);
+    expect(result.metrics.deliveryRun.status).toBe("ok");
+  });
+
+  it.each(["policy", "interrupted", "ok"])("keeps absent preparation detail unknown after a later %s result", async outcome => {
+    const rootDir = await createFixtureRepo(true, "pass");
+    const run = productRunFixture();
+    const events: RunEvent[] = run.events.map(event => ({ ...event, version: "run-event/2", eventId: `fixture-${event.seq}` }));
+    events.push({ ...events[1]!, seq: 3, eventId: "prepare-3", at: "2026-09-07T12:00:02Z", payload: { command: "prepare", outcome: "ok", durationMs: 50, preparation: { checks: "reused", reason: "validation-equivalent" } } });
+    events.push({ ...events[1]!, seq: 4, eventId: "prepare-4", at: "2026-09-07T12:00:03Z", payload: { command: "prepare", outcome, durationMs: 20 } });
+    await write(`telemetry/delivery-runs/${run.runId}.json`, JSON.stringify(buildRunExport({ runId: run.runId, events })), rootDir);
+    const result = await collectHarnessScorecard(rootDir);
+    expect(result.metrics.deliveryRun.present).toBe(true);
+    expect(result.metrics.deliveryRun.preparation).toBeNull();
+  });
+
+  it("reads the latest CLI prepare completion despite later unrelated observations", async () => {
+    const rootDir = await createFixtureRepo(true, "pass");
+    const run = productRunFixture();
+    const events: RunEvent[] = run.events.map(event => ({ ...event, version: "run-event/2", eventId: `fixture-${event.seq}` }));
+    const preparation = { checks: "reused", reason: "validation-equivalent" };
+    events.push({ ...events[1]!, seq: 3, eventId: "prepare-3", at: "2026-09-07T12:00:02Z", payload: { command: "prepare", outcome: "ok", durationMs: 50, preparation } });
+    events.push({ ...events[1]!, seq: 4, eventId: "executor-4", at: "2026-09-07T12:00:03Z", actor: { role: "executor" }, payload: { command: "prepare", outcome: "ok", durationMs: 50, preparation: { checks: "executed", reason: "ordinary" } } });
+    events.push({ ...events[1]!, seq: 5, eventId: "gate-5", at: "2026-09-07T12:00:04Z", payload: { command: "gate", outcome: "ok", durationMs: 50 } });
+    events.push({ ...events[1]!, seq: 6, eventId: "reported-6", at: "2026-09-07T12:00:05Z", kind: "gate.reported", payload: { command: "prepare", outcome: "pass", durationMs: 50 } });
+    await write(`telemetry/delivery-runs/${run.runId}.json`, JSON.stringify(buildRunExport({ runId: run.runId, events })), rootDir);
+    const result = await collectHarnessScorecard(rootDir);
+    expect(result.metrics.deliveryRun.status).toBe("ok");
+    expect(result.metrics.deliveryRun.preparation).toEqual(preparation);
+  });
+
+  it("does not reinterpret an older successful preparation as executed or reused", async () => {
+    const rootDir = await createFixtureRepo(true, "pass");
+    const run = productRunFixture();
+    const preparation: RunEvent = { ...run.events[1]!, seq: 3, at: "2026-09-07T12:00:02Z", payload: { command: "prepare", outcome: "ok", durationMs: 50 } };
+    await write(`telemetry/delivery-runs/${run.runId}.json`, JSON.stringify(buildRunExport({ runId: run.runId, events: [...run.events, preparation] })), rootDir);
+    const result = await collectHarnessScorecard(rootDir);
+    expect(result.metrics.deliveryRun.present).toBe(true);
+    expect(result.metrics.deliveryRun.preparation).toBeNull();
   });
 
   it("counts a product run with a refused gate as a degraded signal", async () => {
