@@ -37,7 +37,7 @@ Athena runs the installed delivery product through `scripts/delivery-product.ts`
 
 Register a POSIX-only SIGQUIT handler beside the existing wrapper handlers. Preserve the first interruption status, forward SIGQUIT to the installed launcher, and continue awaiting `child.exited` before the wrapper returns 131.
 
-The integration fixture records launcher and worker PIDs and the actual signal observed by the worker. Its matrix covers direct and terminal-group SIGQUIT for both cooperative workers and resistant workers. Cooperative workers exit on SIGQUIT; resistant workers force the installed launcher to use bounded SIGKILL escalation. Every case asserts that both descendants are absent or zombies before the wrapper completes.
+The integration fixture records launcher and worker PIDs and the actual signal observed by the worker. Its matrix covers direct and terminal-group SIGQUIT for both cooperative workers and resistant workers. Cooperative workers exit on SIGQUIT; resistant workers force the installed launcher to use bounded SIGKILL escalation. After the wrapper exits, every case asserts that both descendants are absent or zombies. The fixture sends SIGQUIT only after both PID files exist, so it does not exercise arrival during launcher startup.
 
 The repository installs the exact qualified product archive through `bun run agent-skills:install -- --archive ... --metadata ... --maintenance`. This keeps the generated generation, active pointer, exposures, runtime, and compiled policy bound to the producer artifact rather than local edits.
 
@@ -51,7 +51,7 @@ The platform guard avoids registering unsupported POSIX signal behavior on Windo
 
 - Extend wrapper signal matrices whenever the installed launcher's supported signal set changes.
 - Exercise both direct delivery and terminal process-group delivery; shells and terminals can target different processes.
-- Assert descendant state before wrapper completion rather than relying only on exit codes.
+- Assert that no live descendants remain when wrapper completion is accepted instead of relying only on an exit code.
 - Install and test exact qualified artifacts. Never repair a tracked generated generation by hand.
 - Keep SIGKILL documented as uncatchable escalation, separate from cooperative signal propagation.
 
