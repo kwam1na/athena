@@ -19,14 +19,17 @@ export async function runDeliveryProduct(
     const interrupt = () => { interrupted ??= 130; child.kill("SIGINT"); };
     const terminate = () => { interrupted ??= 143; child.kill("SIGTERM"); };
     const hangup = () => { interrupted ??= 129; child.kill("SIGHUP"); };
+    const quit = () => { interrupted ??= 131; child.kill("SIGQUIT"); };
     process.on("SIGINT", interrupt);
     process.on("SIGTERM", terminate);
     process.on("SIGHUP", hangup);
+    if (process.platform !== "win32") process.on("SIGQUIT", quit);
     try { const code = await child.exited; return interrupted ?? code; }
     finally {
       process.removeListener("SIGINT", interrupt);
       process.removeListener("SIGTERM", terminate);
       process.removeListener("SIGHUP", hangup);
+      if (process.platform !== "win32") process.removeListener("SIGQUIT", quit);
     }
   }
   const controller = new AbortController();
