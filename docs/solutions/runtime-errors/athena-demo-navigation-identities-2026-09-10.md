@@ -12,7 +12,7 @@ root_cause: logic_error
 resolution_type: code_fix
 severity: high
 tags: [shared-demo, product-detail, query-admission, sku-identity]
-delivery_diff_fingerprint: d2a94cb4ce3fc105a177abc6cc8732e9713685f77268f56ce0b039098b5e9e2e
+delivery_diff_fingerprint: d16986e4d179bdd210514022790a6909d48e30c343d560de6345c282a2613f94
 ---
 
 # Demo navigation must respect query admission and SKU identity boundaries
@@ -48,3 +48,5 @@ Keep the visible-surface catalog aligned with backend admission. A page containi
 - [Demo-reachable reads need their own sensor](../architecture-patterns/athena-demo-reachable-reads-need-their-own-sensor-2026-08-24.md)
 
 Record-detail sensors must assert the settled destination path and the identity selected from the list. A heading alone also matches a recovery page. Keep a negative control that presents the owner recovery page to those same destination assertions.
+
+The final gate also exposed a pre-existing terminal PIN-test teardown race: input-otp schedules selection callbacks at 0, 10 and 50 ms without cancelling them on unmount. The affected test now uses an owned fake clock, explicitly unmounts, drains pending callbacks, asserts zero remaining timers and restores real timers in a finally block. A negative control omitting the drain fails with two pending timers; the complete terminal file passes normally and under 10x timer lag. Preserve the real approval/command assertions rather than mocking away the dialog.
