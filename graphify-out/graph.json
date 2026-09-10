@@ -30551,7 +30551,7 @@
       "relation": "calls",
       "source": "harness_scorecard_buildinferentialsummarynote",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L384",
+      "source_location": "L386",
       "target": "harness_scorecard_buildsummary",
       "weight": 1
     },
@@ -30563,7 +30563,7 @@
       "relation": "calls",
       "source": "harness_scorecard_ishealthyinferentialstatus",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L350",
+      "source_location": "L352",
       "target": "harness_scorecard_buildsummary",
       "weight": 1
     },
@@ -30575,7 +30575,7 @@
       "relation": "calls",
       "source": "harness_scorecard_buildsummary",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L866",
+      "source_location": "L869",
       "target": "harness_scorecard_collectharnessscorecard",
       "weight": 1
     },
@@ -30587,7 +30587,7 @@
       "relation": "calls",
       "source": "harness_scorecard_createfilesystem",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L795",
+      "source_location": "L798",
       "target": "harness_scorecard_collectharnessscorecard",
       "weight": 1
     },
@@ -30599,7 +30599,7 @@
       "relation": "calls",
       "source": "harness_scorecard_hasanyharnessdocs",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L804",
+      "source_location": "L807",
       "target": "harness_scorecard_collectharnessscorecard",
       "weight": 1
     },
@@ -30611,7 +30611,7 @@
       "relation": "calls",
       "source": "harness_scorecard_inspectdeliveryrunartifact",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L863",
+      "source_location": "L866",
       "target": "harness_scorecard_collectharnessscorecard",
       "weight": 1
     },
@@ -30623,7 +30623,7 @@
       "relation": "calls",
       "source": "harness_scorecard_inspectgraphifyartifacts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L864",
+      "source_location": "L867",
       "target": "harness_scorecard_collectharnessscorecard",
       "weight": 1
     },
@@ -30635,7 +30635,7 @@
       "relation": "calls",
       "source": "harness_scorecard_inspectinferentialartifact",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L859",
+      "source_location": "L862",
       "target": "harness_scorecard_collectharnessscorecard",
       "weight": 1
     },
@@ -30647,7 +30647,7 @@
       "relation": "calls",
       "source": "harness_scorecard_inspectinferentialhistory",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L860",
+      "source_location": "L863",
       "target": "harness_scorecard_collectharnessscorecard",
       "weight": 1
     },
@@ -30659,7 +30659,7 @@
       "relation": "calls",
       "source": "harness_scorecard_inspectruntimetrendartifact",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L861",
+      "source_location": "L864",
       "target": "harness_scorecard_collectharnessscorecard",
       "weight": 1
     },
@@ -30671,7 +30671,7 @@
       "relation": "calls",
       "source": "harness_scorecard_inspectruntimetrendhistory",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L862",
+      "source_location": "L865",
       "target": "harness_scorecard_collectharnessscorecard",
       "weight": 1
     },
@@ -30683,7 +30683,7 @@
       "relation": "calls",
       "source": "harness_scorecard_sortunique",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L798",
+      "source_location": "L801",
       "target": "harness_scorecard_collectharnessscorecard",
       "weight": 1
     },
@@ -30695,7 +30695,7 @@
       "relation": "calls",
       "source": "harness_scorecard_extractscenariosection",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L268",
+      "source_location": "L270",
       "target": "harness_scorecard_extractscenarionames",
       "weight": 1
     },
@@ -30707,7 +30707,7 @@
       "relation": "calls",
       "source": "harness_scorecard_sortunique",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L273",
+      "source_location": "L275",
       "target": "harness_scorecard_extractscenarionames",
       "weight": 1
     },
@@ -30719,7 +30719,7 @@
       "relation": "calls",
       "source": "harness_scorecard_sortunique",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L499",
+      "source_location": "L501",
       "target": "harness_scorecard_getdocumentedscenarioexpectations",
       "weight": 1
     },
@@ -30731,7 +30731,7 @@
       "relation": "calls",
       "source": "harness_scorecard_fileexists",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L423",
+      "source_location": "L425",
       "target": "harness_scorecard_hasanyharnessdocs",
       "weight": 1
     },
@@ -30743,7 +30743,7 @@
       "relation": "calls",
       "source": "harness_scorecard_builddocumentationstatus",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L471",
+      "source_location": "L473",
       "target": "harness_scorecard_inspectappdocumentation",
       "weight": 1
     },
@@ -30755,7 +30755,7 @@
       "relation": "calls",
       "source": "harness_scorecard_countmissingsnippets",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L446",
+      "source_location": "L448",
       "target": "harness_scorecard_inspectappdocumentation",
       "weight": 1
     },
@@ -30767,7 +30767,7 @@
       "relation": "calls",
       "source": "harness_scorecard_extractscenarionames",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L449",
+      "source_location": "L451",
       "target": "harness_scorecard_inspectappdocumentation",
       "weight": 1
     },
@@ -30779,7 +30779,7 @@
       "relation": "calls",
       "source": "harness_scorecard_fileexists",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L439",
+      "source_location": "L441",
       "target": "harness_scorecard_inspectappdocumentation",
       "weight": 1
     },
@@ -30791,7 +30791,7 @@
       "relation": "calls",
       "source": "harness_scorecard_buildgraphifystatus",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L771",
+      "source_location": "L774",
       "target": "harness_scorecard_inspectgraphifyartifacts",
       "weight": 1
     },
@@ -30803,7 +30803,7 @@
       "relation": "calls",
       "source": "harness_scorecard_fileexists",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L767",
+      "source_location": "L770",
       "target": "harness_scorecard_inspectgraphifyartifacts",
       "weight": 1
     },
@@ -30815,7 +30815,7 @@
       "relation": "calls",
       "source": "harness_scorecard_fileexists",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L513",
+      "source_location": "L515",
       "target": "harness_scorecard_inspectinferentialartifact",
       "weight": 1
     },
@@ -30827,7 +30827,7 @@
       "relation": "calls",
       "source": "harness_scorecard_buildemptyhistorymetric",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L612",
+      "source_location": "L614",
       "target": "harness_scorecard_inspectinferentialhistory",
       "weight": 1
     },
@@ -30839,7 +30839,7 @@
       "relation": "calls",
       "source": "harness_scorecard_fileexists",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L610",
+      "source_location": "L612",
       "target": "harness_scorecard_inspectinferentialhistory",
       "weight": 1
     },
@@ -30851,7 +30851,7 @@
       "relation": "calls",
       "source": "harness_scorecard_buildemptyhistorymetric",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L676",
+      "source_location": "L678",
       "target": "harness_scorecard_inspectruntimetrendartifact",
       "weight": 1
     },
@@ -30863,7 +30863,7 @@
       "relation": "calls",
       "source": "harness_scorecard_fileexists",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L664",
+      "source_location": "L666",
       "target": "harness_scorecard_inspectruntimetrendartifact",
       "weight": 1
     },
@@ -30875,7 +30875,7 @@
       "relation": "calls",
       "source": "harness_scorecard_buildemptyhistorymetric",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L707",
+      "source_location": "L709",
       "target": "harness_scorecard_inspectruntimetrendhistory",
       "weight": 1
     },
@@ -30887,7 +30887,7 @@
       "relation": "calls",
       "source": "harness_scorecard_fileexists",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L705",
+      "source_location": "L707",
       "target": "harness_scorecard_inspectruntimetrendhistory",
       "weight": 1
     },
@@ -30899,7 +30899,7 @@
       "relation": "calls",
       "source": "harness_scorecard_collectharnessscorecard",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L893",
+      "source_location": "L896",
       "target": "harness_scorecard_runharnessscorecard",
       "weight": 1
     },
@@ -30911,7 +30911,7 @@
       "relation": "calls",
       "source": "harness_scorecard_test_createinferentialartifact",
       "source_file": "scripts/harness-scorecard.test.ts",
-      "source_location": "L202",
+      "source_location": "L204",
       "target": "harness_scorecard_test_createfixturerepo",
       "weight": 1
     },
@@ -30923,7 +30923,7 @@
       "relation": "calls",
       "source": "harness_scorecard_test_write",
       "source_file": "scripts/harness-scorecard.test.ts",
-      "source_location": "L62",
+      "source_location": "L64",
       "target": "harness_scorecard_test_createfixturerepo",
       "weight": 1
     },
@@ -192815,7 +192815,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_test_ts",
       "source_file": "scripts/harness-scorecard.test.ts",
-      "source_location": "L51",
+      "source_location": "L53",
       "target": "harness_scorecard_test_createfixturerepo",
       "weight": 1
     },
@@ -192827,7 +192827,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_test_ts",
       "source_file": "scripts/harness-scorecard.test.ts",
-      "source_location": "L19",
+      "source_location": "L21",
       "target": "harness_scorecard_test_createinferentialartifact",
       "weight": 1
     },
@@ -192839,7 +192839,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_test_ts",
       "source_file": "scripts/harness-scorecard.test.ts",
-      "source_location": "L13",
+      "source_location": "L15",
       "target": "harness_scorecard_test_write",
       "weight": 1
     },
@@ -192851,7 +192851,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L287",
+      "source_location": "L289",
       "target": "harness_scorecard_builddocumentationstatus",
       "weight": 1
     },
@@ -192863,7 +192863,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L594",
+      "source_location": "L596",
       "target": "harness_scorecard_buildemptyhistorymetric",
       "weight": 1
     },
@@ -192875,7 +192875,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L311",
+      "source_location": "L313",
       "target": "harness_scorecard_buildgraphifystatus",
       "weight": 1
     },
@@ -192887,7 +192887,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L327",
+      "source_location": "L329",
       "target": "harness_scorecard_buildinferentialsummarynote",
       "weight": 1
     },
@@ -192899,7 +192899,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L339",
+      "source_location": "L341",
       "target": "harness_scorecard_buildsummary",
       "weight": 1
     },
@@ -192911,7 +192911,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L791",
+      "source_location": "L794",
       "target": "harness_scorecard_collectharnessscorecard",
       "weight": 1
     },
@@ -192923,7 +192923,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L280",
+      "source_location": "L282",
       "target": "harness_scorecard_countmissingsnippets",
       "weight": 1
     },
@@ -192935,7 +192935,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L236",
+      "source_location": "L238",
       "target": "harness_scorecard_createfilesystem",
       "weight": 1
     },
@@ -192947,7 +192947,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L267",
+      "source_location": "L269",
       "target": "harness_scorecard_extractscenarionames",
       "weight": 1
     },
@@ -192959,7 +192959,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L245",
+      "source_location": "L247",
       "target": "harness_scorecard_extractscenariosection",
       "weight": 1
     },
@@ -192971,7 +192971,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L215",
+      "source_location": "L217",
       "target": "harness_scorecard_fileexists",
       "weight": 1
     },
@@ -192983,7 +192983,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L495",
+      "source_location": "L497",
       "target": "harness_scorecard_getdocumentedscenarioexpectations",
       "weight": 1
     },
@@ -192995,7 +192995,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L414",
+      "source_location": "L416",
       "target": "harness_scorecard_hasanyharnessdocs",
       "weight": 1
     },
@@ -193007,7 +193007,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L431",
+      "source_location": "L433",
       "target": "harness_scorecard_inspectappdocumentation",
       "weight": 1
     },
@@ -193019,7 +193019,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L749",
+      "source_location": "L751",
       "target": "harness_scorecard_inspectdeliveryrunartifact",
       "weight": 1
     },
@@ -193031,7 +193031,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L763",
+      "source_location": "L766",
       "target": "harness_scorecard_inspectgraphifyartifacts",
       "weight": 1
     },
@@ -193043,7 +193043,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L508",
+      "source_location": "L510",
       "target": "harness_scorecard_inspectinferentialartifact",
       "weight": 1
     },
@@ -193055,7 +193055,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L604",
+      "source_location": "L606",
       "target": "harness_scorecard_inspectinferentialhistory",
       "weight": 1
     },
@@ -193067,7 +193067,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L656",
+      "source_location": "L658",
       "target": "harness_scorecard_inspectruntimetrendartifact",
       "weight": 1
     },
@@ -193079,7 +193079,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L699",
+      "source_location": "L701",
       "target": "harness_scorecard_inspectruntimetrendhistory",
       "weight": 1
     },
@@ -193091,7 +193091,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L323",
+      "source_location": "L325",
       "target": "harness_scorecard_ishealthyinferentialstatus",
       "weight": 1
     },
@@ -193103,7 +193103,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L211",
+      "source_location": "L213",
       "target": "harness_scorecard_isruntimescenarioname",
       "weight": 1
     },
@@ -193115,7 +193115,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L228",
+      "source_location": "L230",
       "target": "harness_scorecard_listdirectory",
       "weight": 1
     },
@@ -193127,7 +193127,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L201",
+      "source_location": "L203",
       "target": "harness_scorecard_normalizerepopath",
       "weight": 1
     },
@@ -193139,7 +193139,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L224",
+      "source_location": "L226",
       "target": "harness_scorecard_readjsonfile",
       "weight": 1
     },
@@ -193151,7 +193151,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L232",
+      "source_location": "L234",
       "target": "harness_scorecard_readtextfile",
       "weight": 1
     },
@@ -193163,7 +193163,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L889",
+      "source_location": "L892",
       "target": "harness_scorecard_runharnessscorecard",
       "weight": 1
     },
@@ -193175,7 +193175,7 @@
       "relation": "contains",
       "source": "scripts_harness_scorecard_ts",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L205",
+      "source_location": "L207",
       "target": "harness_scorecard_sortunique",
       "weight": 1
     },
@@ -222058,7 +222058,7 @@
       "label": "createFixtureRepo()",
       "norm_label": "createfixturerepo()",
       "source_file": "scripts/harness-scorecard.test.ts",
-      "source_location": "L51"
+      "source_location": "L53"
     },
     {
       "community": 1051,
@@ -222067,7 +222067,7 @@
       "label": "createInferentialArtifact()",
       "norm_label": "createinferentialartifact()",
       "source_file": "scripts/harness-scorecard.test.ts",
-      "source_location": "L19"
+      "source_location": "L21"
     },
     {
       "community": 1051,
@@ -222076,7 +222076,7 @@
       "label": "write()",
       "norm_label": "write()",
       "source_file": "scripts/harness-scorecard.test.ts",
-      "source_location": "L13"
+      "source_location": "L15"
     },
     {
       "community": 1051,
@@ -318178,7 +318178,7 @@
       "label": "buildDocumentationStatus()",
       "norm_label": "builddocumentationstatus()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L287"
+      "source_location": "L289"
     },
     {
       "community": 58,
@@ -318187,7 +318187,7 @@
       "label": "buildEmptyHistoryMetric()",
       "norm_label": "buildemptyhistorymetric()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L594"
+      "source_location": "L596"
     },
     {
       "community": 58,
@@ -318196,7 +318196,7 @@
       "label": "buildGraphifyStatus()",
       "norm_label": "buildgraphifystatus()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L311"
+      "source_location": "L313"
     },
     {
       "community": 58,
@@ -318205,7 +318205,7 @@
       "label": "buildInferentialSummaryNote()",
       "norm_label": "buildinferentialsummarynote()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L327"
+      "source_location": "L329"
     },
     {
       "community": 58,
@@ -318214,7 +318214,7 @@
       "label": "buildSummary()",
       "norm_label": "buildsummary()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L339"
+      "source_location": "L341"
     },
     {
       "community": 58,
@@ -318223,7 +318223,7 @@
       "label": "collectHarnessScorecard()",
       "norm_label": "collectharnessscorecard()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L791"
+      "source_location": "L794"
     },
     {
       "community": 58,
@@ -318232,7 +318232,7 @@
       "label": "countMissingSnippets()",
       "norm_label": "countmissingsnippets()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L280"
+      "source_location": "L282"
     },
     {
       "community": 58,
@@ -318241,7 +318241,7 @@
       "label": "createFileSystem()",
       "norm_label": "createfilesystem()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L236"
+      "source_location": "L238"
     },
     {
       "community": 58,
@@ -318250,7 +318250,7 @@
       "label": "extractScenarioNames()",
       "norm_label": "extractscenarionames()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L267"
+      "source_location": "L269"
     },
     {
       "community": 58,
@@ -318259,7 +318259,7 @@
       "label": "extractScenarioSection()",
       "norm_label": "extractscenariosection()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L245"
+      "source_location": "L247"
     },
     {
       "community": 58,
@@ -318268,7 +318268,7 @@
       "label": "fileExists()",
       "norm_label": "fileexists()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L215"
+      "source_location": "L217"
     },
     {
       "community": 58,
@@ -318277,7 +318277,7 @@
       "label": "getDocumentedScenarioExpectations()",
       "norm_label": "getdocumentedscenarioexpectations()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L495"
+      "source_location": "L497"
     },
     {
       "community": 58,
@@ -318286,7 +318286,7 @@
       "label": "hasAnyHarnessDocs()",
       "norm_label": "hasanyharnessdocs()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L414"
+      "source_location": "L416"
     },
     {
       "community": 58,
@@ -318295,7 +318295,7 @@
       "label": "inspectAppDocumentation()",
       "norm_label": "inspectappdocumentation()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L431"
+      "source_location": "L433"
     },
     {
       "community": 58,
@@ -318304,7 +318304,7 @@
       "label": "inspectDeliveryRunArtifact()",
       "norm_label": "inspectdeliveryrunartifact()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L749"
+      "source_location": "L751"
     },
     {
       "community": 58,
@@ -318313,7 +318313,7 @@
       "label": "inspectGraphifyArtifacts()",
       "norm_label": "inspectgraphifyartifacts()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L763"
+      "source_location": "L766"
     },
     {
       "community": 58,
@@ -318322,7 +318322,7 @@
       "label": "inspectInferentialArtifact()",
       "norm_label": "inspectinferentialartifact()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L508"
+      "source_location": "L510"
     },
     {
       "community": 58,
@@ -318331,7 +318331,7 @@
       "label": "inspectInferentialHistory()",
       "norm_label": "inspectinferentialhistory()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L604"
+      "source_location": "L606"
     },
     {
       "community": 58,
@@ -318340,7 +318340,7 @@
       "label": "inspectRuntimeTrendArtifact()",
       "norm_label": "inspectruntimetrendartifact()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L656"
+      "source_location": "L658"
     },
     {
       "community": 58,
@@ -318349,7 +318349,7 @@
       "label": "inspectRuntimeTrendHistory()",
       "norm_label": "inspectruntimetrendhistory()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L699"
+      "source_location": "L701"
     },
     {
       "community": 58,
@@ -318358,7 +318358,7 @@
       "label": "isHealthyInferentialStatus()",
       "norm_label": "ishealthyinferentialstatus()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L323"
+      "source_location": "L325"
     },
     {
       "community": 58,
@@ -318367,7 +318367,7 @@
       "label": "isRuntimeScenarioName()",
       "norm_label": "isruntimescenarioname()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L211"
+      "source_location": "L213"
     },
     {
       "community": 58,
@@ -318376,7 +318376,7 @@
       "label": "listDirectory()",
       "norm_label": "listdirectory()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L228"
+      "source_location": "L230"
     },
     {
       "community": 58,
@@ -318385,7 +318385,7 @@
       "label": "normalizeRepoPath()",
       "norm_label": "normalizerepopath()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L201"
+      "source_location": "L203"
     },
     {
       "community": 58,
@@ -318394,7 +318394,7 @@
       "label": "readJsonFile()",
       "norm_label": "readjsonfile()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L224"
+      "source_location": "L226"
     },
     {
       "community": 58,
@@ -318403,7 +318403,7 @@
       "label": "readTextFile()",
       "norm_label": "readtextfile()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L232"
+      "source_location": "L234"
     },
     {
       "community": 58,
@@ -318412,7 +318412,7 @@
       "label": "runHarnessScorecard()",
       "norm_label": "runharnessscorecard()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L889"
+      "source_location": "L892"
     },
     {
       "community": 58,
@@ -318421,7 +318421,7 @@
       "label": "sortUnique()",
       "norm_label": "sortunique()",
       "source_file": "scripts/harness-scorecard.ts",
-      "source_location": "L205"
+      "source_location": "L207"
     },
     {
       "community": 58,

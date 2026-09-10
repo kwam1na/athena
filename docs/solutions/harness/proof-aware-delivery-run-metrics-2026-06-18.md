@@ -1,7 +1,7 @@
 ---
 title: Proof-Aware Delivery Metrics Should Separate Validation Success From Proof Reuse
 date: 2026-06-18
-last_updated: 2026-08-28
+last_updated: 2026-09-10
 category: harness
 module: repo-harness
 problem_type: proof_telemetry_ambiguity
@@ -98,3 +98,29 @@ authoritative evidence.
   second cache, proof record, or invalidation contract.
 - Treat proof evaluation uncertainty as a reason to run the full gate, never as
   permission to skip it.
+
+## Product preparation observations (V26-1888)
+
+The installed product now reports its actual preparation decision on successful
+version-2 `command.completed` events for `prepare`. The optional `preparation`
+member carries `checks` (`executed` or `reused`) and the product's `reason`.
+Athena's scorecard passes that member through from the latest CLI preparation
+completion; it never decides from a refresh flag, elapsed time, or a prior success.
+
+`validation-equivalent` identifies valid reuse. Ordinary preparation reports
+`ordinary`; an invalid receipt or changed preparation fingerprint reports
+`receipt-not-reusable` or `preparation-fingerprint-changed` with executed checks.
+The receipt, policy, base, wiring, workspace and ownership validators continue
+to authorize reuse. These event fields are observations only.
+
+Missing detail is `null` (unknown) in the scorecard. This includes legacy
+records and a later failed or interrupted preparation: selecting the latest
+successful preparation instead would incorrectly keep showing an older reuse.
+The frozen version-1 event format is not widened or rewritten.
+
+The consumer tests cover each product reason, a successful reuse followed by a
+failure/interruption or a completion without detail, and historical version-1
+preparation. Producer tests drive real preparation and export, including reuse,
+fallback, failure and ownership boundaries. Install and qualify the compatible
+product archive before using the new field; a source checkout is not an adopter
+upgrade.
