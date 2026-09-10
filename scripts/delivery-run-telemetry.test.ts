@@ -174,6 +174,11 @@ it("binds only a successful CLI gate preceded by its context and v2 observations
   expect(await matchesCurrentGate(dir, config, sourceTree, withEvents([...v2Export.events.slice(0, -1), interveningCommand, { ...v2Gate, seq: 12 }]))).toBe(false);
   const newerContext: RunEvent = { ...v2Saved, eventId: "newer-context", seq: 11, payload: { ...v2Saved.payload, stage: "validation" } };
   expect(await matchesCurrentGate(dir, config, sourceTree, withEvents([...v2Export.events.slice(0, -1), newerContext, { ...v2Gate, seq: 12 }]))).toBe(false);
+  // A valid non-progress event must not be swallowed by the observation allowlist.
+  const decision: RunEvent = { ...v2Start, eventId: "intervening-decision", seq: 11, kind: "decision.recorded", payload: { fork: "Next step", choice: "Wait for operator" } };
+  const withDecision = withEvents([...v2Export.events.slice(0, -1), decision, { ...v2Gate, seq: 12 }]);
+  expect(parseDeliveryRunTelemetry(JSON.stringify(withDecision))).not.toBeNull();
+  expect(await matchesCurrentGate(dir, config, sourceTree, withDecision)).toBe(false);
   await mkdir(path.join(dir, "telemetry/delivery-runs"), { recursive: true });
   await writeFile(path.join(dir, "telemetry/delivery-runs/export.json"), JSON.stringify(export_));
   git("add", "."); expect(await matchesCurrentGate(dir, config, git("write-tree"), export_)).toBe(true);

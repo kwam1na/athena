@@ -13,7 +13,7 @@ tags:
   - pre-push
   - pr-athena
   - proof-telemetry
-delivery_diff_fingerprint: 8521f7729b87055e62e472ed05e8638136635931ebd4081825d7efadfc1a77f8
+delivery_diff_fingerprint: 23a76407126ceb57cfeea9d766c9afda72e0249ac59d98fd0e31ff83230e6fb7
 ---
 
 # Proof-Aware Delivery Metrics Should Separate Validation Success From Proof Reuse
