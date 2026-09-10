@@ -1,4 +1,6 @@
 import {
+  act,
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -3016,6 +3018,20 @@ describe("POSTerminalDetailViewContent", () => {
 });
 
 describe("POSTerminalDetailView", () => {
+  afterEach(async () => {
+    cleanup();
+    if (vi.isFakeTimers()) {
+      try {
+        await act(async () => {
+          await vi.runOnlyPendingTimersAsync();
+        });
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+  });
+
   beforeEach(() => {
     mocks.authState.isLoading = false;
     mocks.authState.user = { _id: "user-1" };
@@ -3125,7 +3141,10 @@ describe("POSTerminalDetailView", () => {
   });
 
   it("binds manager approval and the handoff command to the exact replacement drawer", async () => {
-    const user = userEvent.setup();
+    // input-otp leaves 0/10/50ms selection callbacks pending after unmount.
+    // Own that clock so teardown drains them before JSDOM removes window.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const handoffDetail: TerminalHealthDetail = {
       ...detail,
       syncEvidence: {

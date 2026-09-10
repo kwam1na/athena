@@ -17,6 +17,7 @@
         "packages/athena-webapp/convex/http.ts",
         "packages/athena-webapp/convex/operationAdmission",
         "packages/athena-webapp/src/components/shared-demo",
+        "packages/athena-webapp/playwright.demo.config.ts",
         "packages/athena-webapp/src/lib/errors/sharedDemoDenialObserver.ts",
         "packages/athena-webapp/src/routes/demo.tsx",
         "packages/athena-webapp/src/routes/_authed.tsx"
@@ -24,7 +25,7 @@
       "commands": [
         {
           "kind": "raw",
-          "command": "bun run --filter '@athena/webapp' test -- convex/sharedDemo convex/contextTracking convex/operationAdmission src/components/shared-demo src/lib/errors/sharedDemoDenialObserver.test.ts src/routes/demo.test.tsx src/routes/_authed.test.tsx"
+          "command": "bun run --filter '@athena/webapp' test -- convex/sharedDemo convex/contextTracking convex/operationAdmission src/components/shared-demo src/tests/demo/navigationCases.test.ts src/components/product/AnalyticsInsights.test.tsx src/components/reports/ReportsSkuDetailView.test.tsx src/components/operations/InventoryImportView.test.tsx src/lib/errors/sharedDemoDenialObserver.test.ts src/routes/demo.test.tsx src/routes/_authed.test.tsx"
         },
         {
           "kind": "script",

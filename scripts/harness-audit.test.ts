@@ -236,6 +236,11 @@ async function createFixtureRepo() {
     rootDir,
   );
   await write(
+    "packages/athena-webapp/playwright.demo.config.ts",
+    "export default {};\n",
+    rootDir,
+  );
+  await write(
     "packages/athena-webapp/src/design-system-build-config.test.ts",
     "export {};\n",
     rootDir,

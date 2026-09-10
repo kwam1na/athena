@@ -10,14 +10,17 @@ import {
 } from "lucide-react";
 import { getRelativeTime } from "~/src/lib/utils";
 import { FadeIn } from "../common/FadeIn";
+import { useSharedDemoContext } from "~/src/hooks/useSharedDemoContext";
+import { DemoNotice } from "../shared-demo/DemoNotice";
 
 export const AnalyticsInsights = () => {
   const { activeStore } = useGetActiveStore();
   const { activeProductVariant, activeProduct } = useProduct();
+  const sharedDemoContext = useSharedDemoContext();
 
   const analytics = useQuery(
     api.storeFront.analytics.getAll,
-    activeStore?._id
+    sharedDemoContext === null && activeStore?._id && activeProduct?._id
       ? {
           storeId: activeStore._id,
           action: "viewed_product",
@@ -25,6 +28,10 @@ export const AnalyticsInsights = () => {
         }
       : "skip",
   );
+
+  if (sharedDemoContext?.kind === "shared_demo") {
+    return <DemoNotice text="Storefront analytics are not available in the demo." />;
+  }
 
   if (!activeStore || !analytics || !activeProduct || !activeProductVariant)
     return null;

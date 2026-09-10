@@ -1178,7 +1178,7 @@ export function InventoryImportView({
   }
 
   if (isReviewRoute && !parseResult) {
-    const isLoadingReviewImport = latestReviewVersion === undefined;
+    const isLoadingReviewImport = !isSharedDemo && latestReviewVersion === undefined;
 
     return (
       <View hideBorder hideHeaderBottomBorder>

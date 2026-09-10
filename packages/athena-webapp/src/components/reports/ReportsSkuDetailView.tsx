@@ -319,7 +319,9 @@ export function ReportsSkuDetailView({
                       search={{
                         mode: "cycle_count",
                         o: getOrigin(),
-                        sku: productSkuId,
+                        ...(isSharedDemo
+                          ? { query: detail.identity.sku ?? productSkuId }
+                          : { sku: productSkuId }),
                       }}
                       to="/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments"
                     >
