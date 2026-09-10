@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, rm, cp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import {
   defineHarnessConfig, computeDeliverableIdentity, GATE_STRUCTURAL_FINDING_CODES,
   type HarnessConfigInput,
@@ -138,6 +138,24 @@ it("product evidence ingestion refuses absent and malformed evidence", async () 
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const productEntry = path.join(repositoryRoot, "scripts/delivery-product.ts");
+
+it("ordinary wrapper binds its SIGQUIT listener guard to process.platform", async () => {
+  const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
+  const on = vi.spyOn(process, "on");
+  const removeListener = vi.spyOn(process, "removeListener");
+  try {
+    Object.defineProperty(process, "platform", { ...platformDescriptor, value: "win32" });
+    expect(await runDeliveryProduct(["--help"], repositoryRoot)).toBe(0);
+    expect(on.mock.calls.filter(([signal]) => signal === "SIGQUIT")).toEqual([]);
+    expect(removeListener.mock.calls.filter(([signal]) => signal === "SIGQUIT")).toEqual([]);
+    expect(on.mock.calls.map(([signal]) => signal)).toEqual(expect.arrayContaining(["SIGINT", "SIGTERM", "SIGHUP"]));
+    expect(removeListener.mock.calls.map(([signal]) => signal)).toEqual(expect.arrayContaining(["SIGINT", "SIGTERM", "SIGHUP"]));
+  } finally {
+    on.mockRestore();
+    removeListener.mockRestore();
+    if (platformDescriptor) Object.defineProperty(process, "platform", platformDescriptor);
+  }
+});
 
 async function installedFixture() {
   const f = await fixture();

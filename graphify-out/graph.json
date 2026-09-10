@@ -20531,7 +20531,7 @@
       "relation": "calls",
       "source": "delivery_product_test_config",
       "source_file": "scripts/delivery-product.test.ts",
-      "source_location": "L147",
+      "source_location": "L165",
       "target": "delivery_product_test_installedfixture",
       "weight": 1
     },
@@ -20543,7 +20543,7 @@
       "relation": "calls",
       "source": "delivery_product_test_fixture",
       "source_file": "scripts/delivery-product.test.ts",
-      "source_location": "L143",
+      "source_location": "L161",
       "target": "delivery_product_test_installedfixture",
       "weight": 1
     },
@@ -186695,7 +186695,7 @@
       "relation": "contains",
       "source": "scripts_delivery_product_test_ts",
       "source_file": "scripts/delivery-product.test.ts",
-      "source_location": "L142",
+      "source_location": "L160",
       "target": "delivery_product_test_installedfixture",
       "weight": 1
     },
@@ -336646,7 +336646,7 @@
       "label": "installedFixture()",
       "norm_label": "installedfixture()",
       "source_file": "scripts/delivery-product.test.ts",
-      "source_location": "L142"
+      "source_location": "L160"
     },
     {
       "community": 806,
