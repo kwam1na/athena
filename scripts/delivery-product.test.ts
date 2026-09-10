@@ -8,12 +8,27 @@ import {
   defineHarnessConfig, computeDeliverableIdentity, GATE_STRUCTURAL_FINDING_CODES,
   type HarnessConfigInput,
 } from "../.agent-skills/current/runtime/kernel.mjs";
-import { runDeliveryProduct, wireRepo } from "./delivery-product";
+import { installDeliveryProductSigquitHandler, runDeliveryProduct, wireRepo } from "./delivery-product";
 import { reviewEvidenceArguments } from "./harness-review-evidence";
 
 const exec = promisify(execFile);
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
+
+it.each([
+  { platform: "darwin", expected: ["on:SIGQUIT", "remove:SIGQUIT"] },
+  { platform: "win32", expected: [] },
+] as const)("SIGQUIT listener lifecycle follows the $platform platform guard", ({ platform, expected }) => {
+  const observed: string[] = [];
+  const remove = installDeliveryProductSigquitHandler(
+    platform,
+    () => {},
+    signal => { observed.push(`on:${signal}`); },
+    signal => { observed.push(`remove:${signal}`); },
+  );
+  remove();
+  expect(observed).toEqual(expected);
+});
 
 function config(overrides: Partial<HarnessConfigInput> = {}) {
   return defineHarnessConfig({

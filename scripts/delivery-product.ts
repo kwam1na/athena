@@ -4,6 +4,17 @@ import { runCli, type CliRuntime } from "../.agent-skills/current/runtime/cli-ap
 export { importHarnessConfig, wireRepo } from "../.agent-skills/current/runtime/cli-api.mjs";
 export type { CliRuntime } from "../.agent-skills/current/runtime/cli-api.mjs";
 
+export function installDeliveryProductSigquitHandler(
+  platform: NodeJS.Platform,
+  handler: () => void,
+  on: (signal: NodeJS.Signals, listener: () => void) => void,
+  remove: (signal: NodeJS.Signals, listener: () => void) => void,
+): () => void {
+  if (platform === "win32") return () => {};
+  on("SIGQUIT", handler);
+  return () => remove("SIGQUIT", handler);
+}
+
 export async function runDeliveryProduct(
   argv: readonly string[],
   rootDir = process.cwd(),
@@ -23,13 +34,18 @@ export async function runDeliveryProduct(
     process.on("SIGINT", interrupt);
     process.on("SIGTERM", terminate);
     process.on("SIGHUP", hangup);
-    if (process.platform !== "win32") process.on("SIGQUIT", quit);
+    const removeQuit = installDeliveryProductSigquitHandler(
+      process.platform,
+      quit,
+      (signal, listener) => { process.on(signal, listener); },
+      (signal, listener) => { process.removeListener(signal, listener); },
+    );
     try { const code = await child.exited; return interrupted ?? code; }
     finally {
       process.removeListener("SIGINT", interrupt);
       process.removeListener("SIGTERM", terminate);
       process.removeListener("SIGHUP", hangup);
-      if (process.platform !== "win32") process.removeListener("SIGQUIT", quit);
+      removeQuit();
     }
   }
   const controller = new AbortController();

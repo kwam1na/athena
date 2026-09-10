@@ -12,7 +12,7 @@ root_cause: logic_error
 resolution_type: code_fix
 severity: medium
 tags: [delivery-product, sigquit, process-signals, descendant-cleanup, installed-runtime]
-delivery_diff_fingerprint: e31c09b8d8cc7519d644f51d64c234737b6bb7a6108952514deab569ca14e6c6
+delivery_diff_fingerprint: 3ffb1035775d0c09ec1d99f8d6a784bbc89de4e7adf80b0bc078ad615aefab98
 ---
 
 # Delivery wrappers must preserve SIGQUIT cleanup
@@ -39,6 +39,8 @@ Register a POSIX-only SIGQUIT handler beside the existing wrapper handlers. Pres
 
 The integration fixture records launcher and worker PIDs and the actual signal observed by the worker. Its matrix covers direct and terminal-group SIGQUIT for both cooperative workers and resistant workers. Cooperative workers exit on SIGQUIT; resistant workers force the installed launcher to use bounded SIGKILL escalation. After the wrapper exits, every case asserts that both descendants are absent or zombies. The fixture sends SIGQUIT only after both PID files exist, so it does not exercise arrival during launcher startup.
 
+Keep the platform guard observable without pretending a macOS process is Windows. The wrapper's SIGQUIT listener lifecycle is a small helper that accepts the platform plus registration and removal callbacks. A simulated `win32` row proves neither callback runs, a POSIX row proves both run, and removing the guard kills that focused test.
+
 The repository installs the exact qualified product archive through `bun run agent-skills:install -- --archive ... --metadata ... --maintenance`. This keeps the generated generation, active pointer, exposures, runtime, and compiled policy bound to the producer artifact rather than local edits.
 
 ## Why This Works
@@ -50,6 +52,7 @@ The platform guard avoids registering unsupported POSIX signal behavior on Windo
 ## Prevention
 
 - Extend wrapper signal matrices whenever the installed launcher's supported signal set changes.
+- Pin platform guards through the actual listener lifecycle so an unconditional registration mutation fails.
 - Exercise both direct delivery and terminal process-group delivery; shells and terminals can target different processes.
 - Assert that no live descendants remain when wrapper completion is accepted instead of relying only on an exit code.
 - Install and test exact qualified artifacts. Never repair a tracked generated generation by hand.
