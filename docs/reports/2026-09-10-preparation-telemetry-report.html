@@ -5,7 +5,7 @@
   <title>Know when preparation checks ran</title>
 </head>
 <body>
-<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="349ce8ec366abd4ccc2db0a81aa3de5ba0765bdcf5dfa4ab20996cf13364b0d0">
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="8521f7729b87055e62e472ed05e8638136635931ebd4081825d7efadfc1a77f8">
   <header data-report-section="header">
     <h1>Know when preparation checks ran</h1>
     <p>V26-1888: product-owned preparation telemetry in Athena</p>
@@ -17,7 +17,7 @@
     </ul>
     <dl data-report-meta>
       <dt>Issue</dt><dd>https://linear.app/v26-labs/issue/V26-1888</dd>
-      <dt>Producer PR</dt><dd>https://github.com/kwam1na/agent-delivery-harness/pull/131</dd>
+      <dt>Producer PR</dt><dd>https://github.com/kwam1na/agent-delivery-harness/pull/131 (merged e4866320)</dd>
       <dt>Source branch</dt><dd>codex/v26-1888-preparation-telemetry</dd>
       <dt>Source commit</dt><dd>a80682762ec5a5096b4b69350f81be23ecc30a77</dd>
       <dt>Status</dt><dd>Candidate; independent review, canonical gate and merge pending</dd>
@@ -53,7 +53,7 @@
         <li>reused / validation-equivalent: the existing strict receipt validation permitted reuse.</li>
         <li>executed / receipt-not-reusable: refresh could not reuse the retained receipt, so checks ran.</li>
         <li>executed / preparation-fingerprint-changed: the preparation fingerprint changed, so checks ran.</li>
-        <li>null: the latest completion has no preparation detail; its execution/reuse status is unknown.</li>
+        <li>null: the latest retained matching completion has no preparation detail; its execution/reuse status is unknown.</li>
       </ul>
   </section>
   <section data-report-section="failure-boundaries">
@@ -61,13 +61,14 @@
       <p>Failed or interrupted preparations do not receive a successful preparation object. When their completion is retained, it replaces the older completion and fieldless detail yields null. If the newer completion append is lost, the scorecard can only report the latest retained older completion.</p>
       <p>Version-1 journals retain their frozen grammar. Older version-2 records and successful completions can also lack the optional field. None is relabeled as executed. The schema rejects the field on unsuccessful or non-prepare completions and rejects contradictory status/reason pairs.</p>
       <p>Overlapping attempts retain the existing ownership rules: a newer attempt can supersede an older receipt, and a failed or interrupted command cannot report successful reuse.</p>
+      <p>The first real adopter gate exposed a compatibility gap: progress events now occur between the saved gate context and its completion. Athena now skips only declared version-2 progress observations, then requires the latest remaining event before the gate to be its athena-gate context. A real intervening command, a newer context, an unsuccessful or non-CLI gate, or a stale validation digest still prevents attribution.</p>
       <p>Observation writes are best effort. If appending a completion fails, telemetry cannot reveal that missing completion. The scorecard reports the latest retained completion, which may be older; if that record has no detail it returns null. Missing telemetry never changes command authority.</p>
   </section>
   <section data-report-section="validation">
     <h2>Validation and delivery status</h2>
-      <p>The combined producer passed npm run check: 3,173 tests across 142 files. Focused preparation, ownership, interruption, export and closed-schema probes passed. The earlier checkpoint also passed standalone installation and packed-product qualification.</p>
+      <p>The merged producer passed npm run check: 3,174 tests across 142 files. Focused preparation, ownership, interruption, export and closed-schema probes passed. The earlier checkpoint also passed standalone installation and packed-product qualification.</p>
       <p>The final archive passed integrity verification and the product installation sensor, including fresh runtime-byte comparison, both skill exposures, installed preparation/context and missing-review refusal. Athena reports productReady=true, current lifecycle, no blockers and current compiled policy.</p>
-      <p>On the final installed archive, bun run harness:test passed 1,316 tests across 68 files, including all 14 scorecard tests. Disposable checkpoint mutations independently proved the CLI-author, command-name and event-kind selection guards. Canonical mechanical preparation passed. Independent delivery review and bun run pr:athena remain pending at report creation.</p>
+      <p>On the final installed archive, bun run harness:test passed 1,316 tests across 68 files, including all 14 scorecard tests. Disposable checkpoint mutations independently proved the CLI-author, command-name and event-kind selection guards. Canonical mechanical preparation passed. Both independent lenses approved the original adopter candidate. Its full gate admitted all obligations, then telemetry export exposed the version-2 adjacency gap described above. The compatibility repair requires fresh preparation, independent verification and canonical gate completion before merge.</p>
       <p>Merge, Linear Done and root alignment are pending. Production deployment is not applicable to the requested merged-changes finish line.</p>
   </section>
   <section data-report-section="guidance">
@@ -84,10 +85,10 @@
     <table>
       <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
       <tbody>
+        <tr><td><code>scripts/delivery-run-telemetry.ts</code></td><td>Validates and persists the product export; matches the saved gate context across progress observations while retaining command and digest boundaries.</td></tr>
         <tr><td><code>scripts/harness-scorecard.ts</code></td><td>Passes the latest product preparation field into the scorecard without a new decision.</td></tr>
-        <tr><td><code>scripts/harness-scorecard.test.ts</code></td><td>Holds the four answers, legacy absence and later failure behavior.</td></tr>
+        <tr><td><code>scripts/harness-scorecard.test.ts</code></td><td>Holds the four product pairs, unknown states and event-selection behavior.</td></tr>
         <tr><td><code>.agent-skills/current/runtime/</code></td><td>Verified runtime 0.4.0 and matching declarations installed from archive ed9eddbffe953181ef8ea21ea16f2e3848aff215bb766d69b2677566172f8dd2.</td></tr>
-        <tr><td><code>scripts/delivery-run-telemetry.ts</code></td><td>Existing validated export reader and persistence boundary.</td></tr>
         <tr><td><code>docs/solutions/harness/proof-aware-delivery-run-metrics-2026-06-18.md</code></td><td>Preserves the distinction between validation success and verified reuse.</td></tr>
       </tbody>
     </table>
@@ -190,6 +191,7 @@
   </section>
   <section data-report-section="subagent-evidence">
     <h2>Subagent evidence</h2>
+      <p>athena_export_diagnosis (gpt-5.6-sol high) diagnosed the real successful-gate/export mismatch and supplied the bounded consumer compatibility repair and regressions.</p>
     <dl>
       <dt>Session context — athena_report_context (GPT-5.6 Luna)</dt><dd>Traced the cutover review, prior proof-reuse decisions and delivery ownership from bounded ticket and repository sources.</dd>
       <dt>Delivered diff — athena_report_diff (GPT-5.6 Luna)</dt><dd>Mapped producer-to-consumer data flow, legacy reader incompatibility, test evidence and generated artifact scope.</dd>

@@ -105,7 +105,7 @@ it("parses only supported invocation arguments", () => {
 });
 
 
-it("binds only an adjacent successful CLI gate context and permits record-neutral transport", async () => {
+it("binds only a successful CLI gate preceded by its context and v2 observations", async () => {
   const dir = await root();
   function git(...args: string[]) {
     const result = spawnSync("git", args, { cwd: dir, encoding: "utf8" });
@@ -136,6 +136,44 @@ it("binds only an adjacent successful CLI gate context and permits record-neutra
   expect(await matchesCurrentGate(dir, config, sourceTree, withEvents([...export_.events, { ...gate, seq: 4, payload: { ...gate.payload, outcome: "policy" } }]))).toBe(false);
   // A second successful completion cannot borrow the earlier context.
   expect(await matchesCurrentGate(dir, config, sourceTree, withEvents([...export_.events, { ...gate, seq: 4 }]))).toBe(false);
+  const v2Start: RunEvent = { ...record.events[0]!, version: "run-event/2", eventId: "start", seq: 1 };
+  const v2Saved: RunEvent = { ...saved, version: "run-event/2", eventId: "gate-context", seq: 2 };
+  const activity = (state: "running" | "completed", seq: number): RunEvent => ({
+    ...record.events[0]!, version: "run-event/2", eventId: `gate-${state}`, seq, kind: "activity.observed", actor: { role: "cli" }, candidateTreeSha: sourceTree,
+    payload: { activityId: "command-gate", attemptId: "command-gate", candidateTreeSha: sourceTree, state, owner: "delivery-harness.cli", phase: "gate", nextStep: "Continue gate." },
+  });
+  const waitStarted: RunEvent = {
+    ...record.events[0]!, version: "run-event/2", eventId: "gate-wait-started", seq: 4, kind: "wait.started", actor: { role: "cli" }, candidateTreeSha: sourceTree,
+    payload: { activityId: "command-gate", attemptId: "command-gate", candidateTreeSha: sourceTree, waitId: "gate-wait", owner: "operator", waitingOn: "human", reason: "Gate prompt.", nextAction: "Answer prompt.", scope: "This gate only." },
+  };
+  const waitResolved: RunEvent = {
+    ...record.events[0]!, version: "run-event/2", eventId: "gate-wait-resolved", seq: 5, kind: "wait.resolved", actor: { role: "cli" }, candidateTreeSha: sourceTree,
+    payload: { activityId: "command-gate", attemptId: "command-gate", candidateTreeSha: sourceTree, waitId: "gate-wait", resolution: "Prompt answered.", scope: "This gate only." },
+  };
+  const artifact: RunEvent = {
+    ...record.events[0]!, version: "run-event/2", eventId: "review-artifact", seq: 6, kind: "artifact.referenced", actor: { role: "executor" }, candidateTreeSha: sourceTree,
+    payload: { artifactId: "review-artifact", activityId: "review", attemptId: "review-r1", candidateTreeSha: sourceTree, digest: "e".repeat(64), sizeBytes: 10, mediaType: "application/json", producer: "codex" },
+  };
+  const report: RunEvent = {
+    ...record.events[0]!, version: "run-event/2", eventId: "review-report", seq: 7, kind: "report.referenced", actor: { role: "executor" }, candidateTreeSha: sourceTree,
+    payload: { reportId: "review-report", role: "clarification", artifactId: "review-artifact", activityId: "review", attemptId: "review-r1", candidateTreeSha: sourceTree, availability: "referenced" },
+  };
+  const finding: RunEvent = {
+    ...record.events[0]!, version: "run-event/2", eventId: "review-finding", seq: 8, kind: "finding.observed", actor: { role: "executor" }, candidateTreeSha: sourceTree,
+    payload: { findingId: "review-finding", reportId: "review-report", activityId: "review", attemptId: "review-r1", candidateTreeSha: sourceTree, state: "resolved", severity: "P2" },
+  };
+  const finish: RunEvent = {
+    ...record.events[0]!, version: "run-event/2", eventId: "finish-observed", seq: 9, kind: "finish.step.observed", actor: { role: "executor" }, candidateTreeSha: sourceTree,
+    payload: { stepId: "focused-tests", candidateTreeSha: sourceTree, name: "Focused tests", state: "completed", owner: "executor" },
+  };
+  const v2Gate: RunEvent = { ...gate, version: "run-event/2", eventId: "gate-completed", seq: 11 };
+  const v2Export = withEvents([v2Start, v2Saved, activity("running", 3), waitStarted, waitResolved, artifact, report, finding, finish, activity("completed", 10), v2Gate]);
+  expect(parseDeliveryRunTelemetry(JSON.stringify(v2Export))).not.toBeNull();
+  expect(await matchesCurrentGate(dir, config, sourceTree, v2Export)).toBe(true);
+  const interveningCommand: RunEvent = { ...v2Gate, eventId: "verify-completed", seq: 11, payload: { command: "verify", outcome: "ok", durationMs: 1 } };
+  expect(await matchesCurrentGate(dir, config, sourceTree, withEvents([...v2Export.events.slice(0, -1), interveningCommand, { ...v2Gate, seq: 12 }]))).toBe(false);
+  const newerContext: RunEvent = { ...v2Saved, eventId: "newer-context", seq: 11, payload: { ...v2Saved.payload, stage: "validation" } };
+  expect(await matchesCurrentGate(dir, config, sourceTree, withEvents([...v2Export.events.slice(0, -1), newerContext, { ...v2Gate, seq: 12 }]))).toBe(false);
   await mkdir(path.join(dir, "telemetry/delivery-runs"), { recursive: true });
   await writeFile(path.join(dir, "telemetry/delivery-runs/export.json"), JSON.stringify(export_));
   git("add", "."); expect(await matchesCurrentGate(dir, config, git("write-tree"), export_)).toBe(true);

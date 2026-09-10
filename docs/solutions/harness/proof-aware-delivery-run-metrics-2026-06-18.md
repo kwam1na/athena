@@ -13,7 +13,7 @@ tags:
   - pre-push
   - pr-athena
   - proof-telemetry
-delivery_diff_fingerprint: 349ce8ec366abd4ccc2db0a81aa3de5ba0765bdcf5dfa4ab20996cf13364b0d0
+delivery_diff_fingerprint: 8521f7729b87055e62e472ed05e8638136635931ebd4081825d7efadfc1a77f8
 ---
 
 # Proof-Aware Delivery Metrics Should Separate Validation Success From Proof Reuse
@@ -124,3 +124,13 @@ preparation. Producer tests drive real preparation and export, including reuse,
 fallback, failure and ownership boundaries. Install and qualify the compatible
 product archive before using the new field; a source checkout is not an adopter
 upgrade.
+
+The first real adopter gate exposed a version boundary in telemetry attribution:
+version-2 CLI activity events and captured reports sit between the saved gate
+context and its successful completion. Requiring raw-event adjacency rejects
+that valid completion even when its strict validation digest matches. Ignore
+only the product's declared version-2 progress observations when locating the
+immediately preceding command context; a real intervening command or newer
+context still breaks attribution. Keep the CLI-success and current-digest
+checks. A fixture containing only version-1 events cannot prove this adopter
+path; retain the real failure and test valid version-2 interleavings as well.

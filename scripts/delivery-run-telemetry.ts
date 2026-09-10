@@ -77,9 +77,11 @@ export async function matchesCurrentGate(rootDir: string, config: HarnessConfig,
   const gate = record.events.findLast(event => event.kind === "command.completed" && event.payload.command === "gate");
   if (!gate || gate.actor.role !== "cli" || gate.payload.outcome !== "ok" || typeof gate.payload.digest !== "string") return false;
   const preceding = record.events.slice(0, record.events.indexOf(gate));
-  const saved = preceding.at(-1);
+  const versionTwoObservationKinds = new Set(["activity.observed", "wait.started", "wait.resolved", "finding.observed", "report.referenced", "artifact.referenced", "finish.step.observed"]);
+  const saved = preceding.findLast(event => event.version !== "run-event/2" || !versionTwoObservationKinds.has(event.kind));
   // The wrapper saves the accepted contract immediately before invoking the actual gate.
-  // A loose match to any earlier context would misattribute a later gate observation.
+  // Version-two observations may describe that invocation without advancing the
+  // command sequence. A real intervening command or context still breaks attribution.
   if (!saved || saved.kind !== "context.saved" || saved.payload.stage !== "athena-gate" || !saved.candidateTreeSha) return false;
   const projection = { ...config, computingIdentityVersion: "validation-tree/v1", reviewNeutral: config.recordNeutral };
   // The product records the strict projection at gate completion. Its staged
