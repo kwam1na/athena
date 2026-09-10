@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { OperationsQueueView } from "~/src/components/operations/OperationsQueueView";
 import type { StockAdjustmentSearchPatch } from "~/src/components/operations/StockAdjustmentWorkspace";
+import { resolveSharedDemoStockSearch } from "~/src/components/shared-demo/sharedDemoStockNavigation";
 
 const stockAdjustmentSearchSchema = z.object({
   availability: z
@@ -16,7 +17,7 @@ const stockAdjustmentSearchSchema = z.object({
   selectedSku: z.string().optional(),
   sku: z.string().optional(),
   work: z.literal("synced_sale_inventory_review").optional(),
-});
+}).transform(resolveSharedDemoStockSearch);
 
 export const Route = createFileRoute(
   "/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments",

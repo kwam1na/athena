@@ -85,6 +85,15 @@ describe("ReportsSkuDetailView shared demo", () => {
     sharedDemoContext = null;
   });
 
+  it("links demo stock adjustments by SKU code, never by fixture ID", () => {
+    sharedDemoContext = { kind: "shared_demo", storeId: "store-1" };
+    useQuery.mockReturnValue(undefined);
+    render(<ReportsSkuDetailView {...demoProps} productSkuId={demoSkuId} />);
+    const href = new URL(screen.getByRole("link", { name: "Adjust stock" }).getAttribute("href")!, "http://localhost");
+    expect(href.searchParams.get("sku")).toBeNull();
+    expect(href.searchParams.get("query")).toBe(SHARED_DEMO_PRODUCTS[0]!.sku);
+  });
+
   it("renders demo SKU detail and day evidence with no live reads", () => {
     sharedDemoContext = { kind: "shared_demo", storeId: "store-1" };
     useQuery.mockReturnValue(undefined);
