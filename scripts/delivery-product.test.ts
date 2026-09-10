@@ -3,17 +3,32 @@ import { mkdtemp, mkdir, writeFile, rm, cp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import {
   defineHarnessConfig, computeDeliverableIdentity, GATE_STRUCTURAL_FINDING_CODES,
   type HarnessConfigInput,
 } from "../.agent-skills/current/runtime/kernel.mjs";
-import { runDeliveryProduct, wireRepo } from "./delivery-product";
+import { installDeliveryProductSigquitHandler, runDeliveryProduct, wireRepo } from "./delivery-product";
 import { reviewEvidenceArguments } from "./harness-review-evidence";
 
 const exec = promisify(execFile);
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
+
+it.each([
+  { platform: "darwin", expected: ["on:SIGQUIT", "remove:SIGQUIT"] },
+  { platform: "win32", expected: [] },
+] as const)("SIGQUIT listener lifecycle follows the $platform platform guard", ({ platform, expected }) => {
+  const observed: string[] = [];
+  const remove = installDeliveryProductSigquitHandler(
+    platform,
+    () => {},
+    signal => { observed.push(`on:${signal}`); },
+    signal => { observed.push(`remove:${signal}`); },
+  );
+  remove();
+  expect(observed).toEqual(expected);
+});
 
 function config(overrides: Partial<HarnessConfigInput> = {}) {
   return defineHarnessConfig({
@@ -124,6 +139,24 @@ it("product evidence ingestion refuses absent and malformed evidence", async () 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const productEntry = path.join(repositoryRoot, "scripts/delivery-product.ts");
 
+it("ordinary wrapper binds its SIGQUIT listener guard to process.platform", async () => {
+  const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
+  const on = vi.spyOn(process, "on");
+  const removeListener = vi.spyOn(process, "removeListener");
+  try {
+    Object.defineProperty(process, "platform", { ...platformDescriptor, value: "win32" });
+    expect(await runDeliveryProduct(["--help"], repositoryRoot)).toBe(0);
+    expect(on.mock.calls.filter(([signal]) => signal === "SIGQUIT")).toEqual([]);
+    expect(removeListener.mock.calls.filter(([signal]) => signal === "SIGQUIT")).toEqual([]);
+    expect(on.mock.calls.map(([signal]) => signal)).toEqual(expect.arrayContaining(["SIGINT", "SIGTERM", "SIGHUP"]));
+    expect(removeListener.mock.calls.map(([signal]) => signal)).toEqual(expect.arrayContaining(["SIGINT", "SIGTERM", "SIGHUP"]));
+  } finally {
+    on.mockRestore();
+    removeListener.mockRestore();
+    if (platformDescriptor) Object.defineProperty(process, "platform", platformDescriptor);
+  }
+});
+
 async function installedFixture() {
   const f = await fixture();
   for (const name of [".agent-skills", ".agents/skills", ".claude/skills"]) {
@@ -162,38 +195,53 @@ it.each(["--help", "-h"])("native installed %s exposes product commands", async 
 }, 20000);
 
 it.each([
-  { signal: "SIGINT", terminalGroup: false },
-  { signal: "SIGTERM", terminalGroup: false },
-  { signal: "SIGHUP", terminalGroup: false },
-  { signal: "SIGHUP", terminalGroup: true },
-] as const)("native wrapper %j waits for launcher and worker termination", async ({ signal, terminalGroup }) => {
+  { signal: "SIGINT", terminalGroup: false, resistant: true },
+  { signal: "SIGTERM", terminalGroup: false, resistant: true },
+  { signal: "SIGHUP", terminalGroup: false, resistant: true },
+  { signal: "SIGHUP", terminalGroup: true, resistant: true },
+  { signal: "SIGQUIT", terminalGroup: false, resistant: false },
+  { signal: "SIGQUIT", terminalGroup: false, resistant: true },
+  { signal: "SIGQUIT", terminalGroup: true, resistant: false },
+  { signal: "SIGQUIT", terminalGroup: true, resistant: true },
+] as const)("native wrapper %j waits for launcher and worker termination", async ({ signal, terminalGroup, resistant }) => {
   const f = await fixture();
   // Import the installed launcher's cancellation boundary without changing its payload.
   const installed = path.join(repositoryRoot, ".agent-skills/current");
-  await f.write(".agent-skills/current/__main__.py", `import sys\nfrom pathlib import Path\nsys.path.insert(0, ${JSON.stringify(installed)})\nfrom agent_skills.product import _run_command\nraise SystemExit(_run_command([sys.executable, '-B', 'worker.py'], Path.cwd()))\n`);
-  await f.write("worker.py", "import os, signal, time\nfrom pathlib import Path\nsignal.signal(signal.SIGINT, signal.SIG_IGN)\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\nsignal.signal(signal.SIGHUP, signal.SIG_IGN)\nPath('worker.pid').write_text(str(os.getpid()))\nwhile True: time.sleep(1)\n");
+  await f.write(".agent-skills/current/__main__.py", `import os, sys\nfrom pathlib import Path\nsys.path.insert(0, ${JSON.stringify(installed)})\nfrom agent_skills.product import _run_command\nPath('launcher.pid').write_text(str(os.getpid()))\nraise SystemExit(_run_command([sys.executable, '-B', 'worker.py', ${JSON.stringify(String(resistant))}], Path.cwd()))\n`);
+  await f.write("worker.py", "import os, signal, sys, time\nfrom pathlib import Path\nresistant = sys.argv[1] == 'true'\ndef received(signum, _frame):\n    Path('worker.sig').write_text(signal.Signals(signum).name)\n    if not resistant: os._exit(0)\nfor name in ('SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT'):\n    if hasattr(signal, name): signal.signal(getattr(signal, name), received)\nPath('worker.pid').write_text(str(os.getpid()))\nwhile True: time.sleep(1)\n");
   // An isolated foreground group models a terminal hangup reaching both the
   // wrapper and its Python child; the runtime itself starts a detached session.
   const command = terminalGroup
     ? ["python3", "-B", "-c", "import os, sys; os.setsid(); os.execvp('bun', ['bun', *sys.argv[1:]])", productEntry, "gate"]
     : ["bun", productEntry, "gate"];
   const wrapper = Bun.spawn(command, { cwd: f.root, stdout: "pipe", stderr: "pipe" });
+  let launcherPid: number | undefined;
   let workerPid: number | undefined;
   try {
     for (let attempt = 0; attempt < 100; attempt++) {
-      try { workerPid = Number(await readFile(path.join(f.root, "worker.pid"), "utf8")); break; }
+      try {
+        launcherPid = Number(await readFile(path.join(f.root, "launcher.pid"), "utf8"));
+        workerPid = Number(await readFile(path.join(f.root, "worker.pid"), "utf8"));
+        break;
+      }
       catch { await new Promise(resolve => setTimeout(resolve, 50)); }
     }
+    expect(launcherPid).toBeDefined();
     expect(workerPid).toBeDefined();
     if (terminalGroup) {
-      await exec("python3", ["-B", "-c", "import os, signal, sys; os.killpg(int(sys.argv[1]), signal.SIGHUP)", String(wrapper.pid)]);
+      await exec("python3", ["-B", "-c", "import os, signal, sys; os.killpg(int(sys.argv[1]), getattr(signal, sys.argv[2]))", String(wrapper.pid), signal]);
     }
     else wrapper.kill(signal);
-    expect(await wrapper.exited).toBe(signal === "SIGINT" ? 130 : signal === "SIGTERM" ? 143 : 129);
-    const worker = await exec("ps", ["-o", "stat=", "-p", String(workerPid)]).catch(() => ({ stdout: "" }));
-    expect(worker.stdout.trim() === "" || worker.stdout.trim().startsWith("Z")).toBe(true);
+    const exitCode = signal === "SIGINT" ? 130 : signal === "SIGTERM" ? 143 : signal === "SIGHUP" ? 129 : 131;
+    expect(await wrapper.exited).toBe(exitCode);
+    expect(await readFile(path.join(f.root, "worker.sig"), "utf8")).toBe(signal);
+    for (const pid of [launcherPid, workerPid]) {
+      const process = await exec("ps", ["-o", "stat=", "-p", String(pid)]).catch(() => ({ stdout: "" }));
+      expect(process.stdout.trim() === "" || process.stdout.trim().startsWith("Z")).toBe(true);
+    }
   } finally {
     wrapper.kill("SIGKILL");
+    if (launcherPid) { try { process.kill(launcherPid, "SIGKILL"); } catch { /* already stopped */ } }
     if (workerPid) { try { process.kill(workerPid, "SIGKILL"); } catch { /* already stopped */ } }
   }
 }, 15000);

@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SIGQUIT through Athena&#x27;s delivery launcher</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="ea2500e9217ebc77f22061847ef305e399b568904391f307b7eddb4a424e1593">
+  <header data-report-section="header">
+    <h1>SIGQUIT through Athena&#x27;s delivery launcher</h1>
+    <p>How the wrapper and installed runtime now complete process cleanup before exit</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>PR #839</li>
+      <li>V26-1912</li>
+      <li>Runtime 0.5.0</li>
+      <li>28 wrapper tests green</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>PR</dt><dd>#839</dd>
+      <dt>Candidate</dt><dd>0af5cc4156c81a346b8566c666a5deeb4e42c696</dd>
+      <dt>Base</dt><dd>0ffde8715746b8f12c50a95c36406fb0932a1886</dd>
+      <dt>Issue</dt><dd>V26-1912</dd>
+      <dt>Status</dt><dd>Draft delivery candidate</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>Executive summary</h2>
+      <p>PR #839 teaches Athena&#x27;s TypeScript delivery wrapper to handle POSIX SIGQUIT as a cooperative shutdown request. The wrapper forwards SIGQUIT to the installed launcher, keeps waiting for that child to finish its cleanup, and returns the conventional exit status 131.</p>
+      <p>The candidate also installs the exact qualified linear-concurrent-delivery-v1 artifact with runtime 0.5.0. That installed launcher owns process-group drainage and bounded escalation, while Athena owns signal translation and waiting. The two layers are tested together through the real installed path.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Why this mattered</h2>
+      <p>Athena already forwarded SIGINT, SIGTERM, and SIGHUP. SIGQUIT was missing. A direct SIGQUIT could stop at the Bun wrapper, and a terminal-group SIGQUIT could end the wrapper before the launcher and worker had demonstrably exited.</p>
+      <p>That gap mattered because an exit code alone does not prove cleanup. The delivery process may own a worker group that needs a cooperative signal, a short drain window, and an uncatchable escalation only when a worker refuses to stop.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Mental model: translator, supervisor, workers</h2>
+      <p>Think of Athena&#x27;s wrapper as a translator at the boundary. It receives the operator-facing SIGQUIT, remembers that the final wrapper status must be 131, forwards the same signal, and waits.</p>
+      <p>The installed Python launcher is the supervisor. It signals the isolated worker process group, allows cooperative drainage, sends SIGKILL only after the bounded deadline when a worker resists, and waits for its direct child. The workers either cooperate with SIGQUIT or exercise that escalation path.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+      <p>Before: SIGINT, SIGTERM, and SIGHUP crossed the Bun boundary, while SIGQUIT could terminate or stop at the wrapper without a complete descendant-cleanup proof.</p>
+      <p>After: SIGQUIT crosses the Bun boundary on POSIX hosts, reaches the installed launcher and worker group, and the wrapper does not return until the launcher has completed. Direct delivery and terminal process-group delivery follow the same ownership model.</p>
+      <ul>
+        <li>Cooperative workers record SIGQUIT and exit promptly.</li>
+        <li>Resistant workers record SIGQUIT, remain alive through the cooperative window, and are stopped by the launcher&#x27;s bounded SIGKILL escalation.</li>
+        <li>The wrapper reports 131 only after launcher completion, while existing SIGINT, SIGTERM, and SIGHUP behavior remains covered.</li>
+      </ul>
+  </section>
+  <section data-report-section="mechanics">
+    <h2>Mechanics across the installed path</h2>
+      <p>scripts/delivery-product.ts routes SIGQUIT registration and removal through a small platform-aware listener helper. The ordinary command path supplies the real process callbacks. Its first observed interruption status wins, so duplicate terminal-group delivery does not rewrite the result. The listener is removed after child completion.</p>
+      <p>The test fixture writes launcher and worker PIDs and records the actual signal seen by the worker. After the wrapper exits, each case checks the recorded SIGQUIT and verifies that both descendant processes are absent or zombies. This makes the absence of live descendants, rather than exit status alone, part of the asserted outcome.</p>
+      <p>The installed bytes came from the qualified archive with SHA-256 e63b1f2bb5516d55445aa7050f2a9366b05abdb9d8584bdeed4119abb5440578 and metadata SHA-256 d46f7f75e11b7f809f93e10b961954bfd7f8dc533f474074aa57b5594d39868e. Athena did not hand-edit the generated generation.</p>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>Failure boundaries</h2>
+      <p>SIGQUIT support is POSIX-specific. A simulated win32 listener-lifecycle row proves Windows performs neither SIGQUIT registration nor removal, while a POSIX row proves both operations. A separate ordinary-command row controls the real process platform input and observes the actual process callbacks, which binds the helper guard to the production wrapper path. The embedded capture override remains on its existing AbortController and SIGINT path.</p>
+      <p>SIGKILL cannot be caught or cooperatively forwarded. It remains an installed-launcher escalation after the cooperative deadline, not a new Athena wrapper signal.</p>
+      <p>A terminal can deliver SIGQUIT to both wrapper and launcher. The implementation tolerates repeated delivery by preserving the first interruption number and allowing already-drained process groups to disappear safely. Future ownership changes must rerun both direct and terminal-group cases.</p>
+      <p>The regression cases send SIGQUIT only after the launcher and worker PID files exist. They exercise steady-state shutdown and do not cover SIGQUIT arriving during launcher startup.</p>
+  </section>
+  <section data-report-section="changes">
+    <h2>What changed</h2>
+      <p>Existing SIGINT, SIGTERM, and SIGHUP semantics remain covered. Repository policy inputs and adapters did not change. The many files under .agent-skills are one qualified generated product payload, not individually authored Athena behavior.</p>
+      <ul>
+        <li>Added the POSIX SIGQUIT handler, forwarding, status 131, and listener cleanup in Athena&#x27;s wrapper.</li>
+        <li>Expanded the installed-path fixture with four SIGQUIT combinations: direct or process-group delivery, each with cooperative or resistant workers.</li>
+        <li>Repaired review finding V26-1912-AT-R1-01 with a platform-aware listener lifecycle seam, win32/POSIX registration-and-removal rows, and an ordinary-command row that pins the production process.platform binding.</li>
+        <li>Installed the qualified linear-concurrent-delivery-v1 generation and recompiled policy provenance against the shipped persona archive.</li>
+        <li>Corrected Athena&#x27;s verified install guidance and its contract pin to include the required --maintenance authority flag.</li>
+        <li>Recorded the reusable signal and artifact-provenance lesson in the solution corpus.</li>
+      </ul>
+  </section>
+  <section data-report-section="validation">
+    <h2>Validation and delivery status</h2>
+      <p>This report describes a delivery candidate. In mandatory round 1, outcome-correctness aligned and adversarial testing returned aligned while retaining P2 V26-1912-AT-R1-01. The executor kept that report unchanged and reduced the round as unresolved. In round 2, outcome-correctness aligned; adversarial testing raised the carried item to P1 after a production-wiring mutation survived the first repair. The candidate now adds the exact ordinary-wrapper regression and awaits round 3 verification and the canonical pr:athena gate. Remote merge, root checkout alignment, and parent-owned Linear closure are pending. Production deployment is not applicable to this authorized finish line and will not be performed.</p>
+      <ul>
+        <li>Artifact archive, release metadata, Linear qualification, and consolidated qualification SHA-256 identities matched the producer handoff.</li>
+        <li>Linear qualification passed 7 of 7 scenarios and 39 assertions. Consolidated qualification passed with 15 native events, two disposable entities canceled and freshly read, and exact receipt readback.</li>
+        <li>delivery:status reported runtime 0.5.0, current lifecycle, productReady true, and current Codex and Claude exposures; policy:check passed.</li>
+        <li>bun test scripts/delivery-product.test.ts passed 28 tests and 101 assertions, including all four installed-path SIGQUIT combinations, win32/POSIX listener lifecycle rows, and the ordinary wrapper&#x27;s real platform binding.</li>
+        <li>The focused unconditional-registration mutation failed the win32 helper row. The exact process.platform-to-darwin mutation from round 2 failed the new ordinary-command row, proving both the guard and its production composition are discriminating.</li>
+        <li>bun run harness:test passed 1,320 tests across 68 files. The focused install-guidance contract passed 7 tests and 61 assertions. Graphify, compound, frontmatter, and diff checks passed.</li>
+        <li>The first install command without --maintenance was rejected by the repository authority guard; the same immutable artifact succeeded with --maintenance. Two run-event payload mistakes were corrected and are retained as caller-side journal history.</li>
+      </ul>
+  </section>
+  <section data-report-section="guidance">
+    <h2>How to extend or debug this path</h2>
+      <ul>
+        <li>Test through the installed launcher rather than replacing it with a wrapper-only stub.</li>
+        <li>Exercise both direct signal delivery and terminal process-group delivery.</li>
+        <li>After wrapper exit, record the signal seen by the worker and confirm that no live launcher or worker remains.</li>
+        <li>Keep SIGKILL documented as uncatchable bounded escalation.</li>
+        <li>Install a qualified archive with its matching release metadata and --maintenance; never patch the tracked generation by hand.</li>
+        <li>After any final source or workflow edit, refresh the report fingerprint and prepare a new candidate before review.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>scripts/delivery-product.ts</code></td><td>Defines Athena&#x27;s signal translation, wait, and exit-status boundary.</td></tr>
+        <tr><td><code>scripts/delivery-product.test.ts</code></td><td>Proves direct and group SIGQUIT for cooperative and resistant workers through the installed path.</td></tr>
+        <tr><td><code>.agent-skills/current/agent_skills/product.py</code></td><td>Qualified launcher implementation that drains the worker group and owns bounded SIGKILL escalation.</td></tr>
+        <tr><td><code>.agent-skills/active.json</code></td><td>Binds the active and retained generations to exact release and archive identities.</td></tr>
+        <tr><td><code>.agents/policy/compiled-snapshot.json</code></td><td>Records Athena policy provenance against the shipped persona archive.</td></tr>
+        <tr><td><code>AGENTS.md</code></td><td>Gives operators the verified artifact installation command with explicit maintainer authority.</td></tr>
+        <tr><td><code>docs/solutions/runtime-errors/delivery-wrapper-sigquit-propagation-2026-09-10.md</code></td><td>Preserves the diagnosis, proof strategy, and future extension guidance.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is Athena&#x27;s wrapper responsible for when SIGQUIT arrives?</p>
+        <ol data-quiz-options>
+          <li>Killing every worker directly without waiting</li>
+          <li data-quiz-correct>Forwarding SIGQUIT, remembering status 131, and awaiting the launcher</li>
+          <li>Recompiling the delivery product at runtime</li>
+          <li>Ignoring SIGQUIT when it comes from a terminal group</li>
+        </ol>
+        <p data-quiz-explanation>Athena owns translation and waiting; the installed launcher owns the worker group and cleanup policy.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which layer owns cooperative process-group drain and bounded escalation?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>The installed Python launcher</li>
+          <li>The report renderer</li>
+          <li>The Linear adapter</li>
+          <li>The Bun test runner</li>
+        </ol>
+        <p data-quiz-explanation>The installed launcher supervises the isolated worker group, including the cooperative window and escalation.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why is exit status 131 insufficient by itself as cleanup evidence?</p>
+        <ol data-quiz-options>
+          <li>It is valid only on Windows</li>
+          <li>It proves which archive was installed</li>
+          <li data-quiz-correct>The wrapper can exit while launcher or worker descendants remain</li>
+          <li>It means SIGTERM rather than SIGQUIT</li>
+        </ol>
+        <p data-quiz-explanation>After wrapper exit, the regression proof also records the worker&#x27;s signal and confirms that no live launcher or worker remains.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What distinguishes the resistant-worker SIGQUIT cases?</p>
+        <ol data-quiz-options>
+          <li>The worker never receives SIGQUIT</li>
+          <li>The launcher immediately skips the cooperative window</li>
+          <li>The wrapper returns zero before cleanup</li>
+          <li data-quiz-correct>The worker records SIGQUIT but requires bounded SIGKILL escalation</li>
+        </ol>
+        <p data-quiz-explanation>Resistance means the cooperative signal is observed without exit, so the launcher reaches its bounded escalation path.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why test terminal process-group delivery as well as direct wrapper delivery?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Terminals may signal multiple processes in the group, creating duplicate-delivery behavior</li>
+          <li>Direct signals cannot carry numeric exit statuses</li>
+          <li>Group delivery is the only form supported by Bun</li>
+          <li>It changes the installed artifact digest</li>
+        </ol>
+        <p data-quiz-explanation>A terminal may target the whole group, so wrapper and launcher must tolerate overlapping delivery while preserving cleanup.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How does SIGKILL fit into this design?</p>
+        <ol data-quiz-options>
+          <li>Athena catches it and forwards it cooperatively</li>
+          <li>It replaces SIGQUIT on every POSIX host</li>
+          <li data-quiz-correct>It is uncatchable escalation owned by the installed launcher after the drain deadline</li>
+          <li>It is supported only by the report test</li>
+        </ol>
+        <p data-quiz-explanation>SIGKILL cannot be caught; it is reserved for bounded escalation when cooperative shutdown fails.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What was the correct response when the old installed 0.4.0 generation failed the new SIGQUIT tests?</p>
+        <ol data-quiz-options>
+          <li>Patch the generated runtime in place</li>
+          <li>Remove the failing cases</li>
+          <li data-quiz-correct>Install the exact qualified 0.5.0 artifact through the lifecycle</li>
+          <li>Change the expected exit status to zero</li>
+        </ol>
+        <p data-quiz-explanation>The red result established the old-byte gap; qualified installation preserved artifact provenance.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What proves the Windows SIGQUIT guard is behaviorally enforced?</p>
+        <ol data-quiz-options>
+          <li>A comment says SIGQUIT is POSIX-only</li>
+          <li>The installed artifact uses a Linear profile</li>
+          <li data-quiz-correct>Helper and ordinary-command win32 rows observe no SIGQUIT listener, and mutations of both the guard and its process.platform binding fail</li>
+          <li>Every POSIX integration case returns 131</li>
+        </ol>
+        <p data-quiz-explanation>The helper row isolates the guard, while the ordinary-command row proves the production wrapper supplies the real platform value, without claiming live Windows execution.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What should a future signal-path test confirm after the wrapper exits?</p>
+        <ol data-quiz-options>
+          <li>Only that the wrapper received some signal</li>
+          <li>Only that a PR exists</li>
+          <li data-quiz-correct>That the worker saw the intended signal and no live launcher or worker remains</li>
+          <li>That Windows supports every POSIX signal</li>
+        </ol>
+        <p data-quiz-explanation>The meaningful outcome spans the whole installed path and its descendants.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What is the delivery status represented by this report?</p>
+        <ol data-quiz-options>
+          <li>Production deployed and Linear closed</li>
+          <li>Merged and root aligned</li>
+          <li data-quiz-correct>Delivery candidate with review, canonical gate, merge, root alignment, and Linear closure still pending</li>
+          <li>Abandoned because hosted architecture validation ran before final evidence existed</li>
+        </ol>
+        <p data-quiz-explanation>The report belongs to the candidate PR. It records completed implementation evidence without predicting later finish-line events.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>session context historian</dt><dd>Reconstructed the artifact wait, failed and successful install attempts, caller-side journal corrections, prior Athena adoption lessons, and the pending merge/no-deploy finish line from session, run, PR, and qualification evidence.</dd>
+      <dt>delivered diff explorer</dt><dd>Mapped the wrapper, installed launcher, tests, generated product, policy projection, operator guidance, risks, and intentionally unchanged signal behavior from the candidate diff and installed bytes.</dd>
+      <dt>quiz and report reviewer</dt><dd>Checked source grounding, process-state semantics, qualification evidence, quiz comprehension, and delivery status; corrected the liveness and startup-timing wording, then approved the platform-guard repair explanation and revised quiz.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

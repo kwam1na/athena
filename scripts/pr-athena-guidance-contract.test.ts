@@ -85,7 +85,7 @@ describe("Athena merge-ready validation guidance", () => {
     const agentsGuide = await readRepoFile("AGENTS.md");
 
     expect(agentsGuide).toContain(
-      "`bun run agent-skills:install -- --archive <archive.zip> --metadata <release.json>`",
+      "`bun run agent-skills:install -- --archive <archive.zip> --metadata <release.json> --maintenance`",
     );
     expect(agentsGuide).toContain(
       "invoke `bun scripts/delivery-product.ts emit <kind> --json '<payload>'` directly",
