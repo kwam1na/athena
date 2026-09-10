@@ -18,16 +18,18 @@
     <dl data-report-meta>
       <dt>Issue</dt><dd>https://linear.app/v26-labs/issue/V26-1888</dd>
       <dt>Producer PR</dt><dd>https://github.com/kwam1na/agent-delivery-harness/pull/131 (merged e4866320)</dd>
+      <dt>Adopter PR</dt><dd>https://github.com/kwam1na/athena/pull/838</dd>
+      <dt>Validated candidate head</dt><dd>0875009258b6c8922757161d9defe0889598c2b1</dd>
       <dt>Source branch</dt><dd>codex/v26-1888-preparation-telemetry</dd>
       <dt>Source commit</dt><dd>369bfadc780c6520ce7e4fe861a77b66f8f1772e</dd>
-      <dt>Status</dt><dd>Candidate; independent review, canonical gate and merge pending</dd>
+      <dt>Status</dt><dd>Candidate; independent review and canonical gate passed; merge pending</dd>
       <dt>Archive</dt><dd>linear-run-surface-v1 / ed9eddbffe953181ef8ea21ea16f2e3848aff215bb766d69b2677566172f8dd2</dd>
     </dl>
   </header>
   <section data-report-section="summary">
     <h2>What this delivers</h2>
       <p>Athena exposes the installed delivery product’s preparation decision in its existing scorecard. It distinguishes checks that ran from checks reused under a valid receipt, and preserves the product’s reason.</p>
-      <p>Athena now carries the verified compatible 0.4.0 producer archive and the consumer regression tests. Independent review, canonical delivery admission, merge and ticket closure remain pending in this candidate report.</p>
+      <p>Athena now carries the verified compatible 0.4.0 producer archive and the consumer regression tests. Both mandated review lenses align with no open findings or deferrals, and the canonical gate completed through export and record verification. Merge and ticket closure remain pending in this candidate report.</p>
   </section>
   <section data-report-section="problem">
     <h2>Why the extra field matters</h2>
@@ -68,7 +70,7 @@
     <h2>Validation and delivery status</h2>
       <p>The merged producer passed npm run check: 3,174 tests across 142 files. Focused preparation, ownership, interruption, export and closed-schema probes passed. The earlier checkpoint also passed standalone installation and packed-product qualification.</p>
       <p>The final archive passed integrity verification and the product installation sensor, including fresh runtime-byte comparison, both skill exposures, installed preparation/context and missing-review refusal. Athena reports productReady=true, current lifecycle, no blockers and current compiled policy.</p>
-      <p>On the final installed archive, bun run harness:test passed 1,316 tests across 68 files, including all 14 scorecard tests. Disposable checkpoint mutations independently proved the CLI-author, command-name and event-kind selection guards. Canonical mechanical preparation passed. Both independent lenses approved the original adopter candidate. Its full gate admitted all obligations, then telemetry export exposed the version-2 adjacency gap described above. The compatibility repair requires fresh preparation, independent verification and canonical gate completion before merge.</p>
+      <p>On the final installed archive, bun run harness:test passed 1,316 tests across 68 files, including all 14 scorecard tests. Disposable checkpoint mutations independently proved the CLI-author, command-name and event-kind selection guards. Canonical mechanical preparation passed. Both independent lenses approved the original adopter candidate. Its full gate admitted all obligations, then telemetry export exposed the version-2 adjacency gap described above. The repaired candidate passed fresh preparation and both mandated review lenses in round 3. The full canonical command then passed in 941 seconds, including telemetry export and delivery-record verification; coverage passed 10,804 webapp tests and 204 storefront tests. The verifier retains observational journal ordering and binding warnings from the run history; admission is based on the independently validated evidence, not those observations.</p>
       <p>Merge, Linear Done and root alignment are pending. Production deployment is not applicable to the requested merged-changes finish line.</p>
   </section>
   <section data-report-section="guidance">
