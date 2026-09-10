@@ -12,7 +12,7 @@ root_cause: logic_error
 resolution_type: code_fix
 severity: high
 tags: [shared-demo, product-detail, query-admission, sku-identity]
-delivery_diff_fingerprint: 2f2179e622619b68ed9e8a4815482c5a953c6e65a2435e0d9ae12fc26f2fdfcc
+delivery_diff_fingerprint: d2a94cb4ce3fc105a177abc6cc8732e9713685f77268f56ce0b039098b5e9e2e
 ---
 
 # Demo navigation must respect query admission and SKU identity boundaries
@@ -46,3 +46,5 @@ Keep the visible-surface catalog aligned with backend admission. A page containi
 ## Related Issues
 - V26-2023
 - [Demo-reachable reads need their own sensor](../architecture-patterns/athena-demo-reachable-reads-need-their-own-sensor-2026-08-24.md)
+
+Record-detail sensors must assert the settled destination path and the identity selected from the list. A heading alone also matches a recovery page. Keep a negative control that presents the owner recovery page to those same destination assertions.

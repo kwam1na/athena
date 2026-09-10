@@ -18,6 +18,17 @@ async function assertPage(page: Page, text: string | RegExp) {
   }
 }
 
+async function assertRecordDestination(page: Page, href: string, identity: string) {
+  const expectedPath = new URL(href, page.url()).pathname;
+  expect(new URL(page.url()).pathname).toBe(expectedPath);
+  await expect(page.locator("main h1").first()).toContainText(identity);
+  await assertPage(page, identity);
+  await page.waitForTimeout(500);
+  expect(new URL(page.url()).pathname).toBe(expectedPath);
+  await expect(page.locator("main h1").first()).toContainText(identity);
+  await assertPage(page, identity);
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto("/demo");
   await expect(page.getByRole("heading", { name: "Run Osu Studio", exact: true })).toBeVisible();
@@ -103,24 +114,32 @@ test("available order, terminal and register detail destinations", async ({ page
     await page.goto(`${storePath}/${source}`);
     const detail = page.locator("main a").filter({ hasText: /\S/ });
     await expect(detail.first()).toBeVisible();
-    const hrefs = await detail.evaluateAll((links) => links.map((link) => link.getAttribute("href")));
-    const href = hrefs.find((value) => value && pattern.test(value));
-    expect(href, `Seeded demo record link on ${source}`).toBeTruthy();
-    await page.goto(href!);
-    await expect(page.locator("main h1").first()).toBeVisible();
-    await assertPage(page, /\S/);
+    const links = await detail.evaluateAll((elements) => elements.map((link) => ({ href: link.getAttribute("href"), text: link.textContent?.trim() ?? "" })));
+    const record = links.find((link) => link.href && pattern.test(link.href));
+    expect(record, `Seeded demo record link on ${source}`).toBeTruthy();
+    const identity = source === "orders/all"
+      ? record!.text.match(/#\d+/)?.[0]
+      : source === "cash-controls/registers"
+        ? record!.text.match(/Register\s+\d+/)?.[0]
+        : record!.text;
+    expect(identity, `Record identity on ${source}`).toBeTruthy();
+    await page.goto(record!.href!);
+    await assertRecordDestination(page, record!.href!, identity!);
     visited.push(page.url());
     const children = await page.locator('main a[href*="/activity"], main a[href*="/traces/"]').evaluateAll((links) => links.map((link) => link.getAttribute("href")));
     for (const child of [...new Set(children)]) {
       if (!child) continue;
       await page.goto(child);
-      await expect(page.locator("main h1").first()).toBeVisible();
-      await assertPage(page, /\S/);
+      await assertRecordDestination(page, child, identity!);
       visited.push(page.url());
     }
   }
   expect(errors).toEqual([]);
   await testInfo.attach("record-destinations", { body: JSON.stringify(visited, null, 2), contentType: "application/json" });
+});
+
+test("record destination assertions reject an owner recovery redirect", async ({ page }) => {
+  await expect(assertRecordDestination(page, `${storePath}/cash-controls/registers/navigation-check`, "Register 01")).rejects.toThrow();
 });
 
 for (const path of [
