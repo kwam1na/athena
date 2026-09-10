@@ -5,7 +5,7 @@
   <title>SIGQUIT through Athena&#x27;s delivery launcher</title>
 </head>
 <body>
-<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="e31c09b8d8cc7519d644f51d64c234737b6bb7a6108952514deab569ca14e6c6">
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="3ffb1035775d0c09ec1d99f8d6a784bbc89de4e7adf80b0bc078ad615aefab98">
   <header data-report-section="header">
     <h1>SIGQUIT through Athena&#x27;s delivery launcher</h1>
     <p>How the wrapper and installed runtime now complete process cleanup before exit</p>
@@ -14,11 +14,11 @@
       <li>PR #839</li>
       <li>V26-1912</li>
       <li>Runtime 0.5.0</li>
-      <li>25 wrapper tests green</li>
+      <li>27 wrapper tests green</li>
     </ul>
     <dl data-report-meta>
       <dt>PR</dt><dd>#839</dd>
-      <dt>Candidate</dt><dd>b8b08022c627fbd38c3fd43e32777fb076929be0</dd>
+      <dt>Candidate</dt><dd>ad76056c851da94d07cbeee860f2a0bdbaa0037b</dd>
       <dt>Base</dt><dd>0ffde8715746b8f12c50a95c36406fb0932a1886</dd>
       <dt>Issue</dt><dd>V26-1912</dd>
       <dt>Status</dt><dd>Draft delivery candidate</dd>
@@ -51,13 +51,13 @@
   </section>
   <section data-report-section="mechanics">
     <h2>Mechanics across the installed path</h2>
-      <p>scripts/delivery-product.ts registers SIGQUIT only on non-Windows platforms. Its first observed interruption status wins, so duplicate terminal-group delivery does not rewrite the result. The listener is removed after child completion.</p>
+      <p>scripts/delivery-product.ts routes SIGQUIT registration and removal through a small platform-aware listener helper. The ordinary command path supplies the real process callbacks. Its first observed interruption status wins, so duplicate terminal-group delivery does not rewrite the result. The listener is removed after child completion.</p>
       <p>The test fixture writes launcher and worker PIDs and records the actual signal seen by the worker. After the wrapper exits, each case checks the recorded SIGQUIT and verifies that both descendant processes are absent or zombies. This makes the absence of live descendants, rather than exit status alone, part of the asserted outcome.</p>
       <p>The installed bytes came from the qualified archive with SHA-256 e63b1f2bb5516d55445aa7050f2a9366b05abdb9d8584bdeed4119abb5440578 and metadata SHA-256 d46f7f75e11b7f809f93e10b961954bfd7f8dc533f474074aa57b5594d39868e. Athena did not hand-edit the generated generation.</p>
   </section>
   <section data-report-section="failure-boundaries">
     <h2>Failure boundaries</h2>
-      <p>SIGQUIT support is POSIX-specific. Windows does not register this handler. The embedded capture override remains on its existing AbortController and SIGINT path.</p>
+      <p>SIGQUIT support is POSIX-specific. A simulated win32 listener-lifecycle row proves Windows performs neither SIGQUIT registration nor removal, while a POSIX row proves both operations. The embedded capture override remains on its existing AbortController and SIGINT path.</p>
       <p>SIGKILL cannot be caught or cooperatively forwarded. It remains an installed-launcher escalation after the cooperative deadline, not a new Athena wrapper signal.</p>
       <p>A terminal can deliver SIGQUIT to both wrapper and launcher. The implementation tolerates repeated delivery by preserving the first interruption number and allowing already-drained process groups to disappear safely. Future ownership changes must rerun both direct and terminal-group cases.</p>
       <p>The regression cases send SIGQUIT only after the launcher and worker PID files exist. They exercise steady-state shutdown and do not cover SIGQUIT arriving during launcher startup.</p>
@@ -68,6 +68,7 @@
       <ul>
         <li>Added the POSIX SIGQUIT handler, forwarding, status 131, and listener cleanup in Athena&#x27;s wrapper.</li>
         <li>Expanded the installed-path fixture with four SIGQUIT combinations: direct or process-group delivery, each with cooperative or resistant workers.</li>
+        <li>Resolved review finding V26-1912-AT-R1-01 with a platform-aware listener lifecycle seam and win32/POSIX registration-and-removal rows; an unconditional-registration mutation now fails.</li>
         <li>Installed the qualified linear-concurrent-delivery-v1 generation and recompiled policy provenance against the shipped persona archive.</li>
         <li>Corrected Athena&#x27;s verified install guidance and its contract pin to include the required --maintenance authority flag.</li>
         <li>Recorded the reusable signal and artifact-provenance lesson in the solution corpus.</li>
@@ -75,12 +76,13 @@
   </section>
   <section data-report-section="validation">
     <h2>Validation and delivery status</h2>
-      <p>This report describes a delivery candidate. The mandatory code-review pair and canonical pr:athena gate remain pending. Remote merge, root checkout alignment, and parent-owned Linear closure are pending. Production deployment is not applicable to this authorized finish line and will not be performed.</p>
+      <p>This report describes a delivery candidate. In mandatory round 1, outcome-correctness aligned and adversarial testing returned aligned while retaining P2 V26-1912-AT-R1-01. The executor kept that report unchanged, reduced the round as unresolved, and repaired the in-contract Windows guard evidence. A complete round 2 and canonical pr:athena gate remain pending. Remote merge, root checkout alignment, and parent-owned Linear closure are pending. Production deployment is not applicable to this authorized finish line and will not be performed.</p>
       <ul>
         <li>Artifact archive, release metadata, Linear qualification, and consolidated qualification SHA-256 identities matched the producer handoff.</li>
         <li>Linear qualification passed 7 of 7 scenarios and 39 assertions. Consolidated qualification passed with 15 native events, two disposable entities canceled and freshly read, and exact receipt readback.</li>
         <li>delivery:status reported runtime 0.5.0, current lifecycle, productReady true, and current Codex and Claude exposures; policy:check passed.</li>
-        <li>bun test scripts/delivery-product.test.ts passed 25 tests and 94 assertions, including all four SIGQUIT combinations.</li>
+        <li>bun test scripts/delivery-product.test.ts passed 27 tests and 96 assertions, including all four installed-path SIGQUIT combinations and win32/POSIX listener lifecycle rows.</li>
+        <li>The focused unconditional-registration mutation failed the win32 row, proving the new guard assertion is discriminating.</li>
         <li>bun run harness:test passed 1,320 tests across 68 files. The focused install-guidance contract passed 7 tests and 61 assertions. Graphify, compound, frontmatter, and diff checks passed.</li>
         <li>The first install command without --maintenance was rejected by the repository authority guard; the same immutable artifact succeeded with --maintenance. Two run-event payload mistakes were corrected and are retained as caller-side journal history.</li>
       </ul>
@@ -186,14 +188,14 @@
         <p data-quiz-explanation>The red result established the old-byte gap; qualified installation preserved artifact provenance.</p>
       </li>
       <li data-quiz-question>
-        <p data-quiz-prompt>Which installation command property is now pinned in Athena guidance?</p>
+        <p data-quiz-prompt>What proves the Windows SIGQUIT guard is behaviorally enforced?</p>
         <ol data-quiz-options>
-          <li>It omits release metadata</li>
-          <li data-quiz-correct>It includes explicit --maintenance authority</li>
-          <li>It points to a producer checkout</li>
-          <li>It bypasses product verification</li>
+          <li>A comment says SIGQUIT is POSIX-only</li>
+          <li>The installed artifact uses a Linear profile</li>
+          <li data-quiz-correct>A simulated win32 row observes no registration or removal, and an unconditional-registration mutation fails</li>
+          <li>Every POSIX integration case returns 131</li>
         </ol>
-        <p data-quiz-explanation>Generation mutation requires explicit repository maintainer authority, represented by --maintenance.</p>
+        <p data-quiz-explanation>The platform-aware listener helper makes the guard directly observable without claiming live Windows execution.</p>
       </li>
       <li data-quiz-question>
         <p data-quiz-prompt>What should a future signal-path test confirm after the wrapper exits?</p>
@@ -222,7 +224,7 @@
     <dl>
       <dt>session context historian</dt><dd>Reconstructed the artifact wait, failed and successful install attempts, caller-side journal corrections, prior Athena adoption lessons, and the pending merge/no-deploy finish line from session, run, PR, and qualification evidence.</dd>
       <dt>delivered diff explorer</dt><dd>Mapped the wrapper, installed launcher, tests, generated product, policy projection, operator guidance, risks, and intentionally unchanged signal behavior from the candidate diff and installed bytes.</dd>
-      <dt>quiz and report reviewer</dt><dd>Checked source grounding, process-state semantics, qualification evidence, quiz comprehension, and delivery status; requested the corrected post-exit liveness wording and the explicit startup-timing boundary now reflected in the report.</dd>
+      <dt>quiz and report reviewer</dt><dd>Checked source grounding, process-state semantics, qualification evidence, quiz comprehension, and delivery status; corrected the liveness and startup-timing wording, then approved the platform-guard repair explanation and revised quiz.</dd>
     </dl>
   </section>
 </article>
