@@ -1346,6 +1346,16 @@ describe("InventoryImportView", () => {
     expect(screen.queryByRole("heading", { name: "Inventory import" })).not.toBeInTheDocument();
   });
 
+  it("does not wait for a saved review query that the demo skips", () => {
+    mockedHooks.useSharedDemoContext.mockReturnValue({ storeId: "store-1" });
+    mockedHooks.latestReviewVersion = undefined;
+
+    render(<InventoryImportView mode="review" />);
+
+    expect(screen.getByRole("heading", { name: "No import loaded" })).toBeInTheDocument();
+    expect(screen.queryByText("Loading inventory review")).not.toBeInTheDocument();
+  });
+
   it("shows the saved-review cost overlay entry only to full administrators", () => {
     mockedHooks.latestReviewVersion = {
       _id: "review-version-7",

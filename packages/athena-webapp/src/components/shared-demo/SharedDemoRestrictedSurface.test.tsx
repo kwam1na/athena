@@ -50,6 +50,21 @@ function routeTemplateToPathname(routeTemplate: string) {
 }
 
 describe("shared demo restricted surfaces", () => {
+  it("keeps storefront administration and analytics outside the demo read boundary", () => {
+    for (const pathname of [
+      "/demo/store/central/dashboard",
+      "/demo/store/central/assets",
+      "/demo/store/central/bags",
+      "/demo/store/central/bags/bag-1",
+      "/demo/store/central/users/customer-1",
+      "/demo/store/central/products/product-1/edit",
+      "/demo/store/central/logs",
+      "/demo/store/central/logs/log-1",
+    ]) {
+      expect(isSharedDemoRestrictedPath(pathname), pathname).toBe(true);
+    }
+  });
+
   it("blocks administration routes while preserving operating routes", () => {
     for (const path of [
       "/demo/store/central/members",
@@ -81,10 +96,9 @@ describe("shared demo restricted surfaces", () => {
     }
   });
 
-  it("allows every Open Work action destination in the demo", () => {
+  it("allows supported Open Work destinations while protecting product edits", () => {
     for (const path of [
       "/demo/store/central/products",
-      "/demo/store/central/products/product-1/edit",
       "/demo/store/central/operations/stock-adjustments",
       "/demo/store/central/services/active-cases",
       "/demo/store/central/services/appointments",

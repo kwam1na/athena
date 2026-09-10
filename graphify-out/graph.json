@@ -134591,7 +134591,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_shared_demo_shareddemosurfacecatalog_ts",
       "source_file": "packages/athena-webapp/src/components/shared-demo/sharedDemoSurfaceCatalog.ts",
-      "source_location": "L396",
+      "source_location": "L390",
       "target": "shareddemosurfacecatalog_classifyathenaviewsurface",
       "weight": 1
     },
@@ -134603,7 +134603,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_shared_demo_shareddemosurfacecatalog_ts",
       "source_file": "packages/athena-webapp/src/components/shared-demo/sharedDemoSurfaceCatalog.ts",
-      "source_location": "L402",
+      "source_location": "L396",
       "target": "shareddemosurfacecatalog_isshareddemosurfacevisible",
       "weight": 1
     },
@@ -134615,7 +134615,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_shared_demo_shareddemosurfacecatalog_ts",
       "source_file": "packages/athena-webapp/src/components/shared-demo/sharedDemoSurfaceCatalog.ts",
-      "source_location": "L333",
+      "source_location": "L327",
       "target": "shareddemosurfacecatalog_normalizepathname",
       "weight": 1
     },
@@ -134627,7 +134627,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_shared_demo_shareddemosurfacecatalog_ts",
       "source_file": "packages/athena-webapp/src/components/shared-demo/sharedDemoSurfaceCatalog.ts",
-      "source_location": "L365",
+      "source_location": "L359",
       "target": "shareddemosurfacecatalog_resolveathenaviewroute",
       "weight": 1
     },
@@ -134639,7 +134639,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_shared_demo_shareddemosurfacecatalog_ts",
       "source_file": "packages/athena-webapp/src/components/shared-demo/sharedDemoSurfaceCatalog.ts",
-      "source_location": "L341",
+      "source_location": "L335",
       "target": "shareddemosurfacecatalog_routetemplatematches",
       "weight": 1
     },
@@ -197903,7 +197903,7 @@
       "relation": "calls",
       "source": "shareddemosurfacecatalog_resolveathenaviewroute",
       "source_file": "packages/athena-webapp/src/components/shared-demo/sharedDemoSurfaceCatalog.ts",
-      "source_location": "L399",
+      "source_location": "L393",
       "target": "shareddemosurfacecatalog_classifyathenaviewsurface",
       "weight": 1
     },
@@ -197915,7 +197915,7 @@
       "relation": "calls",
       "source": "shareddemosurfacecatalog_classifyathenaviewsurface",
       "source_file": "packages/athena-webapp/src/components/shared-demo/sharedDemoSurfaceCatalog.ts",
-      "source_location": "L403",
+      "source_location": "L397",
       "target": "shareddemosurfacecatalog_isshareddemosurfacevisible",
       "weight": 1
     },
@@ -197927,7 +197927,7 @@
       "relation": "calls",
       "source": "shareddemosurfacecatalog_routetemplatematches",
       "source_file": "packages/athena-webapp/src/components/shared-demo/sharedDemoSurfaceCatalog.ts",
-      "source_location": "L374",
+      "source_location": "L368",
       "target": "shareddemosurfacecatalog_resolveathenaviewroute",
       "weight": 1
     },
@@ -197939,7 +197939,7 @@
       "relation": "calls",
       "source": "shareddemosurfacecatalog_normalizepathname",
       "source_file": "packages/athena-webapp/src/components/shared-demo/sharedDemoSurfaceCatalog.ts",
-      "source_location": "L342",
+      "source_location": "L336",
       "target": "shareddemosurfacecatalog_routetemplatematches",
       "weight": 1
     },
@@ -323278,7 +323278,7 @@
       "label": "classifyAthenaViewSurface()",
       "norm_label": "classifyathenaviewsurface()",
       "source_file": "packages/athena-webapp/src/components/shared-demo/sharedDemoSurfaceCatalog.ts",
-      "source_location": "L396"
+      "source_location": "L390"
     },
     {
       "community": 636,
@@ -323287,7 +323287,7 @@
       "label": "isSharedDemoSurfaceVisible()",
       "norm_label": "isshareddemosurfacevisible()",
       "source_file": "packages/athena-webapp/src/components/shared-demo/sharedDemoSurfaceCatalog.ts",
-      "source_location": "L402"
+      "source_location": "L396"
     },
     {
       "community": 636,
@@ -323296,7 +323296,7 @@
       "label": "normalizePathname()",
       "norm_label": "normalizepathname()",
       "source_file": "packages/athena-webapp/src/components/shared-demo/sharedDemoSurfaceCatalog.ts",
-      "source_location": "L333"
+      "source_location": "L327"
     },
     {
       "community": 636,
@@ -323305,7 +323305,7 @@
       "label": "resolveAthenaViewRoute()",
       "norm_label": "resolveathenaviewroute()",
       "source_file": "packages/athena-webapp/src/components/shared-demo/sharedDemoSurfaceCatalog.ts",
-      "source_location": "L365"
+      "source_location": "L359"
     },
     {
       "community": 636,
@@ -323314,7 +323314,7 @@
       "label": "routeTemplateMatches()",
       "norm_label": "routetemplatematches()",
       "source_file": "packages/athena-webapp/src/components/shared-demo/sharedDemoSurfaceCatalog.ts",
-      "source_location": "L341"
+      "source_location": "L335"
     },
     {
       "community": 637,

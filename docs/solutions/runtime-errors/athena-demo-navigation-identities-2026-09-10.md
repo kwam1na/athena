@@ -12,7 +12,7 @@ root_cause: logic_error
 resolution_type: code_fix
 severity: high
 tags: [shared-demo, product-detail, query-admission, sku-identity]
-delivery_diff_fingerprint: d72e41e59e9074eae482e1a915c898fd98a595348f1ca3b6a1c0299c6780625c
+delivery_diff_fingerprint: 88834fce8e064bb6782d5d7042d844a1019bf2f3098431a59621e166bc5532c1
 ---
 
 # Demo navigation must respect query admission and SKU identity boundaries
@@ -31,11 +31,15 @@ The analytics condition checked only the active store. The stock link treated ev
 
 Report stock links use the SKU code as the stock workspace search query in demo mode. Existing bookmarked fixture links are translated at route search validation: story IDs resolve to catalog codes, live demo IDs unwrap to the underlying ID, and unknown fixture references become text searches instead of ID query arguments.
 
+The application sweep also found legacy dashboard, asset, bag, log, and product-edit pages marked visible despite their intentionally denied reads. Those surfaces and the customer profile now use the existing restricted-surface screen before mounting queries. Product editing was already disabled in demo product details; direct edit URLs now preserve that boundary too. Inventory review now distinguishes a skipped demo read from a pending normal-operator read, showing its empty state instead of waiting forever.
+
 ## Why This Works
 Demo context has three states: loading, normal operator, and shared demo. Waiting for explicit normal context avoids cold-load admission races. Report fixture identity and live inventory identity are separate namespaces; crossing from Reports to stock needs an explicit translation.
 
 ## Prevention
 Test demo and cold-load query suppression, preserved normal operator reads, all eight story SKU translations, live IDs, unknown fixture references, and actual report link arguments. Browser navigation proves the real route transitions; mocked tests alone do not.
+
+Keep the visible-surface catalog aligned with backend admission. A page containing a forbidden read needs either a deliberately scoped admission change or an explicit unavailable state before subscription. A skipped query must not drive a perpetual loading state.
 
 ## Related Issues
 - V26-2023
