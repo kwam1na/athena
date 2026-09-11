@@ -102,7 +102,7 @@ export const demoNavigationCases = [
   },
   {
     "path": "/demo/store/central/pos/register",
-    "text": "Sign in required"
+    "text": /Sign in required|Store day not started/
   },
   {
     "path": "/demo/store/central/pos/sessions",

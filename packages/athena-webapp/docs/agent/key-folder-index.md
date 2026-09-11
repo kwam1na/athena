@@ -26,6 +26,6 @@ This key-folder index highlights the main directories agents are likely to need 
 - [`convex/serviceOps`](../../convex/serviceOps) — Service catalog, appointment, and service-case workflows layered on operational work items. Currently 8 file(s); key children: appointments.ts, catalog.ts, catalogAppointments.test.ts, moduleWiring.test.ts, serviceCaseTracing.test.ts.
 - [`convex/workflowTraces`](../../convex/workflowTraces) — Shared workflow trace creation, lookup, presentation, and adapter helpers. Currently 20 file(s); key children: adapters, core.ts, presentation.test.ts, presentation.ts, public.test.ts.
 - [`convex`](../../convex) — Convex functions, HTTP composition, schemas, and backend tests. Currently 1264 file(s); key children: README.md, _generated, agentHarness, app.test.ts, app.ts.
-- [`src/tests`](../../src/tests) — Focused browser-facing regression tests. Currently 15 file(s); key children: README.md, SUMMARY.md, agent, demo, pos.
+- [`src/tests`](../../src/tests) — Focused browser-facing regression tests. Currently 17 file(s); key children: README.md, SUMMARY.md, agent, demo, pos.
 - [`src/test`](../../src/test) — Package test harness helpers and setup. Currently 1 file(s); key children: setup.ts.
 
