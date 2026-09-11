@@ -3,6 +3,14 @@ import { ATHENA_VIEW_SURFACE_CATALOG, isSharedDemoSurfaceVisible } from "~/src/c
 import { demoNavigationCases } from "./navigationCases";
 
 describe("live demo navigation coverage", () => {
+  it("accepts both legitimate POS guards across the daily reset", () => {
+    const register = demoNavigationCases.find((entry) => entry.path.endsWith("/pos/register"))!;
+    expect("Sign in required").toMatch(register.text);
+    expect("Store day not started").toMatch(register.text);
+    expect("POS recovery").not.toMatch(register.text);
+    expect("Something went wrong").not.toMatch(register.text);
+  });
+
   it("requires an explicit page expectation for every static application route", () => {
     const routes = Object.values(ATHENA_VIEW_SURFACE_CATALOG)
       .flatMap((surface) => surface.routes)

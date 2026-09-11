@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { SHARED_DEMO_PRODUCTS } from "~/shared/sharedDemoStory";
 import { demoNavigationCases } from "./navigationCases";
+import { demoJourneyDate } from "./journeyDate";
 
 const storePath = "/demo/store/central";
 const unavailable = "This area is not available in the demo.";
@@ -30,7 +31,23 @@ async function assertRecordDestination(page: Page, href: string, identity: strin
 }
 
 test.beforeEach(async ({ page }) => {
+  // The owner heading can render before Convex's initial token refresh finishes.
+  // A hard navigation then aborts that refresh after the server has rotated it.
+  const refreshedSession = page.waitForResponse((response) => {
+    if (!response.url().endsWith("/api/action") || response.request().method() !== "POST") return false;
+    const body = response.request().postDataJSON();
+    return body?.path === "auth:signIn" && typeof body.args?.[0]?.refreshToken === "string";
+  });
   await page.goto("/demo");
+  const response = await refreshedSession;
+  expect(response.ok()).toBe(true);
+  const result = await response.json();
+  expect(result.status).toBe("success");
+  const refreshToken = result.value?.tokens?.refreshToken;
+  expect(typeof refreshToken).toBe("string");
+  await page.waitForFunction((token) => Object.entries(localStorage).some(
+    ([key, value]) => key.startsWith("__convexAuthRefreshToken_") && value === token,
+  ), refreshToken);
   await expect(page.getByRole("heading", { name: "Run Osu Studio", exact: true })).toBeVisible();
 });
 
@@ -65,8 +82,8 @@ for (const product of SHARED_DEMO_PRODUCTS) {
     const name = matchingName(product.name);
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-    await page.goto(`${storePath}/reports/items?periodDate=${yesterday}&periodType=day`);
+    const historicalWeek = demoJourneyDate(new Date().toISOString().slice(0, 10));
+    await page.goto(`${storePath}/reports/items?periodDate=${historicalWeek}&periodType=week`);
     const reportLink = page.locator(`a[href*="/reports/items/shared-demo-sku-${product.slug}?"]`).first();
     await expect(reportLink).toBeVisible();
     await reportLink.click();
