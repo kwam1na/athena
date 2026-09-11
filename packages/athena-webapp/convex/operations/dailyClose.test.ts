@@ -74,7 +74,8 @@ type TableName =
   | "reportPipelineControl"
   | "reportDirtyDay"
   | "staffProfile"
-  | "store";
+  | "store"
+  | "storeSchedule";
 
 type Row = Record<string, unknown> & { _id: string };
 
@@ -84,6 +85,9 @@ function getHandler<TArgs, TResult>(definition: unknown) {
 }
 
 function compareIndexedValue(left: unknown, right: unknown) {
+  if (left === right) return 0;
+  if (left === undefined) return -1;
+  if (right === undefined) return 1;
   if (typeof left === "number" && typeof right === "number") {
     return left - right;
   }
@@ -949,6 +953,80 @@ describe("end-of-day review backend foundation", () => {
     expect(snapshot.completedClose).toBeNull();
   });
 
+  it("bounds the default snapshot range by the store's own calendar day", async () => {
+    const { db } = createDb({
+      store: [store],
+      storeSchedule: [
+        {
+          _id: "storeSchedule-1",
+          dateExceptions: [],
+          effectiveFrom: Date.UTC(2026, 0, 1),
+          status: "active",
+          storeId: "store-1",
+          timezone: "America/New_York",
+          weeklyClosedDays: [],
+          weeklyWindows: [
+            { dayOfWeek: 4, startMinute: 9 * 60, endMinute: 17 * 60 },
+          ],
+        },
+      ],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+
+    // Midnight-to-midnight in New York (UTC-4 on this date), not the UTC day.
+    expect(snapshot.startAt).toBe(Date.UTC(2026, 4, 7, 4));
+    expect(snapshot.endAt).toBe(Date.UTC(2026, 4, 8, 4));
+  });
+
+  it("keeps the UTC day for a store with no resolvable schedule", async () => {
+    const { db } = createDb({ store: [store] });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.startAt).toBe(Date.UTC(2026, 4, 7));
+    expect(snapshot.endAt).toBe(Date.UTC(2026, 4, 8));
+  });
+
+  it("lets an explicit caller range override the store calendar day", async () => {
+    const { db } = createDb({
+      store: [store],
+      storeSchedule: [
+        {
+          _id: "storeSchedule-1",
+          dateExceptions: [],
+          effectiveFrom: Date.UTC(2026, 0, 1),
+          status: "active",
+          storeId: "store-1",
+          timezone: "America/New_York",
+          weeklyClosedDays: [],
+          weeklyWindows: [
+            { dayOfWeek: 4, startMinute: 9 * 60, endMinute: 17 * 60 },
+          ],
+        },
+      ],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        endAt: Date.UTC(2026, 4, 7, 18),
+        operatingDate: "2026-05-07",
+        startAt: Date.UTC(2026, 4, 7, 12),
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot.startAt).toBe(Date.UTC(2026, 4, 7, 12));
+    expect(snapshot.endAt).toBe(Date.UTC(2026, 4, 7, 18));
+  });
+
   it("includes all closed register sessions for the day and records complete register source evidence", async () => {
     const registerSessions = Array.from({ length: 205 }, (_, index) => ({
       _id: `register-closed-${index + 1}`,
@@ -1130,6 +1208,63 @@ describe("end-of-day review backend foundation", () => {
         }),
       ]),
     );
+  });
+
+  it("keeps current legacy registers but excludes future unstamped registers", async () => {
+    const { db } = createDb({
+      registerSession: [
+        {
+          _id: "legacy-current",
+          openedAt: Date.UTC(2026, 4, 7, 9),
+          openingFloat: 10000,
+          status: "active",
+          storeId: "store-1",
+        },
+        {
+          _id: "legacy-future",
+          openedAt: Date.UTC(2026, 4, 8, 9),
+          openingFloat: 10000,
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
+      store: [store],
+    });
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+    expect(snapshot.blockers.map((item) => item.key)).toEqual([
+      "register_session:legacy-current:active",
+    ]);
+  });
+
+  it("keeps a stamped active register outside explicit snapshot hours", async () => {
+    const { db } = createDb({
+      registerSession: [
+        {
+          _id: "stamped-after-hours",
+          openedAt: Date.UTC(2026, 4, 7, 22),
+          openedOperatingDate: "2026-05-07",
+          openingFloat: 10000,
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
+      store: [store],
+    });
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        operatingDate: "2026-05-07",
+        storeId: "store-1" as Id<"store">,
+        startAt: Date.UTC(2026, 4, 7, 9),
+        endAt: Date.UTC(2026, 4, 7, 18),
+      },
+    );
+    expect(snapshot.blockers.map((item) => item.key)).toEqual([
+      "register_session:stamped-after-hours:active",
+    ]);
   });
 
   it("does not mark source incomplete for many future active register sessions", async () => {

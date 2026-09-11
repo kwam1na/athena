@@ -1,6 +1,8 @@
 ---
 title: Athena Daily Close Is A Store-Day Boundary
 date: 2026-05-07
+last_updated: 2026-09-11
+delivery_diff_fingerprint: 701f0c4714feffd2538c612a3597b4264faeb4df7cc141ea0f239aece9c0177f
 category: logic-errors
 module: athena-webapp
 problem_type: workflow_scope_boundary
@@ -79,9 +81,17 @@ bypassing missing reconciliation work.
 Use an explicit operating-day time range for the snapshot and completion
 mutation. A local operating date is not the same as a UTC calendar day: a cash
 sale completed after midnight UTC can still belong to the current local
-operating day. The client should pass the local `startAt`/`endAt` bounds it is
-using for the operating date, and the server should validate those bounds before
-using them for transaction, register-session, expense, and variance reads.
+operating day. Valid explicit `startAt`/`endAt` bounds remain authoritative. Without them,
+`buildDailyCloseSnapshotWithCtx` resolves the governing schedule timezone into
+a full local calendar day; a missing or invalid schedule retains the UTC fallback.
+Historical EOD automation instead quarantines unresolved schedule ranges.
+
+Trading hours govern when automation evaluates a day, not which completed sales
+the snapshot includes. Historical EOD therefore retains trading-window schedule
+evidence but passes calendar-day bounds to Daily Close. A sale completed after
+scheduled closing still belongs to its local date. Active register sessions
+indexed by `openedOperatingDate <= operatingDate` remain blockers without a
+second wall-clock filter; legacy sessions without date stamps still need it.
 
 Every source table that contributes to close totals should also contribute
 operator-visible close evidence unless the source is intentionally hidden by
@@ -126,3 +136,23 @@ server-side item totals, not from stale client cart state.
 - Test expense transactions with the same local-day boundary, store filtering,
   and completed-status filtering used for POS transactions.
 - Add query-index coverage whenever a new close-readiness source table is added.
+
+## September 2026 regression evidence
+
+PR #790, delivered with #803 under V26-2055/V26-2056, adds focused rows for
+New York calendar bounds, missing-schedule UTC fallback, explicit overrides,
+after-hours sale totals, and an after-hours register that prevents automatic
+Daily Close insertion. Keep these scenarios when changing either resolver.
+The integration focused run passed 283 tests across Daily Close, automation,
+and the agent panel; this is local evidence, not a production backfill.
+
+## Related Issues
+
+- [V26-2055](https://linear.app/v26-labs/issue/V26-2055/deliver-store-calendar-range-fixes-from-pr-790)
+- [Store Schedule foundation](../architecture/athena-store-schedule-foundation-2026-06-27.md)
+
+A final register-attribution pass also filters by closeout evidence. Preserve
+that rule for settled drawers, but trust the date stamp for an unsettled drawer.
+Test the final snapshot, not just its source query: the original change removed
+one filter while a later filter still discarded stamped after-hours drawers.
+The legacy fixture comparator must order undefined before strings, as Convex does.

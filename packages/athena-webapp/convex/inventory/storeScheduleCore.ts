@@ -2,6 +2,7 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import {
   getMissingStoreScheduleContext,
+  resolveStoreCalendarRangeForDate,
   resolveStoreOperatingRangeForDate,
   resolveStoreScheduleContext,
 } from "../lib/storeScheduleTime";
@@ -79,17 +80,26 @@ export async function getStoreScheduleContextForStoreAtWithCtx(
   };
 }
 
-export async function resolveStoreOperatingRangeForDateWithCtx(
+async function findScheduleGoverningOperatingDate(
   ctx: ScheduleReadCtx,
   args: { storeId: Id<"store">; operatingDate: string },
 ) {
   const effectiveAt = Date.parse(`${args.operatingDate}T12:00:00.000Z`);
-  const schedule = Number.isFinite(effectiveAt)
+
+  return Number.isFinite(effectiveAt)
     ? await findActiveScheduleForStoreAt(ctx, {
         storeId: args.storeId,
         at: effectiveAt,
       })
     : null;
+}
+
+/** When the store *trades* on the date: the span of its scheduled windows. */
+export async function resolveStoreOperatingRangeForDateWithCtx(
+  ctx: ScheduleReadCtx,
+  args: { storeId: Id<"store">; operatingDate: string },
+) {
+  const schedule = await findScheduleGoverningOperatingDate(ctx, args);
 
   return {
     schedule,
@@ -97,5 +107,32 @@ export async function resolveStoreOperatingRangeForDateWithCtx(
       schedule,
       operatingDate: args.operatingDate,
     }),
+  };
+}
+
+/**
+ * What the date *contains*: the store-local calendar day.
+ *
+ * The trading window bounds neither the day's records nor its reporting — a
+ * sale rung after the scheduled close still belongs to the operating date it
+ * happened on. Callers that must attribute records to a date use this; callers
+ * timing automation against opening or closing hours use the operating range
+ * above. Disposition when the range will not resolve is the caller's: Daily
+ * Close falls back to a UTC day, the EOD automation quarantines.
+ */
+export async function resolveStoreCalendarRangeForDateWithCtx(
+  ctx: ScheduleReadCtx,
+  args: { storeId: Id<"store">; operatingDate: string },
+) {
+  const schedule = await findScheduleGoverningOperatingDate(ctx, args);
+
+  return {
+    schedule,
+    range: schedule
+      ? resolveStoreCalendarRangeForDate({
+          localDate: args.operatingDate,
+          timezone: schedule.timezone,
+        })
+      : { kind: "invalid" as const },
   };
 }

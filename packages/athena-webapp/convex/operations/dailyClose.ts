@@ -8,6 +8,7 @@ import {
 import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { commandResultValidator } from "../lib/commandResultValidators";
+import { resolveStoreCalendarRangeForDateWithCtx } from "../inventory/storeScheduleCore";
 import { createOperationalWorkItemWithCtx } from "./operationalWorkItems";
 import { patchOperationalWorkItemWithInventoryWithCtx } from "./inventoryContributions";
 import {
@@ -757,6 +758,44 @@ function resolveOperatingDateRange(args: {
   return dateRange;
 }
 
+/**
+ * The range a Daily Close snapshot reads over.
+ *
+ * An explicit caller range still wins. Otherwise the day is bounded in the
+ * store's own timezone rather than by `safeOperatingDateRange`, whose UTC day
+ * silently shifts the boundary for every store that is not on UTC — so a sale
+ * rung late on the operating date could fold into the neighbouring day. Stores
+ * with no resolvable schedule keep the UTC day they have always had.
+ */
+async function resolveSnapshotOperatingDateRangeWithCtx(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    endAt?: number;
+    operatingDate: string;
+    startAt?: number;
+    storeId: Id<"store">;
+  },
+) {
+  const dateRange = safeOperatingDateRange(args.operatingDate);
+
+  if (!dateRange) {
+    return null;
+  }
+
+  if (isValidOperatingDateRange(args.startAt, args.endAt)) {
+    return { startAt: args.startAt!, endAt: args.endAt! };
+  }
+
+  const { range } = await resolveStoreCalendarRangeForDateWithCtx(ctx, {
+    operatingDate: args.operatingDate,
+    storeId: args.storeId,
+  });
+
+  return range.kind === "resolved"
+    ? { startAt: range.startAt, endAt: range.endAt }
+    : dateRange;
+}
+
 function isInRange(value: unknown, startAt: number, endAt: number) {
   return typeof value === "number" && value >= startAt && value < endAt;
 }
@@ -951,19 +990,34 @@ function closeoutApprovalForRegisterSession(
 
 async function filterRegisterSessionsBelongingToRange<
   TSession extends RegisterSessionRangeCandidate,
->(ctx: Pick<QueryCtx, "db">, sessions: TSession[], range: DailyCloseRange) {
+>(
+  ctx: Pick<QueryCtx, "db">,
+  sessions: TSession[],
+  range: DailyCloseRange,
+  operatingDate?: string,
+) {
   const approvalRequestsById = await buildApprovalRequestsById(
     ctx,
     sessions.map((session) => session.managerApprovalRequestId),
   );
 
-  return sessions.filter((session) =>
-    registerSessionBelongsToRange(
+  return sessions.filter((session) => {
+    const approval = closeoutApprovalForRegisterSession(
       session,
-      range,
-      closeoutApprovalForRegisterSession(session, approvalRequestsById),
-    ),
-  );
+      approvalRequestsById,
+    );
+    // Unsettled stamped drawers belong to the operating day even after hours.
+    // Closeout evidence and unstamped legacy drawers still use clock bounds.
+    if (
+      operatingDate !== undefined &&
+      session.openedOperatingDate !== undefined &&
+      session.openedOperatingDate <= operatingDate &&
+      registerSessionCloseoutOperatingAt(session, approval) === undefined
+    ) {
+      return true;
+    }
+    return registerSessionBelongsToRange(session, range, approval);
+  });
 }
 
 async function buildExpenseSessionsById(
@@ -1359,9 +1413,11 @@ async function listRegisterSessionsForDailyClose(
     Doc<"registerSession">
   >();
 
+  // Keep stamped drawers for the final attribution pass, even after hours.
+  // This index also returns missing dates; the final pass checks clock bounds
+  // for those legacy rows and applies closeout evidence when present.
   activeIndexedSessionPages
     .flat()
-    .filter((session) => registerSessionIntersectsRange(session, range))
     .forEach((session) => activeSessionsById.set(session._id, session));
   activeMissingDateSessionPages
     .flat()
@@ -2735,7 +2791,7 @@ export async function buildDailyCloseSnapshotWithCtx(
 ): Promise<DailyCloseSnapshot> {
   const includeManagerReviewEvidence =
     args.includeManagerReviewEvidence ?? true;
-  const range = resolveOperatingDateRange(args);
+  const range = await resolveSnapshotOperatingDateRangeWithCtx(ctx, args);
   const store = await getStore(ctx, args.storeId);
   const automationStatus =
     await getLatestDailyOperationsAutomationStatusWithCtx(ctx, {
@@ -2937,6 +2993,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       ctx,
       registerSessionRead.activeSessions,
       range,
+      args.operatingDate,
     );
   const reviewOnlyRegisterCloseoutSessionsInRange =
     await filterRegisterSessionsBelongingToRange(
