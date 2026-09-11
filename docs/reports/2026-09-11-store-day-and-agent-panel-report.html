@@ -5,7 +5,7 @@
   <title>Store-day boundaries and a steadier Ask Athena panel</title>
 </head>
 <body>
-<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="701f0c4714feffd2538c612a3597b4264faeb4df7cc141ea0f239aece9c0177f">
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="49d6130fa839824716bbf692354ced3c19cfe124e2585a416888a4d696d00c52">
   <header data-report-section="header">
     <h1>Store-day boundaries and a steadier Ask Athena panel</h1>
     <p>Delivery candidate combining PRs #790 and #803</p>
@@ -48,22 +48,24 @@
   </section>
   <section data-report-section="changes">
     <h2>Scope and limits</h2>
-      <p>The delivery changes the schedule helper, Daily Close, historical EOD automation, the agent panel, their tests, and generated graph artifacts. It adds no schema, public API route, authorization capability, or inventory write path.</p>
+      <p>The delivery changes the schedule helper, Daily Close, historical EOD automation, the agent panel, their tests, the store-day read-port compatibility version, and generated artifacts. It adds no schema, public API route, authorization capability, or inventory write path.</p>
       <p>Explicit valid caller bounds still take precedence. Reduced motion remains respected. The change does not backfill or rewrite completed Daily Close snapshots, and the local tests do not prove historical production data has been repaired.</p>
   </section>
   <section data-report-section="validation">
     <h2>Evidence and pending gates</h2>
-      <p>The combined focused suites passed 283 tests. Added integration regressions keep stamped after-hours drawers visible, exclude future unstamped legacy drawers, and drive the real shell through live completion, collapse, a replayed running view, and the same answer&#x27;s return.</p>
-      <p>The first independent review round identified a shell-test coverage gap and prompted deeper register-attribution tests. An initial concern about future legacy drawers was narrowed by an executable regression: a later filter already excludes them. The final stamped-drawer filter was the actual remaining behavior gap. Verification review and the full Athena gate are pending.</p>
+      <p>The combined focused suites passed 283 tests. Added integration regressions keep stamped after-hours drawers visible, exclude future unstamped legacy drawers, and drive the real shell through live completion, collapse, a replayed running view, and the same answer&#x27;s return. Both original adversarial mutations now fail their new regressions, and the restored control passes all 283 tests. The agent port/profile/deployment-state suites also pass 28 tests.</p>
+      <p>Independent review closed the test gaps and withdrew the initial legacy-register concern after checking the final filter. It also traced the snapshot change through operations.storeDay; its manifest and read-port versions now advance together to version 2. Final verification and the full Athena gate remain pending.</p>
       <p>The local in-app demo loads, but Ask Athena is disabled there; no live provider turn was claimed. Production services were reachable before deployment. Merge, root alignment, tracker completion, and production deployment remain pending.</p>
   </section>
   <section data-report-section="guidance">
     <h2>Extending these paths later</h2>
+    <p>See the <a href="../solutions/logic-errors/athena-daily-close-store-day-boundary-2026-05-07.md">Daily Close store-day lesson</a> for the reusable implementation guidance.</p>
       <ul>
         <li>Choose a range from the consumer&#x27;s purpose: automation timing and record inclusion are distinct.</li>
         <li>Exercise the final snapshot, since a later filter can undo a correct source-query change.</li>
         <li>Make legacy fixture ordering match Convex&#x27;s undefined-before-string ordering.</li>
         <li>Test persistent-shell behavior through the shell, rather than supplying a reveal override directly to the panel.</li>
+        <li>Transitive snapshot changes can change agent read-port behavior. Bump both compatibility declarations, regenerate, fence before deploy, smoke with the profile disabled, and restore its prior enabled state.</li>
         <li>Deploy Convex and the Athena webapp after merge; the in-app documentation corpus is part of the webapp bundle.</li>
       </ul>
   </section>
@@ -181,7 +183,7 @@
     <dl>
       <dt>report_context / session context</dt><dd>Attempted focused prior-session discovery. No verified prior-session context was available; the report makes no historical-attempt claim from it.</dd>
       <dt>report_diff / delivered diff</dt><dd>Mapped seven package files, timing versus attribution boundaries, tests, generated artifacts, and overlap with the existing Daily Close lesson.</dd>
-      <dt>independent candidate reviewers</dt><dd>Fourteen isolated lenses reviewed the first prepared candidate. Their actual reports are retained; a second verification round is pending.</dd>
+      <dt>independent candidate reviewers</dt><dd>Fourteen isolated lenses reviewed each candidate round; reports and originating finding dispositions are retained. The next verification covers the compatibility update.</dd>
     </dl>
   </section>
 </article>

@@ -2,7 +2,7 @@
 title: Athena Daily Close Is A Store-Day Boundary
 date: 2026-05-07
 last_updated: 2026-09-11
-delivery_diff_fingerprint: 701f0c4714feffd2538c612a3597b4264faeb4df7cc141ea0f239aece9c0177f
+delivery_diff_fingerprint: 49d6130fa839824716bbf692354ced3c19cfe124e2585a416888a4d696d00c52
 category: logic-errors
 module: athena-webapp
 problem_type: workflow_scope_boundary
@@ -156,3 +156,14 @@ that rule for settled drawers, but trust the date stamp for an unsettled drawer.
 Test the final snapshot, not just its source query: the original change removed
 one filter while a later filter still discarded stamped after-hours drawers.
 The legacy fixture comparator must order undefined before strings, as Convex does.
+
+### Transitive agent read-port compatibility
+
+The `operations.storeDay` port passes its trading window through Daily Operations
+to the Daily Close snapshot. Changing the final register attribution therefore
+changes the port's blocker counts even when its own handler source is unchanged.
+Advance `implementationVersion` in both its manifest binding and port definition,
+regenerate the registry with `bun run agent-sdk:generate`, and follow
+[the compatibility fence](../../../packages/athena-webapp/docs/agent/capability-authoring.md#101-the-compatibility-fence)
+before production deployment. Verify the live switches first, smoke the new
+runtime with the profile disabled, and restore only the previously enabled profile.
