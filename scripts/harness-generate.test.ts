@@ -394,3 +394,15 @@ describe("generateHarnessDocs", () => {
     ).resolves.toContain('"lint:architecture"');
   });
 });
+
+describe("canonical plan documentation projection", () => {
+  it("publishes registry check definitions and qualification authority in generated maps", async () => {
+    const rootDir = await createFixtureRepo();
+    const docs = await generateHarnessDocs(rootDir);
+    const map = JSON.parse(docs.get("packages/athena-webapp/docs/agent/validation-map.json")!);
+    expect(map.qualificationPlan.authority).toBe("legacy-gate");
+    const ids = new Set(map.qualificationChecks.map((check: {id:string})=>check.id));
+    for (const surface of map.qualificationSurfaces) for (const id of surface.checks) expect(ids.has(id)).toBe(true);
+    expect(docs.get("packages/athena-webapp/docs/agent/validation-guide.md")).toContain("does not execute checks or authorize evidence reuse");
+  });
+});

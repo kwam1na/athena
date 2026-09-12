@@ -1,0 +1,14 @@
+{
+  "repository": "kwam1na/athena",
+  "defaultBranch": "main",
+  "workflowId": 42,
+  "workflowPath": ".github/workflows/full-health.yml",
+  "artifactName": "validation-health",
+  "classificationPath": "health-resolutions.json",
+  "checks": [
+    {
+      "checkId": "operator",
+      "scope": { "kind": "package", "package": "operator" }
+    }
+  ]
+}

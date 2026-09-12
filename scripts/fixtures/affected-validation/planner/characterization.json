@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "athena-validation-characterization/1",
+  "authority": "legacy-gate",
+  "cases": [
+    {"name":"report-refresh","changedFiles":["docs/reports/example.html"],"alwaysSelected":"bun run test:coverage","desiredObligations":["plan-integrity","docs-publishing"]},
+    {"name":"empty-schedule","changedFiles":[],"alwaysSelected":"bun run test:coverage","desiredMode":"full-health"},
+    {"name":"overlap","changedFiles":["packages/athena-webapp/src/components/shared-demo/example.tsx"],"overlappingProfile":"operator-unit","desiredMembership":"union"}
+  ],
+  "timings": null,
+  "provenance": "Selection captured with injected no-op executors; no sensor execution or benchmark claimed."
+}

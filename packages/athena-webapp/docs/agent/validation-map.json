@@ -1,4 +1,1790 @@
 {
+  "qualificationPlan": {
+    "schemaVersion": "athena-validation-plan/1",
+    "authority": "legacy-gate",
+    "modes": [
+      "delivery",
+      "comparison",
+      "full-health"
+    ],
+    "sharedInputs": [
+      "package.json",
+      "bun.lockb",
+      "bunfig.toml",
+      "scripts/harness-app-registry.ts",
+      "scripts/harness-validation-plan.ts"
+    ],
+    "publishingPrefixes": [
+      "docs/reports",
+      "docs/solutions"
+    ],
+    "publishingCommands": [
+      "reports:presentation:check",
+      "docs:links:check",
+      "landed-report:check"
+    ],
+    "fullHealthCommands": [
+      "test:coverage",
+      "harness:test",
+      "workflow:check",
+      "architecture:check",
+      "harness:inferential-review",
+      "graphify:check"
+    ],
+    "distinctProfiles": [
+      "unit",
+      "aggregate-coverage",
+      "timer-stress",
+      "browser",
+      "behavior"
+    ]
+  },
+  "qualificationSurfaces": [
+    {
+      "id": "athena.shared-demo-admission",
+      "pathPrefixes": [
+        "packages/athena-webapp/assets/shared-demo-products",
+        "packages/athena-webapp/docs/shared-demo-backend-coverage.md",
+        "packages/athena-webapp/convex/sharedDemo",
+        "packages/athena-webapp/convex/auth.ts",
+        "packages/athena-webapp/convex/auth/SharedDemoTicket.ts",
+        "packages/athena-webapp/convex/contextTracking",
+        "packages/athena-webapp/convex/crons.ts",
+        "packages/athena-webapp/convex/http.ts",
+        "packages/athena-webapp/convex/operationAdmission",
+        "packages/athena-webapp/src/components/shared-demo",
+        "packages/athena-webapp/playwright.demo.config.ts",
+        "packages/athena-webapp/src/lib/errors/sharedDemoDenialObserver.ts",
+        "packages/athena-webapp/src/routes/demo.tsx",
+        "packages/athena-webapp/src/routes/_authed.tsx"
+      ],
+      "checks": [
+        "athena.check.1c7fc4d72c67bc1e",
+        "athena.check.2c425df3f003c174",
+        "athena.check.461b48c115b98f96",
+        "athena.check.8357d29d6b77ff2e",
+        "athena.check.934b2f271b91fab1",
+        "athena.check.9c55e1f427d0103b",
+        "athena.shared-demo-admission.check-0"
+      ],
+      "reason": "Use this when the configured shared demo changes admission, shared-store authority, restore semantics, effect restrictions, visitor-activity tracking on the context event rail, or the owner-oriented application shell. It validates the server boundary, credentialless entry, orientation layer, demo telemetry capture, and generated application contracts together. Demo activity events are support-visible and non-compilable on purpose: demo visitors are store admins of the one shared store, so store-visible telemetry would expose one visitor's behavior to another."
+    },
+    {
+      "id": "athena.route-ui",
+      "pathPrefixes": [
+        "packages/athena-webapp/src/assets",
+        "packages/athena-webapp/src/config.ts",
+        "packages/athena-webapp/src/config.test.ts",
+        "packages/athena-webapp/src/routes",
+        "packages/athena-webapp/src/components",
+        "packages/athena-webapp/src/hooks",
+        "packages/athena-webapp/src/contexts",
+        "packages/athena-webapp/src/index.css"
+      ],
+      "checks": [
+        "athena.check.bfc4c681ede1f4dc",
+        "athena.route-ui.check-0"
+      ],
+      "reason": "Use this for authenticated dashboard flows, service-management screens, route trees, and UI behavior changes that stay inside the frontend shell."
+    },
+    {
+      "id": "athena.changed-frontend-source-lint",
+      "pathPrefixes": [
+        "packages/athena-webapp/src",
+        "packages/athena-webapp/shared",
+        "packages/athena-webapp/types.ts"
+      ],
+      "checks": [
+        "athena.check.8357d29d6b77ff2e"
+      ],
+      "reason": "Run this for changed browser-facing TypeScript or TSX files so introduced ESLint failures are caught before PR handoff."
+    },
+    {
+      "id": "athena.reporting-fact-ledger",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/reports",
+        "packages/athena-webapp/convex/schemas/reports",
+        "packages/athena-webapp/convex/inventoryLedger",
+        "packages/athena-webapp/convex/storeTime",
+        "packages/athena-webapp/shared/reportsContract.ts"
+      ],
+      "checks": [
+        "athena.check.1c7fc4d72c67bc1e",
+        "athena.check.2c425df3f003c174",
+        "athena.check.934b2f271b91fab1",
+        "athena.check.9c55e1f427d0103b",
+        "athena.reporting-fact-ledger.check-0"
+      ],
+      "reason": "Use this for the reporting contract, fact ingestion, the day fold, the sweeper and its read models, custom ranges, reseed, or source-truth verification. Pair it with the owning source-domain scenario when a POS, storefront, service, payment, inventory, or Daily Close command emits new facts. Source state and inventory effects remain atomic with the command; the fold is replayable asynchronous work and must never decide operational success. The fold is the correctness authority — the open-day incremental path is only a preview of it."
+    },
+    {
+      "id": "athena.agent-harness",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/agentHarness",
+        "packages/athena-webapp/convex/automation/agentCapabilities",
+        "packages/athena-webapp/convex/cashControls/agentCapabilities",
+        "packages/athena-webapp/convex/operations/agentCapabilities",
+        "packages/athena-webapp/convex/reports/agentCapabilities",
+        "packages/athena-webapp/convex/stockOps/agentCapabilities",
+        "packages/athena-webapp/convex/lib/agentCapabilityManifests.ts",
+        "packages/athena-webapp/convex/lib/agentCapabilitySupport.ts",
+        "packages/athena-webapp/convex/operationAdmission/delegatedAuthority.ts",
+        "packages/athena-webapp/convex/sharedDemo/delegatedAuthority.ts",
+        "packages/athena-webapp/convex/platform/operationAdmission.ts",
+        "packages/athena-webapp/convex/intelligence/providers/convexAgent.ts",
+        "packages/athena-webapp/convex.json",
+        "packages/athena-webapp/shared/agentHarness",
+        "packages/athena-webapp/src/components/agent",
+        "packages/athena-webapp/src/components/operations/dailyOperationsAgentPresentation.ts"
+      ],
+      "checks": [
+        "athena.agent-harness.check-0",
+        "athena.check.1c7fc4d72c67bc1e",
+        "athena.check.2c425df3f003c174",
+        "athena.check.541d7c311bfffac0",
+        "athena.check.8357d29d6b77ff2e",
+        "athena.check.934b2f271b91fab1",
+        "athena.check.9c55e1f427d0103b"
+      ],
+      "reason": "Use this for the agent harness kernel, a domain capability package, a profile, the delegated admission ports, or the reusable agent host. Three things gate a merge here and none of them may be skipped: generated registry drift (`agent-sdk:check` refuses a stale artifact and names the regeneration command), operation-admission coverage (the checker must report zero findings and the caller table must be current), and the focused conformance, security, and data-governance suites — `releaseConformance`, `security`, `dataGovernance`, and the `evals` smoke matrix — which are what stand between a capability and an operator. Changing a read port's behaviour also requires bumping its `implementationVersion`, which moves the compatibility digest and therefore requires the pre-deploy fence (`bun scripts/agent-harness-fence.ts --reason \"<id>\"`) before the change deploys. Release itself is one switch: publish, smoke through the direct harness while the switch is off, one broad enable, watch the first turns, and disable to roll back — no cohorts, canaries, staged profile versions, or drain gates."
+    },
+    {
+      "id": "athena.daily-store-operations",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/operations/dailyClose.ts",
+        "packages/athena-webapp/convex/operations/dailyOpening.ts",
+        "packages/athena-webapp/convex/operations/dailyOperations.ts",
+        "packages/athena-webapp/convex/schemas/operations/dailyClose.ts",
+        "packages/athena-webapp/convex/schemas/operations/dailyOpening.ts",
+        "packages/athena-webapp/src/components/operations/DailyCloseHistoryView.tsx",
+        "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
+        "packages/athena-webapp/src/components/operations/DailyOpeningView.tsx",
+        "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
+        "packages/athena-webapp/src/components/app-sidebar.tsx",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/index.tsx",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history.tsx",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close.tsx",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening.tsx"
+      ],
+      "checks": [
+        "athena.check.1c7fc4d72c67bc1e",
+        "athena.check.2c425df3f003c174",
+        "athena.check.461b48c115b98f96",
+        "athena.check.8357d29d6b77ff2e",
+        "athena.check.934b2f271b91fab1",
+        "athena.check.9c55e1f427d0103b",
+        "athena.daily-store-operations.check-0"
+      ],
+      "reason": "Use this when Daily Opening, Daily Close, or the store-day operations route wiring changes. It validates the backend readiness gates, operator-facing acknowledgement views, generated Convex API surface, and route tree before broader package validation."
+    },
+    {
+      "id": "athena.stock-ops-procurement",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/stockOps",
+        "packages/athena-webapp/convex/operations/approvalRequests.ts",
+        "packages/athena-webapp/src/components/operations/OperationsQueueView.tsx",
+        "packages/athena-webapp/src/components/operations/StockAdjustmentWorkspace.tsx",
+        "packages/athena-webapp/src/components/procurement",
+        "packages/athena-webapp/src/components/app-sidebar.tsx",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement.index.tsx"
+      ],
+      "checks": [
+        "athena.check.1c7fc4d72c67bc1e",
+        "athena.check.2c425df3f003c174",
+        "athena.check.461b48c115b98f96",
+        "athena.check.934b2f271b91fab1",
+        "athena.check.9c55e1f427d0103b",
+        "athena.stock-ops-procurement.check-0"
+      ],
+      "reason": "Use this when stock adjustments, procurement recommendations, purchase-order lifecycle changes, or receiving route wiring move. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new stockOps function exports changed."
+    },
+    {
+      "id": "athena.cash-controls",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/cashControls",
+        "packages/athena-webapp/convex/operations/registerSessions.ts",
+        "packages/athena-webapp/src/components/cash-controls",
+        "packages/athena-webapp/src/components/operations/OperationsQueueView.tsx",
+        "packages/athena-webapp/src/components/app-sidebar.tsx",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
+      ],
+      "checks": [
+        "athena.cash-controls.check-0",
+        "athena.check.2c425df3f003c174",
+        "athena.check.461b48c115b98f96",
+        "athena.check.934b2f271b91fab1"
+      ],
+      "reason": "Use this when register-session, deposit, closeout, dashboard, operations-queue approval, or cash-controls route wiring changes. This is the confirmation slice for drawers opened from POS showing up in the dashboard and register-session detail views. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new Convex function exports changed."
+    },
+    {
+      "id": "athena.pos-item-adjustment",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/pos/application/commands",
+        "packages/athena-webapp/convex/pos/application/corrections",
+        "packages/athena-webapp/convex/pos/infrastructure/repositories/transactionRepository.ts",
+        "packages/athena-webapp/convex/schemas/pos",
+        "packages/athena-webapp/convex/operations/dailyClose.ts",
+        "packages/athena-webapp/convex/operations/dailyOperations.ts",
+        "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
+        "packages/athena-webapp/src/components/pos/transactions/TransactionView.tsx",
+        "packages/athena-webapp/src/components/operations/OperationsQueueView.tsx"
+      ],
+      "checks": [
+        "athena.check.1c7fc4d72c67bc1e",
+        "athena.check.2c425df3f003c174",
+        "athena.check.461b48c115b98f96",
+        "athena.check.8357d29d6b77ff2e",
+        "athena.check.934b2f271b91fab1",
+        "athena.check.9c55e1f427d0103b",
+        "athena.pos-item-adjustment.check-0"
+      ],
+      "reason": "Use this when completed-transaction item adjustments, adjustment approval/application, transaction detail adjustment history, daily close/operations adjusted totals, or cash-control settlement display changes. It keeps original sale totals and explicit adjusted/net settlement fields covered together."
+    },
+    {
+      "id": "athena.pos-mixed-checkout",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
+        "packages/athena-webapp/convex/pos/application/commands/correctTransaction.ts",
+        "packages/athena-webapp/convex/pos/application/queries/getTransactions.ts",
+        "packages/athena-webapp/convex/pos/application/sync",
+        "packages/athena-webapp/convex/pos/public/transactions.ts",
+        "packages/athena-webapp/convex/operations/dailyClose.ts",
+        "packages/athena-webapp/convex/cashControls",
+        "packages/athena-webapp/convex/serviceOps",
+        "packages/athena-webapp/shared/posLocalSyncContract.ts",
+        "packages/athena-webapp/src/components/pos/OrderSummary.tsx",
+        "packages/athena-webapp/src/components/pos/register/RegisterCheckoutPanel.tsx",
+        "packages/athena-webapp/src/components/pos/receipt/PosReceiptShareControl.tsx",
+        "packages/athena-webapp/src/components/pos/transactions",
+        "packages/athena-webapp/src/components/services/ServiceCasesView.tsx",
+        "packages/athena-webapp/src/components/operations/CommandApprovalDialog.tsx",
+        "packages/athena-webapp/src/lib/pos/infrastructure/local",
+        "packages/athena-webapp/src/lib/pos/presentation/register"
+      ],
+      "checks": [
+        "athena.check.1c7fc4d72c67bc1e",
+        "athena.check.2c425df3f003c174",
+        "athena.check.461b48c115b98f96",
+        "athena.check.8357d29d6b77ff2e",
+        "athena.check.934b2f271b91fab1",
+        "athena.check.9c55e1f427d0103b",
+        "athena.pos-mixed-checkout.check-0"
+      ],
+      "reason": "Use this when POS service mixed checkout changes receipts, transaction read models, service-case payment context, service catalog local readiness, payment allocation splits, daily close/cash-control reporting, or mixed-sale void guardrails. It preserves the split between retail add-ons and service material usage while confirming drawer tender is counted once."
+    },
+    {
+      "id": "athena.service-operations",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/serviceOps",
+        "packages/athena-webapp/convex/operations/serviceIntake.ts",
+        "packages/athena-webapp/src/components/services",
+        "packages/athena-webapp/src/components/operations/OperationsQueueView.tsx",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services"
+      ],
+      "checks": [
+        "athena.check.1c7fc4d72c67bc1e",
+        "athena.check.2c425df3f003c174",
+        "athena.check.934b2f271b91fab1",
+        "athena.check.9c55e1f427d0103b",
+        "athena.service-operations.check-0"
+      ],
+      "reason": "Use this when service intake, catalog management, appointment scheduling, service-case execution, or manager-queue service handoffs change. It validates the command-result service flows plus the operator-facing intake, appointments, active-cases, catalog, and queue surfaces together before broader package validation."
+    },
+    {
+      "id": "athena.auth-staff-store-configuration",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/inventory/auth.ts",
+        "packages/athena-webapp/convex/inventory/stores.ts",
+        "packages/athena-webapp/convex/operations/staffCredentials.ts",
+        "packages/athena-webapp/convex/operations/staffProfiles.ts",
+        "packages/athena-webapp/convex/schema.ts",
+        "packages/athena-webapp/convex/inventory/posSessions.ts",
+        "packages/athena-webapp/convex/pos/application/queries/getRegisterState.ts",
+        "packages/athena-webapp/convex/pos/infrastructure/repositories/cashierRepository.ts",
+        "packages/athena-webapp/src/routes/login/_layout.tsx",
+        "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
+        "packages/athena-webapp/src/components/store-configuration",
+        "packages/athena-webapp/src/components/pos/CashierAuthDialog.tsx",
+        "packages/athena-webapp/src/lib/pos/application/results.ts",
+        "packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts"
+      ],
+      "checks": [
+        "athena.auth-staff-store-configuration.check-0",
+        "athena.check.2c425df3f003c174",
+        "athena.check.934b2f271b91fab1"
+      ],
+      "reason": "Use this when login auth sync, store staff identity, admin store-configuration mutations, or cashier-auth command handling changes. It validates the retryable auth-sync path, the staff credential rules, the staff-management surface, the shared store-configuration hook plus fulfillment/maintenance/MTN MoMo regressions, and the register and cashier-auth flows that now share `staffProfileId` instead of the deleted cashier model."
+    },
+    {
+      "id": "athena.expense-session-cart",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/inventory/expenseSessions.ts",
+        "packages/athena-webapp/convex/inventory/expenseSessionItems.ts",
+        "packages/athena-webapp/convex/inventory/expenseTransactions.ts",
+        "packages/athena-webapp/src/hooks/useExpenseSessions.ts",
+        "packages/athena-webapp/src/hooks/useExpenseOperations.ts",
+        "packages/athena-webapp/src/hooks/useSessionManagementExpense.ts",
+        "packages/athena-webapp/src/components/expense/ExpenseView.tsx",
+        "packages/athena-webapp/src/components/expense/ExpenseCompletion.tsx",
+        "packages/athena-webapp/src/stores/expenseStore.ts",
+        "packages/athena-webapp/types.ts"
+      ],
+      "checks": [
+        "athena.check.2c425df3f003c174",
+        "athena.check.934b2f271b91fab1",
+        "athena.expense-session-cart.check-0"
+      ],
+      "reason": "Use this when expense-session lifecycle, expense cart items, expense transaction finalization, or expense session hooks change. It validates the command-result expense session mutations plus the browser-facing session and cart hooks that now collapse expected failures to safe user-facing copy."
+    },
+    {
+      "id": "athena.omnichannel-order-refund",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/storeFront/onlineOrder.ts",
+        "packages/athena-webapp/convex/storeFront/onlineOrderUtilFns.ts",
+        "packages/athena-webapp/convex/storeFront/payment.ts",
+        "packages/athena-webapp/convex/storeFront/reviews.ts",
+        "packages/athena-webapp/convex/storeFront/helpers/returnExchangeOperations.ts",
+        "packages/athena-webapp/convex/storeFront/helpers/customerEngagementEvents.ts",
+        "packages/athena-webapp/convex/storeFront/customerBehaviorTimeline.ts",
+        "packages/athena-webapp/convex/storeFront/customerObservabilityTimelineData.ts",
+        "packages/athena-webapp/src/components/orders",
+        "packages/athena-webapp/src/components/reviews",
+        "packages/athena-webapp/src/components/users/CustomerBehaviorTimeline.tsx",
+        "packages/athena-webapp/src/components/users/TimelineEventCard.tsx",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews"
+      ],
+      "checks": [
+        "athena.check.1c7fc4d72c67bc1e",
+        "athena.check.2963064233fe773c",
+        "athena.check.2c425df3f003c174",
+        "athena.check.39b9d1d73da2a212",
+        "athena.check.934b2f271b91fab1",
+        "athena.check.9c55e1f427d0103b",
+        "athena.omnichannel-order-refund.check-0"
+      ],
+      "reason": "Use this when order updates, refunds, return-exchange execution, review moderation, feedback-request messaging, or customer-history presentation changes. It validates the migrated storefront command-result surfaces plus the operator-facing order, review, and customer-history views before broader package validation. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new storefront function exports changed."
+    },
+    {
+      "id": "athena.workflow-trace-foundation",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/workflowTraces",
+        "packages/athena-webapp/convex/schemas/observability",
+        "packages/athena-webapp/convex/pos/application/sync",
+        "packages/athena-webapp/convex/pos/application/commands/terminals.ts",
+        "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
+        "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
+        "packages/athena-webapp/convex/pos/application/queries/getTransactions.ts",
+        "packages/athena-webapp/convex/pos/public/sync.ts",
+        "packages/athena-webapp/convex/pos/public/terminals.ts",
+        "packages/athena-webapp/convex/pos/public/transactions.ts",
+        "packages/athena-webapp/convex/pos/infrastructure/repositories/localSyncRepository.ts",
+        "packages/athena-webapp/convex/inventory/posSessions.ts",
+        "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
+        "packages/athena-webapp/convex/operations/registerSessions.ts",
+        "packages/athena-webapp/convex/cashControls/closeouts.ts",
+        "packages/athena-webapp/convex/cashControls/deposits.ts",
+        "packages/athena-webapp/convex/schemas/pos/posLocalSyncConflict.ts",
+        "packages/athena-webapp/convex/schemas/pos/posLocalSyncEvent.ts",
+        "packages/athena-webapp/convex/schemas/pos/posLocalSyncMapping.ts",
+        "packages/athena-webapp/convex/schemas/pos/posTransaction.ts",
+        "packages/athena-webapp/shared/posLocalSyncContract.ts",
+        "packages/athena-webapp/shared/workflowTrace.ts",
+        "packages/athena-webapp/src/components/traces",
+        "packages/athena-webapp/src/components/pos/PointOfSaleView.tsx",
+        "packages/athena-webapp/src/components/pos/SessionManager.tsx",
+        "packages/athena-webapp/src/components/pos/register",
+        "packages/athena-webapp/src/components/pos/session/HeldSessionsList.tsx",
+        "packages/athena-webapp/src/components/pos/transactions",
+        "packages/athena-webapp/src/hooks/useGetTerminal.ts",
+        "packages/athena-webapp/src/lib/pos/infrastructure/local",
+        "packages/athena-webapp/src/lib/pos/presentation/register",
+        "packages/athena-webapp/src/lib/pos/presentation/syncStatusPresentation.ts",
+        "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.tsx",
+        "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces"
+      ],
+      "checks": [
+        "athena.check.1c7fc4d72c67bc1e",
+        "athena.check.2963064233fe773c",
+        "athena.check.2c425df3f003c174",
+        "athena.check.39b9d1d73da2a212",
+        "athena.check.461b48c115b98f96",
+        "athena.check.934b2f271b91fab1",
+        "athena.check.9c55e1f427d0103b",
+        "athena.check.bb22321c9c9a905f",
+        "athena.workflow-trace-foundation.check-0"
+      ],
+      "reason": "Use this when the shared workflow-trace or POS local sync contract, POS local sync repository, POS local-first sync/storage/read-model/command-gateway files, terminal seed lookup, POS local entry/readiness files, the POS register bootstrap or drawer gate, the `pos_session` / `register_session` trace writers, the trace route/view, or POS register, transaction, and cash-controls trace entry points change. It exercises the trace schema and presentation contract, the session/register trace writers, local sync ingestion/projection/repository/read-model adjacency, POS entry/readiness gating, the drawer-open bootstrap handoff, the shared trace route, terminal fallback behavior, and the operator-facing POS and cash-controls surfaces before broader package validation. `test:timing-parity` re-runs the POS suites with every scheduled delay multiplied (`ATHENA_TEST_TIMER_LAG`), which is the only local sensor that reproduces the timing skew of the CI coverage run: it is where `await waitFor(positive)` followed by `expect(...).not.toHaveBeenCalled()` gets caught, because the awaited work keeps advancing between the poll and the negative assertion."
+    },
+    {
+      "id": "athena.pos-app-session-continuity",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/pos/public/terminalAppSessions.ts",
+        "packages/athena-webapp/convex/pos/public/terminals.ts",
+        "packages/athena-webapp/convex/pos/application/commands/terminals.ts",
+        "packages/athena-webapp/convex/schemas/pos/posTerminalRuntimeStatus.ts",
+        "packages/athena-webapp/src/routes/_authed.tsx",
+        "packages/athena-webapp/src/components/pos/PointOfSaleView.tsx",
+        "packages/athena-webapp/src/lib/pos/infrastructure/terminal/usePosTerminalAppSessionRecovery.ts",
+        "packages/athena-webapp/src/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext.tsx",
+        "packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts",
+        "packages/athena-webapp/src/lib/pos/infrastructure/local/terminalRuntimeStatus.ts"
+      ],
+      "checks": [
+        "athena.check.1c7fc4d72c67bc1e",
+        "athena.check.2c425df3f003c174",
+        "athena.check.461b48c115b98f96",
+        "athena.check.8357d29d6b77ff2e",
+        "athena.check.934b2f271b91fab1",
+        "athena.check.9c55e1f427d0103b",
+        "athena.pos-app-session-continuity.check-0"
+      ],
+      "reason": "Use this when POS hub app-session recovery, route-shell continuity, terminal recovery validation, or app-session diagnostics change. It proves the recovery assertion stays POS-hub scoped, non-POS routes still require normal app auth, server validation rejects unsafe scopes, recovery retries stay bounded, terminal diagnostics redact raw recovery data, and sale authority still depends on terminal integrity, drawer authority, local command invariants, and staff proof."
+    },
+    {
+      "id": "athena.pos-offline-route-access",
+      "pathPrefixes": [
+        "packages/athena-webapp/public/pos-app-shell-sw.js",
+        "packages/athena-webapp/playwright.config.ts",
+        "packages/athena-webapp/playwright.prod.config.ts",
+        "packages/athena-webapp/src/main.tsx",
+        "packages/athena-webapp/src/offline",
+        "packages/athena-webapp/src/routes/_authed.tsx",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos",
+        "packages/athena-webapp/src/components/pos/PointOfSaleView.tsx",
+        "packages/athena-webapp/src/components/pos/register",
+        "packages/athena-webapp/src/components/pos/settings/POSSettingsView.tsx",
+        "packages/athena-webapp/src/components/pos/terminals/POSTerminalHealthView.tsx",
+        "packages/athena-webapp/src/lib/pos/infrastructure/local",
+        "packages/athena-webapp/src/lib/pos/presentation/register",
+        "packages/athena-webapp/src/tests/pos/offlineRouteAccess.spec.ts",
+        "packages/athena-webapp/src/tests/pos/offlineSalesContinuity.spec.ts",
+        "packages/athena-webapp/src/tests/prod/posFlow.prod.spec.ts"
+      ],
+      "checks": [
+        "athena.check.2c425df3f003c174",
+        "athena.check.2e5d2ef738e98520",
+        "athena.check.934b2f271b91fab1",
+        "athena.check.f1250d59386a66cc",
+        "athena.pos-offline-route-access.check-0"
+      ],
+      "reason": "Use this when POS service-worker app-shell caching, POS-only offline route entry, offline readiness diagnostics, or hard-reload register continuity changes. Cache Storage must stay limited to static shell assets; POS business state, staff authority, cart events, payments, and catalog snapshots remain in IndexedDB/local POS stores."
+    },
+    {
+      "id": "athena.app-update-readiness",
+      "pathPrefixes": [
+        "packages/athena-webapp/public/pos-app-shell-sw.js",
+        "packages/athena-webapp/src/main.tsx",
+        "packages/athena-webapp/src/routes/__root.tsx",
+        "packages/athena-webapp/src/lib/app-update",
+        "packages/athena-webapp/src/components/app-update",
+        "packages/athena-webapp/src/utils/versionChecker.ts",
+        "packages/athena-webapp/src/offline/posAppShellRoutes.ts",
+        "packages/athena-webapp/src/components/operations/InventoryImportView.tsx",
+        "packages/athena-webapp/src/components/operations/InventoryImportView.test.tsx",
+        "packages/athena-webapp/src/components/pos/register/POSRegisterView.tsx",
+        "packages/athena-webapp/src/components/pos/register/POSRegisterView.test.tsx",
+        "packages/athena-webapp/src/lib/pos/presentation/register/registerUiState.ts",
+        "packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts",
+        "packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.test.ts"
+      ],
+      "checks": [
+        "athena.app-update-readiness.check-0",
+        "athena.check.2c425df3f003c174",
+        "athena.check.934b2f271b91fab1"
+      ],
+      "reason": "Use this when app update detection, Update Ready UI, cross-tab apply blockers, service-worker static update staging, POS update blockers, or Inventory Import update blockers change. Version detection must not reload automatically; surfaces should opt in only while active work, commands, or resumability risk make refresh unsafe."
+    },
+    {
+      "id": "athena.pos-terminal-health",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/schemas/pos/posTerminal.ts",
+        "packages/athena-webapp/convex/schemas/pos/posTerminalRuntimeStatus.ts",
+        "packages/athena-webapp/convex/pos/application/commands/terminals.ts",
+        "packages/athena-webapp/convex/pos/application/queries/terminals.ts",
+        "packages/athena-webapp/convex/pos/application/terminalRecovery",
+        "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRepository.ts",
+        "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
+        "packages/athena-webapp/convex/pos/public/terminals.ts",
+        "packages/athena-webapp/convex/schemas/pos/posTerminalRecovery.ts",
+        "packages/athena-webapp/convex/inventory/posTerminal.ts",
+        "packages/athena-webapp/src/components/pos/settings/POSSettingsView.tsx",
+        "packages/athena-webapp/src/hooks/useGetTerminal.ts",
+        "packages/athena-webapp/src/lib/pos/application/registerAndProvisionPosTerminal.ts",
+        "packages/athena-webapp/src/lib/pos/infrastructure/terminal",
+        "packages/athena-webapp/src/lib/pos/infrastructure/local/terminalRecoveryCommands.ts",
+        "packages/athena-webapp/src/lib/pos/infrastructure/local/terminalRuntimeStatus.ts",
+        "packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts",
+        "packages/athena-webapp/src/lib/pos/presentation/syncStatusPresentation.ts",
+        "packages/athena-webapp/src/components/pos/register/POSRegisterView.tsx",
+        "packages/athena-webapp/src/components/pos/terminals",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals",
+        "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.tsx",
+        "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx"
+      ],
+      "checks": [
+        "athena.check.1c7fc4d72c67bc1e",
+        "athena.check.2c425df3f003c174",
+        "athena.check.461b48c115b98f96",
+        "athena.check.8357d29d6b77ff2e",
+        "athena.check.934b2f271b91fab1",
+        "athena.check.9c55e1f427d0103b",
+        "athena.pos-terminal-health.check-0"
+      ],
+      "reason": "Use this when POS terminal registration, terminal runtime status, browser-side health publisher/readout, terminal recovery commands, terminal setup/detail UI, POS support diagnostics, or cash-controls terminal evidence changes. Stale or pending terminal check-ins are telemetry and should stay out of manager-review queues; unresolved local sync conflicts remain the source of needs-review copy. Browser-local terminal recovery must be verified by a fresh runtime check-in before support treats a terminal as healthy."
+    },
+    {
+      "id": "athena.shared-lib-utility",
+      "pathPrefixes": [
+        "packages/athena-webapp/src/lib",
+        "packages/athena-webapp/shared",
+        "packages/athena-webapp/src/settings",
+        "packages/athena-webapp/src/utils",
+        "packages/athena-webapp/src/stores",
+        "packages/athena-webapp/types.ts"
+      ],
+      "checks": [
+        "athena.check.2c425df3f003c174",
+        "athena.shared-lib-utility.check-0"
+      ],
+      "reason": "Reach for the package suite first, then typecheck when helpers or shared state can affect many call sites."
+    },
+    {
+      "id": "athena.client-server-error-foundation",
+      "pathPrefixes": [
+        "packages/athena-webapp/shared/commandResult.ts",
+        "packages/athena-webapp/src/lib/errors",
+        "packages/athena-webapp/src/lib/errors/presentUnexpectedErrorToast.ts",
+        "packages/athena-webapp/src/lib/errors/presentUnexpectedErrorToast.test.ts",
+        "packages/athena-webapp/src/components/auth/DefaultCatchBoundary.tsx",
+        "packages/athena-webapp/src/components/auth/DefaultCatchBoundary.test.tsx",
+        "packages/athena-webapp/src/routeTree.browser-boundary.test.ts"
+      ],
+      "checks": [
+        "athena.check.2c425df3f003c174",
+        "athena.check.934b2f271b91fab1",
+        "athena.client-server-error-foundation.check-0"
+      ],
+      "reason": "Use this when the shared command-result contract, client command normalizers, generic catch boundary, or browser import boundary changes. Expected failures must stay in browser-safe `user_error` results, thrown faults must collapse to generic fallback copy, and shared modules must not import raw Convex server files into the browser tree."
+    },
+    {
+      "id": "athena.admin-quick-action-toast",
+      "pathPrefixes": [
+        "packages/athena-webapp/src/components/add-product",
+        "packages/athena-webapp/src/components/assets",
+        "packages/athena-webapp/src/components/join-team",
+        "packages/athena-webapp/src/components/organization-members",
+        "packages/athena-webapp/src/components/promo-codes",
+        "packages/athena-webapp/src/lib/errors/presentUnexpectedErrorToast.ts",
+        "packages/athena-webapp/src/lib/errors/presentUnexpectedErrorToast.test.ts",
+        "packages/athena-webapp/src/settings/organization",
+        "packages/athena-webapp/src/settings/store"
+      ],
+      "checks": [
+        "athena.admin-quick-action-toast.check-0",
+        "athena.check.2c425df3f003c174",
+        "athena.check.934b2f271b91fab1"
+      ],
+      "reason": "Use this when admin quick actions still resolve through toast-only UX. Preserve any explicit business-validation copy returned by the surface, but route unexpected failures through the shared generic unexpected-error fallback so raw backend text never reaches the browser."
+    },
+    {
+      "id": "athena.frontend-test-harness",
+      "pathPrefixes": [
+        "packages/athena-webapp/src/test",
+        "packages/athena-webapp/src/tests",
+        "packages/athena-webapp/vitest.setup.ts",
+        "packages/athena-webapp/.env.test"
+      ],
+      "checks": [
+        "athena.check.bb22321c9c9a905f",
+        "athena.frontend-test-harness.check-0"
+      ],
+      "reason": "Run the package suite when package-local frontend test helpers, focused regression tests, or the test-mode env file change. `vitest.setup.ts` also owns the opt-in `ATHENA_TEST_TIMER_LAG` shim behind `test:timing-parity`, so run that sensor too when the setup file changes."
+    },
+    {
+      "id": "athena.convex-backend-adjacent",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex",
+        "packages/athena-webapp/scripts/convex-audit.sh",
+        "packages/athena-webapp/scripts/convex-lint-changed.sh",
+        "packages/athena-webapp/scripts/convexPaginationAntiPatternCheck.py",
+        "packages/athena-webapp/scripts/empty-table.json",
+        "packages/athena-webapp/scripts/purge-reporting-dev.sh",
+        "packages/athena-webapp/src/routes/_authed",
+        "packages/athena-webapp/src/main.tsx"
+      ],
+      "checks": [
+        "athena.check.1c7fc4d72c67bc1e",
+        "athena.check.2963064233fe773c",
+        "athena.check.39b9d1d73da2a212",
+        "athena.check.99d6ecc8d782b065",
+        "athena.check.9c55e1f427d0103b",
+        "athena.convex-backend-adjacent.check-1"
+      ],
+      "reason": "Any change that can affect Convex HTTP wiring, serviceOps schemas and workflows, shared operational rails, reporting maintenance scripts, or route-to-backend composition should include the Convex audit pair. The shrink-only backend dependency guard runs (`bun run dependency:check:backend`) whenever Convex sources change: it snapshots backend import cycles and kernel-boundary violations against a committed baseline, blocks new cycles/violations, and treats baseline removals as drift until the baseline is regenerated (`--update-baseline` is shrink-only, so it cannot absorb new violations). When a public Convex function with an explicit `returns` validator changes, add executable return-contract proof with `assertConformsToExportedReturns`; loose `exportReturns()` string checks do not prove the production return contract. Convex query handlers must not reach mutation-only DB APIs directly or through write-capable repositories/services; split read factories from `MutationCtx`-only write factories when shared code crosses query and mutation boundaries."
+    },
+    {
+      "id": "athena.route-runtime-build",
+      "pathPrefixes": [
+        "packages/athena-webapp/src/main.tsx",
+        "packages/athena-webapp/src/routeTree.gen.ts",
+        "packages/athena-webapp/src/routeTree.browser-boundary.test.ts",
+        "packages/athena-webapp/bunfig.toml",
+        "packages/athena-webapp/vitest.config.ts",
+        "packages/athena-webapp/vite.config.ts",
+        "packages/athena-webapp/vite-docs-content-plugin.ts",
+        "packages/athena-webapp/tsconfig.json"
+      ],
+      "checks": [
+        "athena.check.2c425df3f003c174",
+        "athena.check.461b48c115b98f96",
+        "athena.check.934b2f271b91fab1",
+        "athena.route-runtime-build.check-0"
+      ],
+      "reason": "Run these when bootstrap, generated router state, or package build configuration changes so browser-entry regressions fail before the route tree reaches Arc. `bunfig.toml` only preloads the repo-root `bun test` runner guard, so a change there must still leave the package Vitest suite running normally."
+    },
+    {
+      "id": "athena.storybook-frontend-tooling",
+      "pathPrefixes": [
+        "packages/athena-webapp/.storybook",
+        "packages/athena-webapp/index.html",
+        "packages/athena-webapp/public/favicon.svg",
+        "packages/athena-webapp/public/favicon-16x16.png",
+        "packages/athena-webapp/public/favicon-32x32.png",
+        "packages/athena-webapp/public/apple-touch-icon.png",
+        "packages/athena-webapp/public/android-chrome-192x192.png",
+        "packages/athena-webapp/public/android-chrome-512x512.png",
+        "packages/athena-webapp/public/site.webmanifest",
+        "packages/athena-webapp/src/stories",
+        "packages/athena-webapp/src/index.css",
+        "packages/athena-webapp/src/design-system-build-config.test.ts",
+        "packages/athena-webapp/tailwind.config.js",
+        "packages/athena-webapp/postcss.config.js",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/README.md",
+        "packages/athena-webapp/eslint.config.js",
+        "packages/athena-webapp/scripts/frontend-lint-changed.sh",
+        "packages/athena-webapp/scripts/capture-operations-shot.mjs",
+        "packages/athena-webapp/scripts/capture-hero-shot.mjs",
+        "packages/athena-webapp/scripts/capture-register-shot.mjs",
+        "packages/athena-webapp/.gitignore"
+      ],
+      "checks": [
+        "athena.check.07682e2189010186",
+        "athena.check.934b2f271b91fab1",
+        "athena.storybook-frontend-tooling.check-0"
+      ],
+      "reason": "Use this when the document shell, favicon and web-manifest assets, Storybook config, story files, package-level frontend tooling, or the operations/landing screenshot capture scripts change need isolated validation."
+    },
+    {
+      "id": "athena-webapp.harness-docs",
+      "pathPrefixes": [
+        "packages/athena-webapp/AGENTS.md",
+        "packages/athena-webapp/docs/agent"
+      ],
+      "checks": [
+        "athena.check.cb2aab682811b706",
+        "athena.check.96b0048d84104798",
+        "athena.check.12c552bc88327273",
+        "athena.check.32384e7671ea4ece",
+        "athena.check.3a4daddebd50f316",
+        "athena.check.cfe25747f6857d61",
+        "athena.check.d9c7079c9a4ebaec"
+      ],
+      "reason": "Generated and authored package harness documentation contract"
+    }
+  ],
+  "qualificationChecks": [
+    {
+      "id": "athena.admin-quick-action-toast.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.agent-harness.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.app-update-readiness.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.auth-staff-store-configuration.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.cash-controls.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.07682e2189010186",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run --filter '@athena/webapp' storybook:build"
+      ],
+      "cwd": ".",
+      "profile": "packages/athena-webapp:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.12c552bc88327273",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run harness:test"
+      ],
+      "cwd": ".",
+      "profile": ".:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.1c7fc4d72c67bc1e",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run --filter '@athena/webapp' lint:convex:changed"
+      ],
+      "cwd": ".",
+      "profile": "packages/athena-webapp:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.2963064233fe773c",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run harness:behavior -- --scenario athena-convex-storefront-failure-visibility"
+      ],
+      "cwd": ".",
+      "profile": ".:behavior",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.2c425df3f003c174",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
+      ],
+      "cwd": ".",
+      "profile": "packages/athena-webapp:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.2e5d2ef738e98520",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run --filter '@athena/webapp' test:e2e -- src/tests/pos/offlineRouteAccess.spec.ts src/tests/pos/offlineSalesContinuity.spec.ts"
+      ],
+      "cwd": ".",
+      "profile": "packages/athena-webapp:browser",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.32384e7671ea4ece",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run workflow:check"
+      ],
+      "cwd": ".",
+      "profile": ".:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.39b9d1d73da2a212",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run harness:behavior -- --scenario athena-convex-storefront-composition"
+      ],
+      "cwd": ".",
+      "profile": ".:behavior",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.3a4daddebd50f316",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run architecture:check"
+      ],
+      "cwd": ".",
+      "profile": ".:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.461b48c115b98f96",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run harness:behavior -- --scenario athena-admin-shell-boot"
+      ],
+      "cwd": ".",
+      "profile": ".:behavior",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.541d7c311bfffac0",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run agent-sdk:check"
+      ],
+      "cwd": ".",
+      "profile": "packages/athena-webapp:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.8357d29d6b77ff2e",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run --filter '@athena/webapp' lint:frontend:changed"
+      ],
+      "cwd": ".",
+      "profile": "packages/athena-webapp:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.934b2f271b91fab1",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run --filter '@athena/webapp' build"
+      ],
+      "cwd": ".",
+      "profile": "packages/athena-webapp:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.96b0048d84104798",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run test:coverage"
+      ],
+      "cwd": ".",
+      "profile": ".:aggregate-coverage",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.99d6ecc8d782b065",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run dependency:check:backend"
+      ],
+      "cwd": ".",
+      "profile": "packages/athena-webapp:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.9c55e1f427d0103b",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run --filter '@athena/webapp' audit:convex"
+      ],
+      "cwd": ".",
+      "profile": "packages/athena-webapp:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.bb22321c9c9a905f",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run --filter '@athena/webapp' test:timing-parity"
+      ],
+      "cwd": ".",
+      "profile": "packages/athena-webapp:timer-stress",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.bfc4c681ede1f4dc",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run --filter '@athena/webapp' lint:architecture"
+      ],
+      "cwd": ".",
+      "profile": "packages/athena-webapp:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.cb2aab682811b706",
+      "argv": [
+        "bun",
+        "run",
+        "harness:check"
+      ],
+      "cwd": ".",
+      "profile": "plan-integrity",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.cfe25747f6857d61",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run harness:inferential-review"
+      ],
+      "cwd": ".",
+      "profile": ".:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.d9c7079c9a4ebaec",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run graphify:check"
+      ],
+      "cwd": ".",
+      "profile": ".:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.f1250d59386a66cc",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run --filter '@athena/webapp' test:e2e:prod:pos"
+      ],
+      "cwd": ".",
+      "profile": "packages/athena-webapp:browser",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.client-server-error-foundation.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.convex-backend-adjacent.check-1",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.daily-store-operations.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.expense-session-cart.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.frontend-test-harness.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.omnichannel-order-refund.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.pos-app-session-continuity.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.pos-item-adjustment.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.pos-mixed-checkout.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.pos-offline-route-access.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.pos-terminal-health.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.reporting-fact-ledger.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.route-runtime-build.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.route-ui.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.service-operations.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.shared-demo-admission.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.shared-lib-utility.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.stock-ops-procurement.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.storybook-frontend-tooling.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.workflow-trace-foundation.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/athena-webapp",
+      "profile": "packages/athena-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/athena-webapp/package.json",
+        "packages/athena-webapp/tsconfig.json",
+        "packages/athena-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    }
+  ],
   "workspace": "@athena/webapp",
   "packageDir": "packages/athena-webapp",
   "surfaces": [

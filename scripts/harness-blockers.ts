@@ -42,6 +42,7 @@ export const HARNESS_COMMAND_IDS = [
   "harness:runtime-trends",
   "harness:scorecard",
   "harness:self-review",
+  "harness:plan",
   "harness:test",
   "harness:waive-documentation",
   "pre-push:review",

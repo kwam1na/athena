@@ -1418,3 +1418,23 @@ describe("HARNESS_PACKAGE_REGISTRY", () => {
     }
   });
 });
+
+import { VALIDATION_PLAN_POLICY, VALIDATION_TEST_MEMBERSHIP } from "./harness-app-registry";
+
+describe("canonical planning policy", () => {
+  it("retains legacy authority and explicitly separate execution profiles", () => {
+    expect(VALIDATION_PLAN_POLICY.authority).toBe("legacy-gate");
+    expect(VALIDATION_PLAN_POLICY.modes).toEqual(["delivery","comparison","full-health"]);
+    expect(VALIDATION_PLAN_POLICY.distinctProfiles).toContain("timer-stress");
+  });
+  it("characterizes operator unit membership separately from browser specs", async () => {
+    const config = await readFile(path.join(process.cwd(),"packages/athena-webapp/vitest.config.ts"),"utf8");
+    for (const prefix of ["src","convex","shared"]) {
+      expect(config).toContain(`"${prefix}/**/*.test.{ts,tsx}"`);
+      expect(VALIDATION_TEST_MEMBERSHIP.operatorUnit.test(`packages/athena-webapp/${prefix}/example.test.tsx`)).toBe(true);
+    }
+    expect(VALIDATION_TEST_MEMBERSHIP.operatorUnit.test("packages/athena-webapp/src/tests/example.spec.ts")).toBe(false);
+    expect(VALIDATION_TEST_MEMBERSHIP.rootUnit.test("scripts/fixture/nested.test.ts")).toBe(false);
+    expect(VALIDATION_TEST_MEMBERSHIP.storefrontBrowser.test("packages/storefront-webapp/tests/e2e/checkout.e2e.ts")).toBe(true);
+  });
+});

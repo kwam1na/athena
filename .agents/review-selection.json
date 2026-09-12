@@ -1,50 +1,54 @@
 [
   {
     "reviewerId": "ce-correctness-reviewer",
-    "reason": "Always-on logic and date attribution review"
+    "reason": "Always-on obligation, membership and health decision correctness"
   },
   {
     "reviewerId": "ce-testing-reviewer",
-    "reason": "Always-on regression coverage review"
+    "reason": "Always-on regression and negative-control evidence"
   },
   {
     "reviewerId": "ce-maintainability-reviewer",
-    "reason": "Always-on maintainability review"
+    "reason": "Always-on maintainability of planner and health interfaces"
   },
   {
     "reviewerId": "ce-project-standards-reviewer",
-    "reason": "Always-on repository standards review"
+    "reason": "Always-on repository delivery and generated-artifact policy"
   },
   {
     "reviewerId": "ce-agent-native-reviewer",
-    "reason": "Always-on agent parity review"
+    "reason": "Human and machine planning parity"
   },
   {
     "reviewerId": "ce-learnings-researcher",
-    "reason": "Always-on reusable learning review"
+    "reason": "Reusable validation and trusted-health lessons"
   },
   {
     "reviewerId": "ce-performance-reviewer",
-    "reason": "Schedule database reads and snapshot queries changed"
+    "reason": "Inventory union and same-gate input capture cost"
   },
   {
     "reviewerId": "ce-api-contract-reviewer",
-    "reason": "Exported calendar helper and panel prop signatures changed"
+    "reason": "Exported planner and health contracts"
   },
   {
     "reviewerId": "ce-reliability-reviewer",
-    "reason": "Historical EOD automation quarantine paths changed"
+    "reason": "Health transport failures and evidence reuse guards"
   },
   {
     "reviewerId": "ce-adversarial-reviewer",
-    "reason": "More than 50 source lines and day-close behavior changed"
+    "reason": "Substantial validation and admission-related source changes"
   },
   {
     "reviewerId": "ce-kieran-typescript-reviewer",
-    "reason": "TypeScript backend and React components changed"
+    "reason": "TypeScript planner, health and executor changes"
   },
   {
-    "reviewerId": "ce-julik-frontend-races-reviewer",
-    "reason": "Answer reveal lifecycle and disclosure events changed"
+    "reviewerId": "ce-cli-readiness-reviewer",
+    "reason": "New read-only harness plan command"
+  },
+  {
+    "reviewerId": "ce-security-reviewer",
+    "reason": "Health artifact trust and candidate evidence boundaries"
   }
 ]

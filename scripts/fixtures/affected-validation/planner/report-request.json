@@ -1,0 +1,5 @@
+{
+  "mode": "comparison",
+  "changes": [{"path":"docs/reports/example.html","status":"modified"}],
+  "inventory": ["scripts/harness-validation-plan.test.ts"]
+}

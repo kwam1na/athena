@@ -725,3 +725,15 @@ describe("harness usage errors", () => {
     expect(error.blockers[0].code).toBe(HARNESS_USAGE_ERROR_CODE);
   });
 });
+
+describe("canonical plan command diagnostics", () => {
+  it("renders a planning failure under the registered command source", () => {
+    const blocker = createHarnessBlocker({
+      code:"validation_plan_uncovered_input",
+      source:{kind:"command",id:"harness:plan"},
+      summary:"No obligation covers a deleted input.",
+      remediations:[{id:"repair-plan",kind:"code_change",summary:"Add a covering obligation before planning."}],
+    });
+    expect(formatHarnessBlockers([blocker])).toContain("command:harness:plan");
+  });
+});

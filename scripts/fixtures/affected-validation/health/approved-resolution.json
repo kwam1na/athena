@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "athena-health-classifications/1",
+  "entries": [
+    {
+      "findingId": "failure-1",
+      "findingRevision": "failure-r1",
+      "reference": "main:approved-repair",
+      "revalidationRunId": 10
+    }
+  ]
+}

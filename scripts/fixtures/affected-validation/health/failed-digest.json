@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "athena-validation-health-digest/1",
+  "repository": "kwam1na/athena",
+  "runId": 9,
+  "runAttempt": 1,
+  "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "complete": true,
+  "checks": [{ "checkId": "operator", "outcome": "failure" }],
+  "findings": [
+    {
+      "id": "failure-1",
+      "revision": "failure-r1",
+      "checkId": "operator",
+      "runId": 9,
+      "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ]
+}

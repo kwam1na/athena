@@ -80,3 +80,36 @@ describe("collectHarnessRepoValidationSelection", () => {
     expect(selection.selectedCommands).toEqual([]);
   });
 });
+
+import { collectCanonicalValidationRegistry } from "./harness-repo-validation";
+import { buildValidationPlan } from "./harness-validation-plan";
+
+describe("derived canonical registry", () => {
+  it("selects publishing obligations for a report without application coverage", () => {
+    const registry = collectCanonicalValidationRegistry([
+      "scripts/one.test.ts",
+    ]);
+    const plan = buildValidationPlan(registry, [
+      { path: "docs/reports/report.html", status: "modified" },
+    ]);
+    expect(new Set(plan.checks.map((check) => check.profile))).toEqual(
+      new Set(["plan-integrity", "docs-publishing"]),
+    );
+    expect(plan.checks.some((check) => check.argv.includes("build"))).toBe(
+      true,
+    );
+  });
+  it("keeps full-health inventory nonempty on unchanged main", () => {
+    const registry = collectCanonicalValidationRegistry([
+      "packages/athena-webapp/src/example.test.ts",
+      "scripts/one.test.ts",
+    ]);
+    const plan = buildValidationPlan(registry, [], "full-health");
+    expect(plan.checks.flatMap((check) => check.coveredChecks).sort()).toEqual(
+      registry.checks.map((check) => check.id).sort(),
+    );
+    expect(
+      plan.checks.some((check) => check.profile.includes("aggregate-coverage")),
+    ).toBe(true);
+  });
+});

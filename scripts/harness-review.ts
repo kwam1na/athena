@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { access, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { captureCoverageBinding, compareCoverageBindings, type CoverageCapture } from "./harness-review-coverage";
 
 import { HARNESS_APP_REGISTRY, type ValidationCommand } from "./harness-app-registry";
 import {
@@ -611,7 +612,9 @@ export async function runRawCommand(rootDir: string, command: string, options: {
   if (timedCoverage) {
     (options.logger ?? console).log(`Coverage worker limit: ${env.ATHENA_COVERAGE_MAX_WORKERS || "2"}`);
   }
-  const argv = [shellPath, "-lc", command];
+  // Coverage and the mapped package suite must inherit the same environment;
+  // a login shell could silently source a different execution profile.
+  const argv = command === "bun run test:coverage" ? ["bun", "run", "test:coverage"] : [shellPath, "-lc", command];
   const subprocess = (options.spawn ?? spawnLoggedValidation)(timedCoverage ? ["/usr/bin/time", "-v", ...argv] : argv, {
     cwd: rootDir,
     stdout: "inherit",
@@ -693,7 +696,17 @@ export async function runHarnessReview(
     seen.add(key);
     return true;
   });
+  const isFullWebappTest = (command: (typeof commands)[number]) =>
+    command.kind === "script" && command.workspace === "@athena/webapp" && command.script === "test";
+  const needsCoverageBinding = combinedCommands.some(isFullWebappTest);
+  const capture = () => captureCoverageBinding(rootDir, baseRef, args => runGitCommand(rootDir, ["git", ...args]));
+  let coverage: CoverageCapture = { reason: "no-successful-same-gate-coverage" };
   const runSelectedCommand = async (command: (typeof commands)[number]) => {
+    if (isFullWebappTest(command)) {
+      const reason = coverage.binding ? compareCoverageBindings(coverage, await capture()) : coverage.reason;
+      logger.log(`Webapp test ${reason ? "execute" : "reuse"}: ${reason ?? "successful-same-gate-aggregate-coverage; matching-source-base-dependencies-config-toolchain-environment"}`);
+      if (!reason) return;
+    }
     if (command.kind === "script") {
       logger.log(`Running ${command.workspace}:${command.script}`);
       await (options.runPackageScript ?? ((nextWorkspace, nextScript) =>
@@ -705,8 +718,15 @@ export async function runHarnessReview(
     }
 
     logger.log(`Running raw command: ${command.command}`);
+    const providesCoverage = needsCoverageBinding && command.command === "bun run test:coverage";
+    const before = providesCoverage ? await capture() : undefined;
     await (options.runRawCommand ?? ((nextCommand) =>
       runRawCommand(rootDir, nextCommand)))(command.command);
+    if (before) {
+      const after = before.binding ? await capture() : before;
+      const reason = compareCoverageBindings(before, after);
+      coverage = reason ? { reason } : after;
+    }
   };
   const finalCommands = new Set<string>(ATHENA_FINAL_VALIDATION_COMMANDS.map(command => command.command));
   for (const command of combinedCommands) {

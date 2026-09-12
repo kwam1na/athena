@@ -1,0 +1,157 @@
+{
+  "schemaVersion": "athena-validation-plan/1",
+  "authority": "legacy-gate",
+  "mode": "comparison",
+  "changes": [
+    {
+      "path": "docs/reports/example.html",
+      "status": "modified"
+    }
+  ],
+  "checks": [
+    {
+      "id": "athena.check.2fd1f99b6d81db41",
+      "argv": [
+        "bun",
+        "run",
+        "docs:links:check"
+      ],
+      "cwd": ".",
+      "profile": "docs-publishing",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": [],
+      "identity": "0abaaaac024ef2e78ecc13559fb41d276a548cf4cc42073238f4e445e4e3f096",
+      "reasons": [
+        "docs-publishing: Reports and solutions are consumed by the docs publishing plugin (docs/reports/example.html)"
+      ],
+      "coveredChecks": [
+        "athena.check.2fd1f99b6d81db41"
+      ]
+    },
+    {
+      "id": "athena.check.b54ac6f1e8020d22",
+      "argv": [
+        "bun",
+        "run",
+        "landed-report:check"
+      ],
+      "cwd": ".",
+      "profile": "docs-publishing",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": [],
+      "identity": "2819c5fc5a50963589bf01977dbee25570c9757b7d972ea9b77a776ec07fe136",
+      "reasons": [
+        "docs-publishing: Reports and solutions are consumed by the docs publishing plugin (docs/reports/example.html)"
+      ],
+      "coveredChecks": [
+        "athena.check.b54ac6f1e8020d22"
+      ]
+    },
+    {
+      "id": "athena.check.cb2aab682811b706",
+      "argv": [
+        "bun",
+        "run",
+        "harness:check"
+      ],
+      "cwd": ".",
+      "profile": "plan-integrity",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": [],
+      "identity": "db919b6371874cc59a680b517befbd1ed5d1e178a0711d6eaa098caa62b8564d",
+      "reasons": [
+        "Always required: plan integrity"
+      ],
+      "coveredChecks": [
+        "athena.check.cb2aab682811b706"
+      ]
+    },
+    {
+      "id": "athena.check.d18a6bbdb02fad69",
+      "argv": [
+        "bun",
+        "run",
+        "--filter",
+        "@athena/webapp",
+        "build"
+      ],
+      "cwd": ".",
+      "profile": "docs-publishing",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": [],
+      "identity": "57e3946fde80a13feb1fd86136225386b588f57673b5b5a23c92fa74b6b8c7d7",
+      "reasons": [
+        "docs-publishing: Reports and solutions are consumed by the docs publishing plugin (docs/reports/example.html)"
+      ],
+      "coveredChecks": [
+        "athena.check.d18a6bbdb02fad69"
+      ]
+    },
+    {
+      "id": "athena.check.f81f75f8e965aa7a",
+      "argv": [
+        "bun",
+        "run",
+        "reports:presentation:check"
+      ],
+      "cwd": ".",
+      "profile": "docs-publishing",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": [],
+      "identity": "940a2918e3e8439d411a4a7977006c8343fa0a509eb713ff30970bc5f76490a0",
+      "reasons": [
+        "docs-publishing: Reports and solutions are consumed by the docs publishing plugin (docs/reports/example.html)"
+      ],
+      "coveredChecks": [
+        "athena.check.f81f75f8e965aa7a"
+      ]
+    }
+  ],
+  "evidence": "not-evaluated",
+  "digest": "a3fa2b7327aea9a2bb591239a0bb72b544cbc9cd576c1e5ce185f332aa7c4baa"
+}
