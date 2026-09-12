@@ -9,6 +9,55 @@ import {
 } from "./harness-app-registry";
 import { projectReviewActivation } from "../.agent-skills/current/runtime/kernel.mjs";
 import harnessConfig from "../harness.config";
+import { collectCanonicalValidationRegistry } from "./harness-repo-validation";
+import { buildValidationPlan } from "./harness-validation-plan";
+
+describe("authored affected runtime relationships", () => {
+  it("selects a registered router consumer even before generated route imports are refreshed", () => {
+    const root = "packages/athena-webapp";
+    const files = {
+      [`${root}/package.json`]: '{"name":"@athena/webapp"}',
+      [`${root}/src/routes/new-route.tsx`]: "export const route = {};",
+      [`${root}/src/routeTree.gen.ts`]: "export const tree = {};",
+      [`${root}/src/appRouter.ts`]:
+        'import {tree} from "./routeTree.gen"; export const router = tree;',
+      [`${root}/src/router.test.ts`]: 'import {router} from "./appRouter";',
+      [`${root}/src/unrelated.test.ts`]: "export const unrelated = true;",
+    };
+    const registry = collectCanonicalValidationRegistry(Object.keys(files));
+    const changes = [
+      { path: `${root}/src/routes/new-route.tsx`, status: "modified" as const },
+    ];
+    const plan = buildValidationPlan(registry, changes, "comparison", {
+      base: files,
+      candidate: files,
+    });
+    expect(
+      plan.checks
+        .filter((check) => check.profile.endsWith(":unit"))
+        .flatMap((check) => check.membership),
+    ).toEqual([`${root}/src/router.test.ts`]);
+    const withoutEdge = {
+      ...registry,
+      impact: {
+        ...registry.impact!,
+        relationships: registry.impact!.relationships.filter(
+          (contract) => contract.id !== "route-registration",
+        ),
+      },
+    };
+    const omitted = buildValidationPlan(withoutEdge, changes, "comparison", {
+      base: files,
+      candidate: files,
+    });
+    expect(omitted.checks.flatMap((check) => check.membership)).toContain(
+      `${root}/src/unrelated.test.ts`,
+    );
+    expect(
+      omitted.checks.flatMap((check) => check.reasons).join(" "),
+    ).toContain("unresolved-test-consumers");
+  });
+});
 
 const reviewSensitiveActivationCases = [
   {
@@ -152,9 +201,13 @@ describe("HARNESS_APP_REGISTRY", () => {
         .filter((scenario) => scenario.reviewSensitive)
         .map((scenario) => scenario.id),
     ).sort();
-    const activation = harnessConfig.obligations.find((obligation) => obligation.id === "review.green")!.activation;
+    const activation = harnessConfig.obligations.find(
+      (obligation) => obligation.id === "review.green",
+    )!.activation;
     expect(activation.kind).toBe("relevant_change");
-    expect(harnessConfig.sensitivePaths.map((group) => group.id).sort()).toEqual(declared);
+    expect(
+      harnessConfig.sensitivePaths.map((group) => group.id).sort(),
+    ).toEqual(declared);
     expect(
       reviewSensitiveActivationCases.map(({ scenarioId }) => scenarioId).sort(),
     ).toEqual(declared);
@@ -163,7 +216,9 @@ describe("HARNESS_APP_REGISTRY", () => {
   it.each(reviewSensitiveActivationCases)(
     "$name",
     ({ entry, expectedScenarioIds }) => {
-      expect(projectReviewActivation([{ ...entry, binary: false }], harnessConfig)).toMatchObject({
+      expect(
+        projectReviewActivation([{ ...entry, binary: false }], harnessConfig),
+      ).toMatchObject({
         sensitivePathIds: expectedScenarioIds,
       });
     },
@@ -364,9 +419,7 @@ describe("HARNESS_APP_REGISTRY", () => {
       ],
     });
     expect(backendScenario?.note).toContain("Convex audit pair");
-    expect(backendScenario?.note).toContain(
-      "bun run dependency:check:backend",
-    );
+    expect(backendScenario?.note).toContain("bun run dependency:check:backend");
     expect(backendScenario?.note).toContain("shrink-only");
     expect(backendScenario?.note).toContain("assertConformsToExportedReturns");
     expect(backendScenario?.note).toContain(
@@ -426,7 +479,7 @@ describe("HARNESS_APP_REGISTRY", () => {
         {
           kind: "raw",
           command:
-              "bun run --filter '@athena/webapp' test -- convex/sharedDemo convex/contextTracking convex/operationAdmission src/components/shared-demo src/tests/demo/navigationCases.test.ts src/components/product/AnalyticsInsights.test.tsx src/components/reports/ReportsSkuDetailView.test.tsx src/components/operations/InventoryImportView.test.tsx src/lib/errors/sharedDemoDenialObserver.test.ts src/routes/demo.test.tsx src/routes/_authed.test.tsx",
+            "bun run --filter '@athena/webapp' test -- convex/sharedDemo convex/contextTracking convex/operationAdmission src/components/shared-demo src/tests/demo/navigationCases.test.ts src/components/product/AnalyticsInsights.test.tsx src/components/reports/ReportsSkuDetailView.test.tsx src/components/operations/InventoryImportView.test.tsx src/lib/errors/sharedDemoDenialObserver.test.ts src/routes/demo.test.tsx src/routes/_authed.test.tsx",
         },
         { kind: "script", script: "audit:convex" },
         { kind: "script", script: "lint:convex:changed" },
@@ -1394,9 +1447,7 @@ describe("HARNESS_PACKAGE_REGISTRY", () => {
     expect(registration!.kind).toBe("non-harness");
     // The note is the audit trail for why this package has no validation
     // surface of its own; an empty one would make the exemption unreviewable.
-    expect(
-      (registration as { note: string }).note.length,
-    ).toBeGreaterThan(0);
+    expect((registration as { note: string }).note.length).toBeGreaterThan(0);
   });
 
   it("registers each package directory at most once", () => {
@@ -1419,22 +1470,48 @@ describe("HARNESS_PACKAGE_REGISTRY", () => {
   });
 });
 
-import { VALIDATION_PLAN_POLICY, VALIDATION_TEST_MEMBERSHIP } from "./harness-app-registry";
+import {
+  VALIDATION_PLAN_POLICY,
+  VALIDATION_TEST_MEMBERSHIP,
+} from "./harness-app-registry";
 
 describe("canonical planning policy", () => {
   it("retains legacy authority and explicitly separate execution profiles", () => {
     expect(VALIDATION_PLAN_POLICY.authority).toBe("legacy-gate");
-    expect(VALIDATION_PLAN_POLICY.modes).toEqual(["delivery","comparison","full-health"]);
+    expect(VALIDATION_PLAN_POLICY.modes).toEqual([
+      "delivery",
+      "comparison",
+      "full-health",
+    ]);
     expect(VALIDATION_PLAN_POLICY.distinctProfiles).toContain("timer-stress");
   });
   it("characterizes operator unit membership separately from browser specs", async () => {
-    const config = await readFile(path.join(process.cwd(),"packages/athena-webapp/vitest.config.ts"),"utf8");
-    for (const prefix of ["src","convex","shared"]) {
+    const config = await readFile(
+      path.join(process.cwd(), "packages/athena-webapp/vitest.config.ts"),
+      "utf8",
+    );
+    for (const prefix of ["src", "convex", "shared"]) {
       expect(config).toContain(`"${prefix}/**/*.test.{ts,tsx}"`);
-      expect(VALIDATION_TEST_MEMBERSHIP.operatorUnit.test(`packages/athena-webapp/${prefix}/example.test.tsx`)).toBe(true);
+      expect(
+        VALIDATION_TEST_MEMBERSHIP.operatorUnit.test(
+          `packages/athena-webapp/${prefix}/example.test.tsx`,
+        ),
+      ).toBe(true);
     }
-    expect(VALIDATION_TEST_MEMBERSHIP.operatorUnit.test("packages/athena-webapp/src/tests/example.spec.ts")).toBe(false);
-    expect(VALIDATION_TEST_MEMBERSHIP.rootUnit.test("scripts/fixture/nested.test.ts")).toBe(false);
-    expect(VALIDATION_TEST_MEMBERSHIP.storefrontBrowser.test("packages/storefront-webapp/tests/e2e/checkout.e2e.ts")).toBe(true);
+    expect(
+      VALIDATION_TEST_MEMBERSHIP.operatorUnit.test(
+        "packages/athena-webapp/src/tests/example.spec.ts",
+      ),
+    ).toBe(false);
+    expect(
+      VALIDATION_TEST_MEMBERSHIP.rootUnit.test(
+        "scripts/fixture/nested.test.ts",
+      ),
+    ).toBe(false);
+    expect(
+      VALIDATION_TEST_MEMBERSHIP.storefrontBrowser.test(
+        "packages/storefront-webapp/tests/e2e/checkout.e2e.ts",
+      ),
+    ).toBe(true);
   });
 });

@@ -86,6 +86,8 @@ import {
   HARNESS_APP_REGISTRY,
   VALIDATION_PLAN_POLICY,
   VALIDATION_TEST_MEMBERSHIP,
+  VALIDATION_RUNTIME_RELATIONSHIPS,
+  VALIDATION_IMPACT_TEST_PATTERNS,
   type CanonicalValidationCheck,
   type CanonicalValidationRegistry,
 } from "./harness-app-registry";
@@ -171,15 +173,19 @@ export function collectCanonicalValidationRegistry(
         stableId,
       );
     }
-    const profile = command.includes("coverage")
-      ? "aggregate-coverage"
-      : command.includes("timing-parity")
-        ? "timer-stress"
-        : command.includes("test:e2e")
-          ? "browser"
-          : command.includes("harness:behavior")
-            ? "behavior"
-            : "command";
+    const profile = /^bun run --filter ['"]?[^'" ]+['"]? typecheck$/.test(
+      command,
+    )
+      ? "package-types"
+      : command.includes("coverage")
+        ? "aggregate-coverage"
+        : command.includes("timing-parity")
+          ? "timer-stress"
+          : command.includes("test:e2e")
+            ? "browser"
+            : command.includes("harness:behavior")
+              ? "behavior"
+              : "command";
     const membership =
       profile === "aggregate-coverage"
         ? inventory.filter((file) =>
@@ -307,10 +313,74 @@ export function collectCanonicalValidationRegistry(
       reason: "Generated and authored package harness documentation contract",
     });
   }
+  const impactPackages: NonNullable<
+    CanonicalValidationRegistry["impact"]
+  >["packages"] = [];
+  for (const [root, patterns] of Object.entries(
+    VALIDATION_IMPACT_TEST_PATTERNS,
+  )) {
+    const unitChecks = [...checks.values()]
+      .filter((check) => check.cwd === root && check.profile.endsWith(":unit"))
+      .map((check) => check.id);
+    const workspace =
+      root === "packages/athena-webapp"
+        ? "@athena/webapp"
+        : root === "packages/storefront-webapp"
+          ? "@athena/storefront-webapp"
+          : "valkey-proxy-server";
+    const fallbackChecks =
+      root === "."
+        ? [commandCheck("bun run harness:test")]
+        : [
+            add(
+              ["bun", "run", "--filter", workspace, "test"],
+              ".",
+              `${root}:fallback-suite`,
+            ),
+          ];
+    if (root !== "." && workspace !== "valkey-proxy-server") {
+      fallbackChecks.push(
+        add(
+          ["bun", "run", "--filter", workspace, "typecheck"],
+          ".",
+          `${root}:package-types`,
+        ),
+        add(
+          ["bun", "run", "--filter", workspace, "build"],
+          ".",
+          `${root}:package-build`,
+        ),
+      );
+    }
+    impactPackages.push({
+      root,
+      testPatterns: [...patterns],
+      unitChecks,
+      fallbackChecks: [...unitChecks, ...fallbackChecks],
+    });
+  }
+  const relationships = VALIDATION_RUNTIME_RELATIONSHIPS.map((contract) => ({
+    id: contract.id,
+    inputs: [...contract.inputs],
+    consumers: [...contract.consumers],
+    ...("kind" in contract ? { kind: contract.kind } : {}),
+    ...("guards" in contract ? { guards: { ...contract.guards } } : {}),
+    ...("lazyProducers" in contract
+      ? { lazyProducers: { ...contract.lazyProducers } }
+      : {}),
+    ...("publishing" in contract ? { publishingChecks: publishing } : {}),
+    ...("command" in contract
+      ? { checks: [commandCheck(contract.command)] }
+      : {}),
+    ...("boundedConsumers" in contract
+      ? { boundedConsumers: { ...contract.boundedConsumers } }
+      : {}),
+  }));
   return {
     schemaVersion: "athena-validation-registry/1",
     checks: [...checks.values()].sort((a, b) => a.id.localeCompare(b.id)),
     surfaces,
     alwaysRequired: [integrity],
+    impact: { packages: impactPackages, relationships },
   };
 }

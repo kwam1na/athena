@@ -436,7 +436,7 @@ export const HARNESS_APP_REGISTRY = [
           },
           { kind: "script", script: "build" },
         ],
-        note: "Use this for the agent harness kernel, a domain capability package, a profile, the delegated admission ports, or the reusable agent host. Three things gate a merge here and none of them may be skipped: generated registry drift (`agent-sdk:check` refuses a stale artifact and names the regeneration command), operation-admission coverage (the checker must report zero findings and the caller table must be current), and the focused conformance, security, and data-governance suites — `releaseConformance`, `security`, `dataGovernance`, and the `evals` smoke matrix — which are what stand between a capability and an operator. Changing a read port's behaviour also requires bumping its `implementationVersion`, which moves the compatibility digest and therefore requires the pre-deploy fence (`bun scripts/agent-harness-fence.ts --reason \"<id>\"`) before the change deploys. Release itself is one switch: publish, smoke through the direct harness while the switch is off, one broad enable, watch the first turns, and disable to roll back — no cohorts, canaries, staged profile versions, or drain gates.",
+        note: 'Use this for the agent harness kernel, a domain capability package, a profile, the delegated admission ports, or the reusable agent host. Three things gate a merge here and none of them may be skipped: generated registry drift (`agent-sdk:check` refuses a stale artifact and names the regeneration command), operation-admission coverage (the checker must report zero findings and the caller table must be current), and the focused conformance, security, and data-governance suites — `releaseConformance`, `security`, `dataGovernance`, and the `evals` smoke matrix — which are what stand between a capability and an operator. Changing a read port\'s behaviour also requires bumping its `implementationVersion`, which moves the compatibility digest and therefore requires the pre-deploy fence (`bun scripts/agent-harness-fence.ts --reason "<id>"`) before the change deploys. Release itself is one switch: publish, smoke through the direct harness while the switch is off, one broad enable, watch the first turns, and disable to roll back — no cohorts, canaries, staged profile versions, or drain gates.',
       },
       {
         id: "athena.daily-store-operations",
@@ -1457,24 +1457,1180 @@ export type CanonicalValidationRegistry = {
   checks: CanonicalValidationCheck[];
   surfaces: CanonicalValidationSurface[];
   alwaysRequired: string[];
+  impact?: {
+    packages: Array<{
+      root: string;
+      testPatterns: string[];
+      unitChecks: string[];
+      fallbackChecks: string[];
+    }>;
+    relationships: Array<{
+      kind?: "data";
+      guards?: Record<string, string>;
+      lazyProducers?: Record<string, string>;
+      id: string;
+      inputs: string[];
+      consumers: string[];
+      checks?: string[];
+      publishingChecks?: string[];
+      boundedConsumers?: Record<string, string>;
+    }>;
+  };
 };
+
+/** Runtime consumers ordinary imports cannot establish. Resolved into canonical checks by the generator. */
+export const VALIDATION_RUNTIME_RELATIONSHIPS = [
+  {
+    id: "source-reader-convex-agentHarness-agentRuntime-convexAgent.contract.test.ts",
+    kind: "data",
+    inputs: [
+      "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgentRefs.ts",
+      "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgentCleanup.ts",
+    ],
+    consumers: [
+      "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgent.contract.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgent.contract.test.ts":
+        "9cc77e0576c3e5e1c38b2da624c44e1a35627bbcba42caa4841a788a1acfff7b",
+    },
+  },
+  {
+    id: "source-reader-convex-agentHarness-agentRuntime-convexAgentPersistence.test.ts",
+    kind: "data",
+    inputs: [
+      "packages/athena-webapp/package.json",
+      "packages/athena-webapp/docs/agent/agent-harness-runtime.md",
+      "node_modules/@convex-dev/agent/package.json",
+      "node_modules/ai/package.json",
+      "node_modules/@ai-sdk/openai/package.json",
+    ],
+    consumers: [
+      "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgentPersistence.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/agentHarness/agentRuntime/convexAgentPersistence.test.ts":
+        "1ee8cdc602f837d32541952d2a6c0d093d4e734c7e553dac5e94da78031e4725",
+    },
+  },
+  {
+    id: "source-reader-convex-agentHarness-delegatedAdmission.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/agentHarness/delegatedAdmission.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/agentHarness/delegatedAdmission.test.ts":
+        "d96331b04c9361d88b936cadcc55488fc4776945c8a3e82362e2c1cc47b3c72f",
+    },
+  },
+  {
+    id: "source-reader-convex-agentHarness-historyProjection.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/agentHarness/historyProjection.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/agentHarness/historyProjection.test.ts":
+        "3bce14fad1141a66f93514b0e4d50f36b7ff966ba72cd625379af9af79224c4b",
+    },
+  },
+  {
+    id: "source-reader-convex-agentHarness-importBoundary.test.ts",
+    kind: "data",
+    inputs: [
+      "packages/athena-webapp/convex",
+      "packages/athena-webapp/shared",
+      "packages/athena-webapp/src",
+    ],
+    consumers: [
+      "packages/athena-webapp/convex/agentHarness/importBoundary.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/agentHarness/importBoundary.test.ts":
+        "a58b09542b52cf8a441c90b8c2440c59bf08df7b3ba64dcc3ea0ff5799bd660b",
+    },
+  },
+  {
+    id: "source-reader-convex-agentHarness-profiles-dailyOperations.test.ts",
+    kind: "data",
+    inputs: [
+      "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
+      "packages/athena-webapp/src/components/store-pulse/StorePulseSummaryView.tsx",
+    ],
+    consumers: [
+      "packages/athena-webapp/convex/agentHarness/profiles/dailyOperations.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/agentHarness/profiles/dailyOperations.test.ts":
+        "d9ab2086f4778145c7bd24ffc28e5d237227f7894f422ef0fef49d649ad8d436",
+    },
+  },
+  {
+    id: "source-reader-convex-agentHarness-retention.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: ["packages/athena-webapp/convex/agentHarness/retention.test.ts"],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/agentHarness/retention.test.ts":
+        "9f85dcd3a79cd4ca307ea00e77d3befde4dc2342833af95b09d7fba4106fad30",
+    },
+  },
+  {
+    id: "source-reader-convex-cashControls-closeouts.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: ["packages/athena-webapp/convex/cashControls/closeouts.test.ts"],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/cashControls/closeouts.test.ts":
+        "50691fda21e5e59ef6f287490e8ce7bab18433aa0ae022b95922f81ac398a9a6",
+    },
+  },
+  {
+    id: "source-reader-convex-cashControls-deposits.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: ["packages/athena-webapp/convex/cashControls/deposits.test.ts"],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/cashControls/deposits.test.ts":
+        "76ec40dc03667d470bbf59aeac7797af4e53cdf0e7f397e343c7b70b03c55893",
+    },
+  },
+  {
+    id: "source-reader-convex-cashControls-paymentAllocationAttribution.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/cashControls/paymentAllocationAttribution.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/cashControls/paymentAllocationAttribution.test.ts":
+        "033ad48fa9b60fdfebbe2b2f1eb3284f5d7b784d8a7f7b4d6e9a6c260f52b1be",
+    },
+  },
+  {
+    id: "source-reader-convex-contextTracking-contextEvents.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/contextTracking/contextEvents.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/contextTracking/contextEvents.test.ts":
+        "8858338af6ef357af14f73e1859497adaf438f883fffd4a6f364f5d40db93d0b",
+    },
+  },
+  {
+    id: "source-reader-convex-crons.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: ["packages/athena-webapp/convex/crons.test.ts"],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/crons.test.ts":
+        "237977375eca5639daaaf8de91043ca9bb3b3e93319944b4976b574d101b3221",
+    },
+  },
+  {
+    id: "source-reader-convex-emails-OrderEmail.test.tsx",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: ["packages/athena-webapp/convex/emails/OrderEmail.test.tsx"],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/emails/OrderEmail.test.tsx":
+        "5b8845f09f3f80fc4c9decb904a4789d1a3f190303eff502b7526c5d40c16364",
+    },
+  },
+  {
+    id: "source-reader-convex-http-domains-core-routes-landingFunnelEvents.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/http/domains/core/routes/landingFunnelEvents.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/http/domains/core/routes/landingFunnelEvents.test.ts":
+        "b1f29755835dc85fd9c17bb790c64d7a6aaffb4941d0bb38e19b414801fdc975",
+    },
+  },
+  {
+    id: "source-reader-convex-http-domains-customerChannel-routes-storefrontCors.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/http/domains/customerChannel/routes/storefrontCors.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/http/domains/customerChannel/routes/storefrontCors.test.ts":
+        "fdf4b2b3ac3a5af50c66a17df2bc203bb4e8362e405381ea0ff3ee8e3cc7aada",
+    },
+  },
+  {
+    id: "source-reader-convex-http-health.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: ["packages/athena-webapp/convex/http/health.test.ts"],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/http/health.test.ts":
+        "cdcde2e6d75a9262055e59f857286666cf4684cbf584177a44ad3c1f7bc9cc19",
+    },
+  },
+  {
+    id: "source-reader-convex-http-routerComposition.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: ["packages/athena-webapp/convex/http/routerComposition.test.ts"],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/http/routerComposition.test.ts":
+        "69c9920cf9d245d130c76cbd75baba87353735803f44ae799bcfd108d6f3c500",
+    },
+  },
+  {
+    id: "source-reader-convex-inventory-athenaUserIdentityWriters.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/inventory/athenaUserIdentityWriters.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/inventory/athenaUserIdentityWriters.test.ts":
+        "5debc8ddfa26c22e1de383957ce66a0e35c0e5ca5d16c9b8a0d3804135e92787",
+    },
+  },
+  {
+    id: "source-reader-convex-inventory-sessionQueryIndexes.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/inventory/sessionQueryIndexes.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/inventory/sessionQueryIndexes.test.ts":
+        "b90f76d49d021421c5bd1e31efed3380e2e7801d2535eb627b23d0efcbf2292e",
+    },
+  },
+  {
+    id: "source-reader-convex-inventory-skuSearch.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: ["packages/athena-webapp/convex/inventory/skuSearch.test.ts"],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/inventory/skuSearch.test.ts":
+        "d559e713a90e2ee87a4a3837364ca67b64b4a294cf22abaad04e04236a24c43b",
+    },
+  },
+  {
+    id: "source-reader-convex-inventory-storeSchedule.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/inventory/storeSchedule.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/inventory/storeSchedule.test.ts":
+        "cfeea1fb00b846e0a2171b634c9c47c031cacaf58c81468d879541667f4e40d6",
+    },
+  },
+  {
+    id: "source-reader-convex-inventoryLedger-deficitResolutionWork.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/inventoryLedger/deficitResolutionWork.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/inventoryLedger/deficitResolutionWork.test.ts":
+        "466bf2c46da36024e5ee5c941e19c813a167c55cc8d1400781aae1d200745458",
+    },
+  },
+  {
+    id: "source-reader-convex-inventoryLedger-effects.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/inventoryLedger/effects.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/inventoryLedger/effects.test.ts":
+        "edf5db1cf21cb34c9fb41cb972ab9d991140da23b55cec36c9c41fa3ed9f8636",
+    },
+  },
+  {
+    id: "source-reader-convex-migrations-backfillReportFactObservedAt.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/migrations/backfillReportFactObservedAt.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/migrations/backfillReportFactObservedAt.test.ts":
+        "f934bf89106e0baeb4ebad9722eed5bad116a0a76dc01ef5477b0feb9e23a58f",
+    },
+  },
+  {
+    id: "source-reader-convex-mtn-foundation.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: ["packages/athena-webapp/convex/mtn/foundation.test.ts"],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/mtn/foundation.test.ts":
+        "092bb19494f49dfaf0cff9a28b0157a7e5f7da88366cb4e138776b7a5a515432",
+    },
+  },
+  {
+    id: "source-reader-convex-operationAdmission-importAllowlist.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/operationAdmission/importAllowlist.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/operationAdmission/importAllowlist.test.ts":
+        "1beda968bbab15e4a037c0d0d1b2bc846d0b009c91106d003deb6bf63f31ef05",
+    },
+  },
+  {
+    id: "source-reader-convex-operations-approvalRequestHelpers.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/operations/approvalRequestHelpers.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/operations/approvalRequestHelpers.test.ts":
+        "c8da049a6a322931fde7baac4b0fbba9c21787f9c9aea66547be258b0a703a45",
+    },
+  },
+  {
+    id: "source-reader-convex-operations-inventoryContributionWriteSites.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/operations/inventoryContributionWriteSites.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/operations/inventoryContributionWriteSites.test.ts":
+        "fdd6952498e5753cd4d70e09d197053edf7a6e133fdbc5ec38f7cd4f216e124d",
+    },
+  },
+  {
+    id: "source-reader-convex-operations-operationsQueryIndexes.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/operations/operationsQueryIndexes.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/operations/operationsQueryIndexes.test.ts":
+        "a456be449859c45b4ed5263700a22ac51a6e37c1acef6383913cc5c4fd1a8fc4",
+    },
+  },
+  {
+    id: "source-reader-convex-operations-paymentAllocationCallers.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/operations/paymentAllocationCallers.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/operations/paymentAllocationCallers.test.ts":
+        "60f5bda1c528cb5cc9fbdc3d8b5bce21bad239e0c3b1f9df93394db3535ff743",
+    },
+  },
+  {
+    id: "source-reader-convex-operations-serviceIntake.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/operations/serviceIntake.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/operations/serviceIntake.test.ts":
+        "9fcb3c9d8f5fda5b8c2da35ab4641c43b8a2f57030c66def3cf49d54969f34d9",
+    },
+  },
+  {
+    id: "source-reader-convex-pos-application-expenseSessionCommands.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/pos/application/expenseSessionCommands.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/pos/application/expenseSessionCommands.test.ts":
+        "c66e3aa0a4c6940ff844c00b8ce8446a8944961bd93383bbba3fa02164581e39",
+    },
+  },
+  {
+    id: "source-reader-convex-pos-infrastructure-repositories-localSyncRepository.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/pos/infrastructure/repositories/localSyncRepository.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/pos/infrastructure/repositories/localSyncRepository.test.ts":
+        "00fed6774de32d48d14e69f24587b4dbf87582f71ba42ee6368b80aa0b775c8c",
+    },
+  },
+  {
+    id: "source-reader-convex-pos-infrastructure-repositories-sessionCommandRepository.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/pos/infrastructure/repositories/sessionCommandRepository.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/pos/infrastructure/repositories/sessionCommandRepository.test.ts":
+        "55eee5d6318b03562215bf576a54769339666eb97c579fae13626f852b02d78f",
+    },
+  },
+  {
+    id: "source-reader-convex-pos-public-posRecoveryCodes.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/pos/public/posRecoveryCodes.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/pos/public/posRecoveryCodes.test.ts":
+        "0d988f91eb005fd8892c2c0d715cd050cde98897dfeb8e13a81e92132ab9369d",
+    },
+  },
+  {
+    id: "source-reader-convex-reports-pipelineAcceptedWriteSites.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/reports/pipelineAcceptedWriteSites.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/reports/pipelineAcceptedWriteSites.test.ts":
+        "bfeeefc957ac4f369a11134e89a6d9113c0692659ac1c17cb65608ce5e358028",
+    },
+  },
+  {
+    id: "source-reader-convex-serviceOps-moduleWiring.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/serviceOps/moduleWiring.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/serviceOps/moduleWiring.test.ts":
+        "8adbc480f52d6cb3276fd148352aa2ce27fe6a4e7a992e07766995f0ff983daf",
+    },
+  },
+  {
+    id: "source-reader-convex-sharedDemo-coverage.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: ["packages/athena-webapp/convex/sharedDemo/coverage.test.ts"],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/sharedDemo/coverage.test.ts":
+        "569341a3582c05dc32e0c98b43344b59f9793693bb7673eaacf0be4dc0b0ed6a",
+    },
+  },
+  {
+    id: "source-reader-convex-sharedDemo-domainRestore.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/sharedDemo/domainRestore.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/sharedDemo/domainRestore.test.ts":
+        "688193fc69f2e927ad7e3edb2717116fcd69e85808c8a1612f036835202a5f2d",
+    },
+  },
+  {
+    id: "source-reader-convex-sharedDemo-enforcement.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: ["packages/athena-webapp/convex/sharedDemo/enforcement.test.ts"],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/sharedDemo/enforcement.test.ts":
+        "602be252ff63e0405741a22cea972814c1ccfb0f124d54d1ed25533afbd48f7b",
+    },
+  },
+  {
+    id: "source-reader-convex-sharedDemo-posStoreReadAccessCoverage.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/sharedDemo/posStoreReadAccessCoverage.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/sharedDemo/posStoreReadAccessCoverage.test.ts":
+        "632b63be654afa1b3da83b1f71ade42009f786fce4d59a22dace35e2949f40dd",
+    },
+  },
+  {
+    id: "source-reader-convex-sharedDemo-provision.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: ["packages/athena-webapp/convex/sharedDemo/provision.test.ts"],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/sharedDemo/provision.test.ts":
+        "19e5754a1e22c09a34ccde6b4483b37a03b155180c77ff8a961c55521d9ee4cb",
+    },
+  },
+  {
+    id: "source-reader-convex-sharedDemo-public.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: ["packages/athena-webapp/convex/sharedDemo/public.test.ts"],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/sharedDemo/public.test.ts":
+        "d92a6f85eb40ec86cd603229439931e6a49bd50be0a84d09070396a01c88e227",
+    },
+  },
+  {
+    id: "source-reader-convex-sharedDemo-registerBaseline.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/sharedDemo/registerBaseline.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/sharedDemo/registerBaseline.test.ts":
+        "262d185e34add5b840a32fca6b295e182f23e6261321c52be606959cb1c94813",
+    },
+  },
+  {
+    id: "source-reader-convex-sharedDemo-restore.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: ["packages/athena-webapp/convex/sharedDemo/restore.test.ts"],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/sharedDemo/restore.test.ts":
+        "adf757b8d4e38dbb83ed6607e9e4ec755914670944ddc96ae30a74a83708f8f2",
+    },
+  },
+  {
+    id: "source-reader-convex-sharedDemo-serviceEffectBoundaryCoverage.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/sharedDemo/serviceEffectBoundaryCoverage.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/sharedDemo/serviceEffectBoundaryCoverage.test.ts":
+        "aa903169cd4a30de89e5ef70d447142f545b02399191c6fd400eee887b251f5b",
+    },
+  },
+  {
+    id: "source-reader-convex-stockOps-adjustments.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: ["packages/athena-webapp/convex/stockOps/adjustments.test.ts"],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/stockOps/adjustments.test.ts":
+        "a3be973c0d974e7dd0c7a2781a2f833fcce0720f5a758d60ca9a059d69b16fe7",
+    },
+  },
+  {
+    id: "source-reader-convex-stockOps-purchaseOrders.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/stockOps/purchaseOrders.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/stockOps/purchaseOrders.test.ts":
+        "a455d885e61721fa4ebd68189b3212096c777d36b29dd2d3a6c052c729b09722",
+    },
+  },
+  {
+    id: "source-reader-convex-stockOps-receiving.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: ["packages/athena-webapp/convex/stockOps/receiving.test.ts"],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/stockOps/receiving.test.ts":
+        "8d0caed4fe253a7bc6f4e08ed49260e8b0b47a85df0acb739dd2605571d0daf3",
+    },
+  },
+  {
+    id: "source-reader-convex-stockOps-replenishment.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: ["packages/athena-webapp/convex/stockOps/replenishment.test.ts"],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/stockOps/replenishment.test.ts":
+        "999b890a65f0912aef7a7a438e7deb48b958cc607154bd3b8fdffd48fe4fabe8",
+    },
+  },
+  {
+    id: "source-reader-convex-stockOps-vendors.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: ["packages/athena-webapp/convex/stockOps/vendors.test.ts"],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/stockOps/vendors.test.ts":
+        "a52b7683cb3d7d60052c92981b07efc6252e32c0891a213295b03bfb19df0543",
+    },
+  },
+  {
+    id: "source-reader-convex-storeFront-commerceQueryIndexes.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/storeFront/commerceQueryIndexes.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/storeFront/commerceQueryIndexes.test.ts":
+        "330f0a499188a4a438948211ba365b8f99803bad67c1e579628c053e283335ee",
+    },
+  },
+  {
+    id: "source-reader-convex-storeFront-errorFoundation.test.ts",
+    kind: "data",
+    inputs: [
+      "packages/athena-webapp/convex/storeFront/onlineOrder.ts",
+      "packages/athena-webapp/convex/storeFront/payment.ts",
+      "packages/athena-webapp/convex/storeFront/reviews.ts",
+      "packages/athena-webapp/convex/storeFront/onlineOrderUtilFns.ts",
+      "packages/athena-webapp/src/components/orders/OrderView.tsx",
+      "packages/athena-webapp/src/components/orders/OrderItemsView.tsx",
+      "packages/athena-webapp/src/components/orders/EmailStatusView.tsx",
+      "packages/athena-webapp/src/components/orders/RefundsView.tsx",
+      "packages/athena-webapp/src/components/orders/ReturnExchangeView.tsx",
+      "packages/athena-webapp/src/components/reviews/ReviewsView.tsx",
+    ],
+    consumers: [
+      "packages/athena-webapp/convex/storeFront/errorFoundation.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/storeFront/errorFoundation.test.ts":
+        "91e0e0a876e0f731ae8c0f7d25691a21ec465ad07c139a670313203edc7ad50e",
+    },
+  },
+  {
+    id: "source-reader-convex-storeFront-helperOrchestration.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/storeFront/helperOrchestration.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/storeFront/helperOrchestration.test.ts":
+        "a88a3f9659d9f6e82343d9628d43e1ed5e55085b38ca96615e9a83ef691952ef",
+    },
+  },
+  {
+    id: "source-reader-convex-storeFront-onlineOrder.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: ["packages/athena-webapp/convex/storeFront/onlineOrder.test.ts"],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/storeFront/onlineOrder.test.ts":
+        "45306af403b1f24e64678d345c94a3d04f7fccbcdff6a338a6a1cb4958c0b5fa",
+    },
+  },
+  {
+    id: "source-reader-convex-storeFront-returnExchangeOperations.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/storeFront/returnExchangeOperations.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/storeFront/returnExchangeOperations.test.ts":
+        "8117e57830785869d3061000544ab2c9d85c75476b8acbc6844e42911c1fd598",
+    },
+  },
+  {
+    id: "source-reader-convex-storeFront-timeQueryRefactors.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/storeFront/timeQueryRefactors.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/storeFront/timeQueryRefactors.test.ts":
+        "f7a4eb8253c3a2456de92ee0e25d20ae553d47c8ad4a66f6a60fccb9705f4b98",
+    },
+  },
+  {
+    id: "source-reader-convex-storeTime-operatingPeriods.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/storeTime/operatingPeriods.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/storeTime/operatingPeriods.test.ts":
+        "acbf17b089871a3a44246e516f6835a970ec613fcbcdb6664fb853e6710f149a",
+    },
+  },
+  {
+    id: "source-reader-convex-storeTime-storeTimeAuthority.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [
+      "packages/athena-webapp/convex/storeTime/storeTimeAuthority.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/convex/storeTime/storeTimeAuthority.test.ts":
+        "b440b07fe8da0293a0a62491d13a78773ed072cbec794bc1145d392daafd2d8a",
+    },
+  },
+  {
+    id: "source-reader-src-components-agent-importBoundary.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp"],
+    consumers: [
+      "packages/athena-webapp/src/components/agent/importBoundary.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/src/components/agent/importBoundary.test.ts":
+        "7bf65c1487c1e5c1944d3dbf27285aa8d41869d0f30ab3a6a6f847613178b021",
+    },
+  },
+  {
+    id: "source-reader-src-components-analytics-analyticsWorkspaceEfficiency.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp"],
+    consumers: [
+      "packages/athena-webapp/src/components/analytics/analyticsWorkspaceEfficiency.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/src/components/analytics/analyticsWorkspaceEfficiency.test.ts":
+        "e50e2520616de52b745ca169e9c7b24fcb29d09019b78218706e0013c1809bbc",
+    },
+  },
+  {
+    id: "source-reader-src-components-orders-OrderDetailsView.test.tsx",
+    kind: "data",
+    inputs: ["packages/athena-webapp"],
+    consumers: [
+      "packages/athena-webapp/src/components/orders/OrderDetailsView.test.tsx",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/src/components/orders/OrderDetailsView.test.tsx":
+        "4c0f4bbde30d9c4b9661158160ed03987e135a2f541ce31c17daa37a01b1a9b8",
+    },
+  },
+  {
+    id: "source-reader-src-components-orders-OrderView.test.tsx",
+    kind: "data",
+    inputs: ["packages/athena-webapp"],
+    consumers: [
+      "packages/athena-webapp/src/components/orders/OrderView.test.tsx",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/src/components/orders/OrderView.test.tsx":
+        "7b9188f8cc49c24b67393e9cdb8e655c3fb548632207c41037bcef39f9661a23",
+    },
+  },
+  {
+    id: "source-reader-src-components-orders-OrdersView.test.tsx",
+    kind: "data",
+    inputs: ["packages/athena-webapp"],
+    consumers: [
+      "packages/athena-webapp/src/components/orders/OrdersView.test.tsx",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/src/components/orders/OrdersView.test.tsx":
+        "367b9f9f80b9468183ea74fe1d18e75eb34bcc9d12ee3f9bc68836bde4cd38ae",
+    },
+  },
+  {
+    id: "source-reader-src-components-orders-RefundsView.test.tsx",
+    kind: "data",
+    inputs: ["packages/athena-webapp"],
+    consumers: [
+      "packages/athena-webapp/src/components/orders/RefundsView.test.tsx",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/src/components/orders/RefundsView.test.tsx":
+        "2df10214a8315a02c62028e8402a5bf9c3814fcd7941b26eee93c37e1d1e646b",
+    },
+  },
+  {
+    id: "source-reader-src-components-promo-codes-PromoCodesView.test.tsx",
+    kind: "data",
+    inputs: ["packages/athena-webapp"],
+    consumers: [
+      "packages/athena-webapp/src/components/promo-codes/PromoCodesView.test.tsx",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/src/components/promo-codes/PromoCodesView.test.tsx":
+        "64074a9bbe88bca5753b47117f6f2b767ccea85eb4a91a1f82cbe7aa5dfaa11f",
+    },
+  },
+  {
+    id: "source-reader-src-components-services-ServiceCasesView.test.tsx",
+    kind: "data",
+    inputs: ["packages/athena-webapp"],
+    consumers: [
+      "packages/athena-webapp/src/components/services/ServiceCasesView.test.tsx",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/src/components/services/ServiceCasesView.test.tsx":
+        "55a0e1e6c44ca7ea3f920ceb06a88a3e1beecafb18ffad1699841add29d45076",
+    },
+  },
+  {
+    id: "source-reader-src-components-shared-demo-SharedDemoRestrictedSurface.test.tsx",
+    kind: "data",
+    inputs: ["packages/athena-webapp"],
+    consumers: [
+      "packages/athena-webapp/src/components/shared-demo/SharedDemoRestrictedSurface.test.tsx",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/src/components/shared-demo/SharedDemoRestrictedSurface.test.tsx":
+        "40ffaf023bd02ef0b31d308bfd507de4a8e3d001cef233eb731dadf72d481b46",
+    },
+  },
+  {
+    id: "source-reader-src-components-shared-demo-SharedDemoRuntime.test.tsx",
+    kind: "data",
+    inputs: ["packages/athena-webapp"],
+    consumers: [
+      "packages/athena-webapp/src/components/shared-demo/SharedDemoRuntime.test.tsx",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/src/components/shared-demo/SharedDemoRuntime.test.tsx":
+        "eb987e1e9a1caad742b06a2fe7152f1cb14bdba68a4bd0bc5c1252ac7cbb71bc",
+    },
+  },
+  {
+    id: "source-reader-src-components-shared-demo-sharedDemoReportsFixture.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp"],
+    consumers: [
+      "packages/athena-webapp/src/components/shared-demo/sharedDemoReportsFixture.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/src/components/shared-demo/sharedDemoReportsFixture.test.ts":
+        "ba5933c251ccba4290fcb41faed440f2c42e7b19d5c8571e6d8817e5caadd927",
+    },
+  },
+  {
+    id: "source-reader-src-design-system-build-config.test.ts",
+    kind: "data",
+    inputs: [
+      "packages/athena-webapp",
+      "manage-athena-versions.sh",
+      "scripts/deploy-vps.sh",
+    ],
+    consumers: [
+      "packages/athena-webapp/src/design-system-build-config.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/src/design-system-build-config.test.ts":
+        "b80fcb8809cf128edcfd39e22b00fe49d7fe3712a9f04bdf1f08a9f382cb2a2a",
+    },
+  },
+  {
+    id: "source-reader-src-lib-moneyEntryAudit.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp", "packages/storefront-webapp/src"],
+    consumers: ["packages/athena-webapp/src/lib/moneyEntryAudit.test.ts"],
+    boundedConsumers: {
+      "packages/athena-webapp/src/lib/moneyEntryAudit.test.ts":
+        "1c8b1ccaac4da9dab3624dc0fa38da8e0cd2c88e45591b513e964dd866b6c564",
+    },
+  },
+  {
+    id: "source-reader-src-lib-pos-infrastructure-local-posLocalStorageBoundary.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp"],
+    consumers: [
+      "packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStorageBoundary.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStorageBoundary.test.ts":
+        "f16437bfcaab84f7925dea9955ab5ce07e33df225bcb43cdde29a3bad5ceebeb",
+    },
+  },
+  {
+    id: "source-reader-src-lib-pos-presentation-expense-useExpenseRegisterViewModel.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp"],
+    consumers: [
+      "packages/athena-webapp/src/lib/pos/presentation/expense/useExpenseRegisterViewModel.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/src/lib/pos/presentation/expense/useExpenseRegisterViewModel.test.ts":
+        "e8fa04c0dfccff9de6d7c250809300183705bbe9a5b4d4fcd2134b1ec85288cf",
+    },
+  },
+  {
+    id: "source-reader-src-lib-pos-presentation-register-useRegisterViewModel.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp"],
+    consumers: [
+      "packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.test.ts":
+        "365431d0a28f2311f2a3775ac31b188721b0f7ba5f56295133eb3f9577503537",
+    },
+  },
+  {
+    id: "source-reader-src-routeTree.browser-boundary.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp"],
+    consumers: [
+      "packages/athena-webapp/src/routeTree.browser-boundary.test.ts",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/src/routeTree.browser-boundary.test.ts":
+        "ea963ba3eb6028da28b67b5c66e656d6cf2539171806ec88f0172eed19adfa52",
+    },
+  },
+  {
+    id: "source-reader-src-routes-_authed-$orgUrlSlug-store-$storeUrlSlug-pos.route.test.tsx",
+    kind: "data",
+    inputs: ["packages/athena-webapp"],
+    consumers: [
+      "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos.route.test.tsx",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos.route.test.tsx":
+        "c7dd86fecfffa77ba401d9de26fda8c9f9c4070ed607737aae7af2f7b572c53e",
+    },
+  },
+  {
+    id: "source-reader-src-static-product-metadata.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp"],
+    consumers: ["packages/athena-webapp/src/static-product-metadata.test.ts"],
+    boundedConsumers: {
+      "packages/athena-webapp/src/static-product-metadata.test.ts":
+        "cc00f96fe7b8bca3040313c934c7e8f031b836d5c559b7426e3de41f7f4b07a5",
+    },
+  },
+  {
+    id: "source-reader-src-stories-Foundations-foundations-content.test.tsx",
+    kind: "data",
+    inputs: ["packages/athena-webapp"],
+    consumers: [
+      "packages/athena-webapp/src/stories/Foundations/foundations-content.test.tsx",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/src/stories/Foundations/foundations-content.test.tsx":
+        "e090dd8f923c3e0ef40ad5d5175f460076d45bdd87523e19428ab727daecb840",
+    },
+  },
+  {
+    id: "source-reader-src-stories-storybook-config.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp", ".storybook-athena/main.ts"],
+    consumers: ["packages/athena-webapp/src/stories/storybook-config.test.ts"],
+    boundedConsumers: {
+      "packages/athena-webapp/src/stories/storybook-config.test.ts":
+        "589cd455c0c89d6fcef99299f00ab4605df5c6becd3e0f164f0a2532899aadbf",
+    },
+  },
+  {
+    id: "source-reader-src-viteConfig.test.ts",
+    kind: "data",
+    inputs: ["packages/athena-webapp"],
+    consumers: ["packages/athena-webapp/src/viteConfig.test.ts"],
+    boundedConsumers: {
+      "packages/athena-webapp/src/viteConfig.test.ts":
+        "4187500a340e73fc7f6dd3d843ea30eabe320551181cc37fe32fdd95ff554974",
+    },
+  },
+  {
+    id: "athena-webapp-style-data",
+    kind: "data",
+    inputs: [
+      "packages/athena-webapp/src",
+      "packages/athena-webapp/tailwind.config.js",
+      "packages/athena-webapp/postcss.config.js",
+      "packages/athena-webapp/package.json",
+      "package.json",
+      "bun.lockb",
+    ],
+    consumers: ["packages/athena-webapp/src/index.css"],
+    boundedConsumers: {
+      "packages/athena-webapp/src/index.css":
+        "19b1975759050061922553648379e469ab127f8c508ca45cb83110691bc8f749",
+    },
+    guards: {
+      "packages/athena-webapp/tailwind.config.js":
+        "16db701de61eca6b2d25fba5dde219020e017c46b248661c51b6b2be7a1e5702",
+      "packages/athena-webapp/postcss.config.js":
+        "c3ae79dd928ac53509e8fea8ca5baa2f913abf5e47be7f8159c0bc5e8c9300e6",
+    },
+  },
+  {
+    id: "storefront-webapp-style-data",
+    kind: "data",
+    inputs: [
+      "packages/storefront-webapp/src",
+      "packages/storefront-webapp/tailwind.config.js",
+      "packages/storefront-webapp/postcss.config.cjs",
+      "packages/storefront-webapp/package.json",
+      "package.json",
+      "bun.lockb",
+    ],
+    consumers: ["packages/storefront-webapp/src/index.css"],
+    boundedConsumers: {
+      "packages/storefront-webapp/src/index.css":
+        "9b7b77053c5fbbfcaa3a37f187bd70e166b86006cc4321df61c1d5d77d6e6c30",
+    },
+    guards: {
+      "packages/storefront-webapp/tailwind.config.js":
+        "db2c9c23b87ed001141577e108d9269d2bccc29e5d39fa6fb764d1345c89560b",
+      "packages/storefront-webapp/postcss.config.cjs":
+        "3e9616a36ca4b966f787bf317fa29add7c793e13cee632000e72f1bd1e3fee12",
+    },
+  },
+  {
+    id: "style-data-storybook",
+    kind: "data",
+    inputs: ["packages/athena-webapp/.storybook/storybook.css"],
+    consumers: ["packages/athena-webapp/.storybook/storybook.css"],
+    boundedConsumers: {
+      "packages/athena-webapp/.storybook/storybook.css":
+        "7d89d1485cac5951b6f80355555c2cf02589f4fe9169e4c8395e4b7ad28e597d",
+    },
+  },
+  {
+    id: "style-data-docs-prose",
+    kind: "data",
+    inputs: ["packages/athena-webapp/src/components/docs/docs-prose.css"],
+    consumers: ["packages/athena-webapp/src/components/docs/docs-prose.css"],
+    boundedConsumers: {
+      "packages/athena-webapp/src/components/docs/docs-prose.css":
+        "9d77fa2a28d7d418222b377ae1c86f1d33dad831fe0d42036aa4862d257a1284",
+    },
+  },
+  {
+    id: "style-data-docs-report",
+    kind: "data",
+    inputs: ["packages/athena-webapp/src/components/docs/docs-report.css"],
+    consumers: ["packages/athena-webapp/src/components/docs/docs-report.css"],
+    boundedConsumers: {
+      "packages/athena-webapp/src/components/docs/docs-report.css":
+        "030484f8f9c4edc6cdcca2a763d2d9771b9a3bd72fe93242c75a6a2e080f1e8f",
+    },
+  },
+  {
+    id: "style-data-docs-scroll-to-top",
+    kind: "data",
+    inputs: [
+      "packages/athena-webapp/src/components/docs/docs-scroll-to-top.css",
+    ],
+    consumers: [
+      "packages/athena-webapp/src/components/docs/docs-scroll-to-top.css",
+    ],
+    boundedConsumers: {
+      "packages/athena-webapp/src/components/docs/docs-scroll-to-top.css":
+        "d9ec0b3b44ff5c126566a93b4fe48d1d1c84d1b97352ea9d015a588a5a67d058",
+    },
+  },
+  {
+    id: "style-data-docs-texture",
+    kind: "data",
+    inputs: ["packages/athena-webapp/src/components/docs/docs-texture.css"],
+    consumers: ["packages/athena-webapp/src/components/docs/docs-texture.css"],
+    boundedConsumers: {
+      "packages/athena-webapp/src/components/docs/docs-texture.css":
+        "c9993c04d79d73dcde5f0c29de709060df9dcdf5b45b029fd2d0d6122cd57d45",
+    },
+  },
+  {
+    id: "docs-publishing",
+    kind: "data",
+    inputs: ["docs/reports", "docs/solutions"],
+    consumers: ["packages/athena-webapp/src/lib/docs/content.ts"],
+    publishing: true,
+    lazyProducers: {
+      "packages/athena-webapp/vite-docs-content-plugin.ts":
+        "58d363d506a79d8c8089a19ddeac88056fdd8c1684921b4ab2b13c4464f11a47",
+    },
+  },
+  {
+    id: "route-registration",
+    inputs: ["packages/athena-webapp/src/routes"],
+    consumers: [
+      "packages/athena-webapp/src/routeTree.gen.ts",
+      "packages/athena-webapp/src/appRouter.ts",
+    ],
+  },
+  {
+    id: "convex-schema-tables",
+    inputs: [
+      "packages/athena-webapp/convex/schema.ts",
+      "packages/athena-webapp/convex/schemas",
+    ],
+    consumers: ["packages/athena-webapp/convex"],
+  },
+  {
+    id: "convex-generated-api",
+    inputs: ["packages/athena-webapp/convex/_generated"],
+    consumers: ["packages/athena-webapp/convex", "packages/athena-webapp/src"],
+  },
+  {
+    id: "convex-function-admission",
+    inputs: ["packages/athena-webapp/convex"],
+    consumers: [],
+    command: "bun scripts/convex-operation-admission-check.ts",
+  },
+] as const;
+
+export const VALIDATION_IMPACT_TEST_PATTERNS = {
+  "packages/athena-webapp": [
+    "packages/athena-webapp/{src,convex,shared}/**/*.test.{ts,tsx}",
+  ],
+  "packages/storefront-webapp": [
+    "packages/storefront-webapp/**/*.{test,spec}.{ts,tsx,js,jsx,mts,cts,mjs,cjs}",
+  ],
+  "packages/valkey-proxy-server": ["packages/valkey-proxy-server/app.test.js"],
+  ".": ["scripts/*.test.ts"],
+} as const;
 
 export const VALIDATION_PLAN_POLICY = {
   schemaVersion: "athena-validation-plan/1",
   authority: "legacy-gate",
   modes: ["delivery", "comparison", "full-health"],
-  sharedInputs: ["package.json", "bun.lockb", "bunfig.toml", "scripts/harness-app-registry.ts", "scripts/harness-validation-plan.ts"],
+  sharedInputs: [
+    "package.json",
+    "bun.lockb",
+    "bunfig.toml",
+    "scripts/harness-app-registry.ts",
+    "scripts/harness-validation-plan.ts",
+    "scripts/harness-validation-impact.ts",
+    "scripts/harness-repo-validation.ts",
+  ],
   publishingPrefixes: ["docs/reports", "docs/solutions"],
-  publishingCommands: ["reports:presentation:check", "docs:links:check", "landed-report:check"],
-  fullHealthCommands: ["test:coverage", "harness:test", "workflow:check", "architecture:check", "harness:inferential-review", "graphify:check"],
+  publishingCommands: [
+    "reports:presentation:check",
+    "docs:links:check",
+    "landed-report:check",
+  ],
+  fullHealthCommands: [
+    "test:coverage",
+    "harness:test",
+    "workflow:check",
+    "architecture:check",
+    "harness:inferential-review",
+    "graphify:check",
+  ],
   // These profiles have different configuration/environment semantics even when files overlap.
-  distinctProfiles: ["unit", "aggregate-coverage", "timer-stress", "browser", "behavior"],
+  distinctProfiles: [
+    "unit",
+    "aggregate-coverage",
+    "timer-stress",
+    "browser",
+    "behavior",
+  ],
 } as const;
 
 /** Characterized runner membership, independent from impact selection. */
 export const VALIDATION_TEST_MEMBERSHIP = {
-  operatorUnit: /^packages\/athena-webapp\/(src|convex|shared)\/.*\.test\.(ts|tsx)$/,
-  storefrontUnit: /^packages\/storefront-webapp\/(?!node_modules\/|dist\/).*\.(test|spec)\.[cm]?[jt]sx?$/,
+  operatorUnit:
+    /^packages\/athena-webapp\/(src|convex|shared)\/.*\.test\.(ts|tsx)$/,
+  storefrontUnit:
+    /^packages\/storefront-webapp\/(?!node_modules\/|dist\/).*\.(test|spec)\.[cm]?[jt]sx?$/,
   rootUnit: /^scripts\/[^/]+\.test\.ts$/,
   operatorBrowser: /^packages\/athena-webapp\/src\/tests\/.*\.spec\.ts$/,
   storefrontBrowser: /^packages\/storefront-webapp\/tests\/e2e\/.*\.e2e\.ts$/,
