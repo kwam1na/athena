@@ -950,3 +950,81 @@ for (const stage of ["request", "artifact"] as const) {
     }
   });
 }
+
+function historicalTrustSource(overrides: Record<string, unknown> = {}) {
+  const base = source({
+    runs: [run(11, { conclusion: "success" })],
+    classification: {
+      schemaVersion: "athena-health-classifications/1",
+      entries: [
+        {
+          findingId: "failure-1",
+          findingRevision: "failure-r1",
+          reference: "main:approved-repair",
+          revalidationRunId: 10,
+        },
+      ],
+    },
+  });
+  return {
+    ...base,
+    requestJson: async (url: string): Promise<unknown> => {
+      if (url.endsWith("/actions/runs/10"))
+        return run(10, { conclusion: "success", event: "push", ...overrides });
+      const match = url.match(/\/actions\/runs\/(10|11)\/artifacts/);
+      if (match) {
+        const runId = Number(match[1]);
+        return {
+          total_count: 1,
+          artifacts: [
+            {
+              id: runId * 10,
+              name: policy.artifactName,
+              expired: false,
+              workflow_run: { id: runId, head_sha: sha },
+            },
+          ],
+        };
+      }
+      return base.requestJson(url);
+    },
+    loadArtifact: async (_repository: string, artifactId: number) =>
+      digest({
+        runId: artifactId / 10,
+        checks: [{ checkId: "operator", outcome: "success" }],
+      }),
+  };
+}
+
+test("historical trust accepts a matching trusted default-branch push", async () => {
+  const health = await readValidationHealth(policy, {
+    ...historicalTrustSource(),
+    now,
+  });
+  expect(health.availability).toBe("available");
+  expect(health.findings).toHaveLength(0);
+  expect(health.closedFindings).toHaveLength(1);
+});
+
+for (const [field, overrides] of [
+  ["branch", { head_branch: "candidate-branch" }],
+  ["workflow id", { workflow_id: 99 }],
+  ["workflow path", { path: ".github/workflows/other.yml" }],
+  ["repository", { repository: { full_name: "foreign/athena" } }],
+  ["head repository", { head_repository: { full_name: "foreign/athena" } }],
+  ["event", { event: "pull_request" }],
+  ["status", { status: "in_progress" }],
+  ["conclusion", { conclusion: "cancelled" }],
+  ["run id", { id: 12 }],
+  ["attempt", { run_attempt: 0 }],
+] as const) {
+  test(`historical trust rejects ${field} independently of matching closure evidence`, async () => {
+    const health = await readValidationHealth(policy, {
+      ...historicalTrustSource(overrides),
+      now,
+    });
+    expect(health.availability).toBe("invalid-health");
+    expect(health.findings.map((finding) => finding.id)).toEqual(["failure-1"]);
+    expect(health.closedFindings).toHaveLength(0);
+  });
+}

@@ -7,7 +7,7 @@ problem_type: workflow_issue
 component: development_workflow
 resolution_type: workflow_improvement
 severity: medium
-delivery_diff_fingerprint: 8d0321556de9a0ceb1c756238aae921413c5ead7cf32c9eb08abbe77e66e11f9
+delivery_diff_fingerprint: 9a72933902d1e46fe7433d6107425c8c789a65c682e10e5cad9b15cc1c49f7e4
 applies_when:
   - Changing validation selection or eliminating overlapping test execution
   - Integrating trusted repository health with candidate admission
