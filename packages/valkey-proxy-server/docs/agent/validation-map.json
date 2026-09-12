@@ -12,7 +12,9 @@
       "bun.lockb",
       "bunfig.toml",
       "scripts/harness-app-registry.ts",
-      "scripts/harness-validation-plan.ts"
+      "scripts/harness-validation-plan.ts",
+      "scripts/harness-validation-impact.ts",
+      "scripts/harness-repo-validation.ts"
     ],
     "publishingPrefixes": [
       "docs/reports",
@@ -102,6 +104,8 @@
         "bunfig.toml",
         "package.json",
         "scripts/harness-app-registry.ts",
+        "scripts/harness-repo-validation.ts",
+        "scripts/harness-validation-impact.ts",
         "scripts/harness-validation-plan.ts"
       ],
       "absentInputs": [],
@@ -123,6 +127,8 @@
         "bunfig.toml",
         "package.json",
         "scripts/harness-app-registry.ts",
+        "scripts/harness-repo-validation.ts",
+        "scripts/harness-validation-impact.ts",
         "scripts/harness-validation-plan.ts"
       ],
       "absentInputs": [],
@@ -144,6 +150,8 @@
         "bunfig.toml",
         "package.json",
         "scripts/harness-app-registry.ts",
+        "scripts/harness-repo-validation.ts",
+        "scripts/harness-validation-impact.ts",
         "scripts/harness-validation-plan.ts"
       ],
       "absentInputs": [],
@@ -165,6 +173,8 @@
         "bunfig.toml",
         "package.json",
         "scripts/harness-app-registry.ts",
+        "scripts/harness-repo-validation.ts",
+        "scripts/harness-validation-impact.ts",
         "scripts/harness-validation-plan.ts"
       ],
       "absentInputs": [],
@@ -186,6 +196,8 @@
         "bunfig.toml",
         "package.json",
         "scripts/harness-app-registry.ts",
+        "scripts/harness-repo-validation.ts",
+        "scripts/harness-validation-impact.ts",
         "scripts/harness-validation-plan.ts"
       ],
       "absentInputs": [],
@@ -207,6 +219,8 @@
         "bunfig.toml",
         "package.json",
         "scripts/harness-app-registry.ts",
+        "scripts/harness-repo-validation.ts",
+        "scripts/harness-validation-impact.ts",
         "scripts/harness-validation-plan.ts"
       ],
       "absentInputs": [],
@@ -228,6 +242,8 @@
         "bunfig.toml",
         "package.json",
         "scripts/harness-app-registry.ts",
+        "scripts/harness-repo-validation.ts",
+        "scripts/harness-validation-impact.ts",
         "scripts/harness-validation-plan.ts"
       ],
       "absentInputs": [],
@@ -249,6 +265,8 @@
         "bunfig.toml",
         "package.json",
         "scripts/harness-app-registry.ts",
+        "scripts/harness-repo-validation.ts",
+        "scripts/harness-validation-impact.ts",
         "scripts/harness-validation-plan.ts"
       ],
       "absentInputs": [],
@@ -270,6 +288,8 @@
         "bunfig.toml",
         "package.json",
         "scripts/harness-app-registry.ts",
+        "scripts/harness-repo-validation.ts",
+        "scripts/harness-validation-impact.ts",
         "scripts/harness-validation-plan.ts"
       ],
       "absentInputs": [],
@@ -291,6 +311,8 @@
         "bunfig.toml",
         "package.json",
         "scripts/harness-app-registry.ts",
+        "scripts/harness-repo-validation.ts",
+        "scripts/harness-validation-impact.ts",
         "scripts/harness-validation-plan.ts"
       ],
       "absentInputs": [],
@@ -312,6 +334,8 @@
         "bunfig.toml",
         "package.json",
         "scripts/harness-app-registry.ts",
+        "scripts/harness-repo-validation.ts",
+        "scripts/harness-validation-impact.ts",
         "scripts/harness-validation-plan.ts"
       ],
       "absentInputs": [],
@@ -333,6 +357,8 @@
         "bunfig.toml",
         "package.json",
         "scripts/harness-app-registry.ts",
+        "scripts/harness-repo-validation.ts",
+        "scripts/harness-validation-impact.ts",
         "scripts/harness-validation-plan.ts"
       ],
       "absentInputs": [],

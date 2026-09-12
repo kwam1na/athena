@@ -170,66 +170,147 @@ import { readFile } from "node:fs/promises";
 import { runValidationPlanCli } from "./harness-validation-plan";
 
 describe("read-only planning interface", () => {
+  it("publishes runnable read-only affected consumer examples", async () => {
+    const outputs: string[] = [];
+    for (const name of ["frontend", "report"])
+      await runValidationPlanCli(
+        [
+          "--input",
+          `scripts/fixtures/affected-validation/impact/${name}-request.json`,
+          "--json",
+        ],
+        (line) => outputs.push(line),
+      );
+    const frontend = JSON.parse(outputs[0]),
+      report = JSON.parse(outputs[1]);
+    expect(
+      frontend.checks
+        .filter((check: CanonicalValidationCheck) =>
+          check.profile.endsWith(":unit"),
+        )
+        .flatMap((check: CanonicalValidationCheck) => check.membership),
+    ).toEqual(["packages/athena-webapp/src/lib/imageUtils.test.ts"]);
+    expect(
+      report.checks.every((check: CanonicalValidationCheck) =>
+        ["plan-integrity", "docs-publishing"].includes(check.profile),
+      ),
+    ).toBe(true);
+    expect(report.authority).toBe("legacy-gate");
+    expect(report.evidence).toBe("not-evaluated");
+  });
   it("reproduces the published report fixture exactly", async () => {
     const output: string[] = [];
-    await runValidationPlanCli(["--input","scripts/fixtures/affected-validation/planner/report-request.json","--json"],text=>output.push(text));
-    expect(JSON.parse(output[0])).toEqual(JSON.parse(await readFile("scripts/fixtures/affected-validation/planner/report-plan.json","utf8")));
+    await runValidationPlanCli(
+      [
+        "--input",
+        "scripts/fixtures/affected-validation/planner/report-request.json",
+        "--json",
+      ],
+      (text) => output.push(text),
+    );
+    expect(JSON.parse(output[0])).toEqual(
+      JSON.parse(
+        await readFile(
+          "scripts/fixtures/affected-validation/planner/report-plan.json",
+          "utf8",
+        ),
+      ),
+    );
   });
   it("rejects missing and unknown CLI options before any execution", async () => {
-    await expect(runValidationPlanCli([])).rejects.toMatchObject({code:"malformed-map"});
-    await expect(runValidationPlanCli(["--input","request.json","--execute"])).rejects.toMatchObject({code:"malformed-map"});
+    await expect(runValidationPlanCli([])).rejects.toMatchObject({
+      code: "malformed-map",
+    });
+    await expect(
+      runValidationPlanCli(["--input", "request.json", "--execute"]),
+    ).rejects.toMatchObject({ code: "malformed-map" });
   });
   it("validates unused malformed definitions before selecting an otherwise valid surface", () => {
-    const r=registry([check("a"),check("b")]);
-    (r.checks[1] as unknown as {profile:unknown}).profile=42;
-    expect(()=>buildValidationPlan(r,[change("src/a")])).toThrow("Invalid or duplicate check");
+    const r = registry([check("a"), check("b")]);
+    (r.checks[1] as unknown as { profile: unknown }).profile = 42;
+    expect(() => buildValidationPlan(r, [change("src/a")])).toThrow(
+      "Invalid or duplicate check",
+    );
   });
   it("does not let input object property order change the plan", () => {
-    const r=registry([check("a")]);
-    expect(buildValidationPlan(r,[{status:"modified",path:"src/a"}])).toEqual(buildValidationPlan(r,[{path:"src/a",status:"modified"}]));
+    const r = registry([check("a")]);
+    expect(
+      buildValidationPlan(r, [{ status: "modified", path: "src/a" }]),
+    ).toEqual(buildValidationPlan(r, [{ path: "src/a", status: "modified" }]));
   });
   it("retains prerequisites with reasons and refuses chained supersession", () => {
-    const a=check("a"),b=check("b"),c=check("c");
-    a.prerequisites=["b"];
-    const plan=buildValidationPlan(registry([a,b,c]),[change("src/a")]);
-    expect(plan.checks.flatMap(check=>check.reasons)).toContain("Prerequisite of a");
-    a.supersedes=[{checkId:"b",profile:"unit",reason:"equivalent"}];
-    b.supersedes=[{checkId:"c",profile:"unit",reason:"equivalent"}];
-    expect(()=>buildValidationPlan(registry([a,b,c]),[],"full-health")).toThrow("Supersession");
+    const a = check("a"),
+      b = check("b"),
+      c = check("c");
+    a.prerequisites = ["b"];
+    const plan = buildValidationPlan(registry([a, b, c]), [change("src/a")]);
+    expect(plan.checks.flatMap((check) => check.reasons)).toContain(
+      "Prerequisite of a",
+    );
+    a.supersedes = [{ checkId: "b", profile: "unit", reason: "equivalent" }];
+    b.supersedes = [{ checkId: "c", profile: "unit", reason: "equivalent" }];
+    expect(() =>
+      buildValidationPlan(registry([a, b, c]), [], "full-health"),
+    ).toThrow("Supersession");
   });
   it("retains a prerequisite targeted by otherwise valid supersession", () => {
-    const a=check("a"), b=check("b");
-    a.prerequisites=["b"];
-    a.supersedes=[{checkId:"b",profile:"unit",reason:"Equivalent members"}];
-    const plan=buildValidationPlan(registry([a,b]),[change("src/a")]);
-    expect(plan.checks.map(check=>check.id)).toContain("b");
-    expect(plan.checks.find(check=>check.id==="a")?.prerequisites).toEqual(["b"]);
+    const a = check("a"),
+      b = check("b");
+    a.prerequisites = ["b"];
+    a.supersedes = [
+      { checkId: "b", profile: "unit", reason: "Equivalent members" },
+    ];
+    const plan = buildValidationPlan(registry([a, b]), [change("src/a")]);
+    expect(plan.checks.map((check) => check.id)).toContain("b");
+    expect(
+      plan.checks.find((check) => check.id === "a")?.prerequisites,
+    ).toEqual(["b"]);
   });
   it("rejects non-string and blank supersession explanations", () => {
-    for (const reason of [{unexpected:true},42,"   "]) {
-      const a=check("a"), b=check("b");
-      a.supersedes=[{checkId:"b",profile:"unit",reason:reason as string}];
-      expect(()=>buildValidationPlan(registry([a,b]),[],"full-health")).toThrow("Supersession");
+    for (const reason of [{ unexpected: true }, 42, "   "]) {
+      const a = check("a"),
+        b = check("b");
+      a.supersedes = [
+        { checkId: "b", profile: "unit", reason: reason as string },
+      ];
+      expect(() =>
+        buildValidationPlan(registry([a, b]), [], "full-health"),
+      ).toThrow("Supersession");
     }
   });
   it("provides help without an input file", async () => {
-    for (const flag of ["--help","-h"]) {
-      const output:string[]=[];
-      await runValidationPlanCli([flag],text=>output.push(text));
+    for (const flag of ["--help", "-h"]) {
+      const output: string[] = [];
+      await runValidationPlanCli([flag], (text) => output.push(text));
       expect(output.join("\n")).toContain("full-health");
       expect(output.join("\n")).toContain("inventory");
       expect(output.join("\n")).toContain("changes");
     }
   });
   it("defaults piped output to JSON and allows explicit text", async () => {
-    const output:string[]=[];
-    const args=["--input","scripts/fixtures/affected-validation/planner/report-request.json"];
-    await runValidationPlanCli(args,text=>output.push(text),{stdoutIsTTY:false});
-    expect(JSON.parse(output.pop()!).schemaVersion).toBe("athena-validation-plan/1");
-    await runValidationPlanCli([...args,"--text"],text=>output.push(text),{stdoutIsTTY:false});
+    const output: string[] = [];
+    const args = [
+      "--input",
+      "scripts/fixtures/affected-validation/planner/report-request.json",
+    ];
+    await runValidationPlanCli(args, (text) => output.push(text), {
+      stdoutIsTTY: false,
+    });
+    expect(JSON.parse(output.pop()!).schemaVersion).toBe(
+      "athena-validation-plan/1",
+    );
+    await runValidationPlanCli(
+      [...args, "--text"],
+      (text) => output.push(text),
+      { stdoutIsTTY: false },
+    );
     expect(output.pop()).toStartWith("Validation plan ");
-    await runValidationPlanCli(args,text=>output.push(text),{stdoutIsTTY:true});
+    await runValidationPlanCli(args, (text) => output.push(text), {
+      stdoutIsTTY: true,
+    });
     expect(output.pop()).toStartWith("Validation plan ");
-    await expect(runValidationPlanCli([...args,"--text","--json"])).rejects.toMatchObject({code:"malformed-map"});
+    await expect(
+      runValidationPlanCli([...args, "--text", "--json"]),
+    ).rejects.toMatchObject({ code: "malformed-map" });
   });
 });

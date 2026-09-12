@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
 import {
+  resolveValidationImpact,
+  validateImpactPolicy,
+  type ValidationSnapshots,
+} from "./harness-validation-impact";
+import {
   type CanonicalValidationCheck,
   type CanonicalValidationRegistry,
   VALIDATION_PLAN_POLICY,
@@ -165,6 +170,7 @@ export function validateCanonicalRegistry(
     visited.add(id);
   };
   registry.checks.forEach((check) => visit(check.id));
+  validateImpactPolicy(registry);
 }
 
 /** Pure qualification planning: no check execution, receipt lookup, or admission decision. */
@@ -172,6 +178,7 @@ export function buildValidationPlan(
   registry: CanonicalValidationRegistry,
   changes: ValidationChange[],
   mode: ValidationPlanMode = "comparison",
+  snapshots?: ValidationSnapshots,
 ): ValidationPlan {
   validateCanonicalRegistry(registry);
   if (!VALIDATION_PLAN_POLICY.modes.includes(mode))
@@ -186,6 +193,15 @@ export function buildValidationPlan(
         (change.status !== "renamed" || !validPath(change.oldPath)))
     )
       fail("malformed-map", "Invalid semantic change.");
+  if (snapshots !== undefined) {
+    registry = resolveValidationImpact(
+      registry,
+      changes,
+      snapshots,
+      mode === "full-health",
+    );
+    validateCanonicalRegistry(registry);
+  }
   const normalizedChanges = [
     ...new Map(
       changes.map(({ path, status, oldPath }) => {
@@ -347,16 +363,19 @@ export async function runValidationPlanCli(
   options: { stdoutIsTTY?: boolean } = {},
 ) {
   if (args.length === 1 && ["--help", "-h"].includes(args[0])) {
-    log([
-      "Usage: bun run harness:plan -- --input <request.json> [--json | --text]",
-      "Read-only planning: no checks execute and the legacy gate stays authoritative.",
-      "Request: mode is delivery, comparison, or full-health; changes contains semantic path/status entries;",
-      "inventory lists explicit repository-relative file paths. An optional registry supplies a canonical fixture.",
-      'Minimal request: {"mode":"full-health","changes":[],"inventory":["package.json"]}',
-      'Change example: {"path":"scripts/example.ts","status":"modified"}; renamed entries also supply oldPath.',
-      "JSON is the default for piped output; --text forces human-readable output.",
-      "Example: bun run harness:plan -- --input scripts/fixtures/affected-validation/planner/report-request.json --json",
-    ].join("\n"));
+    log(
+      [
+        "Usage: bun run harness:plan -- --input <request.json> [--json | --text]",
+        "Read-only planning: no checks execute and the legacy gate stays authoritative.",
+        "Request: mode is delivery, comparison, or full-health; changes contains semantic path/status entries;",
+        "inventory lists explicit repository-relative file paths. An optional registry supplies a canonical fixture.",
+        "Optional snapshots: {base: {path: sourceText}, candidate: {path: sourceText}} enables affected-consumer qualification from complete source inventories.",
+        'Minimal request: {"mode":"full-health","changes":[],"inventory":["package.json"]}',
+        'Change example: {"path":"scripts/example.ts","status":"modified"}; renamed entries also supply oldPath.',
+        "JSON is the default for piped output; --text forces human-readable output.",
+        "Example: bun run harness:plan -- --input scripts/fixtures/affected-validation/planner/report-request.json --json",
+      ].join("\n"),
+    );
     return;
   }
   const inputIndex = args.indexOf("--input");
@@ -365,7 +384,8 @@ export async function runValidationPlanCli(
     !args[inputIndex + 1] ||
     args.some(
       (arg, index) =>
-        index !== inputIndex + 1 && !["--input", "--json", "--text"].includes(arg),
+        index !== inputIndex + 1 &&
+        !["--input", "--json", "--text"].includes(arg),
     ) ||
     (args.includes("--json") && args.includes("--text"))
   )
@@ -378,6 +398,7 @@ export async function runValidationPlanCli(
     changes: ValidationChange[];
     inventory: string[];
     registry?: CanonicalValidationRegistry;
+    snapshots?: ValidationSnapshots;
   };
   try {
     request = JSON.parse(await readFile(args[inputIndex + 1], "utf8"));
@@ -398,9 +419,12 @@ export async function runValidationPlanCli(
     request.registry ?? collectCanonicalValidationRegistry(request.inventory),
     request.changes,
     request.mode,
+    request.snapshots,
   );
   log(
-    args.includes("--json") || (!args.includes("--text") && !(options.stdoutIsTTY ?? process.stdout.isTTY))
+    args.includes("--json") ||
+      (!args.includes("--text") &&
+        !(options.stdoutIsTTY ?? process.stdout.isTTY))
       ? JSON.stringify(plan, null, 2)
       : renderValidationPlan(plan),
   );

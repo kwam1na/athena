@@ -1,0 +1,35 @@
+{
+  "mode": "comparison",
+  "changes": [
+    {
+      "path": "packages/athena-webapp/src/lib/imageUtils.ts",
+      "status": "modified"
+    }
+  ],
+  "inventory": [
+    "package.json",
+    "packages/athena-webapp/package.json",
+    "packages/athena-webapp/src/lib/imageUtils.test.ts",
+    "packages/athena-webapp/src/lib/imageUtils.ts",
+    "packages/athena-webapp/src/lib/unrelated.test.ts",
+    "packages/athena-webapp/src/lib/unrelated.ts"
+  ],
+  "snapshots": {
+    "base": {
+      "package.json": "{\"name\":\"affected-fixture\",\"workspaces\":[\"packages/*\"]}",
+      "packages/athena-webapp/package.json": "{\"name\":\"@athena/webapp\"}",
+      "packages/athena-webapp/src/lib/imageUtils.ts": "export const value = 1;",
+      "packages/athena-webapp/src/lib/imageUtils.test.ts": "import {value} from \"./imageUtils\";",
+      "packages/athena-webapp/src/lib/unrelated.ts": "export const unrelated = true;",
+      "packages/athena-webapp/src/lib/unrelated.test.ts": "import {unrelated} from \"./unrelated\";"
+    },
+    "candidate": {
+      "package.json": "{\"name\":\"affected-fixture\",\"workspaces\":[\"packages/*\"]}",
+      "packages/athena-webapp/package.json": "{\"name\":\"@athena/webapp\"}",
+      "packages/athena-webapp/src/lib/imageUtils.ts": "export const value = 2;",
+      "packages/athena-webapp/src/lib/imageUtils.test.ts": "import {value} from \"./imageUtils\";",
+      "packages/athena-webapp/src/lib/unrelated.ts": "export const unrelated = true;",
+      "packages/athena-webapp/src/lib/unrelated.test.ts": "import {unrelated} from \"./unrelated\";"
+    }
+  }
+}

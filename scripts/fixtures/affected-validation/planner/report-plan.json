@@ -24,12 +24,14 @@
         "bunfig.toml",
         "package.json",
         "scripts/harness-app-registry.ts",
+        "scripts/harness-repo-validation.ts",
+        "scripts/harness-validation-impact.ts",
         "scripts/harness-validation-plan.ts"
       ],
       "absentInputs": [],
       "prerequisites": [],
       "supersedes": [],
-      "identity": "0abaaaac024ef2e78ecc13559fb41d276a548cf4cc42073238f4e445e4e3f096",
+      "identity": "cdc6ee8619509fdd882c875e71b7686aeb11e8e173fec139b3701788bade183d",
       "reasons": [
         "docs-publishing: Reports and solutions are consumed by the docs publishing plugin (docs/reports/example.html)"
       ],
@@ -52,12 +54,14 @@
         "bunfig.toml",
         "package.json",
         "scripts/harness-app-registry.ts",
+        "scripts/harness-repo-validation.ts",
+        "scripts/harness-validation-impact.ts",
         "scripts/harness-validation-plan.ts"
       ],
       "absentInputs": [],
       "prerequisites": [],
       "supersedes": [],
-      "identity": "2819c5fc5a50963589bf01977dbee25570c9757b7d972ea9b77a776ec07fe136",
+      "identity": "957199f649008dcfd465432fd00e636aed723311bfddb196355c3dec208ce754",
       "reasons": [
         "docs-publishing: Reports and solutions are consumed by the docs publishing plugin (docs/reports/example.html)"
       ],
@@ -80,12 +84,14 @@
         "bunfig.toml",
         "package.json",
         "scripts/harness-app-registry.ts",
+        "scripts/harness-repo-validation.ts",
+        "scripts/harness-validation-impact.ts",
         "scripts/harness-validation-plan.ts"
       ],
       "absentInputs": [],
       "prerequisites": [],
       "supersedes": [],
-      "identity": "db919b6371874cc59a680b517befbd1ed5d1e178a0711d6eaa098caa62b8564d",
+      "identity": "6b177c5f2881246f5343f31e4869730e638cac5727f01a0d7a5b41ec858b6ce6",
       "reasons": [
         "Always required: plan integrity"
       ],
@@ -110,12 +116,14 @@
         "bunfig.toml",
         "package.json",
         "scripts/harness-app-registry.ts",
+        "scripts/harness-repo-validation.ts",
+        "scripts/harness-validation-impact.ts",
         "scripts/harness-validation-plan.ts"
       ],
       "absentInputs": [],
       "prerequisites": [],
       "supersedes": [],
-      "identity": "57e3946fde80a13feb1fd86136225386b588f57673b5b5a23c92fa74b6b8c7d7",
+      "identity": "1d6908a5a89918a88fe549e896d4c00c81c3f3d302a7ba3bcf97c09f6246e847",
       "reasons": [
         "docs-publishing: Reports and solutions are consumed by the docs publishing plugin (docs/reports/example.html)"
       ],
@@ -138,12 +146,14 @@
         "bunfig.toml",
         "package.json",
         "scripts/harness-app-registry.ts",
+        "scripts/harness-repo-validation.ts",
+        "scripts/harness-validation-impact.ts",
         "scripts/harness-validation-plan.ts"
       ],
       "absentInputs": [],
       "prerequisites": [],
       "supersedes": [],
-      "identity": "940a2918e3e8439d411a4a7977006c8343fa0a509eb713ff30970bc5f76490a0",
+      "identity": "f480f8c76846f548a86b8a3e0571e8463011d74850ba72c46a0efe1e7016916b",
       "reasons": [
         "docs-publishing: Reports and solutions are consumed by the docs publishing plugin (docs/reports/example.html)"
       ],
@@ -153,5 +163,5 @@
     }
   ],
   "evidence": "not-evaluated",
-  "digest": "a3fa2b7327aea9a2bb591239a0bb72b544cbc9cd576c1e5ce185f332aa7c4baa"
+  "digest": "40eb7bc9343077dc31658b87f8995f910413ab3ec38547e942dd5a980dcb8bc5"
 }

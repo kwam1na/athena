@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Choose validation from real consumers</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="877ca31b49b31c18e2fc7f1cffa8a022497dc5c6c49cc12faad74f434d8fa5a6">
+  <header data-report-section="header">
+    <h1>Choose validation from real consumers</h1>
+    <p>How Athena qualifies affected checks and their evidence inputs</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>V26-2066</li>
+      <li>Qualification only</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Status</dt><dd>Delivery candidate; final freshness and full validation pending</dd>
+      <dt>Issue</dt><dd>https://linear.app/v26-labs/issue/V26-2066/resolve-affected-consumers-and-runtime-contracts-for-validation</dd>
+      <dt>Branch</dt><dd>codex/v26-2066-affected-consumers</dd>
+      <dt>Candidate source tree</dt><dd>R3 reviewed tree 16c149bfda99c3b2efd2744746629834cc201d29; sibling projection tests added afterward</dd>
+      <dt>Source snapshot</dt><dd>93c1393573021a9e1d344b8a36edfc8c206ecbcf</dd>
+      <dt>Base</dt><dd>e46b77da73f99a8ca1cc2c418ceaae9ab523f619</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>What this candidate delivers</h2>
+      <p>Athena can qualify which validation checks consume changed files, including relationships that directory matching misses. The planner examines both the previous and candidate source snapshots, keeps conservative coverage for uncertain dependencies, and separates unit groups according to whether reports are inputs.</p>
+      <p>The output remains a read-only canonical plan. V26-2024 owns activating execution and evidence reuse. Merge, tracker closure, root alignment, and report deployment remain pending for this candidate.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Why directories were insufficient</h2>
+      <p>A shared helper can affect a test in another directory or package. Removing an import can also hide a former consumer if analysis sees only the candidate. Runtime registration, runner setup, and filesystem reads introduce dependencies beyond ordinary imports.</p>
+      <p>A broad input union creates another problem: adding a delivery report can invalidate the identity of an unrelated static test grouped with a report reader. Selecting the right tests and describing their inputs are separate decisions.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Ask two questions</h2>
+      <p>First ask which checks can observe the change. Follow consumer relationships backward from changed and renamed paths, using both snapshots. Then ask which files each selected check can observe while it runs. Those forward inputs include raw data and configuration as well as executable dependencies.</p>
+      <p>An unknown read may justify broad inputs for one test. It does not mean the reader executes every import contained in the text it inspects. A runner setup dependency is different: it can affect every member of the runner implicitly.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>From paths to consumers</h2>
+      <p>Previously, the canonical planner selected surface obligations without source-consumer qualification. With complete snapshots, it now resolves static imports, aliases, re-exports, literal dynamic imports, assets, and declared runtime relationships across both revisions.</p>
+      <p>It then discovers candidate tests, preserves removed inputs as absence assertions, adds containing-suite fallback where needed, and binds selected members individually. Each original unit check produces at most two groups: independent of publishing data, and dependent on publishing data. Prerequisite and supersession references follow the partition.</p>
+  </section>
+  <section data-report-section="changes">
+    <h2>The important behavior boundaries</h2>
+      <ul>
+        <li>Report-only changes pass through normal consumer analysis. Genuine readers and relevant conservative fallback remain selected.</li>
+        <li>Exact source and configuration guards qualify finite raw-reader contracts. A changed guard restores uncertainty.</li>
+        <li>Bun filesystem and process access remains conservative, including directory scans. Unknown runner configuration or setup reads retain implicit runner membership.</li>
+        <li>Convex lazy-registry qualification rejects shadowed imported factory or API bindings. Unsupported forms retain named fallback.</li>
+        <li>Full-health planning remains complete and conservative. This candidate creates no passing execution evidence and grants no admission or reuse authority.</li>
+      </ul>
+  </section>
+  <section data-report-section="validation">
+    <h2>What the evidence establishes</h2>
+      <p>Current source checks pass 162 focused tests across the impact, registry, planner, and repository-validation suites. Six runtime repair mutations and two further projection mutations fail as intended and pass after restoration. All 15 independent reviewers approved the source after three rounds: ten confirmed findings were resolved, and four originating withdrawals remain in the audit. Athena accepted that review evidence. The initial canonical gate found a missing report and sibling-test update; both are now supplied and preflight passes. Final review freshness, the full gate, and hosted checks remain pending.</p>
+      <p>A real-source textual audit selects 25 independent operator unit members with 4,138 inputs and 32 publishing-dependent members with 5,824 inputs. Adding a report preserves every independent identity; publishing-dependent membership grows to 34 with 5,825 inputs. This demonstrates planner identity stability for the characterized case, not measured test-execution savings or activated reuse.</p>
+      <p>Deployment and root alignment are pending. The committed report will be published through the normal Athena docs deployment after merge.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>How to extend this safely</h2>
+      <ul>
+        <li>Start with complete base and candidate inventories and honest semantic statuses. The snapshot owner must establish physical containment or bind validated symlink targets.</li>
+        <li>Add a direct consumer and an implicit or unsupported consumer to the same regression fixture. A known direct edge must not hide an omitted peer.</li>
+        <li>For a finite reader contract, pin its actual source and prove every cross-root input. Remove one guard or declared edge to ensure the sensor fails.</li>
+        <li>Inspect fallback reasons, input scope, and retained absence assertions alongside membership counts. Preserve genuine publishing-build dependencies.</li>
+        <li>Use the canonical preparation, independent review, and pr:athena gate before merge. Only the execution owner can bind installed dependencies, environment, toolchain, actual bytes, and passing results.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>scripts/harness-validation-impact.ts</code></td><td>Computes consumer selection, uncertain fallback, inputs, and unit partitions across both snapshots.</td></tr>
+        <tr><td><code>scripts/harness-app-registry.ts</code></td><td>Owns authored package and runtime dependency contracts, including exact reader guards.</td></tr>
+        <tr><td><code>scripts/harness-repo-validation.ts</code></td><td>Projects authored policy into canonical execution profiles and check declarations.</td></tr>
+        <tr><td><code>scripts/harness-validation-plan.ts</code></td><td>Accepts optional snapshots through the existing programmatic and CLI interfaces.</td></tr>
+        <tr><td><code>scripts/harness-validation-impact.test.ts</code></td><td>Proves dependency and fallback behavior, including mutation-sensitive real-source contracts.</td></tr>
+        <tr><td><code>docs/solutions/architecture-patterns/affected-consumers-and-input-soundness-2026-09-12.md</code></td><td>Records the distinction between affected membership and sound evidence inputs.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why inspect both source snapshots?</p>
+        <ol data-quiz-options>
+          <li>To compare formatting styles</li>
+          <li data-quiz-correct>To preserve consumers whose old dependency edge disappeared</li>
+          <li>To execute every test twice</li>
+        </ol>
+        <p data-quiz-explanation>The previous graph can retain a consumer after the candidate removes or redirects its import.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does a small selected membership prove?</p>
+        <ol data-quiz-options>
+          <li>Every selected test has equally small inputs</li>
+          <li>Old evidence is automatically reusable</li>
+          <li data-quiz-correct>Only that fewer members were selected; input soundness is a separate decision</li>
+        </ol>
+        <p data-quiz-explanation>A single unknown reader may require broad input binding despite narrow membership.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How should a report-only change be analyzed?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Resolve genuine consumers and relevant uncertainty before excluding unrelated tests</li>
+          <li>Skip all application tests immediately</li>
+          <li>Always run aggregate coverage</li>
+        </ol>
+        <p data-quiz-explanation>A shortcut can omit real report readers; consumer analysis distinguishes them from unrelated checks.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>When is a finite raw-reader contract qualified?</p>
+        <ol data-quiz-options>
+          <li>Whenever its filename is unchanged</li>
+          <li data-quiz-correct>While its actual source and required configuration guards match</li>
+          <li>After Graphify displays an edge</li>
+        </ol>
+        <p data-quiz-explanation>The exception is bound to characterized bytes and guards, not a label or navigation graph.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What happens when setup configuration cannot be resolved?</p>
+        <ol data-quiz-options>
+          <li>Select only tests importing that config</li>
+          <li>Ignore setup because it has no ordinary export</li>
+          <li data-quiz-correct>Retain full containing runner membership or block if no safe coverage exists</li>
+        </ol>
+        <p data-quiz-explanation>Runner setup can affect members implicitly even when one test also imports it directly.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why reject a shadowed convexTest name?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>The spelling does not prove it is the imported factory</li>
+          <li>Every nested function is prohibited</li>
+          <li>The module is necessarily malicious</li>
+        </ol>
+        <p data-quiz-explanation>Qualification depends on the binding; unsupported shadowing must preserve conservative coverage.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does the accumulated report audit establish?</p>
+        <ol data-quiz-options>
+          <li>Production validation is already faster</li>
+          <li data-quiz-correct>Independent planner identities stayed stable for the characterized source case</li>
+          <li>All future reports have zero validation cost</li>
+        </ol>
+        <p data-quiz-explanation>It is textual planner qualification, not an execution or timing claim.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why may publishing checks include application source?</p>
+        <ol data-quiz-options>
+          <li>Every report is application code</li>
+          <li>Input scope does not matter for publishing</li>
+          <li data-quiz-correct>The actual publishing command includes the application build</li>
+        </ol>
+        <p data-quiz-explanation>Removing genuine build inputs to manufacture narrow reuse would be unsound.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which regression fixture best detects an omitted consumer?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>A direct consumer plus a second implicit or unsupported consumer</li>
+          <li>Only a direct consumer</li>
+          <li>An assertion that the plan is nonempty</li>
+        </ol>
+        <p data-quiz-explanation>The mixed fixture prevents a known direct edge or generic fallback from masking the missing peer.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What remains beyond qualification delivery?</p>
+        <ol data-quiz-options>
+          <li>Nothing once the plan is valid JSON</li>
+          <li data-quiz-correct>Execution-owner activation and the separately recorded merge, alignment, deployment, and closeout gates</li>
+          <li>Automatically reuse every prior green test</li>
+        </ol>
+        <p data-quiz-explanation>A canonical plan is not execution evidence, and delivery events must be verified separately.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>report_diff / delivered-diff research</dt><dd>Inspected the staged delivered diff, runtime boundaries, generated artifacts, current focused results, and real-source qualification audit.</dd>
+      <dt>report_context / session-context research</dt><dd>Recovered accepted concurrent ownership, accumulated report-followup semantics, review history, and the full delivery finish line.</dd>
+      <dt>report_quiz / report and quiz review</dt><dd>Approved the explanation and all ten quiz questions with no findings; subsequent evidence and candidate metadata updates remain subject to final report review.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

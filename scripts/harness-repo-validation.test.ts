@@ -85,6 +85,61 @@ import { collectCanonicalValidationRegistry } from "./harness-repo-validation";
 import { buildValidationPlan } from "./harness-validation-plan";
 
 describe("derived canonical registry", () => {
+  it("retains guarded runtime readers and resolves their executable obligations", () => {
+    const registry = collectCanonicalValidationRegistry([]);
+    const docs = registry.impact?.relationships.find(
+      (relationship) => relationship.id === "docs-publishing",
+    );
+    expect(docs?.kind).toBe("data");
+    expect(docs?.lazyProducers?.[
+      "packages/athena-webapp/vite-docs-content-plugin.ts"
+    ]).toMatch(/^[a-f0-9]{64}$/);
+    expect(docs?.publishingChecks?.length).toBeGreaterThan(0);
+    for (const id of docs?.publishingChecks ?? []) {
+      expect(registry.checks.find((check) => check.id === id)?.profile).toBe(
+        "docs-publishing",
+      );
+    }
+    const styles = registry.impact?.relationships.find(
+      (relationship) => relationship.id === "athena-webapp-style-data",
+    );
+    expect(styles?.guards?.[
+      "packages/athena-webapp/tailwind.config.js"
+    ]).toMatch(/^[a-f0-9]{64}$/);
+    expect(styles?.boundedConsumers?.[
+      "packages/athena-webapp/src/index.css"
+    ]).toMatch(/^[a-f0-9]{64}$/);
+    const admission = registry.impact?.relationships.find(
+      (relationship) => relationship.id === "convex-function-admission",
+    );
+    expect(admission?.checks).toHaveLength(1);
+    expect(registry.checks.find((check) => check.id === admission?.checks?.[0])?.argv)
+      .toEqual(["/bin/sh", "-c", "bun scripts/convex-operation-admission-check.ts"]);
+  });
+  it("binds containing package fallbacks to executable suite, type and build checks", () => {
+    const registry = collectCanonicalValidationRegistry([
+      "packages/athena-webapp/src/example.test.ts",
+    ]);
+    const owner = registry.impact?.packages.find(
+      (entry) => entry.root === "packages/athena-webapp",
+    );
+    expect(owner).toBeDefined();
+    const fallbacks = (owner?.fallbackChecks ?? []).map((id) =>
+      registry.checks.find((check) => check.id === id),
+    );
+    expect(fallbacks.every(Boolean)).toBe(true);
+    for (const [profile, command] of [
+      ["fallback-suite", "test"],
+      ["package-types", "typecheck"],
+      ["package-build", "build"],
+    ]) {
+      const check = fallbacks.find((entry) =>
+        entry?.profile === `packages/athena-webapp:${profile}`,
+      );
+      expect(check?.cwd).toBe(".");
+      expect(check?.argv).toEqual(["bun", "run", "--filter", "@athena/webapp", command]);
+    }
+  });
   it("selects publishing obligations for a report without application coverage", () => {
     const registry = collectCanonicalValidationRegistry([
       "scripts/one.test.ts",

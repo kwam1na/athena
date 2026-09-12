@@ -1,15 +1,15 @@
 [
   {
     "reviewerId": "ce-correctness-reviewer",
-    "reason": "Always-on obligation, membership and health decision correctness"
+    "reason": "Always-on affected consumer and input declaration correctness"
   },
   {
     "reviewerId": "ce-testing-reviewer",
-    "reason": "Always-on regression and negative-control evidence"
+    "reason": "Always-on snapshot, fallback and source mutation negative controls"
   },
   {
     "reviewerId": "ce-maintainability-reviewer",
-    "reason": "Always-on maintainability of planner and health interfaces"
+    "reason": "Always-on maintainability of dependency resolution and authored policy"
   },
   {
     "reviewerId": "ce-project-standards-reviewer",
@@ -17,38 +17,38 @@
   },
   {
     "reviewerId": "ce-agent-native-reviewer",
-    "reason": "Human and machine planning parity"
+    "reason": "Human and machine read-only planning parity"
   },
   {
     "reviewerId": "ce-learnings-researcher",
-    "reason": "Reusable validation and trusted-health lessons"
+    "reason": "Reusable affected selection and input soundness lessons"
   },
   {
     "reviewerId": "ce-performance-reviewer",
-    "reason": "Inventory union and same-gate input capture cost"
+    "reason": "Base and candidate graph construction and closure costs"
   },
   {
     "reviewerId": "ce-api-contract-reviewer",
-    "reason": "Exported planner and health contracts"
+    "reason": "Exported snapshot, impact policy and canonical planner contracts"
   },
   {
     "reviewerId": "ce-reliability-reviewer",
-    "reason": "Health transport failures and evidence reuse guards"
+    "reason": "Conservative unknown dependency fallbacks and malformed input failures"
   },
   {
     "reviewerId": "ce-adversarial-reviewer",
-    "reason": "Substantial validation and admission-related source changes"
+    "reason": "Substantial dependency qualification and input trust boundary changes"
   },
   {
     "reviewerId": "ce-kieran-typescript-reviewer",
-    "reason": "TypeScript planner, health and executor changes"
+    "reason": "TypeScript AST resolver, registry and planner changes"
   },
   {
     "reviewerId": "ce-cli-readiness-reviewer",
-    "reason": "New read-only harness plan command"
+    "reason": "Read-only harness plan snapshot request and canonical output"
   },
   {
     "reviewerId": "ce-security-reviewer",
-    "reason": "Health artifact trust and candidate evidence boundaries"
+    "reason": "Untrusted snapshot paths, manifests and source-bound runtime exceptions"
   }
 ]
