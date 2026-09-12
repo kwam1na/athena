@@ -48,6 +48,7 @@ export const HARNESS_BLOCKER_CLI_INVENTORY = [
     file: "scripts/harness-self-review.ts",
     commands: ["harness:self-review"],
   },
+  { file: "scripts/harness-validation-plan.ts", commands: ["harness:plan"] },
   { file: "scripts/harness-test.ts", commands: ["harness:test"] },
   { file: "scripts/pre-push-review.ts", commands: ["pre-push:review"] },
   {

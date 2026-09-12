@@ -1431,3 +1431,51 @@ export function getHarnessPackageRegistration(packageDir: string) {
     (entry) => entry.packageDir === packageDir,
   );
 }
+
+/** Qualification contract; the live gate remains authoritative until explicit cutover. */
+export type CanonicalValidationCheck = {
+  id: string;
+  profile: string;
+  argv: string[];
+  cwd: string;
+  membership: string[];
+  inputs: string[];
+  absentInputs: string[];
+  prerequisites: string[];
+  supersedes: Array<{ checkId: string; profile: string; reason: string }>;
+};
+
+export type CanonicalValidationSurface = {
+  id: string;
+  pathPrefixes: string[];
+  checks: string[];
+  reason: string;
+};
+
+export type CanonicalValidationRegistry = {
+  schemaVersion: "athena-validation-registry/1";
+  checks: CanonicalValidationCheck[];
+  surfaces: CanonicalValidationSurface[];
+  alwaysRequired: string[];
+};
+
+export const VALIDATION_PLAN_POLICY = {
+  schemaVersion: "athena-validation-plan/1",
+  authority: "legacy-gate",
+  modes: ["delivery", "comparison", "full-health"],
+  sharedInputs: ["package.json", "bun.lockb", "bunfig.toml", "scripts/harness-app-registry.ts", "scripts/harness-validation-plan.ts"],
+  publishingPrefixes: ["docs/reports", "docs/solutions"],
+  publishingCommands: ["reports:presentation:check", "docs:links:check", "landed-report:check"],
+  fullHealthCommands: ["test:coverage", "harness:test", "workflow:check", "architecture:check", "harness:inferential-review", "graphify:check"],
+  // These profiles have different configuration/environment semantics even when files overlap.
+  distinctProfiles: ["unit", "aggregate-coverage", "timer-stress", "browser", "behavior"],
+} as const;
+
+/** Characterized runner membership, independent from impact selection. */
+export const VALIDATION_TEST_MEMBERSHIP = {
+  operatorUnit: /^packages\/athena-webapp\/(src|convex|shared)\/.*\.test\.(ts|tsx)$/,
+  storefrontUnit: /^packages\/storefront-webapp\/(?!node_modules\/|dist\/).*\.(test|spec)\.[cm]?[jt]sx?$/,
+  rootUnit: /^scripts\/[^/]+\.test\.ts$/,
+  operatorBrowser: /^packages\/athena-webapp\/src\/tests\/.*\.spec\.ts$/,
+  storefrontBrowser: /^packages\/storefront-webapp\/tests\/e2e\/.*\.e2e\.ts$/,
+} as const;

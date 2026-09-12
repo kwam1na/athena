@@ -96,6 +96,10 @@ async function createRealAuditFixtureDrift() {
       "packages/athena-webapp/scripts/convex-lint-changed.sh",
     ),
   );
+  await cp(
+    path.join(process.cwd(), "packages/athena-webapp/vitest.config.ts"),
+    path.join(rootDir, "packages/athena-webapp/vitest.config.ts"),
+  );
   await symlink(path.join(process.cwd(), "node_modules"), path.join(rootDir, "node_modules"));
 
   const registryPath = path.join(rootDir, "scripts/harness-app-registry.ts");

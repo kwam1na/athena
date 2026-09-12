@@ -40,17 +40,17 @@ afterEach(async () => {
 
 describe("HARNESS_BLOCKER_CLI_INVENTORY", () => {
   it("keeps every direct harness boundary in the explicit inventory", () => {
-    expect(HARNESS_BLOCKER_CLI_INVENTORY).toHaveLength(24);
+    expect(HARNESS_BLOCKER_CLI_INVENTORY).toHaveLength(25);
     expect(
       HARNESS_BLOCKER_CLI_INVENTORY.flatMap((entry) => entry.commands),
-    ).toHaveLength(33);
+    ).toHaveLength(34);
     expect(
       new Set(HARNESS_BLOCKER_CLI_INVENTORY.map((entry) => entry.file)).size,
-    ).toBe(24);
+    ).toBe(25);
     expect(
       new Set(HARNESS_BLOCKER_CLI_INVENTORY.flatMap((entry) => entry.commands))
         .size,
-    ).toBe(33);
+    ).toBe(34);
   });
 });
 

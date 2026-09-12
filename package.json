@@ -35,6 +35,7 @@
     "harness:scorecard": "bun scripts/harness-scorecard.ts",
     "harness:self-review": "bun scripts/harness-self-review.ts",
     "harness:review": "bun scripts/harness-review.ts",
+    "harness:plan": "bun scripts/harness-validation-plan.ts",
     "harness:test": "bun scripts/harness-test.ts",
     "harness:waive-documentation": "bun scripts/documentation-waiver-command.ts",
     "plan-html:check": "bun scripts/validate-plan-html.ts",

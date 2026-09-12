@@ -1,4 +1,345 @@
 {
+  "qualificationPlan": {
+    "schemaVersion": "athena-validation-plan/1",
+    "authority": "legacy-gate",
+    "modes": [
+      "delivery",
+      "comparison",
+      "full-health"
+    ],
+    "sharedInputs": [
+      "package.json",
+      "bun.lockb",
+      "bunfig.toml",
+      "scripts/harness-app-registry.ts",
+      "scripts/harness-validation-plan.ts"
+    ],
+    "publishingPrefixes": [
+      "docs/reports",
+      "docs/solutions"
+    ],
+    "publishingCommands": [
+      "reports:presentation:check",
+      "docs:links:check",
+      "landed-report:check"
+    ],
+    "fullHealthCommands": [
+      "test:coverage",
+      "harness:test",
+      "workflow:check",
+      "architecture:check",
+      "harness:inferential-review",
+      "graphify:check"
+    ],
+    "distinctProfiles": [
+      "unit",
+      "aggregate-coverage",
+      "timer-stress",
+      "browser",
+      "behavior"
+    ]
+  },
+  "qualificationSurfaces": [
+    {
+      "id": "valkey.service-logic-entrypoint",
+      "pathPrefixes": [
+        "packages/valkey-proxy-server/package.json",
+        "packages/valkey-proxy-server/README.md",
+        "packages/valkey-proxy-server/app.js",
+        "packages/valkey-proxy-server/app.test.js",
+        "packages/valkey-proxy-server/index.js"
+      ],
+      "checks": [
+        "athena.check.c7edf42bc28e8b2c",
+        "athena.check.d0b6b219f1779557",
+        "athena.check.d3af5e529de6d34f",
+        "athena.check.f9df93655e8a833c"
+      ],
+      "reason": "Use the local test suite and syntax checks when handler logic, operator docs, or runtime bootstrap changes."
+    },
+    {
+      "id": "valkey.live-connection-probe",
+      "pathPrefixes": [
+        "packages/valkey-proxy-server/test-connection.js"
+      ],
+      "checks": [
+        "athena.check.d3af5e529de6d34f",
+        "athena.check.f1507470f5d74666"
+      ],
+      "reason": "Keep the live Redis probe syntax-checked locally; run the environment-dependent connection probe manually when cluster access is available."
+    },
+    {
+      "id": "valkey-proxy-server.harness-docs",
+      "pathPrefixes": [
+        "packages/valkey-proxy-server/AGENTS.md",
+        "packages/valkey-proxy-server/docs/agent"
+      ],
+      "checks": [
+        "athena.check.cb2aab682811b706",
+        "athena.check.96b0048d84104798",
+        "athena.check.12c552bc88327273",
+        "athena.check.32384e7671ea4ece",
+        "athena.check.3a4daddebd50f316",
+        "athena.check.cfe25747f6857d61",
+        "athena.check.d9c7079c9a4ebaec"
+      ],
+      "reason": "Generated and authored package harness documentation contract"
+    }
+  ],
+  "qualificationChecks": [
+    {
+      "id": "athena.check.12c552bc88327273",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run harness:test"
+      ],
+      "cwd": ".",
+      "profile": ".:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.32384e7671ea4ece",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run workflow:check"
+      ],
+      "cwd": ".",
+      "profile": ".:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.3a4daddebd50f316",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run architecture:check"
+      ],
+      "cwd": ".",
+      "profile": ".:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.96b0048d84104798",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run test:coverage"
+      ],
+      "cwd": ".",
+      "profile": ".:aggregate-coverage",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.c7edf42bc28e8b2c",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "node --check packages/valkey-proxy-server/index.js"
+      ],
+      "cwd": ".",
+      "profile": "packages/valkey-proxy-server:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.cb2aab682811b706",
+      "argv": [
+        "bun",
+        "run",
+        "harness:check"
+      ],
+      "cwd": ".",
+      "profile": "plan-integrity",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.cfe25747f6857d61",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run harness:inferential-review"
+      ],
+      "cwd": ".",
+      "profile": ".:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.d0b6b219f1779557",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "node --check packages/valkey-proxy-server/app.js"
+      ],
+      "cwd": ".",
+      "profile": "packages/valkey-proxy-server:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.d3af5e529de6d34f",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run --filter 'valkey-proxy-server' test"
+      ],
+      "cwd": ".",
+      "profile": "packages/valkey-proxy-server:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.d9c7079c9a4ebaec",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run graphify:check"
+      ],
+      "cwd": ".",
+      "profile": ".:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.f1507470f5d74666",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "node --check packages/valkey-proxy-server/test-connection.js"
+      ],
+      "cwd": ".",
+      "profile": "packages/valkey-proxy-server:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.f9df93655e8a833c",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run harness:behavior -- --scenario valkey-proxy-local-request-response"
+      ],
+      "cwd": ".",
+      "profile": ".:behavior",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    }
+  ],
   "workspace": "valkey-proxy-server",
   "packageDir": "packages/valkey-proxy-server",
   "surfaces": [

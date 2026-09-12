@@ -1,4 +1,586 @@
 {
+  "qualificationPlan": {
+    "schemaVersion": "athena-validation-plan/1",
+    "authority": "legacy-gate",
+    "modes": [
+      "delivery",
+      "comparison",
+      "full-health"
+    ],
+    "sharedInputs": [
+      "package.json",
+      "bun.lockb",
+      "bunfig.toml",
+      "scripts/harness-app-registry.ts",
+      "scripts/harness-validation-plan.ts"
+    ],
+    "publishingPrefixes": [
+      "docs/reports",
+      "docs/solutions"
+    ],
+    "publishingCommands": [
+      "reports:presentation:check",
+      "docs:links:check",
+      "landed-report:check"
+    ],
+    "fullHealthCommands": [
+      "test:coverage",
+      "harness:test",
+      "workflow:check",
+      "architecture:check",
+      "harness:inferential-review",
+      "graphify:check"
+    ],
+    "distinctProfiles": [
+      "unit",
+      "aggregate-coverage",
+      "timer-stress",
+      "browser",
+      "behavior"
+    ]
+  },
+  "qualificationSurfaces": [
+    {
+      "id": "storefront.route-ui",
+      "pathPrefixes": [
+        "packages/storefront-webapp/src/assets",
+        "packages/storefront-webapp/src/config.ts",
+        "packages/storefront-webapp/src/index.css",
+        "packages/storefront-webapp/src/routes",
+        "packages/storefront-webapp/src/components",
+        "packages/storefront-webapp/src/hooks",
+        "packages/storefront-webapp/src/contexts"
+      ],
+      "checks": [
+        "storefront.route-ui.check-0"
+      ],
+      "reason": "Start here for most layout, component, and route behavior changes that do not alter the checkout or browser-journey contract."
+    },
+    {
+      "id": "storefront.route-runtime-build",
+      "pathPrefixes": [
+        "packages/storefront-webapp/index.html",
+        "packages/storefront-webapp/package.json",
+        "packages/storefront-webapp/tsconfig.json",
+        "packages/storefront-webapp/bunfig.toml",
+        "packages/storefront-webapp/src/main.tsx",
+        "packages/storefront-webapp/src/router.tsx",
+        "packages/storefront-webapp/src/routeTree.gen.ts",
+        "packages/storefront-webapp/vitest.config.ts",
+        "packages/storefront-webapp/vite.config.ts"
+      ],
+      "checks": [
+        "athena.check.008d93fdb515038d",
+        "athena.check.6cc612707b6d6a15",
+        "athena.check.c86b0d30abcdc9c5",
+        "storefront.route-runtime-build.check-0"
+      ],
+      "reason": "Use this when the Vite browser bootstrap, package manifest, generated router state, or TypeScript/build wiring changes. `bunfig.toml` only preloads the repo-root `bun test` runner guard, so a change there must still leave the package Vitest suite running normally."
+    },
+    {
+      "id": "storefront.shared-lib-api-wrapper",
+      "pathPrefixes": [
+        "packages/storefront-webapp/src/lib",
+        "packages/storefront-webapp/src/utils",
+        "packages/storefront-webapp/src/api"
+      ],
+      "checks": [
+        "athena.check.008d93fdb515038d",
+        "athena.check.6cc612707b6d6a15",
+        "storefront.shared-lib-api-wrapper.check-0"
+      ],
+      "reason": "These surfaces fan out widely across the app, so pair the default suite with a typecheck when shared helpers change."
+    },
+    {
+      "id": "storefront.checkout-auth-boundary",
+      "pathPrefixes": [
+        "packages/storefront-webapp/src/routes/shop/checkout",
+        "packages/storefront-webapp/src/components/checkout",
+        "packages/storefront-webapp/src/routes/auth.verify.tsx"
+      ],
+      "checks": [
+        "athena.check.098b281e11d36335",
+        "athena.check.f20a8341dbe96c35",
+        "storefront.checkout-auth-boundary.check-0"
+      ],
+      "reason": "Use the scoped architecture lint when lower-level helpers could accidentally depend on checkout or auth route entrypoints."
+    },
+    {
+      "id": "storefront.payment-redirect-journeys",
+      "pathPrefixes": [
+        "packages/storefront-webapp/playwright.config.ts",
+        "packages/storefront-webapp/tests/e2e",
+        "packages/storefront-webapp/src/routes/shop/checkout"
+      ],
+      "checks": [
+        "athena.check.76d765da67a9fe11",
+        "athena.check.c8b7e2913b7845c8",
+        "athena.check.ee6b3f65ff797a9d",
+        "athena.check.f20a8341dbe96c35",
+        "storefront.payment-redirect-journeys.check-0"
+      ],
+      "reason": "Run the Playwright layer when navigation, checkout, or redirect behavior could change the end-to-end customer path."
+    },
+    {
+      "id": "storefront-webapp.harness-docs",
+      "pathPrefixes": [
+        "packages/storefront-webapp/AGENTS.md",
+        "packages/storefront-webapp/docs/agent"
+      ],
+      "checks": [
+        "athena.check.cb2aab682811b706",
+        "athena.check.96b0048d84104798",
+        "athena.check.12c552bc88327273",
+        "athena.check.32384e7671ea4ece",
+        "athena.check.3a4daddebd50f316",
+        "athena.check.cfe25747f6857d61",
+        "athena.check.d9c7079c9a4ebaec"
+      ],
+      "reason": "Generated and authored package harness documentation contract"
+    }
+  ],
+  "qualificationChecks": [
+    {
+      "id": "athena.check.008d93fdb515038d",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run harness:behavior -- --scenario storefront-backend-first-load"
+      ],
+      "cwd": ".",
+      "profile": ".:behavior",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.098b281e11d36335",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run --filter '@athena/storefront-webapp' lint:architecture"
+      ],
+      "cwd": ".",
+      "profile": "packages/storefront-webapp:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.12c552bc88327273",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run harness:test"
+      ],
+      "cwd": ".",
+      "profile": ".:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.32384e7671ea4ece",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run workflow:check"
+      ],
+      "cwd": ".",
+      "profile": ".:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.3a4daddebd50f316",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run architecture:check"
+      ],
+      "cwd": ".",
+      "profile": ".:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.6cc612707b6d6a15",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json"
+      ],
+      "cwd": ".",
+      "profile": "packages/storefront-webapp:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.76d765da67a9fe11",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run --filter '@athena/storefront-webapp' test:e2e"
+      ],
+      "cwd": ".",
+      "profile": "packages/storefront-webapp:browser",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.96b0048d84104798",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run test:coverage"
+      ],
+      "cwd": ".",
+      "profile": ".:aggregate-coverage",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.c86b0d30abcdc9c5",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run --filter '@athena/storefront-webapp' build"
+      ],
+      "cwd": ".",
+      "profile": "packages/storefront-webapp:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.c8b7e2913b7845c8",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run harness:behavior -- --scenario storefront-checkout-verification-recovery"
+      ],
+      "cwd": ".",
+      "profile": ".:behavior",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.cb2aab682811b706",
+      "argv": [
+        "bun",
+        "run",
+        "harness:check"
+      ],
+      "cwd": ".",
+      "profile": "plan-integrity",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.cfe25747f6857d61",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run harness:inferential-review"
+      ],
+      "cwd": ".",
+      "profile": ".:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.d9c7079c9a4ebaec",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run graphify:check"
+      ],
+      "cwd": ".",
+      "profile": ".:command",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.ee6b3f65ff797a9d",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run harness:behavior -- --scenario storefront-checkout-validation-blocker"
+      ],
+      "cwd": ".",
+      "profile": ".:behavior",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.f20a8341dbe96c35",
+      "argv": [
+        "/bin/sh",
+        "-c",
+        "bun run harness:behavior -- --scenario storefront-checkout-bootstrap"
+      ],
+      "cwd": ".",
+      "profile": ".:behavior",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "storefront.checkout-auth-boundary.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/storefront-webapp",
+      "profile": "packages/storefront-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/storefront-webapp/package.json",
+        "packages/storefront-webapp/tsconfig.json",
+        "packages/storefront-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "storefront.payment-redirect-journeys.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/storefront-webapp",
+      "profile": "packages/storefront-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/storefront-webapp/package.json",
+        "packages/storefront-webapp/tsconfig.json",
+        "packages/storefront-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "storefront.route-runtime-build.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/storefront-webapp",
+      "profile": "packages/storefront-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/storefront-webapp/package.json",
+        "packages/storefront-webapp/tsconfig.json",
+        "packages/storefront-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "storefront.route-ui.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/storefront-webapp",
+      "profile": "packages/storefront-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/storefront-webapp/package.json",
+        "packages/storefront-webapp/tsconfig.json",
+        "packages/storefront-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "storefront.shared-lib-api-wrapper.check-0",
+      "argv": [
+        "bun",
+        "run",
+        "test",
+        "--"
+      ],
+      "cwd": "packages/storefront-webapp",
+      "profile": "packages/storefront-webapp:unit",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/storefront-webapp/package.json",
+        "packages/storefront-webapp/tsconfig.json",
+        "packages/storefront-webapp/vitest.config.ts",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    }
+  ],
   "workspace": "@athena/storefront-webapp",
   "packageDir": "packages/storefront-webapp",
   "surfaces": [

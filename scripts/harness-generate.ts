@@ -6,7 +6,9 @@ import {
   type HarnessAppRegistryEntry,
   type ValidationCommand,
   GENERATED_HARNESS_DOCS,
+  VALIDATION_PLAN_POLICY,
 } from "./harness-app-registry";
+import { collectCanonicalValidationRegistry } from "./harness-repo-validation";
 import { runHarnessCliBoundary } from "./harness-blockers";
 
 const GENERATED_DOC_NOTICE =
@@ -352,7 +354,13 @@ function toGeneratedValidationMap(
   config: HarnessAppRegistryEntry,
   packageConfig: PackageConfig,
 ) {
+  const canonical = collectCanonicalValidationRegistry([]);
+  const qualificationSurfaces = canonical.surfaces.filter(surface => surface.pathPrefixes.some(prefix => prefix.startsWith(`${config.packageDir}/`)));
+  const checkIds = new Set(qualificationSurfaces.flatMap(surface => surface.checks));
   return {
+    qualificationPlan: VALIDATION_PLAN_POLICY,
+    qualificationSurfaces,
+    qualificationChecks: canonical.checks.filter(check => checkIds.has(check.id)),
     workspace: packageConfig.packageName,
     packageDir: config.packageDir,
     surfaces: [
@@ -535,6 +543,9 @@ async function buildValidationGuide(
   packageConfig: PackageConfig,
 ) {
   const bodyLines = [
+    "Read-only canonical planning: `bun run harness:plan -- --input <request.json> [--json | --text]`; use `--help` for request fields. Piped output defaults to JSON. Modes: delivery, comparison, full-health. The legacy gate remains authoritative; the plan does not execute checks or authorize evidence reuse.",
+    "Same-profile overlapping test membership is unioned. Coverage, timer-stress and browser profiles remain distinct. Full-health selects the complete registered inventory even with no changes. Invalid maps, prerequisites and uncovered inputs block planning.",
+    "",
     "Use this decision guide to answer “what should I run for this change?” based on the surface you touched.",
     "",
   ];
