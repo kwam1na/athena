@@ -543,7 +543,7 @@ async function buildValidationGuide(
   packageConfig: PackageConfig,
 ) {
   const bodyLines = [
-    "Read-only canonical planning: `bun run harness:plan -- --input <request.json> [--json]`. Modes: delivery, comparison, full-health. The legacy gate remains authoritative; the plan does not execute checks or authorize evidence reuse.",
+    "Read-only canonical planning: `bun run harness:plan -- --input <request.json> [--json | --text]`; use `--help` for request fields. Piped output defaults to JSON. Modes: delivery, comparison, full-health. The legacy gate remains authoritative; the plan does not execute checks or authorize evidence reuse.",
     "Same-profile overlapping test membership is unioned. Coverage, timer-stress and browser profiles remain distinct. Full-health selects the complete registered inventory even with no changes. Invalid maps, prerequisites and uncovered inputs block planning.",
     "",
     "Use this decision guide to answer “what should I run for this change?” based on the surface you touched.",

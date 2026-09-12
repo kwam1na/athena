@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdtemp, mkdir, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -1374,10 +1374,21 @@ describe("same-gate coverage invalidation", () => {
     return { steps, logs };
   }
 
-  it.each(["source", "base", "config", "lockfile", "dependency", "environment"])("executes when %s changes during coverage", async kind => {
+  it.each(["source", "restored-source", "base", "config", "lockfile", "dependency", "environment"])("executes when %s changes during coverage", async kind => {
     const root = await createCoverageFixture();
+    if (kind === "restored-source") {
+      const timestamp = new Date("2020-01-01T00:00:00Z");
+      await utimes(path.join(root, "packages/athena-webapp/src/app.ts"), timestamp, timestamp);
+    }
     const result = await exercise(root, async () => {
-      if (kind === "base") runGit(root, ["commit", "--allow-empty", "-m", "base moved"]);
+      if (kind === "restored-source") {
+        const file = "packages/athena-webapp/src/app.ts";
+        const original = await readFile(path.join(root, file), "utf8");
+        await write(file, "temporary source while coverage runs", root);
+        await write(file, original, root);
+        const timestamp = new Date("2020-01-01T00:00:00Z");
+        await utimes(path.join(root, file), timestamp, timestamp);
+      } else if (kind === "base") runGit(root, ["commit", "--allow-empty", "-m", "base moved"]);
       else if (kind === "config") await write("packages/athena-webapp/vitest.config.ts", "export default {};", root);
       else if (kind === "dependency") await write("node_modules/vitest/package.json", '{"version":"changed"}', root);
       else if (kind === "environment") await write(".env.local", "SENTINEL_SECRET=never-log-this-value", root);
@@ -1394,6 +1405,83 @@ describe("same-gate coverage invalidation", () => {
   it("executes with incomplete or customized coverage rather than inferring a full pass", async () => {
     const root = await createCoverageFixture();
     await write("package.json", JSON.stringify({ scripts: { "test:coverage": "vitest run --coverage src/one.test.ts" } }), root);
+    runGit(root, ["add", "."]);
+    const result = await exercise(root);
+    expect(result.steps).toContain("@athena/webapp:test");
+    expect(result.logs).toContain("Webapp test execute: unqualified-coverage-profile");
+  });
+
+  it("executes with a stable alternate Vitest config staged before coverage", async () => {
+    const root = await createCoverageFixture();
+    await write("packages/athena-webapp/vitest.config.ts", 'export default { test: { include: ["src/only.test.ts"] } };', root);
+    runGit(root, ["add", "."]);
+    const result = await exercise(root);
+    expect(result.steps).toContain("@athena/webapp:test");
+    expect(result.logs).toContain("Webapp test execute: unqualified-coverage-profile");
+  });
+
+  it("rejects dependency links outside the captured checkout", async () => {
+    const root = await createCoverageFixture();
+    const external = await mkdtemp(path.join(tmpdir(), "athena-external-dependency-"));
+    tempRoots.push(external);
+    await writeFile(path.join(external, "package.json"), '{"version":"4.1.11"}');
+    await symlink(external, path.join(root, "node_modules", "external-package"));
+    const result = await exercise(root);
+    expect(result.steps).toContain("@athena/webapp:test");
+    expect(result.logs).toContain("Webapp test execute: coverage-inputs-unavailable");
+  });
+
+  it("accepts an unchanged dependency link contained in the checkout", async () => {
+    const root = await createCoverageFixture();
+    await symlink("vitest", path.join(root, "node_modules", "contained-package"));
+    const result = await exercise(root);
+    expect(result.steps).not.toContain("@athena/webapp:test");
+    expect(result.logs.some(line => line.startsWith("Webapp test reuse:"))).toBe(true);
+  });
+
+  it("rejects dependency mutation even after bytes and mtime are restored", async () => {
+    const root = await createCoverageFixture();
+    const dependency = path.join(root, "node_modules/vitest/package.json");
+    const original = await readFile(dependency);
+    const originalTime = new Date("2020-01-01T00:00:00Z");
+    await utimes(dependency, originalTime, originalTime);
+    const before = await lstat(dependency, { bigint: true });
+    const result = await exercise(root, async () => {
+      await writeFile(dependency, "temporary dependency during coverage");
+      await writeFile(dependency, original);
+      await utimes(dependency, originalTime, originalTime);
+    });
+    const after = await lstat(dependency, { bigint: true });
+    expect(await readFile(dependency)).toEqual(original);
+    expect(after.mtimeNs).toBe(before.mtimeNs);
+    expect(after.ctimeNs).not.toBe(before.ctimeNs);
+    expect(result.steps).toContain("@athena/webapp:test");
+    expect(result.logs).toContain("Webapp test execute: source-base-toolchain-or-dependencies-changed");
+  });
+
+  it("rejects ignored environment-file changes even when values and mtime are restored", async () => {
+    const root = await createCoverageFixture();
+    const environmentFile = path.join(root, ".env.local");
+    const original = "FEATURE_FLAG=original";
+    const timestamp = new Date("2020-01-01T00:00:00Z");
+    await writeFile(environmentFile, original);
+    await utimes(environmentFile, timestamp, timestamp);
+    const result = await exercise(root, async () => {
+      await writeFile(environmentFile, "FEATURE_FLAG=temporary");
+      await writeFile(environmentFile, original);
+      await utimes(environmentFile, timestamp, timestamp);
+    });
+    expect(result.steps).toContain("@athena/webapp:test");
+    expect(result.logs).toContain("Webapp test execute: execution-environment-changed");
+    expect(result.logs.join("\n")).not.toContain("FEATURE_FLAG");
+  });
+
+  it.each(["pretest", "posttest"])("does not skip a stable %s lifecycle obligation", async hook => {
+    const root = await createCoverageFixture();
+    const appPath = "packages/athena-webapp/package.json";
+    const app = JSON.parse(await readFile(path.join(root, appPath), "utf8"));
+    app.scripts[hook] = "echo additional ordinary-suite obligation";
+    await write(appPath, JSON.stringify(app), root);
     runGit(root, ["add", "."]);
     const result = await exercise(root);
     expect(result.steps).toContain("@athena/webapp:test");

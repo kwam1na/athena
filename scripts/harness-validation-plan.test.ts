@@ -197,4 +197,39 @@ describe("read-only planning interface", () => {
     b.supersedes=[{checkId:"c",profile:"unit",reason:"equivalent"}];
     expect(()=>buildValidationPlan(registry([a,b,c]),[],"full-health")).toThrow("Supersession");
   });
+  it("retains a prerequisite targeted by otherwise valid supersession", () => {
+    const a=check("a"), b=check("b");
+    a.prerequisites=["b"];
+    a.supersedes=[{checkId:"b",profile:"unit",reason:"Equivalent members"}];
+    const plan=buildValidationPlan(registry([a,b]),[change("src/a")]);
+    expect(plan.checks.map(check=>check.id)).toContain("b");
+    expect(plan.checks.find(check=>check.id==="a")?.prerequisites).toEqual(["b"]);
+  });
+  it("rejects non-string and blank supersession explanations", () => {
+    for (const reason of [{unexpected:true},42,"   "]) {
+      const a=check("a"), b=check("b");
+      a.supersedes=[{checkId:"b",profile:"unit",reason:reason as string}];
+      expect(()=>buildValidationPlan(registry([a,b]),[],"full-health")).toThrow("Supersession");
+    }
+  });
+  it("provides help without an input file", async () => {
+    for (const flag of ["--help","-h"]) {
+      const output:string[]=[];
+      await runValidationPlanCli([flag],text=>output.push(text));
+      expect(output.join("\n")).toContain("full-health");
+      expect(output.join("\n")).toContain("inventory");
+      expect(output.join("\n")).toContain("changes");
+    }
+  });
+  it("defaults piped output to JSON and allows explicit text", async () => {
+    const output:string[]=[];
+    const args=["--input","scripts/fixtures/affected-validation/planner/report-request.json"];
+    await runValidationPlanCli(args,text=>output.push(text),{stdoutIsTTY:false});
+    expect(JSON.parse(output.pop()!).schemaVersion).toBe("athena-validation-plan/1");
+    await runValidationPlanCli([...args,"--text"],text=>output.push(text),{stdoutIsTTY:false});
+    expect(output.pop()).toStartWith("Validation plan ");
+    await runValidationPlanCli(args,text=>output.push(text),{stdoutIsTTY:true});
+    expect(output.pop()).toStartWith("Validation plan ");
+    await expect(runValidationPlanCli([...args,"--text","--json"])).rejects.toMatchObject({code:"malformed-map"});
+  });
 });

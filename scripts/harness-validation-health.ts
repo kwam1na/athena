@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
+import { spawn } from "node:child_process";
+import { closeSync, openSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-
-import { requestGitHubJson } from "./delivery-documentation-admission";
 
 /** Qualification contract only. Call again at admission; never persist an eligible
  * decision as authorization for another candidate, profile, or health revision.
@@ -100,6 +100,7 @@ export type HealthDecision = {
   recovery?: { mode: "full-health"; retainFindings: true };
 };
 export const HEALTH_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+export const HEALTH_READ_TIMEOUT_MS = 30_000;
 
 function covers(outer: HealthScope, inner: HealthScope): boolean {
   if (outer.kind === "repo") return true;
@@ -398,15 +399,22 @@ export type HealthClassification = {
   revalidationRunId?: number;
 };
 export type HealthReaderOptions = {
+  /** Total wall-clock budget, including approval and artifact reads (1–60000ms). */
+  timeoutMs?: number;
   /** Trusted host capability verifying maintainer approval for this exact
    * classification on pinned main. Main membership alone is not approval.
    * Missing/false capability preserves conservative scope and global findings. */
   verifyClassificationApproval?: (
     classification: HealthClassification,
     pinnedMainSha: string,
+    signal?: AbortSignal,
   ) => Promise<boolean>;
-  requestJson?: (endpoint: string) => Promise<unknown>;
-  loadArtifact?: (repository: string, artifactId: number) => Promise<unknown>;
+  requestJson?: (endpoint: string, signal?: AbortSignal) => Promise<unknown>;
+  loadArtifact?: (
+    repository: string,
+    artifactId: number,
+    signal?: AbortSignal,
+  ) => Promise<unknown>;
   previous?: HealthSnapshot;
   now?: number;
 };
@@ -418,8 +426,31 @@ export async function readValidationHealth(
   policy: HealthPolicy,
   options: HealthReaderOptions = {},
 ): Promise<HealthSnapshot> {
-  const request = options.requestJson ?? requestGitHubJson;
-  const load = options.loadArtifact ?? loadHealthArtifact;
+  const controller = new AbortController();
+  const signal = controller.signal;
+  const timeoutMs = options.timeoutMs ?? HEALTH_READ_TIMEOUT_MS;
+  const validTimeout =
+    Number.isFinite(timeoutMs) && timeoutMs >= 1 && timeoutMs <= 60_000;
+  const deadline = setTimeout(
+    () => controller.abort(),
+    validTimeout ? timeoutMs : HEALTH_READ_TIMEOUT_MS,
+  );
+  const request = options.requestJson
+    ? (endpoint: string) =>
+        abortable(() => options.requestJson!(endpoint, signal), signal)
+    : async (endpoint: string) => {
+        const result = await runHealthProcess(["gh", "api", endpoint], signal);
+        if (result.exitCode !== 0) throw new HealthReadError("api-unavailable");
+        return JSON.parse(result.stdout.toString("utf8")) as unknown;
+      };
+  const load = options.loadArtifact
+    ? (repository: string, artifactId: number) =>
+        abortable(
+          () => options.loadArtifact!(repository, artifactId, signal),
+          signal,
+        )
+    : (repository: string, artifactId: number) =>
+        loadHealthArtifact(repository, artifactId, signal);
   const now = options.now ?? Date.now();
   const findings = new Map(
     (options.previous?.findings ?? []).map((f) => [
@@ -439,6 +470,7 @@ export async function readValidationHealth(
   let mainSha: string | undefined;
   const bindings: unknown[] = [];
   try {
+    if (!validTimeout) throw new HealthReadError("invalid-health");
     if (
       !/^[\w.-]+\/[\w.-]+$/.test(policy.repository) ||
       !nonEmpty(policy.defaultBranch) ||
@@ -525,15 +557,7 @@ export async function readValidationHealth(
     if (runs.length === 0) throw new HealthReadError("missing-seed");
     lastAttempt = runResult(runs[0]);
     const observed = new Map<number, { run: Run; digest: HealthDigest }>();
-    // Newer partial attempts can report failures; the first complete digest
-    // provides the cumulative history. Do not read expired older superseded
-    // artifacts merely to rediscover already-carried history.
-    for (const run of runs) {
-      if (
-        run.status !== "completed" ||
-        !["success", "failure"].includes(run.conclusion ?? "")
-      )
-        continue;
+    const readRunDigest = async (run: Run): Promise<HealthDigest> => {
       const artifacts = await request(
         `${base}/actions/runs/${run.id}/artifacts?per_page=100`,
       );
@@ -570,6 +594,18 @@ export async function readValidationHealth(
         artifactId: artifact.id,
         digest,
       });
+      return digest;
+    };
+    // Newer partial attempts can report failures; the first complete digest
+    // provides the cumulative history. Do not read expired older superseded
+    // artifacts merely to rediscover already-carried history.
+    for (const run of runs) {
+      if (
+        run.status !== "completed" ||
+        !["success", "failure"].includes(run.conclusion ?? "")
+      )
+        continue;
+      const digest = await readRunDigest(run);
       for (const f of digest.findings) {
         const existing = findings.get(f.id);
         // API observations may arrive out of order. Never roll a retained
@@ -604,13 +640,38 @@ export async function readValidationHealth(
       );
       if (
         !approval ||
-        (await options.verifyClassificationApproval?.(approval, mainSha)) !==
-          true
+        !options.verifyClassificationApproval ||
+        (await abortable(
+          () =>
+            options.verifyClassificationApproval!(approval, mainSha!, signal),
+          signal,
+        )) !== true
       )
         continue;
       if (approval.scope) finding.scope = approval.scope;
-      const revalidation =
-        approval.revalidationRunId && observed.get(approval.revalidationRunId);
+      if (
+        !approval.revalidationRunId ||
+        approval.revalidationRunId <= finding.runId
+      )
+        continue;
+      let revalidation = observed.get(approval.revalidationRunId);
+      if (!revalidation) {
+        const historical: unknown =
+          runs.find((run) => run.id === approval.revalidationRunId) ??
+          (await request(`${base}/actions/runs/${approval.revalidationRunId}`));
+        if (
+          !trustedRun(historical, policy) ||
+          historical.id !== approval.revalidationRunId ||
+          historical.status !== "completed" ||
+          !["success", "failure"].includes(historical.conclusion ?? "")
+        ) {
+          throw new HealthReadError("invalid-health");
+        }
+        revalidation = {
+          run: historical,
+          digest: await readRunDigest(historical),
+        };
+      }
       if (
         revalidation &&
         revalidation.run.id > finding.runId &&
@@ -654,6 +715,8 @@ export async function readValidationHealth(
   } catch (error) {
     availability =
       error instanceof HealthReadError ? error.availability : "api-unavailable";
+  } finally {
+    clearTimeout(deadline);
   }
   const retained = [...findings.values()].sort((a, b) =>
     a.id.localeCompare(b.id),
@@ -678,44 +741,105 @@ export async function readValidationHealth(
   };
 }
 
+function abortable<T>(
+  operation: () => Promise<T>,
+  signal: AbortSignal,
+): Promise<T> {
+  if (signal.aborted)
+    return Promise.reject(new HealthReadError("api-unavailable"));
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(new HealthReadError("api-unavailable"));
+    signal.addEventListener("abort", abort, { once: true });
+    Promise.resolve()
+      .then(operation)
+      .then(
+        (value) => {
+          signal.removeEventListener("abort", abort);
+          resolve(value);
+        },
+        (error) => {
+          signal.removeEventListener("abort", abort);
+          reject(error);
+        },
+      );
+  });
+}
+
+/** Own and reap the process group before returning on cancellation. Download
+ * output can go directly to a temporary archive without buffering the ZIP. */
+export async function runHealthProcess(
+  command: string[],
+  signal: AbortSignal,
+  stdoutPath?: string,
+): Promise<{ exitCode: number | null; stdout: Buffer }> {
+  if (signal.aborted) throw new HealthReadError("api-unavailable");
+  const output =
+    stdoutPath === undefined ? undefined : openSync(stdoutPath, "w");
+  try {
+    const child = spawn(command[0], command.slice(1), {
+      detached: process.platform !== "win32",
+      stdio: ["ignore", output ?? "pipe", "pipe"],
+      env: {
+        ...process.env,
+        ...(process.env.GITHUB_TOKEN && !process.env.GH_TOKEN
+          ? { GH_TOKEN: process.env.GITHUB_TOKEN }
+          : {}),
+      },
+    });
+    return await new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      child.stdout?.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+      child.stderr?.resume();
+      const abort = () => {
+        try {
+          if (child.pid && process.platform !== "win32")
+            process.kill(-child.pid, "SIGKILL");
+          else child.kill("SIGKILL");
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ESRCH")
+            child.kill("SIGKILL");
+        }
+      };
+      signal.addEventListener("abort", abort, { once: true });
+      child.once("error", (error) => {
+        signal.removeEventListener("abort", abort);
+        reject(error);
+      });
+      child.once("close", (exitCode) => {
+        signal.removeEventListener("abort", abort);
+        if (signal.aborted) reject(new HealthReadError("api-unavailable"));
+        else resolve({ exitCode, stdout: Buffer.concat(chunks) });
+      });
+      if (signal.aborted) abort();
+    });
+  } finally {
+    if (output !== undefined) closeSync(output);
+  }
+}
+
 async function loadHealthArtifact(
   repository: string,
   artifactId: number,
+  signal: AbortSignal,
 ): Promise<unknown> {
   const directory = await mkdtemp(path.join(tmpdir(), "athena-health-"));
   try {
     const archive = path.join(directory, "health.zip");
-    const download = Bun.spawn(
+    const download = await runHealthProcess(
       ["gh", "api", `/repos/${repository}/actions/artifacts/${artifactId}/zip`],
-      {
-        stdout: Bun.file(archive),
-        stderr: "pipe",
-        env: {
-          ...process.env,
-          ...(process.env.GITHUB_TOKEN && !process.env.GH_TOKEN
-            ? { GH_TOKEN: process.env.GITHUB_TOKEN }
-            : {}),
-        },
-      },
+      signal,
+      archive,
     );
-    const [, exitCode] = await Promise.all([
-      new Response(download.stderr).text(),
-      download.exited,
-    ]);
-    if (exitCode !== 0) throw new HealthReadError("artifact-unavailable");
+    if (download.exitCode !== 0)
+      throw new HealthReadError("artifact-unavailable");
     // Read one fixed member to stdout; never extract paths supplied by a ZIP.
-    const unzip = Bun.spawn(["unzip", "-p", archive, "health.json"], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    const [json, , code] = await Promise.all([
-      new Response(unzip.stdout).text(),
-      new Response(unzip.stderr).text(),
-      unzip.exited,
-    ]);
-    if (code !== 0) throw new HealthReadError("artifact-unavailable");
+    const unzip = await runHealthProcess(
+      ["unzip", "-p", archive, "health.json"],
+      signal,
+    );
+    if (unzip.exitCode !== 0) throw new HealthReadError("artifact-unavailable");
     try {
-      return JSON.parse(json);
+      return JSON.parse(unzip.stdout.toString("utf8"));
     } catch {
       throw new HealthReadError("invalid-health");
     }

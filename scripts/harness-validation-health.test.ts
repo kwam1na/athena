@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import fixturePolicy from "./fixtures/affected-validation/health/policy.json";
 import fixtureDigest from "./fixtures/affected-validation/health/failed-digest.json";
 import {
   evaluateValidationHealth,
   readValidationHealth,
+  runHealthProcess,
   type HealthSnapshot,
   type HealthPolicy,
   type RepairProof,
@@ -699,3 +703,250 @@ test("main membership without independent approval capability cannot narrow or c
   });
   expect(health.closedFindings).toHaveLength(0);
 });
+
+test("approved historical revalidation stays closed after a newer complete run and on a fresh read", async () => {
+  const base = source({
+    runs: [run(11, { conclusion: "success" })],
+    classification: {
+      schemaVersion: "athena-health-classifications/1",
+      entries: [
+        {
+          findingId: "failure-1",
+          findingRevision: "failure-r1",
+          reference: "main:approved-repair",
+          revalidationRunId: 10,
+        },
+      ],
+    },
+  });
+  const fixture = {
+    ...base,
+    requestJson: async (url: string): Promise<unknown> => {
+      if (url.endsWith("/actions/runs/10"))
+        return run(10, { conclusion: "success" });
+      const match = url.match(/\/actions\/runs\/(10|11)\/artifacts/);
+      if (match) {
+        const runId = Number(match[1]);
+        return {
+          total_count: 1,
+          artifacts: [
+            {
+              id: runId * 10,
+              name: policy.artifactName,
+              expired: false,
+              workflow_run: { id: runId, head_sha: sha },
+            },
+          ],
+        };
+      }
+      return base.requestJson(url);
+    },
+    loadArtifact: async (_repository: string, artifactId: number) =>
+      digest({
+        runId: artifactId / 10,
+        checks: [{ checkId: "operator", outcome: "success" }],
+      }),
+  };
+  const previous = snapshot();
+  previous.findings = [];
+  previous.closedFindings = [
+    {
+      finding: snapshot().findings[0],
+      reference: "main:approved-repair",
+      mainSha: sha,
+      revalidationRunId: 10,
+    },
+  ];
+  for (const prior of [previous, undefined]) {
+    const health = await readValidationHealth(policy, {
+      ...fixture,
+      previous: prior,
+      now,
+    });
+    expect(health.availability).toBe("available");
+    expect(health.findings).toHaveLength(0);
+    expect(health.closedFindings).toHaveLength(1);
+    expect(health.closedFindings[0].revalidationRunId).toBe(10);
+    expect(health.lastComplete?.runId).toBe(11);
+  }
+});
+
+test("a later real failure is not discharged by an older approved closure", async () => {
+  const base = source({
+    runs: [run(11)],
+    artifact: {
+      id: 110,
+      name: policy.artifactName,
+      expired: false,
+      workflow_run: { id: 11, head_sha: sha },
+    },
+    body: digest({
+      runId: 11,
+      findings: [
+        {
+          id: "failure-1",
+          revision: "failure-r2",
+          checkId: "operator",
+          runId: 11,
+          headSha: sha,
+        },
+      ],
+    }),
+    classification: {
+      schemaVersion: "athena-health-classifications/1",
+      entries: [
+        {
+          findingId: "failure-1",
+          findingRevision: "failure-r1",
+          reference: "main:approved-repair",
+          revalidationRunId: 10,
+        },
+      ],
+    },
+  });
+  const health = await readValidationHealth(policy, { ...base, now });
+  expect(health.availability).toBe("available");
+  expect(health.findings).toHaveLength(1);
+  expect(health.findings[0].revision).toBe("failure-r2");
+  expect(health.closedFindings).toHaveLength(0);
+});
+
+test("proof finding revision is bound independently of all other matching proof fields", () => {
+  const input = { health: snapshot(), candidate, now };
+  const matched = evaluateValidationHealth({ ...input, proofs: [proof()] });
+  expect(matched.status).toBe("eligible");
+  expect(matched.obligations[0].discharged).toBe(true);
+  const differentRevision = evaluateValidationHealth({
+    ...input,
+    proofs: [{ ...proof(), findingRevision: "different-finding-revision" }],
+  });
+  expect(differentRevision.status).toBe("repair-required");
+  expect(differentRevision.obligations[0].discharged).toBe(false);
+});
+
+for (const stage of ["request", "artifact", "approval"] as const) {
+  test(`stalled ${stage} adapter times out and retains prior failures`, async () => {
+    const fixture = source({
+      classification: {
+        schemaVersion: "athena-health-classifications/1",
+        entries: [
+          {
+            findingId: "failure-1",
+            findingRevision: "failure-r1",
+            reference: "main:approval",
+            scope: { kind: "paths", package: "operator", paths: ["src/a.ts"] },
+          },
+        ],
+      },
+    });
+    const stalled = () => new Promise<never>(() => {});
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const result = await Promise.race([
+        readValidationHealth(policy, {
+          ...fixture,
+          previous: snapshot(),
+          now,
+          timeoutMs: 20,
+          ...(stage === "request"
+            ? { requestJson: stalled }
+            : stage === "artifact"
+              ? { loadArtifact: stalled }
+              : { verifyClassificationApproval: stalled }),
+        }),
+        new Promise<"hung">((resolve) => {
+          timer = setTimeout(() => resolve("hung"), 200);
+        }),
+      ]);
+      expect(result).not.toBe("hung");
+      if (result === "hung") throw new Error("health read remained pending");
+      expect(result.availability).toBe("api-unavailable");
+      expect(result.findings).toHaveLength(1);
+      expect(result.findings[0].scope).toEqual({
+        kind: "package",
+        package: "operator",
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+}
+
+for (const stage of ["request", "artifact"] as const) {
+  test(`owned stalled ${stage} process is reaped and temporary archives are removed`, async () => {
+    const directory = await mkdtemp(
+      path.join(tmpdir(), "health-process-test-"),
+    );
+    const pidPath = path.join(directory, "child.pid");
+    const ghPath = path.join(directory, "gh");
+    const outer = new AbortController();
+    const guard = setTimeout(() => outer.abort(), 5000);
+    try {
+      await writeFile(
+        ghPath,
+        `#!/usr/bin/env bun\nawait Bun.write(${JSON.stringify(pidPath)}, String(process.pid));\nsetInterval(() => {}, 1000);\n`,
+      );
+      await chmod(ghPath, 0o755);
+      const responses = {
+        commit: { sha },
+        classification: {
+          encoding: "base64",
+          content: Buffer.from(
+            JSON.stringify({
+              schemaVersion: "athena-health-classifications/1",
+              entries: [],
+            }),
+          ).toString("base64"),
+        },
+        runs: { total_count: 1, workflow_runs: [run()] },
+        artifacts: {
+          total_count: 1,
+          artifacts: [
+            {
+              id: 91,
+              name: policy.artifactName,
+              expired: false,
+              workflow_run: { id: 9, head_sha: sha },
+            },
+          ],
+        },
+      };
+      const program = `
+        process.env.PATH = ${JSON.stringify(directory)} + ':' + process.env.PATH;
+        process.env.TMPDIR = ${JSON.stringify(directory)};
+        const { readValidationHealth } = await import(${JSON.stringify(path.join(import.meta.dir, "harness-validation-health.ts"))});
+        const { readdirSync } = await import('node:fs');
+        const responses = ${JSON.stringify(responses)};
+        const requestJson = async (url) => url.includes('/commits/') ? responses.commit : url.includes('/contents/') ? responses.classification : url.includes('/artifacts') ? responses.artifacts : responses.runs;
+        const health = await readValidationHealth(${JSON.stringify(policy)}, {
+          now: ${now}, timeoutMs: 1000, previous: ${JSON.stringify(snapshot())},
+          ...(${JSON.stringify(stage)} === 'artifact' ? { requestJson } : {}),
+        });
+        console.log(JSON.stringify({ availability: health.availability, findings: health.findings.length, residual: readdirSync(${JSON.stringify(directory)}).filter(name => name.startsWith('athena-health-')) }));
+      `;
+      const result = await runHealthProcess(
+        [
+          "/usr/bin/env",
+          `PATH=${directory}:${process.env.PATH}`,
+          `TMPDIR=${directory}`,
+          process.execPath,
+          "-e",
+          program,
+        ],
+        outer.signal,
+      );
+      expect(result.exitCode).toBe(0);
+      expect(JSON.parse(result.stdout.toString())).toEqual({
+        availability: "api-unavailable",
+        findings: 1,
+        residual: [],
+      });
+      const pid = Number(await readFile(pidPath, "utf8"));
+      expect(() => process.kill(pid, 0)).toThrow();
+    } finally {
+      clearTimeout(guard);
+      outer.abort();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+}

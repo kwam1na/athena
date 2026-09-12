@@ -64,12 +64,27 @@ async function toolchainState() {
   }));
 }
 
+async function sourceMutationState(root: string, git: Git) {
+  const files = await git(["ls-files", "-z"]);
+  if (files.exitCode !== 0) throw new Error("unreadable source membership");
+  const entries: string[] = [];
+  for (const file of files.stdout.split("\0").filter(Boolean).sort()) {
+    const stat = await lstat(path.join(root, file), { bigint: true });
+    // Git binds bytes and membership, but would miss an edit followed by a
+    // restore during execution. Inode/ctime also bind that mutation history.
+    entries.push(`${file}:${stat.ino}:${stat.mode}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`);
+  }
+  return digest(entries.join("\n"));
+}
+
 export async function captureCoverageBinding(root: string, baseRef: string | undefined, git: Git): Promise<CoverageCapture> {
   try {
+    root = await realpath(root);
     const manifest = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
     const app = JSON.parse(await readFile(path.join(root, WEBAPP, "package.json"), "utf8"));
     if (manifest.scripts?.["test:coverage"] !== COVERAGE_COMMAND ||
         app.scripts?.test !== "vitest run --maxWorkers=4" ||
+        ["pretest", "posttest"].some(hook => app.scripts?.[hook] !== undefined) ||
         app.scripts?.["test:coverage"] !== "vitest run --coverage --maxWorkers=${ATHENA_COVERAGE_MAX_WORKERS:-2}" ||
         digest(await readFile(path.join(root, WEBAPP, "vitest.config.ts"))) !== QUALIFIED_CONFIG) {
       return { reason: "unqualified-coverage-profile" };
@@ -83,14 +98,16 @@ export async function captureCoverageBinding(root: string, baseRef: string | und
     }
     // Environment values stay only in memory and are never logged or hashed.
     const environment = Object.entries(process.env).sort(([a], [b]) => a.localeCompare(b));
-    const privateInputs: Array<[string, string | null]> = [];
+    const privateInputs: Array<[string, string, string]> = [];
     for (const directory of [root, path.join(root, WEBAPP)]) {
       for (const name of (await readdir(directory)).filter(name => name === ".env" || name.startsWith(".env.")).sort()) {
-        privateInputs.push([path.join(directory, name), await readFile(path.join(directory, name), "utf8")]);
+        const location = path.join(directory, name);
+        const stat = await lstat(location, { bigint: true });
+        privateInputs.push([location, await readFile(location, "utf8"), `${stat.ino}:${stat.mtimeNs}:${stat.ctimeNs}`]);
       }
     }
     return { binding: {
-      identity: [tree.stdout.trim(), base.stdout.trim(), process.execPath, process.version, Bun.version, process.platform, process.arch, await toolchainState(), await dependencyState(root)].join(":"),
+      identity: [tree.stdout.trim(), base.stdout.trim(), process.execPath, process.version, Bun.version, process.platform, process.arch, await toolchainState(), await dependencyState(root), await sourceMutationState(root, git)].join(":"),
       environment: JSON.stringify([environment, privateInputs]),
     } };
   } catch {

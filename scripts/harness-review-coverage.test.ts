@@ -1,6 +1,9 @@
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { compareCoverageBindings, type CoverageCapture } from "./harness-review-coverage";
+import { captureCoverageBinding, compareCoverageBindings, type CoverageCapture } from "./harness-review-coverage";
 
 const successfulCapture: CoverageCapture = {
   binding: { identity: "prepared-tree/base/toolchain/dependencies", environment: "private execution inputs" },
@@ -34,4 +37,32 @@ describe("coverage binding admission", () => {
     const recaptured: CoverageCapture = { binding: { ...successfulCapture.binding } };
     expect(compareCoverageBindings(successfulCapture, recaptured)).toBeUndefined();
   });
+});
+
+it.each(["pretest", "posttest"])("qualifies %s before inspecting Git or dependencies", async hook => {
+  const root = await mkdtemp(path.join(tmpdir(), "athena-coverage-qualification-"));
+  const sourceRoot = path.resolve(import.meta.dir, "..");
+  try {
+    await mkdir(path.join(root, "packages/athena-webapp"), { recursive: true });
+    for (const file of ["package.json", "packages/athena-webapp/package.json", "packages/athena-webapp/vitest.config.ts"]) {
+      await writeFile(path.join(root, file), await readFile(path.join(sourceRoot, file)));
+    }
+    const appPath = path.join(root, "packages/athena-webapp/package.json");
+    const app = JSON.parse(await readFile(appPath, "utf8"));
+    delete app.scripts.pretest;
+    delete app.scripts.posttest;
+    await writeFile(appPath, JSON.stringify(app));
+    let gitCalls = 0;
+    const git = async () => { gitCalls++; return { exitCode: 1, stdout: "" }; };
+    // This control proves the fixture passes the other profile conditions.
+    expect(await captureCoverageBinding(root, "HEAD", git)).toEqual({ reason: "source-not-prepared" });
+    expect(gitCalls).toBeGreaterThan(0);
+    gitCalls = 0;
+    app.scripts[hook] = "echo additional ordinary-suite obligation";
+    await writeFile(appPath, JSON.stringify(app));
+    expect(await captureCoverageBinding(root, "HEAD", git)).toEqual({ reason: "unqualified-coverage-profile" });
+    expect(gitCalls).toBe(0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

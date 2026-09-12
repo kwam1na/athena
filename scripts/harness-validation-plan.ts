@@ -142,7 +142,8 @@ export function validateCanonicalRegistry(
         other.id === check.id ||
         declaration.profile !== other.profile ||
         other.profile !== check.profile ||
-        !declaration.reason ||
+        typeof declaration.reason !== "string" ||
+        !declaration.reason.trim() ||
         other.cwd !== check.cwd ||
         other.membership.some((file) => !check.membership.includes(file))
       )
@@ -288,12 +289,6 @@ export function buildValidationPlan(
         other.coveredChecks.length !== 1
       )
         continue;
-      if (
-        other.supersedes.some((entry) =>
-          check.coveredChecks.includes(entry.checkId),
-        )
-      )
-        fail("invalid-supersession", "Mutual supersession is ambiguous.");
       superseded.add(other.id);
       check.reasons = sorted([
         ...check.reasons,
@@ -349,19 +344,34 @@ import {
 export async function runValidationPlanCli(
   args: string[],
   log: (text: string) => void = console.log,
+  options: { stdoutIsTTY?: boolean } = {},
 ) {
+  if (args.length === 1 && ["--help", "-h"].includes(args[0])) {
+    log([
+      "Usage: bun run harness:plan -- --input <request.json> [--json | --text]",
+      "Read-only planning: no checks execute and the legacy gate stays authoritative.",
+      "Request: mode is delivery, comparison, or full-health; changes contains semantic path/status entries;",
+      "inventory lists explicit repository-relative file paths. An optional registry supplies a canonical fixture.",
+      'Minimal request: {"mode":"full-health","changes":[],"inventory":["package.json"]}',
+      'Change example: {"path":"scripts/example.ts","status":"modified"}; renamed entries also supply oldPath.',
+      "JSON is the default for piped output; --text forces human-readable output.",
+      "Example: bun run harness:plan -- --input scripts/fixtures/affected-validation/planner/report-request.json --json",
+    ].join("\n"));
+    return;
+  }
   const inputIndex = args.indexOf("--input");
   if (
     inputIndex < 0 ||
     !args[inputIndex + 1] ||
     args.some(
       (arg, index) =>
-        index !== inputIndex + 1 && !["--input", "--json"].includes(arg),
-    )
+        index !== inputIndex + 1 && !["--input", "--json", "--text"].includes(arg),
+    ) ||
+    (args.includes("--json") && args.includes("--text"))
   )
     fail(
       "malformed-map",
-      "Usage: bun run harness:plan -- --input <request.json> [--json]",
+      "Usage: bun run harness:plan -- --input <request.json> [--json | --text]; use --help for request fields.",
     );
   let request: {
     mode: ValidationPlanMode;
@@ -390,7 +400,7 @@ export async function runValidationPlanCli(
     request.mode,
   );
   log(
-    args.includes("--json")
+    args.includes("--json") || (!args.includes("--text") && !(options.stdoutIsTTY ?? process.stdout.isTTY))
       ? JSON.stringify(plan, null, 2)
       : renderValidationPlan(plan),
   );

@@ -70,6 +70,13 @@ may use a sufficiently recent complete result and retains open failures. A
 bounded history scan that cannot establish completeness returns unavailable.
 The sensor emits no external mutation and registers no CLI or live obligation.
 
+Each read has a 30-second total deadline (`timeoutMs` accepts 1–60000ms).
+Injected request, artifact and approval capabilities receive an `AbortSignal`
+and should cancel their own work when signalled. A stalled injected promise
+cannot hold admission indefinitely. Owned GitHub/unzip process groups are killed
+and reaped on timeout, and temporary archives are removed before the reader
+returns `api-unavailable` with retained failures.
+
 Run `bun test scripts/harness-validation-health.test.ts` for the offline contract
 corpus. The integration owner runs the combined repository gate and generated
 artifact checks. These fixtures do not claim hosted qualification.

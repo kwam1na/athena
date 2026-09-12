@@ -1,6 +1,8 @@
 # Canonical plan qualification contract
 
-`bun run harness:plan -- --input <request.json> [--json]` is read-only. The
+`bun run harness:plan -- --input <request.json> [--json | --text]` is read-only.
+Use `--help` for request fields and an example. Piped output defaults to JSON;
+terminal output defaults to text, with either flag selecting an explicit format. The
 request supplies a mode (`delivery`, `comparison`, `full-health`), semantic
 changes (`path`, `status`, and `oldPath` for renames), and a repository-relative
 file inventory. An optional canonical registry supports standalone qualification

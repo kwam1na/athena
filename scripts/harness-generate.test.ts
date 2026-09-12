@@ -404,5 +404,8 @@ describe("canonical plan documentation projection", () => {
     const ids = new Set(map.qualificationChecks.map((check: {id:string})=>check.id));
     for (const surface of map.qualificationSurfaces) for (const id of surface.checks) expect(ids.has(id)).toBe(true);
     expect(docs.get("packages/athena-webapp/docs/agent/validation-guide.md")).toContain("does not execute checks or authorize evidence reuse");
+    expect(docs.get("packages/athena-webapp/docs/agent/validation-guide.md")).toContain("[--json | --text]");
+    expect(docs.get("packages/athena-webapp/docs/agent/validation-guide.md")).toContain("use `--help` for request fields");
+    expect(docs.get("packages/athena-webapp/docs/agent/validation-guide.md")).toContain("Piped output defaults to JSON");
   });
 });

@@ -7,7 +7,7 @@ problem_type: workflow_issue
 component: development_workflow
 resolution_type: workflow_improvement
 severity: medium
-delivery_diff_fingerprint: c5ea1235128016611da78c8b979da84cb79d6bcf398f28db0e4445105fa1a4eb
+delivery_diff_fingerprint: 8d0321556de9a0ceb1c756238aae921413c5ead7cf32c9eb08abbe77e66e11f9
 applies_when:
   - Changing validation selection or eliminating overlapping test execution
   - Integrating trusted repository health with candidate admission
@@ -39,12 +39,20 @@ configuration, dependencies, toolchain and private environment before coverage,
 after it, and before reuse. A failed or unqualified observation runs no shortcut.
 This creates no durable Athena receipt and does not replace the product's future
 isolated snapshot implementation. Timing stress remains a separate profile.
+Qualification includes the runner's lifecycle hooks. Source, dependency and private
+file mutation metadata also matter: restoring bytes and modification time after
+an intervening edit must not disguise a changed execution input. Private values
+and metadata remain in memory rather than becoming exported evidence.
 
 Trusted health adds another distinct boundary: a verified repair proof can discharge
 a requirement for one candidate/profile without closing the repository-wide finding.
 Global closure requires approved main resolution plus newer trusted revalidation.
 Missing or revoked localization restores conservative scope; unavailable health
 requests full-health recovery while retaining known failures.
+Resolve the approval's exact historical revalidation independently of the latest
+complete run. Otherwise a newer healthy cumulative digest can reopen a resolved
+failure. Keep newer failure revisions open, and bound network and subprocess waits
+so unavailable-health recovery remains reachable when an external reader stalls.
 
 ## Why This Matters
 
@@ -59,6 +67,8 @@ are different outcomes. Treating them as interchangeable creates false green evi
 - Represent deletions and both rename paths; fail early when no obligation covers one.
 - Reject malformed registries and prerequisite cycles before expensive execution.
 - Keep candidate repair discharge separate from trusted-main health resolution.
+- Mutation-test each decisive guard with one changed binding at a time; a broader
+  dirty-tree guard can otherwise hide a missing configuration or revision check.
 - Integrate concurrent source lanes before regenerating shared maps and graphs.
 
 ## Examples
