@@ -15,12 +15,14 @@
       <li>Qualification only</li>
     </ul>
     <dl data-report-meta>
-      <dt>Status</dt><dd>Delivery candidate; final freshness and full validation pending</dd>
+      <dt>Status</dt><dd>Delivery candidate; review and initial full gate approved; final report validation and hosted checks pending</dd>
       <dt>Issue</dt><dd>https://linear.app/v26-labs/issue/V26-2066/resolve-affected-consumers-and-runtime-contracts-for-validation</dd>
       <dt>Branch</dt><dd>codex/v26-2066-affected-consumers</dd>
-      <dt>Candidate source tree</dt><dd>R3 reviewed tree 16c149bfda99c3b2efd2744746629834cc201d29; sibling projection tests added afterward</dd>
-      <dt>Source snapshot</dt><dd>93c1393573021a9e1d344b8a36edfc8c206ecbcf</dd>
+      <dt>Candidate source tree</dt><dd>Reviewed tree d269cd6207eb03c09def3581bdad512c2df2e850</dd>
+      <dt>Source snapshot</dt><dd>e342406bab2493cb2fd4f03c8bf145a27b824a4c</dd>
       <dt>Base</dt><dd>e46b77da73f99a8ca1cc2c418ceaae9ab523f619</dd>
+      <dt>PR</dt><dd>https://github.com/kwam1na/athena/pull/842</dd>
+      <dt>Candidate head</dt><dd>f45733e9fcf3e181db9672d0c8087922cc105e90</dd>
     </dl>
   </header>
   <section data-report-section="summary">
@@ -55,8 +57,9 @@
   </section>
   <section data-report-section="validation">
     <h2>What the evidence establishes</h2>
-      <p>Current source checks pass 162 focused tests across the impact, registry, planner, and repository-validation suites. Six runtime repair mutations and two further projection mutations fail as intended and pass after restoration. All 15 independent reviewers approved the source after three rounds: ten confirmed findings were resolved, and four originating withdrawals remain in the audit. Athena accepted that review evidence. The initial canonical gate found a missing report and sibling-test update; both are now supplied and preflight passes. Final review freshness, the full gate, and hosted checks remain pending.</p>
+      <p>All 15 required reviewers approved the candidate within four rounds. Ten confirmed findings were resolved, four originating withdrawals remain in the audit, and no findings were deferred. Athena accepted the review evidence. Focused qualification passed 162 tests; destructive runtime and projection controls failed as intended and passed after restoration. The canonical pr:athena gate passed and verified the delivery record, including coverage over 10,824 operator tests, 204 storefront tests, and 1,497 root harness tests. Final report validation and hosted PR checks remain pending.</p>
       <p>A real-source textual audit selects 25 independent operator unit members with 4,138 inputs and 32 publishing-dependent members with 5,824 inputs. Adding a report preserves every independent identity; publishing-dependent membership grows to 34 with 5,825 inputs. This demonstrates planner identity stability for the characterized case, not measured test-execution savings or activated reuse.</p>
+      <p>The frozen installed release reports an observational round-to-record mismatch after neutral telemetry transport. Its verified admission and review evidence passed. The upstream V26-2067 release contains the readout fix, with adoption owned by V26-2024; this candidate preserves the actual warning and original review history.</p>
       <p>Deployment and root alignment are pending. The committed report will be published through the normal Athena docs deployment after merge.</p>
   </section>
   <section data-report-section="guidance">
@@ -184,7 +187,7 @@
     <dl>
       <dt>report_diff / delivered-diff research</dt><dd>Inspected the staged delivered diff, runtime boundaries, generated artifacts, current focused results, and real-source qualification audit.</dd>
       <dt>report_context / session-context research</dt><dd>Recovered accepted concurrent ownership, accumulated report-followup semantics, review history, and the full delivery finish line.</dd>
-      <dt>report_quiz / report and quiz review</dt><dd>Approved the explanation and all ten quiz questions with no findings; subsequent evidence and candidate metadata updates remain subject to final report review.</dd>
+      <dt>report_quiz / report and quiz review</dt><dd>Approved the explanation, evidence boundaries, and all ten quiz questions in two reviews; final PR and gate metadata are being verified in the same report-review loop.</dd>
     </dl>
   </section>
 </article>
