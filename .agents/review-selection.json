@@ -1,1 +1,50 @@
-[]
+[
+  {
+    "reviewerId": "ce-correctness-reviewer",
+    "reason": "Always-on logic and date attribution review"
+  },
+  {
+    "reviewerId": "ce-testing-reviewer",
+    "reason": "Always-on regression coverage review"
+  },
+  {
+    "reviewerId": "ce-maintainability-reviewer",
+    "reason": "Always-on maintainability review"
+  },
+  {
+    "reviewerId": "ce-project-standards-reviewer",
+    "reason": "Always-on repository standards review"
+  },
+  {
+    "reviewerId": "ce-agent-native-reviewer",
+    "reason": "Always-on agent parity review"
+  },
+  {
+    "reviewerId": "ce-learnings-researcher",
+    "reason": "Always-on reusable learning review"
+  },
+  {
+    "reviewerId": "ce-performance-reviewer",
+    "reason": "Schedule database reads and snapshot queries changed"
+  },
+  {
+    "reviewerId": "ce-api-contract-reviewer",
+    "reason": "Exported calendar helper and panel prop signatures changed"
+  },
+  {
+    "reviewerId": "ce-reliability-reviewer",
+    "reason": "Historical EOD automation quarantine paths changed"
+  },
+  {
+    "reviewerId": "ce-adversarial-reviewer",
+    "reason": "More than 50 source lines and day-close behavior changed"
+  },
+  {
+    "reviewerId": "ce-kieran-typescript-reviewer",
+    "reason": "TypeScript backend and React components changed"
+  },
+  {
+    "reviewerId": "ce-julik-frontend-races-reviewer",
+    "reason": "Answer reveal lifecycle and disclosure events changed"
+  }
+]

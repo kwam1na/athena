@@ -170,7 +170,7 @@ export const STORE_DAY_MANIFEST = defineCapabilityManifest({
   binding: {
     readIntents: ["daily_operations.view", "daily_close.view"],
     portKey: STORE_DAY_PORT_KEY,
-    implementationVersion: "1",
+    implementationVersion: "2",
   },
 });
 
@@ -200,7 +200,7 @@ export const STORE_DAY_READ_PORT = defineAgentReadPort({
   verbs: ["get"],
   scopeKind: "store",
   readIntents: STORE_DAY_MANIFEST.binding.readIntents,
-  implementationVersion: "1",
+  implementationVersion: "2",
   declaredCost: AGENT_SNAPSHOT_COST,
   handler: { kind: "internal_query", functionPath: "operations/agentCapabilities/storeDayPorts:getStoreDay" },
   projections: ["managerReview"],

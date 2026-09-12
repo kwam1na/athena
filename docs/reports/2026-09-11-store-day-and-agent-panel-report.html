@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Store-day boundaries and a steadier Ask Athena panel</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="49d6130fa839824716bbf692354ced3c19cfe124e2585a416888a4d696d00c52">
+  <header data-report-section="header">
+    <h1>Store-day boundaries and a steadier Ask Athena panel</h1>
+    <p>Combined delivery candidate in PR #790, incorporating PR #803</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>V26-2055 + V26-2056</li>
+      <li>Merge and production deployment pending</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Sources</dt><dd>https://github.com/kwam1na/athena/pull/790 and https://github.com/kwam1na/athena/pull/803</dd>
+      <dt>Candidate</dt><dd>257157e7f165c5dde4f473c0653a8a703cbc5d02</dd>
+      <dt>Tickets</dt><dd>https://linear.app/v26-labs/issue/V26-2055 and https://linear.app/v26-labs/issue/V26-2056</dd>
+      <dt>Base</dt><dd>26ef1c6abe2109d549291dbfc90545c09600c995</dd>
+      <dt>Delivery PR</dt><dd>https://github.com/kwam1na/athena/pull/790</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>What is being delivered</h2>
+      <p>Daily Close and historical EOD snapshots include a store&#x27;s whole local calendar day, including after-hours sales. Ask Athena gets quieter initial suggestions and remembers which committed answers have already appeared, so reopening the panel does not replay their animation.</p>
+      <p>The two original PRs are rebased together on current main. The requested finish line is one merged PR, local root alignment, and verified Convex and Athena webapp production deployments. Those events are pending in this candidate report.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Why the changes matter</h2>
+      <p>Scheduled opening and closing hours describe when a shop expects to trade. They do not contain every valid sale. Using those hours as the snapshot boundary can omit a sale recorded after closing. A UTC day can likewise split a non-UTC store&#x27;s local date.</p>
+      <p>The visual panel can disappear and return while its shell stays mounted. If animation history lives only in the panel, a replayed subscription snapshot can make an old answer look newly delivered.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Two boundaries with different lifetimes</h2>
+      <p>Use trading hours to decide when automation should act. Use the local calendar day to decide which timestamped records the snapshot contains. Operating-date stamps keep unsettled drawers associated with their day; settled closeout evidence and unstamped legacy drawers still require clock-based attribution.</p>
+      <p>An answer&#x27;s arrival belongs to the persistent shell. The panel consumes that decision and paints a seen answer fully when reopened.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>Before and after</h2>
+      <ul>
+        <li>Daily Close without explicit bounds: UTC day becomes the governing schedule&#x27;s local calendar day. Missing or invalid schedules retain the existing UTC fallback.</li>
+        <li>Historical EOD: trading-window snapshot bounds become calendar-day bounds. Trading hours and schedule evidence remain the timing authority; unresolved ranges quarantine.</li>
+        <li>Unsettled stamped drawers: the final attribution pass now preserves them outside explicit snapshot hours. Future unstamped drawers remain excluded.</li>
+        <li>Suggested questions: a centered disclosure opens on hover and can be pinned with a click. The empty neutral status is removed.</li>
+        <li>Answer reveal: the persistent shell records turn ID and commit time, preventing replay after collapse and reopen.</li>
+      </ul>
+  </section>
+  <section data-report-section="changes">
+    <h2>Scope and limits</h2>
+      <p>The delivery changes the schedule helper, Daily Close, historical EOD automation, the agent panel, their tests, the store-day read-port compatibility version, and generated artifacts. It adds no schema, public API route, authorization capability, or inventory write path.</p>
+      <p>Explicit valid caller bounds still take precedence. Reduced motion remains respected. The change does not backfill or rewrite completed Daily Close snapshots, and the local tests do not prove historical production data has been repaired.</p>
+  </section>
+  <section data-report-section="validation">
+    <h2>Evidence and pending gates</h2>
+      <p>The combined focused suites passed 283 tests. Added integration regressions keep stamped after-hours drawers visible, exclude future unstamped legacy drawers, and drive the real shell through live completion, collapse, a replayed running view, and the same answer&#x27;s return. Both original adversarial mutations now fail their new regressions, and the restored control passes all 283 tests. The agent port/profile/deployment-state suites also pass 28 tests.</p>
+      <p>Independent review closed the test gaps and withdrew the initial legacy-register concern after checking the final filter. It also traced the snapshot change through operations.storeDay; its manifest and read-port versions now advance together to version 2. The PR checks and delivery record are the authority for final gate status. This report records the targeted evidence available at generation.</p>
+      <p>The local in-app demo loads, but Ask Athena is disabled there; no live provider turn was claimed. Production services were reachable before deployment. Merge, root alignment, tracker completion, and production deployment remain pending.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>Extending these paths later</h2>
+    <p>See the <a href="../solutions/logic-errors/athena-daily-close-store-day-boundary-2026-05-07.md">Daily Close store-day lesson</a> for the reusable implementation guidance.</p>
+      <ul>
+        <li>Choose a range from the consumer&#x27;s purpose: automation timing and record inclusion are distinct.</li>
+        <li>Exercise the final snapshot, since a later filter can undo a correct source-query change.</li>
+        <li>Make legacy fixture ordering match Convex&#x27;s undefined-before-string ordering.</li>
+        <li>Test persistent-shell behavior through the shell, rather than supplying a reveal override directly to the panel.</li>
+        <li>Transitive snapshot changes can change agent read-port behavior. Bump both compatibility declarations, regenerate, fence before deploy, smoke with the profile disabled, and restore its prior enabled state.</li>
+        <li>Deploy Convex and the Athena webapp after merge; the in-app documentation corpus is part of the webapp bundle.</li>
+      </ul>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>packages/athena-webapp/convex/inventory/storeScheduleCore.ts</code></td><td>Shares governing schedule lookup and resolves calendar-day bounds.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/operations/dailyClose.ts</code></td><td>Resolves default snapshot bounds and preserves unsettled stamped drawers through final attribution.</td></tr>
+        <tr><td><code>packages/athena-webapp/convex/operations/dailyOperationsAutomation.ts</code></td><td>Keeps trading-window timing while snapshotting the calendar day.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/agent/AthenaAgentPanel.tsx</code></td><td>Renders the disclosure and keeps answer-arrival identity in the shell.</td></tr>
+        <tr><td><code>packages/athena-webapp/src/components/agent/AthenaAgentPanel.test.tsx</code></td><td>Exercises panel interaction and real-shell answer replay.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which range determines historical EOD snapshot contents?</p>
+        <ol data-quiz-options>
+          <li>Scheduled trading hours</li>
+          <li data-quiz-correct>The store-local calendar day</li>
+          <li>The browser&#x27;s timezone</li>
+        </ol>
+        <p data-quiz-explanation>Trading hours govern timing; the calendar day bounds timestamped snapshot contents.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What wins when Daily Close receives valid explicit bounds?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Those explicit bounds</li>
+          <li>The UTC day always</li>
+          <li>The scheduled opening window</li>
+        </ol>
+        <p data-quiz-explanation>Explicit validated caller ranges keep precedence.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does interactive Daily Close do without a resolvable schedule?</p>
+        <ol data-quiz-options>
+          <li>Deletes the close</li>
+          <li>Assumes the browser timezone</li>
+          <li data-quiz-correct>Keeps its UTC fallback</li>
+        </ol>
+        <p data-quiz-explanation>The existing fallback remains; historical automation has a stricter quarantine boundary.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does unresolved historical automation do?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Quarantines the attempt</li>
+          <li>Silently uses UTC</li>
+          <li>Creates an empty completed close</li>
+        </ol>
+        <p data-quiz-explanation>Automation refuses ambiguous schedule attribution.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why keep an unsettled stamped drawer outside snapshot clock hours?</p>
+        <ol data-quiz-options>
+          <li>All drawers belong to all days</li>
+          <li data-quiz-correct>Its operating-date stamp identifies the unresolved day</li>
+          <li>Clock time is never used</li>
+        </ol>
+        <p data-quiz-explanation>Unstamped and settled closeout attribution still uses clock evidence.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Should a future unstamped drawer block a historic date?</p>
+        <ol data-quiz-options>
+          <li>Yes, because undefined sorts first</li>
+          <li>Yes, if still active</li>
+          <li data-quiz-correct>No, the final clock-range filter excludes it</li>
+        </ol>
+        <p data-quiz-explanation>Index eligibility alone does not establish snapshot membership.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where does seen-answer identity live?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>In the persistent shell</li>
+          <li>Only in the visual panel</li>
+          <li>In the input placeholder</li>
+        </ol>
+        <p data-quiz-explanation>The shell survives collapse and preserves arrival identity across panel remounts.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which test best proves answer replay prevention?</p>
+        <ol data-quiz-options>
+          <li>Count the new refs</li>
+          <li data-quiz-correct>Drive completion and reopen through the real shell</li>
+          <li>Pass null directly as a panel prop</li>
+        </ol>
+        <p data-quiz-explanation>A real-shell test detects a missing connection between shell state and panel props.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does this candidate report establish about production?</p>
+        <ol data-quiz-options>
+          <li>Every historical close was repaired</li>
+          <li>Deployment has completed</li>
+          <li data-quiz-correct>Deployment and merge are pending</li>
+        </ol>
+        <p data-quiz-explanation>Candidate evidence must not predict the later finish-line events.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How should an after-hours sale be treated?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Included in its local calendar date</li>
+          <li>Discarded after scheduled closing</li>
+          <li>Moved to the next opening automatically</li>
+        </ol>
+        <p data-quiz-explanation>Trading hours do not define eligibility of completed sales for the day snapshot.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>report_context / session context</dt><dd>Attempted focused prior-session discovery. No verified prior-session context was available; the report makes no historical-attempt claim from it.</dd>
+      <dt>report_diff / delivered diff</dt><dd>Mapped seven package files, timing versus attribution boundaries, tests, generated artifacts, and overlap with the existing Daily Close lesson.</dd>
+      <dt>independent candidate reviewers</dt><dd>Fourteen isolated lenses reviewed the candidate rounds. Reports, mutation evidence, and originating finding dispositions are retained in the delivery run.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

@@ -1698,7 +1698,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
     },
     "cap_dailyops_store_day": {
       "binding": {
-        "implementationVersion": "1",
+        "implementationVersion": "2",
         "portKey": "operations.storeDay",
         "readIntents": [
           "daily_operations.view",
@@ -2703,7 +2703,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       }
     }
   },
-  "compatibilityDigest": "fnv1a64:c09342d06ca88d7f",
+  "compatibilityDigest": "fnv1a64:394c0b9bd98a9f2b",
   "contractVersion": 1,
   "enablement": {
     "capabilities": {
@@ -2801,7 +2801,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       "sourceDigest": "sha256:0af207c6ac01a732cdeb5bebc8b2a6ad6e7944bf9e6bb62d197cfe899a87c981"
     },
     "operations.storeDay": {
-      "implementationVersion": "1",
+      "implementationVersion": "2",
       "sourceDigest": "sha256:6cdb3ac336b82a3485926c95dd7f97857616e1e4c7c12d81160ee0319cfa1fd1"
     },
     "reports.daySales": {
@@ -3447,7 +3447,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
         "functionPath": "operations/agentCapabilities/storeDayPorts:getStoreDay",
         "kind": "internal_query"
       },
-      "implementationVersion": "1",
+      "implementationVersion": "2",
       "portKey": "operations.storeDay",
       "projections": [
         "managerReview"
@@ -3557,7 +3557,7 @@ export const AGENT_GENERATED_REGISTRY: AgentCapabilityRegistry = {
       ]
     }
   },
-  "registryDigest": "fnv1a64:b532f08d43e93f20",
+  "registryDigest": "fnv1a64:32938673903841ef",
   "sdkView": {
     "contractVersion": 1,
     "packages": {
@@ -3708,7 +3708,7 @@ export const AGENT_GENERATED_SOURCE_KEYS: readonly string[] = [
 ];
 
 /** What a run pins; the deployment epoch fence compares it with the durable epoch digest. */
-export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:c09342d06ca88d7f";
+export const AGENT_GENERATED_COMPATIBILITY_DIGEST = "fnv1a64:394c0b9bd98a9f2b";
 
 /** Schema identity only; unchanged when a capability is enabled or disabled. */
-export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:b532f08d43e93f20";
+export const AGENT_GENERATED_REGISTRY_DIGEST = "fnv1a64:32938673903841ef";

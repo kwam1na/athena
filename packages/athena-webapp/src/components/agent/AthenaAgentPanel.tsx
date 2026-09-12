@@ -347,6 +347,8 @@ export type AthenaAgentPanelProps = {
   readonly width: number;
   readonly onWidthChange: (width: number) => void;
   readonly onClose: () => void;
+  /** The one committed answer this mounted shell observed arriving live. */
+  readonly answerRevealKey?: string | null;
   readonly returnLabel?: string;
   readonly scrollTop?: number | null;
   readonly onScrollTopChange?: (scrollTop: number) => void;
@@ -361,6 +363,7 @@ export function AthenaAgentPanel({
   width,
   onWidthChange,
   onClose,
+  answerRevealKey: shellAnswerRevealKey,
   returnLabel,
   scrollTop = null,
   onScrollTopChange,
@@ -483,19 +486,21 @@ export function AthenaAgentPanel({
   }
   if (run.activeTurnId && run.hostState === "running")
     runningTurnRef.current = run.activeTurnId;
+  const answerArrivesLive =
+    shellAnswerRevealKey === undefined
+      ? answerArrivalRef.current?.live === true
+      : shellAnswerRevealKey === answerKey;
   const answerReveal = useStreamingText({
     text: run.answer?.narrative ?? null,
     key: answerKey,
     // An answer that lands live arrives from nothing at the answer pace; one
     // the panel mounts onto is already settled and paints whole.
     revealMode: "answer",
-    arrives: answerArrivalRef.current?.live === true,
-    animate: !reducedMotion && answerArrivalRef.current?.live === true,
+    arrives: answerArrivesLive,
+    animate: !reducedMotion && answerArrivesLive,
   });
   const answerWipe = useWordWipe(
-    !reducedMotion &&
-      answerArrivalRef.current?.live === true &&
-      !answerReveal.settled,
+    !reducedMotion && answerArrivesLive && !answerReveal.settled,
   );
   const followContentKey = [
     run.activeTurnId ?? "none",
@@ -788,9 +793,14 @@ export function AthenaAgentPanel({
   }, [run.hostState, run.provisionalState, run.activeTurnId, focusOwn]);
 
   const answerQuality = run.answer ? describeQuality(run.answer) : null;
+  const isInitialState =
+    run.hostState === "idle" && run.turn === null && run.history.length === 0;
   const isHistoryResumeState =
     run.hostState === "idle" && run.turn === null && run.history.length > 0;
   const activityOwnsStatus = !run.answer && run.status.tone === "progress";
+  const showStandaloneStatus =
+    !activityOwnsStatus &&
+    (run.turn !== null || run.answer !== null || run.status.tone === "warning");
   // Finished drafts, rendered only where the live draft itself may show:
   // inside the provisional container while the turn runs, and behind the
   // committed answer once it has superseded them. The hook already empties
@@ -841,7 +851,10 @@ export function AthenaAgentPanel({
 
   const canSend = run.canSubmit && run.canFollowUp && draft.trim().length > 0;
   const submit = useCallback(
-    async (prompt: string, options: { readonly starterIntentId?: string } = {}) => {
+    async (
+      prompt: string,
+      options: { readonly starterIntentId?: string } = {},
+    ) => {
       // Wait for the new turn bubble before moving the transcript. Moving the
       // old transcript here would put the wrong question at the viewport edge.
       activeQuestionSettleRef.current?.();
@@ -853,7 +866,9 @@ export function AthenaAgentPanel({
       promptRef.current?.focus();
       // The options arg rides only on taps so typed sends keep their arity
       // (free-form turns byte-identical, panel included).
-      await (options.starterIntentId ? run.submit(prompt, options) : run.submit(prompt));
+      await (options.starterIntentId
+        ? run.submit(prompt, options)
+        : run.submit(prompt));
       onDraftChange("");
     },
     [onDraftChange, run],
@@ -1051,6 +1066,9 @@ export function AthenaAgentPanel({
               aria-label="This question"
               className={cn(
                 "space-y-layout-md px-layout-md py-layout-md",
+                isInitialState
+                  ? "flex min-h-full flex-col items-center justify-center"
+                  : null,
                 questionTopActive ? "min-h-[calc(100%+var(--space-md))]" : null,
               )}
               data-testid="athena-agent-transcript"
@@ -1076,7 +1094,7 @@ export function AthenaAgentPanel({
                 />
               )}
 
-              {!activityOwnsStatus ? (
+              {showStandaloneStatus ? (
                 <div
                   className={
                     run.answer
@@ -1320,7 +1338,7 @@ export function AthenaAgentPanel({
           separates it from the transcript. */}
       <form
         className={cn(
-          "mx-layout-md mb-layout-sm mt-layout-xs flex flex-col rounded-lg border border-border/80 bg-background shadow-sm",
+          "mx-layout-sm mb-layout-sm mt-layout-xs flex flex-col rounded-lg border border-border/80 bg-background shadow-sm",
           "transition-[border-color,box-shadow] focus-within:border-primary-border focus-within:ring-2 focus-within:ring-ring/20 motion-reduce:transition-none",
         )}
         data-testid="athena-agent-composer"
@@ -1330,7 +1348,7 @@ export function AthenaAgentPanel({
         }}
       >
         <label className="sr-only" htmlFor="athena-agent-prompt">
-          Ask a question about this context
+          Ask Athena a question...
         </label>
         <Textarea
           className={cn(
@@ -1353,7 +1371,7 @@ export function AthenaAgentPanel({
           placeholder={
             run.answer || run.history.length > 0
               ? "Ask a follow-up…"
-              : "Ask about this context"
+              : "Ask Athena a question..."
           }
           ref={promptRef}
           rows={3}
@@ -1407,7 +1425,6 @@ export function AthenaAgentPanel({
           </p>
         ) : null}
       </form>
-
     </div>
   );
 
@@ -1437,7 +1454,7 @@ export function AthenaAgentPanel({
   return (
     <aside
       aria-label={presentation.entry.label}
-      className="athena-agent-detached-panel fixed bottom-[calc(var(--space-md)+3rem+var(--space-sm))] right-layout-md z-40 isolate flex h-[60dvh] max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border/70 bg-surface-raised/95 shadow-overlay backdrop-blur-xl supports-[backdrop-filter]:bg-surface-raised/85"
+      className="athena-agent-detached-panel fixed bottom-[calc(var(--space-md)+3rem+var(--space-sm))] right-layout-md z-40 isolate flex h-[60dvh] max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border/70 bg-surface-raised/95 shadow-surface backdrop-blur-xl supports-[backdrop-filter]:bg-surface-raised/85"
       data-layout="docked"
       data-motion={reducedMotion ? "reduced" : "standard"}
       data-testid="athena-agent-panel"
@@ -1472,30 +1489,57 @@ function StarterIntents({
   intents: AthenaAgentPresentation["starterIntents"];
   onChoose: (intent: AthenaAgentPresentation["starterIntents"][number]) => void;
 }) {
+  const [hovered, setHovered] = useState(false);
+  const [pinnedOpen, setPinnedOpen] = useState(false);
+
   if (intents.length === 0) return null;
+  // Keep the disclosure's expanded footprint in the initial layout. That
+  // anchors the summary where it will sit after hover instead of recentering
+  // the taller open state and making the trigger jump upward.
+  const reservedRows = Array.from(
+    { length: intents.length + 1 },
+    () => "var(--control-height-standard)",
+  ).join(" + ");
   return (
-    <div className="space-y-layout-sm" data-testid="athena-agent-starters">
-      <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-        Try
-      </p>
-      <ul className="flex flex-col gap-layout-xs">
+    <details
+      className="group w-full max-w-xs"
+      data-testid="athena-agent-starters"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      open={hovered || pinnedOpen}
+      style={{ minHeight: `calc(${reservedRows} + var(--space-xs))` }}
+    >
+      <summary
+        className="mx-auto flex min-h-[44px] w-fit cursor-pointer list-none items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none [&::-webkit-details-marker]:hidden"
+        onClick={(event) => {
+          event.preventDefault();
+          setPinnedOpen((open) => !open);
+        }}
+      >
+        <ChevronRight
+          aria-hidden="true"
+          className="h-3.5 w-3.5 shrink-0 transition-transform duration-150 group-open:rotate-90 motion-reduce:transition-none"
+        />
+        Suggested questions
+      </summary>
+      <ul className="mt-layout-xs flex flex-col border-l border-border/60 pl-layout-xs">
         {intents.map((intent) => (
           <li key={intent.id}>
             <Button
               className={cn(
                 TOUCH_TARGET,
-                "w-full justify-start rounded-lg text-left",
+                "h-auto w-full justify-start whitespace-normal rounded-md px-2 py-2 text-left font-normal leading-5 text-muted-foreground hover:bg-surface hover:text-foreground",
               )}
               onClick={() => onChoose(intent)}
               type="button"
-              variant="utility"
+              variant="ghost"
             >
               {intent.label}
             </Button>
           </li>
         ))}
       </ul>
-    </div>
+    </details>
   );
 }
 
@@ -1910,6 +1954,31 @@ function AthenaAgentShellPanel({
     onActiveTurnChange: rememberTurn,
   });
 
+  // The shell outlives the visual panel. Keep commit arrival identity here so
+  // collapse/expand cannot replay a wipe when a reactivated subscription
+  // briefly reports the old running snapshot before returning the same answer.
+  const seenAnswerKeysRef = useRef(new Set<string>());
+  const visibleRunningTurnRef = useRef<string | null>(null);
+  const liveAnswerKeyRef = useRef<string | null>(null);
+  const answerKey =
+    run.answer && run.activeTurnId
+      ? `${run.activeTurnId}:${run.answer.committedAt}`
+      : null;
+  if (!open) {
+    visibleRunningTurnRef.current = null;
+    liveAnswerKeyRef.current = null;
+  } else if (run.activeTurnId && run.hostState === "running") {
+    visibleRunningTurnRef.current = run.activeTurnId;
+  }
+  if (answerKey !== null && !seenAnswerKeysRef.current.has(answerKey)) {
+    seenAnswerKeysRef.current.add(answerKey);
+    liveAnswerKeyRef.current =
+      open && visibleRunningTurnRef.current === run.activeTurnId
+        ? answerKey
+        : null;
+    visibleRunningTurnRef.current = null;
+  }
+
   const harnessResponding = isAthenaAgentResponding(run.hostState);
   useEffect(() => {
     onRespondingChange(harnessResponding);
@@ -1919,6 +1988,7 @@ function AthenaAgentShellPanel({
 
   return (
     <AthenaAgentPanel
+      answerRevealKey={liveAnswerKeyRef.current}
       draft={draft}
       layout={resolvedLayout}
       onClose={onClose}
@@ -1934,9 +2004,7 @@ function AthenaAgentShellPanel({
   );
 }
 
-function isAthenaAgentResponding(
-  hostState: AthenaAgentRun["hostState"],
-) {
+function isAthenaAgentResponding(hostState: AthenaAgentRun["hostState"]) {
   return (
     hostState === "submitting" ||
     hostState === "reconnecting" ||
@@ -2008,21 +2076,16 @@ export function AthenaAgentShellProvider({
     window.setTimeout(() => returnTarget?.focus(), 0);
   }, []);
 
-  const registerSurfaceTarget = useCallback(
-    (next: AthenaAgentShellTarget) => {
-      setSurfaceTarget(next);
-      return () => {
-        setSurfaceTarget((current) => (current === next ? null : current));
-      };
-    },
-    [],
-  );
+  const registerSurfaceTarget = useCallback((next: AthenaAgentShellTarget) => {
+    setSurfaceTarget(next);
+    return () => {
+      setSurfaceTarget((current) => (current === next ? null : current));
+    };
+  }, []);
 
   const syncResponding = useCallback(
     (harnessResponding: boolean) => {
-      setResponding((current) =>
-        harnessResponding ? open || current : false,
-      );
+      setResponding((current) => (harnessResponding ? open || current : false));
     },
     [open],
   );
@@ -2159,7 +2222,9 @@ function AthenaAgentSurfaceEntry({
     layout,
   };
   const targetRef = useRef(nextTarget);
-  if (shellTargetIdentity(targetRef.current) !== shellTargetIdentity(nextTarget)) {
+  if (
+    shellTargetIdentity(targetRef.current) !== shellTargetIdentity(nextTarget)
+  ) {
     targetRef.current = nextTarget;
   }
   const target = targetRef.current;
