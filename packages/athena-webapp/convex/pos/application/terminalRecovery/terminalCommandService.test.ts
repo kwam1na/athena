@@ -14,6 +14,197 @@ const storeId = "store-1" as Id<"store">;
 const terminalId = "terminal-1" as Id<"posTerminal">;
 
 describe("terminal command service", () => {
+  it("retains bounded diagnostic evidence only for a claimed diagnostic command", async () => {
+    const diagnostics = {
+      version: 1 as const,
+      startedAt: now,
+      completedAt: now + 1,
+      pageSize: 250 as const,
+      includeReviewEvents: false as const,
+      pages: [{ terminalId, pageIndex: 0, fullPage: false, events: [] }],
+    };
+    for (const commandType of ["report_diagnostics", "retry_sync"] as const) {
+      const repository = buildRepository({
+        commands: [
+          buildCommand({
+            commandType,
+            status: "claimed",
+            executionId: "execution",
+          }),
+        ],
+      });
+      const result = await acknowledgeTerminalRecoveryCommand(repository, {
+        acknowledgedAt: now + 2,
+        commandId: "command-1" as Id<"posTerminalRecoveryCommand">,
+        executionId: "execution",
+        result: "completed",
+        storeId,
+        terminalId,
+        uploadPageDiagnostics: diagnostics,
+      });
+      if (commandType === "report_diagnostics") {
+        expect(result).toMatchObject({
+          kind: "ok",
+          data: { acknowledgement: { uploadPageDiagnostics: diagnostics } },
+        });
+      } else {
+        expect(result.kind).toBe("user_error");
+        expect(repository.patchCommand).not.toHaveBeenCalled();
+      }
+    }
+    const repository = buildRepository({
+      commands: [
+        buildCommand({
+          commandType: "report_diagnostics",
+          status: "claimed",
+          executionId: "execution",
+        }),
+      ],
+    });
+    const result = await acknowledgeTerminalRecoveryCommand(repository, {
+      acknowledgedAt: now + 2,
+      commandId: "command-1" as Id<"posTerminalRecoveryCommand">,
+      executionId: "execution",
+      result: "completed",
+      storeId,
+      terminalId,
+      uploadPageDiagnostics: {
+        ...diagnostics,
+        pages: Array.from({ length: 5 }, () => diagnostics.pages[0]),
+      },
+    });
+    expect(result.kind).toBe("user_error");
+    expect(repository.patchCommand).not.toHaveBeenCalled();
+
+    const event = {
+      localEventId: "event-1",
+      type: "session.payments_updated",
+      sequence: 1,
+      syncStatus: "needs_review",
+      drainCandidate: false,
+      activityCandidate: false,
+    };
+    const atLimit = {
+      ...diagnostics,
+      pages: [
+        {
+          terminalId,
+          pageIndex: 1,
+          fullPage: true,
+          events: Array.from({ length: 250 }, () => ({
+            ...event,
+            type: "x".repeat(160),
+          })),
+        },
+      ],
+    };
+    const rejected = [
+      { label: "failed result", result: "failed" as const, payload: atLimit },
+      {
+        label: "oversized page",
+        result: "completed" as const,
+        payload: {
+          ...diagnostics,
+          pages: [
+            {
+              terminalId,
+              pageIndex: 0,
+              fullPage: true,
+              events: Array.from({ length: 251 }, () => event),
+            },
+          ],
+        },
+      },
+      {
+        label: "out-of-range page index",
+        result: "completed" as const,
+        payload: {
+          ...diagnostics,
+          pages: [{ terminalId, pageIndex: 2, fullPage: false, events: [] }],
+        },
+      },
+      {
+        label: "oversized event string",
+        result: "completed" as const,
+        payload: {
+          ...diagnostics,
+          pages: [
+            {
+              terminalId,
+              pageIndex: 0,
+              fullPage: false,
+              events: [{ ...event, type: "x".repeat(161) }],
+            },
+          ],
+        },
+      },
+      {
+        label: "oversized terminal id",
+        result: "completed" as const,
+        payload: {
+          ...diagnostics,
+          pages: [
+            {
+              terminalId: "t".repeat(161),
+              pageIndex: 0,
+              fullPage: false,
+              events: [],
+            },
+          ],
+        },
+      },
+    ];
+    for (const boundCase of rejected) {
+      const boundRepository = buildRepository({
+        commands: [
+          buildCommand({
+            commandType: "report_diagnostics",
+            status: "claimed",
+            executionId: "execution",
+          }),
+        ],
+      });
+      const boundResult = await acknowledgeTerminalRecoveryCommand(
+        boundRepository,
+        {
+          acknowledgedAt: now + 2,
+          commandId: "command-1" as Id<"posTerminalRecoveryCommand">,
+          executionId: "execution",
+          result: boundCase.result,
+          storeId,
+          terminalId,
+          uploadPageDiagnostics: boundCase.payload as never,
+        },
+      );
+      expect(boundResult.kind, boundCase.label).toBe("user_error");
+      expect(boundRepository.patchCommand, boundCase.label).not.toHaveBeenCalled();
+    }
+
+    // The allow side of the same bounds: exactly at every limit is accepted,
+    // so the guard is pinned on both sides rather than rejecting everything.
+    const atLimitRepository = buildRepository({
+      commands: [
+        buildCommand({
+          commandType: "report_diagnostics",
+          status: "claimed",
+          executionId: "execution",
+        }),
+      ],
+    });
+    const atLimitResult = await acknowledgeTerminalRecoveryCommand(
+      atLimitRepository,
+      {
+        acknowledgedAt: now + 2,
+        commandId: "command-1" as Id<"posTerminalRecoveryCommand">,
+        executionId: "execution",
+        result: "completed",
+        storeId,
+        terminalId,
+        uploadPageDiagnostics: atLimit as never,
+      },
+    );
+    expect(atLimitResult.kind).toBe("ok");
+  });
   it("issues, claims, acknowledges, and waits for runtime verification", async () => {
     const repository = buildRepository();
 
@@ -33,7 +224,9 @@ describe("terminal command service", () => {
 
     expect(issued.kind).toBe("ok");
     const commandId =
-      issued.kind === "ok" ? issued.data._id : ("never" as Id<"posTerminalRecoveryCommand">);
+      issued.kind === "ok"
+        ? issued.data._id
+        : ("never" as Id<"posTerminalRecoveryCommand">);
 
     const claimable = await listClaimableTerminalRecoveryCommands(repository, {
       now,
@@ -1128,7 +1321,9 @@ describe("terminal command service", () => {
       verifiedAt: now,
     });
     expect(fresh.verifiedCommandIds).toEqual(["command-1"]);
-    expect(repository.listRuntimeVerificationReadyCommands).toHaveBeenCalledWith({
+    expect(
+      repository.listRuntimeVerificationReadyCommands,
+    ).toHaveBeenCalledWith({
       cursor: undefined,
       storeId,
       terminalId,
@@ -1207,14 +1402,13 @@ describe("terminal command service", () => {
       verifiedCommandIds: [],
     });
     expect(second.verifiedCommandIds).toEqual(["command-middle-eligible"]);
-    expect(repository.listRuntimeVerificationReadyCommands).toHaveBeenNthCalledWith(
-      2,
-      {
-        cursor: "page-2",
-        storeId,
-        terminalId,
-      },
-    );
+    expect(
+      repository.listRuntimeVerificationReadyCommands,
+    ).toHaveBeenNthCalledWith(2, {
+      cursor: "page-2",
+      storeId,
+      terminalId,
+    });
     expect(repository.patchCommand).toHaveBeenCalledTimes(1);
     expect(repository.patchCommand).toHaveBeenCalledWith(
       "command-middle-eligible",
@@ -1599,38 +1793,44 @@ describe("terminal command service", () => {
       ],
     });
 
-    const applying = await verifyTerminalRecoveryCommandsFromRuntime(repository, {
-      runtimeStatus: buildRuntimeStatus({
-        appUpdate: {
-          canApply: false,
-          commandExecutionId: "execution-1",
-          detectorStatus: "ok",
-          observedAt: now,
-          status: "applying",
-        },
-        receivedAt: now,
-      }),
-      storeId,
-      terminalId,
-      verifiedAt: now,
-    });
+    const applying = await verifyTerminalRecoveryCommandsFromRuntime(
+      repository,
+      {
+        runtimeStatus: buildRuntimeStatus({
+          appUpdate: {
+            canApply: false,
+            commandExecutionId: "execution-1",
+            detectorStatus: "ok",
+            observedAt: now,
+            status: "applying",
+          },
+          receivedAt: now,
+        }),
+        storeId,
+        terminalId,
+        verifiedAt: now,
+      },
+    );
     expect(applying.verifiedCommandIds).toEqual([]);
 
-    const current = await verifyTerminalRecoveryCommandsFromRuntime(repository, {
-      runtimeStatus: buildRuntimeStatus({
-        appUpdate: {
-          canApply: false,
-          commandExecutionId: "execution-1",
-          detectorStatus: "ok",
-          observedAt: now,
-          status: "current",
-        },
-        receivedAt: now,
-      }),
-      storeId,
-      terminalId,
-      verifiedAt: now,
-    });
+    const current = await verifyTerminalRecoveryCommandsFromRuntime(
+      repository,
+      {
+        runtimeStatus: buildRuntimeStatus({
+          appUpdate: {
+            canApply: false,
+            commandExecutionId: "execution-1",
+            detectorStatus: "ok",
+            observedAt: now,
+            status: "current",
+          },
+          receivedAt: now,
+        }),
+        storeId,
+        terminalId,
+        verifiedAt: now,
+      },
+    );
 
     expect(current.verifiedCommandIds).toEqual(["command-1"]);
   });
@@ -1663,17 +1863,22 @@ describe("terminal command service", () => {
   });
 });
 
-function buildRepository(seed: {
-  commands?: Doc<"posTerminalRecoveryCommand">[];
-} = {}) {
+function buildRepository(
+  seed: {
+    commands?: Doc<"posTerminalRecoveryCommand">[];
+  } = {},
+) {
   const commands = [...(seed.commands ?? [])];
   return {
     getCommand: vi.fn(async (commandId: Id<"posTerminalRecoveryCommand">) => {
       return commands.find((command) => command._id === commandId) ?? null;
     }),
     insertCommand: vi.fn(
-      async (input: Omit<Doc<"posTerminalRecoveryCommand">, "_id" | "_creationTime">) => {
-        const commandId = `command-${commands.length + 1}` as Id<"posTerminalRecoveryCommand">;
+      async (
+        input: Omit<Doc<"posTerminalRecoveryCommand">, "_id" | "_creationTime">,
+      ) => {
+        const commandId =
+          `command-${commands.length + 1}` as Id<"posTerminalRecoveryCommand">;
         const command = {
           _id: commandId,
           _creationTime: input.issuedAt,
@@ -1685,7 +1890,10 @@ function buildRepository(seed: {
     ),
     listCommandsForTerminal: vi.fn(async (args) =>
       commands.filter((command) => {
-        if (command.storeId !== args.storeId || command.terminalId !== args.terminalId) {
+        if (
+          command.storeId !== args.storeId ||
+          command.terminalId !== args.terminalId
+        ) {
           return false;
         }
         if (
@@ -1719,7 +1927,9 @@ function buildRepository(seed: {
         commandId: Id<"posTerminalRecoveryCommand">,
         patch: Partial<Doc<"posTerminalRecoveryCommand">>,
       ) => {
-        const index = commands.findIndex((command) => command._id === commandId);
+        const index = commands.findIndex(
+          (command) => command._id === commandId,
+        );
         if (index >= 0) {
           commands[index] = { ...commands[index]!, ...patch };
         }

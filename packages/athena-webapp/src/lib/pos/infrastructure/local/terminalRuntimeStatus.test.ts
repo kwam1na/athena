@@ -532,6 +532,33 @@ describe("terminalRuntimeStatus", () => {
     expect(JSON.stringify(status.sync.reviewEvents)).not.toContain("staff-1");
   });
 
+  it("reports all 12 local review events when upload-page debug reports zero", () => {
+    const status = buildPosTerminalRuntimeStatus({
+      clock: () => 2_000,
+      events: Array.from({ length: 12 }, (_, index) =>
+        buildLocalEvent({
+          localEventId: `event-review-${index}`,
+          sequence: index + 1,
+          sync: { status: "needs_review", uploaded: true },
+          type: index === 0 ? "register.closeout_started" : "session.payments_updated",
+          uploadSequence: index === 0 ? 22 : undefined,
+        }),
+      ),
+      source: "sync-runtime",
+      syncDebug: {
+        failedEventCount: 0,
+        pendingUploadEventCount: 0,
+        reviewEventCount: 0,
+        reviewEvents: [],
+      },
+    });
+
+    expect(status.sync.status).toBe("needs_review");
+    expect(status.sync.pendingEventCount).toBe(0);
+    expect(status.sync.reviewEvents).toHaveLength(12);
+    expect(status.sync.reviewEventCount).toBe(12);
+  });
+
   it("keeps local review samples from sync debug when event state is stale", () => {
     const status = buildPosTerminalRuntimeStatus({
       clock: () => 2_000,
@@ -564,6 +591,34 @@ describe("terminalRuntimeStatus", () => {
         type: "transaction.completed",
       }),
     ]);
+  });
+
+  it("counts published review samples when both the debug count and the event ledger are empty", () => {
+    const status = buildPosTerminalRuntimeStatus({
+      clock: () => 2_000,
+      events: [],
+      source: "register",
+      syncDebug: {
+        localOnlyEventCount: 0,
+        pendingUploadEventCount: 0,
+        reviewEventCount: 0,
+        reviewEvents: Array.from({ length: 3 }, (_, index) => ({
+          createdAt: 1_000,
+          localEventId: `event-review-${index}`,
+          localRegisterSessionId: "register-1",
+          sequence: index + 1,
+          status: "needs_review",
+          type: "transaction.completed",
+          uploaded: true,
+          uploadSequence: index + 1,
+        })),
+      },
+    });
+
+    // Neither the debug count (0) nor the event ledger (empty) can produce 3;
+    // only the published diagnostic samples can, so a stale zero cannot hide
+    // review evidence the runtime is simultaneously reporting.
+    expect(status.sync.reviewEventCount).toBe(3);
   });
 
   it("falls back to local event review samples when sync debug only reports a count", () => {

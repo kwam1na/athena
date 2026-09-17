@@ -1,0 +1,776 @@
+{
+  "spec": "delivery-run-export/1",
+  "labels": "self-attested; observability, not evidence; unbound to a record",
+  "runId": "run-5aa1cc181f2cdd4a",
+  "events": [
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 1,
+      "at": "2026-09-22T22:07:51Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "run.started",
+      "actor": {
+        "role": "executor"
+      },
+      "ticket": "V26-2087",
+      "attestation": "self",
+      "payload": {
+        "ticket": "V26-2087",
+        "host": "claude-code",
+        "workflow": {
+          "releaseId": "linear-concurrent-delivery-v1",
+          "profile": "linear"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 2,
+      "at": "2026-09-22T22:07:52Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "e0cdd012c63c2e91d43ff31ead0a02716408136b",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Land the content of commit feb46a5b (V26-2087: POS terminal sync starvation and server-settled review recovery) onto main, rebased onto origin/main, reconciling main with code already running in production.",
+          "acceptanceCriteria": [
+            "The rebased commit carries exactly the original source content, with graphify and harness generated artifacts regenerated on the rebased tree",
+            "No features, refactors or improvements beyond defects flagged by the gate or reviewers inside this diff",
+            "Review converges with lens.outcome-correctness, lens.adversarial-testing and ce-correctness-reviewer all approving with zero findings",
+            "Every review deferral has a Linear follow-up issue in project athena",
+            "A landed-change report and a docs/solutions note accompany the change, both stamped with the current deliverable diff fingerprint",
+            "No production deploy and no backfill are performed by this delivery"
+          ],
+          "finishLine": "merge-ready"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "e0cdd012c63c2e91d43ff31ead0a02716408136b",
+        "candidateBinding": {
+          "deliverableDigest": "1c214f1e1639f0d9b85f51c1c6b8517a3f6f790e2094be94a24566e58b485280",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "e7e042ae038772347b3b5887c18c9b9f97b75d07",
+          "mergeBaseSha": "e7e042ae038772347b3b5887c18c9b9f97b75d07",
+          "workspaceId": "a3208042c8a25f7e2caae03c8bb8220a0e0fc3e9d61a83dff02ead987d131c6b"
+        },
+        "policyDigest": "1dd70381b10a325aaaf69ac741cff234a2fc6c7c623e08134b54fd72be12183c",
+        "release": {
+          "runtimeVersion": "0.5.0",
+          "releaseId": "linear-scoped-validation-diagnostics-v1",
+          "profile": "linear",
+          "archiveSha256": "ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 3,
+      "at": "2026-09-22T22:07:58Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "e0cdd012c63c2e91d43ff31ead0a02716408136b",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Land the content of commit feb46a5b (V26-2087: POS terminal sync starvation and server-settled review recovery) onto main, rebased onto origin/main, reconciling main with code already running in production.",
+          "acceptanceCriteria": [
+            "The rebased commit carries exactly the original source content, with graphify and harness generated artifacts regenerated on the rebased tree",
+            "No features, refactors or improvements beyond defects flagged by the gate or reviewers inside this diff",
+            "Review converges with lens.outcome-correctness, lens.adversarial-testing and ce-correctness-reviewer all approving with zero findings",
+            "Every review deferral has a Linear follow-up issue in project athena",
+            "A landed-change report and a docs/solutions note accompany the change, both stamped with the current deliverable diff fingerprint",
+            "No production deploy and no backfill are performed by this delivery"
+          ],
+          "finishLine": "merge-ready"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "e0cdd012c63c2e91d43ff31ead0a02716408136b",
+        "candidateBinding": {
+          "deliverableDigest": "1c214f1e1639f0d9b85f51c1c6b8517a3f6f790e2094be94a24566e58b485280",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "e7e042ae038772347b3b5887c18c9b9f97b75d07",
+          "mergeBaseSha": "e7e042ae038772347b3b5887c18c9b9f97b75d07",
+          "workspaceId": "a3208042c8a25f7e2caae03c8bb8220a0e0fc3e9d61a83dff02ead987d131c6b"
+        },
+        "policyDigest": "1dd70381b10a325aaaf69ac741cff234a2fc6c7c623e08134b54fd72be12183c",
+        "release": {
+          "runtimeVersion": "0.5.0",
+          "releaseId": "linear-scoped-validation-diagnostics-v1",
+          "profile": "linear",
+          "archiveSha256": "ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 4,
+      "at": "2026-09-22T22:07:59Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "policy",
+        "durationMs": 1033
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 5,
+      "at": "2026-09-22T22:09:59Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 111062
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 6,
+      "at": "2026-09-22T22:10:00Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "e0cdd012c63c2e91d43ff31ead0a02716408136b",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Land the content of commit feb46a5b (V26-2087: POS terminal sync starvation and server-settled review recovery) onto main, rebased onto origin/main, reconciling main with code already running in production.",
+          "acceptanceCriteria": [
+            "The rebased commit carries exactly the original source content, with graphify and harness generated artifacts regenerated on the rebased tree",
+            "No features, refactors or improvements beyond defects flagged by the gate or reviewers inside this diff",
+            "Review converges with lens.outcome-correctness, lens.adversarial-testing and ce-correctness-reviewer all approving with zero findings",
+            "Every review deferral has a Linear follow-up issue in project athena",
+            "A landed-change report and a docs/solutions note accompany the change, both stamped with the current deliverable diff fingerprint",
+            "No production deploy and no backfill are performed by this delivery"
+          ],
+          "finishLine": "merge-ready"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "e0cdd012c63c2e91d43ff31ead0a02716408136b",
+        "candidateBinding": {
+          "deliverableDigest": "1c214f1e1639f0d9b85f51c1c6b8517a3f6f790e2094be94a24566e58b485280",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "e7e042ae038772347b3b5887c18c9b9f97b75d07",
+          "mergeBaseSha": "e7e042ae038772347b3b5887c18c9b9f97b75d07",
+          "workspaceId": "a3208042c8a25f7e2caae03c8bb8220a0e0fc3e9d61a83dff02ead987d131c6b"
+        },
+        "policyDigest": "1dd70381b10a325aaaf69ac741cff234a2fc6c7c623e08134b54fd72be12183c",
+        "release": {
+          "runtimeVersion": "0.5.0",
+          "releaseId": "linear-scoped-validation-diagnostics-v1",
+          "profile": "linear",
+          "archiveSha256": "ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 7,
+      "at": "2026-09-22T22:10:05Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "policy",
+        "durationMs": 4332
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 8,
+      "at": "2026-09-22T22:10:17Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "usage",
+        "durationMs": 76
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 9,
+      "at": "2026-09-22T22:10:18Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "submit-evidence",
+        "outcome": "usage",
+        "durationMs": 80
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 10,
+      "at": "2026-09-22T22:13:05Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 517
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 11,
+      "at": "2026-09-22T22:13:44Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "policy",
+        "durationMs": 535
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 12,
+      "at": "2026-09-22T22:14:39Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "policy",
+        "durationMs": 471
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 13,
+      "at": "2026-09-22T22:16:47Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 111146
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 14,
+      "at": "2026-09-22T22:16:48Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 497
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 15,
+      "at": "2026-09-22T22:18:44Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 115166
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 16,
+      "at": "2026-09-22T22:18:53Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "policy",
+        "durationMs": 467
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 17,
+      "at": "2026-09-22T22:19:19Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "ok",
+        "durationMs": 443
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 18,
+      "at": "2026-09-22T22:19:25Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "submit-evidence",
+        "outcome": "policy",
+        "durationMs": 474
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 19,
+      "at": "2026-09-22T22:19:59Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "ok",
+        "durationMs": 449
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 20,
+      "at": "2026-09-22T22:20:06Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "submit-evidence",
+        "outcome": "policy",
+        "durationMs": 467
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 21,
+      "at": "2026-09-22T22:20:29Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "ok",
+        "durationMs": 429
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 22,
+      "at": "2026-09-22T22:20:37Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "submit-evidence",
+        "outcome": "policy",
+        "durationMs": 495
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 23,
+      "at": "2026-09-22T22:30:06Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "d70221849b434670941a65c783e13c4637c96298",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Reconcile main with the POS terminal sync fixes already running in production, plus the acknowledgement.uploadPageDiagnostics schema field that production data already carries, so that main becomes deployable again without reverting a live fix.",
+          "acceptanceCriteria": [
+            "The upload drain pages forward instead of re-reading a fixed 250-event head window, and a non-advancing continuation throws",
+            "Expense events appended without a register session are neither given a pending activity state nor treated as activity candidates",
+            "reviewEventCount derives from the debug counter, the needs_review ledger and the published review samples",
+            "A bounded read-only upload page diagnostics sample round-trips on the recovery acknowledgement, shape-validated by a shared Convex validator and bounds-checked by the service",
+            "The recovery schema declares acknowledgement.uploadPageDiagnostics",
+            "The server-settled local review recovery path is not included; it is tracked for delivery in V26-2114",
+            "Review converges with lens.outcome-correctness, lens.adversarial-testing and ce-correctness-reviewer all approving with zero findings",
+            "No production deploy and no backfill are performed by this delivery"
+          ],
+          "finishLine": "merge-ready"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "d70221849b434670941a65c783e13c4637c96298",
+        "candidateBinding": {
+          "deliverableDigest": "2144c70a53942aeeed0b6a9e6e966629a25342fc5d4f98ebb93ad7b50037ac92",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "e7e042ae038772347b3b5887c18c9b9f97b75d07",
+          "mergeBaseSha": "e7e042ae038772347b3b5887c18c9b9f97b75d07",
+          "workspaceId": "a3208042c8a25f7e2caae03c8bb8220a0e0fc3e9d61a83dff02ead987d131c6b"
+        },
+        "policyDigest": "1dd70381b10a325aaaf69ac741cff234a2fc6c7c623e08134b54fd72be12183c",
+        "release": {
+          "runtimeVersion": "0.5.0",
+          "releaseId": "linear-scoped-validation-diagnostics-v1",
+          "profile": "linear",
+          "archiveSha256": "ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 24,
+      "at": "2026-09-22T22:48:44Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 111965
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 25,
+      "at": "2026-09-22T22:48:45Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 452
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 26,
+      "at": "2026-09-22T22:49:05Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "ok",
+        "durationMs": 457
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 27,
+      "at": "2026-09-22T22:49:14Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "submit-evidence",
+        "outcome": "ok",
+        "durationMs": 524
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 28,
+      "at": "2026-09-22T22:49:22Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2170a9dbc2ee9c266f248fff19c67c167a3d75dd",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Reconcile main with the POS terminal sync fixes already running in production, plus the acknowledgement.uploadPageDiagnostics schema field that production data already carries, so that main becomes deployable again without reverting a live fix.",
+          "acceptanceCriteria": [
+            "The upload drain pages forward instead of re-reading a fixed 250-event head window, and a non-advancing continuation throws",
+            "Expense events appended without a register session are neither given a pending activity state nor treated as activity candidates",
+            "reviewEventCount derives from the debug counter, the needs_review ledger and the published review samples",
+            "A bounded read-only upload page diagnostics sample round-trips on the recovery acknowledgement, shape-validated by a shared Convex validator and bounds-checked by the service",
+            "The recovery schema declares acknowledgement.uploadPageDiagnostics",
+            "The server-settled local review recovery path is not included; it is tracked for delivery in V26-2114",
+            "Review converges with lens.outcome-correctness, lens.adversarial-testing and ce-correctness-reviewer all approving with zero findings",
+            "No production deploy and no backfill are performed by this delivery"
+          ],
+          "finishLine": "merge-ready"
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "2170a9dbc2ee9c266f248fff19c67c167a3d75dd",
+        "candidateBinding": {
+          "deliverableDigest": "2144c70a53942aeeed0b6a9e6e966629a25342fc5d4f98ebb93ad7b50037ac92",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "e7e042ae038772347b3b5887c18c9b9f97b75d07",
+          "mergeBaseSha": "e7e042ae038772347b3b5887c18c9b9f97b75d07",
+          "workspaceId": "a3208042c8a25f7e2caae03c8bb8220a0e0fc3e9d61a83dff02ead987d131c6b"
+        },
+        "policyDigest": "1dd70381b10a325aaaf69ac741cff234a2fc6c7c623e08134b54fd72be12183c",
+        "release": {
+          "runtimeVersion": "0.5.0",
+          "releaseId": "linear-scoped-validation-diagnostics-v1",
+          "profile": "linear",
+          "archiveSha256": "ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01"
+        }
+      }
+    },
+    {
+      "version": "run-event/1",
+      "runId": "run-5aa1cc181f2cdd4a",
+      "seq": 29,
+      "at": "2026-09-22T23:20:55Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "ok",
+        "durationMs": 1893043,
+        "digest": "9935b04b4a4ada1f4f866b6ea2370f7944510998ce372f7b00ac3843c6ec2260"
+      }
+    }
+  ],
+  "summary": {
+    "ticket": "V26-2087",
+    "open": true,
+    "startedAt": "2026-09-22T22:07:51Z",
+    "lastAt": "2026-09-22T23:20:55Z",
+    "durationSeconds": 4384,
+    "phases": {
+      "implementationSeconds": 4384,
+      "reviewSeconds": 0,
+      "tailSeconds": 0,
+      "rounds": 0,
+      "gate": {
+        "totalMs": 1898408,
+        "counted": 3,
+        "unreadable": 0,
+        "unseen": false
+      }
+    },
+    "roundsOpened": 0,
+    "roundsClosed": 0,
+    "findings": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 0,
+      "P3": 0
+    },
+    "gate": {
+      "outcome": "ok",
+      "writer": "cli"
+    }
+  },
+  "costs": {
+    "review": {
+      "coverage": "unreported",
+      "unreportedEntries": 0,
+      "totals": []
+    },
+    "run": {
+      "coverage": "unreported"
+    }
+  },
+  "readout": {
+    "status": "incomplete",
+    "present": [
+      "run.started",
+      "command.completed:gate"
+    ],
+    "missing": [
+      "ticket.read",
+      "posture.declared",
+      "lens.selected",
+      "review.round.opened",
+      "review.round.closed",
+      "command.completed:record",
+      "pr.opened",
+      "run.ended"
+    ],
+    "violations": [
+      "gate-before-closed-round"
+    ],
+    "explanations": [
+      {
+        "violation": "gate-before-closed-round",
+        "because": "the governing gate completion at seq 29 has no closed round this row accepts: the journal carries no round whose latest opening is closed by its own latest close, so no closed round governs",
+        "blocksAdmission": false
+      }
+    ]
+  },
+  "refusedAppends": []
+}

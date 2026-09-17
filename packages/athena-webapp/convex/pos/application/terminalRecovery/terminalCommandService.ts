@@ -1,4 +1,5 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
+import type { PosUploadPageDiagnostics } from "../../../../shared/posUploadPageDiagnostics";
 import {
   ok,
   userError,
@@ -52,15 +53,16 @@ export type TerminalRecoveryCommandReadRepository = {
   }>;
 };
 
-export type TerminalRecoveryCommandRepository = TerminalRecoveryCommandReadRepository & {
-  insertCommand(
-    input: Omit<Doc<"posTerminalRecoveryCommand">, "_id" | "_creationTime">,
-  ): Promise<Id<"posTerminalRecoveryCommand">>;
-  patchCommand(
-    commandId: Id<"posTerminalRecoveryCommand">,
-    patch: Partial<Doc<"posTerminalRecoveryCommand">>,
-  ): Promise<void>;
-};
+export type TerminalRecoveryCommandRepository =
+  TerminalRecoveryCommandReadRepository & {
+    insertCommand(
+      input: Omit<Doc<"posTerminalRecoveryCommand">, "_id" | "_creationTime">,
+    ): Promise<Id<"posTerminalRecoveryCommand">>;
+    patchCommand(
+      commandId: Id<"posTerminalRecoveryCommand">,
+      patch: Partial<Doc<"posTerminalRecoveryCommand">>,
+    ): Promise<void>;
+  };
 
 export async function issueTerminalRecoveryCommand(
   repository: TerminalRecoveryCommandRepository,
@@ -84,13 +86,15 @@ export async function issueTerminalRecoveryCommand(
   if (containsSecretLikeField(args.commandContext)) {
     return userError({
       code: "validation_failed",
-      message: "Terminal recovery commands can only store non-secret audit data.",
+      message:
+        "Terminal recovery commands can only store non-secret audit data.",
     });
   }
   if (containsSecretLikeField(args.expectedEvidence)) {
     return userError({
       code: "validation_failed",
-      message: "Terminal recovery commands can only store non-secret audit data.",
+      message:
+        "Terminal recovery commands can only store non-secret audit data.",
     });
   }
 
@@ -121,11 +125,13 @@ export async function issueTerminalRecoveryCommand(
     ) {
       return ok(command);
     }
-    if (!isEquivalentCommand(command, {
-      commandContext,
-      commandType: args.commandType,
-      expectedEvidence,
-    })) {
+    if (
+      !isEquivalentCommand(command, {
+        commandContext,
+        commandType: args.commandType,
+        expectedEvidence,
+      })
+    ) {
       continue;
     }
     if (isActiveCommand(command)) {
@@ -147,7 +153,14 @@ export async function issueTerminalRecoveryCommand(
   };
   const commandId = await repository.insertCommand(input);
   const command = await repository.getCommand(commandId);
-  return ok(command ?? ({ _id: commandId, _creationTime: args.issuedAt, ...input } as Doc<"posTerminalRecoveryCommand">));
+  return ok(
+    command ??
+      ({
+        _id: commandId,
+        _creationTime: args.issuedAt,
+        ...input,
+      } as Doc<"posTerminalRecoveryCommand">),
+  );
 }
 
 export async function listClaimableTerminalRecoveryCommands(
@@ -176,7 +189,8 @@ export async function listClaimableTerminalRecoveryCommands(
       command.storeId === args.storeId &&
       command.terminalId === args.terminalId &&
       (command.status === "pending" ||
-        (command.status === "claimed" && command.commandType !== "update_app")) &&
+        (command.status === "claimed" &&
+          command.commandType !== "update_app")) &&
       command.expiresAt > args.now
     ) {
       claimable.push(command);
@@ -220,24 +234,26 @@ export async function claimTerminalRecoveryCommand(
 
   if (command.status === "pending") {
     const executionId = buildExecutionId(command._id, args.claimedAt);
-    await repository.patchCommand(command._id, pruneUndefined({
-      claimedAt: args.claimedAt,
-      executionId,
-      expectedEvidence:
-        command.commandType === "update_app" &&
-        command.expectedEvidence.appUpdateCommandExecutionId === undefined
-          ? {
-              ...command.expectedEvidence,
-              appUpdateCommandExecutionId: executionId,
-            }
-          : undefined,
-      status: "claimed",
-    }));
+    await repository.patchCommand(
+      command._id,
+      pruneUndefined({
+        claimedAt: args.claimedAt,
+        executionId,
+        expectedEvidence:
+          command.commandType === "update_app" &&
+          command.expectedEvidence.appUpdateCommandExecutionId === undefined
+            ? {
+                ...command.expectedEvidence,
+                appUpdateCommandExecutionId: executionId,
+              }
+            : undefined,
+        status: "claimed",
+      }),
+    );
   }
 
   const executionId =
-    command.executionId ??
-    buildExecutionId(command._id, args.claimedAt);
+    command.executionId ?? buildExecutionId(command._id, args.claimedAt);
   const expectedEvidence =
     command.commandType === "update_app" &&
     command.expectedEvidence.appUpdateCommandExecutionId === undefined
@@ -259,6 +275,7 @@ export async function acknowledgeTerminalRecoveryCommand(
   repository: TerminalRecoveryCommandRepository,
   args: {
     acknowledgedAt: number;
+    uploadPageDiagnostics?: PosUploadPageDiagnostics;
     clearedLocalReviewEventIds?: string[];
     commandId: Id<"posTerminalRecoveryCommand">;
     executionId?: string;
@@ -287,6 +304,29 @@ export async function acknowledgeTerminalRecoveryCommand(
   }
 
   const status = args.result;
+  const diagnostics = args.uploadPageDiagnostics;
+  if (
+    diagnostics &&
+    (command.commandType !== "report_diagnostics" ||
+      args.result !== "completed" ||
+      diagnostics.pages.length > 4 ||
+      diagnostics.pages.some(
+        (page) =>
+          page.events.length > 250 ||
+          (page.pageIndex !== 0 && page.pageIndex !== 1) ||
+          page.terminalId.length > 160 ||
+          page.events.some((event) =>
+            Object.values(event).some(
+              (value) => typeof value === "string" && value.length > 160,
+            ),
+          ),
+      ))
+  ) {
+    return userError({
+      code: "validation_failed",
+      message: "Invalid bounded upload page diagnostic.",
+    });
+  }
   const verificationStatus =
     args.result === "completed"
       ? "runtime_verification_ready"
@@ -297,6 +337,7 @@ export async function acknowledgeTerminalRecoveryCommand(
   );
   const patch = {
     acknowledgement: pruneUndefined({
+      ...(diagnostics ? { uploadPageDiagnostics: diagnostics } : {}),
       acknowledgedAt: args.acknowledgedAt,
       ...(clearedLocalReviewEventIds.length > 0
         ? { clearedLocalReviewEventIds }
@@ -419,7 +460,10 @@ export async function verifyTerminalRecoveryCommandsFromRuntime(
   });
   const verifiedCommandIds: Array<Id<"posTerminalRecoveryCommand">> = [];
 
-  if (args.verifiedAt - args.runtimeStatus.receivedAt > RUNTIME_VERIFICATION_FRESHNESS_MS) {
+  if (
+    args.verifiedAt - args.runtimeStatus.receivedAt >
+    RUNTIME_VERIFICATION_FRESHNESS_MS
+  ) {
     return { nextCursor: page.nextCursor, verifiedCommandIds };
   }
 
@@ -476,7 +520,8 @@ function runtimeMatchesExpectedEvidence(
   }
   if (
     expectedEvidence.terminalSeedReady !== undefined &&
-    runtimeStatus.localStore.terminalSeedReady !== expectedEvidence.terminalSeedReady
+    runtimeStatus.localStore.terminalSeedReady !==
+      expectedEvidence.terminalSeedReady
   ) {
     return false;
   }
@@ -495,7 +540,8 @@ function runtimeMatchesExpectedEvidence(
   }
   if (
     expectedEvidence.localReviewEventCount !== undefined &&
-    runtimeStatus.sync.reviewEventCount !== expectedEvidence.localReviewEventCount
+    runtimeStatus.sync.reviewEventCount !==
+      expectedEvidence.localReviewEventCount
   ) {
     return false;
   }
@@ -507,7 +553,8 @@ function runtimeMatchesExpectedEvidence(
   }
   if (
     expectedEvidence.staffAuthorityStatus !== undefined &&
-    runtimeStatus.staffAuthority.status !== expectedEvidence.staffAuthorityStatus
+    runtimeStatus.staffAuthority.status !==
+      expectedEvidence.staffAuthorityStatus
   ) {
     return false;
   }
@@ -576,7 +623,9 @@ function validateTerminalRecoveryCommandShape(input: {
     }
     const expectedClearedIds =
       input.expectedEvidence.localReviewClearedEventIds ?? [];
-    if (uniqueStrings(expectedClearedIds).length !== expectedClearedIds.length) {
+    if (
+      uniqueStrings(expectedClearedIds).length !== expectedClearedIds.length
+    ) {
       return "Local review clear-all commands require unique cleared item evidence.";
     }
     if (!arraysEqualAsSets(eventIds, expectedClearedIds)) {
@@ -595,24 +644,18 @@ function validateTerminalRecoveryCommandShape(input: {
   if (uniqueStrings(eventIds).length !== eventIds.length) {
     return "Local review cleanup commands require unique local review item ids.";
   }
-  if (
-    input.commandContext.localReviewClearLimit !== undefined
-  ) {
+  if (input.commandContext.localReviewClearLimit !== undefined) {
     return "Local review cleanup commands must target explicit reviewed item ids.";
   }
   if (input.expectedEvidence.localReviewEventCount === undefined) {
     return "Local review cleanup commands require expected local review count evidence.";
   }
-  const expectedClearedIds = input.expectedEvidence.localReviewClearedEventIds ?? [];
+  const expectedClearedIds =
+    input.expectedEvidence.localReviewClearedEventIds ?? [];
   if (uniqueStrings(expectedClearedIds).length !== expectedClearedIds.length) {
     return "Local review cleanup commands require unique cleared item evidence.";
   }
-  if (
-    !arraysEqualAsSets(
-      eventIds,
-      expectedClearedIds,
-    )
-  ) {
+  if (!arraysEqualAsSets(eventIds, expectedClearedIds)) {
     return "Local review cleanup commands require matching cleared item evidence.";
   }
 
@@ -765,13 +808,15 @@ function containsSecretLikeField(value: unknown): boolean {
   if (typeof value !== "object") {
     return false;
   }
-  return Object.entries(value as Record<string, unknown>).some(([key, entry]) => {
-    const normalized = key.toLowerCase();
-    return (
-      SECRET_LIKE_KEYS.some((secretKey) => normalized.includes(secretKey)) ||
-      containsSecretLikeField(entry)
-    );
-  });
+  return Object.entries(value as Record<string, unknown>).some(
+    ([key, entry]) => {
+      const normalized = key.toLowerCase();
+      return (
+        SECRET_LIKE_KEYS.some((secretKey) => normalized.includes(secretKey)) ||
+        containsSecretLikeField(entry)
+      );
+    },
+  );
 }
 
 function pruneUndefined<T extends Record<string, unknown>>(value: T): T {

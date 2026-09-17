@@ -78,6 +78,7 @@ import {
   mapServerSettlementOutcomeToLocalState,
 } from "./syncStatus";
 import { readScopedPosLocalEvents } from "./localRegisterReader";
+import { collectUploadPageDiagnostics } from "./uploadPageDiagnostics";
 import {
   isPosLocalEventInTerminalScope,
   resolvePosLocalTerminalScope,
@@ -673,6 +674,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
 
             const pending = await readScopedPosLocalUploadEvents({
               includeReviewEvents: drainIncludesReviewEvents(options),
+              drainOptions: options,
+              uploadSupport,
               store,
               storeId,
               terminalId,
@@ -692,16 +695,6 @@ export function usePosLocalSyncRuntimeStatus(input: {
                   uploadSupport,
                 ) || isPosLocalRuntimeActivityReportCandidate(event),
             );
-            if (!shouldStop()) {
-              setDebug((current) => ({
-                ...current,
-                ...buildRuntimeSyncDebug(
-                  pending.value.events,
-                  mode,
-                  uploadSupport,
-                ),
-              }));
-            }
             return uploadableEvents.map((event) => ({
               id: event.localEventId,
               terminalId: event.terminalId,
@@ -836,6 +829,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
           uploadBatch: async (pendingEvents) => {
             const latestEvents = await readScopedPosLocalUploadEvents({
               includeReviewEvents: drainIncludesReviewEvents(options),
+              drainOptions: options,
+              uploadSupport,
               store,
               storeId,
               terminalId,
@@ -1922,6 +1917,17 @@ export function usePosLocalSyncRuntimeStatus(input: {
           command: claimResult.data,
           appUpdateCoordinator,
           onRetrySync: requestRetry,
+          reportDiagnostics: async (scope) => ({
+            uploadPageDiagnostics: await collectUploadPageDiagnostics({
+              ...scope,
+              store,
+              isDrainCandidate: (event) =>
+                isPosLocalRuntimeDrainCandidate(event, {}, uploadSupport),
+              isActivityCandidate: isPosLocalRuntimeActivityReportCandidate,
+            }),
+            message:
+              "Read-only upload page sample collected; no events changed or retried.",
+          }),
           resolveServerReview: async ({
             storeId: reviewStoreId,
             terminalId: reviewTerminalId,
@@ -2050,6 +2056,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
           ...(executionId ? { executionId } : {}),
           message: localResult.message,
           localReviewEvents: localResult.localReviewEvents,
+          ...(localResult.uploadPageDiagnostics
+            ? { uploadPageDiagnostics: localResult.uploadPageDiagnostics }
+            : {}),
           result: ackResult,
           storeId: storeId as Id<"store">,
           syncSecretHash: runtimeStatusSyncSecretHash,
@@ -2134,6 +2143,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
     runtimeStatusTerminalId,
     storeFactory,
     storeId,
+    uploadSupport,
   ]);
 
   return useMemo(() => {
@@ -2721,8 +2731,10 @@ export function assertPosLocalStoreOk<T>(
   }
 }
 
-async function readScopedPosLocalUploadEvents(input: {
+export async function readScopedPosLocalUploadEvents(input: {
   includeReviewEvents?: boolean;
+  drainOptions?: PosLocalRuntimeDrainOptions;
+  uploadSupport?: PosLocalSyncUploadSupport;
   store: PosLocalRuntimeStore;
   storeId?: string | null;
   terminalId?: string | null;
@@ -2741,14 +2753,28 @@ async function readScopedPosLocalUploadEvents(input: {
   const eventPages =
     listEventsForUpload && scope.storeId && terminalIds.length > 0
       ? await Promise.all(
-          terminalIds.map((scopedTerminalId) =>
-            listEventsForUpload.call(input.store, {
-              includeReviewEvents: input.includeReviewEvents,
-              limit: 250,
-              storeId: scope.storeId,
-              terminalId: scopedTerminalId,
-            }),
-          ),
+          terminalIds.map(async (scopedTerminalId) => {
+            let afterSequence: number | undefined;
+            while (true) {
+              const page = await listEventsForUpload.call(input.store, {
+                includeReviewEvents: input.includeReviewEvents,
+                limit: 250,
+                storeId: scope.storeId,
+                terminalId: scopedTerminalId,
+                ...(afterSequence !== undefined ? { afterSequence } : {}),
+              });
+              if (!page.ok) return page;
+              if (page.value.some((event) =>
+                isPosLocalRuntimeDrainCandidate(event, input.drainOptions, input.uploadSupport) ||
+                isPosLocalRuntimeActivityReportCandidate(event),
+              ) || page.value.length < 250) return page;
+              const nextSequence = Math.max(...page.value.map((event) => event.sequence));
+              if (!Number.isFinite(nextSequence) || nextSequence <= (afterSequence ?? -1)) {
+                throw new Error("Upload page continuation did not advance.");
+              }
+              afterSequence = nextSequence;
+            }
+          }),
         )
       : [
           listEventsForUpload
@@ -2873,6 +2899,9 @@ export function isPosLocalRuntimeDrainCandidate(
 export function isPosLocalRuntimeActivityReportCandidate(
   event: PosLocalEventRecord,
 ) {
+  if (event.type.startsWith("expense.") && !event.localRegisterSessionId) {
+    return false;
+  }
   if (!canReportPosRegisterSessionLocalActivityType(event.type)) {
     return false;
   }

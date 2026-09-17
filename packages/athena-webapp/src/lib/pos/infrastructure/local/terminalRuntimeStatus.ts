@@ -764,9 +764,11 @@ function buildSyncMetrics(
   const statusEvents = input.events.filter(
     (event) => !isNonBlockingRegisterLifecycleReviewEvent(event),
   );
-  const reviewEventCount =
-    input.syncDebug?.reviewEventCount ??
-    input.events.filter((event) => event.sync.status === "needs_review").length;
+  const reviewEventCount = Math.max(
+    input.syncDebug?.reviewEventCount ?? 0,
+    input.events.filter((event) => event.sync.status === "needs_review").length,
+    getRuntimeReviewDiagnosticsEvents(input).length,
+  );
   const actionableReviewEventCount = statusEvents.filter(
     (event) => event.sync.status === "needs_review",
   ).length;
