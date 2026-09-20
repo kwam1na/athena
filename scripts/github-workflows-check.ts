@@ -64,6 +64,8 @@ require_contract(producer.fetch('if').include?('github.event.repository.default_
 require_contract(producer.fetch('steps').any? { |s| s.fetch('run','').include?('bun run harness:validation-ci -- health') }, 'native full inventory entry missing')
 artifact = producer.fetch('steps').find { |s| s.fetch('uses','').start_with?('actions/upload-artifact@') }
 require_contract(artifact && artifact['if'] == 'always()' && artifact.dig('with','name') == 'athena-validation-health' && artifact.dig('with','path') == 'artifacts/validation-ci/health.json' && artifact.dig('with','retention-days') == 90, 'complete health artifact contract missing')
+diagnostics = producer.fetch('steps').find { |s| s.dig('with','name') == 'athena-validation-health-diagnostics' }
+require_contract(diagnostics && diagnostics.fetch('uses','').start_with?('actions/upload-artifact@') && diagnostics['if'] == 'always()' && diagnostics.dig('with','path') == 'artifacts/validation-ci/diagnostics.json' && diagnostics.dig('with','retention-days') == 90, 'separate execution diagnostics artifact missing')
 puts '[workflow:check] affected validation guard, summaries and health contract passed'
 `;
 

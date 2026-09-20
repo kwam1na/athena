@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import base from "../harness.config";
+import base from "./harness-base-config";
 import { projectValidationPolicy } from "./harness-validation-policy";
 import type { ValidationPlan } from "./harness-validation-plan";
 

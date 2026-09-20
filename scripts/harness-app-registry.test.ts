@@ -8,7 +8,7 @@ import {
   getHarnessPackageRegistration,
 } from "./harness-app-registry";
 import { projectReviewActivation } from "../.agent-skills/current/runtime/kernel.mjs";
-import harnessConfig from "../harness.config";
+import harnessConfig from "./harness-base-config";
 import { collectCanonicalValidationRegistry } from "./harness-repo-validation";
 import { buildValidationPlan } from "./harness-validation-plan";
 

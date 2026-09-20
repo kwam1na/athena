@@ -18,15 +18,15 @@
     },
     {
       "path": "cli-api.d.mts",
-      "sha256": "0c0d6eb4f2fdc7029e971cd2e3fe8dc8d5549b4347f66aa70cf2badb5f366d2e"
+      "sha256": "d04259809670c1bb419b8e0222f4665e1970160bc46a6e2aa3bdecb7466a2e1d"
     },
     {
       "path": "cli-api.mjs",
-      "sha256": "e9836b364cd346555b4bb44c012d1de389161841706f5fb663fa5db0d7f6fb4c"
+      "sha256": "8c017e5cd3ef06e87ee4b527907923f0ff04d37ec3cb2c02d784aade0d0653c9"
     },
     {
       "path": "cli.mjs",
-      "sha256": "a606dd72674c313945e2bfeac47b139701f4ca56d4519815d20f23a586599e70"
+      "sha256": "eed2c7e2d77a6bdb2d5de1ae586ebc5ca368e7ec09378b2c843bf271bf107367"
     },
     {
       "path": "kernel.d.mts",

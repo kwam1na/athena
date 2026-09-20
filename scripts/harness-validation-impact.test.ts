@@ -2029,7 +2029,7 @@ describe("mixed default and named type imports", () => {
     async (changed) => {
       const { projectValidationPolicy } =
         await import("./harness-validation-policy");
-      const { ATHENA_LEGACY_CONFIG } = await import("../harness.config");
+      const { ATHENA_LEGACY_CONFIG } = await import("./harness-base-config");
       const base = dependencyFiles(
         'import Runtime, { type T } from "./producer";',
       );

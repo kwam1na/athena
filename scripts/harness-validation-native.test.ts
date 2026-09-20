@@ -159,6 +159,12 @@ describe("public native validation lifecycle", () => {
         if (result.status !== "verified")
           throw new Error(JSON.stringify({ result, messages }));
         expect(result.status).toBe("verified");
+        expect(result.candidate?.headSha).toBe(input.binding.headSha);
+        expect(result.candidate?.base.tipSha).toBe(input.binding.baseSha);
+        expect(result.candidate?.treeSha).toBe(
+          result.observations.providers[0].attempts.at(-1)?.origin.candidate
+            .treeSha,
+        );
         expect(result.phases.map((p) => p.phase)).toEqual([
           "prepare",
           "gate",
@@ -181,6 +187,11 @@ describe("public native validation lifecycle", () => {
         const result = await runNativeValidation(input);
         expect(result.status).toBe("failed");
         expect(result).not.toHaveProperty("recordRef");
+        expect(result.candidate?.headSha).toBe(input.binding.headSha);
+        expect(result.candidate?.deliverable.digest).toBe(
+          result.observations.providers[0].attempts.at(-1)?.origin.candidate
+            .deliverableDigest,
+        );
         expect(result.observations.providers[0].attempts.at(-1)?.status).toBe(
           "failed",
         );

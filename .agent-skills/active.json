@@ -237,7 +237,7 @@
     },
     {
       "path": "release-manifest.json",
-      "sha256": "b6529266242a38251b8eb9a3b9f4e056a03db61b38e5df1e83c1149afea1c29b"
+      "sha256": "85e976a5e5bdef6a5cebb1d935746bcbf3f8318ae05cca032db24877a0c56713"
     },
     {
       "path": "runtime/LICENSE",
@@ -253,15 +253,15 @@
     },
     {
       "path": "runtime/cli-api.d.mts",
-      "sha256": "0c0d6eb4f2fdc7029e971cd2e3fe8dc8d5549b4347f66aa70cf2badb5f366d2e"
+      "sha256": "d04259809670c1bb419b8e0222f4665e1970160bc46a6e2aa3bdecb7466a2e1d"
     },
     {
       "path": "runtime/cli-api.mjs",
-      "sha256": "e9836b364cd346555b4bb44c012d1de389161841706f5fb663fa5db0d7f6fb4c"
+      "sha256": "8c017e5cd3ef06e87ee4b527907923f0ff04d37ec3cb2c02d784aade0d0653c9"
     },
     {
       "path": "runtime/cli.mjs",
-      "sha256": "a606dd72674c313945e2bfeac47b139701f4ca56d4519815d20f23a586599e70"
+      "sha256": "eed2c7e2d77a6bdb2d5de1ae586ebc5ca368e7ec09378b2c843bf271bf107367"
     },
     {
       "path": "runtime/kernel.d.mts",
@@ -281,7 +281,7 @@
     },
     {
       "path": "runtime/runtime.json",
-      "sha256": "51161ba4dd575d8cdbcf4f6c7a72d27eab04110a874bd73a890d06926704cea0"
+      "sha256": "196b24a12df2244bc7f1684307cd9377a9d57a03922ba375ae53ffffe2b909d9"
     },
     {
       "path": "schemas/catalog.schema.json",
@@ -488,7 +488,7 @@
       "sha256": "49630e23374f0375cb7d019ea024bcd5ea0c284feb8dc124b393b60f6e8d9aa7"
     }
   ],
-  "generation": "290f544834a6ac8678e96ee753494d0f2efac0b2e0233fc59f9d17adac713876",
+  "generation": "ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01",
   "ownership": "agent-skills-managed",
   "previous": {
     "files": [
@@ -710,7 +710,7 @@
       },
       {
         "path": "release-manifest.json",
-        "sha256": "9d915917149d40648a80b232907d9b2a84c04bbbf18e37aac178c97426d42512"
+        "sha256": "41bc0f53f31e144046b56b302a4969240ee68ac4f8ae4a01ffaf68951dc603da"
       },
       {
         "path": "runtime/LICENSE",
@@ -730,11 +730,11 @@
       },
       {
         "path": "runtime/cli-api.mjs",
-        "sha256": "a22ebac86ac6d96dbd7d8226c7c8fe0abdf07c334274342e3f783830e0e89f46"
+        "sha256": "bcedf20ee93d056a3afc2e8b2082b26cf0145780d8a4e33fbe3236182568d6c4"
       },
       {
         "path": "runtime/cli.mjs",
-        "sha256": "d7eaa1c80d03aef0d50217cd87ed9d03ec1ea106b2efc2013929806d0c7dbd07"
+        "sha256": "c541ffae0222152ca31c9e077acb7998ff09a05d5160e2f71daea0447477ba64"
       },
       {
         "path": "runtime/kernel.d.mts",
@@ -754,7 +754,7 @@
       },
       {
         "path": "runtime/runtime.json",
-        "sha256": "fd5c8b2de5f73f068a0693d0e5171e70710b1b95e7d1a36f0fb792dcad032458"
+        "sha256": "d0bf9eeffd1c6da11e0efb7adfc22b1eb8ce77ec831596babe56a2ec27d54d72"
       },
       {
         "path": "schemas/catalog.schema.json",
@@ -961,19 +961,19 @@
         "sha256": "49630e23374f0375cb7d019ea024bcd5ea0c284feb8dc124b393b60f6e8d9aa7"
       }
     ],
-    "generation": "efa1fa4f736e03fada3f4567f13024268a6f8fd4f46dbe01b4eb662890074af3",
+    "generation": "78360a77f607e46862597918a982169dd2085fd060d771a4dae492c59bc4e406",
     "release": {
-      "archiveSha256": "efa1fa4f736e03fada3f4567f13024268a6f8fd4f46dbe01b4eb662890074af3",
-      "metadataSha256": "5eabe942b1536198b3229c7c035c44f4716e9b826e5172ccd1b9cff8962a01f8",
+      "archiveSha256": "78360a77f607e46862597918a982169dd2085fd060d771a4dae492c59bc4e406",
+      "metadataSha256": "27fecaec101c0eee0690f891d4d90202dc5cb089d9250a22f567fe0c12f78e1e",
       "profile": "linear",
-      "releaseId": "scoped-validation-product-directories-v1"
+      "releaseId": "linear-scoped-validation-snapshot-liveness-v1"
     }
   },
   "release": {
-    "archiveSha256": "290f544834a6ac8678e96ee753494d0f2efac0b2e0233fc59f9d17adac713876",
-    "metadataSha256": "ed8770755ee85de612b9d0acb9cc266db14df4e806c092b0f4f66ebf938a68e1",
+    "archiveSha256": "ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01",
+    "metadataSha256": "1be993ac98740cd7dce0a1298fbe4be18e1484632aa9fc312d70cf1b6f7ed49c",
     "profile": "linear",
-    "releaseId": "scoped-validation-product-shallow-v1"
+    "releaseId": "linear-scoped-validation-diagnostics-v1"
   },
   "schemaVersion": "agent-skills-receipt/1"
 }

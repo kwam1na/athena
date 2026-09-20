@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ATHENA_LEGACY_CONFIG } from "../harness.config.ts";
+import { ATHENA_LEGACY_CONFIG } from "./harness-base-config.ts";
 import { configureScopedValidation } from "./harness-validation-runtime.ts";
 import { configureLocalScopedValidation } from "./harness-validation-local-runtime.ts";
 import { checkLocalValidationHealth } from "./harness-validation-local-health-check.ts";

@@ -9,7 +9,7 @@
     "personaSource": {
       "form": "shipped-by-identity",
       "composition": "qualifications/fixtures/agent-skills-core-v1-composition.zip",
-      "archiveSha256": "290f544834a6ac8678e96ee753494d0f2efac0b2e0233fc59f9d17adac713876",
+      "archiveSha256": "ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01",
       "manifest": "personas/manifest.json"
     }
   },

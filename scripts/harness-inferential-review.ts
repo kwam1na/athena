@@ -1,4 +1,4 @@
-import { importHarnessConfig } from "./delivery-product";
+import { loadHarnessBaseConfig } from "./harness-base-config-loader";
 import Anthropic from "@anthropic-ai/sdk";
 import { spawn as spawnChildProcess } from "node:child_process";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
@@ -384,7 +384,7 @@ async function expandProductValidationWiring(rootDir: string, scripts: Record<st
   // Installed gate wiring is declared by provider checks, not inferred from
   // retired wrapper phases or flags which skip repository validation.
   if (/\bbun\s+scripts\/(?:pr-athena-delivery-run|delivery-product)\.ts\b/.test(prAthenaScript)) {
-    const config = await importHarnessConfig(rootDir);
+    const config = await loadHarnessBaseConfig(rootDir);
     const declaredCommands = config.providers.flatMap(provider => provider.check ? [provider.check.command.join(" ")] : []);
     if (declaredCommands.some(command => /\bbun\s+run\s+harness:review\b/.test(command))) {
       const validation = await import(pathToFileURL(path.join(rootDir, "scripts/harness-review.ts")).href);

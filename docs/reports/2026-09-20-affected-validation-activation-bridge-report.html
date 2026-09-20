@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Preparing affected validation for a trusted cutover</title>
+</head>
+<body>
+<article data-athena-landed-change-report="v2" data-athena-report-diff-fingerprint="8eb3a13f623afe7fc107371716c48c683fb55fe0935eeeee74d0937b6d94f485">
+  <header data-report-section="header">
+    <h1>Preparing affected validation for a trusted cutover</h1>
+    <p>Separate policy inspection from execution, preserve useful failure diagnostics, and keep activation evidence honest.</p>
+    <ul data-report-pills>
+      <li>Delivery candidate</li>
+      <li>Legacy validation remains the default</li>
+      <li>No application deployment</li>
+    </ul>
+    <dl data-report-meta>
+      <dt>Status</dt><dd>Delivery candidate; all findings corrected; final verification and canonical gate pending</dd>
+      <dt>Ticket</dt><dd>https://linear.app/v26-labs/issue/V26-2071</dd>
+      <dt>Prepared source</dt><dd>2bca58e061cdea6108d2017702c8d57ce4982b84; mechanical preparation passed</dd>
+      <dt>Product</dt><dd>Official diagnostics release ea924e59 installed; producer PR 163 merged</dd>
+      <dt>Source candidate</dt><dd>Prepared tree 2bca58e061cdea6108d2017702c8d57ce4982b84; base d387c35d8f98874ad00973004d011dfdd5dad4ec</dd>
+    </dl>
+  </header>
+  <section data-report-section="summary">
+    <h2>What this bridge delivers</h2>
+      <p>This bridge prepares Athena to adopt affected validation safely. It separates declared policy from the configuration that starts validation, lets the trusted guard authenticate ordinary pull requests, and adds health incident and diagnostic artifacts. Legacy validation remains the default.</p>
+      <p>The product owns portable execution, attempt history, redaction and evidence admission. Athena owns its policy, selected checks and hosted workflow. The bridge uses those public product capabilities rather than reading private attempt storage.</p>
+  </section>
+  <section data-report-section="problem">
+    <h2>Why the bridge is needed</h2>
+      <p>A reader that only needs declared policy must not start live health loading or capture another validation plan. Importing a named export from an active module still runs that module, so metadata and documentation identity readers could trigger work they did not need.</p>
+      <p>The first protected-main health inventory observed 44 checks and reported 9 failures. It retained authoritative outcomes but not useful command failure detail. The failures were real observations; their underlying causes could not be recovered from the published digest. A subsequent diagnostic repair must make the next run useful without rewriting that history.</p>
+  </section>
+  <section data-report-section="mental-model">
+    <h2>Three separate responsibilities</h2>
+      <p>Declared policy says which rules and sensors exist. Active configuration chooses a mode and captures the work that must run. The installed product executes that work and decides whether its evidence is acceptable.</p>
+      <p>Health is the authoritative record of observed outcomes. Incidents name ownership and scope. Diagnostics explain the execution, including what is unavailable. Neither presentation artifact can turn a failed result into a passing one.</p>
+  </section>
+  <section data-report-section="before-after">
+    <h2>How the flow changes</h2>
+      <p>Before this change, passive readers could load the active entrypoint, and the health workflow published only a digest of outcomes. After it, passive readers use an explicit base-policy module and loader. The active entrypoint alone selects legacy, comparison or full-health mode.</p>
+      <p>Hosted execution still begins with authenticated run, head and base bindings. It then loads protected policy, computes the plan and invokes native validation. The adapter retains diagnostics before a later health read can fail; incident presentation follows the authoritative digest. Each artifact has a separate upload.</p>
+  </section>
+  <section data-report-section="changes">
+    <h2>Behavior and boundaries</h2>
+      <p>The base loader requires a physical, explicit repository root and a regular contained policy file. It validates the declaration and does not fall back to an active entrypoint. Documentation identity capture uses that same passive policy path while preserving preparation and waiver authority.</p>
+      <p>The guard gains authenticated pull-request support. This is preparatory: ordinary PR routing and the default mode are not switched here. A guard refusal remains a refusal, not permission to use a legacy fallback.</p>
+      <p>Diagnostics match new attempts against the actual native candidate capture. Planning and native CI use different identity policies, so equal source trees do not justify comparing their deliverable digests. Returned provider, generation, input, profile and origin bindings must agree before diagnostic detail is attached.</p>
+      <p>Output tails are bounded and redacted by the product. Unknown exits, unavailable output and unclassified failures remain explicit. Athena retains a bounded diagnostic artifact without copying raw exception messages, environment values or private attempt files.</p>
+  </section>
+  <section data-report-section="failure-boundaries">
+    <h2>What a failure means</h2>
+      <p>A complete inventory can contain failed checks. Complete does not mean healthy. The original nine hosted failures remain unclassified until sufficient new evidence supports a diagnosis; a later run does not retrospectively reveal their old cause.</p>
+      <p>Missing or mismatched diagnostic data remains unavailable. A setup failure without an attempt does not receive a fabricated attempt or raw command exit. Stale diagnostic files are removed before the new invocation, and failure to write diagnostics cannot authorize validation.</p>
+      <p>The incident report assigns the repository maintainer to triage, retains the protected scope and leaves classification pending. Only the existing authenticated health process can close a finding.</p>
+      <p>The diagnostic producer review reproduced partial-credential disclosure when the process output limit cut through a synthetic credential. The repair reports buffer-limited command output as unavailable while retaining the typed failure cause. Both producer reviewers approved the fix and closed all four findings. Producer PR 163 merged with all six hosted checks passing; its qualified official archive is installed in this bridge.</p>
+  </section>
+  <section data-report-section="validation">
+    <h2>Evidence and remaining gates</h2>
+      <p>Producer PR 163 passed 3,970 tests and both required review lenses. Official archive qualification exercised 79 commands across 15 installed probes, including upgrade, rollback and authentic old/new record compatibility controls. Root independently matched all 11 installed runtime files against the archive, build output and descriptor. Athena readiness and policy checks passed.</p>
+      <p>The integrated bridge uses the published diagnostic API and types. Root passed 14 tests with 82 assertions, including real public native success, failure and capture-refusal controls. The adversarial reviewer separately passed 140 focused tests with 529 assertions. Generated artifact repair and mechanical preparation passed on tree 2bca58e061cdea6108d2017702c8d57ce4982b84. The canonical gate and PR remain pending at this candidate snapshot.</p>
+      <p>The three selected Athena lenses retain the full review history: outcome correctness, adversarial testing and correctness. The P2 truncation coverage gap is independently closed: the corrected diagnostic file passes 12 tests with 68 assertions, and removing only prioritization fails the new assertion. Required sibling coverage passed 60 focused tests; the complete coordinator fixture passed 16 tests with 76 assertions after adding its passive policy declaration. The final verification round and canonical gate remain pending. Bridge merge and root alignment remain pending. No application/backend deployment is part of this work.</p>
+      <p>After this bridge, the full finish line still requires the remaining native fault/repair and report-lineage cases, matched performance measurements, successful hosted health and cold verification, authoritative default activation and demonstrated rollback.</p>
+  </section>
+  <section data-report-section="guidance">
+    <h2>How to extend and troubleshoot this path</h2>
+      <p>Use the base declaration for passive policy or identity inspection. Use the active entrypoint only when selecting or running validation. Test that passive readers still work when an active entrypoint deliberately throws.</p>
+      <p>For a hosted failure, start with the authenticated run and health digest, then the separate diagnostic artifact. Match the actual canonical check and its attempt binding. If detail is unavailable, preserve that fact rather than assigning a likely cause.</p>
+      <p>Keep historical receipts bound to their original release and candidate. Reuse requires a positive product freshness decision. Before cutover, retain the actual broad validation and rollback controls, then write the final record under the intended default mode.</p>
+  </section>
+  <section data-report-section="key-files">
+    <h2>Key files</h2>
+    <table>
+      <thead><tr><th>File</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>scripts/harness-base-config.ts</code></td><td>Declares policy without starting validation.</td></tr>
+        <tr><td><code>scripts/harness-base-config-loader.ts</code></td><td>Loads and validates explicit passive policy roots.</td></tr>
+        <tr><td><code>harness.config.ts</code></td><td>Owns mode selection; keeps legacy as the default.</td></tr>
+        <tr><td><code>scripts/delivery-documentation-admission.ts</code></td><td>Captures documentation identity without activating live validation.</td></tr>
+        <tr><td><code>scripts/harness-validation-trust.ts</code></td><td>Authenticates supported PR and dispatch invocations.</td></tr>
+        <tr><td><code>scripts/harness-validation-native.ts</code></td><td>Retains the actual candidate captured for native execution.</td></tr>
+        <tr><td><code>scripts/harness-validation-ci-diagnostics.ts</code></td><td>Maps bounded public diagnostic detail to exact new attempts.</td></tr>
+        <tr><td><code>scripts/harness-validation-health-incidents.ts</code></td><td>Presents ownership and protected scope without changing health authority.</td></tr>
+        <tr><td><code>.github/workflows/athena-validation-health.yml</code></td><td>Keeps health, incidents and diagnostics as separate retained artifacts.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section data-report-section="quiz" data-quiz-pass-threshold="8">
+    <h2>Comprehension quiz</h2>
+    <p>Pass required: 8 of 10.</p>
+    <ol data-quiz>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why does the bridge keep declared policy separate from the active configuration?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>So metadata and identity readers can inspect policy without starting live health and plan capture.</li>
+          <li>So metadata readers can waive health failures.</li>
+          <li>So the product no longer needs candidate identity.</li>
+        </ol>
+        <p data-quiz-explanation>Passive inspection must not trigger execution-time work; actual validation still uses the active configuration.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does the PR-capable guard change permit?</p>
+        <ol data-quiz-options>
+          <li>Every pull request may skip legacy checks.</li>
+          <li data-quiz-correct>An authenticated pull-request invocation can use the guard once the supporting code is on its trusted base.</li>
+          <li>A failed guard can be treated as an ordinary fallback.</li>
+        </ol>
+        <p data-quiz-explanation>The trusted base must support the invocation, and a guard failure still blocks. This bridge does not activate affected routing by default.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Where do portable execution and evidence semantics belong?</p>
+        <ol data-quiz-options>
+          <li>Only in Athena report HTML.</li>
+          <li>In a separate Athena copy of the product attempt store.</li>
+          <li data-quiz-correct>In the installed delivery product; Athena declares repository policy and sensors.</li>
+        </ol>
+        <p data-quiz-explanation>The product owns attempts, evidence and admission. Athena adapts its repository policy and workflow to those public capabilities.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Which identity should a diagnostic attempt match?</p>
+        <ol data-quiz-options>
+          <li>Any attempt with the same test filename.</li>
+          <li data-quiz-correct>The actual native candidate capture, with its full origin and attempt bindings.</li>
+          <li>The earlier planning digest, even when its identity policy differs.</li>
+        </ol>
+        <p data-quiz-explanation>Planning and native CI can produce different deliverable identities for the same source tree. Diagnostics must match the actual native execution.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What does a health digest with complete:true establish?</p>
+        <ol data-quiz-options>
+          <li>Every check passed.</li>
+          <li>All previous findings were closed.</li>
+          <li data-quiz-correct>The required inventory was observed; individual checks may still have failed.</li>
+        </ol>
+        <p data-quiz-explanation>The observed run had a complete inventory and nine failures. Completeness and health are different claims.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Can a diagnostic artifact authorize a failing check?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>No. It explains observations while health and native admission remain authoritative.</li>
+          <li>Yes, if the output tail looks harmless.</li>
+          <li>Yes, if the diagnostic writer exits successfully.</li>
+        </ol>
+        <p data-quiz-explanation>Diagnostic presentation cannot alter the recorded result, classify a finding, or supply passing evidence.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What should an unknown raw command exit be reported as?</p>
+        <ol data-quiz-options>
+          <li>Zero when no stderr is present.</li>
+          <li data-quiz-correct>Unknown, preserving unavailable execution or output information.</li>
+          <li>The wrapper exit code, even when it was synthesized.</li>
+        </ol>
+        <p data-quiz-explanation>A wrapper refusal is not proof of an actual child exit. The diagnostic contract must preserve that uncertainty.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>Why retain diagnostics before rereading current health?</p>
+        <ol data-quiz-options>
+          <li>To avoid checking current health.</li>
+          <li>To make any later failure count as success.</li>
+          <li data-quiz-correct>To keep useful execution detail even if the subsequent health read or admission fails.</li>
+        </ol>
+        <p data-quiz-explanation>Retention preserves troubleshooting evidence without changing the later health decision.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>How may evidence from an older installed release be reused?</p>
+        <ol data-quiz-options>
+          <li data-quiz-correct>Only when the product positively accepts its current freshness and bindings.</li>
+          <li>By changing the release label in its JSON.</li>
+          <li>Whenever the earlier command exited zero.</li>
+        </ol>
+        <p data-quiz-explanation>Historical results retain their original bindings. Byte similarity or prior success alone does not prove reusable current evidence.</p>
+      </li>
+      <li data-quiz-question>
+        <p data-quiz-prompt>What remains after the bridge is merged?</p>
+        <ol data-quiz-options>
+          <li>Nothing: bridge merge proves the entire plan is activated.</li>
+          <li data-quiz-correct>The remaining qualification, health repair, hosted proof, measured performance, default cutover and rollback evidence.</li>
+          <li>Only an application production deployment.</li>
+        </ol>
+        <p data-quiz-explanation>The bridge enables the next delivery stages. The full accepted finish line remains separate, and no application deployment was requested.</p>
+      </li>
+    </ol>
+  </section>
+  <section data-report-section="subagent-evidence">
+    <h2>Subagent evidence</h2>
+    <dl>
+      <dt>Session context: /root/report_evidence_refresh</dt><dd>Collected prior delivery, review history, hosted failure evidence and pending finish-line boundaries.</dd>
+      <dt>Delivered diff: /root/bridge_report_diff_context</dt><dd>Mapped the prepared bridge against d387, checked architectural boundaries, official API adoption and generated release integrity, and distinguished source from execution evidence.</dd>
+      <dt>Report review: /root/bridge_report_review</dt><dd>Reviewed draft narrative, quiz and evidence boundaries with zero findings; final metadata and fingerprint will be rechecked before merge.</dd>
+    </dl>
+  </section>
+</article>
+</body>
+</html>

@@ -12,7 +12,7 @@ import {
 import { HarnessBlockedError } from "./harness-blockers";
 import { writeGeneratedHarnessDocs } from "./harness-generate";
 import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
-import harnessConfig from "../harness.config";
+import harnessConfig from "./harness-base-config";
 
 const tempRoots: string[] = [];
 
@@ -2004,10 +2004,11 @@ async function createDeliveryFixture(config = harnessConfig) {
     rootDir,
   );
   await write(
-    "harness.config.ts",
+    "scripts/harness-base-config.ts",
     `export default ${JSON.stringify(config)};`,
     rootDir,
   );
+  await write("harness.config.ts", 'throw new Error("ACTIVE_ENTRYPOINT_EVALUATED");', rootDir);
   for (const file of [
     "scripts/delivery-product.ts",
     ".agent-skills/current/runtime/kernel.mjs",

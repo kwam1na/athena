@@ -18,18 +18,23 @@ import {
   runHarnessCliBoundary,
 } from "./harness-blockers";
 import { collectChangedPathsForDiff } from "./delivery-diff-fingerprint";
-import {
-  importHarnessConfig,
-  wireRepo,
-} from "../.agent-skills/current/runtime/cli-api.mjs";
+import { wireRepo } from "../.agent-skills/current/runtime/cli-api.mjs";
+import { loadHarnessBaseConfig } from "./harness-base-config-loader";
 import {
   computeDeliverableIdentity,
+  type HarnessConfig,
   type CapturedCandidate,
   type CandidateCapture,
 } from "../.agent-skills/current/runtime/kernel.mjs";
 
-async function captureDocumentationCandidate(rootDir: string) {
-  const config = await importHarnessConfig(rootDir);
+// Documentation identity uses the declared delivery identity policy. Loading
+// active validation here would authenticate health and capture selection again;
+// neither operation authorizes a documentation waiver.
+async function captureDocumentationCandidate(
+  rootDir: string,
+  loadConfig: (rootDir: string) => Promise<HarnessConfig>,
+) {
+  const config = await loadConfig(rootDir);
   return (await wireRepo(rootDir, config)).captureCandidate();
 }
 
@@ -42,6 +47,7 @@ type PullRequestEvent = {
 };
 
 type AdmissionOptions = {
+  loadConfig?: (rootDir: string) => Promise<HarnessConfig>;
   evaluateDocumentation?: (rootDir: string) => DeliveryDocumentationCheckResult;
   collectDocuments?: (
     rootDir: string,
@@ -247,7 +253,12 @@ export async function evaluateDeliveryDocumentationAdmission(
   }
 
   const capture = await (
-    options.captureCandidate ?? captureDocumentationCandidate
+    options.captureCandidate ??
+    ((root) =>
+      captureDocumentationCandidate(
+        root,
+        options.loadConfig ?? loadHarnessBaseConfig,
+      ))
   )(rootDir);
   if (capture.ok === false) {
     return {
@@ -261,6 +272,7 @@ export async function evaluateDeliveryDocumentationAdmission(
     capture.candidate,
     documentation,
     {
+      loadConfig: options.loadConfig,
       repository: options.repository,
       pullRequest: options.pullRequest,
       discoverWaiver: options.discoverWaiver,
@@ -285,6 +297,7 @@ export async function discoverCurrentDocumentationWaiver(
   documentation: DeliveryDocumentationCheckResult,
   options: Pick<
     AdmissionOptions,
+    | "loadConfig"
     | "repository"
     | "pullRequest"
     | "discoverWaiver"
@@ -315,7 +328,9 @@ export async function discoverCurrentDocumentationWaiver(
   if (candidate.mode !== "clean") {
     if (candidate.mode !== "staged-index") return undefined;
     try {
-      const config = await importHarnessConfig(rootDir);
+      const config = await (options.loadConfig ?? loadHarnessBaseConfig)(
+        rootDir,
+      );
       const projection = {
         ...config,
         computingIdentityVersion: "validation-tree/v1",

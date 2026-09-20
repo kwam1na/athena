@@ -1,6 +1,3 @@
-// packages/cli/src/main.ts
-import { createInterface } from "node:readline";
-
 // packages/cli/src/commands/check.ts
 import path2 from "node:path";
 import { deliveryRecordPathFor, resolveRecordStorage, BlockedError } from "./kernel.mjs";
@@ -227,18 +224,60 @@ ${checkCommand.usage}` };
 };
 
 // packages/cli/src/commands/admit.ts
-import { readFile as readFile6 } from "node:fs/promises";
-import path12 from "node:path";
+import { readFile as readFile5 } from "node:fs/promises";
+import path14 from "node:path";
 
 // packages/cli/src/check-snapshot.ts
-import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
-import { lstat, mkdir, mkdtemp, readFile, readdir, readlink, realpath, rename, rm } from "node:fs/promises";
+import { execFile, spawn } from "node:child_process";
+import { mkdir, mkdtemp, realpath, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path3 from "node:path";
 import { promisify } from "node:util";
-import { createExecPort, digestCanonical } from "./kernel.mjs";
+import { createExecPort } from "./kernel.mjs";
+
+// packages/cli/src/snapshot-inventory-worker.ts
+var snapshotInventoryWorker = String.raw`
+import { lstat, readFile, readdir, readlink, realpath } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import path from 'node:path';
+const { root, outputs, excludeDependencies, forbidGit } = JSON.parse(process.env.DELIVERY_SNAPSHOT_REQUEST);
+const entries = [];
+const inside = target => {
+  const relative = path.relative(root, target);
+  return relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative);
+};
+const escape = () => { throw { code: 'check_snapshot_escape' }; };
+const walk = async relative => {
+  if (relative === '.git' || (excludeDependencies && relative.split('/').includes('node_modules')) ||
+      outputs.some(o => o.endsWith('/') ? relative === o.slice(0, -1) || relative.startsWith(o) : relative === o)) return;
+  const absolute = path.join(root, relative), stat = await lstat(absolute);
+  if (stat.isSymbolicLink()) {
+    const target = await readlink(absolute);
+    if (path.isAbsolute(target) || !inside(path.resolve(path.dirname(absolute), target))) escape();
+    try { if (!inside(await realpath(absolute))) escape(); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+    entries.push([relative, 'link', target]);
+  } else if (stat.isDirectory()) {
+    for (const name of (await readdir(absolute)).sort()) await walk(relative ? relative + '/' + name : name);
+  } else if (stat.isFile()) {
+    entries.push([relative, stat.mode & 0o111, createHash('sha256').update(await readFile(absolute)).digest('hex')]);
+  } else escape();
+};
+try {
+  if (forbidGit && await lstat(path.join(root, '.git')).then(() => true, error => { if (error.code === 'ENOENT') return false; throw error; })) throw { code: 'check_snapshot_drift' };
+  await walk('');
+  // Tuples contain only arrays, strings and permission integers: JSON.stringify
+  // has exactly the same bytes as canonical JSON for this restricted shape.
+  process.stdout.write(JSON.stringify({ digest: createHash('sha256').update(JSON.stringify(entries)).digest('hex') }));
+} catch (error) {
+  process.stdout.write(JSON.stringify({ code: ['check_snapshot_escape', 'check_snapshot_drift'].includes(error.code) ? error.code : 'check_snapshot_unavailable' }));
+  process.exitCode = 1;
+}
+`;
+
+// packages/cli/src/check-snapshot.ts
 var exec = promisify(execFile);
+var SNAPSHOT_TIMEOUT_MS = 5 * 6e4;
 var CheckSnapshotError = class extends Error {
   code;
   constructor(code, message) {
@@ -250,27 +289,57 @@ function inside(root, target) {
   const relative = path3.relative(root, target);
   return relative !== ".." && !relative.startsWith(`..${path3.sep}`) && !path3.isAbsolute(relative);
 }
-async function snapshotInventory(root, exclude) {
-  const entries = [];
-  const walk = async (relative) => {
-    if (exclude(relative)) return;
-    const absolute = path3.join(root, relative), stat3 = await lstat(absolute);
-    if (stat3.isSymbolicLink()) {
-      const target = await readlink(absolute);
-      if (path3.isAbsolute(target) || !inside(root, path3.resolve(path3.dirname(absolute), target))) throw new CheckSnapshotError("check_snapshot_escape", "A snapshot link escapes its private execution tree.");
-      try {
-        if (!inside(root, await realpath(absolute))) throw new CheckSnapshotError("check_snapshot_escape", "A snapshot link resolves outside its private execution tree.");
-      } catch (error) {
-        if (error.code !== "ENOENT") throw error;
-      }
-      entries.push([relative, "link", target]);
-    } else if (stat3.isDirectory()) {
-      for (const name of (await readdir(absolute)).sort()) await walk(relative ? `${relative}/${name}` : name);
-    } else if (stat3.isFile()) entries.push([relative, stat3.mode & 73, createHash("sha256").update(await readFile(absolute)).digest("hex")]);
-    else throw new CheckSnapshotError("check_snapshot_escape", "A snapshot contains an unsupported filesystem entry.");
-  };
-  await walk("");
-  return digestCanonical(entries);
+async function snapshotProcess(command, args, cwd, env, deadline, signal) {
+  if (signal?.aborted) throw new CheckSnapshotError("check_snapshot_interrupted", "Snapshot verification was interrupted.");
+  const remaining = deadline - performance.now();
+  if (remaining <= 0) throw new CheckSnapshotError("check_snapshot_timeout", "Snapshot verification exceeded its deadline.");
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
+    let failure2, stdout = "", size = 0;
+    const stop = (code, message) => {
+      failure2 ??= new CheckSnapshotError(code, message);
+      child.kill("SIGKILL");
+    };
+    const abort = () => stop("check_snapshot_interrupted", "Snapshot verification was interrupted.");
+    const timer = setTimeout(() => stop("check_snapshot_timeout", "Snapshot verification exceeded its deadline."), remaining);
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) abort();
+    child.stdout.on("data", (bytes) => {
+      size += bytes.length;
+      if (size > 64 * 1024) stop("check_snapshot_unavailable", "Snapshot verifier output exceeded its limit.");
+      else stdout += bytes.toString();
+    });
+    child.stderr.on("data", () => {
+    });
+    child.on("error", () => {
+      failure2 ??= new CheckSnapshotError("check_snapshot_unavailable", "Snapshot verifier could not execute.");
+    });
+    child.once("close", (code) => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
+      if (!failure2 && performance.now() >= deadline) failure2 = new CheckSnapshotError("check_snapshot_timeout", "Snapshot verification exceeded its deadline.");
+      if (failure2) reject(failure2);
+      else resolve({ code, stdout });
+    });
+  });
+}
+async function snapshotInventory(root, outputs, excludeDependencies = false, deadline = performance.now() + SNAPSHOT_TIMEOUT_MS, signal, forbidGit = false) {
+  const result = await snapshotProcess(
+    process.execPath,
+    ["--input-type=module", "--eval", snapshotInventoryWorker],
+    root,
+    { PATH: process.env["PATH"] ?? "/usr/bin:/bin", DELIVERY_SNAPSHOT_REQUEST: JSON.stringify({ root, outputs, excludeDependencies, forbidGit }) },
+    deadline,
+    signal
+  );
+  let parsed;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch {
+    throw new CheckSnapshotError("check_snapshot_unavailable", "Snapshot inventory returned no valid result.");
+  }
+  if (result.code !== 0 || !/^[a-f0-9]{64}$/.test(parsed.digest ?? "")) throw new CheckSnapshotError(["check_snapshot_escape", "check_snapshot_drift"].includes(parsed.code ?? "") ? parsed.code : "check_snapshot_unavailable", "Snapshot inventory could not verify private bytes and links.");
+  return parsed.digest;
 }
 function executionPath(root, value2) {
   return value2.split(path3.delimiter).filter((p) => p && path3.isAbsolute(p) && !inside(root, p) && !p.split(path3.sep).includes("node_modules")).join(path3.delimiter) || "/usr/bin:/bin";
@@ -287,7 +356,7 @@ async function createCheckSnapshot(input) {
   };
   try {
     await git("init", "-q");
-    await git("fetch", "--no-tags", "--no-write-fetch-head", input.rootDir, input.candidate.headSha, input.candidate.base.tipSha, input.candidate.treeSha);
+    await git("fetch", "--update-shallow", "--no-tags", "--no-write-fetch-head", input.rootDir, input.candidate.headSha, input.candidate.base.tipSha, input.candidate.treeSha);
     await git("update-ref", "HEAD", input.candidate.headSha);
     await git("read-tree", input.candidate.treeSha);
     await git("checkout-index", "--all", "--force");
@@ -306,9 +375,8 @@ async function createCheckSnapshot(input) {
       await rename(path3.join(rootDir, ".git"), gitDirectory);
     }
     const controlRoot = privateControl ?? path3.join(rootDir, ".git");
-    const output = (p) => input.outputs.some((o) => o.endsWith("/") ? p === o.slice(0, -1) || p.startsWith(o) : p === o);
-    const sourceExcluded = (p) => p === ".git" || p.split("/").includes("node_modules") || output(p);
-    const sourceDigest = await snapshotInventory(rootDir, sourceExcluded);
+    const inventory = (outputs, sourceOnly = false, deadline = performance.now() + SNAPSHOT_TIMEOUT_MS) => snapshotInventory(rootDir, outputs, sourceOnly, deadline, input.signal, input.gitContext === "none");
+    const sourceDigest = await inventory(input.outputs, true);
     const environment = {
       ...input.environment,
       PATH: `${path3.join(rootDir, "node_modules/.bin")}${path3.delimiter}${cleanEnv["PATH"]}`,
@@ -329,15 +397,19 @@ async function createCheckSnapshot(input) {
       const result = await createExecPort().run({ command: input.dependencies.command[0], args: input.dependencies.command.slice(1), cwd: rootDir, env: environment, timeoutMs: input.dependencies.timeoutMs, maxBuffer: 1024 * 1024, ...input.signal ? { signal: input.signal } : {} });
       if (result.code !== 0 || input.signal?.aborted) throw new CheckSnapshotError("check_dependency_failed", "Private dependency installation did not complete successfully.");
     }
-    if (sourceDigest !== await snapshotInventory(rootDir, sourceExcluded)) throw new CheckSnapshotError("check_snapshot_drift", "Dependency setup changed prepared source bytes.");
-    const dependencyDigest = await snapshotInventory(rootDir, (p) => p === ".git" || output(p));
-    const verify = async () => {
-      if (input.gitContext === "none" && await lstat(path3.join(rootDir, ".git")).then(() => true, (error) => {
-        if (error.code === "ENOENT") return false;
-        throw error;
-      })) throw new CheckSnapshotError("check_snapshot_drift", "A file-only check introduced Git metadata.");
-      await snapshotInventory(rootDir, (p) => p === ".git");
-      if (await git("write-tree") !== input.candidate.treeSha || await git("rev-parse", "HEAD") !== candidateCommit || await git("rev-parse", `${candidateRef}^{tree}`) !== input.candidate.treeSha || await git("rev-parse", baseRef) !== input.candidate.base.tipSha || dependencyDigest !== await snapshotInventory(rootDir, (p) => p === ".git" || output(p))) throw new CheckSnapshotError("check_snapshot_drift", "Execution changed the private source, dependencies or pinned Git context.");
+    if (sourceDigest !== await inventory(input.outputs, true)) throw new CheckSnapshotError("check_snapshot_drift", "Dependency setup changed prepared source bytes.");
+    const dependencyDigest = await inventory(input.outputs);
+    const verify = async (options) => {
+      const timeoutMs = options?.timeoutMs ?? SNAPSHOT_TIMEOUT_MS;
+      if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > SNAPSHOT_TIMEOUT_MS) throw new CheckSnapshotError("check_snapshot_timeout", "Snapshot deadline must be positive and cannot exceed five minutes.");
+      const deadline = performance.now() + timeoutMs;
+      const verifyGit = async (...args) => {
+        const result = await snapshotProcess("git", gitDirectory ? [`--git-dir=${gitDirectory}`, `--work-tree=${rootDir}`, ...args] : args, rootDir, cleanEnv, deadline, input.signal);
+        if (result.code !== 0) throw new CheckSnapshotError("check_snapshot_unavailable", "Snapshot Git identity could not be read.");
+        return result.stdout.trim();
+      };
+      await inventory([], false, deadline);
+      if (await verifyGit("write-tree") !== input.candidate.treeSha || await verifyGit("rev-parse", "HEAD") !== candidateCommit || await verifyGit("rev-parse", `${candidateRef}^{tree}`) !== input.candidate.treeSha || await verifyGit("rev-parse", baseRef) !== input.candidate.base.tipSha || dependencyDigest !== await inventory(input.outputs, false, deadline)) throw new CheckSnapshotError("check_snapshot_drift", "Execution changed the private source, dependencies or pinned Git context.");
     };
     return { rootDir, commandRoot: path3.join(controlRoot, "commands"), environment, dependencyDigest, verify, cleanup };
   } catch (error) {
@@ -804,7 +876,7 @@ import {
   createArtifactsPort as createArtifactsPort2,
   ReviewInputError as OutcomeError,
   BlockedError as BlockedError3,
-  digestCanonical as digestCanonical2,
+  digestCanonical,
   evaluatePreparationReceipt,
   sha256Hex as sha256Hex2,
   REVIEW_GREEN_1,
@@ -839,7 +911,7 @@ async function buildReviewContext(rootDir, config, candidate, receipt2) {
     workflowGraphSha256: inputs.workflowGraphSha256,
     charters
   };
-  return { spec: REVIEW_CONTEXT_SPEC, digest: digestCanonical2(binding), binding };
+  return { spec: REVIEW_CONTEXT_SPEC, digest: digestCanonical(binding), binding };
 }
 function resolveGateBinding(config) {
   const obligations = config.obligations.filter(
@@ -908,7 +980,7 @@ async function emitReviewEvidence(context, original, document) {
     await writeFile(path6.join(runRoot, `${name}.json`), bytes, "utf8");
     artifacts.push({ path: `${name}.json`, sha256: sha256Hex2(bytes), role: name });
   }
-  if (digestCanonical2(reviewed.binding.candidate) !== digestCanonical2(candidate)) {
+  if (digestCanonical(reviewed.binding.candidate) !== digestCanonical(candidate)) {
     const bytes = `${JSON.stringify({
       spec: "review-context-projection/1",
       basis: "unchanged-deliverable-and-review-inputs",
@@ -977,16 +1049,16 @@ async function emitReviewEvidence(context, original, document) {
 
 // packages/cli/src/scoped-checks.ts
 import { randomUUID as randomUUID5 } from "node:crypto";
-import { access, mkdir as mkdir4, readFile as readFile4, realpath as realpath2, rm as rm3, stat } from "node:fs/promises";
-import path8 from "node:path";
+import { access, mkdir as mkdir4, readFile as readFile3, realpath as realpath2, rm as rm3, stat } from "node:fs/promises";
+import path10 from "node:path";
 import {
   captureCheckBindings,
   captureCheckOutputSnapshots,
   candidateTreeEvidenceReader,
   candidateTreeSourceReader,
   createExecPort as createExecPort2,
-  digestCanonical as digestCanonical4,
-  resolveRecordStorage as resolveRecordStorage3,
+  digestCanonical as digestCanonical5,
+  resolveRecordStorage as resolveRecordStorage5,
   runGitCommand,
   scopedCheckIdentity,
   selectScopedCheckAttempt,
@@ -996,9 +1068,9 @@ import {
 
 // packages/cli/src/scoped-attempts.ts
 import { randomUUID as randomUUID4 } from "node:crypto";
-import { link, mkdir as mkdir3, readFile as readFile3, readdir as readdir2, unlink, writeFile as writeFile2 } from "node:fs/promises";
+import { link, mkdir as mkdir3, readFile as readFile2, readdir, unlink, writeFile as writeFile2 } from "node:fs/promises";
 import path7 from "node:path";
-import { digestCanonical as digestCanonical3 } from "./kernel.mjs";
+import { digestCanonical as digestCanonical2 } from "./kernel.mjs";
 var corrupt = () => new CheckSnapshotError("check_attempt_corrupt", "Scoped check attempt history is missing, corrupt or inconsistent.");
 var AttemptStore = class {
   root;
@@ -1008,7 +1080,7 @@ var AttemptStore = class {
   async generations() {
     let names;
     try {
-      names = await readdir2(this.root);
+      names = await readdir(this.root);
     } catch (error) {
       if (error.code === "ENOENT") return [];
       throw error;
@@ -1038,7 +1110,7 @@ var AttemptStore = class {
   async publish(target, entry) {
     const temp = `${target}.${randomUUID4()}.tmp`;
     try {
-      await writeFile2(temp, JSON.stringify({ digest: digestCanonical3(entry), entry }), { flag: "wx", mode: 384 });
+      await writeFile2(temp, JSON.stringify({ digest: digestCanonical2(entry), entry }), { flag: "wx", mode: 384 });
       await link(temp, target);
     } finally {
       await unlink(temp).catch(() => void 0);
@@ -1047,16 +1119,16 @@ var AttemptStore = class {
   async finish(attempt, status, payload) {
     const rows = await this.read();
     const running = rows.find((row) => row.attempt.generation === attempt.generation)?.attempt;
-    if (running?.status !== "running" || digestCanonical3(running) !== digestCanonical3(attempt)) throw corrupt();
+    if (running?.status !== "running" || digestCanonical2(running) !== digestCanonical2(attempt)) throw corrupt();
     await this.publish(path7.join(this.root, String(attempt.generation), "terminal.json"), { attempt: { ...attempt, status }, payload });
   }
   async load(file) {
-    const raw = JSON.parse(await readFile3(file, "utf8"));
+    const raw = JSON.parse(await readFile2(file, "utf8"));
     const row = raw.entry;
     const attempt = row?.attempt;
     const nonempty = (value2) => typeof value2 === "string" && value2.length > 0;
     const candidate = attempt?.origin?.candidate;
-    if (!row || !attempt || raw.digest !== digestCanonical3(row) || attempt.version !== "scoped-attempt/1" || !nonempty(attempt.attemptId) || !nonempty(attempt.providerId) || !nonempty(attempt.origin?.runId) || !Number.isSafeInteger(attempt.generation) || attempt.generation < 1 || !["running", "passed", "failed", "interrupted"].includes(attempt.status) || ![attempt.inputDigest, attempt.profileDigest].every((value2) => typeof value2 === "string" && /^[a-f0-9]{64}$/.test(value2)) || !candidate || ![
+    if (!row || !attempt || raw.digest !== digestCanonical2(row) || attempt.version !== "scoped-attempt/1" || !nonempty(attempt.attemptId) || !nonempty(attempt.providerId) || !nonempty(attempt.origin?.runId) || !Number.isSafeInteger(attempt.generation) || attempt.generation < 1 || !["running", "passed", "failed", "interrupted"].includes(attempt.status) || ![attempt.inputDigest, attempt.profileDigest].every((value2) => typeof value2 === "string" && /^[a-f0-9]{64}$/.test(value2)) || !candidate || ![
       candidate.treeSha,
       candidate.deliverableDigest,
       candidate.identityToken,
@@ -1081,7 +1153,7 @@ var AttemptStore = class {
         } catch (error) {
           if (error.code !== "ENOENT") throw error;
         }
-        if (terminal && (terminal.attempt.status === "running" || digestCanonical3({ ...terminal.attempt, status: "running" }) !== digestCanonical3(start.attempt))) throw corrupt();
+        if (terminal && (terminal.attempt.status === "running" || digestCanonical2({ ...terminal.attempt, status: "running" }) !== digestCanonical2(start.attempt))) throw corrupt();
         rows.push(terminal ?? start);
       }
       return rows;
@@ -1091,28 +1163,139 @@ var AttemptStore = class {
   }
 };
 
+// packages/cli/src/scoped-diagnostics.ts
+import path9 from "node:path";
+import { digestCanonical as digestCanonical4, resolveRecordStorage as resolveRecordStorage4 } from "./kernel.mjs";
+
+// packages/cli/src/scoped-observations.ts
+import path8 from "node:path";
+import { digestCanonical as digestCanonical3, resolveRecordStorage as resolveRecordStorage3 } from "./kernel.mjs";
+function projectScopedAttempt(attempt, durationMs) {
+  return {
+    version: attempt.version,
+    providerId: attempt.providerId,
+    attemptId: attempt.attemptId,
+    generation: attempt.generation,
+    inputDigest: attempt.inputDigest,
+    profileDigest: attempt.profileDigest,
+    status: attempt.status,
+    origin: { runId: attempt.origin.runId, candidate: {
+      treeSha: attempt.origin.candidate.treeSha,
+      deliverableDigest: attempt.origin.candidate.deliverableDigest,
+      identityToken: attempt.origin.candidate.identityToken,
+      baseRef: attempt.origin.candidate.baseRef,
+      baseTipSha: attempt.origin.candidate.baseTipSha,
+      mergeBaseSha: attempt.origin.candidate.mergeBaseSha,
+      workspaceId: attempt.origin.candidate.workspaceId
+    } },
+    ...durationMs === void 0 ? {} : { durationMs }
+  };
+}
+async function readScopedCheckObservations(input) {
+  const { rootDir, config } = input;
+  const storage = await resolveRecordStorage3(rootDir, { storageNamespace: config.storageNamespace, leaf: "scoped-attempts" });
+  const providers = [];
+  for (const provider of config.providers.filter((provider2) => provider2.check?.scope !== void 0)) {
+    const store = new AttemptStore(path8.join(storage.storageDir, digestCanonical3({ gate: config.gateId, provider: provider.id })));
+    const retained = await store.read();
+    if (retained.some((row) => row.attempt.providerId !== provider.id)) {
+      throw new CheckSnapshotError("check_attempt_corrupt", "Scoped check attempt history belongs to a different provider.");
+    }
+    providers.push({ providerId: provider.id, attempts: retained.map(({ attempt, payload }) => projectScopedAttempt(attempt, payload?.durationMs)) });
+  }
+  return { version: "scoped-check-observations/1", providers };
+}
+
+// packages/cli/src/scoped-diagnostics.ts
+var phases = ["snapshot-setup", "pre-command-verification", "command", "post-command-verification", "output-capture", "complete"];
+var failureCodes = ["check_snapshot_interrupted", "check_snapshot_timeout", "check_snapshot_unavailable", "check_snapshot_escape", "check_snapshot_drift", "check_snapshot_cleanup_failed", "check_dependency_source_overlap", "check_dependency_failed", "check_command_failed", "check_output_missing", "check_attempt_superseded", "check_artifact_unavailable", "check_evidence_rejected"];
+var executionCodes = ["ENOENT", "EACCES", "EPERM", "ABORT_ERR", "ERR_CHILD_PROCESS_STDIO_MAXBUFFER", "SIGKILL", "SIGTERM", "execution_failed"];
+function scopedDiagnosticFailure(error, executionErrorCode) {
+  if (!(error instanceof CheckSnapshotError) || !failureCodes.includes(error.code)) return { unavailable: "unclassified" };
+  return {
+    code: error.code,
+    ...executionCodes.includes(executionErrorCode ?? "") ? { executionErrorCode } : {}
+  };
+}
+function redactScopedOutput(text2, secrets) {
+  return [...secrets].filter(Boolean).sort((a, b) => b.length - a.length).reduce((value2, secret) => value2.split(secret).join("[REDACTED]"), text2);
+}
+function scopedCommandDiagnostic(result, secrets) {
+  if (result.errorCode === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") return { unavailable: "not-completed" };
+  const numericExit = result.errorCode === void 0 || result.errorCode === String(result.code);
+  if (!numericExit && result.stdout.length + result.stderr.length === 0) return { unavailable: ["ENOENT", "EACCES", "EPERM"].includes(result.errorCode) ? "not-started" : "not-completed" };
+  const redacted = redactScopedOutput(`${result.stdout}
+${result.stderr}`, secrets);
+  return { exitCode: numericExit ? result.code : null, outputTail: redacted.slice(-4e3), truncated: redacted.length > 4e3 };
+}
+function projectDiagnostic(value2) {
+  const corrupt2 = () => {
+    throw new CheckSnapshotError("check_attempt_corrupt", "Selected scoped diagnostics are malformed.");
+  };
+  const object = (v) => v !== null && typeof v === "object" && !Array.isArray(v) ? v : corrupt2();
+  const row = object(value2), failure2 = object(row["failure"]), command = object(row["command"]);
+  if (row["availability"] !== "available" || !phases.includes(row["phase"])) return corrupt2();
+  let safeFailure;
+  if ("unavailable" in failure2) {
+    if (typeof failure2["unavailable"] !== "string" || !["not-failed", "unclassified"].includes(failure2["unavailable"]) || "code" in failure2 || "executionErrorCode" in failure2) return corrupt2();
+    safeFailure = { unavailable: failure2["unavailable"] };
+  } else {
+    if (!failureCodes.includes(failure2["code"]) || "executionErrorCode" in failure2 && !executionCodes.includes(failure2["executionErrorCode"])) return corrupt2();
+    safeFailure = { code: failure2["code"], ..."executionErrorCode" in failure2 ? { executionErrorCode: failure2["executionErrorCode"] } : {} };
+  }
+  let safeCommand;
+  if ("unavailable" in command) {
+    if (typeof command["unavailable"] !== "string" || !["not-started", "not-completed"].includes(command["unavailable"]) || "exitCode" in command || "outputTail" in command || "truncated" in command) return corrupt2();
+    safeCommand = { unavailable: command["unavailable"] };
+  } else {
+    if (!(command["exitCode"] === null || typeof command["exitCode"] === "number" && Number.isSafeInteger(command["exitCode"]) && command["exitCode"] >= 0) || typeof command["outputTail"] !== "string" || command["outputTail"].length > 4e3 || typeof command["truncated"] !== "boolean") return corrupt2();
+    safeCommand = { exitCode: command["exitCode"], outputTail: command["outputTail"], truncated: command["truncated"] };
+  }
+  return { availability: "available", phase: row["phase"], failure: safeFailure, command: safeCommand };
+}
+async function readScopedCheckDiagnostics(input) {
+  const { rootDir, config, attemptIds } = input;
+  if (!Array.isArray(attemptIds) || attemptIds.length > 100 || attemptIds.some((id) => typeof id !== "string" || !id.length || id.length > 128) || new Set(attemptIds).size !== attemptIds.length) throw new CheckSnapshotError("check_diagnostics_request_invalid", "Diagnostics require at most 100 unique nonempty attempt identifiers.");
+  const requested = new Set(attemptIds), seen = /* @__PURE__ */ new Set();
+  const providers = [];
+  const storage = await resolveRecordStorage4(rootDir, { storageNamespace: config.storageNamespace, leaf: "scoped-attempts" });
+  for (const provider of config.providers.filter((p) => p.check?.scope !== void 0)) {
+    const rows = requested.size ? await new AttemptStore(path9.join(storage.storageDir, digestCanonical4({ gate: config.gateId, provider: provider.id }))).read() : [];
+    if (rows.some((row) => row.attempt.providerId !== provider.id)) throw new CheckSnapshotError("check_attempt_corrupt", "Scoped history belongs to a different provider.");
+    const attempts = [];
+    for (const { attempt, payload } of rows.filter((row) => requested.has(row.attempt.attemptId))) {
+      if (seen.has(attempt.attemptId)) throw new CheckSnapshotError("check_attempt_corrupt", "A requested attempt identifier is ambiguous.");
+      seen.add(attempt.attemptId);
+      const diagnostic = attempt.status === "running" ? { availability: "unavailable", reason: "running" } : payload?.diagnostic === void 0 ? { availability: "unavailable", reason: "legacy" } : projectDiagnostic(payload.diagnostic);
+      attempts.push({ ...projectScopedAttempt(attempt, payload?.durationMs), diagnostic });
+    }
+    providers.push({ providerId: provider.id, attempts });
+  }
+  return { version: "scoped-check-diagnostics/1", providers, unavailableAttemptIds: attemptIds.filter((id) => !seen.has(id)) };
+}
+
 // packages/cli/src/scoped-checks.ts
 function scopedCandidate(candidate) {
   return { treeSha: candidate.treeSha, deliverableDigest: candidate.deliverable.digest, identityToken: candidate.deliverable.identity, baseRef: candidate.base.ref, baseTipSha: candidate.base.tipSha, mergeBaseSha: candidate.base.mergeBaseSha, workspaceId: candidate.workspaceId };
 }
 async function executableIdentity(command, root, searchPath, cwd, read) {
-  if (command.includes(path8.sep) && !path8.isAbsolute(command)) {
-    const file = path8.posix.normalize(path8.posix.join(cwd, command));
+  if (command.includes(path10.sep) && !path10.isAbsolute(command)) {
+    const file = path10.posix.normalize(path10.posix.join(cwd, command));
     if (file === ".." || file.startsWith("../")) throw new CheckSnapshotError("check_runtime_unavailable", "A relative execution tool must stay inside the prepared tree.");
     const bytes = await read(file);
     if (bytes === null) throw new CheckSnapshotError("check_runtime_unavailable", "A relative execution tool is missing from the prepared tree.");
     return { command, sha256: sha256Hex3(bytes), metadata: await read.metadata(file) };
   }
-  const candidates = command.includes(path8.sep) ? [path8.resolve(root, command)] : searchPath.split(path8.delimiter).map((p) => path8.join(p, command));
+  const candidates = command.includes(path10.sep) ? [path10.resolve(root, command)] : searchPath.split(path10.delimiter).map((p) => path10.join(p, command));
   for (const file of candidates) {
     try {
       await access(file);
     } catch {
       continue;
     }
-    const relative = path8.relative(await realpath2(root), await realpath2(file));
-    if (relative !== ".." && !relative.startsWith(`..${path8.sep}`) && !path8.isAbsolute(relative)) throw new CheckSnapshotError("check_runtime_author_path", "Repository execution tools must use a relative command so they run from the private prepared tree.");
-    return { command, sha256: sha256Hex3(await readFile4(file)), mode: (await stat(file)).mode & 73 };
+    const relative = path10.relative(await realpath2(root), await realpath2(file));
+    if (relative !== ".." && !relative.startsWith(`..${path10.sep}`) && !path10.isAbsolute(relative)) throw new CheckSnapshotError("check_runtime_author_path", "Repository execution tools must use a relative command so they run from the private prepared tree.");
+    return { command, sha256: sha256Hex3(await readFile3(file)), mode: (await stat(file)).mode & 73 };
   }
   throw new CheckSnapshotError("check_runtime_unavailable", "A declared execution tool cannot be resolved and bound.");
 }
@@ -1135,7 +1318,7 @@ var ScopedChecks = class _ScopedChecks {
     if (!providers.length) return void 0;
     if (context.config.scopedExecution?.version !== "scoped-execution/1") throw new CheckSnapshotError("scoped_executor_required", "Scoped checks require supported private execution profiles before preparation.");
     const session = new _ScopedChecks(context, candidate);
-    const storage = await resolveRecordStorage3(context.rootDir, { storageNamespace: context.config.storageNamespace, leaf: "scoped-attempts" });
+    const storage = await resolveRecordStorage5(context.rootDir, { storageNamespace: context.config.storageNamespace, leaf: "scoped-attempts" });
     const read = await candidateTreeSourceReader(context.rootDir, candidate.treeSha);
     const readEvidence = await candidateTreeEvidenceReader(context.rootDir, candidate.treeSha);
     const listing = await runGitCommand(["git", "ls-tree", "-r", "--name-only", "-z", candidate.treeSha], { cwd: context.rootDir });
@@ -1150,7 +1333,7 @@ var ScopedChecks = class _ScopedChecks {
       const tools = await Promise.all([[process.execPath, "."], [provider.check.command[0], scope.cwd], ...profile.dependencies ? [[profile.dependencies.command[0], "."]] : []].map(([c, cwd]) => executableIdentity(c, context.rootDir, searchPath, cwd, read)));
       const observation = {
         version: "scoped-runtime/1",
-        runtimeDigest: digestCanonical4({ platform: process.platform, arch: process.arch, tools, searchPath }),
+        runtimeDigest: digestCanonical5({ platform: process.platform, arch: process.arch, tools, searchPath }),
         flags: Object.fromEntries(scope.environment.filter((e) => e.kind === "flag" && context.env[e.name] !== void 0).map((e) => [e.name, context.env[e.name]])),
         credentials: Object.fromEntries(scope.environment.filter((e) => e.kind === "credential").map((e) => {
           const present = context.env[e.name] !== void 0, identity = present ? profile.credentialIdentities[e.name] ?? null : null;
@@ -1160,14 +1343,14 @@ var ScopedChecks = class _ScopedChecks {
       };
       session.observations.set(provider.id, observation);
       session.identities.set(provider.id, await scopedCheckIdentity(context.config, provider, inventory, read, observation, candidate, readEvidence));
-      session.stores.set(provider.id, new AttemptStore(path8.join(storage.storageDir, digestCanonical4({ gate: context.config.gateId, provider: provider.id }))));
+      session.stores.set(provider.id, new AttemptStore(path10.join(storage.storageDir, digestCanonical5({ gate: context.config.gateId, provider: provider.id }))));
     }
     return session;
   }
   async plan() {
     const checks = {};
     for (const [id, identity] of this.identities) checks[id] = { inputDigest: identity.inputDigest, profileDigest: identity.profileDigest, reusable: identity.reusable, attempts: (await this.stores.get(id).read()).map((r) => r.attempt) };
-    return { version: "scoped-plan/1", candidate: scopedCandidate(this.candidate), selectionDigest: digestCanonical4(this.context.config.providers.filter((p) => p.check?.scope).map((p) => ({ id: p.id, check: p.check })).sort((a, b) => a.id.localeCompare(b.id))), checks };
+    return { version: "scoped-plan/1", candidate: scopedCandidate(this.candidate), selectionDigest: digestCanonical5(this.context.config.providers.filter((p) => p.check?.scope).map((p) => ({ id: p.id, check: p.check })).sort((a, b) => a.id.localeCompare(b.id))), checks };
   }
   async selected(id) {
     const identity = this.identities.get(id);
@@ -1176,7 +1359,7 @@ var ScopedChecks = class _ScopedChecks {
     return rows.find((r) => r.attempt.attemptId === selected?.attemptId);
   }
   readOutput = async (repoPath, providerId) => {
-    if (!this.identities.has(providerId)) return readFile4(path8.join(this.context.rootDir, repoPath));
+    if (!this.identities.has(providerId)) return readFile3(path10.join(this.context.rootDir, repoPath));
     const selected = await this.selected(providerId);
     const output = selected?.attempt.status === "passed" ? selected.payload?.outputs.find((o) => o.path === repoPath) : void 0;
     if (!output || sha256Hex3(Buffer.from(output.base64, "base64")) !== output.sha256) throw new CheckSnapshotError("check_output_missing", "Retained scoped output is absent or corrupt.");
@@ -1219,6 +1402,8 @@ var ScopedChecks = class _ScopedChecks {
     const started = Date.now(), check = provider.check, profile = this.context.config.scopedExecution.profiles.find((p) => p.id === check.scope.profile);
     const attempt = this.owned.get(provider.id) ?? await this.allocate(provider.id);
     let payload = { outputs: [] }, terminal = false;
+    let diagnostic = { availability: "available", phase: "snapshot-setup", failure: { unavailable: "not-failed" }, command: { unavailable: "not-started" } };
+    let executionErrorCode;
     const store = this.stores.get(provider.id);
     try {
       const key = profile.id;
@@ -1227,36 +1412,43 @@ var ScopedChecks = class _ScopedChecks {
         snapshot = await createCheckSnapshot({ rootDir: this.context.rootDir, candidate: this.candidate, outputs: profile.mutableOutputs, gitContext: profile.gitContext ?? "full", environment: { PATH: this.context.env["PATH"] ?? process.env["PATH"] ?? "/usr/bin:/bin" }, ...profile.dependencies ? { dependencies: profile.dependencies } : {}, ...this.context.signal ? { signal: this.context.signal } : {} });
         this.snapshots.set(key, snapshot);
       }
+      diagnostic = { ...diagnostic, phase: "pre-command-verification" };
       await snapshot.verify();
-      for (const output of check.outputs ?? []) await rm3(path8.join(snapshot.rootDir, output), { recursive: true, force: true });
+      for (const output of check.outputs ?? []) await rm3(path10.join(snapshot.rootDir, output), { recursive: true, force: true });
       const injected = Object.fromEntries(check.scope.environment.filter((e) => this.context.env[e.name] !== void 0).map((e) => [e.name, this.context.env[e.name]]));
       this.context.write(`checking ${provider.id}: attempt ${attempt.attemptId}`);
-      const commandHome = path8.join(snapshot.commandRoot, attempt.attemptId, "home"), commandTemp = path8.join(snapshot.commandRoot, attempt.attemptId, "tmp");
+      diagnostic = { ...diagnostic, phase: "command" };
+      const commandHome = path10.join(snapshot.commandRoot, attempt.attemptId, "home"), commandTemp = path10.join(snapshot.commandRoot, attempt.attemptId, "tmp");
       await mkdir4(commandHome, { recursive: true });
       await mkdir4(commandTemp, { recursive: true });
-      const result = await createExecPort2().run({ command: check.command[0], args: check.command.slice(1), cwd: path8.join(snapshot.rootDir, check.scope.cwd), env: { ...snapshot.environment, ...injected, HOME: commandHome, TMPDIR: commandTemp }, timeoutMs: check.timeoutMs, maxBuffer: 1024 * 1024, ...this.context.signal ? { signal: this.context.signal } : {} });
+      diagnostic = { ...diagnostic, command: { unavailable: "not-completed" } };
+      const result = await createExecPort2().run({ command: check.command[0], args: check.command.slice(1), cwd: path10.join(snapshot.rootDir, check.scope.cwd), env: { ...snapshot.environment, ...injected, HOME: commandHome, TMPDIR: commandTemp }, timeoutMs: check.timeoutMs, maxBuffer: 1024 * 1024, ...this.context.signal ? { signal: this.context.signal } : {} });
       const secrets = check.scope.environment.filter((e) => e.kind === "credential").map((e) => this.context.env[e.name]).filter((v) => !!v);
-      const redact = (s) => secrets.reduce((text2, secret) => text2.split(secret).join("[REDACTED]"), s);
+      const redact = (s) => redactScopedOutput(s, secrets);
+      executionErrorCode = result.errorCode;
+      diagnostic = { ...diagnostic, command: scopedCommandDiagnostic(result, secrets) };
       payload = { outputs: [], durationMs: Date.now() - started, log: redact(`${result.stdout}
 ${result.stderr}`).slice(-4e3), dependencyDigest: snapshot.dependencyDigest };
       if (result.code !== 0 || this.context.signal?.aborted) throw new CheckSnapshotError("check_command_failed", `Declared scoped check ${provider.id} did not complete successfully (exit ${result.code}).`);
+      diagnostic = { ...diagnostic, phase: "post-command-verification" };
       await snapshot.verify();
+      diagnostic = { ...diagnostic, phase: "output-capture" };
       const outputs = await captureCheckOutputSnapshots(snapshot.rootDir, check.outputs ?? []);
       if (!outputs || outputs.some((o) => secrets.some((secret) => Buffer.from(o.base64, "base64").includes(Buffer.from(secret))))) throw new CheckSnapshotError("check_output_missing", "A retained output is absent, corrupt, escaped or contains credential bytes.");
-      payload = { ...payload, outputs };
+      payload = { ...payload, outputs, diagnostic: { ...diagnostic, phase: "complete" } };
       await store.finish(attempt, "passed", payload);
       terminal = true;
       const scopedPlan = await this.plan();
       const wiring = await this.context.wire();
       const binding = (await captureCheckBindings(this.context.rootDir, this.context.config, this.candidate, { ...wiring.storageOptions, scopedPlan, readOutput: this.readOutput }))[provider.id];
-      if (!binding || binding.scopedAttemptDigest !== digestCanonical4({ ...attempt, status: "passed" })) throw new CheckSnapshotError("check_attempt_superseded", "A newer attempt superseded this completion before evidence publication.");
+      if (!binding || binding.scopedAttemptDigest !== digestCanonical5({ ...attempt, status: "passed" })) throw new CheckSnapshotError("check_attempt_superseded", "A newer attempt superseded this completion before evidence publication.");
       const runId = attempt.attemptId, finalPassId = "pass-1";
       const allocation = await this.context.artifacts.allocateRunRoot({ providerId: provider.id, runId });
       if (!allocation.ok) throw new CheckSnapshotError("check_artifact_unavailable", "Cannot allocate scoped check evidence.");
       const artifacts = [];
       const write = async (name, value2, role) => {
         const text2 = JSON.stringify(value2);
-        await this.context.artifacts.writeTextFile(path8.join(allocation.runRoot.path, name), text2);
+        await this.context.artifacts.writeTextFile(path10.join(allocation.runRoot.path, name), text2);
         artifacts.push({ path: name, sha256: sha256Hex3(text2), role });
       };
       for (const [index, output] of outputs.entries()) await write(`check-output-${index}.json`, { path: output.path, base64: output.base64 }, "check-output");
@@ -1265,7 +1457,7 @@ ${result.stderr}`).slice(-4e3), dependencyDigest: snapshot.dependencyDigest };
       await write("scoped-inputs.json", { observation: this.observations.get(provider.id), attempt: { ...attempt, status: "passed" }, durationMs: payload.durationMs, dependencyDigest: payload.dependencyDigest }, "scoped-inputs");
       const c = this.candidate;
       const manifest = { spec: "delivery-evidence/1", provider: { id: provider.id, runId, finalPassId }, candidate: { vcs: "git", treeSha: c.treeSha, headSha: c.headSha, deliverable: c.deliverable, base: c.base, workspaceId: c.workspaceId }, runHistory: [{ preparedTreeSha: c.treeSha, evaluatedInPassId: finalPassId }], artifacts, attestation: { level: "self", signatures: [] }, recordedAt: (/* @__PURE__ */ new Date()).toISOString(), claims: obligationIds.map((obligation) => ({ obligation, payloadSpec: "checks.passed/1", payload: claim })) };
-      const manifestPath = path8.join(allocation.runRoot.path, "manifest.json");
+      const manifestPath = path10.join(allocation.runRoot.path, "manifest.json");
       await this.context.artifacts.writeTextFile(manifestPath, JSON.stringify(manifest));
       const submit = async () => {
         const outcome2 = await submitManifest2({ rootDir: this.context.rootDir, config: this.context.config, manifestPath }, { captureCandidate: wiring.captureCandidate, artifacts: this.context.artifacts, ...wiring.storageOptions, scopedPlan: await this.plan(), readOutput: this.readOutput });
@@ -1275,7 +1467,13 @@ ${result.stderr}`).slice(-4e3), dependencyDigest: snapshot.dependencyDigest };
       else await submit();
       this.context.write(`passed ${provider.id}: ${Date.now() - started}ms including snapshot setup; retained ${runId}`);
     } catch (error) {
-      if (!terminal) await store.finish(attempt, this.context.signal?.aborted ? "interrupted" : "failed", { ...payload, durationMs: Date.now() - started });
+      if (!terminal) await store.finish(attempt, this.context.signal?.aborted ? "interrupted" : "failed", {
+        ...payload,
+        durationMs: Date.now() - started,
+        diagnostic: { ...diagnostic, failure: scopedDiagnosticFailure(error, executionErrorCode) },
+        ...error instanceof CheckSnapshotError ? { log: `${payload.log ?? ""}
+${error.code}`.slice(-4e3) } : {}
+      });
       const damaged = this.snapshots.get(profile.id);
       this.snapshots.delete(profile.id);
       await damaged?.cleanup();
@@ -1290,8 +1488,8 @@ ${result.stderr}`).slice(-4e3), dependencyDigest: snapshot.dependencyDigest };
 
 // packages/cli/src/declared-checks.ts
 import { randomUUID as randomUUID6 } from "node:crypto";
-import path9 from "node:path";
-import { captureCheckBindings as captureCheckBindings2, captureCheckOutputSnapshots as captureCheckOutputSnapshots2, digestCanonical as digestCanonical5, classifyCandidateDrift, computeCheckWiringFingerprint, createBlocker as createBlocker3, createExecPort as createExecPort3, sha256Hex as sha256Hex4, submitManifest as submitManifest3 } from "./kernel.mjs";
+import path11 from "node:path";
+import { captureCheckBindings as captureCheckBindings2, captureCheckOutputSnapshots as captureCheckOutputSnapshots2, digestCanonical as digestCanonical6, classifyCandidateDrift, computeCheckWiringFingerprint, createBlocker as createBlocker3, createExecPort as createExecPort3, sha256Hex as sha256Hex4, submitManifest as submitManifest3 } from "./kernel.mjs";
 async function runDeclaredCheck(context, provider, obligationIds, before) {
   const check = provider.check;
   const wiring = await context.wire();
@@ -1328,17 +1526,17 @@ ${result.stderr}`.slice(-4e3)}`);
   const allocation = await context.artifacts.allocateRunRoot({ providerId: provider.id, runId });
   if (!allocation.ok) return fail("check_artifact_unavailable", "Cannot allocate the declared check evidence root.");
   const snapshots = await captureCheckOutputSnapshots2(context.rootDir, check.outputs ?? []);
-  if (snapshots === void 0 || digestCanonical5(snapshots.map(({ path: path21, sha256 }) => ({ path: path21, sha256 }))) !== binding.outputsDigest) return fail("check_output_missing", "Declared outputs changed before evidence retention.");
+  if (snapshots === void 0 || digestCanonical6(snapshots.map(({ path: path23, sha256 }) => ({ path: path23, sha256 }))) !== binding.outputsDigest) return fail("check_output_missing", "Declared outputs changed before evidence retention.");
   const outputArtifacts = [];
   for (const [index, output] of snapshots.entries()) {
     const contents = JSON.stringify({ path: output.path, base64: output.base64 });
     const artifactPath = `check-output-${index}.json`;
-    await context.artifacts.writeTextFile(path9.join(allocation.runRoot.path, artifactPath), contents);
+    await context.artifacts.writeTextFile(path11.join(allocation.runRoot.path, artifactPath), contents);
     outputArtifacts.push({ path: artifactPath, sha256: sha256Hex4(contents), role: "check-output" });
   }
   const payload = { verdict: "green", exitCode: 0, binding };
   const terminal = JSON.stringify({ providerId: provider.id, runId, finalPassId, ...payload });
-  await context.artifacts.writeTextFile(path9.join(allocation.runRoot.path, "check-result.json"), terminal);
+  await context.artifacts.writeTextFile(path11.join(allocation.runRoot.path, "check-result.json"), terminal);
   const candidate = captured.candidate;
   const manifest = {
     spec: "delivery-evidence/1",
@@ -1350,7 +1548,7 @@ ${result.stderr}`.slice(-4e3)}`);
     recordedAt: (/* @__PURE__ */ new Date()).toISOString(),
     claims: obligationIds.map((obligation) => ({ obligation, payloadSpec: "checks.passed/1", payload }))
   };
-  const manifestPath = path9.join(allocation.runRoot.path, "manifest.json");
+  const manifestPath = path11.join(allocation.runRoot.path, "manifest.json");
   await context.artifacts.writeTextFile(manifestPath, JSON.stringify(manifest));
   const outcome2 = await submitManifest3({ rootDir: context.rootDir, config: context.config, manifestPath }, { captureCandidate: wiring.captureCandidate, artifacts: context.artifacts, ...wiring.storageOptions });
   return outcome2.status === "accepted" ? [] : outcome2.blockers;
@@ -1678,19 +1876,19 @@ import {
   discoverRecords,
   readCompiledRepositoryPolicy
 } from "./kernel.mjs";
-import path11 from "node:path";
+import path13 from "node:path";
 
 // packages/cli/src/record-retention.ts
-import { createHash as createHash2, randomUUID as randomUUID7 } from "node:crypto";
+import { createHash, randomUUID as randomUUID7 } from "node:crypto";
 import { execFile as execFile3 } from "node:child_process";
 import { constants as fsConstants } from "node:fs";
-import { chmod, lstat as lstat2, mkdir as mkdir5, open, readFile as readFile5, readdir as readdir3, rename as rename2, unlink as unlink2 } from "node:fs/promises";
-import path10 from "node:path";
+import { chmod, lstat, mkdir as mkdir5, open, readFile as readFile4, readdir as readdir2, rename as rename2, unlink as unlink2 } from "node:fs/promises";
+import path12 from "node:path";
 import { promisify as promisify3 } from "node:util";
 import {
   ProcessLockRefused,
   deriveDeliveryRecordPath,
-  resolveRecordStorage as resolveRecordStorage4,
+  resolveRecordStorage as resolveRecordStorage6,
   sha256Hex as sha256Hex5,
   withProcessLock
 } from "./kernel.mjs";
@@ -1700,7 +1898,7 @@ var DIGEST = /^[a-f0-9]{64}$/;
 var LEDGER_VERSION = "delivery-record-retention/1";
 var RETENTION_LEAF = "delivery-record-retention";
 var failure = (code, detail) => ({ ok: false, code, detail });
-var scopeDigest = (scope) => createHash2("sha256").update(scope, "utf8").digest("hex");
+var scopeDigest = (scope) => createHash("sha256").update(scope, "utf8").digest("hex");
 function isRecord(value2) {
   return typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
 }
@@ -1729,19 +1927,19 @@ function parseLedger(value2, expectedName) {
 }
 async function readLedgers(storageDir) {
   const ledgers = /* @__PURE__ */ new Map();
-  for (const name of await readdir3(storageDir).catch((error) => {
+  for (const name of await readdir2(storageDir).catch((error) => {
     if (error.code === "ENOENT") return [];
     throw error;
   })) {
     if (!name.endsWith(".json")) continue;
-    const ledgerPath = path10.join(storageDir, name);
-    const stats = await lstat2(ledgerPath).catch(() => void 0);
+    const ledgerPath = path12.join(storageDir, name);
+    const stats = await lstat(ledgerPath).catch(() => void 0);
     if (stats === void 0 || !stats.isFile() || stats.isSymbolicLink() || (stats.mode & 63) !== 0) {
       return failure("retention_ledger_unsafe", `${ledgerPath} is not an owner-only regular file`);
     }
     let value2;
     try {
-      value2 = JSON.parse(await readFile5(ledgerPath, "utf8"));
+      value2 = JSON.parse(await readFile4(ledgerPath, "utf8"));
     } catch {
       return failure("retention_ledger_invalid", `${ledgerPath} is not valid JSON`);
     }
@@ -1762,8 +1960,8 @@ async function readLedgers(storageDir) {
   return { ok: true, ledgers };
 }
 async function writeLedger(ledgerPath, ledger) {
-  await mkdir5(path10.dirname(ledgerPath), { recursive: true, mode: 448 });
-  await chmod(path10.dirname(ledgerPath), 448);
+  await mkdir5(path12.dirname(ledgerPath), { recursive: true, mode: 448 });
+  await chmod(path12.dirname(ledgerPath), 448);
   const temporary = `${ledgerPath}.tmp-${randomUUID7()}`;
   const handle = await open(temporary, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL, 384);
   try {
@@ -1777,11 +1975,11 @@ async function writeLedger(ledgerPath, ledger) {
   await rename2(temporary, ledgerPath);
 }
 async function verifyWorkingRecord(rootDir, entry) {
-  const absolute = path10.join(rootDir, entry.relativePath);
-  const stats = await lstat2(absolute).catch((error) => error.code === "ENOENT" ? void 0 : Promise.reject(error));
+  const absolute = path12.join(rootDir, entry.relativePath);
+  const stats = await lstat(absolute).catch((error) => error.code === "ENOENT" ? void 0 : Promise.reject(error));
   if (stats === void 0) return failure("retention_owned_record_changed", `${entry.relativePath} is missing`);
   if (!stats.isFile() || stats.isSymbolicLink()) return failure("retention_owned_record_unsafe", `${entry.relativePath} is not a regular file`);
-  if (sha256Hex5(await readFile5(absolute)) !== entry.sha256) {
+  if (sha256Hex5(await readFile4(absolute)) !== entry.sha256) {
     return failure("retention_owned_record_changed", `${entry.relativePath} no longer matches its ownership receipt`);
   }
   return { ok: true };
@@ -1805,9 +2003,9 @@ async function applyDeliveryRecordRetention(input) {
   if (!DIGEST.test(input.current.deliverableDigest) || deriveDeliveryRecordPath(input.recordBasePath, input.current.deliverableDigest) !== input.current.relativePath) {
     return failure("retention_ledger_invalid", "the current path is not the configured per-digest record path");
   }
-  const storage = await resolveRecordStorage4(input.rootDir, { storageNamespace: input.storageNamespace, leaf: RETENTION_LEAF });
-  const ledgerPath = path10.join(storage.storageDir, `${scopeDigest(input.scope)}.json`);
-  const lockPath = path10.join(storage.storageDir, ".ownership.lock");
+  const storage = await resolveRecordStorage6(input.rootDir, { storageNamespace: input.storageNamespace, leaf: RETENTION_LEAF });
+  const ledgerPath = path12.join(storage.storageDir, `${scopeDigest(input.scope)}.json`);
+  const lockPath = path12.join(storage.storageDir, ".ownership.lock");
   await mkdir5(storage.storageDir, { recursive: true, mode: 448 });
   try {
     return await withProcessLock(lockPath, 5e3, async () => {
@@ -1843,8 +2041,8 @@ async function applyDeliveryRecordRetention(input) {
         await writeLedger(ledgerPath, ledger);
       }
       for (const pending of ledger.pendingPrune) {
-        const absolute = path10.join(input.rootDir, pending.relativePath);
-        const present = await lstat2(absolute).then(() => true, (error) => error.code === "ENOENT" ? false : Promise.reject(error));
+        const absolute = path12.join(input.rootDir, pending.relativePath);
+        const present = await lstat(absolute).then(() => true, (error) => error.code === "ENOENT" ? false : Promise.reject(error));
         if (present) {
           const verified = await verifyWorkingRecord(input.rootDir, pending);
           if (!verified.ok) return verified;
@@ -1871,7 +2069,7 @@ async function applyDeliveryRecordRetention(input) {
           return failure("retention_ownership_ambiguous", `${currentReceipt.relativePath} belongs to retention scope ${other.scope}`);
         }
       }
-      const currentStats = await lstat2(path10.join(input.rootDir, currentReceipt.relativePath)).catch((error) => error.code === "ENOENT" ? void 0 : Promise.reject(error));
+      const currentStats = await lstat(path12.join(input.rootDir, currentReceipt.relativePath)).catch((error) => error.code === "ENOENT" ? void 0 : Promise.reject(error));
       if (currentIndex < 0 && currentStats !== void 0) {
         return failure("retention_path_unowned", `${currentReceipt.relativePath} existed before retention scope ${input.scope} owned it`);
       }
@@ -1908,7 +2106,7 @@ async function applyDeliveryRecordRetention(input) {
         await writeLedger(ledgerPath, ledger);
         for (const entry of pendingPrune) {
           try {
-            await unlink2(path10.join(input.rootDir, entry.relativePath));
+            await unlink2(path12.join(input.rootDir, entry.relativePath));
           } catch (error) {
             return failure("retention_cleanup_failed", `could not remove ${entry.relativePath}: ${error instanceof Error ? error.message : String(error)}`);
           }
@@ -2033,7 +2231,7 @@ ${recordCommand.usage}` };
     );
     if (!checked.ok) return { kind: "blocked", blockers: [...checked.blockers] };
     const relativePath = deliveryRecordPathFor2(context.config, decision.candidate.deliverable.digest);
-    const absolutePath = path11.join(context.rootDir, relativePath);
+    const absolutePath = path13.join(context.rootDir, relativePath);
     const bytes = deliveryRecordBytes(built.record);
     if (retention === void 0) {
       await context.artifacts.writeTextFile(absolutePath, bytes);
@@ -2259,7 +2457,7 @@ ${USAGE4}` };
     }
     let outcome2;
     try {
-      outcome2 = JSON.parse(await readFile6(path12.resolve(context.rootDir, context.args[1]), "utf8"));
+      outcome2 = JSON.parse(await readFile5(path14.resolve(context.rootDir, context.args[1]), "utf8"));
     } catch {
       return { kind: "usage", message: `The review outcome must be a readable JSON document.
 ${USAGE4}` };
@@ -2612,8 +2810,8 @@ async function startRun(surface, force, supplied, version, eventId) {
 
 // packages/cli/src/commands/maintain.ts
 import { execFile as execFile4 } from "node:child_process";
-import { readFile as readFile7 } from "node:fs/promises";
-import path13 from "node:path";
+import { readFile as readFile6 } from "node:fs/promises";
+import path15 from "node:path";
 import { compiledAdopterPolicyBindingDigest, createManagedDeliveryFacade } from "./kernel.mjs";
 var SOURCE_ID = "delivery-harness.cli.maintain";
 var MAINTAIN_OPERATIONS = Object.freeze([
@@ -2654,7 +2852,7 @@ async function resolveFacade(context) {
   }
   let pointer;
   try {
-    pointer = JSON.parse(await readFile7(path13.join(common, "managed-delivery", "facade.json"), "utf8"));
+    pointer = JSON.parse(await readFile6(path15.join(common, "managed-delivery", "facade.json"), "utf8"));
   } catch {
     return blocked(
       "no_managed_installation",
@@ -2665,7 +2863,7 @@ async function resolveFacade(context) {
   let policyBinding = context.policyBinding;
   if (policyBinding === void 0) {
     try {
-      policyBinding = JSON.parse(await readFile7(path13.join(common, "managed-delivery", "policy-binding.json"), "utf8"));
+      policyBinding = JSON.parse(await readFile6(path15.join(common, "managed-delivery", "policy-binding.json"), "utf8"));
     } catch {
       return blocked(
         "policy_binding_missing",
@@ -2715,7 +2913,7 @@ Operations: ${MAINTAIN_OPERATIONS.join(" | ")}`,
         if (packedDir === void 0) {
           return { kind: "usage", message: "update requires --packed <dir> naming the verified packed generation to install." };
         }
-        const outcome2 = await facade.updateComposition({ packedDir: path13.resolve(context.rootDir, packedDir), now });
+        const outcome2 = await facade.updateComposition({ packedDir: path15.resolve(context.rootDir, packedDir), now });
         if (!outcome2.ok) return { kind: "blocked", blockers: [...outcome2.blockers] };
         emit(outcome2);
         return {
@@ -2763,8 +2961,8 @@ Operations: ${MAINTAIN_OPERATIONS.join(" | ")}`,
 
 // packages/cli/src/commands/managed.ts
 import { execFile as execFile5 } from "node:child_process";
-import { readFile as readFile8, readdir as readdir4, realpath as realpath3 } from "node:fs/promises";
-import path14 from "node:path";
+import { readFile as readFile7, readdir as readdir3, realpath as realpath3 } from "node:fs/promises";
+import path16 from "node:path";
 import {
   FACADE_OPERATIONS,
   compiledAdopterPolicyBindingDigest as compiledAdopterPolicyBindingDigest2,
@@ -2822,10 +3020,10 @@ async function resolveInstallation(context) {
   if (common === void 0) {
     return blocked2("not_a_repository", "The working directory is not a git repository.", "Run from the delivery worktree.");
   }
-  const namespace = path14.join(common, "managed-delivery");
+  const namespace = path16.join(common, "managed-delivery");
   let pointer;
   try {
-    pointer = JSON.parse(await readFile8(path14.join(namespace, "facade.json"), "utf8"));
+    pointer = JSON.parse(await readFile7(path16.join(namespace, "facade.json"), "utf8"));
   } catch {
     return blocked2(
       "no_managed_delivery",
@@ -2835,14 +3033,14 @@ async function resolveInstallation(context) {
   }
   let deliveries;
   try {
-    deliveries = (await readdir4(path14.join(namespace, "deliveries"), { withFileTypes: true })).filter((candidate) => candidate.isDirectory()).map((candidate) => candidate.name).sort();
+    deliveries = (await readdir3(path16.join(namespace, "deliveries"), { withFileTypes: true })).filter((candidate) => candidate.isDirectory()).map((candidate) => candidate.name).sort();
   } catch {
     deliveries = [];
   }
   const active = [];
   for (const candidate of deliveries) {
     try {
-      const journal = await readFile8(path14.join(namespace, "deliveries", candidate, "journal.jsonl"), "utf8");
+      const journal = await readFile7(path16.join(namespace, "deliveries", candidate, "journal.jsonl"), "utf8");
       const terminal = journal.split("\n").filter((line) => line.length > 0).some((line) => {
         try {
           const entry = JSON.parse(line);
@@ -2859,7 +3057,7 @@ async function resolveInstallation(context) {
   let policyBinding = context.policyBinding;
   if (policyBinding === void 0) {
     try {
-      policyBinding = JSON.parse(await readFile8(path14.join(namespace, "policy-binding.json"), "utf8"));
+      policyBinding = JSON.parse(await readFile7(path16.join(namespace, "policy-binding.json"), "utf8"));
     } catch {
       return blocked2(
         "policy_binding_missing",
@@ -2910,7 +3108,7 @@ async function resolveManaged(context, requested) {
   let fence;
   try {
     const workspace = JSON.parse(
-      await readFile8(path14.join(namespace, "deliveries", deliveryId, "workspace.json"), "utf8")
+      await readFile7(path16.join(namespace, "deliveries", deliveryId, "workspace.json"), "utf8")
     );
     if (typeof workspace.worktreeDir === "string" && typeof workspace.fence === "number") {
       const [boundReal, hereReal] = await Promise.all([realpath3(workspace.worktreeDir), realpath3(context.rootDir)]);
@@ -2988,7 +3186,7 @@ Operations: ${MANAGED_OPERATIONS.join(" | ")}`,
         };
       }
       try {
-        return await readFile8(path14.resolve(context.rootDir, file), "utf8");
+        return await readFile7(path16.resolve(context.rootDir, file), "utf8");
       } catch (error) {
         return { kind: "usage", message: `${operation2} could not read ${file}: ${error instanceof Error ? error.message : String(error)}` };
       }
@@ -3153,8 +3351,8 @@ Operations: ${MANAGED_OPERATIONS.join(" | ")}`,
 };
 
 // packages/cli/src/commands/emit-review-evidence.ts
-import { readFile as readFile9 } from "node:fs/promises";
-import path15 from "node:path";
+import { readFile as readFile8 } from "node:fs/promises";
+import path17 from "node:path";
 var emitReviewEvidenceCommand = {
   name: "emit-review-evidence",
   sourceId: "delivery-harness.cli.emit-review-evidence",
@@ -3167,7 +3365,7 @@ var emitReviewEvidenceCommand = {
     let original;
     let document;
     try {
-      original = JSON.parse(await readFile9(path15.resolve(context.rootDir, context.args[1]), "utf8"));
+      original = JSON.parse(await readFile8(path17.resolve(context.rootDir, context.args[1]), "utf8"));
       const raw = await context.readStdin?.() ?? "";
       if (!raw.trim()) return { kind: "usage", message: "The review-outcome/1 document is required on stdin." };
       document = JSON.parse(raw);
@@ -3191,12 +3389,12 @@ var emitReviewEvidenceCommand = {
 
 // packages/cli/src/run-view-record.ts
 import { realpath as realpath5 } from "node:fs/promises";
-import path17 from "node:path";
+import path19 from "node:path";
 
 // packages/cli/src/run-archive-commands.ts
 import { constants } from "node:fs";
 import { open as open2, realpath as realpath4 } from "node:fs/promises";
-import path16 from "node:path";
+import path18 from "node:path";
 import {
   createArtifactsPort as createArtifactsPort3,
   readRunArtifact,
@@ -3479,14 +3677,14 @@ function projectRunPhases(events) {
 }
 function phaseRows(events) {
   const summary = summarize(events);
-  const phases = summary.phases;
-  const gate = phases.gate;
+  const phases2 = summary.phases;
+  const gate = phases2.gate;
   const gateRow = gate.unseen ? "unseen \u2014 no gate completion is journaled, so any gate this delivery ran is missing from the tail above" : `${durationLabel(gate.totalMs / 1e3)} summed over ${gate.counted} journaled gate completion(s)` + (gate.unreadable === 0 ? "" : `; ${gate.unreadable} journaled no readable duration, so the sum under-reports`);
   return [
     "  phases:",
-    `    implementation  ${durationLabel(phases.implementationSeconds)}  (first event to the first round)`,
-    `    review          ${durationLabel(phases.reviewSeconds)}  over ${phases.rounds} round(s), fix time between rounds included`,
-    `    tail            ${durationLabel(phases.tailSeconds)}  (last closed round to the last event)`,
+    `    implementation  ${durationLabel(phases2.implementationSeconds)}  (first event to the first round)`,
+    `    review          ${durationLabel(phases2.reviewSeconds)}  over ${phases2.rounds} round(s), fix time between rounds included`,
+    `    tail            ${durationLabel(phases2.tailSeconds)}  (last closed round to the last event)`,
     `    gate time       ${gateRow}`,
     `    total           ${durationLabel(summary.durationSeconds)}${summary.open ? "  (open; the tail is still accruing)" : ""}`
   ];
@@ -3785,23 +3983,23 @@ async function readArchiveFile(file) {
   }
 }
 async function resolvedDestination(file) {
-  let parent = path16.dirname(file);
-  const suffix = [path16.basename(file)];
+  let parent = path18.dirname(file);
+  const suffix = [path18.basename(file)];
   for (; ; ) {
     try {
-      return path16.join(await realpath4(parent), ...suffix);
+      return path18.join(await realpath4(parent), ...suffix);
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
-      suffix.unshift(path16.basename(parent));
-      const next = path16.dirname(parent);
+      suffix.unshift(path18.basename(parent));
+      const next = path18.dirname(parent);
       if (next === parent) throw error;
       parent = next;
     }
   }
 }
 var within = (parent, child) => {
-  const relative = path16.relative(parent, child);
-  return relative === "" || !relative.startsWith("..") && !path16.isAbsolute(relative);
+  const relative = path18.relative(parent, child);
+  return relative === "" || !relative.startsWith("..") && !path18.isAbsolute(relative);
 };
 async function runArchiveCommand(context, command, args) {
   if (command === "export" && (args.length !== 3 || args[1] !== "--output"))
@@ -3817,7 +4015,7 @@ async function runArchiveCommand(context, command, args) {
   try {
     if (command === "archive") {
       const text2 = await readArchiveFile(
-        path16.resolve(context.rootDir, args[0])
+        path18.resolve(context.rootDir, args[0])
       );
       const parsed = parseRunExport(text2);
       if (!parsed.ok) return blocked3("archive invalid or unsupported");
@@ -3857,7 +4055,7 @@ async function runArchiveCommand(context, command, args) {
     });
     if (!archive.ok) return blocked3(archive.reason);
     const destination = await resolvedDestination(
-      path16.resolve(context.rootDir, args[2])
+      path18.resolve(context.rootDir, args[2])
     );
     if (within(await realpath4(resolved.surface.commonDir), destination) || within(await realpath4(resolved.surface.runsDir), destination))
       return blocked3(
@@ -3870,7 +4068,7 @@ async function runArchiveCommand(context, command, args) {
       JSON.stringify({
         spec: "run-archive-export/1",
         runId,
-        path: path16.resolve(context.rootDir, args[2]),
+        path: path18.resolve(context.rootDir, args[2]),
         sizeBytes: Buffer.byteLength(archive.text),
         authority: "observation"
       })
@@ -3886,7 +4084,7 @@ import {
   isSafeRelativePath,
   isInsideResolved,
   parseDeliveryRecord,
-  digestCanonical as digestCanonical6
+  digestCanonical as digestCanonical7
 } from "./kernel.mjs";
 async function withRetainedRecord(view, root, relativePath) {
   if (relativePath === void 0 || view.historical) return view;
@@ -3907,7 +4105,7 @@ async function withRetainedRecord(view, root, relativePath) {
     if (isSafeRelativePath(relativePath)) {
       const resolvedRoot = await realpath5(root);
       const resolvedFile = await realpath5(
-        path17.join(resolvedRoot, relativePath)
+        path19.join(resolvedRoot, relativePath)
       );
       if (!isInsideResolved(resolvedRoot, resolvedFile))
         status = "outside_run_root";
@@ -3930,7 +4128,7 @@ async function withRetainedRecord(view, root, relativePath) {
             "Status",
             "Legacy record \u2014 integrity unavailable; no accepted evidence inferred"
           );
-        else if (integrityDigest !== digestCanonical6(unsigned))
+        else if (integrityDigest !== digestCanonical7(unsigned))
           add("Status", "Corrupt \u2014 retained record digest does not match");
         else {
           add(
@@ -3951,7 +4149,7 @@ async function withRetainedRecord(view, root, relativePath) {
               if (evidence?.resolution.kind !== "evidence") continue;
               const manifest = evidence.resolution.portable?.manifest;
               if (typeof manifest !== "object" || manifest === null) continue;
-              if (digestCanonical6(manifest) !== evidence.resolution.manifestDigest) {
+              if (digestCanonical7(manifest) !== evidence.resolution.manifestDigest) {
                 add(
                   "Retained manifest",
                   "Corrupt \u2014 digest does not match; timestamp unavailable"
@@ -4432,7 +4630,7 @@ async function runArtifactCommand(context, command, args) {
 
 // packages/cli/src/commands/runs.ts
 import { stat as stat2 } from "node:fs/promises";
-import path18 from "node:path";
+import path20 from "node:path";
 import {
   RUN_EVENT_KINDS,
   RUN_EVENT_KINDS_V1,
@@ -4444,7 +4642,7 @@ import {
 } from "./kernel.mjs";
 
 // packages/cli/src/run-server.ts
-import { createHash as createHash3 } from "node:crypto";
+import { createHash as createHash2 } from "node:crypto";
 
 // packages/cli/src/run-live.ts
 var RUN_LIVE_SCRIPT = String.raw`(() => {
@@ -4989,7 +5187,7 @@ var SECURITY_HEADERS = {
   // between loopback and loopback has any business holding one.
   "Cache-Control": "no-store"
 };
-var LIVE_CSP = RUN_SERVER_CSP.replace("script-src 'none'", `script-src 'sha256-${createHash3("sha256").update(RUN_LIVE_SCRIPT).digest("base64")}'`).replace("connect-src 'none'", "connect-src 'self'");
+var LIVE_CSP = RUN_SERVER_CSP.replace("script-src 'none'", `script-src 'sha256-${createHash2("sha256").update(RUN_LIVE_SCRIPT).digest("base64")}'`).replace("connect-src 'none'", "connect-src 'self'");
 function send(response, status, contentType, body, livePage = false) {
   response.writeHead(status, {
     ...SECURITY_HEADERS,
@@ -5431,7 +5629,7 @@ ${USAGE6}` });
 }
 async function sizeOf(runsDir, runId) {
   try {
-    return (await stat2(path18.join(runsDir, `${runId}.jsonl`))).size;
+    return (await stat2(path20.join(runsDir, `${runId}.jsonl`))).size;
   } catch {
     return 0;
   }
@@ -5580,7 +5778,7 @@ ${USAGE6}` };
         continue;
       }
       if (token === "--archive") {
-        archives.push(path18.resolve(rootDir, value2));
+        archives.push(path20.resolve(rootDir, value2));
         continue;
       }
       if (token === "--freshness-seconds") {
@@ -5589,7 +5787,7 @@ ${USAGE6}` };
         continue;
       }
       if (token === "--repo") {
-        repos.push(path18.resolve(rootDir, value2));
+        repos.push(path20.resolve(rootDir, value2));
         continue;
       }
       if (!/^\d{1,5}$/.test(value2)) return { ok: false, message: `--port needs a port number.
@@ -5619,7 +5817,7 @@ async function serveRuns(context, args) {
   if (!parsed.ok) return { kind: "usage", message: parsed.message };
   let archives;
   try {
-    archives = await Promise.all(parsed.args.archives.map(async (file) => ({ label: path18.basename(file), text: await readArchiveFile(file) })));
+    archives = await Promise.all(parsed.args.archives.map(async (file) => ({ label: path20.basename(file), text: await readArchiveFile(file) })));
   } catch {
     return unresolvable("An explicitly selected archive could not be read within its size limit.");
   }
@@ -5643,8 +5841,8 @@ function untilSignalled(signal) {
 }
 
 // packages/cli/src/commands/verify.ts
-import { readFile as readFile10 } from "node:fs/promises";
-import path19 from "node:path";
+import { readFile as readFile9 } from "node:fs/promises";
+import path21 from "node:path";
 import {
   MAX_RUN_PROVIDER_ID,
   RUN_PROVIDER_ID,
@@ -5765,10 +5963,10 @@ var verifyCommand = {
       mergeBaseSha: capture.candidate.base.mergeBaseSha
     };
     const relativePath = deliveryRecordPathFor3(context.config, identity.deliverableDigest);
-    const absolutePath = path19.join(context.rootDir, relativePath);
+    const absolutePath = path21.join(context.rootDir, relativePath);
     let text2;
     try {
-      text2 = await readFile10(absolutePath, "utf8");
+      text2 = await readFile9(absolutePath, "utf8");
     } catch {
       return {
         kind: "blocked",
@@ -5866,9 +6064,9 @@ var verifyCommand = {
 };
 
 // packages/cli/src/ordinary-context.ts
-import { readFile as readFile11 } from "node:fs/promises";
-import path20 from "node:path";
-import { HARNESS_VERSION, digestCanonical as digestCanonical7 } from "./kernel.mjs";
+import { readFile as readFile10 } from "node:fs/promises";
+import path22 from "node:path";
+import { HARNESS_VERSION, digestCanonical as digestCanonical8 } from "./kernel.mjs";
 function recoveryBlocker(code, summary, details) {
   return commandBlocker({
     code,
@@ -5885,7 +6083,7 @@ function rejectionDetails(rejections) {
 }
 function ordinaryEventWriter(version, kind, payload) {
   if (version !== "run-event/2") return { version };
-  return { version, eventId: `${kind.replaceAll(".", "-")}-${digestCanonical7(payload)}` };
+  return { version, eventId: `${kind.replaceAll(".", "-")}-${digestCanonical8(payload)}` };
 }
 async function recoveryRun(rootDir, named) {
   const resolved = await resolveRunSurface(rootDir);
@@ -5898,14 +6096,14 @@ async function recoveryRun(rootDir, named) {
   return { ok: true, surface: resolved.surface, runId, events: read.events, version: read.events[0]?.version ?? "run-event/1" };
 }
 async function installedRelease(rootDir) {
-  const document = JSON.parse(await readFile11(path20.join(rootDir, ".agent-skills/active.json"), "utf8"));
+  const document = JSON.parse(await readFile10(path22.join(rootDir, ".agent-skills/active.json"), "utf8"));
   const release = document?.release;
   if (!release || typeof release.releaseId !== "string" || typeof release.profile !== "string" || typeof release.archiveSha256 !== "string" || !/^[0-9a-f]{64}$/.test(release.archiveSha256)) {
     throw new Error("Installed workflow release identity is missing or malformed.");
   }
   return { runtimeVersion: HARNESS_VERSION, releaseId: release.releaseId, profile: release.profile, archiveSha256: release.archiveSha256 };
 }
-var policyDigest = (context) => digestCanonical7({ config: context.config, policyBinding: context.policyBinding ?? null });
+var policyDigest = (context) => digestCanonical8({ config: context.config, policyBinding: context.policyBinding ?? null });
 function reconciliationActions(events) {
   const actions = /* @__PURE__ */ new Map();
   for (const event of events) {
@@ -5991,7 +6189,7 @@ var saveContextCommand = {
 };
 
 // packages/cli/src/commands/resume.ts
-import { classifyCandidateDrift as classifyCandidateDrift3, digestCanonical as digestCanonical8, evaluatePreparationReceipt as evaluatePreparationReceipt4, runAdmission as runAdmission2 } from "./kernel.mjs";
+import { classifyCandidateDrift as classifyCandidateDrift3, digestCanonical as digestCanonical9, evaluatePreparationReceipt as evaluatePreparationReceipt4, runAdmission as runAdmission2 } from "./kernel.mjs";
 var USAGE9 = "Usage: delivery-harness resume [--run <run-id>]";
 var resumeCommand = {
   name: "resume",
@@ -6012,7 +6210,7 @@ var resumeCommand = {
     const drift = [];
     if (p["policyDigest"] !== policyDigest(context)) drift.push("policy_changed");
     try {
-      if (digestCanonical8(p["release"]) !== digestCanonical8(await installedRelease(context.rootDir))) drift.push("release_changed");
+      if (digestCanonical9(p["release"]) !== digestCanonical9(await installedRelease(context.rootDir))) drift.push("release_changed");
     } catch {
       drift.push("release_unreadable");
     }
@@ -6035,7 +6233,7 @@ var resumeCommand = {
     ) : void 0;
     if (capture.ok && admission?.candidate && classifyCandidateDrift3(capture.candidate, admission.candidate).length > 0) drift.push("candidate_observation_changed");
     try {
-      if (digestCanonical8(p["release"]) !== digestCanonical8(await installedRelease(context.rootDir)) && !drift.includes("release_changed")) drift.push("release_changed");
+      if (digestCanonical9(p["release"]) !== digestCanonical9(await installedRelease(context.rootDir)) && !drift.includes("release_changed")) drift.push("release_changed");
     } catch {
       if (!drift.includes("release_unreadable")) drift.push("release_unreadable");
     }
@@ -6058,10 +6256,8 @@ var resumeCommand = {
   }
 };
 
-// packages/cli/src/scoped-observations.ts
-import { digestCanonical as digestCanonical9, resolveRecordStorage as resolveRecordStorage5 } from "./kernel.mjs";
-
 // packages/cli/src/index.ts
+var PACKAGE_NAME = "@agent-delivery-harness/cli";
 var COMMANDS = [
   admitCommand,
   prepareCommand,
@@ -6082,127 +6278,38 @@ var COMMANDS = [
 function runCli(argv, runtime) {
   return runCliBoundary(argv, COMMANDS, runtime);
 }
-
-// packages/cli/src/main.ts
-import { invokedDirectly } from "./kernel.mjs";
-function createWaiverPrompt(input, output, signal) {
-  return (decision, obligationIds) => new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(new CliInterruption());
-      return;
-    }
-    const rl = createInterface({ input, output });
-    let settled = false;
-    const settle = (action) => {
-      if (settled) return;
-      settled = true;
-      signal?.removeEventListener("abort", interrupt);
-      action();
-    };
-    const interrupt = () => settle(() => {
-      rl.close();
-      reject(new CliInterruption("Waiver prompt interrupted."));
-    });
-    rl.on("SIGINT", interrupt);
-    signal?.addEventListener("abort", interrupt, { once: true });
-    rl.on("close", () => {
-      settle(() => resolve(false));
-    });
-    output.write(`Waiving covers ${obligationIds.length} obligation(s): ${obligationIds.join(", ")}.
-`);
-    output.write(`Candidate: ${decision.candidate.treeSha}. Approval covers only these findings under the current policy; live obligations require new approval each invocation.
-`);
-    for (const resolution of decision.resolutions) {
-      if (resolution.kind === "blocked" && obligationIds.includes(resolution.obligationId)) {
-        for (const blocker of resolution.blockers) output.write(`${resolution.obligationId}: [${blocker.code}] ${blocker.summary}
-`);
-      }
-    }
-    const finish = (value2) => settle(() => {
-      rl.close();
-      resolve(value2);
-    });
-    rl.question("Waive all of them? [y/N] ", (answer) => {
-      if (!/^\s*y(es)?\s*$/i.test(answer)) return finish(false);
-      rl.question("Author: ", (author) => {
-        if (!author.trim() || author.length > 256) return finish(false);
-        rl.question("Reason: ", (reason) => {
-          if (!reason.trim() || reason.length > 4096) return finish(false);
-          finish({ author: author.trim(), reason: reason.trim() });
-        });
-      });
-    });
-  });
-}
-var readlineWaiverPrompt = (decision, obligationIds) => createWaiverPrompt(process.stdin, process.stderr)(decision, obligationIds);
-function readStdinText(input, signal) {
-  if (signal?.aborted) return Promise.reject(new CliInterruption());
-  if (input.isTTY === true) return Promise.resolve("");
-  return new Promise((resolve, reject) => {
-    let text2 = "";
-    const cleanup = () => {
-      input.removeListener("data", data);
-      input.removeListener("error", finish);
-      input.removeListener("end", finish);
-      signal?.removeEventListener("abort", interrupt);
-    };
-    const data = (chunk) => {
-      text2 += chunk;
-    };
-    const finish = () => {
-      cleanup();
-      resolve(text2);
-    };
-    const interrupt = () => {
-      cleanup();
-      input.pause();
-      reject(new CliInterruption());
-    };
-    input.setEncoding("utf8");
-    input.on("data", data);
-    input.once("error", finish);
-    input.once("end", finish);
-    signal?.addEventListener("abort", interrupt, { once: true });
-  });
-}
-function defaultRuntime(signal) {
-  return {
-    cwd: process.cwd(),
-    env: process.env,
-    stdinIsTTY: process.stdin.isTTY === true,
-    stdoutIsTTY: process.stdout.isTTY === true,
-    stdout: (text2) => process.stdout.write(text2),
-    stderr: (text2) => process.stderr.write(text2),
-    ...signal ? { signal } : {},
-    promptForWaiver: createWaiverPrompt(process.stdin, process.stderr, signal),
-    readStdin: () => readStdinText(process.stdin, signal)
-  };
-}
-async function main(argv) {
-  const controller = new AbortController();
-  const interrupt = () => controller.abort();
-  process.on("SIGINT", interrupt);
-  try {
-    const code = await runCli(argv, defaultRuntime(controller.signal));
-    return controller.signal.aborted ? EXIT_INTERRUPTED : code;
-  } finally {
-    process.removeListener("SIGINT", interrupt);
-  }
-}
-if (invokedDirectly(process.argv[1], import.meta.url)) {
-  process.exitCode = EXIT_POLICY;
-  main(process.argv.slice(2)).then((code) => {
-    process.exitCode = code;
-  }).catch((error) => {
-    process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}
-`);
-    process.exitCode = EXIT_POLICY;
-  });
-}
 export {
-  createWaiverPrompt,
-  defaultRuntime,
-  main,
-  readStdinText,
-  readlineWaiverPrompt
+  COMMANDS,
+  COMPLETION_WRAPPED_COMMANDS,
+  CliInterruption,
+  EXIT_INTERRUPTED,
+  EXIT_OK,
+  EXIT_POLICY,
+  EXIT_USAGE,
+  PACKAGE_NAME,
+  admitCommand,
+  buildRunExport,
+  checkCommand,
+  commandBlocker,
+  emitCommand,
+  emitReviewEvidenceCommand,
+  gateCommand,
+  importHarnessConfig,
+  isConfigFreeCommand,
+  maintainCommand,
+  managedCommand,
+  parseRunExport,
+  prepareCommand,
+  readScopedCheckDiagnostics,
+  readScopedCheckObservations,
+  recordCommand,
+  resumeCommand,
+  reviewContextCommand,
+  runCli,
+  runCliBoundary,
+  runsCommand,
+  saveContextCommand,
+  submitEvidenceCommand,
+  verifyCommand,
+  wireRepo
 };

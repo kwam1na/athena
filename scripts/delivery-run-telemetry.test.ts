@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { buildRunExport, parseRunExport } from "../.agent-skills/current/runtime/cli-api.mjs";
 import { computeDeliverableIdentity, createRunStore, resolveRunStoreLocation, runGitDirect, gitNamespaceClearedEnvironment, type RunEvent } from "../.agent-skills/current/runtime/kernel.mjs";
 import { collectDeliveryRunTelemetryFindings, deliveryRunTelemetryPath, parseArgs, parseDeliveryRunTelemetry, readDeliveryRunTelemetryRecords, readCurrentDeliveryRunExport, matchesCurrentGate, writeDeliveryRunTelemetryRecord, type DeliveryRunTelemetryCheckInput } from "./delivery-run-telemetry";
-import config from "../harness.config";
+import config from "./harness-base-config";
 import { productRunFixture } from "./delivery-run-telemetry.fixtures";
 
 const roots: string[] = [];

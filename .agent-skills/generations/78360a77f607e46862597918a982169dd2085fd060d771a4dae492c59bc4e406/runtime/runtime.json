@@ -22,11 +22,11 @@
     },
     {
       "path": "cli-api.mjs",
-      "sha256": "a22ebac86ac6d96dbd7d8226c7c8fe0abdf07c334274342e3f783830e0e89f46"
+      "sha256": "bcedf20ee93d056a3afc2e8b2082b26cf0145780d8a4e33fbe3236182568d6c4"
     },
     {
       "path": "cli.mjs",
-      "sha256": "d7eaa1c80d03aef0d50217cd87ed9d03ec1ea106b2efc2013929806d0c7dbd07"
+      "sha256": "c541ffae0222152ca31c9e077acb7998ff09a05d5160e2f71daea0447477ba64"
     },
     {
       "path": "kernel.d.mts",

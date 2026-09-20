@@ -3351,32 +3351,3525 @@
         "durationMs": 1567174,
         "digest": "74e9c784ad3435d2e64ba7bf8db190c908de122e41a18f5f6abb2b13fa4520c3"
       }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "aa94645d-53d2-44d1-9e90-07626ccfd6b4",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 127,
+      "at": "2026-09-20T07:41:46Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "6c14be51951d384eb006dc7dc1f6c039e979d058",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-fb645503-8ab3-45be-902a-ffdfd43eef5e",
+        "attemptId": "command-fb645503-8ab3-45be-902a-ffdfd43eef5e",
+        "candidateTreeSha": "6c14be51951d384eb006dc7dc1f6c039e979d058",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "prepare",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "1fc6b708-cb46-4a9c-8331-6d6480f842e5",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 128,
+      "at": "2026-09-20T07:41:46Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "6c14be51951d384eb006dc7dc1f6c039e979d058",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-fb645503-8ab3-45be-902a-ffdfd43eef5e",
+        "attemptId": "command-fb645503-8ab3-45be-902a-ffdfd43eef5e",
+        "candidateTreeSha": "6c14be51951d384eb006dc7dc1f6c039e979d058",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "prepare",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "0e1d3a10-2810-45bb-a632-9b100710d6d0",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 129,
+      "at": "2026-09-20T07:41:46Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 1181,
+        "preparation": {
+          "checks": "reused",
+          "reason": "validation-equivalent"
+        }
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "f0c06466-60ea-457d-8442-d07d1402a05f",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 130,
+      "at": "2026-09-20T07:41:48Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "6c14be51951d384eb006dc7dc1f6c039e979d058",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-537331d4-57af-4f3e-8fa0-1f081ca70f14",
+        "attemptId": "command-537331d4-57af-4f3e-8fa0-1f081ca70f14",
+        "candidateTreeSha": "6c14be51951d384eb006dc7dc1f6c039e979d058",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "record",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "0e6aa35c-f897-4b04-a1c7-75973316a03f",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 131,
+      "at": "2026-09-20T07:42:00Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "6c14be51951d384eb006dc7dc1f6c039e979d058",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-537331d4-57af-4f3e-8fa0-1f081ca70f14",
+        "attemptId": "command-537331d4-57af-4f3e-8fa0-1f081ca70f14",
+        "candidateTreeSha": "6c14be51951d384eb006dc7dc1f6c039e979d058",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "record",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "03278ecd-ced1-4fce-8008-4ebdb1194ddc",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 132,
+      "at": "2026-09-20T07:42:00Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "record",
+        "outcome": "ok",
+        "durationMs": 13232
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "eb317e67-35d2-4b28-906d-91efe8b919e0",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 133,
+      "at": "2026-09-20T07:42:01Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "24fbcaa74abc1743aeac98af1d7c2bff3715de51",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-2d10a232-c04f-4946-bfa0-688b2e9036c1",
+        "attemptId": "command-2d10a232-c04f-4946-bfa0-688b2e9036c1",
+        "candidateTreeSha": "24fbcaa74abc1743aeac98af1d7c2bff3715de51",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "prepare",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "bf1f1682-3fe9-4e67-afe2-e93dd9cfd523",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 134,
+      "at": "2026-09-20T07:42:02Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "24fbcaa74abc1743aeac98af1d7c2bff3715de51",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-2d10a232-c04f-4946-bfa0-688b2e9036c1",
+        "attemptId": "command-2d10a232-c04f-4946-bfa0-688b2e9036c1",
+        "candidateTreeSha": "24fbcaa74abc1743aeac98af1d7c2bff3715de51",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "prepare",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "1fe6c0b3-089d-4b7b-81ce-d97a7ee5962e",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 135,
+      "at": "2026-09-20T07:42:02Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 1181,
+        "preparation": {
+          "checks": "reused",
+          "reason": "validation-equivalent"
+        }
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "ee330735-e7b3-4fcf-9022-50375ac80f30",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 136,
+      "at": "2026-09-20T07:42:03Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "24fbcaa74abc1743aeac98af1d7c2bff3715de51",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-17c85dde-ca50-4f83-a7c5-8957a191b4e2",
+        "attemptId": "command-17c85dde-ca50-4f83-a7c5-8957a191b4e2",
+        "candidateTreeSha": "24fbcaa74abc1743aeac98af1d7c2bff3715de51",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "verify",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "946b27e5-e6fe-49a5-8cca-f03463948e85",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 137,
+      "at": "2026-09-20T07:42:14Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "24fbcaa74abc1743aeac98af1d7c2bff3715de51",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-17c85dde-ca50-4f83-a7c5-8957a191b4e2",
+        "attemptId": "command-17c85dde-ca50-4f83-a7c5-8957a191b4e2",
+        "candidateTreeSha": "24fbcaa74abc1743aeac98af1d7c2bff3715de51",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "verify",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "170961d0-d00e-48e5-86bb-83015fbd99fb",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 138,
+      "at": "2026-09-20T07:42:14Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "verify",
+        "outcome": "ok",
+        "durationMs": 11837
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "491f8d75-9f5b-4313-a1ec-1f5de9f90225",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 139,
+      "at": "2026-09-20T07:43:28Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "24fbcaa74abc1743aeac98af1d7c2bff3715de51",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-256c80fa-b4af-47ff-a0cb-68b7dfaffc4e",
+        "attemptId": "command-256c80fa-b4af-47ff-a0cb-68b7dfaffc4e",
+        "candidateTreeSha": "24fbcaa74abc1743aeac98af1d7c2bff3715de51",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "verify",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "43f69585-eaec-4e82-82a3-d814de0550b0",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 140,
+      "at": "2026-09-20T07:43:33Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "24fbcaa74abc1743aeac98af1d7c2bff3715de51",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-256c80fa-b4af-47ff-a0cb-68b7dfaffc4e",
+        "attemptId": "command-256c80fa-b4af-47ff-a0cb-68b7dfaffc4e",
+        "candidateTreeSha": "24fbcaa74abc1743aeac98af1d7c2bff3715de51",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "verify",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "dcaa91c2-1d5a-4499-83f4-1286810c255a",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 141,
+      "at": "2026-09-20T07:43:33Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "verify",
+        "outcome": "ok",
+        "durationMs": 5655
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "pr843-integration-merge",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 142,
+      "at": "2026-09-20T08:10:15Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "finish.step.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "24fbcaa74abc1743aeac98af1d7c2bff3715de51",
+      "attestation": "self",
+      "payload": {
+        "stepId": "pr843-integration-merge",
+        "candidateTreeSha": "24fbcaa74abc1743aeac98af1d7c2bff3715de51",
+        "name": "integration-merge",
+        "state": "completed",
+        "owner": "root",
+        "reason": "PR843 merged as d387c35d8f98874ad00973004d011dfdd5dad4ec after all five required hosted contexts passed; activation remains pending"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "pr843-root-alignment",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 143,
+      "at": "2026-09-20T08:10:15Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "finish.step.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "24fbcaa74abc1743aeac98af1d7c2bff3715de51",
+      "attestation": "self",
+      "payload": {
+        "stepId": "pr843-root-alignment",
+        "candidateTreeSha": "24fbcaa74abc1743aeac98af1d7c2bff3715de51",
+        "name": "integration-root-alignment",
+        "state": "completed",
+        "owner": "root",
+        "reason": "Root main fast-forwarded to d387c35d; clean; unrelated terminal-sync branch feb46a5b preserved"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "context-saved-4422852e64780f2afa7e55b151017804943c8c6eef68583cd6dff8a46fd924f1",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 144,
+      "at": "2026-09-20T10:02:02Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "5c3ab40b5276d05a7bf6410d43243d0a0cb6ecb9",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Deliver the entire approved affected-validation plan through V26-2071 activation, integrating V26-2024 report-only reuse, V26-2069 CI and full-health execution, and V26-2070 recovery documentation.",
+          "acceptanceCriteria": [
+            "Report-only edits rerun applicable report checks without unrelated application tests, coverage, typechecks or builds; native evidence proves valid reuse and binds the final candidate.",
+            "Changes to source, dependencies, relevant config, policy, release or incompatible base invalidate affected evidence; missing, failed, tampered or mismatched evidence never passes.",
+            "Local, fresh-clone/CI, telemetry and portable verification agree while preserving review history and original execution provenance.",
+            "Shared local/CI plans preserve required contexts, trusted cumulative full-health failures, classification approval and repair admission.",
+            "Qualify the exact installed release, upgrade, rollback, large sources and bounded metadata; document actual capabilities and recovery.",
+            "Complete all approved qualification scenarios, matched repeated timing measurements, successful hosted lifecycle, trusted main health seed and cold-reader proof before default activation.",
+            "Resolve findings in-run, pass required review and canonical gates, commit reports and learning, merge all delivery changes, close tickets, align root and clean owned worktrees."
+          ],
+          "finishLine": "Entire approved plan delivered and activated through V26-2071, merged with verified root alignment and closeout."
+        },
+        "stage": "athena-bridge-prepared",
+        "candidateTreeSha": "5c3ab40b5276d05a7bf6410d43243d0a0cb6ecb9",
+        "candidateBinding": {
+          "deliverableDigest": "e6866718cef8430a86ac5c63b9b4b4765d81c2520e7a77556d9f65840c79ea24",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "d387c35d8f98874ad00973004d011dfdd5dad4ec",
+          "mergeBaseSha": "d387c35d8f98874ad00973004d011dfdd5dad4ec",
+          "workspaceId": "426e378eb08fe58a3ffb5e706e7e6c5137892f11a6e3be3a850cc159f52f5bd0"
+        },
+        "policyDigest": "1dd70381b10a325aaaf69ac741cff234a2fc6c7c623e08134b54fd72be12183c",
+        "release": {
+          "runtimeVersion": "0.5.0",
+          "releaseId": "linear-scoped-validation-snapshot-liveness-v1",
+          "profile": "linear",
+          "archiveSha256": "78360a77f607e46862597918a982169dd2085fd060d771a4dae492c59bc4e406"
+        }
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2071-diagnostics-release-adopted-sep20",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 145,
+      "at": "2026-09-20T11:58:07Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "decision.recorded",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "fork": "Install the qualified diagnostic release during the existing affected-validation delivery",
+        "choice": "Installed linear-scoped-validation-diagnostics-v1 archive ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01 after producer PR163 merged 470b522a72d74bacbd00fb7ebc83763b28dfd4fd. Root verified artifact and installed runtime hashes, readiness and policy. Preserve all prior Athena rounds and original bound; acquire current review only after final adapter delta and preparation. Full activation and qualification remain incomplete.",
+        "cited": "V26-2071; V26-2090"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "55eb4f8e-158c-4848-a6ff-5163eca206b0",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 146,
+      "at": "2026-09-20T12:00:45Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-03e94590-a1f7-4365-a3c5-3bd3968ebcfe",
+        "attemptId": "command-03e94590-a1f7-4365-a3c5-3bd3968ebcfe",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "prepare",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "19a87c9a-5329-4123-94b2-efa845899d24",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 147,
+      "at": "2026-09-20T12:01:20Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-03e94590-a1f7-4365-a3c5-3bd3968ebcfe",
+        "attemptId": "command-03e94590-a1f7-4365-a3c5-3bd3968ebcfe",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "prepare",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "4188bae0-d4ca-4456-b44b-717c245713a5",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 148,
+      "at": "2026-09-20T12:01:20Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 34921,
+        "preparation": {
+          "checks": "executed",
+          "reason": "ordinary"
+        }
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "036e6c70-92cc-41b8-a0ff-5a3aa22c90d4",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 149,
+      "at": "2026-09-20T12:02:19Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-4066ac05-6ccd-4826-a433-51ccecd65084",
+        "attemptId": "command-4066ac05-6ccd-4826-a433-51ccecd65084",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "review-context",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "e49e6607-15d7-4183-9f51-a5ce9fadb2cd",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 150,
+      "at": "2026-09-20T12:02:19Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-4066ac05-6ccd-4826-a433-51ccecd65084",
+        "attemptId": "command-4066ac05-6ccd-4826-a433-51ccecd65084",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "review-context",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "7b76bda0-1835-4871-b818-7a79b906aeb2",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 151,
+      "at": "2026-09-20T12:02:19Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 826
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r3-lenses-selected",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 152,
+      "at": "2026-09-20T12:12:10Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "lens.selected",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "mandated": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing"
+        ],
+        "selected": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing",
+          "athena.ce-correctness-reviewer"
+        ],
+        "rationale": "Explicit user amendment: mandatory outcome and adversarial lenses plus focused correctness. No uncovered risk justifies a 16-lens roster."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-round-3-opened",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 153,
+      "at": "2026-09-20T12:12:11Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.opened",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "round": 3,
+        "roundId": "v26-2024-round-3",
+        "bound": 4,
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "lenses": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing",
+          "athena.ce-correctness-reviewer"
+        ]
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r3-outcome-correctness-queued",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 154,
+      "at": "2026-09-20T12:12:11Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-outcome-correctness",
+        "attemptId": "round3-outcome-correctness",
+        "supersedesAttemptId": "round2-outcome-correctness",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "roundId": "v26-2024-round-3",
+        "round": 3,
+        "lensId": "lens.outcome-correctness",
+        "state": "queued",
+        "owner": "reviewer",
+        "phase": "review",
+        "nextStep": "Independent verification review of prepared bridge; request slot for executable probes."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r3-testing-policy-queued",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 155,
+      "at": "2026-09-20T12:12:11Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-testing-policy",
+        "attemptId": "round3-testing-policy",
+        "supersedesAttemptId": "round2-testing-policy",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "roundId": "v26-2024-round-3",
+        "round": 3,
+        "lensId": "lens.adversarial-testing",
+        "state": "queued",
+        "owner": "reviewer",
+        "phase": "review",
+        "nextStep": "Independent verification review of prepared bridge; request slot for executable probes."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r3-ce-correctness-reviewer-queued",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 156,
+      "at": "2026-09-20T12:12:12Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-ce-correctness-reviewer",
+        "attemptId": "round3-ce-correctness-reviewer",
+        "supersedesAttemptId": "round2-ce-correctness-reviewer",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "roundId": "v26-2024-round-3",
+        "round": 3,
+        "lensId": "athena.ce-correctness-reviewer",
+        "state": "queued",
+        "owner": "reviewer",
+        "phase": "review",
+        "nextStep": "Independent verification review of prepared bridge; request slot for executable probes."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r3-outcome-correctness-running",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 157,
+      "at": "2026-09-20T12:13:07Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-outcome-correctness",
+        "attemptId": "round3-outcome-correctness",
+        "supersedesAttemptId": "round2-outcome-correctness",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "roundId": "v26-2024-round-3",
+        "round": 3,
+        "lensId": "lens.outcome-correctness",
+        "state": "running",
+        "owner": "reviewer",
+        "phase": "review",
+        "nextStep": "Native host /root/bridge_outcome_round3 started review; granular progress and cost unavailable."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r3-testing-policy-running",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 158,
+      "at": "2026-09-20T12:13:07Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-testing-policy",
+        "attemptId": "round3-testing-policy",
+        "supersedesAttemptId": "round2-testing-policy",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "roundId": "v26-2024-round-3",
+        "round": 3,
+        "lensId": "lens.adversarial-testing",
+        "state": "running",
+        "owner": "reviewer",
+        "phase": "review",
+        "nextStep": "Native host /root/bridge_adversarial_round3 started review; granular progress and cost unavailable."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r3-ce-correctness-reviewer-running",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 159,
+      "at": "2026-09-20T12:13:08Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-ce-correctness-reviewer",
+        "attemptId": "round3-ce-correctness-reviewer",
+        "supersedesAttemptId": "round2-ce-correctness-reviewer",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "roundId": "v26-2024-round-3",
+        "round": 3,
+        "lensId": "athena.ce-correctness-reviewer",
+        "state": "running",
+        "owner": "reviewer",
+        "phase": "review",
+        "nextStep": "Native host /root/bridge_correctness_round3 started review; granular progress and cost unavailable."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r3-outcome-correctness-capture-artifact",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 160,
+      "at": "2026-09-20T12:16:17Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "artifact.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "artifactId": "v26-2024-r3-outcome-correctness",
+        "activityId": "review-outcome-correctness",
+        "attemptId": "round3-outcome-correctness",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "roundId": "v26-2024-round-3",
+        "round": 3,
+        "lensId": "lens.outcome-correctness",
+        "digest": "08e043b9d99d1d116fb6b5a3826e24d4fa063898c2ee82406a411baec35fe509",
+        "sizeBytes": 8446,
+        "mediaType": "application/json",
+        "producer": "outcome-correctness"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r3-outcome-correctness-capture-report",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 161,
+      "at": "2026-09-20T12:16:17Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "report.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "reportId": "v26-2024-r3-outcome-correctness",
+        "role": "review",
+        "activityId": "review-outcome-correctness",
+        "attemptId": "round3-outcome-correctness",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "roundId": "v26-2024-round-3",
+        "round": 3,
+        "lensId": "lens.outcome-correctness",
+        "availability": "referenced",
+        "artifactId": "v26-2024-r3-outcome-correctness"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r3-outcome-correctness-completed",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 162,
+      "at": "2026-09-20T12:16:18Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-outcome-correctness",
+        "attemptId": "round3-outcome-correctness",
+        "supersedesAttemptId": "round2-outcome-correctness",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "roundId": "v26-2024-round-3",
+        "round": 3,
+        "lensId": "lens.outcome-correctness",
+        "state": "completed",
+        "owner": "reviewer",
+        "phase": "review",
+        "verdict": "approved"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r3-ce-correctness-reviewer-capture-artifact",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 163,
+      "at": "2026-09-20T12:16:18Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "artifact.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "artifactId": "v26-2024-r3-ce-correctness-reviewer",
+        "activityId": "review-ce-correctness-reviewer",
+        "attemptId": "round3-ce-correctness-reviewer",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "roundId": "v26-2024-round-3",
+        "round": 3,
+        "lensId": "athena.ce-correctness-reviewer",
+        "digest": "5b78f2434f355ab7930c059a48fbf2ad5a5dd7b73581c53098fcaf907d5a364f",
+        "sizeBytes": 7254,
+        "mediaType": "application/json",
+        "producer": "ce-correctness-reviewer"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r3-ce-correctness-reviewer-capture-report",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 164,
+      "at": "2026-09-20T12:16:18Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "report.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "reportId": "v26-2024-r3-ce-correctness-reviewer",
+        "role": "review",
+        "activityId": "review-ce-correctness-reviewer",
+        "attemptId": "round3-ce-correctness-reviewer",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "roundId": "v26-2024-round-3",
+        "round": 3,
+        "lensId": "athena.ce-correctness-reviewer",
+        "availability": "referenced",
+        "artifactId": "v26-2024-r3-ce-correctness-reviewer"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r3-ce-correctness-reviewer-completed",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 165,
+      "at": "2026-09-20T12:16:18Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-ce-correctness-reviewer",
+        "attemptId": "round3-ce-correctness-reviewer",
+        "supersedesAttemptId": "round2-ce-correctness-reviewer",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "roundId": "v26-2024-round-3",
+        "round": 3,
+        "lensId": "athena.ce-correctness-reviewer",
+        "state": "completed",
+        "owner": "reviewer",
+        "phase": "review",
+        "verdict": "approved"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r3-testing-policy-capture-artifact",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 166,
+      "at": "2026-09-20T12:18:42Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "artifact.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "artifactId": "v26-2024-r3-testing-policy",
+        "activityId": "review-testing-policy",
+        "attemptId": "round3-testing-policy",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "roundId": "v26-2024-round-3",
+        "round": 3,
+        "lensId": "lens.adversarial-testing",
+        "digest": "6bdf6ab393c1b4cde0fce49707b7b7658985292f0f8de5e12bdd176301951bbe",
+        "sizeBytes": 10029,
+        "mediaType": "application/json",
+        "producer": "testing-policy"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r3-testing-policy-capture-report",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 167,
+      "at": "2026-09-20T12:18:42Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "report.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "reportId": "v26-2024-r3-testing-policy",
+        "role": "review",
+        "activityId": "review-testing-policy",
+        "attemptId": "round3-testing-policy",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "roundId": "v26-2024-round-3",
+        "round": 3,
+        "lensId": "lens.adversarial-testing",
+        "availability": "referenced",
+        "artifactId": "v26-2024-r3-testing-policy"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r3-testing-policy-completed",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 168,
+      "at": "2026-09-20T12:18:43Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-testing-policy",
+        "attemptId": "round3-testing-policy",
+        "supersedesAttemptId": "round2-testing-policy",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "roundId": "v26-2024-round-3",
+        "round": 3,
+        "lensId": "lens.adversarial-testing",
+        "state": "completed",
+        "owner": "reviewer",
+        "phase": "review",
+        "verdict": "approved"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "9d53fa1b-552c-4da3-9e8e-5ef7dd8f20ad",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 169,
+      "at": "2026-09-20T12:18:51Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-a5161725-f70c-4a17-a167-b968a359d97a",
+        "attemptId": "command-a5161725-f70c-4a17-a167-b968a359d97a",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "emit-review-evidence",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "02530a37-e2ec-428e-ab3e-876e93e46e32",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 170,
+      "at": "2026-09-20T12:18:52Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-a5161725-f70c-4a17-a167-b968a359d97a",
+        "attemptId": "command-a5161725-f70c-4a17-a167-b968a359d97a",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "emit-review-evidence",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "55b51852-c443-4c17-867b-f5aa2554eddd",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 171,
+      "at": "2026-09-20T12:18:52Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "ok",
+        "durationMs": 748
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "6d5df5f3-1f02-4377-b9bd-c2c44ed359d7",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 172,
+      "at": "2026-09-20T12:19:18Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-65429074-45d6-444b-8741-d17a9d74aa64",
+        "attemptId": "command-65429074-45d6-444b-8741-d17a9d74aa64",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "submit-evidence",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "446cb8e7-7f75-477b-b05a-12ecbece2b95",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 173,
+      "at": "2026-09-20T12:19:18Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-65429074-45d6-444b-8741-d17a9d74aa64",
+        "attemptId": "command-65429074-45d6-444b-8741-d17a9d74aa64",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "state": "failed",
+        "owner": "delivery-harness.cli",
+        "phase": "submit-evidence",
+        "nextStep": "Command returned policy (exit 1); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "7d2decf4-6434-466c-9771-9c43863734b6",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 174,
+      "at": "2026-09-20T12:19:18Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "submit-evidence",
+        "outcome": "policy",
+        "durationMs": 848
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r3-reduction-capture-artifact",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 175,
+      "at": "2026-09-20T12:19:19Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "artifact.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "artifactId": "v26-2024-r3-reduction",
+        "activityId": "review-reduction",
+        "attemptId": "round3-reduction",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "digest": "1d065c6065ac2e9d19d815fc06a848bb85a8d90990ec526f6d2070ab6488ae06",
+        "sizeBytes": 28597,
+        "mediaType": "application/json",
+        "producer": "root"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r3-reduction-capture-report",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 176,
+      "at": "2026-09-20T12:19:19Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "report.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "reportId": "v26-2024-r3-reduction",
+        "role": "reduction",
+        "activityId": "review-reduction",
+        "attemptId": "round3-reduction",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "availability": "referenced",
+        "artifactId": "v26-2024-r3-reduction"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r3-closed",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 177,
+      "at": "2026-09-20T12:19:19Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.closed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "round": 3,
+        "roundId": "v26-2024-round-3",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "outcome": "aligned",
+        "findings": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 1,
+          "P3": 0
+        },
+        "cost": {
+          "coverage": "unreported",
+          "reportedBy": "host"
+        }
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-tp-r3-001-closure-capture-artifact",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 178,
+      "at": "2026-09-20T12:22:45Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "artifact.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "artifactId": "v26-2024-tp-r3-001-closure",
+        "activityId": "review-testing-policy",
+        "attemptId": "round3-testing-policy",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "roundId": "v26-2024-round-3",
+        "round": 3,
+        "lensId": "lens.adversarial-testing",
+        "digest": "b0d08f4556c4b7efe440ccf675895690c7c7b9a712c2641357825adb365204bd",
+        "sizeBytes": 2180,
+        "mediaType": "application/json",
+        "producer": "testing-policy"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-tp-r3-001-closure-capture-report",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 179,
+      "at": "2026-09-20T12:22:45Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "report.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+      "attestation": "self",
+      "payload": {
+        "reportId": "v26-2024-tp-r3-001-closure",
+        "role": "clarification",
+        "originatingReportId": "v26-2024-r3-testing-policy",
+        "findingId": "TP-R3-001",
+        "activityId": "review-testing-policy",
+        "attemptId": "round3-testing-policy",
+        "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+        "roundId": "v26-2024-round-3",
+        "round": 3,
+        "lensId": "lens.adversarial-testing",
+        "availability": "referenced",
+        "artifactId": "v26-2024-tp-r3-001-closure"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "f5e026e2-81a5-4db8-917b-bd70f2f8efc6",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 180,
+      "at": "2026-09-20T12:23:28Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-65506ff6-89bf-4350-962a-a96f9d42b52d",
+        "attemptId": "command-65506ff6-89bf-4350-962a-a96f9d42b52d",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "prepare",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "f80d4eec-2f92-49ab-a931-c3bb2c994aaa",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 181,
+      "at": "2026-09-20T12:24:03Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-65506ff6-89bf-4350-962a-a96f9d42b52d",
+        "attemptId": "command-65506ff6-89bf-4350-962a-a96f9d42b52d",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "prepare",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "a855565c-5fea-4b8b-bf93-b9a49687de44",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 182,
+      "at": "2026-09-20T12:24:03Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 35188,
+        "preparation": {
+          "checks": "executed",
+          "reason": "ordinary"
+        }
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "e1764979-9e0c-428f-a549-3c176903ffae",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 183,
+      "at": "2026-09-20T12:24:14Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-b71e2e6b-f909-4169-a374-0cfb09e24817",
+        "attemptId": "command-b71e2e6b-f909-4169-a374-0cfb09e24817",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "review-context",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "23256ec7-4032-495d-be56-20cf1ba35ce8",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 184,
+      "at": "2026-09-20T12:24:14Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-b71e2e6b-f909-4169-a374-0cfb09e24817",
+        "attemptId": "command-b71e2e6b-f909-4169-a374-0cfb09e24817",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "review-context",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "8d36d778-4bf3-46b2-a224-6dd7fa970fa0",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 185,
+      "at": "2026-09-20T12:24:14Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 830
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r4-lenses-selected",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 186,
+      "at": "2026-09-20T12:25:32Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "lens.selected",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "mandated": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing"
+        ],
+        "selected": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing",
+          "athena.ce-correctness-reviewer"
+        ],
+        "rationale": "Same user-selected three lenses; correction changed prepared candidate, current review reuse unavailable."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-round-4-opened",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 187,
+      "at": "2026-09-20T12:25:32Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.opened",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "round": 4,
+        "roundId": "v26-2024-round-4",
+        "bound": 4,
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "lenses": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing",
+          "athena.ce-correctness-reviewer"
+        ]
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r4-outcome-correctness-queued",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 188,
+      "at": "2026-09-20T12:25:32Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-outcome-correctness",
+        "attemptId": "round4-outcome-correctness",
+        "supersedesAttemptId": "round3-outcome-correctness",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "roundId": "v26-2024-round-4",
+        "round": 4,
+        "lensId": "lens.outcome-correctness",
+        "state": "queued",
+        "owner": "reviewer",
+        "phase": "review",
+        "nextStep": "Verify carried findings and corrected candidate delta; same three lenses."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r4-testing-policy-queued",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 189,
+      "at": "2026-09-20T12:25:33Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-testing-policy",
+        "attemptId": "round4-testing-policy",
+        "supersedesAttemptId": "round3-testing-policy",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "roundId": "v26-2024-round-4",
+        "round": 4,
+        "lensId": "lens.adversarial-testing",
+        "state": "queued",
+        "owner": "reviewer",
+        "phase": "review",
+        "nextStep": "Verify carried findings and corrected candidate delta; same three lenses."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r4-ce-correctness-reviewer-queued",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 190,
+      "at": "2026-09-20T12:25:33Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-ce-correctness-reviewer",
+        "attemptId": "round4-ce-correctness-reviewer",
+        "supersedesAttemptId": "round3-ce-correctness-reviewer",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "roundId": "v26-2024-round-4",
+        "round": 4,
+        "lensId": "athena.ce-correctness-reviewer",
+        "state": "queued",
+        "owner": "reviewer",
+        "phase": "review",
+        "nextStep": "Verify carried findings and corrected candidate delta; same three lenses."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r4-outcome-correctness-running",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 191,
+      "at": "2026-09-20T12:26:25Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-outcome-correctness",
+        "attemptId": "round4-outcome-correctness",
+        "supersedesAttemptId": "round3-outcome-correctness",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "roundId": "v26-2024-round-4",
+        "round": 4,
+        "lensId": "lens.outcome-correctness",
+        "state": "running",
+        "owner": "reviewer",
+        "phase": "review",
+        "nextStep": "Native host started corrected-candidate verification; granular progress/cost unavailable."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r4-testing-policy-running",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 192,
+      "at": "2026-09-20T12:26:26Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-testing-policy",
+        "attemptId": "round4-testing-policy",
+        "supersedesAttemptId": "round3-testing-policy",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "roundId": "v26-2024-round-4",
+        "round": 4,
+        "lensId": "lens.adversarial-testing",
+        "state": "running",
+        "owner": "reviewer",
+        "phase": "review",
+        "nextStep": "Native host started corrected-candidate verification; granular progress/cost unavailable."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r4-ce-correctness-reviewer-running",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 193,
+      "at": "2026-09-20T12:26:26Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-ce-correctness-reviewer",
+        "attemptId": "round4-ce-correctness-reviewer",
+        "supersedesAttemptId": "round3-ce-correctness-reviewer",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "roundId": "v26-2024-round-4",
+        "round": 4,
+        "lensId": "athena.ce-correctness-reviewer",
+        "state": "running",
+        "owner": "reviewer",
+        "phase": "review",
+        "nextStep": "Native host started corrected-candidate verification; granular progress/cost unavailable."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r4-outcome-correctness-capture-artifact",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 194,
+      "at": "2026-09-20T12:28:14Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "artifact.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "artifactId": "v26-2024-r4-outcome-correctness",
+        "activityId": "review-outcome-correctness",
+        "attemptId": "round4-outcome-correctness",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "roundId": "v26-2024-round-4",
+        "round": 4,
+        "lensId": "lens.outcome-correctness",
+        "digest": "373b857ba5cfe56369760ac28c5239002bb3609a719b584d45b298327ce02242",
+        "sizeBytes": 5433,
+        "mediaType": "application/json",
+        "producer": "outcome-correctness"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r4-outcome-correctness-capture-report",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 195,
+      "at": "2026-09-20T12:28:14Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "report.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "reportId": "v26-2024-r4-outcome-correctness",
+        "role": "review",
+        "activityId": "review-outcome-correctness",
+        "attemptId": "round4-outcome-correctness",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "roundId": "v26-2024-round-4",
+        "round": 4,
+        "lensId": "lens.outcome-correctness",
+        "availability": "referenced",
+        "artifactId": "v26-2024-r4-outcome-correctness"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r4-outcome-correctness-completed",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 196,
+      "at": "2026-09-20T12:28:14Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-outcome-correctness",
+        "attemptId": "round4-outcome-correctness",
+        "supersedesAttemptId": "round3-outcome-correctness",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "roundId": "v26-2024-round-4",
+        "round": 4,
+        "lensId": "lens.outcome-correctness",
+        "state": "completed",
+        "owner": "reviewer",
+        "phase": "review",
+        "verdict": "approved"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r4-testing-policy-capture-artifact",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 197,
+      "at": "2026-09-20T12:28:14Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "artifact.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "artifactId": "v26-2024-r4-testing-policy",
+        "activityId": "review-testing-policy",
+        "attemptId": "round4-testing-policy",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "roundId": "v26-2024-round-4",
+        "round": 4,
+        "lensId": "lens.adversarial-testing",
+        "digest": "e435e07574bbbfc1c4df3a062f3d4bd7964869e08903cb63aa003644691a8e1f",
+        "sizeBytes": 6097,
+        "mediaType": "application/json",
+        "producer": "testing-policy"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r4-testing-policy-capture-report",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 198,
+      "at": "2026-09-20T12:28:14Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "report.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "reportId": "v26-2024-r4-testing-policy",
+        "role": "review",
+        "activityId": "review-testing-policy",
+        "attemptId": "round4-testing-policy",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "roundId": "v26-2024-round-4",
+        "round": 4,
+        "lensId": "lens.adversarial-testing",
+        "availability": "referenced",
+        "artifactId": "v26-2024-r4-testing-policy"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r4-testing-policy-completed",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 199,
+      "at": "2026-09-20T12:28:15Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-testing-policy",
+        "attemptId": "round4-testing-policy",
+        "supersedesAttemptId": "round3-testing-policy",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "roundId": "v26-2024-round-4",
+        "round": 4,
+        "lensId": "lens.adversarial-testing",
+        "state": "completed",
+        "owner": "reviewer",
+        "phase": "review",
+        "verdict": "approved"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r4-ce-correctness-reviewer-capture-artifact",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 200,
+      "at": "2026-09-20T12:28:15Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "artifact.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "artifactId": "v26-2024-r4-ce-correctness-reviewer",
+        "activityId": "review-ce-correctness-reviewer",
+        "attemptId": "round4-ce-correctness-reviewer",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "roundId": "v26-2024-round-4",
+        "round": 4,
+        "lensId": "athena.ce-correctness-reviewer",
+        "digest": "0ad006eba9873ce9721b3175b0e9e545021d2fc06868566af26d34b515e3ab84",
+        "sizeBytes": 6306,
+        "mediaType": "application/json",
+        "producer": "ce-correctness-reviewer"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r4-ce-correctness-reviewer-capture-report",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 201,
+      "at": "2026-09-20T12:28:15Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "report.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "reportId": "v26-2024-r4-ce-correctness-reviewer",
+        "role": "review",
+        "activityId": "review-ce-correctness-reviewer",
+        "attemptId": "round4-ce-correctness-reviewer",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "roundId": "v26-2024-round-4",
+        "round": 4,
+        "lensId": "athena.ce-correctness-reviewer",
+        "availability": "referenced",
+        "artifactId": "v26-2024-r4-ce-correctness-reviewer"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r4-ce-correctness-reviewer-completed",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 202,
+      "at": "2026-09-20T12:28:16Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-ce-correctness-reviewer",
+        "attemptId": "round4-ce-correctness-reviewer",
+        "supersedesAttemptId": "round3-ce-correctness-reviewer",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "roundId": "v26-2024-round-4",
+        "round": 4,
+        "lensId": "athena.ce-correctness-reviewer",
+        "state": "completed",
+        "owner": "reviewer",
+        "phase": "review",
+        "verdict": "approved"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r4-reduction-capture-artifact",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 203,
+      "at": "2026-09-20T12:28:16Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "artifact.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "artifactId": "v26-2024-r4-reduction",
+        "activityId": "review-reduction",
+        "attemptId": "round4-reduction",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "digest": "041271c3d2f1768cfeae9f0c385d7716a646265f87a3d70782c8dff90a460e72",
+        "sizeBytes": 20061,
+        "mediaType": "application/json",
+        "producer": "root"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r4-reduction-capture-report",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 204,
+      "at": "2026-09-20T12:28:16Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "report.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "reportId": "v26-2024-r4-reduction",
+        "role": "reduction",
+        "activityId": "review-reduction",
+        "attemptId": "round4-reduction",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "availability": "referenced",
+        "artifactId": "v26-2024-r4-reduction"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r4-closed",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 205,
+      "at": "2026-09-20T12:28:17Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.closed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "round": 4,
+        "roundId": "v26-2024-round-4",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "outcome": "aligned",
+        "findings": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 0,
+          "P3": 0
+        },
+        "cost": {
+          "coverage": "unreported",
+          "reportedBy": "host"
+        }
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "a42f2ef6-90cc-4229-9fdb-fae2a416f544",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 206,
+      "at": "2026-09-20T12:28:23Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-c4b4e75b-2631-48eb-a009-fe2c95c107d8",
+        "attemptId": "command-c4b4e75b-2631-48eb-a009-fe2c95c107d8",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "emit-review-evidence",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "eaab8027-0fe2-4dab-a7ef-3c83d99c614d",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 207,
+      "at": "2026-09-20T12:28:24Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-c4b4e75b-2631-48eb-a009-fe2c95c107d8",
+        "attemptId": "command-c4b4e75b-2631-48eb-a009-fe2c95c107d8",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "emit-review-evidence",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "240f44c5-78e1-4185-aa1c-4d1b985f37a9",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 208,
+      "at": "2026-09-20T12:28:24Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "ok",
+        "durationMs": 854
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "7360e2e2-4ea4-4d58-9451-3f803712cdb8",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 209,
+      "at": "2026-09-20T12:28:34Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-b5c9ad6e-c073-4664-80a7-a10d26fdcafe",
+        "attemptId": "command-b5c9ad6e-c073-4664-80a7-a10d26fdcafe",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "submit-evidence",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "7a66411d-655e-496e-94d3-424427f394a7",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 210,
+      "at": "2026-09-20T12:28:34Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-b5c9ad6e-c073-4664-80a7-a10d26fdcafe",
+        "attemptId": "command-b5c9ad6e-c073-4664-80a7-a10d26fdcafe",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "submit-evidence",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "7f5fb6ac-576f-4410-a74d-e7570192dd91",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 211,
+      "at": "2026-09-20T12:28:34Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "submit-evidence",
+        "outcome": "ok",
+        "durationMs": 940
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "context-saved-c884d3dba85ee0e4c6753b9a873ab7f250ef49a7feadd89052faa08bbe59d216",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 212,
+      "at": "2026-09-20T12:28:47Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Deliver the entire approved affected-validation plan through V26-2071 activation, integrating V26-2024 report-only reuse, V26-2069 CI and full-health execution, and V26-2070 recovery documentation.",
+          "acceptanceCriteria": [
+            "Report-only edits rerun applicable report checks without unrelated application tests, coverage, typechecks or builds; native evidence proves valid reuse and binds the final candidate.",
+            "Changes to source, dependencies, relevant config, policy, release or incompatible base invalidate affected evidence; missing, failed, tampered or mismatched evidence never passes.",
+            "Local, fresh-clone/CI, telemetry and portable verification agree while preserving review history and original execution provenance.",
+            "Shared local/CI plans preserve required contexts, trusted cumulative full-health failures, classification approval and repair admission.",
+            "Qualify the exact installed release, upgrade, rollback, large sources and bounded metadata; document actual capabilities and recovery.",
+            "Complete all approved qualification scenarios, matched repeated timing measurements, successful hosted lifecycle, trusted main health seed and cold-reader proof before default activation.",
+            "Resolve findings in-run, pass required review and canonical gates, commit reports and learning, merge all delivery changes, close tickets, align root and clean owned worktrees."
+          ],
+          "finishLine": "Entire approved plan delivered and activated through V26-2071, merged with verified root alignment and closeout."
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "candidateBinding": {
+          "deliverableDigest": "601fce8e01bb535578dee3dc9a09a9ed90752b2063f1fcdea26d065be934b361",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "d387c35d8f98874ad00973004d011dfdd5dad4ec",
+          "mergeBaseSha": "d387c35d8f98874ad00973004d011dfdd5dad4ec",
+          "workspaceId": "426e378eb08fe58a3ffb5e706e7e6c5137892f11a6e3be3a850cc159f52f5bd0"
+        },
+        "policyDigest": "1dd70381b10a325aaaf69ac741cff234a2fc6c7c623e08134b54fd72be12183c",
+        "release": {
+          "runtimeVersion": "0.5.0",
+          "releaseId": "linear-scoped-validation-diagnostics-v1",
+          "profile": "linear",
+          "archiveSha256": "ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01"
+        }
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "ed63b826-a81a-46a5-b34c-7a971e632ad5",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 213,
+      "at": "2026-09-20T12:28:47Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-8509fb66-e2f6-47ae-a7a2-f94360557276",
+        "attemptId": "command-8509fb66-e2f6-47ae-a7a2-f94360557276",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "gate",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "de764f77-eeab-4ad9-846e-4e82eaad0769",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 214,
+      "at": "2026-09-20T12:29:09Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-8509fb66-e2f6-47ae-a7a2-f94360557276",
+        "attemptId": "command-8509fb66-e2f6-47ae-a7a2-f94360557276",
+        "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+        "state": "failed",
+        "owner": "delivery-harness.cli",
+        "phase": "gate",
+        "nextStep": "Command returned policy (exit 1); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "5ee4f1a1-f3e5-4b97-a464-daad29688330",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 215,
+      "at": "2026-09-20T12:29:09Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "policy",
+        "durationMs": 21922
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-grace-eligibility-sibling-repair",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 216,
+      "at": "2026-09-20T12:34:06Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "decision.recorded",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "fork": "Required candidate repair after all three selected lenses aligned at original bound4",
+        "choice": "Use the single permitted grace verification round, round5 outside counted bound, for sibling-test coverage repairs. Retain every prior round and originating closure. Run targeted and required harness sensors before acquisition. Same three lenses. No production or review policy weakened.",
+        "cited": ".agents/skills/execute-work/SKILL.md grace rule; /Users/kwamina/delivery-artifacts/v26-2024-adoption/bridge-sibling-preflight-sep20.log"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "e5ce54a5-9034-44a3-a75b-0d7968976473",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 217,
+      "at": "2026-09-20T12:45:13Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-8ff408e1-1eb4-4ecd-9f8f-fa5dde0e633d",
+        "attemptId": "command-8ff408e1-1eb4-4ecd-9f8f-fa5dde0e633d",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "prepare",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "7d39a1f6-4b39-4835-be4f-a2c34e5ff047",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 218,
+      "at": "2026-09-20T12:45:48Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-8ff408e1-1eb4-4ecd-9f8f-fa5dde0e633d",
+        "attemptId": "command-8ff408e1-1eb4-4ecd-9f8f-fa5dde0e633d",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "prepare",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "8fe090a3-a0cf-4303-91d6-95d831f867bf",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 219,
+      "at": "2026-09-20T12:45:48Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "prepare",
+        "outcome": "ok",
+        "durationMs": 34940,
+        "preparation": {
+          "checks": "executed",
+          "reason": "ordinary"
+        }
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "6afefa9e-58ff-4a79-a899-f17fd64641a5",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 220,
+      "at": "2026-09-20T12:46:27Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-bb33e0d7-423f-483f-8bb4-4f96fb8466f0",
+        "attemptId": "command-bb33e0d7-423f-483f-8bb4-4f96fb8466f0",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "review-context",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "81cadaa7-2a04-4e89-ab95-1e7785099db0",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 221,
+      "at": "2026-09-20T12:46:28Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-bb33e0d7-423f-483f-8bb4-4f96fb8466f0",
+        "attemptId": "command-bb33e0d7-423f-483f-8bb4-4f96fb8466f0",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "review-context",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "1b8d6bbe-1a74-4aed-a582-45b203ff0580",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 222,
+      "at": "2026-09-20T12:46:28Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "review-context",
+        "outcome": "ok",
+        "durationMs": 836
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r5-lenses-selected",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 223,
+      "at": "2026-09-20T12:48:04Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "lens.selected",
+      "actor": {
+        "role": "executor"
+      },
+      "attestation": "self",
+      "payload": {
+        "mandated": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing"
+        ],
+        "selected": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing",
+          "athena.ce-correctness-reviewer"
+        ],
+        "rationale": "Same user-selected three; permitted grace after all aligned at bound4 and required sibling-test/fixture repair."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-round-5-opened",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 224,
+      "at": "2026-09-20T12:48:05Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.opened",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "round": 5,
+        "roundId": "v26-2024-round-5",
+        "bound": 4,
+        "grace": true,
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "lenses": [
+          "lens.outcome-correctness",
+          "lens.adversarial-testing",
+          "athena.ce-correctness-reviewer"
+        ]
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r5-outcome-correctness-queued",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 225,
+      "at": "2026-09-20T12:48:05Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-outcome-correctness",
+        "attemptId": "round5-outcome-correctness",
+        "supersedesAttemptId": "round4-outcome-correctness",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "roundId": "v26-2024-round-5",
+        "round": 5,
+        "lensId": "lens.outcome-correctness",
+        "state": "queued",
+        "owner": "reviewer",
+        "phase": "review",
+        "nextStep": "Complete ordinary verification scope in single allowed grace round."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r5-testing-policy-queued",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 226,
+      "at": "2026-09-20T12:48:05Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-testing-policy",
+        "attemptId": "round5-testing-policy",
+        "supersedesAttemptId": "round4-testing-policy",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "roundId": "v26-2024-round-5",
+        "round": 5,
+        "lensId": "lens.adversarial-testing",
+        "state": "queued",
+        "owner": "reviewer",
+        "phase": "review",
+        "nextStep": "Complete ordinary verification scope in single allowed grace round."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r5-ce-correctness-reviewer-queued",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 227,
+      "at": "2026-09-20T12:48:06Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-ce-correctness-reviewer",
+        "attemptId": "round5-ce-correctness-reviewer",
+        "supersedesAttemptId": "round4-ce-correctness-reviewer",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "roundId": "v26-2024-round-5",
+        "round": 5,
+        "lensId": "athena.ce-correctness-reviewer",
+        "state": "queued",
+        "owner": "reviewer",
+        "phase": "review",
+        "nextStep": "Complete ordinary verification scope in single allowed grace round."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r5-outcome-correctness-running",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 228,
+      "at": "2026-09-20T12:48:46Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-outcome-correctness",
+        "attemptId": "round5-outcome-correctness",
+        "supersedesAttemptId": "round4-outcome-correctness",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "roundId": "v26-2024-round-5",
+        "round": 5,
+        "lensId": "lens.outcome-correctness",
+        "state": "running",
+        "owner": "reviewer",
+        "phase": "review",
+        "nextStep": "Native host started grace verification; granular progress/cost unavailable."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r5-testing-policy-running",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 229,
+      "at": "2026-09-20T12:48:46Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-testing-policy",
+        "attemptId": "round5-testing-policy",
+        "supersedesAttemptId": "round4-testing-policy",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "roundId": "v26-2024-round-5",
+        "round": 5,
+        "lensId": "lens.adversarial-testing",
+        "state": "running",
+        "owner": "reviewer",
+        "phase": "review",
+        "nextStep": "Native host started grace verification; granular progress/cost unavailable."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r5-ce-correctness-reviewer-running",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 230,
+      "at": "2026-09-20T12:48:47Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-ce-correctness-reviewer",
+        "attemptId": "round5-ce-correctness-reviewer",
+        "supersedesAttemptId": "round4-ce-correctness-reviewer",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "roundId": "v26-2024-round-5",
+        "round": 5,
+        "lensId": "athena.ce-correctness-reviewer",
+        "state": "running",
+        "owner": "reviewer",
+        "phase": "review",
+        "nextStep": "Native host started grace verification; granular progress/cost unavailable."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r5-outcome-correctness-capture-artifact",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 231,
+      "at": "2026-09-20T12:51:03Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "artifact.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "artifactId": "v26-2024-r5-outcome-correctness",
+        "activityId": "review-outcome-correctness",
+        "attemptId": "round5-outcome-correctness",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "roundId": "v26-2024-round-5",
+        "round": 5,
+        "lensId": "lens.outcome-correctness",
+        "digest": "337af4c00d6f1e08bdf83214ea8048f8f0a2aba43e451f13f0a420ec5d88cac4",
+        "sizeBytes": 7236,
+        "mediaType": "application/json",
+        "producer": "outcome-correctness"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r5-outcome-correctness-capture-report",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 232,
+      "at": "2026-09-20T12:51:03Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "report.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "reportId": "v26-2024-r5-outcome-correctness",
+        "role": "review",
+        "activityId": "review-outcome-correctness",
+        "attemptId": "round5-outcome-correctness",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "roundId": "v26-2024-round-5",
+        "round": 5,
+        "lensId": "lens.outcome-correctness",
+        "availability": "referenced",
+        "artifactId": "v26-2024-r5-outcome-correctness"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r5-outcome-correctness-completed",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 233,
+      "at": "2026-09-20T12:51:04Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-outcome-correctness",
+        "attemptId": "round5-outcome-correctness",
+        "supersedesAttemptId": "round4-outcome-correctness",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "roundId": "v26-2024-round-5",
+        "round": 5,
+        "lensId": "lens.outcome-correctness",
+        "state": "completed",
+        "owner": "reviewer",
+        "phase": "review",
+        "verdict": "approved"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r5-testing-policy-capture-artifact",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 234,
+      "at": "2026-09-20T12:51:04Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "artifact.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "artifactId": "v26-2024-r5-testing-policy",
+        "activityId": "review-testing-policy",
+        "attemptId": "round5-testing-policy",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "roundId": "v26-2024-round-5",
+        "round": 5,
+        "lensId": "lens.adversarial-testing",
+        "digest": "3ec3a935fdd788fae467739197956a6790593127b521ca4ec57223c2affe6402",
+        "sizeBytes": 9541,
+        "mediaType": "application/json",
+        "producer": "testing-policy"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r5-testing-policy-capture-report",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 235,
+      "at": "2026-09-20T12:51:04Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "report.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "reportId": "v26-2024-r5-testing-policy",
+        "role": "review",
+        "activityId": "review-testing-policy",
+        "attemptId": "round5-testing-policy",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "roundId": "v26-2024-round-5",
+        "round": 5,
+        "lensId": "lens.adversarial-testing",
+        "availability": "referenced",
+        "artifactId": "v26-2024-r5-testing-policy"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r5-testing-policy-completed",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 236,
+      "at": "2026-09-20T12:51:05Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-testing-policy",
+        "attemptId": "round5-testing-policy",
+        "supersedesAttemptId": "round4-testing-policy",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "roundId": "v26-2024-round-5",
+        "round": 5,
+        "lensId": "lens.adversarial-testing",
+        "state": "completed",
+        "owner": "reviewer",
+        "phase": "review",
+        "verdict": "approved"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r5-ce-correctness-reviewer-capture-artifact",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 237,
+      "at": "2026-09-20T12:51:05Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "artifact.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "artifactId": "v26-2024-r5-ce-correctness-reviewer",
+        "activityId": "review-ce-correctness-reviewer",
+        "attemptId": "round5-ce-correctness-reviewer",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "roundId": "v26-2024-round-5",
+        "round": 5,
+        "lensId": "athena.ce-correctness-reviewer",
+        "digest": "8fdbd596fbf55ea8fa0bad09be0d7de89fe2b7db89958cee332e473c16e20cb2",
+        "sizeBytes": 6748,
+        "mediaType": "application/json",
+        "producer": "ce-correctness-reviewer"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r5-ce-correctness-reviewer-capture-report",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 238,
+      "at": "2026-09-20T12:51:05Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "report.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "reportId": "v26-2024-r5-ce-correctness-reviewer",
+        "role": "review",
+        "activityId": "review-ce-correctness-reviewer",
+        "attemptId": "round5-ce-correctness-reviewer",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "roundId": "v26-2024-round-5",
+        "round": 5,
+        "lensId": "athena.ce-correctness-reviewer",
+        "availability": "referenced",
+        "artifactId": "v26-2024-r5-ce-correctness-reviewer"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r5-ce-correctness-reviewer-completed",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 239,
+      "at": "2026-09-20T12:51:06Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "review-ce-correctness-reviewer",
+        "attemptId": "round5-ce-correctness-reviewer",
+        "supersedesAttemptId": "round4-ce-correctness-reviewer",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "roundId": "v26-2024-round-5",
+        "round": 5,
+        "lensId": "athena.ce-correctness-reviewer",
+        "state": "completed",
+        "owner": "reviewer",
+        "phase": "review",
+        "verdict": "approved"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r5-reduction-capture-artifact",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 240,
+      "at": "2026-09-20T12:51:06Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "artifact.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "artifactId": "v26-2024-r5-reduction",
+        "activityId": "review-reduction",
+        "attemptId": "round5-reduction",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "digest": "20ee7335455a2752dbc427c94956293d9b506bb7c17fefff37110b80a368d3a8",
+        "sizeBytes": 25878,
+        "mediaType": "application/json",
+        "producer": "root"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r5-reduction-capture-report",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 241,
+      "at": "2026-09-20T12:51:06Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "report.referenced",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "reportId": "v26-2024-r5-reduction",
+        "role": "reduction",
+        "activityId": "review-reduction",
+        "attemptId": "round5-reduction",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "availability": "referenced",
+        "artifactId": "v26-2024-r5-reduction"
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "v26-2024-r5-closed",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 242,
+      "at": "2026-09-20T12:51:06Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "review.round.closed",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "round": 5,
+        "roundId": "v26-2024-round-5",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "outcome": "aligned",
+        "findings": {
+          "P0": 0,
+          "P1": 0,
+          "P2": 0,
+          "P3": 0
+        },
+        "cost": {
+          "coverage": "unreported",
+          "reportedBy": "host"
+        }
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "c5222b2e-6ce4-404c-89f5-f9fdef796e53",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 243,
+      "at": "2026-09-20T12:51:14Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-eef2c025-25d4-4e0a-9ec1-b11b8df48a88",
+        "attemptId": "command-eef2c025-25d4-4e0a-9ec1-b11b8df48a88",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "emit-review-evidence",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "36554cb3-f1c8-4a18-9339-64af8e9fbe99",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 244,
+      "at": "2026-09-20T12:51:14Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-eef2c025-25d4-4e0a-9ec1-b11b8df48a88",
+        "attemptId": "command-eef2c025-25d4-4e0a-9ec1-b11b8df48a88",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "emit-review-evidence",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "f29ca8bd-aefe-4abb-8273-b551e468464c",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 245,
+      "at": "2026-09-20T12:51:14Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "ok",
+        "durationMs": 969
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "d19235b3-63b4-4100-99c2-580f6da98213",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 246,
+      "at": "2026-09-20T12:51:26Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-6211916d-527a-4bce-83b3-776563ec275a",
+        "attemptId": "command-6211916d-527a-4bce-83b3-776563ec275a",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "submit-evidence",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "7e0ff81e-3046-4ce8-922a-dbaf05bf7f25",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 247,
+      "at": "2026-09-20T12:51:27Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-6211916d-527a-4bce-83b3-776563ec275a",
+        "attemptId": "command-6211916d-527a-4bce-83b3-776563ec275a",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "state": "failed",
+        "owner": "delivery-harness.cli",
+        "phase": "submit-evidence",
+        "nextStep": "Command returned policy (exit 1); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "903a7f25-6b57-48a2-839a-dee37c8e03d1",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 248,
+      "at": "2026-09-20T12:51:27Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "submit-evidence",
+        "outcome": "policy",
+        "durationMs": 870
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "f94a10f9-e58d-42f4-8a5b-d2bc1270242c",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 249,
+      "at": "2026-09-20T12:52:13Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-df858c79-4b7f-4bf0-9c40-6584a5145460",
+        "attemptId": "command-df858c79-4b7f-4bf0-9c40-6584a5145460",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "emit-review-evidence",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "6dcf6eb8-3c50-4009-8c67-b0039c2a6a78",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 250,
+      "at": "2026-09-20T12:52:14Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-df858c79-4b7f-4bf0-9c40-6584a5145460",
+        "attemptId": "command-df858c79-4b7f-4bf0-9c40-6584a5145460",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "emit-review-evidence",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "04b55e29-4301-485e-958a-975173b54ee7",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 251,
+      "at": "2026-09-20T12:52:14Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "emit-review-evidence",
+        "outcome": "ok",
+        "durationMs": 901
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "fd103655-2423-45fd-861c-94147a99e001",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 252,
+      "at": "2026-09-20T12:52:24Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-dab0f6a0-631e-4ece-9880-c858aa8999c9",
+        "attemptId": "command-dab0f6a0-631e-4ece-9880-c858aa8999c9",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "submit-evidence",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "a588b33c-7f0d-48f9-884a-b8b43a36d92f",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 253,
+      "at": "2026-09-20T12:52:24Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-dab0f6a0-631e-4ece-9880-c858aa8999c9",
+        "attemptId": "command-dab0f6a0-631e-4ece-9880-c858aa8999c9",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "submit-evidence",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "c942f0e4-15e3-41ba-b7df-873449809210",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 254,
+      "at": "2026-09-20T12:52:24Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "submit-evidence",
+        "outcome": "ok",
+        "durationMs": 965
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "context-saved-8fe3d9af9ebc8a150dae03289b42d4ba5921bdaf911780d9737659ed6adca9c4",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 255,
+      "at": "2026-09-20T12:52:54Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "context.saved",
+      "actor": {
+        "role": "executor"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "spec": "ordinary-run-context/1",
+        "contract": {
+          "objective": "Deliver the entire approved affected-validation plan through V26-2071 activation, integrating V26-2024 report-only reuse, V26-2069 CI and full-health execution, and V26-2070 recovery documentation.",
+          "acceptanceCriteria": [
+            "Report-only edits rerun applicable report checks without unrelated application tests, coverage, typechecks or builds; native evidence proves valid reuse and binds the final candidate.",
+            "Changes to source, dependencies, relevant config, policy, release or incompatible base invalidate affected evidence; missing, failed, tampered or mismatched evidence never passes.",
+            "Local, fresh-clone/CI, telemetry and portable verification agree while preserving review history and original execution provenance.",
+            "Shared local/CI plans preserve required contexts, trusted cumulative full-health failures, classification approval and repair admission.",
+            "Qualify the exact installed release, upgrade, rollback, large sources and bounded metadata; document actual capabilities and recovery.",
+            "Complete all approved qualification scenarios, matched repeated timing measurements, successful hosted lifecycle, trusted main health seed and cold-reader proof before default activation.",
+            "Resolve findings in-run, pass required review and canonical gates, commit reports and learning, merge all delivery changes, close tickets, align root and clean owned worktrees."
+          ],
+          "finishLine": "Entire approved plan delivered and activated through V26-2071, merged with verified root alignment and closeout."
+        },
+        "stage": "athena-gate",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "candidateBinding": {
+          "deliverableDigest": "0d9ca7cb960be2617f38a47fc928edf6741d4615991794ab6f3d8d86bc62b925",
+          "identity": "deliverable-tree/v1",
+          "baseRef": "origin/main",
+          "baseTipSha": "d387c35d8f98874ad00973004d011dfdd5dad4ec",
+          "mergeBaseSha": "d387c35d8f98874ad00973004d011dfdd5dad4ec",
+          "workspaceId": "426e378eb08fe58a3ffb5e706e7e6c5137892f11a6e3be3a850cc159f52f5bd0"
+        },
+        "policyDigest": "1dd70381b10a325aaaf69ac741cff234a2fc6c7c623e08134b54fd72be12183c",
+        "release": {
+          "runtimeVersion": "0.5.0",
+          "releaseId": "linear-scoped-validation-diagnostics-v1",
+          "profile": "linear",
+          "archiveSha256": "ea924e59affe501c0022c26c11032f48219b939ad4948b75a0205abab8eb9e01"
+        }
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "83886a9d-105c-48df-9da4-dc56feb225cf",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 256,
+      "at": "2026-09-20T12:52:55Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-f0aa2cbf-5771-4078-bd36-fdfa17b7aa31",
+        "attemptId": "command-f0aa2cbf-5771-4078-bd36-fdfa17b7aa31",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "state": "running",
+        "owner": "delivery-harness.cli",
+        "phase": "gate",
+        "nextStep": "Await command outcome; intermediate progress is unavailable unless explicitly observed."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "ecb6347b-45ef-4a7d-97c1-61b61c76b4d2",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 257,
+      "at": "2026-09-20T13:17:42Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "activity.observed",
+      "actor": {
+        "role": "cli"
+      },
+      "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+      "attestation": "self",
+      "payload": {
+        "activityId": "command-f0aa2cbf-5771-4078-bd36-fdfa17b7aa31",
+        "attemptId": "command-f0aa2cbf-5771-4078-bd36-fdfa17b7aa31",
+        "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+        "state": "completed",
+        "owner": "delivery-harness.cli",
+        "phase": "gate",
+        "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+      }
+    },
+    {
+      "version": "run-event/2",
+      "eventId": "ec4e01b2-8d71-45ac-aa32-e7c737399bd9",
+      "runId": "run-d27b017aaff9d66d",
+      "seq": 258,
+      "at": "2026-09-20T13:17:42Z",
+      "repo": {
+        "commonDir": "/Users/kwamina/athena/.git"
+      },
+      "kind": "command.completed",
+      "actor": {
+        "role": "cli"
+      },
+      "attestation": "self",
+      "payload": {
+        "command": "gate",
+        "outcome": "ok",
+        "durationMs": 1487041,
+        "digest": "3ecd28442df1be8ceb5cb015511f3f6e43e7150a5b641fc95db8fcb91616f953"
+      }
     }
   ],
   "summary": {
     "ticket": "V26-2024",
     "open": true,
     "startedAt": "2026-09-17T01:32:34Z",
-    "lastAt": "2026-09-20T07:41:45Z",
-    "durationSeconds": 281351,
+    "lastAt": "2026-09-20T13:17:42Z",
+    "durationSeconds": 301508,
     "phases": {
       "implementationSeconds": 272904,
-      "reviewSeconds": 2990,
-      "tailSeconds": 5457,
-      "rounds": 2,
+      "reviewSeconds": 27008,
+      "tailSeconds": 1596,
+      "rounds": 5,
       "gate": {
-        "totalMs": 4557534,
-        "counted": 3,
+        "totalMs": 6066497,
+        "counted": 5,
         "unreadable": 0,
         "unseen": false
       }
     },
-    "roundsOpened": 2,
-    "roundsClosed": 2,
+    "roundsOpened": 5,
+    "roundsClosed": 5,
     "findings": {
       "P0": 0,
       "P1": 4,
-      "P2": 0,
+      "P2": 1,
       "P3": 0
     },
     "gate": {
@@ -3391,7 +6884,7 @@
   "costs": {
     "review": {
       "coverage": "unreported",
-      "unreportedEntries": 2,
+      "unreportedEntries": 5,
       "totals": []
     },
     "run": {
@@ -3420,7 +6913,7 @@
     "explanations": [
       {
         "violation": "record-before-gate",
-        "because": "the governing record completion at seq 106 precedes the governing gate completion at seq 126, so the record was written before the gate it reports",
+        "because": "the governing record completion at seq 132 precedes the governing gate completion at seq 258, so the record was written before the gate it reports",
         "blocksAdmission": false
       }
     ]
@@ -3435,10 +6928,20 @@
       "kind": "activity.observed",
       "code": "invalid_transition",
       "at": "2026-09-20T06:07:32Z"
+    },
+    {
+      "kind": "decision.recorded",
+      "code": "unknown_member",
+      "at": "2026-09-20T12:33:35Z"
+    },
+    {
+      "kind": "decision.recorded",
+      "code": "malformed_member",
+      "at": "2026-09-20T12:33:50Z"
     }
   ],
   "progress": {
-    "asOf": "2026-09-20T07:41:45Z",
+    "asOf": "2026-09-20T13:17:42Z",
     "activities": [
       {
         "activityId": "command-ab7b5248-4eed-4417-b314-87a9de0de2e8",
@@ -3596,7 +7099,7 @@
       },
       {
         "activityId": "review-outcome-correctness",
-        "currentAttemptId": "round2-outcome-correctness",
+        "currentAttemptId": "round5-outcome-correctness",
         "attempts": [
           {
             "activityId": "review-outcome-correctness",
@@ -3632,18 +7135,81 @@
             "firstObservedAt": "2026-09-20T06:06:04Z",
             "lastObservedAt": "2026-09-20T06:08:18Z",
             "lifecycleIncomplete": true,
-            "superseded": false,
+            "superseded": true,
             "freshness": "stale",
             "waits": [],
             "startedAt": "2026-09-20T06:06:04Z",
             "nextStep": "Return actual independent complete review result; preserve previous finding closures and scope amendment.",
+            "verdict": "approved"
+          },
+          {
+            "activityId": "review-outcome-correctness",
+            "attemptId": "round3-outcome-correctness",
+            "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+            "state": "completed",
+            "owner": "reviewer",
+            "phase": "review",
+            "roundId": "v26-2024-round-3",
+            "round": 3,
+            "lensId": "lens.outcome-correctness",
+            "supersedesAttemptId": "round2-outcome-correctness",
+            "firstObservedAt": "2026-09-20T12:12:11Z",
+            "lastObservedAt": "2026-09-20T12:16:18Z",
+            "lifecycleIncomplete": false,
+            "superseded": true,
+            "freshness": "stale",
+            "waits": [],
+            "nextStep": "Native host /root/bridge_outcome_round3 started review; granular progress and cost unavailable.",
+            "startedAt": "2026-09-20T12:13:07Z",
+            "verdict": "approved"
+          },
+          {
+            "activityId": "review-outcome-correctness",
+            "attemptId": "round4-outcome-correctness",
+            "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+            "state": "completed",
+            "owner": "reviewer",
+            "phase": "review",
+            "roundId": "v26-2024-round-4",
+            "round": 4,
+            "lensId": "lens.outcome-correctness",
+            "supersedesAttemptId": "round3-outcome-correctness",
+            "firstObservedAt": "2026-09-20T12:25:32Z",
+            "lastObservedAt": "2026-09-20T12:28:14Z",
+            "lifecycleIncomplete": false,
+            "superseded": true,
+            "freshness": "stale",
+            "waits": [],
+            "nextStep": "Native host started corrected-candidate verification; granular progress/cost unavailable.",
+            "startedAt": "2026-09-20T12:26:25Z",
+            "verdict": "approved"
+          },
+          {
+            "activityId": "review-outcome-correctness",
+            "attemptId": "round5-outcome-correctness",
+            "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+            "state": "completed",
+            "owner": "reviewer",
+            "phase": "review",
+            "roundId": "v26-2024-round-5",
+            "round": 5,
+            "lensId": "lens.outcome-correctness",
+            "supersedesAttemptId": "round4-outcome-correctness",
+            "firstObservedAt": "2026-09-20T12:48:05Z",
+            "lastObservedAt": "2026-09-20T12:51:04Z",
+            "lifecycleIncomplete": false,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "nextStep": "Native host started grace verification; granular progress/cost unavailable.",
+            "startedAt": "2026-09-20T12:48:46Z",
             "verdict": "approved"
           }
         ]
       },
       {
         "activityId": "review-testing-policy",
-        "currentAttemptId": "round2-testing-policy",
+        "currentAttemptId": "round5-testing-policy",
         "attempts": [
           {
             "activityId": "review-testing-policy",
@@ -3679,18 +7245,81 @@
             "firstObservedAt": "2026-09-20T06:06:04Z",
             "lastObservedAt": "2026-09-20T06:08:16Z",
             "lifecycleIncomplete": true,
-            "superseded": false,
+            "superseded": true,
             "freshness": "stale",
             "waits": [],
             "startedAt": "2026-09-20T06:06:04Z",
             "nextStep": "Return actual independent complete review result; preserve previous finding closures and scope amendment.",
+            "verdict": "approved"
+          },
+          {
+            "activityId": "review-testing-policy",
+            "attemptId": "round3-testing-policy",
+            "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+            "state": "completed",
+            "owner": "reviewer",
+            "phase": "review",
+            "roundId": "v26-2024-round-3",
+            "round": 3,
+            "lensId": "lens.adversarial-testing",
+            "supersedesAttemptId": "round2-testing-policy",
+            "firstObservedAt": "2026-09-20T12:12:11Z",
+            "lastObservedAt": "2026-09-20T12:18:43Z",
+            "lifecycleIncomplete": false,
+            "superseded": true,
+            "freshness": "stale",
+            "waits": [],
+            "nextStep": "Native host /root/bridge_adversarial_round3 started review; granular progress and cost unavailable.",
+            "startedAt": "2026-09-20T12:13:07Z",
+            "verdict": "approved"
+          },
+          {
+            "activityId": "review-testing-policy",
+            "attemptId": "round4-testing-policy",
+            "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+            "state": "completed",
+            "owner": "reviewer",
+            "phase": "review",
+            "roundId": "v26-2024-round-4",
+            "round": 4,
+            "lensId": "lens.adversarial-testing",
+            "supersedesAttemptId": "round3-testing-policy",
+            "firstObservedAt": "2026-09-20T12:25:33Z",
+            "lastObservedAt": "2026-09-20T12:28:15Z",
+            "lifecycleIncomplete": false,
+            "superseded": true,
+            "freshness": "stale",
+            "waits": [],
+            "nextStep": "Native host started corrected-candidate verification; granular progress/cost unavailable.",
+            "startedAt": "2026-09-20T12:26:26Z",
+            "verdict": "approved"
+          },
+          {
+            "activityId": "review-testing-policy",
+            "attemptId": "round5-testing-policy",
+            "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+            "state": "completed",
+            "owner": "reviewer",
+            "phase": "review",
+            "roundId": "v26-2024-round-5",
+            "round": 5,
+            "lensId": "lens.adversarial-testing",
+            "supersedesAttemptId": "round4-testing-policy",
+            "firstObservedAt": "2026-09-20T12:48:05Z",
+            "lastObservedAt": "2026-09-20T12:51:05Z",
+            "lifecycleIncomplete": false,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "nextStep": "Native host started grace verification; granular progress/cost unavailable.",
+            "startedAt": "2026-09-20T12:48:46Z",
             "verdict": "approved"
           }
         ]
       },
       {
         "activityId": "review-ce-correctness-reviewer",
-        "currentAttemptId": "round2-ce-correctness-reviewer",
+        "currentAttemptId": "round5-ce-correctness-reviewer",
         "attempts": [
           {
             "activityId": "review-ce-correctness-reviewer",
@@ -3726,11 +7355,74 @@
             "firstObservedAt": "2026-09-20T06:06:05Z",
             "lastObservedAt": "2026-09-20T06:08:17Z",
             "lifecycleIncomplete": true,
-            "superseded": false,
+            "superseded": true,
             "freshness": "stale",
             "waits": [],
             "startedAt": "2026-09-20T06:06:05Z",
             "nextStep": "Return actual independent complete review result; preserve previous finding closures and scope amendment.",
+            "verdict": "approved"
+          },
+          {
+            "activityId": "review-ce-correctness-reviewer",
+            "attemptId": "round3-ce-correctness-reviewer",
+            "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+            "state": "completed",
+            "owner": "reviewer",
+            "phase": "review",
+            "roundId": "v26-2024-round-3",
+            "round": 3,
+            "lensId": "athena.ce-correctness-reviewer",
+            "supersedesAttemptId": "round2-ce-correctness-reviewer",
+            "firstObservedAt": "2026-09-20T12:12:12Z",
+            "lastObservedAt": "2026-09-20T12:16:18Z",
+            "lifecycleIncomplete": false,
+            "superseded": true,
+            "freshness": "stale",
+            "waits": [],
+            "nextStep": "Native host /root/bridge_correctness_round3 started review; granular progress and cost unavailable.",
+            "startedAt": "2026-09-20T12:13:08Z",
+            "verdict": "approved"
+          },
+          {
+            "activityId": "review-ce-correctness-reviewer",
+            "attemptId": "round4-ce-correctness-reviewer",
+            "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+            "state": "completed",
+            "owner": "reviewer",
+            "phase": "review",
+            "roundId": "v26-2024-round-4",
+            "round": 4,
+            "lensId": "athena.ce-correctness-reviewer",
+            "supersedesAttemptId": "round3-ce-correctness-reviewer",
+            "firstObservedAt": "2026-09-20T12:25:33Z",
+            "lastObservedAt": "2026-09-20T12:28:16Z",
+            "lifecycleIncomplete": false,
+            "superseded": true,
+            "freshness": "stale",
+            "waits": [],
+            "nextStep": "Native host started corrected-candidate verification; granular progress/cost unavailable.",
+            "startedAt": "2026-09-20T12:26:26Z",
+            "verdict": "approved"
+          },
+          {
+            "activityId": "review-ce-correctness-reviewer",
+            "attemptId": "round5-ce-correctness-reviewer",
+            "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+            "state": "completed",
+            "owner": "reviewer",
+            "phase": "review",
+            "roundId": "v26-2024-round-5",
+            "round": 5,
+            "lensId": "athena.ce-correctness-reviewer",
+            "supersedesAttemptId": "round4-ce-correctness-reviewer",
+            "firstObservedAt": "2026-09-20T12:48:06Z",
+            "lastObservedAt": "2026-09-20T12:51:06Z",
+            "lifecycleIncomplete": false,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "nextStep": "Native host started grace verification; granular progress/cost unavailable.",
+            "startedAt": "2026-09-20T12:48:47Z",
             "verdict": "approved"
           }
         ]
@@ -4121,9 +7813,471 @@
             "lastObservedAt": "2026-09-20T07:41:45Z",
             "lifecycleIncomplete": true,
             "superseded": false,
-            "freshness": "recent",
+            "freshness": "stale",
             "waits": [],
             "startedAt": "2026-09-20T07:15:38Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-fb645503-8ab3-45be-902a-ffdfd43eef5e",
+        "currentAttemptId": "command-fb645503-8ab3-45be-902a-ffdfd43eef5e",
+        "attempts": [
+          {
+            "activityId": "command-fb645503-8ab3-45be-902a-ffdfd43eef5e",
+            "attemptId": "command-fb645503-8ab3-45be-902a-ffdfd43eef5e",
+            "candidateTreeSha": "6c14be51951d384eb006dc7dc1f6c039e979d058",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "prepare",
+            "firstObservedAt": "2026-09-20T07:41:46Z",
+            "lastObservedAt": "2026-09-20T07:41:46Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T07:41:46Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-537331d4-57af-4f3e-8fa0-1f081ca70f14",
+        "currentAttemptId": "command-537331d4-57af-4f3e-8fa0-1f081ca70f14",
+        "attempts": [
+          {
+            "activityId": "command-537331d4-57af-4f3e-8fa0-1f081ca70f14",
+            "attemptId": "command-537331d4-57af-4f3e-8fa0-1f081ca70f14",
+            "candidateTreeSha": "6c14be51951d384eb006dc7dc1f6c039e979d058",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "record",
+            "firstObservedAt": "2026-09-20T07:41:48Z",
+            "lastObservedAt": "2026-09-20T07:42:00Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T07:41:48Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-2d10a232-c04f-4946-bfa0-688b2e9036c1",
+        "currentAttemptId": "command-2d10a232-c04f-4946-bfa0-688b2e9036c1",
+        "attempts": [
+          {
+            "activityId": "command-2d10a232-c04f-4946-bfa0-688b2e9036c1",
+            "attemptId": "command-2d10a232-c04f-4946-bfa0-688b2e9036c1",
+            "candidateTreeSha": "24fbcaa74abc1743aeac98af1d7c2bff3715de51",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "prepare",
+            "firstObservedAt": "2026-09-20T07:42:01Z",
+            "lastObservedAt": "2026-09-20T07:42:02Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T07:42:01Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-17c85dde-ca50-4f83-a7c5-8957a191b4e2",
+        "currentAttemptId": "command-17c85dde-ca50-4f83-a7c5-8957a191b4e2",
+        "attempts": [
+          {
+            "activityId": "command-17c85dde-ca50-4f83-a7c5-8957a191b4e2",
+            "attemptId": "command-17c85dde-ca50-4f83-a7c5-8957a191b4e2",
+            "candidateTreeSha": "24fbcaa74abc1743aeac98af1d7c2bff3715de51",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "verify",
+            "firstObservedAt": "2026-09-20T07:42:03Z",
+            "lastObservedAt": "2026-09-20T07:42:14Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T07:42:03Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-256c80fa-b4af-47ff-a0cb-68b7dfaffc4e",
+        "currentAttemptId": "command-256c80fa-b4af-47ff-a0cb-68b7dfaffc4e",
+        "attempts": [
+          {
+            "activityId": "command-256c80fa-b4af-47ff-a0cb-68b7dfaffc4e",
+            "attemptId": "command-256c80fa-b4af-47ff-a0cb-68b7dfaffc4e",
+            "candidateTreeSha": "24fbcaa74abc1743aeac98af1d7c2bff3715de51",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "verify",
+            "firstObservedAt": "2026-09-20T07:43:28Z",
+            "lastObservedAt": "2026-09-20T07:43:33Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T07:43:28Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-03e94590-a1f7-4365-a3c5-3bd3968ebcfe",
+        "currentAttemptId": "command-03e94590-a1f7-4365-a3c5-3bd3968ebcfe",
+        "attempts": [
+          {
+            "activityId": "command-03e94590-a1f7-4365-a3c5-3bd3968ebcfe",
+            "attemptId": "command-03e94590-a1f7-4365-a3c5-3bd3968ebcfe",
+            "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "prepare",
+            "firstObservedAt": "2026-09-20T12:00:45Z",
+            "lastObservedAt": "2026-09-20T12:01:20Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T12:00:45Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-4066ac05-6ccd-4826-a433-51ccecd65084",
+        "currentAttemptId": "command-4066ac05-6ccd-4826-a433-51ccecd65084",
+        "attempts": [
+          {
+            "activityId": "command-4066ac05-6ccd-4826-a433-51ccecd65084",
+            "attemptId": "command-4066ac05-6ccd-4826-a433-51ccecd65084",
+            "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "review-context",
+            "firstObservedAt": "2026-09-20T12:02:19Z",
+            "lastObservedAt": "2026-09-20T12:02:19Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T12:02:19Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-a5161725-f70c-4a17-a167-b968a359d97a",
+        "currentAttemptId": "command-a5161725-f70c-4a17-a167-b968a359d97a",
+        "attempts": [
+          {
+            "activityId": "command-a5161725-f70c-4a17-a167-b968a359d97a",
+            "attemptId": "command-a5161725-f70c-4a17-a167-b968a359d97a",
+            "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "emit-review-evidence",
+            "firstObservedAt": "2026-09-20T12:18:51Z",
+            "lastObservedAt": "2026-09-20T12:18:52Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T12:18:51Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-65429074-45d6-444b-8741-d17a9d74aa64",
+        "currentAttemptId": "command-65429074-45d6-444b-8741-d17a9d74aa64",
+        "attempts": [
+          {
+            "activityId": "command-65429074-45d6-444b-8741-d17a9d74aa64",
+            "attemptId": "command-65429074-45d6-444b-8741-d17a9d74aa64",
+            "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+            "state": "failed",
+            "owner": "delivery-harness.cli",
+            "phase": "submit-evidence",
+            "firstObservedAt": "2026-09-20T12:19:18Z",
+            "lastObservedAt": "2026-09-20T12:19:18Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T12:19:18Z",
+            "nextStep": "Command returned policy (exit 1); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-65506ff6-89bf-4350-962a-a96f9d42b52d",
+        "currentAttemptId": "command-65506ff6-89bf-4350-962a-a96f9d42b52d",
+        "attempts": [
+          {
+            "activityId": "command-65506ff6-89bf-4350-962a-a96f9d42b52d",
+            "attemptId": "command-65506ff6-89bf-4350-962a-a96f9d42b52d",
+            "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "prepare",
+            "firstObservedAt": "2026-09-20T12:23:28Z",
+            "lastObservedAt": "2026-09-20T12:24:03Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T12:23:28Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-b71e2e6b-f909-4169-a374-0cfb09e24817",
+        "currentAttemptId": "command-b71e2e6b-f909-4169-a374-0cfb09e24817",
+        "attempts": [
+          {
+            "activityId": "command-b71e2e6b-f909-4169-a374-0cfb09e24817",
+            "attemptId": "command-b71e2e6b-f909-4169-a374-0cfb09e24817",
+            "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "review-context",
+            "firstObservedAt": "2026-09-20T12:24:14Z",
+            "lastObservedAt": "2026-09-20T12:24:14Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T12:24:14Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-c4b4e75b-2631-48eb-a009-fe2c95c107d8",
+        "currentAttemptId": "command-c4b4e75b-2631-48eb-a009-fe2c95c107d8",
+        "attempts": [
+          {
+            "activityId": "command-c4b4e75b-2631-48eb-a009-fe2c95c107d8",
+            "attemptId": "command-c4b4e75b-2631-48eb-a009-fe2c95c107d8",
+            "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "emit-review-evidence",
+            "firstObservedAt": "2026-09-20T12:28:23Z",
+            "lastObservedAt": "2026-09-20T12:28:24Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T12:28:23Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-b5c9ad6e-c073-4664-80a7-a10d26fdcafe",
+        "currentAttemptId": "command-b5c9ad6e-c073-4664-80a7-a10d26fdcafe",
+        "attempts": [
+          {
+            "activityId": "command-b5c9ad6e-c073-4664-80a7-a10d26fdcafe",
+            "attemptId": "command-b5c9ad6e-c073-4664-80a7-a10d26fdcafe",
+            "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "submit-evidence",
+            "firstObservedAt": "2026-09-20T12:28:34Z",
+            "lastObservedAt": "2026-09-20T12:28:34Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T12:28:34Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-8509fb66-e2f6-47ae-a7a2-f94360557276",
+        "currentAttemptId": "command-8509fb66-e2f6-47ae-a7a2-f94360557276",
+        "attempts": [
+          {
+            "activityId": "command-8509fb66-e2f6-47ae-a7a2-f94360557276",
+            "attemptId": "command-8509fb66-e2f6-47ae-a7a2-f94360557276",
+            "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+            "state": "failed",
+            "owner": "delivery-harness.cli",
+            "phase": "gate",
+            "firstObservedAt": "2026-09-20T12:28:47Z",
+            "lastObservedAt": "2026-09-20T12:29:09Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T12:28:47Z",
+            "nextStep": "Command returned policy (exit 1); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-8ff408e1-1eb4-4ecd-9f8f-fa5dde0e633d",
+        "currentAttemptId": "command-8ff408e1-1eb4-4ecd-9f8f-fa5dde0e633d",
+        "attempts": [
+          {
+            "activityId": "command-8ff408e1-1eb4-4ecd-9f8f-fa5dde0e633d",
+            "attemptId": "command-8ff408e1-1eb4-4ecd-9f8f-fa5dde0e633d",
+            "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "prepare",
+            "firstObservedAt": "2026-09-20T12:45:13Z",
+            "lastObservedAt": "2026-09-20T12:45:48Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T12:45:13Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-bb33e0d7-423f-483f-8bb4-4f96fb8466f0",
+        "currentAttemptId": "command-bb33e0d7-423f-483f-8bb4-4f96fb8466f0",
+        "attempts": [
+          {
+            "activityId": "command-bb33e0d7-423f-483f-8bb4-4f96fb8466f0",
+            "attemptId": "command-bb33e0d7-423f-483f-8bb4-4f96fb8466f0",
+            "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "review-context",
+            "firstObservedAt": "2026-09-20T12:46:27Z",
+            "lastObservedAt": "2026-09-20T12:46:28Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T12:46:27Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-eef2c025-25d4-4e0a-9ec1-b11b8df48a88",
+        "currentAttemptId": "command-eef2c025-25d4-4e0a-9ec1-b11b8df48a88",
+        "attempts": [
+          {
+            "activityId": "command-eef2c025-25d4-4e0a-9ec1-b11b8df48a88",
+            "attemptId": "command-eef2c025-25d4-4e0a-9ec1-b11b8df48a88",
+            "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "emit-review-evidence",
+            "firstObservedAt": "2026-09-20T12:51:14Z",
+            "lastObservedAt": "2026-09-20T12:51:14Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T12:51:14Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-6211916d-527a-4bce-83b3-776563ec275a",
+        "currentAttemptId": "command-6211916d-527a-4bce-83b3-776563ec275a",
+        "attempts": [
+          {
+            "activityId": "command-6211916d-527a-4bce-83b3-776563ec275a",
+            "attemptId": "command-6211916d-527a-4bce-83b3-776563ec275a",
+            "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+            "state": "failed",
+            "owner": "delivery-harness.cli",
+            "phase": "submit-evidence",
+            "firstObservedAt": "2026-09-20T12:51:26Z",
+            "lastObservedAt": "2026-09-20T12:51:27Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T12:51:26Z",
+            "nextStep": "Command returned policy (exit 1); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-df858c79-4b7f-4bf0-9c40-6584a5145460",
+        "currentAttemptId": "command-df858c79-4b7f-4bf0-9c40-6584a5145460",
+        "attempts": [
+          {
+            "activityId": "command-df858c79-4b7f-4bf0-9c40-6584a5145460",
+            "attemptId": "command-df858c79-4b7f-4bf0-9c40-6584a5145460",
+            "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "emit-review-evidence",
+            "firstObservedAt": "2026-09-20T12:52:13Z",
+            "lastObservedAt": "2026-09-20T12:52:14Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T12:52:13Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-dab0f6a0-631e-4ece-9880-c858aa8999c9",
+        "currentAttemptId": "command-dab0f6a0-631e-4ece-9880-c858aa8999c9",
+        "attempts": [
+          {
+            "activityId": "command-dab0f6a0-631e-4ece-9880-c858aa8999c9",
+            "attemptId": "command-dab0f6a0-631e-4ece-9880-c858aa8999c9",
+            "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "submit-evidence",
+            "firstObservedAt": "2026-09-20T12:52:24Z",
+            "lastObservedAt": "2026-09-20T12:52:24Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "stale",
+            "waits": [],
+            "startedAt": "2026-09-20T12:52:24Z",
+            "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
+          }
+        ]
+      },
+      {
+        "activityId": "command-f0aa2cbf-5771-4078-bd36-fdfa17b7aa31",
+        "currentAttemptId": "command-f0aa2cbf-5771-4078-bd36-fdfa17b7aa31",
+        "attempts": [
+          {
+            "activityId": "command-f0aa2cbf-5771-4078-bd36-fdfa17b7aa31",
+            "attemptId": "command-f0aa2cbf-5771-4078-bd36-fdfa17b7aa31",
+            "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+            "state": "completed",
+            "owner": "delivery-harness.cli",
+            "phase": "gate",
+            "firstObservedAt": "2026-09-20T12:52:55Z",
+            "lastObservedAt": "2026-09-20T13:17:42Z",
+            "lifecycleIncomplete": true,
+            "superseded": false,
+            "freshness": "recent",
+            "waits": [],
+            "startedAt": "2026-09-20T12:52:55Z",
             "nextStep": "Command returned ok (exit 0); continue the declared delivery workflow."
           }
         ]
@@ -4267,7 +8421,7 @@
           "availability": "referenced",
           "artifactId": "v26-2024-r2-testing-policy"
         },
-        "current": true
+        "current": false
       },
       {
         "seq": 71,
@@ -4284,7 +8438,7 @@
           "availability": "referenced",
           "artifactId": "v26-2024-r2-ce-correctness-reviewer"
         },
-        "current": true
+        "current": false
       },
       {
         "seq": 74,
@@ -4301,7 +8455,7 @@
           "availability": "referenced",
           "artifactId": "v26-2024-r2-outcome-correctness"
         },
-        "current": true
+        "current": false
       },
       {
         "seq": 85,
@@ -4318,6 +8472,220 @@
           "artifactId": "v26-2024-r2-reduction"
         },
         "current": true
+      },
+      {
+        "seq": 161,
+        "at": "2026-09-20T12:16:17Z",
+        "payload": {
+          "reportId": "v26-2024-r3-outcome-correctness",
+          "role": "review",
+          "activityId": "review-outcome-correctness",
+          "attemptId": "round3-outcome-correctness",
+          "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+          "roundId": "v26-2024-round-3",
+          "round": 3,
+          "lensId": "lens.outcome-correctness",
+          "availability": "referenced",
+          "artifactId": "v26-2024-r3-outcome-correctness"
+        },
+        "current": false
+      },
+      {
+        "seq": 164,
+        "at": "2026-09-20T12:16:18Z",
+        "payload": {
+          "reportId": "v26-2024-r3-ce-correctness-reviewer",
+          "role": "review",
+          "activityId": "review-ce-correctness-reviewer",
+          "attemptId": "round3-ce-correctness-reviewer",
+          "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+          "roundId": "v26-2024-round-3",
+          "round": 3,
+          "lensId": "athena.ce-correctness-reviewer",
+          "availability": "referenced",
+          "artifactId": "v26-2024-r3-ce-correctness-reviewer"
+        },
+        "current": false
+      },
+      {
+        "seq": 167,
+        "at": "2026-09-20T12:18:42Z",
+        "payload": {
+          "reportId": "v26-2024-r3-testing-policy",
+          "role": "review",
+          "activityId": "review-testing-policy",
+          "attemptId": "round3-testing-policy",
+          "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+          "roundId": "v26-2024-round-3",
+          "round": 3,
+          "lensId": "lens.adversarial-testing",
+          "availability": "referenced",
+          "artifactId": "v26-2024-r3-testing-policy"
+        },
+        "current": false
+      },
+      {
+        "seq": 176,
+        "at": "2026-09-20T12:19:19Z",
+        "payload": {
+          "reportId": "v26-2024-r3-reduction",
+          "role": "reduction",
+          "activityId": "review-reduction",
+          "attemptId": "round3-reduction",
+          "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+          "availability": "referenced",
+          "artifactId": "v26-2024-r3-reduction"
+        },
+        "current": false
+      },
+      {
+        "seq": 179,
+        "at": "2026-09-20T12:22:45Z",
+        "payload": {
+          "reportId": "v26-2024-tp-r3-001-closure",
+          "role": "clarification",
+          "originatingReportId": "v26-2024-r3-testing-policy",
+          "findingId": "TP-R3-001",
+          "activityId": "review-testing-policy",
+          "attemptId": "round3-testing-policy",
+          "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+          "roundId": "v26-2024-round-3",
+          "round": 3,
+          "lensId": "lens.adversarial-testing",
+          "availability": "referenced",
+          "artifactId": "v26-2024-tp-r3-001-closure"
+        },
+        "current": false
+      },
+      {
+        "seq": 195,
+        "at": "2026-09-20T12:28:14Z",
+        "payload": {
+          "reportId": "v26-2024-r4-outcome-correctness",
+          "role": "review",
+          "activityId": "review-outcome-correctness",
+          "attemptId": "round4-outcome-correctness",
+          "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+          "roundId": "v26-2024-round-4",
+          "round": 4,
+          "lensId": "lens.outcome-correctness",
+          "availability": "referenced",
+          "artifactId": "v26-2024-r4-outcome-correctness"
+        },
+        "current": false
+      },
+      {
+        "seq": 198,
+        "at": "2026-09-20T12:28:14Z",
+        "payload": {
+          "reportId": "v26-2024-r4-testing-policy",
+          "role": "review",
+          "activityId": "review-testing-policy",
+          "attemptId": "round4-testing-policy",
+          "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+          "roundId": "v26-2024-round-4",
+          "round": 4,
+          "lensId": "lens.adversarial-testing",
+          "availability": "referenced",
+          "artifactId": "v26-2024-r4-testing-policy"
+        },
+        "current": false
+      },
+      {
+        "seq": 201,
+        "at": "2026-09-20T12:28:15Z",
+        "payload": {
+          "reportId": "v26-2024-r4-ce-correctness-reviewer",
+          "role": "review",
+          "activityId": "review-ce-correctness-reviewer",
+          "attemptId": "round4-ce-correctness-reviewer",
+          "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+          "roundId": "v26-2024-round-4",
+          "round": 4,
+          "lensId": "athena.ce-correctness-reviewer",
+          "availability": "referenced",
+          "artifactId": "v26-2024-r4-ce-correctness-reviewer"
+        },
+        "current": false
+      },
+      {
+        "seq": 204,
+        "at": "2026-09-20T12:28:16Z",
+        "payload": {
+          "reportId": "v26-2024-r4-reduction",
+          "role": "reduction",
+          "activityId": "review-reduction",
+          "attemptId": "round4-reduction",
+          "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+          "availability": "referenced",
+          "artifactId": "v26-2024-r4-reduction"
+        },
+        "current": false
+      },
+      {
+        "seq": 232,
+        "at": "2026-09-20T12:51:03Z",
+        "payload": {
+          "reportId": "v26-2024-r5-outcome-correctness",
+          "role": "review",
+          "activityId": "review-outcome-correctness",
+          "attemptId": "round5-outcome-correctness",
+          "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+          "roundId": "v26-2024-round-5",
+          "round": 5,
+          "lensId": "lens.outcome-correctness",
+          "availability": "referenced",
+          "artifactId": "v26-2024-r5-outcome-correctness"
+        },
+        "current": true
+      },
+      {
+        "seq": 235,
+        "at": "2026-09-20T12:51:04Z",
+        "payload": {
+          "reportId": "v26-2024-r5-testing-policy",
+          "role": "review",
+          "activityId": "review-testing-policy",
+          "attemptId": "round5-testing-policy",
+          "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+          "roundId": "v26-2024-round-5",
+          "round": 5,
+          "lensId": "lens.adversarial-testing",
+          "availability": "referenced",
+          "artifactId": "v26-2024-r5-testing-policy"
+        },
+        "current": true
+      },
+      {
+        "seq": 238,
+        "at": "2026-09-20T12:51:05Z",
+        "payload": {
+          "reportId": "v26-2024-r5-ce-correctness-reviewer",
+          "role": "review",
+          "activityId": "review-ce-correctness-reviewer",
+          "attemptId": "round5-ce-correctness-reviewer",
+          "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+          "roundId": "v26-2024-round-5",
+          "round": 5,
+          "lensId": "athena.ce-correctness-reviewer",
+          "availability": "referenced",
+          "artifactId": "v26-2024-r5-ce-correctness-reviewer"
+        },
+        "current": true
+      },
+      {
+        "seq": 241,
+        "at": "2026-09-20T12:51:06Z",
+        "payload": {
+          "reportId": "v26-2024-r5-reduction",
+          "role": "reduction",
+          "activityId": "review-reduction",
+          "attemptId": "round5-reduction",
+          "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+          "availability": "referenced",
+          "artifactId": "v26-2024-r5-reduction"
+        },
+        "current": false
       }
     ],
     "artifacts": [
@@ -4462,7 +8830,7 @@
           "mediaType": "application/json",
           "producer": "testing-policy"
         },
-        "current": true
+        "current": false
       },
       {
         "seq": 70,
@@ -4480,7 +8848,7 @@
           "mediaType": "application/json",
           "producer": "ce-correctness-reviewer"
         },
-        "current": true
+        "current": false
       },
       {
         "seq": 73,
@@ -4498,7 +8866,7 @@
           "mediaType": "application/json",
           "producer": "outcome-correctness"
         },
-        "current": true
+        "current": false
       },
       {
         "seq": 84,
@@ -4516,9 +8884,261 @@
           "producer": "root"
         },
         "current": true
+      },
+      {
+        "seq": 160,
+        "at": "2026-09-20T12:16:17Z",
+        "payload": {
+          "artifactId": "v26-2024-r3-outcome-correctness",
+          "activityId": "review-outcome-correctness",
+          "attemptId": "round3-outcome-correctness",
+          "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+          "roundId": "v26-2024-round-3",
+          "round": 3,
+          "lensId": "lens.outcome-correctness",
+          "digest": "08e043b9d99d1d116fb6b5a3826e24d4fa063898c2ee82406a411baec35fe509",
+          "sizeBytes": 8446,
+          "mediaType": "application/json",
+          "producer": "outcome-correctness"
+        },
+        "current": false
+      },
+      {
+        "seq": 163,
+        "at": "2026-09-20T12:16:18Z",
+        "payload": {
+          "artifactId": "v26-2024-r3-ce-correctness-reviewer",
+          "activityId": "review-ce-correctness-reviewer",
+          "attemptId": "round3-ce-correctness-reviewer",
+          "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+          "roundId": "v26-2024-round-3",
+          "round": 3,
+          "lensId": "athena.ce-correctness-reviewer",
+          "digest": "5b78f2434f355ab7930c059a48fbf2ad5a5dd7b73581c53098fcaf907d5a364f",
+          "sizeBytes": 7254,
+          "mediaType": "application/json",
+          "producer": "ce-correctness-reviewer"
+        },
+        "current": false
+      },
+      {
+        "seq": 166,
+        "at": "2026-09-20T12:18:42Z",
+        "payload": {
+          "artifactId": "v26-2024-r3-testing-policy",
+          "activityId": "review-testing-policy",
+          "attemptId": "round3-testing-policy",
+          "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+          "roundId": "v26-2024-round-3",
+          "round": 3,
+          "lensId": "lens.adversarial-testing",
+          "digest": "6bdf6ab393c1b4cde0fce49707b7b7658985292f0f8de5e12bdd176301951bbe",
+          "sizeBytes": 10029,
+          "mediaType": "application/json",
+          "producer": "testing-policy"
+        },
+        "current": false
+      },
+      {
+        "seq": 175,
+        "at": "2026-09-20T12:19:19Z",
+        "payload": {
+          "artifactId": "v26-2024-r3-reduction",
+          "activityId": "review-reduction",
+          "attemptId": "round3-reduction",
+          "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+          "digest": "1d065c6065ac2e9d19d815fc06a848bb85a8d90990ec526f6d2070ab6488ae06",
+          "sizeBytes": 28597,
+          "mediaType": "application/json",
+          "producer": "root"
+        },
+        "current": false
+      },
+      {
+        "seq": 178,
+        "at": "2026-09-20T12:22:45Z",
+        "payload": {
+          "artifactId": "v26-2024-tp-r3-001-closure",
+          "activityId": "review-testing-policy",
+          "attemptId": "round3-testing-policy",
+          "candidateTreeSha": "2bca58e061cdea6108d2017702c8d57ce4982b84",
+          "roundId": "v26-2024-round-3",
+          "round": 3,
+          "lensId": "lens.adversarial-testing",
+          "digest": "b0d08f4556c4b7efe440ccf675895690c7c7b9a712c2641357825adb365204bd",
+          "sizeBytes": 2180,
+          "mediaType": "application/json",
+          "producer": "testing-policy"
+        },
+        "current": false
+      },
+      {
+        "seq": 194,
+        "at": "2026-09-20T12:28:14Z",
+        "payload": {
+          "artifactId": "v26-2024-r4-outcome-correctness",
+          "activityId": "review-outcome-correctness",
+          "attemptId": "round4-outcome-correctness",
+          "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+          "roundId": "v26-2024-round-4",
+          "round": 4,
+          "lensId": "lens.outcome-correctness",
+          "digest": "373b857ba5cfe56369760ac28c5239002bb3609a719b584d45b298327ce02242",
+          "sizeBytes": 5433,
+          "mediaType": "application/json",
+          "producer": "outcome-correctness"
+        },
+        "current": false
+      },
+      {
+        "seq": 197,
+        "at": "2026-09-20T12:28:14Z",
+        "payload": {
+          "artifactId": "v26-2024-r4-testing-policy",
+          "activityId": "review-testing-policy",
+          "attemptId": "round4-testing-policy",
+          "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+          "roundId": "v26-2024-round-4",
+          "round": 4,
+          "lensId": "lens.adversarial-testing",
+          "digest": "e435e07574bbbfc1c4df3a062f3d4bd7964869e08903cb63aa003644691a8e1f",
+          "sizeBytes": 6097,
+          "mediaType": "application/json",
+          "producer": "testing-policy"
+        },
+        "current": false
+      },
+      {
+        "seq": 200,
+        "at": "2026-09-20T12:28:15Z",
+        "payload": {
+          "artifactId": "v26-2024-r4-ce-correctness-reviewer",
+          "activityId": "review-ce-correctness-reviewer",
+          "attemptId": "round4-ce-correctness-reviewer",
+          "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+          "roundId": "v26-2024-round-4",
+          "round": 4,
+          "lensId": "athena.ce-correctness-reviewer",
+          "digest": "0ad006eba9873ce9721b3175b0e9e545021d2fc06868566af26d34b515e3ab84",
+          "sizeBytes": 6306,
+          "mediaType": "application/json",
+          "producer": "ce-correctness-reviewer"
+        },
+        "current": false
+      },
+      {
+        "seq": 203,
+        "at": "2026-09-20T12:28:16Z",
+        "payload": {
+          "artifactId": "v26-2024-r4-reduction",
+          "activityId": "review-reduction",
+          "attemptId": "round4-reduction",
+          "candidateTreeSha": "57a66c8c2899628407fa4e34898b7f3f8665d3ab",
+          "digest": "041271c3d2f1768cfeae9f0c385d7716a646265f87a3d70782c8dff90a460e72",
+          "sizeBytes": 20061,
+          "mediaType": "application/json",
+          "producer": "root"
+        },
+        "current": false
+      },
+      {
+        "seq": 231,
+        "at": "2026-09-20T12:51:03Z",
+        "payload": {
+          "artifactId": "v26-2024-r5-outcome-correctness",
+          "activityId": "review-outcome-correctness",
+          "attemptId": "round5-outcome-correctness",
+          "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+          "roundId": "v26-2024-round-5",
+          "round": 5,
+          "lensId": "lens.outcome-correctness",
+          "digest": "337af4c00d6f1e08bdf83214ea8048f8f0a2aba43e451f13f0a420ec5d88cac4",
+          "sizeBytes": 7236,
+          "mediaType": "application/json",
+          "producer": "outcome-correctness"
+        },
+        "current": true
+      },
+      {
+        "seq": 234,
+        "at": "2026-09-20T12:51:04Z",
+        "payload": {
+          "artifactId": "v26-2024-r5-testing-policy",
+          "activityId": "review-testing-policy",
+          "attemptId": "round5-testing-policy",
+          "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+          "roundId": "v26-2024-round-5",
+          "round": 5,
+          "lensId": "lens.adversarial-testing",
+          "digest": "3ec3a935fdd788fae467739197956a6790593127b521ca4ec57223c2affe6402",
+          "sizeBytes": 9541,
+          "mediaType": "application/json",
+          "producer": "testing-policy"
+        },
+        "current": true
+      },
+      {
+        "seq": 237,
+        "at": "2026-09-20T12:51:05Z",
+        "payload": {
+          "artifactId": "v26-2024-r5-ce-correctness-reviewer",
+          "activityId": "review-ce-correctness-reviewer",
+          "attemptId": "round5-ce-correctness-reviewer",
+          "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+          "roundId": "v26-2024-round-5",
+          "round": 5,
+          "lensId": "athena.ce-correctness-reviewer",
+          "digest": "8fdbd596fbf55ea8fa0bad09be0d7de89fe2b7db89958cee332e473c16e20cb2",
+          "sizeBytes": 6748,
+          "mediaType": "application/json",
+          "producer": "ce-correctness-reviewer"
+        },
+        "current": true
+      },
+      {
+        "seq": 240,
+        "at": "2026-09-20T12:51:06Z",
+        "payload": {
+          "artifactId": "v26-2024-r5-reduction",
+          "activityId": "review-reduction",
+          "attemptId": "round5-reduction",
+          "candidateTreeSha": "4f3b36bb421bea9c4044d541f392949e6750cb48",
+          "digest": "20ee7335455a2752dbc427c94956293d9b506bb7c17fefff37110b80a368d3a8",
+          "sizeBytes": 25878,
+          "mediaType": "application/json",
+          "producer": "root"
+        },
+        "current": false
       }
     ],
-    "finishSteps": [],
+    "finishSteps": [
+      {
+        "seq": 142,
+        "at": "2026-09-20T08:10:15Z",
+        "payload": {
+          "stepId": "pr843-integration-merge",
+          "candidateTreeSha": "24fbcaa74abc1743aeac98af1d7c2bff3715de51",
+          "name": "integration-merge",
+          "state": "completed",
+          "owner": "root",
+          "reason": "PR843 merged as d387c35d8f98874ad00973004d011dfdd5dad4ec after all five required hosted contexts passed; activation remains pending"
+        },
+        "current": true
+      },
+      {
+        "seq": 143,
+        "at": "2026-09-20T08:10:15Z",
+        "payload": {
+          "stepId": "pr843-root-alignment",
+          "candidateTreeSha": "24fbcaa74abc1743aeac98af1d7c2bff3715de51",
+          "name": "integration-root-alignment",
+          "state": "completed",
+          "owner": "root",
+          "reason": "Root main fast-forwarded to d387c35d; clean; unrelated terminal-sync branch feb46a5b preserved"
+        },
+        "current": true
+      }
+    ],
     "currentFindings": [],
     "findingsCoverage": "unreported"
   }

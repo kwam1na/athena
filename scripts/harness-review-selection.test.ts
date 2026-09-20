@@ -13,8 +13,9 @@ afterEach(async () => { await Promise.all(fixtures.splice(0).map(dir => rm(dir, 
 async function loadSelection(value: unknown) {
   const dir = await mkdtemp(path.join(tmpdir(), "athena-review-selection-"));
   fixtures.push(dir);
-  const source = (await readFile(path.join(rootDir, "harness.config.ts"), "utf8"))
-    .replaceAll('from "./', `from "${rootDir}/`)
+  const source = (await readFile(path.join(rootDir, "scripts/harness-base-config.ts"), "utf8"))
+    .replaceAll('from "../', `from "${rootDir}/`)
+    .replaceAll('from "./', `from "${rootDir}/scripts/`)
     .replace(`${rootDir}/.agents/review-selection.json`, `${dir}/selection.json`);
   await writeFile(path.join(dir, "harness.config.ts"), source);
   await writeFile(path.join(dir, "selection.json"), JSON.stringify(value));

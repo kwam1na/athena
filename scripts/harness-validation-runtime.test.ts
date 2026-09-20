@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { ATHENA_LEGACY_CONFIG } from "../harness.config";
+import { ATHENA_LEGACY_CONFIG } from "./harness-base-config";
 import { configureScopedValidation } from "./harness-validation-runtime";
 import type { NativeValidationSelection } from "./harness-validation-load";
 import qualifiedFrontend from "./fixtures/affected-validation/frontend-qualified-profiles.json";

@@ -34,6 +34,7 @@ async function fixture(withWaiver = false) {
     obligations: [...baseConfig.obligations, { id: "documentation.current", activation: { kind: "always" }, freshness: "live", providers: ["fixture.documentation"], acceptedPayloadSpecs: ["checks.passed/1"], allowedResolutionKinds: ["satisfied_live_fact", "not_applicable"], humanWaiverAllowed: false, minimumAttestationLevel: "self", ciDelegationPolicyIds: [], waivableCodes: [], nonWaivableCodes: [...GATE_STRUCTURAL_FINDING_CODES], remediation: { default: [{ id: "documentation", kind: "manual_action", summary: "Repair documentation." }] } }],
   }) : baseConfig;
   await write("harness.config.ts", `export default ${JSON.stringify(config)};`);
+  await write("scripts/harness-base-config.ts", `export default ${JSON.stringify(config)};`);
   for (const name of [".agent-skills", ".agents/skills", ".claude/skills"]) {
     await cp(path.join(repositoryRoot, name), path.join(root, name), { recursive: true, verbatimSymlinks: true });
   }

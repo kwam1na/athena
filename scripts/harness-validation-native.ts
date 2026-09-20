@@ -38,6 +38,8 @@ export type NativeValidationObservations = Awaited<
 >;
 export const readNativeValidationObservations = readScopedCheckObservations;
 type CommonResult = {
+  /** Exact public native capture, distinct from the planning policy identity. */
+  candidate?: CapturedCandidate;
   observations: NativeValidationObservations;
   beforeObservations: NativeValidationObservations;
   phases: Array<{ phase: NativeValidationPhase; exitCode: number }>;
@@ -239,8 +241,10 @@ async function coordinator(
       throw new Error("Native candidate differs from authenticated binding");
     return candidate;
   };
+  let candidate: CapturedCandidate | undefined;
   try {
     const original = await capture();
+    candidate = original;
     let verifiedRecordText: string | undefined;
     const recordRef = path.join(
       rootDir,
@@ -256,6 +260,7 @@ async function coordinator(
       if (exitCode !== 0)
         return {
           status: "failed",
+          candidate,
           phase,
           exitCode,
           observations: await observe(),
@@ -275,6 +280,7 @@ async function coordinator(
     if (!parsed.ok) throw new Error("Verified native record could not be read");
     return {
       status: "verified",
+      candidate,
       recordRef,
       record: parsed.record,
       selectedAttempts: verifiedAttempts(
@@ -288,6 +294,7 @@ async function coordinator(
   } catch (error) {
     return {
       status: "failed",
+      candidate,
       phase,
       exitCode: null,
       error: error instanceof Error ? error.message : String(error),
