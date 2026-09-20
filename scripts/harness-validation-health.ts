@@ -32,10 +32,12 @@ export type HealthFinding = {
   checkId: string;
   scope: HealthScope;
   runId: number;
+  runAttempt?: number;
   headSha: string;
 };
 export type HealthRunResult = {
   runId: number;
+  runAttempt?: number;
   headSha: string;
   outcome: string;
   completedAt: number;
@@ -53,6 +55,9 @@ export type HealthSnapshot = {
   revision: string;
   observedAt: number;
   availability: HealthAvailability;
+  /** Producer continuation only: all newer completed digests and a cumulative
+   * complete predecessor were read. Does not make an incomplete run eligible. */
+  historyComplete?: boolean;
   lastAttempt?: HealthRunResult;
   lastComplete?: HealthRunResult;
   findings: HealthFinding[];
@@ -101,6 +106,8 @@ export type HealthDecision = {
 };
 export const HEALTH_MAX_AGE_MS = 48 * 60 * 60 * 1000;
 export const HEALTH_READ_TIMEOUT_MS = 30_000;
+/** Reserved uncertainty obligation, never a synthetic passing execution. */
+export const HEALTH_HISTORY_CHECK_ID = "athena:unknown-health-history";
 
 function covers(outer: HealthScope, inner: HealthScope): boolean {
   if (outer.kind === "repo") return true;
@@ -132,6 +139,14 @@ export function evaluateValidationHealth(input: {
 }): HealthDecision {
   const { health, candidate } = input;
   const now = input.now ?? Date.now();
+  const full = input.fullValidation;
+  const validFull =
+    full?.mode === "full-health" &&
+    full.candidateRef === candidate.candidateRef &&
+    full.profile === candidate.profile &&
+    full.healthRevision === health.revision &&
+    full.outcome === "success" &&
+    nonEmpty(full.evidenceRef);
   const obligations = health.findings
     .filter(
       (f) =>
@@ -139,18 +154,24 @@ export function evaluateValidationHealth(input: {
         candidate.scopes.some((s) => intersects(s, f.scope)),
     )
     .map((finding) => {
-      const proof = input.proofs?.find(
-        (p) =>
-          p.candidateRef === candidate.candidateRef &&
-          p.profile === candidate.profile &&
-          p.healthRevision === health.revision &&
-          p.findingId === finding.id &&
-          p.findingRevision === finding.revision &&
-          p.checkId === finding.checkId &&
-          p.outcome === "success" &&
-          nonEmpty(p.evidenceRef) &&
-          covers(p.scope, finding.scope),
-      );
+      if (finding.checkId === HEALTH_HISTORY_CHECK_ID && validFull) {
+        return { finding, discharged: true, evidenceRef: full!.evidenceRef };
+      }
+      const proof =
+        finding.checkId === HEALTH_HISTORY_CHECK_ID
+          ? undefined
+          : input.proofs?.find(
+              (p) =>
+                p.candidateRef === candidate.candidateRef &&
+                p.profile === candidate.profile &&
+                p.healthRevision === health.revision &&
+                p.findingId === finding.id &&
+                p.findingRevision === finding.revision &&
+                p.checkId === finding.checkId &&
+                p.outcome === "success" &&
+                nonEmpty(p.evidenceRef) &&
+                covers(p.scope, finding.scope),
+            );
       return {
         finding,
         discharged: !!proof,
@@ -175,7 +196,6 @@ export function evaluateValidationHealth(input: {
     "intersecting-failure",
     "requirements-satisfied",
   ].includes(reason);
-  const full = input.fullValidation;
   const recovered =
     unavailable &&
     full?.mode === "full-health" &&
@@ -243,8 +263,10 @@ function hash(value: unknown) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 class HealthReadError extends Error {
-  constructor(readonly availability: HealthAvailability) {
+  readonly availability: HealthAvailability;
+  constructor(availability: HealthAvailability) {
     super(availability);
+    this.availability = availability;
   }
 }
 
@@ -283,6 +305,7 @@ function trustedRun(value: unknown, policy: HealthPolicy): value is Run {
 function runResult(run: Run): HealthRunResult {
   return {
     runId: run.id,
+    runAttempt: run.run_attempt,
     headSha: run.head_sha,
     outcome:
       run.status === "completed" ? (run.conclusion ?? "unknown") : run.status,
@@ -360,6 +383,8 @@ function parseDigest(
         nonEmpty(f.revision) &&
         nonEmpty(f.checkId) &&
         positive(f.runId) &&
+        (f.runAttempt === undefined || positive(f.runAttempt)) &&
+        (f.checkId !== HEALTH_HISTORY_CHECK_ID || positive(f.runAttempt)) &&
         isSha(f.headSha),
     ) ||
     new Set(value.findings.map((f) => f.id)).size !== value.findings.length
@@ -398,7 +423,136 @@ export type HealthClassification = {
    * check under the complete policy inventory, after the originating run. */
   revalidationRunId?: number;
 };
+
+/** Verify an explicit maintainer comment, never infer approval from a merge,
+ * agent attribution, candidate files, or the comment URL alone. The comment body
+ * is JSON {schemaVersion, repository, reviewedCommit, classification}, where
+ * classification excludes reference. Exact comment bytes are pinned by reference.
+ */
+export function createHealthApprovalVerifier(
+  policy: HealthPolicy,
+  requestJson: (
+    endpoint: string,
+    signal?: AbortSignal,
+  ) => Promise<unknown> = async (endpoint, signal) => {
+    if (!signal) throw new Error("Approval read requires the health deadline");
+    const result = await runHealthProcess(["gh", "api", "--hostname", "github.com", endpoint], signal);
+    if (result.exitCode !== 0) throw new Error("Approval API unavailable");
+    return JSON.parse(result.stdout.toString("utf8")) as unknown;
+  },
+): NonNullable<HealthReaderOptions["verifyClassificationApproval"]> {
+  return async (classification, pinnedMainSha, signal) => {
+    try {
+      if (signal?.aborted || !isSha(pinnedMainSha)) return false;
+      const match =
+        /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/([1-9]\d*)#issuecomment-([1-9]\d*)@sha256:([a-f0-9]{64})$/.exec(
+          classification.reference,
+        );
+      if (!match || match[1] !== policy.repository) return false;
+      const [, repository, prNumber, commentId, digest] = match;
+      if (!positive(Number(prNumber)) || !positive(Number(commentId)))
+        return false;
+      const base = `/repos/${repository}`;
+      const comment = await requestJson(
+        `${base}/issues/comments/${commentId}`,
+        signal,
+      );
+      if (
+        !record(comment) ||
+        comment.id !== Number(commentId) ||
+        typeof comment.body !== "string" ||
+        comment.issue_url !==
+          `https://api.github.com${base}/issues/${prNumber}` ||
+        !record(comment.user) ||
+        comment.user.type !== "User" ||
+        !nonEmpty(comment.user.login) ||
+        createHash("sha256").update(comment.body).digest("hex") !== digest
+      )
+        return false;
+      const payload: unknown = JSON.parse(comment.body);
+      if (
+        !record(payload) ||
+        payload.schemaVersion !== "athena-health-approval/1" ||
+        payload.repository !== repository ||
+        !isSha(payload.reviewedCommit) ||
+        !record(payload.classification)
+      )
+        return false;
+      const approved = payload.classification;
+      const tuple = (value: RecordValue) => ({
+        findingId: value.findingId,
+        findingRevision: value.findingRevision,
+        scope:
+          value.scope === undefined
+            ? undefined
+            : record(value.scope)
+              ? {
+                  kind: value.scope.kind,
+                  ...(value.scope.kind !== "repo"
+                    ? { package: value.scope.package }
+                    : {}),
+                  ...(value.scope.kind === "paths"
+                    ? { paths: value.scope.paths }
+                    : {}),
+                }
+              : null,
+        revalidationRunId: value.revalidationRunId,
+      });
+      if (
+        !nonEmpty(approved.findingId) ||
+        !nonEmpty(approved.findingRevision) ||
+        (approved.scope !== undefined && !validScope(approved.scope)) ||
+        (approved.revalidationRunId !== undefined &&
+          !positive(approved.revalidationRunId)) ||
+        JSON.stringify(tuple(approved)) !==
+          JSON.stringify(tuple(classification))
+      )
+        return false;
+      const pull = await requestJson(`${base}/pulls/${prNumber}`, signal);
+      if (
+        !record(pull) ||
+        pull.number !== Number(prNumber) ||
+        !record(pull.base) ||
+        !record(pull.base.repo) ||
+        pull.base.repo.full_name !== repository
+      )
+        return false;
+      const permission = await requestJson(
+        `${base}/collaborators/${encodeURIComponent(comment.user.login)}/permission`,
+        signal,
+      );
+      if (
+        !record(permission) ||
+        !(
+          permission.permission === "admin" ||
+          (permission.permission === "write" &&
+            permission.role_name === "maintain")
+        ) ||
+        !record(permission.user) ||
+        permission.user.login !== comment.user.login
+      )
+        return false;
+      const comparison = await requestJson(
+        `${base}/compare/${payload.reviewedCommit}...${pinnedMainSha}`,
+        signal,
+      );
+      return (
+        !signal?.aborted &&
+        record(comparison) &&
+        ["ahead", "identical"].includes(String(comparison.status))
+      );
+    } catch {
+      // Revocation, deletion and transient failures retain the conservative
+      // finding. readValidationHealth owns the encompassing deadline.
+      return false;
+    }
+  };
+}
 export type HealthReaderOptions = {
+  signal?: AbortSignal;
+  /** Producer history only, bound to its authenticated current run. Admission
+   * must omit this option so a newer unfinished observation remains visible. */
+  excludeCurrentRunId?: number;
   /** Total wall-clock budget, including approval and artifact reads (1–60000ms). */
   timeoutMs?: number;
   /** Trusted host capability verifying maintainer approval for this exact
@@ -428,6 +582,9 @@ export async function readValidationHealth(
 ): Promise<HealthSnapshot> {
   const controller = new AbortController();
   const signal = controller.signal;
+  const abort = () => controller.abort();
+  if (options.signal?.aborted) abort();
+  else options.signal?.addEventListener("abort", abort, { once: true });
   const timeoutMs = options.timeoutMs ?? HEALTH_READ_TIMEOUT_MS;
   const validTimeout =
     Number.isFinite(timeoutMs) && timeoutMs >= 1 && timeoutMs <= 60_000;
@@ -439,7 +596,7 @@ export async function readValidationHealth(
     ? (endpoint: string) =>
         abortable(() => options.requestJson!(endpoint, signal), signal)
     : async (endpoint: string) => {
-        const result = await runHealthProcess(["gh", "api", endpoint], signal);
+        const result = await runHealthProcess(["gh", "api", "--hostname", "github.com", endpoint], signal);
         if (result.exitCode !== 0) throw new HealthReadError("api-unavailable");
         return JSON.parse(result.stdout.toString("utf8")) as unknown;
       };
@@ -467,10 +624,16 @@ export async function readValidationHealth(
   let lastAttempt = options.previous?.lastAttempt;
   let lastComplete = options.previous?.lastComplete;
   let availability: HealthAvailability = "available";
+  let historyComplete = false;
   let mainSha: string | undefined;
   const bindings: unknown[] = [];
   try {
     if (!validTimeout) throw new HealthReadError("invalid-health");
+    if (
+      options.excludeCurrentRunId !== undefined &&
+      !positive(options.excludeCurrentRunId)
+    )
+      throw new HealthReadError("invalid-health");
     if (
       !/^[\w.-]+\/[\w.-]+$/.test(policy.repository) ||
       !nonEmpty(policy.defaultBranch) ||
@@ -479,7 +642,12 @@ export async function readValidationHealth(
       !nonEmpty(policy.artifactName) ||
       !nonEmpty(policy.classificationPath) ||
       policy.checks.length === 0 ||
-      !policy.checks.every((c) => nonEmpty(c.checkId) && validScope(c.scope)) ||
+      !policy.checks.every(
+        (c) =>
+          nonEmpty(c.checkId) &&
+          c.checkId !== HEALTH_HISTORY_CHECK_ID &&
+          validScope(c.scope),
+      ) ||
       new Set(policy.checks.map((c) => c.checkId)).size !== policy.checks.length
     )
       throw new HealthReadError("invalid-health");
@@ -545,6 +713,7 @@ export async function readValidationHealth(
         throw new HealthReadError("invalid-health");
       for (const item of list.workflow_runs) {
         if (!trustedRun(item, policy)) continue;
+        if (item.id === options.excludeCurrentRunId) continue;
         runs.push(item);
         if (Date.parse(item.updated_at) <= now - HEALTH_MAX_AGE_MS)
           reachedOverdueHistory = true;
@@ -582,11 +751,15 @@ export async function readValidationHealth(
         artifact.workflow_run.head_sha !== run.head_sha
       )
         throw new HealthReadError("artifact-unavailable");
-      const digest = parseDigest(
-        await load(policy.repository, artifact.id),
-        run,
-        policy,
-      );
+      let body: unknown;
+      try {
+        body = await load(policy.repository, artifact.id);
+      } catch {
+        throw new HealthReadError(
+          signal.aborted ? "api-unavailable" : "artifact-unavailable",
+        );
+      }
+      const digest = parseDigest(body, run, policy);
       observed.set(run.id, { run, digest });
       bindings.push({
         runId: run.id,
@@ -599,12 +772,12 @@ export async function readValidationHealth(
     // Newer partial attempts can report failures; the first complete digest
     // provides the cumulative history. Do not read expired older superseded
     // artifacts merely to rediscover already-carried history.
+    let unreadActiveAttempt = false;
     for (const run of runs) {
-      if (
-        run.status !== "completed" ||
-        !["success", "failure"].includes(run.conclusion ?? "")
-      )
+      if (run.status !== "completed") {
+        unreadActiveAttempt = true;
         continue;
+      }
       const digest = await readRunDigest(run);
       for (const f of digest.findings) {
         const existing = findings.get(f.id);
@@ -627,8 +800,12 @@ export async function readValidationHealth(
           },
         });
       }
-      if (digest.complete) {
+      if (
+        digest.complete &&
+        ["success", "failure"].includes(run.conclusion ?? "")
+      ) {
         lastComplete = runResult(run);
+        historyComplete = !unreadActiveAttempt;
         break;
       }
     }
@@ -648,7 +825,8 @@ export async function readValidationHealth(
         )) !== true
       )
         continue;
-      if (approval.scope) finding.scope = approval.scope;
+      if (approval.scope && finding.checkId !== HEALTH_HISTORY_CHECK_ID)
+        finding.scope = approval.scope;
       if (
         !approval.revalidationRunId ||
         approval.revalidationRunId <= finding.runId
@@ -676,9 +854,11 @@ export async function readValidationHealth(
         revalidation &&
         revalidation.run.id > finding.runId &&
         revalidation.digest.complete &&
-        revalidation.digest.checks.some(
-          (c) => c.checkId === finding.checkId && c.outcome === "success",
-        )
+        (finding.checkId === HEALTH_HISTORY_CHECK_ID
+          ? revalidation.digest.checks.every((c) => c.outcome === "success")
+          : revalidation.digest.checks.some(
+              (c) => c.checkId === finding.checkId && c.outcome === "success",
+            ))
       ) {
         const comparison = await request(
           `${base}/compare/${revalidation.run.head_sha}...${mainSha}`,
@@ -708,6 +888,12 @@ export async function readValidationHealth(
       }
     }
     if (!lastComplete) throw new HealthReadError("incomplete");
+    if (
+      runs[0].status !== "completed" ||
+      observed.get(runs[0].id)?.digest.complete !== true ||
+      !["success", "failure"].includes(runs[0].conclusion ?? "")
+    )
+      throw new HealthReadError("incomplete");
     if (lastComplete.completedAt > now || lastAttempt.completedAt > now)
       throw new HealthReadError("invalid-health");
     if (now - lastComplete.completedAt >= HEALTH_MAX_AGE_MS)
@@ -717,6 +903,7 @@ export async function readValidationHealth(
       error instanceof HealthReadError ? error.availability : "api-unavailable";
   } finally {
     clearTimeout(deadline);
+    options.signal?.removeEventListener("abort", abort);
   }
   const retained = [...findings.values()].sort((a, b) =>
     a.id.localeCompare(b.id),
@@ -726,6 +913,7 @@ export async function readValidationHealth(
     revision: hash({
       policy,
       availability,
+      historyComplete,
       bindings,
       lastAttempt,
       lastComplete,
@@ -734,6 +922,7 @@ export async function readValidationHealth(
     }),
     observedAt: now,
     availability,
+    historyComplete,
     lastAttempt,
     lastComplete,
     findings: retained,
@@ -826,7 +1015,7 @@ async function loadHealthArtifact(
   try {
     const archive = path.join(directory, "health.zip");
     const download = await runHealthProcess(
-      ["gh", "api", `/repos/${repository}/actions/artifacts/${artifactId}/zip`],
+      ["gh", "api", "--hostname", "github.com", `/repos/${repository}/actions/artifacts/${artifactId}/zip`],
       signal,
       archive,
     );

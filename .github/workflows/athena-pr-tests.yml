@@ -4,10 +4,14 @@ on:
   pull_request:
     branches:
       - main
-  schedule:
-    - cron: "0 14 * * 1"
   workflow_dispatch:
     inputs:
+      validation_mode:
+        description: Legacy validation or explicit affected-path qualification; default PR authority is unchanged.
+        type: choice
+        required: false
+        default: legacy
+        options: [legacy, affected-qualification]
       runtime_behavior_report_lines:
         description: Optional literal [harness:behavior:report] lines to aggregate into runtime trend history.
         required: false
@@ -28,38 +32,232 @@ env:
   NODE_OPTIONS: --max-old-space-size=4096
 
 jobs:
+  affected-validation-qualification:
+    name: Native Affected Validation Qualification
+    if: github.event_name == 'workflow_dispatch' && inputs.validation_mode == 'affected-qualification'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    concurrency:
+      group: athena-production-validation
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      pull-requests: read
+    outputs:
+      base_guard_ready: ${{ steps.base-guard.outputs.base_guard_ready }}
+      verified: ${{ steps.native.outputs.verified }}
+      plan_mode: ${{ steps.native.outputs.plan_mode }}
+      base_sha: ${{ steps.base.outputs.sha }}
+    steps:
+      - name: Checkout pinned candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: candidate
+
+      - name: Resolve authenticated base
+        id: base
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          base_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$BASE_REF" --jq .sha)"
+          [[ "$base_sha" =~ ^[a-f0-9]{40}$ ]]
+          echo "sha=$base_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout independent pinned-base guard
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ steps.base.outputs.sha }}
+          path: pinned-base
+
+      - name: Setup delivery runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: pinned-base/package.json
+
+      - name: Run base-owned guard against candidate
+        id: base-guard
+        working-directory: pinned-base
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VALIDATION_GUARD_BASE_SHA: ${{ steps.base.outputs.sha }}
+        run: |
+          set -euo pipefail
+          entry="$(git ls-tree HEAD -- scripts/harness-validation-ci.ts)"
+          if [ -n "$entry" ]; then
+            [[ "$entry" =~ ^100(644|755)[[:space:]]blob[[:space:]][a-f0-9]{40}[[:space:]]scripts/harness-validation-ci.ts$ ]]
+            test -f scripts/harness-validation-ci.ts
+            test ! -L scripts/harness-validation-ci.ts
+            bun install --frozen-lockfile --ignore-scripts
+            bun scripts/harness-validation-ci.ts guard --candidate-root "$GITHUB_WORKSPACE/candidate"
+          else
+            echo "Base predates native guard; existing broad candidate validation remains mandatory."
+            echo "base_guard_ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup private dependency interpreter
+        if: steps.base-guard.outputs.base_guard_ready == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Execute and verify canonical affected plan
+        id: native
+        if: steps.base-guard.outputs.base_guard_ready == 'true'
+        working-directory: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VALIDATION_GUARD_BASE_SHA: ${{ steps.base.outputs.sha }}
+          VALIDATION_PR_NUMBER: ${{ github.event.pull_request.number }}
+          VALIDATION_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          ATHENA_COVERAGE_MAX_WORKERS: ${{ inputs.coverage_workers || '2' }}
+          HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ATHENA_POS_E2E_RUN_LOCAL_BUILD: "1"
+          ATHENA_PROD_CONVEX_URL: https://colorless-cardinal-870.convex.cloud
+          ATHENA_PROD_CONVEX_SITE_URL: https://colorless-cardinal-870.convex.site
+          ATHENA_PROD_POS_RECOVERY_CODE: ${{ secrets.ATHENA_PROD_POS_RECOVERY_CODE }}
+          ATHENA_PROD_POS_STORE_ID: nn7byz68a3j4tfjvgdf9evpt3n78kk38
+          ATHENA_PROD_POS_HUB_PATH: /wigclub/store/wigclub/pos
+        run: bun "$GITHUB_WORKSPACE/pinned-base/scripts/harness-validation-ci.ts" qualify
+
+      - name: Retain native qualification summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: affected-validation-qualification
+          path: |
+            candidate/artifacts/validation-ci/summary.json
+            candidate/artifacts/validation-ci/delivery-record.json
+          if-no-files-found: warn
+
+  affected-validation-final:
+    name: Verify Portable Affected Validation
+    needs: [affected-validation-qualification]
+    if: always() && needs.affected-validation-qualification.outputs.base_guard_ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      verified: ${{ steps.final.outputs.verified }}
+    steps:
+      - name: Require successful execution job
+        env:
+          EXECUTION_RESULT: ${{ needs.affected-validation-qualification.result }}
+        run: test "$EXECUTION_RESULT" = "success"
+
+      - name: Checkout fresh candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: candidate
+
+      - name: Checkout trusted final controller
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.affected-validation-qualification.outputs.base_sha }}
+          path: pinned-base
+
+      - name: Setup delivery runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: pinned-base/package.json
+
+      - name: Setup private dependency interpreter
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install trusted controller dependencies
+        working-directory: pinned-base
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Download portable validation record
+        uses: actions/download-artifact@v4
+        with:
+          name: affected-validation-qualification
+          path: candidate/artifacts/validation-ci
+
+      - name: Independently verify native evidence and current health
+        id: final
+        working-directory: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VALIDATION_GUARD_BASE_SHA: ${{ needs.affected-validation-qualification.outputs.base_sha }}
+          VALIDATION_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          VALIDATION_PR_NUMBER: ${{ github.event.pull_request.number }}
+          VALIDATION_PLAN_MODE: ${{ needs.affected-validation-qualification.outputs.plan_mode }}
+          VALIDATION_EXECUTION_RESULT: ${{ needs.affected-validation-qualification.result }}
+          ATHENA_COVERAGE_MAX_WORKERS: ${{ inputs.coverage_workers || '2' }}
+          HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ATHENA_POS_E2E_RUN_LOCAL_BUILD: "1"
+          ATHENA_PROD_CONVEX_URL: https://colorless-cardinal-870.convex.cloud
+          ATHENA_PROD_CONVEX_SITE_URL: https://colorless-cardinal-870.convex.site
+          ATHENA_PROD_POS_RECOVERY_CODE: ${{ secrets.ATHENA_PROD_POS_RECOVERY_CODE }}
+          ATHENA_PROD_POS_STORE_ID: nn7byz68a3j4tfjvgdf9evpt3n78kk38
+          ATHENA_PROD_POS_HUB_PATH: /wigclub/store/wigclub/pos
+        run: bun "$GITHUB_WORKSPACE/pinned-base/scripts/harness-validation-ci.ts" verify-final
+
   harness-validation:
     name: Harness and Architecture Validation
+    needs: [affected-validation-qualification, affected-validation-final]
+    if: always()
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Pin pull request base
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         env:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: git update-ref refs/remotes/origin/main "$PR_BASE_SHA"
 
       - name: Setup delivery runtime
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: "24"
 
       - name: Setup Bun
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
 
       - name: Install dependencies
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         run: bun install --frozen-lockfile
 
       - name: Verify installed product and portable delivery evidence
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -67,20 +265,25 @@ jobs:
           bun run delivery:verify --mandated-lens lens.outcome-correctness --mandated-lens lens.adversarial-testing
 
       - name: Check delivery documentation
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: bun run delivery:documentation-admission
 
       - name: Check delivery-run telemetry record
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         run: bun run delivery:telemetry-check
 
       - name: Install Graphify runtime
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         run: python3 -m pip install -r .graphify-requirements.txt
 
       - name: Install Playwright browser
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         run: bunx playwright install chromium
 
       - name: Run harness review
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         env:
           HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -88,7 +291,7 @@ jobs:
         run: bun run harness:review --base origin/main
 
       - name: Upload harness validation artifacts
-        if: always()
+        if: always() && needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: harness-validation-artifacts
@@ -98,9 +301,25 @@ jobs:
             /tmp/athena-validation-*/output.log
           if-no-files-found: ignore
 
+      - name: Confirm complete native qualification
+        if: github.event_name == 'workflow_dispatch' && inputs.validation_mode == 'affected-qualification'
+        env:
+          NATIVE_RESULT: ${{ needs.affected-validation-qualification.result }}
+          BASE_GUARD_READY: ${{ needs.affected-validation-qualification.outputs.base_guard_ready }}
+          FINAL_RESULT: ${{ needs.affected-validation-final.result }}
+          NATIVE_VERIFIED: ${{ needs.affected-validation-final.outputs.verified }}
+        run: |
+          test "$NATIVE_RESULT" = "success"
+          if [ "$BASE_GUARD_READY" = "true" ]; then
+            test "$FINAL_RESULT" = "success"
+            test "$NATIVE_VERIFIED" = "true"
+          else
+            test "$BASE_GUARD_READY" = "false"
+          fi
+
   harness-janitor-report:
     name: Harness Janitor Report
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.validation_mode != 'affected-qualification'
     runs-on: ubuntu-latest
 
     steps:
@@ -119,7 +338,7 @@ jobs:
       - name: Setup delivery runtime
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: "24"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -186,111 +405,166 @@ jobs:
 
   harness-implementation-tests:
     name: Harness Implementation Tests
+    needs: [affected-validation-qualification, affected-validation-final]
+    if: always()
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Pin pull request base
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         env:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: git update-ref refs/remotes/origin/main "$PR_BASE_SHA"
 
       - name: Setup delivery runtime
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: "24"
 
       - name: Setup Bun
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
 
       - name: Install dependencies
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         run: bun install --frozen-lockfile
 
       - name: Run harness implementation tests
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         run: bun run harness:test
+
+      - name: Confirm complete native qualification
+        if: github.event_name == 'workflow_dispatch' && inputs.validation_mode == 'affected-qualification'
+        env:
+          NATIVE_RESULT: ${{ needs.affected-validation-qualification.result }}
+          BASE_GUARD_READY: ${{ needs.affected-validation-qualification.outputs.base_guard_ready }}
+          FINAL_RESULT: ${{ needs.affected-validation-final.result }}
+          NATIVE_VERIFIED: ${{ needs.affected-validation-final.outputs.verified }}
+        run: |
+          test "$NATIVE_RESULT" = "success"
+          if [ "$BASE_GUARD_READY" = "true" ]; then
+            test "$FINAL_RESULT" = "success"
+            test "$NATIVE_VERIFIED" = "true"
+          else
+            test "$BASE_GUARD_READY" = "false"
+          fi
 
   athena-webapp-validation:
     name: Athena and Storefront Webapp Validation
+    needs: [affected-validation-qualification, affected-validation-final]
+    if: always()
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Pin pull request base
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         env:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: git update-ref refs/remotes/origin/main "$PR_BASE_SHA"
 
       - name: Setup delivery runtime
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: "24"
 
       - name: Setup Bun
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
 
       - name: Install dependencies
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         run: bun install --frozen-lockfile
 
       - name: Build Athena webapp
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         run: bun run --filter '@athena/webapp' build
 
       - name: Build storefront webapp
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         run: bun run --filter '@athena/storefront-webapp' build
+
+      - name: Confirm complete native qualification
+        if: github.event_name == 'workflow_dispatch' && inputs.validation_mode == 'affected-qualification'
+        env:
+          NATIVE_RESULT: ${{ needs.affected-validation-qualification.result }}
+          BASE_GUARD_READY: ${{ needs.affected-validation-qualification.outputs.base_guard_ready }}
+          FINAL_RESULT: ${{ needs.affected-validation-final.result }}
+          NATIVE_VERIFIED: ${{ needs.affected-validation-final.outputs.verified }}
+        run: |
+          test "$NATIVE_RESULT" = "success"
+          if [ "$BASE_GUARD_READY" = "true" ]; then
+            test "$FINAL_RESULT" = "success"
+            test "$NATIVE_VERIFIED" = "true"
+          else
+            test "$BASE_GUARD_READY" = "false"
+          fi
 
   athena-prod-pos-e2e:
     name: Athena POS E2E against Production Backend
+    needs: [affected-validation-qualification, affected-validation-final]
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:
-      group: athena-prod-pos-e2e-${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: true
+      group: athena-production-validation
+      cancel-in-progress: false
 
     steps:
       - name: Checkout
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Pin pull request base
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         env:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: git update-ref refs/remotes/origin/main "$PR_BASE_SHA"
 
       - name: Setup delivery runtime
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: "24"
 
       - name: Setup Bun
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
 
       - name: Install dependencies
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         run: bun install --frozen-lockfile
 
       - name: Install Playwright browser
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         run: bunx playwright install chromium
 
       - name: Report POS recovery-code coverage mode
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         env:
           ATHENA_PROD_POS_RECOVERY_CODE: ${{ secrets.ATHENA_PROD_POS_RECOVERY_CODE }}
         shell: bash
@@ -303,6 +577,7 @@ jobs:
           echo "ATHENA_PROD_POS_RECOVERY_CODE is configured; authenticated POS recovery submit coverage will run."
 
       - name: Run candidate POS E2E against production backend
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         env:
           ATHENA_POS_E2E_RUN_LOCAL_BUILD: "1"
           ATHENA_PROD_CONVEX_URL: https://colorless-cardinal-870.convex.cloud
@@ -313,7 +588,7 @@ jobs:
         run: bun run --filter '@athena/webapp' -- test:e2e:prod:pos
 
       - name: Upload production POS E2E artifacts
-        if: always()
+        if: always() && needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: athena-prod-pos-e2e-artifacts
@@ -322,14 +597,37 @@ jobs:
             /tmp/athena-webapp-prod-playwright-results
           if-no-files-found: ignore
 
+      - name: Confirm complete native qualification
+        if: github.event_name == 'workflow_dispatch' && inputs.validation_mode == 'affected-qualification'
+        env:
+          NATIVE_RESULT: ${{ needs.affected-validation-qualification.result }}
+          BASE_GUARD_READY: ${{ needs.affected-validation-qualification.outputs.base_guard_ready }}
+          FINAL_RESULT: ${{ needs.affected-validation-final.result }}
+          NATIVE_VERIFIED: ${{ needs.affected-validation-final.outputs.verified }}
+        run: |
+          test "$NATIVE_RESULT" = "success"
+          if [ "$BASE_GUARD_READY" = "true" ]; then
+            test "$FINAL_RESULT" = "success"
+            test "$NATIVE_VERIFIED" = "true"
+          else
+            test "$BASE_GUARD_READY" = "false"
+          fi
+
   storefront-webapp-validation-context:
     name: Storefront Webapp Validation Context
-    needs: [harness-validation, athena-webapp-validation]
+    needs:
+      [
+        harness-validation,
+        athena-webapp-validation,
+        affected-validation-qualification,
+        affected-validation-final,
+      ]
     if: always()
     runs-on: ubuntu-latest
 
     steps:
       - name: Confirm consolidated storefront validation coverage
+        if: needs.affected-validation-qualification.outputs.base_guard_ready != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -339,3 +637,19 @@ jobs:
           fi
 
           echo "Storefront tests are covered by Harness and Architecture Validation; builds are covered by Athena and Storefront Webapp Validation."
+
+      - name: Confirm complete native qualification
+        if: github.event_name == 'workflow_dispatch' && inputs.validation_mode == 'affected-qualification'
+        env:
+          NATIVE_RESULT: ${{ needs.affected-validation-qualification.result }}
+          BASE_GUARD_READY: ${{ needs.affected-validation-qualification.outputs.base_guard_ready }}
+          FINAL_RESULT: ${{ needs.affected-validation-final.result }}
+          NATIVE_VERIFIED: ${{ needs.affected-validation-final.outputs.verified }}
+        run: |
+          test "$NATIVE_RESULT" = "success"
+          if [ "$BASE_GUARD_READY" = "true" ]; then
+            test "$FINAL_RESULT" = "success"
+            test "$NATIVE_VERIFIED" = "true"
+          else
+            test "$BASE_GUARD_READY" = "false"
+          fi

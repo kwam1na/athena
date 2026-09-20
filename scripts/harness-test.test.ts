@@ -1,4 +1,11 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -42,19 +49,31 @@ function runGit(rootDir: string, ...args: string[]) {
 
 afterEach(async () => {
   await Promise.all(
-    tempRoots.splice(0).map((rootDir) =>
-      rm(rootDir, { recursive: true, force: true })
-    )
+    tempRoots
+      .splice(0)
+      .map((rootDir) => rm(rootDir, { recursive: true, force: true })),
   );
 });
 
 describe("collectHarnessTestTargets", () => {
   it("collects repo-root scripts/*.test.ts files as absolute paths", async () => {
     const rootDir = await createFixtureRoot();
-    await write("scripts/harness-audit.test.ts", "test('a', () => {});\n", rootDir);
-    await write("scripts/pre-push-review.test.ts", "test('b', () => {});\n", rootDir);
+    await write(
+      "scripts/harness-audit.test.ts",
+      "test('a', () => {});\n",
+      rootDir,
+    );
+    await write(
+      "scripts/pre-push-review.test.ts",
+      "test('b', () => {});\n",
+      rootDir,
+    );
     await write("scripts/harness-review.ts", "export {};\n", rootDir);
-    await write("scripts/nested/ignored.test.ts", "test('c', () => {});\n", rootDir);
+    await write(
+      "scripts/nested/ignored.test.ts",
+      "test('c', () => {});\n",
+      rootDir,
+    );
 
     await expect(collectHarnessTestTargets(rootDir)).resolves.toEqual([
       path.join(rootDir, "scripts", "harness-audit.test.ts"),
@@ -69,27 +88,31 @@ describe("collectHarnessTestTargets", () => {
     await write("scripts/not-a-test.ts", "export {};\n", rootDir);
 
     await expect(collectHarnessTestTargets(rootDir)).resolves.toEqual(
-      collectRootScriptTestFiles(rootDir)
+      collectRootScriptTestFiles(rootDir),
     );
   });
 
   it("ignores test files in cloned worktree trees", async () => {
     const rootDir = await createFixtureRoot();
-    await write("scripts/harness-audit.test.ts", "test('root', () => {});\n", rootDir);
+    await write(
+      "scripts/harness-audit.test.ts",
+      "test('root', () => {});\n",
+      rootDir,
+    );
     await write(
       ".worktrees/clone-a/scripts/harness-audit.test.ts",
       "test('clone-a', () => {});\n",
-      rootDir
+      rootDir,
     );
     await write(
       "worktrees/clone-b/scripts/harness-audit.test.ts",
       "test('clone-b', () => {});\n",
-      rootDir
+      rootDir,
     );
     await write(
       "packages/.claude/worktrees/clone-c/scripts/harness-audit.test.ts",
       "test('clone-c', () => {});\n",
-      rootDir
+      rootDir,
     );
 
     await expect(collectHarnessTestTargets(rootDir)).resolves.toEqual([
@@ -99,6 +122,126 @@ describe("collectHarnessTestTargets", () => {
 });
 
 describe("runHarnessTest", () => {
+  it("does not allow passthrough arguments to broaden explicit membership", async () => {
+    const rootDir = await createFixtureRoot();
+    await write("scripts/selected.test.ts", "test('a', () => {});", rootDir);
+    let spawned = false;
+    await expect(
+      runHarnessTest(rootDir, {
+        selectedFiles: ["scripts/selected.test.ts"],
+        passthroughArgs: ["scripts/unrelated.test.ts"],
+        spawn: () => {
+          spawned = true;
+          return { exited: Promise.resolve(0) };
+        },
+      }),
+    ).rejects.toMatchObject({
+      blockers: [{ code: "harness_test_selection_invalid" }],
+    });
+    expect(spawned).toBe(false);
+  });
+
+  it("does not execute an unrelated failing test in a real selected run", async () => {
+    const rootDir = await createFixtureRoot();
+    await write(
+      "scripts/selected.test.ts",
+      "import { test, expect } from 'bun:test'; test('selected', () => expect(true).toBe(true));",
+      rootDir,
+    );
+    await write(
+      "scripts/unrelated.test.ts",
+      "throw new Error('unrelated test executed');",
+      rootDir,
+    );
+    await expect(
+      runHarnessTest(rootDir, {
+        selectedFiles: ["scripts/selected.test.ts"],
+        passthroughArgs: [],
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("refuses a symlink pretending to be a member of the root suite", async () => {
+    const rootDir = await createFixtureRoot();
+    await write("scripts/regular.test.ts", "test('a', () => {});", rootDir);
+    await symlink(
+      "regular.test.ts",
+      path.join(rootDir, "scripts/linked.test.ts"),
+    );
+    await expect(
+      runHarnessTest(rootDir, {
+        selectedFiles: ["scripts/linked.test.ts"],
+        dryRun: true,
+      }),
+    ).rejects.toMatchObject({
+      blockers: [{ code: "harness_test_selection_invalid" }],
+    });
+  });
+
+  it("executes only explicit root-test membership, sorted and deduplicated", async () => {
+    const rootDir = await createFixtureRoot();
+    for (const name of ["alpha", "beta", "unrelated"]) {
+      await write(
+        `scripts/${name}.test.ts`,
+        "test('fixture', () => {});\n",
+        rootDir,
+      );
+    }
+    let command: string[] = [];
+    await runHarnessTest(rootDir, {
+      selectedFiles: [
+        "scripts/beta.test.ts",
+        "scripts/alpha.test.ts",
+        "scripts/beta.test.ts",
+      ],
+      passthroughArgs: ["--timeout", "5000"],
+      spawn: (argv) => {
+        command = argv;
+        return { exited: Promise.resolve(0) };
+      },
+    });
+    expect(command).toEqual([
+      "bun",
+      "test",
+      path.join(rootDir, "scripts/alpha.test.ts"),
+      path.join(rootDir, "scripts/beta.test.ts"),
+      "--timeout",
+      "5000",
+    ]);
+  });
+
+  it.each([
+    [],
+    ["scripts/missing.test.ts"],
+    ["scripts/nested/other.test.ts"],
+    ["../outside.test.ts"],
+    ["/tmp/outside.test.ts"],
+  ])(
+    "refuses invalid explicit membership %j before spawning",
+    async (...files) => {
+      const rootDir = await createFixtureRoot();
+      await write("scripts/alpha.test.ts", "test('a', () => {});\n", rootDir);
+      await write(
+        "scripts/nested/other.test.ts",
+        "test('b', () => {});\n",
+        rootDir,
+      );
+      let spawned = false;
+      await expect(
+        runHarnessTest(rootDir, {
+          selectedFiles: files,
+          spawn: () => {
+            spawned = true;
+            return { exited: Promise.resolve(0) };
+          },
+        }),
+      ).rejects.toMatchObject({
+        blockers: [{ code: "harness_test_selection_invalid" }],
+      });
+      expect(spawned).toBe(false);
+    },
+  );
+
   it("keeps parent Git state unchanged while real fixture tests run under hook context", async () => {
     const parentRoot = await createFixtureRoot();
     runGit(parentRoot, "init", "--initial-branch=main");
@@ -185,7 +328,11 @@ describe("runHarnessTest", () => {
 
   it("removes inherited Git repository context from the bun test process", async () => {
     const rootDir = await createFixtureRoot();
-    await write("scripts/harness-audit.test.ts", "test('root', () => {});\n", rootDir);
+    await write(
+      "scripts/harness-audit.test.ts",
+      "test('root', () => {});\n",
+      rootDir,
+    );
 
     const originalGitDir = process.env.GIT_DIR;
     const originalGitWorkTree = process.env.GIT_WORK_TREE;
@@ -223,11 +370,15 @@ describe("runHarnessTest", () => {
 
   it("supports --dry-run selection checks without invoking bun test", async () => {
     const rootDir = await createFixtureRoot();
-    await write("scripts/harness-audit.test.ts", "test('root', () => {});\n", rootDir);
+    await write(
+      "scripts/harness-audit.test.ts",
+      "test('root', () => {});\n",
+      rootDir,
+    );
     await write(
       ".worktrees/clone-a/scripts/harness-audit.test.ts",
       "test('clone', () => {});\n",
-      rootDir
+      rootDir,
     );
 
     const logLines: string[] = [];
@@ -243,20 +394,54 @@ describe("runHarnessTest", () => {
             exited: Promise.resolve(0),
           };
         },
-      })
+      }),
     ).resolves.toBeUndefined();
 
     expect(spawned).toBe(false);
-    expect(logLines).toContain("[harness:test] Selected repo-root script tests:");
-    expect(logLines).toContain(path.join(rootDir, "scripts", "harness-audit.test.ts"));
-    expect(logLines.join("\n")).not.toContain(`${path.sep}.worktrees${path.sep}`);
+    expect(logLines).toContain(
+      "[harness:test] Selected repo-root script tests:",
+    );
+    expect(logLines).toContain(
+      path.join(rootDir, "scripts", "harness-audit.test.ts"),
+    );
+    expect(logLines.join("\n")).not.toContain(
+      `${path.sep}.worktrees${path.sep}`,
+    );
   });
 });
 
 describe("parseHarnessTestCliArgs", () => {
+  it("separates repeated test membership from runner arguments after --", () => {
+    expect(
+      parseHarnessTestCliArgs([
+        "--test-file",
+        "scripts/alpha.test.ts",
+        "--test-file",
+        "scripts/beta.test.ts",
+        "--",
+        "--timeout",
+        "5000",
+      ]),
+    ).toEqual({
+      dryRun: false,
+      selectedFiles: ["scripts/alpha.test.ts", "scripts/beta.test.ts"],
+      passthroughArgs: ["--timeout", "5000"],
+    });
+  });
+
+  it("refuses --test-file without a value", () => {
+    expect(() => parseHarnessTestCliArgs(["--test-file"])).toThrow();
+  });
+
   it("peels off --dry-run and preserves passthrough bun test args", () => {
     expect(
-      parseHarnessTestCliArgs(["--dry-run", "--reporter", "dot", "--timeout", "5000"])
+      parseHarnessTestCliArgs([
+        "--dry-run",
+        "--reporter",
+        "dot",
+        "--timeout",
+        "5000",
+      ]),
     ).toEqual({
       dryRun: true,
       passthroughArgs: ["--reporter", "dot", "--timeout", "5000"],

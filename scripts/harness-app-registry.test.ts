@@ -12,6 +12,25 @@ import harnessConfig from "../harness.config";
 import { collectCanonicalValidationRegistry } from "./harness-repo-validation";
 import { buildValidationPlan } from "./harness-validation-plan";
 
+it("keeps authored full-health profiles unnormalized without source characterization", () => {
+  const plan = buildValidationPlan(
+    collectCanonicalValidationRegistry([]),
+    [],
+    "full-health",
+  );
+  expect(
+    plan.checks.some((check) => check.profile === "packages/athena-webapp:unit"),
+  ).toBe(true);
+  expect(
+    plan.checks.some(
+      (check) => check.profile === "packages/athena-webapp:fallback-suite",
+    ),
+  ).toBe(true);
+  expect(
+    plan.checks.every((check) => check.ordinaryFullSuite === undefined),
+  ).toBe(true);
+});
+
 describe("authored affected runtime relationships", () => {
   it("selects a registered router consumer even before generated route imports are refreshed", () => {
     const root = "packages/athena-webapp";

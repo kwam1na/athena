@@ -6,7 +6,9 @@ import path from "node:path";
 // commands and different configs remain separate executions. This is transient
 // bookkeeping inside one provider invocation, never portable gate evidence.
 const COVERAGE_COMMAND = "bun scripts/coverage-toolchain-parity.ts --repair && bun run --filter '@athena/webapp' test:coverage && bun run --filter '@athena/storefront-webapp' test:coverage && bun run test:coverage:scripts && bun scripts/coverage-summary.ts";
-const QUALIFIED_CONFIG = "689ad77112acfa25f3042ee33fbefeaa502b40f067fffde58a196800b1e8a556";
+// The qualified config relocates Vitest results to .cache while preserving the
+// complete ordinary-suite membership and coverage settings. Keep the exact pin.
+const QUALIFIED_CONFIG = "9f4054cddededa466de627a6d8444ef1f85330d1defaec49df60105ebbfaca14";
 const WEBAPP = "packages/athena-webapp";
 const digest = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
 

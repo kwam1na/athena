@@ -1443,6 +1443,12 @@ export type CanonicalValidationCheck = {
   absentInputs: string[];
   prerequisites: string[];
   supersedes: Array<{ checkId: string; profile: string; reason: string }>;
+  /** Emitted only by the characterized operator full-suite normalization.
+   * This is selection metadata, never passing execution or health evidence. */
+  ordinaryFullSuite?: {
+    contract: "athena-operator-full-unit/1";
+    coveredProfiles: Array<{ checkId: string; profile: string }>;
+  };
 };
 
 export type CanonicalValidationSurface = {

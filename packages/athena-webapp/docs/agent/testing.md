@@ -1,5 +1,17 @@
 # Athena Webapp Testing
 
+Affected validation is currently opt-in qualification; legacy delivery validation
+remains the default. Follow the [qualification guide](../../../../docs/harness.md#affected-validation-qualification)
+for exact membership, conservative fallbacks, profiles, and native evidence.
+Only this package's qualified typecheck uses `athena-typecheck-none`; unit, asset
+build, browser, and other checks retain their declared full Git context. A
+storefront typecheck still includes its Athena source dependencies. Asset builds
+require the corresponding typecheck; `build` continues to run both. Unknown
+consumer or runner behavior expands validation instead of silently omitting it.
+Focused slices do not establish full-health aggregate floors, and a plan alone
+cannot establish a pass or evidence reuse. Merge-ready work still requires root
+`bun run pr:athena` and the mandated review sequence.
+
 Use the package commands in this guide for focused iteration and diagnosis. Once a branch is merge-ready, run `bun run pr:athena` from the repository root before any independently assembled broad suite. Its ordering intentionally checks inexpensive prerequisites such as delivery documentation before coverage and other expensive validation, then records proof for pre-push reuse.
 
 Use the repo-root harness commands together:

@@ -3,6 +3,8 @@ import path from "path";
 import { athenaDocsContentPlugin } from "./vite-docs-content-plugin";
 
 export default defineConfig({
+  // Test-result caches are outputs, not mutations of installed dependencies.
+  cacheDir: "./.cache",
   plugins: [athenaDocsContentPlugin()],
   test: {
     setupFiles: "./vitest.setup.ts",

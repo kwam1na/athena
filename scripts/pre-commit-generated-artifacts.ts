@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
 import { writeGeneratedHarnessDocs } from "./harness-generate";
+import { VALIDATION_HEALTH_INVENTORY_PATH } from "./harness-validation-health-inventory";
 import { TRACKED_GRAPHIFY_ARTIFACTS } from "./graphify-check";
 import { runGraphifyRebuild } from "./graphify-rebuild";
 import {
@@ -12,6 +13,7 @@ import {
 } from "./agent-sdk-generate";
 
 const TRACKED_GENERATED_HARNESS_DOCS = [
+  VALIDATION_HEALTH_INVENTORY_PATH,
   ...new Set(
     HARNESS_APP_REGISTRY.flatMap((app) => app.harnessDocs.generatedDocs)
   ),

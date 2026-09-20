@@ -73,8 +73,8 @@
       ],
       "checks": [
         "athena.check.008d93fdb515038d",
-        "athena.check.6cc612707b6d6a15",
-        "athena.check.c86b0d30abcdc9c5",
+        "athena.check.08303aea16b532ce",
+        "athena.check.6e6ee358586b62fb",
         "storefront.route-runtime-build.check-0"
       ],
       "reason": "Use this when the Vite browser bootstrap, package manifest, generated router state, or TypeScript/build wiring changes. `bunfig.toml` only preloads the repo-root `bun test` runner guard, so a change there must still leave the package Vitest suite running normally."
@@ -88,7 +88,7 @@
       ],
       "checks": [
         "athena.check.008d93fdb515038d",
-        "athena.check.6cc612707b6d6a15",
+        "athena.check.08303aea16b532ce",
         "storefront.shared-lib-api-wrapper.check-0"
       ],
       "reason": "These surfaces fan out widely across the app, so pair the default suite with a typecheck when shared helpers change."
@@ -156,6 +156,32 @@
         "bun.lockb",
         "bunfig.toml",
         "package.json",
+        "scripts/harness-app-registry.ts",
+        "scripts/harness-repo-validation.ts",
+        "scripts/harness-validation-impact.ts",
+        "scripts/harness-validation-plan.ts"
+      ],
+      "absentInputs": [],
+      "prerequisites": [],
+      "supersedes": []
+    },
+    {
+      "id": "athena.check.08303aea16b532ce",
+      "argv": [
+        "bun",
+        "run",
+        "typecheck"
+      ],
+      "cwd": "packages/storefront-webapp",
+      "profile": "packages/storefront-webapp:package-types",
+      "membership": [],
+      "inputs": [
+        "bun.lockb",
+        "bunfig.toml",
+        "package.json",
+        "packages/storefront-webapp/package.json",
+        "packages/storefront-webapp/tsconfig.json",
+        "packages/storefront-webapp/vitest.config.ts",
         "scripts/harness-app-registry.ts",
         "scripts/harness-repo-validation.ts",
         "scripts/harness-validation-impact.ts",
@@ -258,26 +284,31 @@
       "supersedes": []
     },
     {
-      "id": "athena.check.6cc612707b6d6a15",
+      "id": "athena.check.6e6ee358586b62fb",
       "argv": [
-        "/bin/sh",
-        "-c",
-        "bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json"
+        "bun",
+        "run",
+        "build:assets"
       ],
-      "cwd": ".",
-      "profile": "packages/storefront-webapp:command",
+      "cwd": "packages/storefront-webapp",
+      "profile": "packages/storefront-webapp:package-build",
       "membership": [],
       "inputs": [
         "bun.lockb",
         "bunfig.toml",
         "package.json",
+        "packages/storefront-webapp/package.json",
+        "packages/storefront-webapp/tsconfig.json",
+        "packages/storefront-webapp/vitest.config.ts",
         "scripts/harness-app-registry.ts",
         "scripts/harness-repo-validation.ts",
         "scripts/harness-validation-impact.ts",
         "scripts/harness-validation-plan.ts"
       ],
       "absentInputs": [],
-      "prerequisites": [],
+      "prerequisites": [
+        "athena.check.08303aea16b532ce"
+      ],
       "supersedes": []
     },
     {
@@ -312,29 +343,6 @@
       ],
       "cwd": ".",
       "profile": ".:aggregate-coverage",
-      "membership": [],
-      "inputs": [
-        "bun.lockb",
-        "bunfig.toml",
-        "package.json",
-        "scripts/harness-app-registry.ts",
-        "scripts/harness-repo-validation.ts",
-        "scripts/harness-validation-impact.ts",
-        "scripts/harness-validation-plan.ts"
-      ],
-      "absentInputs": [],
-      "prerequisites": [],
-      "supersedes": []
-    },
-    {
-      "id": "athena.check.c86b0d30abcdc9c5",
-      "argv": [
-        "/bin/sh",
-        "-c",
-        "bun run --filter '@athena/storefront-webapp' build"
-      ],
-      "cwd": ".",
-      "profile": "packages/storefront-webapp:command",
       "membership": [],
       "inputs": [
         "bun.lockb",

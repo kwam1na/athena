@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { HarnessBlockedError } from "./harness-blockers";
 import { runHarnessCheck, validateHarnessDocs } from "./harness-check";
 import { writeGeneratedHarnessDocs } from "./harness-generate";
+import { VALIDATION_HEALTH_INVENTORY_PATH } from "./harness-validation-health-inventory";
 
 const REQUIRED_INDEX_LINKS = [
   "./architecture.md",
@@ -820,6 +821,16 @@ describe("validateHarnessDocs", () => {
     await expect(validateHarnessDocs(rootDir)).resolves.toContain(
       "Stale generated harness doc: packages/storefront-webapp/docs/agent/route-index.md"
     );
+  });
+
+  it("rejects deletion of the generated trusted health inventory", async () => {
+    const rootDir = await createFixtureRepo();
+    const missing = `Missing generated harness doc: ${VALIDATION_HEALTH_INVENTORY_PATH}`;
+    await expect(validateHarnessDocs(rootDir)).resolves.not.toContain(missing);
+    await rm(path.join(rootDir, VALIDATION_HEALTH_INVENTORY_PATH));
+    await expect(validateHarnessDocs(rootDir)).resolves.toContain(missing);
+    await writeGeneratedHarnessDocs(rootDir);
+    await expect(validateHarnessDocs(rootDir)).resolves.not.toContain(missing);
   });
 
   it("treats validation-map.json as a generated harness artifact", async () => {

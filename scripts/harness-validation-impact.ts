@@ -1,6 +1,7 @@
 import { posix } from "node:path";
 import { createHash } from "node:crypto";
 import ts from "typescript";
+import { OPERATOR_FULL_UNIT_CONTRACT } from "./harness-repo-validation";
 import type {
   CanonicalValidationCheck,
   CanonicalValidationRegistry,
@@ -14,6 +15,11 @@ import {
 export type ValidationSnapshots = {
   base: Record<string, string>;
   candidate: Record<string, string>;
+  /** Native-qualified symlink entry -> normalized immediate target, not source text. */
+  links?: {
+    base: Record<string, string>;
+    candidate: Record<string, string>;
+  };
 };
 const sorted = (values: Iterable<string>) => [...new Set(values)].sort();
 const contains = (prefix: string, path: string) =>
@@ -157,19 +163,97 @@ function validateSnapshots(snapshots: ValidationSnapshots) {
         "Invalid snapshot: expected repository-relative paths and source text values.",
       );
   }
+  if (snapshots.links !== undefined) {
+    if (
+      !snapshots.links ||
+      typeof snapshots.links !== "object" ||
+      Array.isArray(snapshots.links)
+    )
+      throw new ValidationPlanError("malformed-map", "Invalid snapshot links.");
+    for (const side of ["base", "candidate"] as const) {
+      if (
+        !snapshots.links[side] ||
+        typeof snapshots.links[side] !== "object" ||
+        Array.isArray(snapshots.links[side])
+      )
+        throw new ValidationPlanError(
+          "malformed-map",
+          "Invalid snapshot link map.",
+        );
+      sourcePaths(snapshots[side], snapshots.links[side]);
+    }
+  }
+}
+
+/** Resolves only the pinned inventory. No ambient filesystem lookup is allowed. */
+function sourcePaths(
+  files: Record<string, string>,
+  links: Record<string, string> = {},
+) {
+  const malformed = (message: string): never => {
+    throw new ValidationPlanError("malformed-map", message);
+  };
+  if (!links || typeof links !== "object" || Array.isArray(links))
+    malformed("Invalid snapshot link map.");
+  const names = Object.keys(links).sort((a, b) => b.length - a.length);
+  for (const [path, target] of Object.entries(links)) {
+    if (
+      !validPath(path) ||
+      path === "." ||
+      posix.normalize(path) !== path ||
+      !Object.hasOwn(files, path) ||
+      !validPath(target) ||
+      posix.normalize(target) !== target
+    )
+      malformed("Invalid snapshot link entry or target.");
+    if (Object.keys(files).some((file) => file.startsWith(`${path}/`)))
+      malformed(`Snapshot inventories descendants beneath a link: ${path}`);
+  }
+  const resolve = (path: string) => {
+    const crossed: string[] = [];
+    let physical = path;
+    for (;;) {
+      const link = names.find((name) => contains(name, physical));
+      if (!link) return { physical, crossed };
+      if (crossed.includes(link)) malformed(`Cyclic snapshot link: ${link}`);
+      crossed.push(link);
+      physical = posix.join(links[link], physical.slice(link.length));
+      if (!validPath(physical))
+        malformed(`Snapshot link escapes inventory: ${link}`);
+    }
+  };
+  const exists = (path: string) =>
+    Object.hasOwn(files, path) ||
+    Object.keys(files).some((file) => contains(path, file));
+  for (const name of names) {
+    const target = resolve(name).physical;
+    if (!exists(target)) malformed(`Dangling snapshot link: ${name}`);
+  }
+  return { resolve, names };
 }
 const connect = (graph: Graph, from: string, to: string) => {
   const targets = graph.get(from) ?? new Set<string>();
   targets.add(to);
   graph.set(from, targets);
 };
-function dependencies(files: Record<string, string>): {
+function dependencies(
+  files: Record<string, string>,
+  links: Record<string, string> = {},
+): {
   graph: Graph;
   data: Graph;
   unknown: Map<string, Map<string, string[] | null>>;
 } {
   const graph: Graph = new Map();
   const data: Graph = new Map();
+  const linkPaths = sourcePaths(files, links);
+  // Preserve every real link entry in forward input and reverse impact closure.
+  // Source is parsed only at its physical path below.
+  for (const link of linkPaths.names) {
+    const { physical, crossed } = linkPaths.resolve(link);
+    for (const input of crossed.slice(1)) connect(graph, link, input);
+    if (Object.hasOwn(files, physical)) connect(graph, link, physical);
+  }
   const unknown = new Map<string, Map<string, string[] | null>>();
   const mark = (
     file: string,
@@ -198,7 +282,11 @@ function dependencies(files: Record<string, string>): {
   for (const [path, text] of Object.entries(files))
     if (posix.basename(path) === "package.json") {
       try {
-        const manifest = JSON.parse(text);
+        const manifest = JSON.parse(
+          Object.hasOwn(links, path)
+            ? files[linkPaths.resolve(path).physical]
+            : text,
+        );
         if (
           !manifest ||
           typeof manifest !== "object" ||
@@ -217,11 +305,29 @@ function dependencies(files: Record<string, string>): {
     [...manifests.keys()]
       .filter((root) => root === "." || contains(root, file))
       .sort((a, b) => b.length - a.length)[0];
-  const findFile = (path: string) => {
+  const linkedConfigurations = new Map<string, string[]>();
+  const configurationLinks = (root: string) => {
+    if (!linkedConfigurations.has(root)) {
+      const inputs = configurationInputs(files, root).flatMap(
+        (configuration) => {
+          const { physical, crossed } = linkPaths.resolve(configuration);
+          return crossed.length
+            ? [
+                ...crossed,
+                ...(Object.hasOwn(files, physical) ? [physical] : []),
+              ]
+            : [];
+        },
+      );
+      linkedConfigurations.set(root, sorted(inputs));
+    }
+    return linkedConfigurations.get(root)!;
+  };
+  const findFile = (path: string, consumer?: string, typeOnly = false) => {
     const withoutJs = /\.[cm]?jsx?$/.test(path)
       ? path.replace(/\.[cm]?jsx?$/, "")
       : path;
-    return [
+    for (const candidate of [
       path,
       ...[
         ".ts",
@@ -236,9 +342,19 @@ function dependencies(files: Record<string, string>): {
         "/index.tsx",
         "/index.js",
       ].map((suffix) => `${withoutJs}${suffix}`),
-    ].find((candidate) => Object.hasOwn(files, candidate));
+    ]) {
+      const { physical, crossed } = linkPaths.resolve(candidate);
+      if (!Object.hasOwn(files, physical) || Object.hasOwn(links, physical))
+        continue;
+      if (consumer)
+        for (const link of crossed)
+          connect(typeOnly ? data : graph, consumer, link);
+      return physical;
+    }
+    return undefined;
   };
   for (const [file, text] of Object.entries(files)) {
+    if (Object.hasOwn(links, file)) continue;
     if (/\.(?:vue|svelte|astro|mdx)$/.test(file))
       mark(file, "unqualified-source-loader");
     if (/\.(?:css|scss|sass|less)$/.test(file))
@@ -256,6 +372,8 @@ function dependencies(files: Record<string, string>): {
     )
       mark(file, "unparsed-source");
     const root = packageRoot(file);
+    for (const input of configurationLinks(root ?? "."))
+      connect(graph, file, input);
     const apiNames = new Set<string>();
     const convexFactories = new Set<string>();
     for (const statement of source.statements)
@@ -391,13 +509,13 @@ function dependencies(files: Record<string, string>): {
         const path = posix.normalize(posix.join(posix.dirname(file), clean));
         if (path.split("/").includes("node_modules")) return;
         local = true;
-        target = findFile(path);
+        target = findFile(path, file, typeOnly);
       } else {
         const configPath = root && posix.join(root, "tsconfig.json");
         if (configPath && Object.hasOwn(files, configPath)) {
           const parsed = ts.parseConfigFileTextToJson(
             configPath,
-            files[configPath],
+            files[linkPaths.resolve(configPath).physical],
           );
           if (
             parsed.error ||
@@ -454,11 +572,17 @@ function dependencies(files: Record<string, string>): {
                       replacement.replace("*", middle),
                     ),
                   ),
+                  file,
+                  typeOnly,
                 );
               }
           }
           if (!target && options.baseUrl !== undefined) {
-            target = findFile(posix.join(root!, options.baseUrl, clean));
+            target = findFile(
+              posix.join(root!, options.baseUrl, clean),
+              file,
+              typeOnly,
+            );
             if (target) local = true;
           }
         }
@@ -481,7 +605,11 @@ function dependencies(files: Record<string, string>): {
                   ? (manifest.exports as Record<string, unknown>)[subpath]
                   : undefined;
             if (typeof exported === "string" && exported.startsWith("./"))
-              target ??= findFile(posix.join(workspace, exported));
+              target ??= findFile(
+                posix.join(workspace, exported),
+                file,
+                typeOnly,
+              );
             else mark(file, "unqualified-workspace-export");
           }
       }
@@ -606,7 +734,8 @@ function dependencies(files: Record<string, string>): {
           ts.isImportDeclaration(node)
             ? Boolean(
                 node.importClause?.isTypeOnly ||
-                (node.importClause?.namedBindings &&
+                (!node.importClause?.name &&
+                  node.importClause?.namedBindings &&
                   ts.isNamedImports(node.importClause.namedBindings) &&
                   node.importClause.namedBindings.elements.length &&
                   node.importClause.namedBindings.elements.every(
@@ -672,7 +801,10 @@ function dependencies(files: Record<string, string>): {
           const reference = literalReference(node);
           const target =
             reference && reference.length >= 3 && root
-              ? findFile(`${root}/convex/${reference.slice(1, -1).join("/")}`)
+              ? findFile(
+                  `${root}/convex/${reference.slice(1, -1).join("/")}`,
+                  file,
+                )
               : undefined;
           if (target) {
             connect(graph, file, target);
@@ -714,6 +846,25 @@ function dependencies(files: Record<string, string>): {
             posix.join(posix.dirname(file), node.arguments[0].text),
           );
           const glob = new Bun.Glob(pattern);
+          const firstMagic = pattern.search(/[\*?\[\]{]/);
+          const beforeMagic = pattern.slice(0, firstMagic);
+          const literalPrefix =
+            firstMagic < 0
+              ? pattern
+              : beforeMagic.endsWith("/")
+                ? beforeMagic.slice(0, -1)
+                : posix.dirname(beforeMagic);
+          const linkedDirectories = linkPaths.names.filter(
+            (link) =>
+              !Object.hasOwn(files, linkPaths.resolve(link).physical) &&
+              (contains(link, literalPrefix) ||
+                contains(literalPrefix || ".", link)),
+          );
+          if (linkedDirectories.length) {
+            // Directory-glob expansion is runner-defined. Keep the named containing
+            // fallback instead of interpreting an empty virtual directory as no work.
+            mark(file, "unqualified-linked-glob");
+          }
           for (const target of Object.keys(files))
             if (glob.match(target)) connect(graph, file, target);
         } else mark(file, "unqualified-glob");
@@ -880,7 +1031,7 @@ function bindInputs(
 }
 
 /** Project conservative consumer selection into the existing canonical registry. */
-export function resolveValidationImpact(
+function resolveConsumerImpact(
   registry: CanonicalValidationRegistry,
   changes: ValidationChange[],
   snapshots: ValidationSnapshots,
@@ -956,8 +1107,11 @@ export function resolveValidationImpact(
   const publishing = registry.impact.relationships.filter(
     (contract) => contract.publishingChecks,
   );
-  const baseAnalysis = dependencies(snapshots.base),
-    candidateAnalysis = dependencies(snapshots.candidate);
+  const baseAnalysis = dependencies(snapshots.base, snapshots.links?.base),
+    candidateAnalysis = dependencies(
+      snapshots.candidate,
+      snapshots.links?.candidate,
+    );
   const baseGraph = baseAnalysis.graph,
     candidateGraph = candidateAnalysis.graph;
   const baseData = baseAnalysis.data,
@@ -1303,6 +1457,7 @@ export function resolveValidationImpact(
   };
   [...selected].forEach(require);
   const partitions = new Map<string, string[]>();
+  const publishingInputs = new Map<string[], boolean>();
   const inputCache = new Map<
     string,
     Pick<CanonicalValidationCheck, "inputs" | "absentInputs">
@@ -1349,7 +1504,14 @@ export function resolveValidationImpact(
         check.cwd,
         check.inputs,
         check.absentInputs,
-        members,
+        // bindInputs already seeds every candidate path inside these scopes.
+        // Such members cannot change its input closure; keep their actual
+        // membership on the returned check, but share this invocation's binding.
+        members.filter(
+          (member) =>
+            !Object.hasOwn(snapshots.candidate, member) ||
+            !scopes.some((scope) => contains(scope, member)),
+        ),
         scopes,
         broad,
       ]);
@@ -1375,29 +1537,56 @@ export function resolveValidationImpact(
     };
     if (!unitChecks.has(check.id) || !membership.length)
       return [bind(membership)];
-    const groups = new Map<boolean, CanonicalValidationCheck>();
+    // Accumulate each partition once instead of repeatedly sorting its growing
+    // input union for every member. Cached bindings share the same input arrays.
+    const groups = new Map<
+      boolean,
+      {
+        check: CanonicalValidationCheck;
+        membership: Set<string>;
+        inputs: Set<string>;
+        absentInputs: Set<string>;
+        bindings: Set<string[]>;
+      }
+    >();
     for (const member of membership) {
       const bound = bind([member]);
-      const publishes = [...bound.inputs, ...bound.absentInputs].some((path) =>
-        publishing.some((contract) =>
-          contract.inputs.some((prefix) => contains(prefix, path)),
-        ),
-      );
-      const previous = groups.get(publishes);
-      if (previous) {
-        previous.membership = sorted([...previous.membership, member]);
-        previous.inputs = sorted([...previous.inputs, ...bound.inputs]);
-        previous.absentInputs = sorted([
-          ...previous.absentInputs,
-          ...bound.absentInputs,
-        ]);
-      } else
-        groups.set(publishes, {
-          ...bound,
-          id: publishes ? `${check.id}.publishing` : check.id,
-        });
+      let publishes = publishingInputs.get(bound.inputs);
+      if (publishes === undefined) {
+        publishes = [...bound.inputs, ...bound.absentInputs].some((path) =>
+          publishing.some((contract) =>
+            contract.inputs.some((prefix) => contains(prefix, path)),
+          ),
+        );
+        publishingInputs.set(bound.inputs, publishes);
+      }
+      let group = groups.get(publishes);
+      if (!group) {
+        group = {
+          check: {
+            ...bound,
+            id: publishes ? `${check.id}.publishing` : check.id,
+          },
+          membership: new Set(),
+          inputs: new Set(),
+          absentInputs: new Set(),
+          bindings: new Set(),
+        };
+        groups.set(publishes, group);
+      }
+      group.membership.add(member);
+      if (!group.bindings.has(bound.inputs)) {
+        for (const path of bound.inputs) group.inputs.add(path);
+        for (const path of bound.absentInputs) group.absentInputs.add(path);
+        group.bindings.add(bound.inputs);
+      }
     }
-    const result = [...groups.values()];
+    const result = [...groups.values()].map((group) => ({
+      ...group.check,
+      membership: sorted(group.membership),
+      inputs: sorted(group.inputs),
+      absentInputs: sorted(group.absentInputs),
+    }));
     partitions.set(
       check.id,
       result.map((group) => group.id),
@@ -1440,7 +1629,179 @@ export function resolveValidationImpact(
       id: `affected.${index}`,
       pathPrefixes: [path],
       checks: sorted([...selected].flatMap((id) => partitions.get(id) ?? [id])),
-      reason: `Affected consumers across base and candidate: ${sorted(reasons).join("; ")}`,
+      // Every affected surface selects the same checks. Attach the complete
+      // shared diagnostics once; repeating them for every changed path makes
+      // each final check's reasons grow as changes times diagnostic count.
+      reason:
+        index === 0
+          ? `Affected consumers across base and candidate: ${sorted(reasons).join("; ")}`
+          : "Affected consumers across base and candidate (shared diagnostics: affected.0)",
     })),
+  };
+}
+
+/** Full fallback is the authored Bun execution, not an emulation of Bun's env in
+ * the exact-membership Node helper. Only a characterized complete ordinary suite
+ * may cover both obligations; narrowed runs retain their exact-membership guard.
+ */
+export function resolveValidationImpact(
+  registry: CanonicalValidationRegistry,
+  changes: ValidationChange[],
+  snapshots: ValidationSnapshots,
+  fullHealth = false,
+): CanonicalValidationRegistry {
+  const resolved = resolveConsumerImpact(
+    registry,
+    changes,
+    snapshots,
+    fullHealth,
+  );
+  const contract = OPERATOR_FULL_UNIT_CONTRACT;
+  const pkg = resolved.impact!.packages.find(
+    (item) => item.root === contract.root,
+  );
+  if (
+    !pkg ||
+    JSON.stringify(pkg.testPatterns) !== JSON.stringify([contract.testPattern])
+  )
+    return resolved;
+  for (const files of [snapshots.base, snapshots.candidate]) {
+    try {
+      const manifest = JSON.parse(files[`${contract.root}/package.json`]);
+      const rootManifest = JSON.parse(files["package.json"]);
+      if (
+        manifest.name !== contract.workspace ||
+        manifest.scripts?.test !== "vitest run --maxWorkers=4" ||
+        manifest.scripts?.pretest !== undefined ||
+        manifest.scripts?.posttest !== undefined ||
+        manifest.devDependencies?.vitest !== "4.1.11" ||
+        rootManifest.packageManager !== "bun@1.1.29"
+      )
+        return resolved;
+    } catch {
+      return resolved;
+    }
+    if (
+      Object.entries(contract.sources).some(
+        ([path, digest]) =>
+          files[path] === undefined ||
+          createHash("sha256").update(files[path]).digest("hex") !== digest,
+      )
+    )
+      return resolved;
+    // Alternative config/project discovery is not part of the characterized suite.
+    if (
+      Object.keys(files).some(
+        (path) =>
+          [".", contract.root].includes(posix.dirname(path)) &&
+          /^vitest[.](config|workspace|projects)[.]/.test(
+            posix.basename(path),
+          ) &&
+          path !== `${contract.root}/vitest.config.ts`,
+      )
+    )
+      return resolved;
+  }
+  const selected = new Set(
+    fullHealth
+      ? resolved.checks.map((c) => c.id)
+      : [
+          ...resolved.alwaysRequired,
+          ...resolved.surfaces.flatMap((surface) => surface.checks),
+        ],
+  );
+  const byId = new Map(resolved.checks.map((check) => [check.id, check]));
+  const require = (id: string) => {
+    for (const prerequisite of byId.get(id)!.prerequisites)
+      if (!selected.has(prerequisite)) {
+        selected.add(prerequisite);
+        require(prerequisite);
+      }
+  };
+  [...selected].forEach(require);
+  const fallback = resolved.checks.find(
+    (check) =>
+      selected.has(check.id) &&
+      pkg.fallbackChecks.includes(check.id) &&
+      check.profile === `${contract.root}:fallback-suite` &&
+      check.cwd === "." &&
+      JSON.stringify(check.argv) ===
+        JSON.stringify(["bun", "run", "--filter", contract.workspace, "test"]),
+  );
+  if (!fallback || fallback.membership.length) return resolved;
+  const membership = sorted(
+    Object.keys(snapshots.candidate).filter((path) =>
+      new Bun.Glob(contract.testPattern).match(path),
+    ),
+  );
+  if (
+    !membership.length ||
+    membership.some(
+      (path) =>
+        /\/(node_modules|[.]git)\//.test(path) ||
+        Object.hasOwn(snapshots.links?.candidate ?? {}, path),
+    )
+  )
+    return resolved;
+  const units = resolved.checks.filter(
+    (check) => selected.has(check.id) && pkg.unitChecks.includes(check.id),
+  );
+  const allMembers = new Set(membership);
+  if (
+    !units.length ||
+    units.some(
+      (check) =>
+        check.profile !== `${contract.root}:unit` ||
+        check.cwd !== contract.root ||
+        JSON.stringify(check.argv) !==
+          JSON.stringify(["bun", "run", "test", "--"]) ||
+        !check.membership.length ||
+        check.membership.some((path) => !allMembers.has(path)),
+    ) ||
+    JSON.stringify(sorted(units.flatMap((check) => check.membership))) !==
+      JSON.stringify(membership)
+  )
+    return resolved;
+  const group = [fallback, ...units];
+  const groupIds = new Set(group.map((check) => check.id));
+  // Do not absorb an obligation that another command needs to execute first.
+  if (
+    group.some((check) => check.supersedes.length) ||
+    resolved.checks.some(
+      (check) =>
+        check.prerequisites.some((id) => groupIds.has(id)) ||
+        check.supersedes.some((entry) => groupIds.has(entry.checkId)),
+    )
+  )
+    return resolved;
+  const execution = {
+    // Every normalized member carries the same complete declaration so strict
+    // grouping preserves both one execution and each original profile binding.
+    ordinaryFullSuite: {
+      contract: "athena-operator-full-unit/1" as const,
+      coveredProfiles: group
+        .map(({ id, profile }) => ({ checkId: id, profile }))
+        .sort((a, b) => a.checkId.localeCompare(b.checkId)),
+    },
+    argv: fallback.argv,
+    cwd: fallback.cwd,
+    profile: fallback.profile,
+    membership,
+    inputs: sorted(group.flatMap((check) => check.inputs)),
+    absentInputs: sorted(group.flatMap((check) => check.absentInputs)),
+    prerequisites: sorted(group.flatMap((check) => check.prerequisites)),
+  };
+  return {
+    ...resolved,
+    checks: resolved.checks.map((check) =>
+      groupIds.has(check.id) ? { ...check, ...execution } : check,
+    ),
+    impact: {
+      ...resolved.impact!,
+      packages: resolved.impact!.packages.map((item) => ({
+        ...item,
+        unitChecks: item.unitChecks.filter((id) => !groupIds.has(id)),
+      })),
+    },
   };
 }

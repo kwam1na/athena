@@ -4,6 +4,10 @@ import { runCli, type CliRuntime } from "../.agent-skills/current/runtime/cli-ap
 export { importHarnessConfig, wireRepo } from "../.agent-skills/current/runtime/cli-api.mjs";
 export type { CliRuntime } from "../.agent-skills/current/runtime/cli-api.mjs";
 
+// Bun's Process declaration narrows removal overloads to memoryPressure;
+// the inherited EventEmitter API also owns signal listener removal.
+const signalEvents: NodeJS.EventEmitter = process;
+
 export function installDeliveryProductSigquitHandler(
   platform: NodeJS.Platform,
   handler: () => void,
@@ -38,13 +42,13 @@ export async function runDeliveryProduct(
       process.platform,
       quit,
       (signal, listener) => { process.on(signal, listener); },
-      (signal, listener) => { process.removeListener(signal, listener); },
+      (signal, listener) => { signalEvents.removeListener(signal, listener); },
     );
     try { const code = await child.exited; return interrupted ?? code; }
     finally {
-      process.removeListener("SIGINT", interrupt);
-      process.removeListener("SIGTERM", terminate);
-      process.removeListener("SIGHUP", hangup);
+      signalEvents.removeListener("SIGINT", interrupt);
+      signalEvents.removeListener("SIGTERM", terminate);
+      signalEvents.removeListener("SIGHUP", hangup);
       removeQuit();
     }
   }
@@ -63,7 +67,7 @@ export async function runDeliveryProduct(
       signal: controller.signal,
       ...overrides,
     });
-  } finally { process.removeListener("SIGINT", interrupt); }
+  } finally { signalEvents.removeListener("SIGINT", interrupt); }
 }
 
 if (import.meta.main) process.exitCode = await runDeliveryProduct(Bun.argv.slice(2));

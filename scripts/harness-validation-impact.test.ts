@@ -73,6 +73,227 @@ const members = (plan: ReturnType<typeof buildValidationPlan>) =>
     .flatMap((check) => check.membership);
 
 describe("affected consumer qualification", () => {
+  const linkedFixture = () => {
+    const base = {
+      ...snapshot(),
+      [file("leaf.ts")]: "\u0000symlink:real/module.ts",
+      [file("real/module.ts")]: 'export { value } from "./dependency";',
+      [file("real/dependency.ts")]: "export const value = 1;",
+      [file("dependency.ts")]: "export const value = 0;",
+      [file("two.test.ts")]: 'import { value } from "./real/dependency";',
+    };
+    const links = { [file("leaf.ts")]: file("real/module.ts") };
+    return { base, links };
+  };
+
+  it("resolves symlink imports at the physical module despite an alias-directory decoy", () => {
+    const { base, links } = linkedFixture();
+    const plan = buildValidationPlan(
+      registry(),
+      [{ path: file("real/dependency.ts"), status: "modified" }],
+      "comparison",
+      {
+        base,
+        candidate: {
+          ...base,
+          [file("real/dependency.ts")]: "export const value = 2;",
+        },
+        links: { base: links, candidate: links },
+      },
+    );
+    expect(members(plan)).toEqual([file("one.test.ts"), file("two.test.ts")]);
+    const inputs = plan.checks.find((check) => check.id === unit)!.inputs;
+    expect(inputs).toContain(file("leaf.ts"));
+    expect(inputs).toContain(file("real/module.ts"));
+    expect(inputs).toContain(file("real/dependency.ts"));
+    expect(inputs).not.toContain(file("dependency.ts"));
+  });
+
+  it("accepts a physical target edit without inventing a semantic alias edit", () => {
+    const { base, links } = linkedFixture();
+    const plan = buildValidationPlan(
+      registry(),
+      [{ path: file("real/module.ts"), status: "modified" }],
+      "comparison",
+      {
+        base,
+        candidate: {
+          ...base,
+          [file("real/module.ts")]:
+            'export { value } from "./dependency"; // edit',
+        },
+        links: { base: links, candidate: links },
+      },
+    );
+    expect(members(plan)).toEqual([file("one.test.ts")]);
+    expect(plan.changes).toEqual([
+      { path: file("real/module.ts"), status: "modified" },
+    ]);
+  });
+
+  it("retains intermediate link dependencies when a downstream link retargets", () => {
+    const { base, links } = linkedFixture();
+    base[file("leaf.ts")] = "\u0000symlink:middle.ts";
+    base[file("middle.ts")] = "\u0000symlink:real/module.ts";
+    base[file("other/module.ts")] = base[file("real/module.ts")];
+    base[file("other/dependency.ts")] = "export const value=9;";
+    const before = {
+      ...links,
+      [file("leaf.ts")]: file("middle.ts"),
+      [file("middle.ts")]: file("real/module.ts"),
+    };
+    const after = { ...before, [file("middle.ts")]: file("other/module.ts") };
+    const plan = buildValidationPlan(
+      registry(),
+      [{ path: file("middle.ts"), status: "modified" }],
+      "comparison",
+      {
+        base,
+        candidate: {
+          ...base,
+          [file("middle.ts")]: "\u0000symlink:other/module.ts",
+        },
+        links: { base: before, candidate: after },
+      },
+    );
+    expect(members(plan)).toEqual([file("one.test.ts")]);
+    const inputs = plan.checks.find((check) => check.id === unit)!.inputs;
+    for (const path of [
+      "leaf.ts",
+      "middle.ts",
+      "other/module.ts",
+      "other/dependency.ts",
+      "real/module.ts",
+      "real/dependency.ts",
+    ])
+      expect(inputs).toContain(file(path));
+  });
+
+  it("resolves directory link children and retains equal-content retarget effects", () => {
+    const base = {
+      ...snapshot(),
+      [file("linked")]: "\u0000symlink:first",
+      [file("one.test.ts")]: 'import {value} from "./linked/module";',
+      [file("first/module.ts")]: 'export {value} from "./dependency";',
+      [file("second/module.ts")]: 'export {value} from "./dependency";',
+      [file("first/dependency.ts")]: "export const value=1;",
+      [file("second/dependency.ts")]: "export const value=2;",
+    };
+    const before = { [file("linked")]: file("first") },
+      after = { [file("linked")]: file("second") };
+    const plan = buildValidationPlan(
+      registry(),
+      [{ path: file("linked"), status: "modified" }],
+      "comparison",
+      {
+        base,
+        candidate: { ...base, [file("linked")]: "\u0000symlink:second" },
+        links: { base: before, candidate: after },
+      },
+    );
+    expect(members(plan)).toEqual([file("one.test.ts")]);
+    const check = plan.checks.find((check) => check.id === unit)!;
+    for (const path of [
+      "linked",
+      "first/module.ts",
+      "first/dependency.ts",
+      "second/module.ts",
+      "second/dependency.ts",
+    ])
+      expect(check.inputs).toContain(file(path));
+    expect(check.absentInputs).not.toContain(file("first"));
+    expect(check.absentInputs).not.toContain(file("second"));
+  });
+
+  it("binds linked JSON and linked configuration to physical inputs without parsing link text", () => {
+    const base = {
+      ...snapshot(),
+      [file("package.json")]: "\u0000symlink:config/manifest.json",
+      [file("config/manifest.json")]: '{"name":"example"}',
+      [file("data.json")]: "\u0000symlink:config/data.json",
+      [file("config/data.json")]: '{"value":1}',
+      [file("one.test.ts")]: 'import data from "./data.json";',
+    };
+    const links = {
+      [file("package.json")]: file("config/manifest.json"),
+      [file("data.json")]: file("config/data.json"),
+    };
+    const plan = buildValidationPlan(
+      registry(),
+      [{ path: file("config/data.json"), status: "modified" }],
+      "comparison",
+      {
+        base,
+        candidate: { ...base, [file("config/data.json")]: '{"value":2}' },
+        links: { base: links, candidate: links },
+      },
+    );
+    expect(members(plan)).toEqual([file("one.test.ts")]);
+    expect(plan.checks.find((check) => check.id === unit)!.inputs).toContain(
+      file("config/manifest.json"),
+    );
+  });
+
+  for (const pattern of ["./linked/**/*.ts", "./link*/*.ts", "./**/*.ts"])
+    it(`keeps a named containing fallback for a directory glob through a link: ${pattern}`, () => {
+      const base = {
+        ...snapshot(),
+        [file("linked")]: "\u0000symlink:real",
+        [file("real/value.ts")]: "export const value=1;",
+        [file("one.test.ts")]:
+          `const modules=import.meta.glob(${JSON.stringify(pattern)});`,
+        [file("two.test.ts")]: 'import {value} from "./real/value";',
+      };
+      const links = { [file("linked")]: file("real") };
+      const plan = buildValidationPlan(
+        registry(),
+        [{ path: file("real/value.ts"), status: "modified" }],
+        "comparison",
+        {
+          base,
+          candidate: {
+            ...base,
+            [file("real/value.ts")]: "export const value=2;",
+          },
+          links: { base: links, candidate: links },
+        },
+      );
+      expect(members(plan)).toEqual([file("one.test.ts"), file("two.test.ts")]);
+      expect(plan.checks.flatMap((check) => check.reasons).join(" ")).toContain(
+        "unqualified-linked-glob",
+      );
+    });
+
+  for (const kind of [
+    "missing-key",
+    "outside",
+    "cycle",
+    "dangling",
+    "descendant",
+    "missing-side",
+  ])
+    it(`rejects invalid native-qualified link maps: ${kind}`, () => {
+      const { base, links } = linkedFixture();
+      if (kind === "missing-key")
+        links[file("missing.ts")] = file("real/module.ts");
+      if (kind === "outside") links[file("leaf.ts")] = "../outside.ts";
+      if (kind === "cycle") links[file("leaf.ts")] = file("leaf.ts");
+      if (kind === "dangling") links[file("leaf.ts")] = file("untracked");
+      if (kind === "descendant")
+        base[file("leaf.ts/child.ts")] = "export const x=1";
+      const maps =
+        kind === "missing-side"
+          ? { base: links }
+          : { base: links, candidate: links };
+      expect(() =>
+        buildValidationPlan(registry(), [], "full-health", {
+          base,
+          candidate: base,
+          links: maps as never,
+        }),
+      ).toThrow();
+    });
+
   for (const reader of [
     'new Bun.Glob("*.ts").scanSync({cwd:"packages/example"})',
     'new Bun.Glob("*.ts").scan({cwd:"packages/example"})',
@@ -1411,5 +1632,462 @@ describe("affected consumer qualification", () => {
         }),
       ),
     ).toEqual([file("one.test.ts"), file("two.test.ts")]);
+  });
+});
+
+describe("invocation-local broad input binding", () => {
+  it("retains every member and invalidates added inputs and membership on the next plan", () => {
+    const r = registry();
+    const base = {
+      ...snapshot(),
+      [file("one.test.ts")]: "import(getModule());",
+      "outside/original.json": "{}",
+    };
+    const changes = [{ path: file("leaf.ts"), status: "modified" as const }];
+    const before = buildValidationPlan(r, changes, "comparison", {
+      base,
+      candidate: base,
+    });
+    const beforeUnit = before.checks.find((check) => check.id === unit)!;
+    expect(beforeUnit.membership).toEqual([
+      file("one.test.ts"),
+      file("two.test.ts"),
+    ]);
+    expect(beforeUnit.inputs).toContain("outside/original.json");
+
+    // Reuse the same snapshot object, as well as the same registry: no binding
+    // may escape the invocation or hide newly discovered files and members.
+    const candidate = base as Record<string, string>;
+    candidate[file("three.test.ts")] = 'import "./other";';
+    candidate["outside/added.json"] = '{"value":1}';
+    const after = buildValidationPlan(r, changes, "comparison", {
+      base: candidate,
+      candidate,
+    });
+    const afterUnit = after.checks.find((check) => check.id === unit)!;
+    expect(afterUnit.membership).toEqual([
+      file("one.test.ts"),
+      file("three.test.ts"),
+      file("two.test.ts"),
+    ]);
+    expect(afterUnit.inputs).toContain("outside/added.json");
+    expect(afterUnit.identity).not.toEqual(beforeUnit.identity);
+    expect(beforeUnit.inputs).not.toContain("outside/added.json");
+  });
+
+  it("keeps distinct member scopes and removed inputs in the binding", () => {
+    const r = registry();
+    const reader = 'import fs from "node:fs"; fs.readFileSync(getPath());';
+    const base = {
+      ...snapshot(),
+      [file("one.test.ts")]: reader,
+      [file("two.test.ts")]: 'import "./other";',
+      "outside/first.json": "{}",
+      "outside/second.json": "{}",
+    };
+    r.impact!.relationships.push({
+      id: "bounded-reader",
+      inputs: ["outside/first.json"],
+      consumers: [file("one.test.ts")],
+      boundedConsumers: {
+        [file("one.test.ts")]: createHash("sha256")
+          .update(reader)
+          .digest("hex"),
+      },
+    });
+    const candidate = { ...base };
+    delete (candidate as Record<string, string>)["outside/first.json"];
+    const plan = buildValidationPlan(
+      r,
+      [
+        { path: "outside/first.json", status: "deleted" },
+        { path: file("other.ts"), status: "modified" },
+      ],
+      "comparison",
+      { base, candidate },
+    );
+    const selected = plan.checks.find((check) => check.id === unit)!;
+    expect(selected.membership).toEqual([
+      file("one.test.ts"),
+      file("two.test.ts"),
+    ]);
+    expect(selected.absentInputs).toContain("outside/first.json");
+    expect(selected.inputs).toContain(file("other.ts"));
+    expect(selected.inputs).not.toContain("outside/second.json");
+  });
+});
+
+describe("affected diagnostic size", () => {
+  it("carries complete shared diagnostics once per check across many changed paths", () => {
+    const r = registry();
+    const base: Record<string, string> = { ...snapshot() };
+    for (let index = 0; index < 30; index++) {
+      base[file(`generated-${index}.ts`)] = "import(getModule());";
+    }
+    const changes = Object.keys(base)
+      .filter((path) => path.includes("generated-"))
+      .map((path) => ({ path, status: "modified" as const }));
+    const plan = buildValidationPlan(r, changes, "comparison", {
+      base,
+      candidate: base,
+    });
+    expect(members(plan)).toEqual([file("one.test.ts"), file("two.test.ts")]);
+    const oneChange = buildValidationPlan(r, [changes[0]], "comparison", {
+      base,
+      candidate: base,
+    });
+    const contracts = (value: typeof plan) =>
+      value.checks.map(({ reasons: _reasons, ...contract }) => contract);
+    expect(contracts(plan)).toEqual(contracts(oneChange));
+    for (const check of plan.checks) {
+      const diagnostics = check.reasons.join("\n");
+      for (const change of changes) {
+        const reason = `computed-import (${change.path})`;
+        // Preserve every fallback and its location, but never multiply the
+        // entire global diagnostic list by the number of changed files.
+        expect(diagnostics.split(reason).length - 1).toBe(1);
+        expect(check.inputs).toContain(change.path);
+      }
+      expect(check.reasons).toHaveLength(changes.length);
+    }
+    const reversed = buildValidationPlan(
+      r,
+      [...changes].reverse(),
+      "comparison",
+      {
+        base,
+        candidate: base,
+      },
+    );
+    expect(reversed).toEqual(plan);
+  });
+});
+
+describe("characterized operator full-suite fallback", () => {
+  const operator = "packages/athena-webapp";
+  const first = `${operator}/src/one.test.ts`;
+  const second = `${operator}/convex/two.test.ts`;
+  const configFiles = [
+    `${operator}/vitest.config.ts`,
+    `${operator}/vite-docs-content-plugin.ts`,
+    `${operator}/src/lib/docs/parsing.ts`,
+  ];
+  const fixture = () => {
+    const files: Record<string, string> = {
+      "package.json": JSON.stringify({ packageManager: "bun@1.1.29" }),
+      [`${operator}/package.json`]: JSON.stringify({
+        name: "@athena/webapp",
+        scripts: { test: "vitest run --maxWorkers=4" },
+        devDependencies: { vitest: "4.1.11" },
+      }),
+      [first]: "export {};",
+      [second]: "export {};",
+      ...Object.fromEntries(
+        configFiles.map((path) => [path, readFileSync(path, "utf8")]),
+      ),
+    };
+    const check = (id: string, extra = {}) => ({
+      id,
+      profile: `${operator}:unit`,
+      cwd: operator,
+      argv: ["bun", "run", "test", "--"],
+      membership: [first, second],
+      inputs: [],
+      absentInputs: [],
+      prerequisites: [],
+      supersedes: [],
+      ...extra,
+    });
+    const r: CanonicalValidationRegistry = {
+      schemaVersion: "athena-validation-registry/1",
+      alwaysRequired: [],
+      checks: [
+        check("ordinary"),
+        check("other-ordinary"),
+        check("fallback", {
+          profile: `${operator}:fallback-suite`,
+          cwd: ".",
+          argv: ["bun", "run", "--filter", "@athena/webapp", "test"],
+          membership: [],
+        }),
+        ...["timer-stress", "coverage", "browser"].map((profile) =>
+          check(profile, {
+            profile: `${operator}:${profile}`,
+            argv: ["bun", "run", profile],
+            membership: [],
+          }),
+        ),
+      ],
+      surfaces: [
+        {
+          id: "operator",
+          pathPrefixes: [operator],
+          checks: ["ordinary"],
+          reason: "Ordinary source",
+        },
+      ],
+      impact: {
+        packages: [
+          {
+            root: operator,
+            testPatterns: [
+              `${operator}/{src,convex,shared}/**/*.test.{ts,tsx}`,
+            ],
+            unitChecks: ["ordinary", "other-ordinary"],
+            fallbackChecks: [
+              "ordinary",
+              "other-ordinary",
+              "fallback",
+              "timer-stress",
+              "coverage",
+              "browser",
+            ],
+          },
+        ],
+        relationships: [],
+      },
+    };
+    return { files, r };
+  };
+  const full = (
+    r: CanonicalValidationRegistry,
+    files: Record<string, string>,
+  ) =>
+    buildValidationPlan(r, [], "full-health", {
+      base: files,
+      candidate: files,
+    });
+  it("uses one authored Bun execution with complete membership and every covered ID", () => {
+    const { files, r } = fixture();
+    const plan = full(r, files);
+    const suite = plan.checks.find((c) =>
+      c.profile.endsWith(":fallback-suite"),
+    )!;
+    expect(suite.coveredChecks).toEqual([
+      "fallback",
+      "ordinary",
+      "other-ordinary",
+    ]);
+    expect(suite.membership).toEqual([second, first].sort());
+    expect(suite.argv).toEqual([
+      "bun",
+      "run",
+      "--filter",
+      "@athena/webapp",
+      "test",
+    ]);
+    expect(suite.cwd).toBe(".");
+    expect(plan.checks.filter((c) => c.profile.endsWith(":unit"))).toHaveLength(
+      0,
+    );
+    expect(plan.checks).toHaveLength(4);
+    expect(suite.reasons.join(" ")).toContain("Full-health");
+  });
+  it("keeps broad fallback diagnostics and candidate additions/deletions", () => {
+    const { files, r } = fixture();
+    const added = `${operator}/shared/new.test.ts`;
+    const candidate = {
+      ...files,
+      [added]: "export {};",
+      [`${operator}/unknown.ts`]: "require(name);",
+    };
+    delete candidate[first];
+    const plan = buildValidationPlan(
+      r,
+      [
+        { path: first, status: "deleted" },
+        { path: added, status: "added" },
+        { path: `${operator}/unknown.ts`, status: "added" },
+      ],
+      "comparison",
+      { base: files, candidate },
+    );
+    const suite = plan.checks.find((c) =>
+      c.profile.endsWith(":fallback-suite"),
+    )!;
+    expect(suite.coveredChecks).toEqual([
+      "fallback",
+      "ordinary",
+      "other-ordinary",
+    ]);
+    expect(suite.membership).toEqual([second, added].sort());
+    expect(suite.absentInputs).toContain(first);
+    expect(suite.inputs).toContain(added);
+    expect(suite.reasons.join(" ")).toContain("unknown.ts");
+  });
+  for (const invalid of [
+    "script",
+    "hook",
+    "config",
+    "plugin",
+    "patterns",
+    "version",
+    "extra-config",
+    "excluded-member",
+    "prerequisite",
+    "argv",
+  ]) {
+    it(`preserves conservative execution for ${invalid}`, () => {
+      const { files, r } = fixture();
+      const manifest = JSON.parse(files[`${operator}/package.json`]);
+      if (invalid === "script") manifest.scripts.test += " --coverage";
+      if (invalid === "hook") manifest.scripts.pretest = "echo setup";
+      if (invalid === "version") manifest.devDependencies.vitest = "unknown";
+      files[`${operator}/package.json`] = JSON.stringify(manifest);
+      if (invalid === "config") files[configFiles[0]] += "\n// unknown";
+      if (invalid === "plugin") files[configFiles[1]] += "\n// unknown";
+      if (invalid === "extra-config")
+        files[`${operator}/vitest.config.js`] = "export default {}";
+      if (invalid === "patterns")
+        r.impact!.packages[0].testPatterns = [`${operator}/src/**/*.test.ts`];
+      if (invalid === "excluded-member")
+        files[`${operator}/src/node_modules/x.test.ts`] = "export {};";
+      if (invalid === "prerequisite") r.checks[2].prerequisites = ["ordinary"];
+      if (invalid === "argv") r.checks[0].argv.push("--coverage");
+      const plan = full(r, files);
+      expect(
+        plan.checks.find((c) => c.coveredChecks.includes("fallback"))!
+          .coveredChecks,
+      ).toEqual(["fallback"]);
+      expect(
+        plan.checks.some(
+          (c) =>
+            c.coveredChecks.includes("ordinary") && c.profile.endsWith(":unit"),
+        ),
+      ).toBe(true);
+    });
+  }
+  it("does not absorb incomplete ordinary membership into a selected raw fallback", () => {
+    const { files, r } = fixture();
+    r.impact!.packages[0].fallbackChecks = ["fallback"];
+    const plan = buildValidationPlan(
+      r,
+      [{ path: first, status: "modified" }],
+      "comparison",
+      {
+        base: files,
+        candidate: { ...files, [first]: "export const change = true;" },
+      },
+    );
+    expect(
+      plan.checks.find((c) => c.coveredChecks.includes("fallback"))!
+        .coveredChecks,
+    ).toEqual(["fallback"]);
+    expect(
+      plan.checks.find((c) => c.coveredChecks.includes("ordinary"))!.membership,
+    ).toEqual([first]);
+  });
+  it("unions prerequisite and input obligations without losing absent inputs", () => {
+    const { files, r } = fixture();
+    r.checks[0].inputs = ["missing-unit-input.ts"];
+    r.checks[2].inputs = ["missing-fallback-input.ts"];
+    r.checks[0].prerequisites = ["coverage"];
+    const suite = full(r, files).checks.find((c) =>
+      c.coveredChecks.includes("fallback"),
+    )!;
+    expect(suite.coveredChecks).toEqual([
+      "fallback",
+      "ordinary",
+      "other-ordinary",
+    ]);
+    expect(suite.prerequisites).toEqual(["coverage"]);
+    expect(suite.absentInputs).toContain("missing-unit-input.ts");
+    expect(suite.absentInputs).toContain("missing-fallback-input.ts");
+  });
+  it("does not broaden a narrow ordinary selection", () => {
+    const { files, r } = fixture();
+    // A minimal runner without the real plugin's independently broad dependencies.
+    for (const path of configFiles) delete files[path];
+    const plan = buildValidationPlan(
+      r,
+      [{ path: first, status: "modified" }],
+      "comparison",
+      {
+        base: files,
+        candidate: { ...files, [first]: "export const change = true;" },
+      },
+    );
+    expect(plan.checks.some((c) => c.profile.endsWith(":fallback-suite"))).toBe(
+      false,
+    );
+    expect(plan.checks.flatMap((c) => c.membership)).toEqual([first]);
+  });
+});
+
+describe("mixed default and named type imports", () => {
+  const dependencyFiles = (statement: string) => ({
+    ...snapshot(),
+    [file("wrapper.ts")]: `${statement}\nexport const wrapper = Runtime;`,
+    [file("producer.ts")]:
+      'import { leaf } from "./leaf"; export default leaf; export type T = string;',
+    [file("leaf.ts")]: "export const leaf = 1;",
+    [file("one.test.ts")]: 'import { wrapper } from "./wrapper";',
+    [file("two.test.ts")]: 'import { leaf } from "./leaf";',
+  });
+  it.each(["leaf.ts", "wrapper.ts"])(
+    "selects and binds the mixed-import consumer when %s changes",
+    async (changed) => {
+      const { projectValidationPolicy } =
+        await import("./harness-validation-policy");
+      const { ATHENA_LEGACY_CONFIG } = await import("../harness.config");
+      const base = dependencyFiles(
+        'import Runtime, { type T } from "./producer";',
+      );
+      const path = file(changed);
+      const plan = buildValidationPlan(
+        registry(),
+        [{ path, status: "modified" }],
+        "comparison",
+        {
+          base,
+          candidate: { ...base, [path]: base[path] + "\n// changed" },
+        },
+      );
+      expect(members(plan)).toContain(file("one.test.ts"));
+      const consumer = plan.checks.find((check) =>
+        check.membership.includes(file("one.test.ts")),
+      )!;
+      expect(consumer.inputs).toContain(file("producer.ts"));
+      expect(consumer.inputs).toContain(file("leaf.ts"));
+      const projected = projectValidationPolicy(ATHENA_LEGACY_CONFIG, plan, {
+        profiles: [
+          {
+            id: "fixture-full",
+            gitContext: "full",
+            dependencyInputs: ["package.json"],
+            mutableOutputs: [],
+            credentialIdentities: {},
+          },
+        ],
+        profileByCheck: Object.fromEntries(
+          plan.checks.map((check) => [check.id, "fixture-full"]),
+        ),
+        mechanicalChecks: [],
+      });
+      const providerId = projected.checks.find(
+        (check) => check.checkId === consumer.id,
+      )!.providerId;
+      expect(
+        projected.config.providers.find(
+          (provider) => provider.id === providerId,
+        )!.check!.scope!.files,
+      ).toContain(file("leaf.ts"));
+    },
+  );
+  it("keeps a true all-type named import out of runtime transitive selection", () => {
+    const base = dependencyFiles('import { type T } from "./producer";');
+    base[file("wrapper.ts")] =
+      'import { type T } from "./producer"; export const wrapper: T = "text";';
+    const path = file("leaf.ts");
+    const plan = buildValidationPlan(
+      registry(),
+      [{ path, status: "modified" }],
+      "comparison",
+      {
+        base,
+        candidate: { ...base, [path]: "export const leaf = 2;" },
+      },
+    );
+    expect(members(plan)).toEqual([file("two.test.ts")]);
   });
 });

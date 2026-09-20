@@ -1,72 +1,71 @@
-import { access, readFile, writeFile } from "node:fs/promises";
+import { access, lstat, realpath, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { writeGraphifyWikiPages } from "./graphify-wiki";
 
-export const GRAPHIFY_REBUILD_SNIPPET =
-  [
-    "import os",
-    "import re",
-    "import shutil",
-    "from pathlib import Path",
-    "from graphify.extract import extract",
-    "from graphify.build import build_from_json",
-    "from graphify.cluster import cluster, score_all",
-    "from graphify.analyze import god_nodes, surprising_connections, suggest_questions",
-    "from graphify.report import generate",
-    "from graphify.export import to_json",
-    "ROOT = Path('.')",
-    "EXTENSIONS = {'.py', '.js', '.ts', '.tsx', '.go', '.rs', '.java', '.c', '.h', '.cpp', '.cc', '.cxx', '.hpp', '.rb', '.cs', '.kt', '.kts', '.scala', '.php', '.swift', '.lua', '.toc', '.zig', '.ps1', '.m', '.mm'}",
-    "SKIP_DIRS = {'node_modules', 'worktrees', 'graphify-out', '__pycache__', 'artifacts', 'coverage', 'dist', 'storybook-static'}",
-    "def collect_repo_files(root: Path) -> list[Path]:",
-    "    results = []",
-    "    for dirpath, dirnames, filenames in os.walk(root):",
-    "        dp = Path(dirpath)",
-    "        if any(part.startswith('.') for part in dp.parts):",
-    "            dirnames[:] = []",
-    "            continue",
-    "        dirnames[:] = [d for d in dirnames if not d.startswith('.') and d not in SKIP_DIRS]",
-    "        for fname in filenames:",
-    "            if fname.startswith('.'):",
-    "                continue",
-    "            file_path = dp / fname",
-    "            if any(part in SKIP_DIRS for part in file_path.parts):",
-    "                continue",
-    "            if file_path.suffix in EXTENSIONS:",
-    "                results.append(file_path)",
-    "    return sorted(results)",
-    "out = ROOT / 'graphify-out'",
-    "out.mkdir(exist_ok=True)",
-    "cache_dir = out / 'cache'",
-    "if cache_dir.exists():",
-    "    shutil.rmtree(cache_dir)",
-    "code_files = collect_repo_files(ROOT)",
-    "if not code_files:",
-    "    raise SystemExit('[graphify rebuild] No code files found - nothing to rebuild.')",
-    "result = extract(code_files)",
-    "detection = {'files': {'code': [str(f) for f in code_files], 'document': [], 'paper': [], 'image': []}, 'total_files': len(code_files), 'total_words': 0}",
-    "graph = build_from_json(result)",
-    "communities = cluster(graph)",
-    "cohesion = score_all(graph, communities)",
-    "gods = god_nodes(graph)",
-    "surprises = surprising_connections(graph, communities)",
-    "labels = {cid: 'Community ' + str(cid) for cid in communities}",
-    "questions = suggest_questions(graph, communities, labels)",
-    "report = generate(graph, communities, cohesion, labels, gods, surprises, detection, {'input': 0, 'output': 0}, str(ROOT), suggested_questions=questions)",
-    "report_lines = report.splitlines()",
-    "if report_lines:",
-    "    report_lines[0] = re.sub(r'\\s+\\(\\d{4}-\\d{2}-\\d{2}\\)$', '', report_lines[0])",
-    "normalized_report = '\\n'.join(line.rstrip() for line in report_lines)",
-    "if report.endswith('\\n'):",
-    "    normalized_report += '\\n'",
-    "(out / 'GRAPH_REPORT.md').write_text(normalized_report)",
-    "to_json(graph, communities, str(out / 'graph.json'))",
-    "flag = out / 'needs_update'",
-    "if flag.exists():",
-    "    flag.unlink()",
-    "print(f'[graphify rebuild] Rebuilt: {graph.number_of_nodes()} nodes, {graph.number_of_edges()} edges, {len(communities)} communities')",
-    "print(f'[graphify rebuild] graph.json and GRAPH_REPORT.md updated in {out}')",
-  ].join("\n");
+export const GRAPHIFY_REBUILD_SNIPPET = [
+  "import os",
+  "import re",
+  "import shutil",
+  "from pathlib import Path",
+  "from graphify.extract import extract",
+  "from graphify.build import build_from_json",
+  "from graphify.cluster import cluster, score_all",
+  "from graphify.analyze import god_nodes, surprising_connections, suggest_questions",
+  "from graphify.report import generate",
+  "from graphify.export import to_json",
+  "ROOT = Path('.')",
+  "EXTENSIONS = {'.py', '.js', '.ts', '.tsx', '.go', '.rs', '.java', '.c', '.h', '.cpp', '.cc', '.cxx', '.hpp', '.rb', '.cs', '.kt', '.kts', '.scala', '.php', '.swift', '.lua', '.toc', '.zig', '.ps1', '.m', '.mm'}",
+  "SKIP_DIRS = {'node_modules', 'worktrees', 'graphify-out', '__pycache__', 'artifacts', 'coverage', 'dist', 'storybook-static'}",
+  "def collect_repo_files(root: Path) -> list[Path]:",
+  "    results = []",
+  "    for dirpath, dirnames, filenames in os.walk(root):",
+  "        dp = Path(dirpath)",
+  "        if any(part.startswith('.') for part in dp.parts):",
+  "            dirnames[:] = []",
+  "            continue",
+  "        dirnames[:] = [d for d in dirnames if not d.startswith('.') and d not in SKIP_DIRS]",
+  "        for fname in filenames:",
+  "            if fname.startswith('.'):",
+  "                continue",
+  "            file_path = dp / fname",
+  "            if any(part in SKIP_DIRS for part in file_path.parts):",
+  "                continue",
+  "            if file_path.suffix in EXTENSIONS:",
+  "                results.append(file_path)",
+  "    return sorted(results)",
+  "out = ROOT / 'graphify-out'",
+  "out.mkdir(exist_ok=True)",
+  "cache_dir = out / 'cache'",
+  "if cache_dir.exists():",
+  "    shutil.rmtree(cache_dir)",
+  "code_files = collect_repo_files(ROOT)",
+  "if not code_files:",
+  "    raise SystemExit('[graphify rebuild] No code files found - nothing to rebuild.')",
+  "result = extract(code_files)",
+  "detection = {'files': {'code': [str(f) for f in code_files], 'document': [], 'paper': [], 'image': []}, 'total_files': len(code_files), 'total_words': 0}",
+  "graph = build_from_json(result)",
+  "communities = cluster(graph)",
+  "cohesion = score_all(graph, communities)",
+  "gods = god_nodes(graph)",
+  "surprises = surprising_connections(graph, communities)",
+  "labels = {cid: 'Community ' + str(cid) for cid in communities}",
+  "questions = suggest_questions(graph, communities, labels)",
+  "report = generate(graph, communities, cohesion, labels, gods, surprises, detection, {'input': 0, 'output': 0}, str(ROOT), suggested_questions=questions)",
+  "report_lines = report.splitlines()",
+  "if report_lines:",
+  "    report_lines[0] = re.sub(r'\\s+\\(\\d{4}-\\d{2}-\\d{2}\\)$', '', report_lines[0])",
+  "normalized_report = '\\n'.join(line.rstrip() for line in report_lines)",
+  "if report.endswith('\\n'):",
+  "    normalized_report += '\\n'",
+  "(out / 'GRAPH_REPORT.md').write_text(normalized_report)",
+  "to_json(graph, communities, str(out / 'graph.json'))",
+  "flag = out / 'needs_update'",
+  "if flag.exists():",
+  "    flag.unlink()",
+  "print(f'[graphify rebuild] Rebuilt: {graph.number_of_nodes()} nodes, {graph.number_of_edges()} edges, {len(communities)} communities')",
+  "print(f'[graphify rebuild] graph.json and GRAPH_REPORT.md updated in {out}')",
+].join("\n");
 
 type SpawnedProcess = {
   exited: Promise<number>;
@@ -76,20 +75,18 @@ type SpawnedProcess = {
 type GraphifyRebuildEnvironment = Record<string, string | undefined>;
 
 type GraphifyRebuildOptions = {
+  // Freshness checks generate in scratch space, but dependencies remain in
+  // the original snapshot. Resolve and validate the interpreter there.
+  interpreterRootDir?: string;
   spawn?: (
     command: string[],
-    options: { cwd: string; env: GraphifyRebuildEnvironment }
+    options: { cwd: string; env: GraphifyRebuildEnvironment },
   ) => SpawnedProcess;
   writeGraphifyWikiPages?: (rootDir: string) => Promise<void>;
 };
 
 type JsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+  null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
 async function fileExists(filePath: string) {
   try {
@@ -100,13 +97,36 @@ async function fileExists(filePath: string) {
   }
 }
 
-async function resolveGraphifyPython(rootDir: string) {
+export async function resolveGraphifyPython(
+  rootDir: string,
+  env: GraphifyRebuildEnvironment = process.env,
+) {
+  if (env.ATHENA_GRAPHIFY_PYTHON !== undefined) {
+    if (env.ATHENA_GRAPHIFY_PYTHON !== "private")
+      throw new Error("Unsupported native Graphify interpreter selection");
+    const python = path.join(rootDir, "node_modules/.bin/python3");
+    const relative = path.relative(
+      await realpath(rootDir),
+      await realpath(python),
+    );
+    if (
+      !(await lstat(python)).isFile() ||
+      relative.startsWith("../") ||
+      path.isAbsolute(relative)
+    )
+      throw new Error(
+        "Native Graphify requires its private regular interpreter wrapper",
+      );
+    return python;
+  }
   const configuredPythonPath = path.join(rootDir, ".graphify_python");
   if (!(await fileExists(configuredPythonPath))) {
     return "python3";
   }
 
-  const configuredPython = (await readFile(configuredPythonPath, "utf8")).trim();
+  const configuredPython = (
+    await readFile(configuredPythonPath, "utf8")
+  ).trim();
   if (!configuredPython) {
     return "python3";
   }
@@ -122,7 +142,7 @@ async function resolveGraphifyPython(rootDir: string) {
   }
 
   console.warn(
-    `[graphify rebuild] Configured interpreter not found (${configuredPython}); falling back to python3.`
+    `[graphify rebuild] Configured interpreter not found (${configuredPython}); falling back to python3.`,
   );
   return "python3";
 }
@@ -155,13 +175,13 @@ function sortJsonValue(value: JsonValue): JsonValue {
   return Object.fromEntries(
     Object.entries(value)
       .sort(([left], [right]) => compareDeterministically(left, right))
-      .map(([key, nestedValue]) => [key, sortJsonValue(nestedValue)])
+      .map(([key, nestedValue]) => [key, sortJsonValue(nestedValue)]),
   );
 }
 
 function sortJsonArray(values: JsonValue[]) {
   return [...values].sort((left, right) =>
-    compareDeterministically(JSON.stringify(left), JSON.stringify(right))
+    compareDeterministically(JSON.stringify(left), JSON.stringify(right)),
   );
 }
 
@@ -193,9 +213,11 @@ async function normalizeGraphJsonArtifact(rootDir: string) {
 
 export async function runGraphifyRebuild(
   rootDir: string,
-  options: GraphifyRebuildOptions = {}
+  options: GraphifyRebuildOptions = {},
 ) {
-  const graphifyPython = await resolveGraphifyPython(rootDir);
+  const graphifyPython = await resolveGraphifyPython(
+    options.interpreterRootDir ?? rootDir,
+  );
   const command = [graphifyPython, "-c", GRAPHIFY_REBUILD_SNIPPET];
   const env = {
     ...process.env,
@@ -221,7 +243,7 @@ export async function runGraphifyRebuild(
     ? (await new Response(subprocess.stderr).text()).trim()
     : "";
   throw new Error(
-    stderr || `Graphify rebuild failed (${exitCode}): ${command.join(" ")}`
+    stderr || `Graphify rebuild failed (${exitCode}): ${command.join(" ")}`,
   );
 }
 

@@ -26,6 +26,7 @@ export const HARNESS_COMMAND_IDS = [
   "delivery:documentation-check",
   "delivery:documentation-admission",
   "delivery:telemetry-check",
+  "delivery:telemetry-artifacts-check",
   "graphify:check",
   "graphify:rebuild",
   "harness:audit",
@@ -44,6 +45,11 @@ export const HARNESS_COMMAND_IDS = [
   "harness:self-review",
   "harness:plan",
   "harness:test",
+  "harness:vitest-membership",
+  "harness:validation-ci",
+  "harness:selection-guard",
+  "harness:local-health",
+  "harness:validation-dependencies",
   "harness:waive-documentation",
   "pre-push:review",
   "pr:athena",
@@ -129,7 +135,10 @@ export class HarnessBlockedError extends Error {
  * operator relies on to identify who is blocking them.
  */
 function withoutControlCharacters(value: string) {
-  return value.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, "");
+  return value.replace(
+    /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g,
+    "",
+  );
 }
 
 /**
@@ -293,9 +302,8 @@ function sanitizedRemediation(remediation: HarnessRemediation) {
     );
   }
   if (
-    (remediation.kind === "command" ||
-      (remediation.kind === "retry" && remediation.command)) &&
-    remediation.command.length === 0
+    (remediation.kind === "command" && remediation.command.length === 0) ||
+    (remediation.kind === "retry" && remediation.command?.length === 0)
   ) {
     throw new Error("Harness remediation command must be non-empty.");
   }
@@ -329,9 +337,13 @@ function validatedSource(source: HarnessBlockerSource) {
       case "gate":
         return source.id === ATHENA_PR_VALIDATION_GATE_ID;
       case "obligation":
-        return harnessConfig.obligations.some(obligation => obligation.id === source.id);
+        return harnessConfig.obligations.some(
+          (obligation) => obligation.id === source.id,
+        );
       case "provider":
-        return harnessConfig.providers.some(provider => provider.id === source.id);
+        return harnessConfig.providers.some(
+          (provider) => provider.id === source.id,
+        );
       case "preparation":
         return (HARNESS_PREPARATION_SOURCE_IDS as readonly string[]).includes(
           source.id,
@@ -407,13 +419,12 @@ export function formatHarnessCommand(command: readonly string[]) {
   return command.map(quoteCommandArgument).join(" ");
 }
 
-
 function remediationInstruction(remediation: HarnessRemediation) {
-  const command =
-    remediation.kind === "command" ||
-    (remediation.kind === "retry" && remediation.command)
-      ? ` Command: ${formatHarnessCommand(remediation.command)}`
-      : "";
+  const argv =
+    remediation.kind === "command" || remediation.kind === "retry"
+      ? remediation.command
+      : undefined;
+  const command = argv ? ` Command: ${formatHarnessCommand(argv)}` : "";
   const details = remediation.details ? ` ${remediation.details}` : "";
   return `- (${remediation.id}) ${remediation.summary}${command}${details}`;
 }

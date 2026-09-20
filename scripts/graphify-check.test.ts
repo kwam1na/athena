@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -40,6 +40,28 @@ afterEach(async () => {
 });
 
 describe("runGraphifyCheck", () => {
+  it("retains the private interpreter while rebuilding in a scratch workspace", async () => {
+    const rootDir = await createFixtureRoot();
+    const interpreter = path.join(rootDir, "node_modules/.bin/python3");
+    await write(
+      "node_modules/.bin/python3",
+      '#!/bin/sh\n[ -f packages/example/src/main.ts ] || exit 24\n[ ! -e node_modules ] || exit 25\nprintf "PRIVATE_GRAPHIFY_INTERPRETER:%s\\n" "$PWD" >&2\nexit 23\n',
+      rootDir,
+    );
+    await chmod(interpreter, 0o755);
+    await write(".graphify_python", "/missing/author/python3\n", rootDir);
+    const previous = process.env.ATHENA_GRAPHIFY_PYTHON;
+    process.env.ATHENA_GRAPHIFY_PYTHON = "private";
+    try {
+      await expect(runGraphifyCheck(rootDir)).rejects.toThrow(
+        "PRIVATE_GRAPHIFY_INTERPRETER:",
+      );
+    } finally {
+      if (previous === undefined) delete process.env.ATHENA_GRAPHIFY_PYTHON;
+      else process.env.ATHENA_GRAPHIFY_PYTHON = previous;
+    }
+  });
+
   it("passes when tracked graphify artifacts match a fresh rebuild", async () => {
     const rootDir = await createFixtureRoot();
     await write("graphify-out/GRAPH_REPORT.md", "fresh report\n", rootDir);

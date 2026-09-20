@@ -1,54 +1,6 @@
 [
   {
     "reviewerId": "ce-correctness-reviewer",
-    "reason": "Always-on affected consumer and input declaration correctness"
-  },
-  {
-    "reviewerId": "ce-testing-reviewer",
-    "reason": "Always-on snapshot, fallback and source mutation negative controls"
-  },
-  {
-    "reviewerId": "ce-maintainability-reviewer",
-    "reason": "Always-on maintainability of dependency resolution and authored policy"
-  },
-  {
-    "reviewerId": "ce-project-standards-reviewer",
-    "reason": "Always-on repository delivery and generated-artifact policy"
-  },
-  {
-    "reviewerId": "ce-agent-native-reviewer",
-    "reason": "Human and machine read-only planning parity"
-  },
-  {
-    "reviewerId": "ce-learnings-researcher",
-    "reason": "Reusable affected selection and input soundness lessons"
-  },
-  {
-    "reviewerId": "ce-performance-reviewer",
-    "reason": "Base and candidate graph construction and closure costs"
-  },
-  {
-    "reviewerId": "ce-api-contract-reviewer",
-    "reason": "Exported snapshot, impact policy and canonical planner contracts"
-  },
-  {
-    "reviewerId": "ce-reliability-reviewer",
-    "reason": "Conservative unknown dependency fallbacks and malformed input failures"
-  },
-  {
-    "reviewerId": "ce-adversarial-reviewer",
-    "reason": "Substantial dependency qualification and input trust boundary changes"
-  },
-  {
-    "reviewerId": "ce-kieran-typescript-reviewer",
-    "reason": "TypeScript AST resolver, registry and planner changes"
-  },
-  {
-    "reviewerId": "ce-cli-readiness-reviewer",
-    "reason": "Read-only harness plan snapshot request and canonical output"
-  },
-  {
-    "reviewerId": "ce-security-reviewer",
-    "reason": "Untrusted snapshot paths, manifests and source-bound runtime exceptions"
+    "reason": "User-selected focused review: dependency closure, input declarations, and local health contract correctness; complements mandated outcome and adversarial testing lenses."
   }
 ]

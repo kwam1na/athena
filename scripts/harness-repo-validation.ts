@@ -92,6 +92,18 @@ import {
   type CanonicalValidationRegistry,
 } from "./harness-app-registry";
 
+/** Exact authored root commands only: -p names the config discovered from package cwd.
+ * Flags, shell syntax and other projects deliberately remain opaque obligations. */
+export function characterizedRootTypecheckWorkspace(command: string) {
+  if (command === "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json")
+    return "@athena/webapp";
+  if (
+    command === "bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json"
+  )
+    return "@athena/storefront-webapp";
+  return undefined;
+}
+
 /** Derived from authored scenario commands; this does not change legacy selection. */
 export function collectCanonicalValidationRegistry(
   inventory: string[],
@@ -127,16 +139,39 @@ export function collectCanonicalValidationRegistry(
       membership: sortUniquePaths([...(old?.membership ?? []), ...membership]),
       inputs: sortUniquePaths(inputs),
       absentInputs: [],
-      prerequisites: [],
+      prerequisites: old?.prerequisites ?? [],
       supersedes: [],
     });
     return id;
+  };
+  const packagePipeline = (workspace: string) => {
+    const cwd =
+      workspace === "@athena/webapp"
+        ? "packages/athena-webapp"
+        : "packages/storefront-webapp";
+    const types = add(["bun", "run", "typecheck"], cwd, `${cwd}:package-types`);
+    const assets = add(
+      ["bun", "run", "build:assets"],
+      cwd,
+      `${cwd}:package-build`,
+    );
+    checks.get(assets)!.prerequisites = [types];
+    return { types, assets };
   };
   const commandCheck = (
     command: string,
     packageDir = ".",
     stableId?: string,
   ) => {
+    const rootTypecheck = characterizedRootTypecheckWorkspace(command);
+    if (rootTypecheck) return packagePipeline(rootTypecheck).types;
+    const pipeline = command.match(
+      /^bun run --filter ['"]?(@athena\/(?:webapp|storefront-webapp))['"]? (typecheck|build)$/,
+    );
+    if (pipeline) {
+      const checks = packagePipeline(pipeline[1]);
+      return pipeline[2] === "typecheck" ? checks.types : checks.assets;
+    }
     // Authored commands retain shell behavior unless they are the characterized plain test form.
     const match = command.match(
       /^bun run --filter ['"]?(@athena\/(?:webapp|storefront-webapp))['"]? test(?: -- (.+))?$/,
@@ -224,13 +259,7 @@ export function collectCanonicalValidationRegistry(
   const publishing = VALIDATION_PLAN_POLICY.publishingCommands.map((script) =>
     add(["bun", "run", script], ".", "docs-publishing"),
   );
-  publishing.push(
-    add(
-      ["bun", "run", "--filter", "@athena/webapp", "build"],
-      ".",
-      "docs-publishing",
-    ),
-  );
+  publishing.push(packagePipeline("@athena/webapp").assets);
   surfaces.push({
     id: "docs-publishing",
     pathPrefixes: [...VALIDATION_PLAN_POLICY.publishingPrefixes],
@@ -254,6 +283,7 @@ export function collectCanonicalValidationRegistry(
       "harness.config.ts",
       "AGENTS.md",
       "README.md",
+      "docs/harness.md",
       "packages/AGENTS.md",
       "manage-athena-versions.sh",
     ],
@@ -270,8 +300,8 @@ export function collectCanonicalValidationRegistry(
   surfaces.push({
     id: "delivery-records",
     pathPrefixes: ["telemetry/delivery-runs"],
-    checks: [commandCheck("bun run delivery:telemetry-check")],
-    reason: "Validate retained delivery record",
+    checks: [commandCheck("bun scripts/delivery-telemetry-artifacts.ts --base refs/delivery/base")],
+    reason: "Validate source telemetry artifact integrity; current-run admission remains host-owned",
   });
   for (const app of HARNESS_APP_REGISTRY) {
     const workspace =
@@ -339,18 +369,8 @@ export function collectCanonicalValidationRegistry(
             ),
           ];
     if (root !== "." && workspace !== "valkey-proxy-server") {
-      fallbackChecks.push(
-        add(
-          ["bun", "run", "--filter", workspace, "typecheck"],
-          ".",
-          `${root}:package-types`,
-        ),
-        add(
-          ["bun", "run", "--filter", workspace, "build"],
-          ".",
-          `${root}:package-build`,
-        ),
-      );
+      const pipeline = packagePipeline(workspace);
+      fallbackChecks.push(pipeline.types, pipeline.assets);
     }
     impactPackages.push({
       root,
@@ -384,3 +404,21 @@ export function collectCanonicalValidationRegistry(
     impact: { packages: impactPackages, relationships },
   };
 }
+
+/** Qualified ordinary full-suite execution. Bun retains its own lifecycle environment.
+ * Config-loading sources are pinned because a plugin may change discovery semantics.
+ * Changes deliberately fall back to the original independent obligations.
+ */
+export const OPERATOR_FULL_UNIT_CONTRACT = {
+  root: "packages/athena-webapp",
+  workspace: "@athena/webapp",
+  testPattern: "packages/athena-webapp/{src,convex,shared}/**/*.test.{ts,tsx}",
+  sources: {
+    "packages/athena-webapp/vitest.config.ts":
+      "9f4054cddededa466de627a6d8444ef1f85330d1defaec49df60105ebbfaca14",
+    "packages/athena-webapp/vite-docs-content-plugin.ts":
+      "58d363d506a79d8c8089a19ddeac88056fdd8c1684921b4ab2b13c4464f11a47",
+    "packages/athena-webapp/src/lib/docs/parsing.ts":
+      "aeb7fdda026e0b41b81fee89d4333ffd8c7be49c67f7efb677519d9ef7e87a61",
+  },
+} as const;

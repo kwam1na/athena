@@ -39,7 +39,7 @@ describe("coverage binding admission", () => {
   });
 });
 
-it.each(["pretest", "posttest"])("qualifies %s before inspecting Git or dependencies", async hook => {
+it.each(["pretest", "posttest", "cacheDir"])("qualifies %s before inspecting Git or dependencies", async field => {
   const root = await mkdtemp(path.join(tmpdir(), "athena-coverage-qualification-"));
   const sourceRoot = path.resolve(import.meta.dir, "..");
   try {
@@ -58,8 +58,15 @@ it.each(["pretest", "posttest"])("qualifies %s before inspecting Git or dependen
     expect(await captureCoverageBinding(root, "HEAD", git)).toEqual({ reason: "source-not-prepared" });
     expect(gitCalls).toBeGreaterThan(0);
     gitCalls = 0;
-    app.scripts[hook] = "echo additional ordinary-suite obligation";
-    await writeFile(appPath, JSON.stringify(app));
+    if (field === "cacheDir") {
+      const configPath = path.join(root, "packages/athena-webapp/vitest.config.ts");
+      const config = await readFile(configPath, "utf8");
+      expect(config).toContain('cacheDir: "./.cache"');
+      await writeFile(configPath, config.replace('cacheDir: "./.cache"', 'cacheDir: "./node_modules/.vite"'));
+    } else {
+      app.scripts[field] = "echo additional ordinary-suite obligation";
+      await writeFile(appPath, JSON.stringify(app));
+    }
     expect(await captureCoverageBinding(root, "HEAD", git)).toEqual({ reason: "unqualified-coverage-profile" });
     expect(gitCalls).toBe(0);
   } finally {

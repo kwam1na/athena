@@ -9,7 +9,7 @@ import {
 import harnessConfig, { ATHENA_PR_VALIDATION_GATE_ID } from "../harness.config";
 
 export type HarnessBlockerCliInventoryEntry = {
-  file: `scripts/${string}.ts`;
+  file: `scripts/${string}.ts` | `scripts/${string}.mjs`;
   commands: readonly string[];
 };
 
@@ -49,7 +49,15 @@ export const HARNESS_BLOCKER_CLI_INVENTORY = [
     commands: ["harness:self-review"],
   },
   { file: "scripts/harness-validation-plan.ts", commands: ["harness:plan"] },
+  {
+    file: "scripts/harness-validation-ci.ts",
+    commands: ["harness:validation-ci"],
+  },
   { file: "scripts/harness-test.ts", commands: ["harness:test"] },
+  { file: "scripts/harness-vitest-membership.mjs", commands: [] },
+  { file: "scripts/harness-validation-selection-guard.mjs", commands: [] },
+  { file: "scripts/harness-validation-local-health-check.ts", commands: [] },
+  { file: "scripts/harness-validation-dependencies.py", commands: [] },
   { file: "scripts/pre-push-review.ts", commands: ["pre-push:review"] },
   {
     file: "scripts/delivery-documentation-check.ts",
@@ -67,9 +75,28 @@ export const HARNESS_BLOCKER_CLI_INVENTORY = [
     file: "scripts/documentation-waiver-command.ts",
     commands: ["harness:waive-documentation"],
   },
-  { file: "scripts/delivery-product.ts", commands: ["delivery:emit", "pr:athena:prepare", "pr:athena:validate", "pr:athena:validate-provider", "harness:review-context", "harness:review-evidence", "pr:athena:record-proof", "harness:review-outcome", "delivery:record", "delivery:verify", "delivery:resume"] },
-  { file: "scripts/delivery-documentation-admission.ts", commands: ["delivery:documentation-admission"] },
+  {
+    file: "scripts/delivery-product.ts",
+    commands: [
+      "delivery:emit",
+      "pr:athena:prepare",
+      "pr:athena:validate",
+      "pr:athena:validate-provider",
+      "harness:review-context",
+      "harness:review-evidence",
+      "pr:athena:record-proof",
+      "harness:review-outcome",
+      "delivery:record",
+      "delivery:verify",
+      "delivery:resume",
+    ],
+  },
+  {
+    file: "scripts/delivery-documentation-admission.ts",
+    commands: ["delivery:documentation-admission"],
+  },
   { file: "scripts/delivery-live-sensor.ts", commands: [] },
+  { file: "scripts/delivery-telemetry-artifacts.ts", commands: ["delivery:telemetry-artifacts-check"] },
   { file: "scripts/harness-gate-admission.ts", commands: [] },
   { file: "scripts/harness-review-evidence.ts", commands: [] },
   { file: "scripts/policy-projection-check.ts", commands: ["policy:check"] },
@@ -140,7 +167,8 @@ export async function discoverHarnessBlockerInventory(
     }
     const relativeFile = path.posix.join("scripts", entry.name);
     const source = await readFile(path.join(rootDir, relativeFile), "utf8");
-    if (MAIN_BOUNDARY_PATTERN.test(source)) mainBoundaryFiles.push(relativeFile);
+    if (MAIN_BOUNDARY_PATTERN.test(source))
+      mainBoundaryFiles.push(relativeFile);
   }
   mainBoundaryFiles.sort((left, right) => left.localeCompare(right));
 
@@ -233,16 +261,121 @@ export function inspectHarnessCliBoundary(
   // Product CLI and provider rails own their serialization and exit protocol.
   // These exact adapters still need a live delegation/protocol boundary.
   if (file === "scripts/delivery-product.ts") {
-    return /from ["'][^"']*current\/runtime\/cli-api\.mjs["']/.test(source) && /return await runCli\(/.test(source) && /process\.exitCode = await runDeliveryProduct\(/.test(source)
-      ? [] : [{ code: "boundary-runner-missing", file, message: "Product aliases must preserve the installed CLI boundary and exit result." }];
+    return /from ["'][^"']*current\/runtime\/cli-api\.mjs["']/.test(source) &&
+      /return await runCli\(/.test(source) &&
+      /process\.exitCode = await runDeliveryProduct\(/.test(source)
+      ? []
+      : [
+          {
+            code: "boundary-runner-missing",
+            file,
+            message:
+              "Product aliases must preserve the installed CLI boundary and exit result.",
+          },
+        ];
   }
   if (file === "scripts/delivery-live-sensor.ts") {
-    return /DELIVERY_PROVIDER_RAILS_VERSION/.test(source) && /kind: "terminal"/.test(source) && /outcome: "failed"/.test(source)
-      ? [] : [{ code: "boundary-runner-missing", file, message: "Live sensor adapters must emit the product rails terminal success/failure protocol." }];
+    return /DELIVERY_PROVIDER_RAILS_VERSION/.test(source) &&
+      /kind: "terminal"/.test(source) &&
+      /outcome: "failed"/.test(source)
+      ? []
+      : [
+          {
+            code: "boundary-runner-missing",
+            file,
+            message:
+              "Live sensor adapters must emit the product rails terminal success/failure protocol.",
+          },
+        ];
   }
-  if (["scripts/harness-gate-admission.ts", "scripts/harness-review-evidence.ts", "scripts/pre-push-review.ts"].includes(file)) {
-    return /import { runDeliveryProduct } from "\.\/delivery-product"/.test(source) && /runDeliveryProduct\(/.test(source) && /process\.exitCode = await /.test(source) && !/console\.(?:error|warn)|process\.exit\(/.test(source)
-      ? [] : [{ code: "boundary-runner-missing", file, message: "Compatibility aliases must delegate outcomes to the installed product boundary." }];
+  if (
+    [
+      "scripts/harness-gate-admission.ts",
+      "scripts/harness-review-evidence.ts",
+      "scripts/pre-push-review.ts",
+    ].includes(file)
+  ) {
+    return /import { runDeliveryProduct } from "\.\/delivery-product"/.test(
+      source,
+    ) &&
+      /runDeliveryProduct\(/.test(source) &&
+      /process\.exitCode = await /.test(source) &&
+      !/console\.(?:error|warn)|process\.exit\(/.test(source)
+      ? []
+      : [
+          {
+            code: "boundary-runner-missing",
+            file,
+            message:
+              "Compatibility aliases must delegate outcomes to the installed product boundary.",
+          },
+        ];
+  }
+  if (file === "scripts/harness-validation-dependencies.py") {
+    const required = [
+      /"schemaVersion":\s*1\b/,
+      /"blockers":\s*\[/,
+      /"code":\s*"validation_dependency_setup_failed"/,
+      /"source":\s*\{\s*"kind":\s*"command",\s*"id":\s*"harness:validation-dependencies"/,
+      /"remediations":\s*\[\s*\{/,
+      /"kind":\s*"code_change"/,
+      /sys\.exit\(1\)/,
+    ];
+    return required.every((pattern) => pattern.test(source))
+      ? []
+      : [
+          {
+            code: "boundary-runner-missing",
+            file,
+            message:
+              "Private dependency setup must preserve its typed Python failure boundary.",
+          },
+        ];
+  }
+  // These children serialize the shared blocker envelope without requiring a
+  // successful configuration import before they can report capture failures.
+  const nodeBoundary = (
+    {
+      "scripts/harness-vitest-membership.mjs": {
+        code: "vitest_membership_failed",
+        source: "harness:vitest-membership",
+      },
+      "scripts/harness-validation-selection-guard.mjs": {
+        code: "validation_selection_stale",
+        source: "harness:selection-guard",
+      },
+      "scripts/harness-validation-local-health-check.ts": {
+        code: "local_validation_health_failed",
+        source: "harness:local-health",
+      },
+      "scripts/delivery-telemetry-artifacts.ts": {
+        code: "telemetry_artifact_read_failed",
+        source: "delivery:telemetry-artifacts-check",
+      },
+    } as Record<string, { code: string; source: string }>
+  )[file];
+  if (nodeBoundary) {
+    const required = [
+      /schemaVersion:\s*1\b/,
+      /blockers(?::\s*\[|\s*[,}])/,
+      new RegExp(`code:\\s*"${nodeBoundary.code}"`),
+      new RegExp(
+        `source:\\s*\\{\\s*kind:\\s*"command",\\s*id:\\s*"${nodeBoundary.source}"`,
+      ),
+      /remediations:\s*\[\s*\{/,
+      /kind:\s*"(?:code_change|manual_action)"/,
+      /process\.exitCode\s*=\s*1/,
+    ];
+    return required.every((pattern) => pattern.test(source))
+      ? []
+      : [
+          {
+            code: "boundary-runner-missing",
+            file,
+            message:
+              "The Node child must retain its typed blocker envelope and nonzero failure boundary.",
+          },
+        ];
   }
   const boundary = boundarySource(source);
   if (!boundary) {
@@ -296,9 +429,11 @@ function isRegistryOwnedSource(kind: string, id: string) {
     case "gate":
       return id === ATHENA_PR_VALIDATION_GATE_ID;
     case "obligation":
-      return harnessConfig.obligations.some(obligation => obligation.id === id);
+      return harnessConfig.obligations.some(
+        (obligation) => obligation.id === id,
+      );
     case "provider":
-      return harnessConfig.providers.some(provider => provider.id === id);
+      return harnessConfig.providers.some((provider) => provider.id === id);
     case "preparation":
       return (HARNESS_PREPARATION_SOURCE_IDS as readonly string[]).includes(id);
     case "candidate":
@@ -493,7 +628,10 @@ export async function auditHarnessBlockerInventory(
   // One id must mean one repair, within a file as well as across the contract.
   // Keying a map by id would have collapsed same-file duplicates silently -
   // and two sites in one file is exactly the shape this rule was added for.
-  const remediationSummaries = new Map<string, { file: string; summary: string }>();
+  const remediationSummaries = new Map<
+    string,
+    { file: string; summary: string }
+  >();
   const reportedDivergentIds = new Set<string>();
   for (const entry of HARNESS_BLOCKER_CLI_INVENTORY) {
     let source: string;

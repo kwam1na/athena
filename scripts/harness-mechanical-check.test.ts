@@ -8,8 +8,7 @@ import {
   selectMechanicalCommands,
 } from "./harness-mechanical-check";
 
-const CONVEX_FILE =
-  "packages/athena-webapp/convex/inventory/stockTransfers.ts";
+const CONVEX_FILE = "packages/athena-webapp/convex/inventory/stockTransfers.ts";
 const ROUTE_FILE = "packages/athena-webapp/src/routes/demo.tsx";
 const REPORT_FILE = "docs/reports/2026/athena-weekly-close.html";
 
@@ -124,7 +123,9 @@ describe("mechanical command selection", () => {
     expect(
       selectMechanicalCommands(["packages/athena-webapp/src/routes/demo.tsx"]),
     ).toEqual(
-      selectMechanicalCommands(["./packages/athena-webapp/src/routes/demo.tsx"]),
+      selectMechanicalCommands([
+        "./packages/athena-webapp/src/routes/demo.tsx",
+      ]),
     );
   });
 
@@ -149,8 +150,7 @@ describe("mechanical command selection", () => {
     ]);
 
     for (const command of selected) {
-      const text =
-        command.kind === "script" ? command.script : command.command;
+      const text = command.kind === "script" ? command.script : command.command;
       expect(text).not.toMatch(/(^|\s)(test|build)(\s|$)/);
     }
   });
@@ -180,7 +180,9 @@ describe("harness mechanical check", () => {
     const result = await runHarnessMechanicalCheck("/repo", setup as never);
 
     expect(result.status).toBe("pass");
-    expect(result.ranCommands).toContain("@athena/webapp:lint:frontend:changed");
+    expect(result.ranCommands).toContain(
+      "@athena/webapp:lint:frontend:changed",
+    );
     expect(result.ranCommands).toContain(
       "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
     );
@@ -253,7 +255,9 @@ describe("harness mechanical check", () => {
     const result = await runHarnessMechanicalCheck("/repo", setup as never);
 
     expect(result.status).toBe("pass");
-    expect(result.ranCommands).toContain("@athena/webapp:lint:frontend:changed");
+    expect(result.ranCommands).toContain(
+      "@athena/webapp:lint:frontend:changed",
+    );
     expect(result.skippedCommands).toEqual(
       expect.arrayContaining([
         "@athena/webapp:lint:architecture",
@@ -278,4 +282,30 @@ describe("harness mechanical check", () => {
     expect(result).toMatchObject({ status: "pass", ranCommands: [] });
     expect(setup._spies.runPackageScript).not.toHaveBeenCalled();
   });
+});
+
+it("classifies the actual legacy-selected mechanics for native preparation", async () => {
+  const { isMechanicalValidationCheck } =
+    await import("./harness-validation-command");
+  const selected = selectMechanicalCommands([CONVEX_FILE, ROUTE_FILE]);
+  expect(selected.length).toBeGreaterThan(0);
+  for (const command of selected) {
+    const raw =
+      command.kind === "raw"
+        ? command.command
+        : `bun run --filter '@athena/webapp' ${command.script}`;
+    expect(
+      isMechanicalValidationCheck({
+        id: raw,
+        argv: ["/bin/sh", "-c", raw],
+        cwd: ".",
+        profile: "command",
+        membership: [],
+        inputs: [],
+        absentInputs: [],
+        prerequisites: [],
+        supersedes: [],
+      }),
+    ).toBe(true);
+  }
 });

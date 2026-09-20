@@ -37,7 +37,8 @@ export type ValidationPlanDiagnostic =
   | "cyclic-prerequisite"
   | "uncovered-input"
   | "empty-plan"
-  | "invalid-supersession";
+  | "invalid-supersession"
+  | "capture-unavailable";
 export class ValidationPlanError extends Error {
   constructor(
     readonly code: ValidationPlanDiagnostic,
@@ -272,6 +273,7 @@ export function buildValidationPlan(
       absentInputs: check.absentInputs,
       prerequisites: check.prerequisites,
       supersedes: check.supersedes,
+      ordinaryFullSuite: check.ordinaryFullSuite,
     });
     const prior = groups.get(key);
     if (prior) {
@@ -326,6 +328,7 @@ export function buildValidationPlan(
       absentInputs: check.absentInputs,
       prerequisites: check.prerequisites,
       supersedes: check.supersedes,
+      ordinaryFullSuite: check.ordinaryFullSuite,
     });
   const body = {
     schemaVersion: VALIDATION_PLAN_POLICY.schemaVersion,
@@ -350,22 +353,25 @@ export function renderValidationPlan(plan: ValidationPlan): string {
 }
 
 import { readFile } from "node:fs/promises";
+import { writeFileSync } from "node:fs";
 import { collectCanonicalValidationRegistry } from "./harness-repo-validation";
-import {
-  HarnessBlockedError,
-  createHarnessBlocker,
-  runHarnessCliBoundary,
-} from "./harness-blockers";
+
+export function writeValidationPlanOutput(text: string) {
+  // Bun 1.1.29 console output can duplicate a leading UTF-8 byte at a chunk
+  // boundary. Write encoded bytes through the file API for machine-readable JSON.
+  writeFileSync(1, text + "\n", "utf8");
+}
 
 export async function runValidationPlanCli(
   args: string[],
-  log: (text: string) => void = console.log,
+  log: (text: string) => void = writeValidationPlanOutput,
   options: { stdoutIsTTY?: boolean } = {},
 ) {
   if (args.length === 1 && ["--help", "-h"].includes(args[0])) {
     log(
       [
         "Usage: bun run harness:plan -- --input <request.json> [--json | --text]",
+        "Native capture: bun run harness:plan -- --capture-config <config.json> --mode <delivery|comparison|full-health>",
         "Read-only planning: no checks execute and the legacy gate stays authoritative.",
         "Request: mode is delivery, comparison, or full-health; changes contains semantic path/status entries;",
         "inventory lists explicit repository-relative file paths. An optional registry supplies a canonical fixture.",
@@ -376,6 +382,68 @@ export async function runValidationPlanCli(
         "Example: bun run harness:plan -- --input scripts/fixtures/affected-validation/planner/report-request.json --json",
       ].join("\n"),
     );
+    return;
+  }
+  if (args.includes("--capture-config")) {
+    const values = new Map<string, string>();
+    for (let index = 0; index < args.length; index += 2) {
+      const flag = args[index],
+        value = args[index + 1];
+      if (
+        !["--capture-config", "--mode"].includes(flag) ||
+        !value ||
+        value.startsWith("--") ||
+        values.has(flag)
+      )
+        fail(
+          "malformed-map",
+          "Native capture requires --capture-config <config.json> --mode <delivery|comparison|full-health>.",
+        );
+      values.set(flag, value);
+    }
+    const mode = values.get("--mode");
+    if (!mode || !["delivery", "comparison", "full-health"].includes(mode))
+      fail(
+        "malformed-map",
+        "Native capture requires an explicit supported mode.",
+      );
+    const { defineHarnessConfig } =
+      await import("../.agent-skills/current/runtime/kernel.mjs");
+    let config;
+    try {
+      config = defineHarnessConfig(
+        JSON.parse(await readFile(values.get("--capture-config")!, "utf8")),
+      );
+    } catch {
+      return fail(
+        "malformed-map",
+        "Cannot read a valid native capture configuration.",
+      );
+    }
+    const { captureCanonicalValidationPlan, projectCapturedValidationPlan } =
+      await import("./harness-validation-capture");
+    try {
+      const captured = await captureCanonicalValidationPlan(
+        process.cwd(),
+        config,
+        mode as ValidationPlanMode,
+      );
+      log(JSON.stringify(projectCapturedValidationPlan(captured)));
+    } catch (error) {
+      if (error instanceof ValidationPlanError) throw error;
+      const { BlockedError } =
+        await import("../.agent-skills/current/runtime/kernel.mjs");
+      fail(
+        "capture-unavailable",
+        error instanceof BlockedError
+          ? error.blockers
+              .map((blocker) => `${blocker.code}: ${blocker.summary}`)
+              .join("; ")
+          : error instanceof Error
+            ? error.message
+            : "Native source capture unavailable",
+      );
+    }
     return;
   }
   const inputIndex = args.indexOf("--input");
@@ -435,6 +503,8 @@ async function runValidationPlanBoundary() {
     await runValidationPlanCli(Bun.argv.slice(2));
   } catch (error) {
     if (!(error instanceof ValidationPlanError)) throw error;
+    const { HarnessBlockedError, createHarnessBlocker } =
+      await import("./harness-blockers");
     throw new HarnessBlockedError([
       createHarnessBlocker({
         code: `validation_plan_${error.code.replaceAll("-", "_")}`,
@@ -443,10 +513,15 @@ async function runValidationPlanBoundary() {
         details: error.message,
         remediations: [
           {
-            id: "repair-validation-plan-request",
+            id:
+              error.code === "capture-unavailable"
+                ? "restore-native-source-capture"
+                : "repair-validation-plan-request",
             kind: "code_change",
             summary:
-              "Correct the authored registry or request using the named diagnostic; regenerate derived maps before retrying.",
+              error.code === "capture-unavailable"
+                ? "Finish authorized source preparation and use the qualified installed runtime before capturing a fresh plan."
+                : "Correct the authored registry or request using the named diagnostic; regenerate derived maps before retrying.",
           },
         ],
       }),
@@ -455,6 +530,7 @@ async function runValidationPlanBoundary() {
 }
 
 if (import.meta.main) {
+  const { runHarnessCliBoundary } = await import("./harness-blockers");
   process.exitCode = await runHarnessCliBoundary({
     source: { kind: "command", id: "harness:plan" },
     reproduce: [

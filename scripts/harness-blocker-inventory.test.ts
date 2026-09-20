@@ -40,22 +40,27 @@ afterEach(async () => {
 
 describe("HARNESS_BLOCKER_CLI_INVENTORY", () => {
   it("keeps every direct harness boundary in the explicit inventory", () => {
-    expect(HARNESS_BLOCKER_CLI_INVENTORY).toHaveLength(25);
+    expect(HARNESS_BLOCKER_CLI_INVENTORY).toHaveLength(31);
     expect(
       HARNESS_BLOCKER_CLI_INVENTORY.flatMap((entry) => entry.commands),
-    ).toHaveLength(34);
+    ).toHaveLength(36);
     expect(
       new Set(HARNESS_BLOCKER_CLI_INVENTORY.map((entry) => entry.file)).size,
-    ).toBe(25);
+    ).toBe(31);
     expect(
       new Set(HARNESS_BLOCKER_CLI_INVENTORY.flatMap((entry) => entry.commands))
         .size,
-    ).toBe(34);
+    ).toBe(36);
   });
 });
 
 // Athena domain CLIs retain their typed blocker boundary after the product cutover.
 const MIGRATED_CONTRACT_FILES = [
+  "scripts/harness-vitest-membership.mjs",
+  "scripts/harness-validation-selection-guard.mjs",
+  "scripts/harness-validation-local-health-check.ts",
+  "scripts/delivery-telemetry-artifacts.ts",
+  "scripts/harness-validation-dependencies.py",
   "scripts/delivery-documentation-check.ts",
   "scripts/delivery-run-telemetry.ts",
   "scripts/delivery-documentation-admission.ts",
@@ -178,16 +183,40 @@ describe("inspectHarnessCliBoundary", () => {
 describe("product-owned boundaries", () => {
   it("requires installed CLI delegation and retained exit status", async () => {
     const file = "scripts/delivery-product.ts";
-    const source = await readFile(path.resolve(import.meta.dirname, "..", file), "utf8");
+    const source = await readFile(
+      path.resolve(import.meta.dirname, "..", file),
+      "utf8",
+    );
     expect(inspectHarnessCliBoundary(file, source)).toEqual([]);
-    expect(inspectHarnessCliBoundary(file, source.replace("return await runCli(", "return await pretendCli("))[0]?.code).toBe("boundary-runner-missing");
-    expect(inspectHarnessCliBoundary(file, source.replace("process.exitCode = await runDeliveryProduct(", "await runDeliveryProduct("))[0]?.code).toBe("boundary-runner-missing");
+    expect(
+      inspectHarnessCliBoundary(
+        file,
+        source.replace("return await runCli(", "return await pretendCli("),
+      )[0]?.code,
+    ).toBe("boundary-runner-missing");
+    expect(
+      inspectHarnessCliBoundary(
+        file,
+        source.replace(
+          "process.exitCode = await runDeliveryProduct(",
+          "await runDeliveryProduct(",
+        ),
+      )[0]?.code,
+    ).toBe("boundary-runner-missing");
   });
   it("requires a failed terminal outcome from live provider adapters", async () => {
     const file = "scripts/delivery-live-sensor.ts";
-    const source = await readFile(path.resolve(import.meta.dirname, "..", file), "utf8");
+    const source = await readFile(
+      path.resolve(import.meta.dirname, "..", file),
+      "utf8",
+    );
     expect(inspectHarnessCliBoundary(file, source)).toEqual([]);
-    expect(inspectHarnessCliBoundary(file, source.replace('outcome: "failed"', 'outcome: "success"'))[0]?.code).toBe("boundary-runner-missing");
+    expect(
+      inspectHarnessCliBoundary(
+        file,
+        source.replace('outcome: "failed"', 'outcome: "success"'),
+      )[0]?.code,
+    ).toBe("boundary-runner-missing");
   });
 });
 
@@ -196,13 +225,13 @@ describe("inspectHarnessBlockerShapes", () => {
     const findings = inspectHarnessBlockerShapes(
       "scripts/harness-fixture.ts",
       [
-        'createHarnessBlocker({',
+        "createHarnessBlocker({",
         '  code: "fixture_empty",',
         '  source: { kind: "command", id: "harness:check" },',
         '  summary: "fixture",',
         "  remediations: [],",
         "});",
-        'createHarnessBlocker({',
+        "createHarnessBlocker({",
         '  code: "fixture_freeform",',
         '  source: { kind: "obligation", id: "review.invented" },',
         '  summary: "fixture",',
@@ -222,7 +251,7 @@ describe("inspectHarnessBlockerShapes", () => {
       inspectHarnessBlockerShapes(
         "scripts/harness-fixture.ts",
         [
-          'createHarnessBlocker({',
+          "createHarnessBlocker({",
           '  code: "fixture_ok",',
           '  source: { kind: "obligation", id: "review.green" },',
           '  summary: "fixture",',
@@ -237,7 +266,7 @@ describe("inspectHarnessBlockerShapes", () => {
 describe("inspectRenderNonZeroSuppression", () => {
   const suppressFallback = [
     "if (import.meta.main) {",
-    '  await runHarnessCliBoundary({',
+    "  await runHarnessCliBoundary({",
     '    source: { kind: "command", id: "harness:fixture" },',
     '    reproduce: ["bun", "scripts/harness-fixture.ts"],',
     "    run: runFixtureCli,",
@@ -282,7 +311,9 @@ describe("inspectRenderNonZeroSuppression", () => {
     expect(
       inspectRenderNonZeroSuppression(
         "scripts/harness-fixture.ts",
-        [suppressFallback, 'throw new HarnessBlockedError(blockers);'].join("\n"),
+        [suppressFallback, "throw new HarnessBlockedError(blockers);"].join(
+          "\n",
+        ),
       ),
     ).toEqual([]);
     expect(
@@ -299,7 +330,7 @@ describe("inspectRenderNonZeroSuppression", () => {
   it("leaves files that keep the shared fallback alone", () => {
     const source = [
       "if (import.meta.main) {",
-      '  await runHarnessCliBoundary({',
+      "  await runHarnessCliBoundary({",
       '    source: { kind: "command", id: "harness:fixture" },',
       '    reproduce: ["bun", "scripts/harness-fixture.ts"],',
       "    run: runFixtureCli,",

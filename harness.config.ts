@@ -26,7 +26,7 @@ const liveCheck = (id: string, provider: string, summary: string): ObligationPol
   remediation: { default: [{ id: `repair-${id.replaceAll(".", "-")}`, kind: "manual_action", summary }] },
 });
 
-export default defineHarnessConfig({
+export const ATHENA_LEGACY_CONFIG = defineHarnessConfig({
   gateId: ATHENA_PR_VALIDATION_GATE_ID,
   baseRef: "origin/main",
   storageNamespace: "delivery-harness/",
@@ -97,3 +97,16 @@ export default defineHarnessConfig({
   deliveryRecordPath: "telemetry/delivery-runs/delivery-record.json",
   deliveryRecordVerification: { baseMovement: "stale" },
 });
+
+
+// Qualification opt-in only. V26-2071 owns the separately qualified default cutover.
+const validationMode = process.env.ATHENA_VALIDATION_MODE;
+if (validationMode && !["comparison", "full-health"].includes(validationMode)) {
+  throw new Error("ATHENA_VALIDATION_MODE must be comparison or full-health before activation");
+}
+export const ATHENA_LOCAL_VALIDATION = validationMode
+  ? await (await import("./scripts/harness-validation-local-runtime.ts")).configureLocalScopedValidation(
+      process.cwd(), ATHENA_LEGACY_CONFIG, validationMode as "comparison" | "full-health",
+    )
+  : undefined;
+export default ATHENA_LOCAL_VALIDATION?.config ?? ATHENA_LEGACY_CONFIG;

@@ -166,7 +166,16 @@ describe("canonical qualification plan", () => {
   });
 });
 
-import { readFile } from "node:fs/promises";
+import {
+  readFile,
+  mkdtemp,
+  mkdir,
+  copyFile,
+  symlink,
+  rm,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { runValidationPlanCli } from "./harness-validation-plan";
 
 describe("read-only planning interface", () => {
@@ -192,7 +201,12 @@ describe("read-only planning interface", () => {
     ).toEqual(["packages/athena-webapp/src/lib/imageUtils.test.ts"]);
     expect(
       report.checks.every((check: CanonicalValidationCheck) =>
-        ["plan-integrity", "docs-publishing"].includes(check.profile),
+        [
+          "plan-integrity",
+          "docs-publishing",
+          "packages/athena-webapp:package-types",
+          "packages/athena-webapp:package-build",
+        ].includes(check.profile),
       ),
     ).toBe(true);
     expect(report.authority).toBe("legacy-gate");
@@ -312,5 +326,138 @@ describe("read-only planning interface", () => {
     await expect(
       runValidationPlanCli([...args, "--text", "--json"]),
     ).rejects.toMatchObject({ code: "malformed-map" });
+  });
+});
+
+// Config builds may request a plan. Importing this library must not recursively
+// evaluate the consuming harness config through its CLI error renderer.
+it("imports the pure planner without loading the harness configuration", async () => {
+  const root = await mkdtemp(join(tmpdir(), "athena-pure-plan-"));
+  try {
+    await mkdir(join(root, "scripts"));
+    for (const name of [
+      "harness-validation-plan.ts",
+      "harness-validation-impact.ts",
+      "harness-repo-validation.ts",
+      "harness-app-registry.ts",
+    ]) {
+      await copyFile(
+        resolve(import.meta.dirname, name),
+        join(root, "scripts", name),
+      );
+    }
+    await symlink(
+      resolve(import.meta.dirname, "../node_modules"),
+      join(root, "node_modules"),
+      "dir",
+    );
+    const child = Bun.spawn(
+      [
+        "bun",
+        "-e",
+        "import {buildValidationPlan} from './scripts/harness-validation-plan.ts'; console.log(typeof buildValidationPlan)",
+      ],
+      { cwd: root, stdout: "pipe", stderr: "pipe" },
+    );
+    const [code, output, error] = await Promise.all([
+      child.exited,
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+    ]);
+    expect({ code, error }).toEqual({ code: 0, error: "" });
+    expect(output.trim()).toBe("function");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+it("requires an explicit unambiguous native capture request", async () => {
+  for (const args of [
+    ["--capture-config", "config.json"],
+    ["--capture-config", "config.json", "--mode", "unknown"],
+    [
+      "--capture-config",
+      "config.json",
+      "--mode",
+      "comparison",
+      "--mode",
+      "full-health",
+    ],
+    [
+      "--capture-config",
+      "config.json",
+      "--mode",
+      "comparison",
+      "--input",
+      "uploaded-plan.json",
+    ],
+  ])
+    await expect(runValidationPlanCli(args)).rejects.toMatchObject({
+      code: "malformed-map",
+    });
+});
+
+it("preserves UTF-8 at Bun stdout chunk boundaries", async () => {
+  const { mkdtemp, open, readFile, rm } = await import("node:fs/promises");
+  const { join, resolve } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const root = await mkdtemp(join(tmpdir(), "validation-output-"));
+  const output = await open(join(root, "output.json"), "w");
+  try {
+    const child = Bun.spawn(
+      [
+        "bun",
+        "-e",
+        `import { writeValidationPlanOutput } from ${JSON.stringify(resolve(import.meta.dirname, "harness-validation-plan.ts"))}; writeValidationPlanOutput("a".repeat(65535) + "€" + "z".repeat(65536));`,
+      ],
+      {
+        stdout: output.fd,
+        stderr: "pipe",
+      },
+    );
+    const error = await new Response(child.stderr).text();
+    expect({ code: await child.exited, error }).toEqual({ code: 0, error: "" });
+    const actual = await readFile(join(root, "output.json"));
+    expect(
+      actual.equals(
+        Buffer.from("a".repeat(65535) + "€" + "z".repeat(65536) + "\n"),
+      ),
+    ).toBe(true);
+  } finally {
+    await output.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+describe("full-suite equivalence declaration binding", () => {
+  it("preserves identical coverage through grouping and separates changed declarations", () => {
+    const declaration = {
+      contract: "athena-operator-full-unit/1" as const,
+      coveredProfiles: [
+        { checkId: "original-unit", profile: "packages/athena-webapp:unit" },
+      ],
+    };
+    const a = {
+      ...check("a", ["one.test.ts"]),
+      ordinaryFullSuite: declaration,
+    };
+    const b = {
+      ...check("b", ["two.test.ts"]),
+      ordinaryFullSuite: structuredClone(declaration),
+    };
+    const combined = buildValidationPlan(registry([a, b]), [], "full-health");
+    expect(combined.checks).toHaveLength(1);
+    expect(combined.checks[0].ordinaryFullSuite).toEqual(declaration);
+    expect(combined.checks[0].coveredChecks).toEqual(["a", "b"]);
+    b.ordinaryFullSuite.coveredProfiles = [
+      { checkId: "different-unit", profile: "packages/athena-webapp:unit" },
+    ];
+    const changed = buildValidationPlan(registry([a, b]), [], "full-health");
+    expect(changed.checks).toHaveLength(2);
+    expect(changed.digest).not.toBe(combined.digest);
+    const before = buildValidationPlan(registry([a]), [], "full-health");
+    a.ordinaryFullSuite = structuredClone(b.ordinaryFullSuite);
+    const after = buildValidationPlan(registry([a]), [], "full-health");
+    expect(after.checks[0].identity).not.toBe(before.checks[0].identity);
   });
 });

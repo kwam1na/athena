@@ -58,7 +58,7 @@ const CODE_EXTENSIONS = new Set([
 ]);
 
 type GraphifyCheckOptions = {
-  runGraphifyRebuild?: (rootDir: string) => Promise<void>;
+  runGraphifyRebuild?: typeof runGraphifyRebuild;
 };
 
 async function fileExists(filePath: string) {
@@ -158,7 +158,7 @@ export async function runGraphifyCheck(
 
   try {
     await copyGraphifyCheckInputs(rootDir, workspaceRoot);
-    await rebuild(workspaceRoot);
+    await rebuild(workspaceRoot, { interpreterRootDir: rootDir });
     const staleArtifacts = await collectStaleGraphifyArtifacts(rootDir, workspaceRoot);
 
     if (staleArtifacts.length === 0) {
