@@ -15,11 +15,12 @@
       <li>No application deployment</li>
     </ul>
     <dl data-report-meta>
-      <dt>Status</dt><dd>Delivery candidate; all findings corrected; final verification and canonical gate pending</dd>
+      <dt>Status</dt><dd>Delivery candidate; all three selected reviewers aligned; canonical gate passed; merge pending</dd>
       <dt>Ticket</dt><dd>https://linear.app/v26-labs/issue/V26-2071</dd>
-      <dt>Prepared source</dt><dd>2bca58e061cdea6108d2017702c8d57ce4982b84; mechanical preparation passed</dd>
+      <dt>Prepared source</dt><dd>Reviewed tree 4f3b36bb421bea9c4044d541f392949e6750cb48; record transport accepted through verified review-neutral projection</dd>
       <dt>Product</dt><dd>Official diagnostics release ea924e59 installed; producer PR 163 merged</dd>
-      <dt>Source candidate</dt><dd>Prepared tree 2bca58e061cdea6108d2017702c8d57ce4982b84; base d387c35d8f98874ad00973004d011dfdd5dad4ec</dd>
+      <dt>Source candidate</dt><dd>80f543ce558330e6806403d5d762871aedeee488; base d387c35d8f98874ad00973004d011dfdd5dad4ec</dd>
+      <dt>Pull request</dt><dd>https://github.com/kwam1na/athena/pull/844</dd>
     </dl>
   </header>
   <section data-report-section="summary">
@@ -59,8 +60,8 @@
   <section data-report-section="validation">
     <h2>Evidence and remaining gates</h2>
       <p>Producer PR 163 passed 3,970 tests and both required review lenses. Official archive qualification exercised 79 commands across 15 installed probes, including upgrade, rollback and authentic old/new record compatibility controls. Root independently matched all 11 installed runtime files against the archive, build output and descriptor. Athena readiness and policy checks passed.</p>
-      <p>The integrated bridge uses the published diagnostic API and types. Root passed 14 tests with 82 assertions, including real public native success, failure and capture-refusal controls. The adversarial reviewer separately passed 140 focused tests with 529 assertions. Generated artifact repair and mechanical preparation passed on tree 2bca58e061cdea6108d2017702c8d57ce4982b84. The canonical gate and PR remain pending at this candidate snapshot.</p>
-      <p>The three selected Athena lenses retain the full review history: outcome correctness, adversarial testing and correctness. The P2 truncation coverage gap is independently closed: the corrected diagnostic file passes 12 tests with 68 assertions, and removing only prioritization fails the new assertion. Required sibling coverage passed 60 focused tests; the complete coordinator fixture passed 16 tests with 76 assertions after adding its passive policy declaration. The final verification round and canonical gate remain pending. Bridge merge and root alignment remain pending. No application/backend deployment is part of this work.</p>
+      <p>The integrated bridge uses the published diagnostic API and types. Root passed 14 tests with 82 assertions, including real public native success, failure and capture-refusal controls. The adversarial reviewer separately passed 140 focused tests with 529 assertions. Generated artifact repair and mechanical preparation passed on tree 4f3b36bb421bea9c4044d541f392949e6750cb48. Canonical bun run pr:athena passed: operator coverage 10,824 tests, storefront coverage 204 tests, root script coverage and the separate harness check 1,923 tests each. Admission, delivery record creation, final verification and pre-push verification passed. Draft PR 844 contains this candidate.</p>
+      <p>The three selected Athena lenses retain the full review history: outcome correctness, adversarial testing and correctness. The P2 truncation coverage gap is independently closed: the corrected diagnostic file passes 12 tests with 68 assertions, and removing only prioritization fails the new assertion. Required sibling coverage passed 60 focused tests; the complete coordinator fixture passed 16 tests with 76 assertions after adding its passive policy declaration. All three lenses approved the final verification round with no open findings or deferrals. The product accepted its evidence and verified that telemetry transport preserves the reviewed projection. The complete round history and all originating closures remain retained. Bridge merge and root alignment remain pending. No application/backend deployment is part of this work.</p>
       <p>After this bridge, the full finish line still requires the remaining native fault/repair and report-lineage cases, matched performance measurements, successful hosted health and cold verification, authoritative default activation and demonstrated rollback.</p>
   </section>
   <section data-report-section="guidance">
