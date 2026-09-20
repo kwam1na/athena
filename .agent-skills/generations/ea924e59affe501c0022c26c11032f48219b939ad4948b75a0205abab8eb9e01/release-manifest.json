@@ -1,5 +1,5 @@
 {
-  "contentSha256": "210b4190d4824e66286d8e8e31c845f6771981397615c1ef77bafc5173ea2347",
+  "contentSha256": "069395899d3c005cadf6db3fb31ac9be1772cc9dbcc6b0ee54a58fa2e5f701ba",
   "entryPoint": "python -m agent_skills.validate --root .",
   "files": [
     {
@@ -290,17 +290,17 @@
     {
       "group": "linear",
       "path": "runtime/cli-api.d.mts",
-      "sha256": "0c0d6eb4f2fdc7029e971cd2e3fe8dc8d5549b4347f66aa70cf2badb5f366d2e"
+      "sha256": "d04259809670c1bb419b8e0222f4665e1970160bc46a6e2aa3bdecb7466a2e1d"
     },
     {
       "group": "linear",
       "path": "runtime/cli-api.mjs",
-      "sha256": "a22ebac86ac6d96dbd7d8226c7c8fe0abdf07c334274342e3f783830e0e89f46"
+      "sha256": "8c017e5cd3ef06e87ee4b527907923f0ff04d37ec3cb2c02d784aade0d0653c9"
     },
     {
       "group": "linear",
       "path": "runtime/cli.mjs",
-      "sha256": "d7eaa1c80d03aef0d50217cd87ed9d03ec1ea106b2efc2013929806d0c7dbd07"
+      "sha256": "eed2c7e2d77a6bdb2d5de1ae586ebc5ca368e7ec09378b2c843bf271bf107367"
     },
     {
       "group": "linear",
@@ -325,7 +325,7 @@
     {
       "group": "linear",
       "path": "runtime/runtime.json",
-      "sha256": "fd5c8b2de5f73f068a0693d0e5171e70710b1b95e7d1a36f0fb792dcad032458"
+      "sha256": "196b24a12df2244bc7f1684307cd9377a9d57a03922ba375ae53ffffe2b909d9"
     },
     {
       "group": "linear",
@@ -703,10 +703,10 @@
         "validation-inventory.json",
         "workflows/delivery-v1.json"
       ],
-      "sha256": "210b4190d4824e66286d8e8e31c845f6771981397615c1ef77bafc5173ea2347"
+      "sha256": "069395899d3c005cadf6db3fb31ac9be1772cc9dbcc6b0ee54a58fa2e5f701ba"
     }
   },
   "profile": "linear",
-  "releaseId": "scoped-validation-product-directories-v1",
+  "releaseId": "linear-scoped-validation-diagnostics-v1",
   "schemaVersion": "agent-skills-release/1"
 }

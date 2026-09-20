@@ -1,7 +1,12 @@
+import { readScopedCheckDiagnostics } from "../.agent-skills/current/runtime/cli-api.mjs";
+import {
+  collectValidationDiagnostics,
+  type ReadDiagnostics,
+} from "./harness-validation-ci-diagnostics";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { realpath, mkdir, writeFile, rename, rm } from "node:fs/promises";
-import { importHarnessConfig } from "../.agent-skills/current/runtime/cli-api.mjs";
+import { loadHarnessBaseConfig } from "./harness-base-config-loader";
 import {
   runGitCommand,
   digestCanonical,
@@ -51,7 +56,7 @@ export type ValidationCiAdapterPorts = {
   env?: NodeJS.ProcessEnv;
   controllerRoot?: string;
   authenticate?: typeof resolveHostedValidationBinding;
-  loadLegacy?: typeof importHarnessConfig;
+  loadLegacy?: typeof loadHarnessBaseConfig;
   captureSelection?: (
     root: string,
     config: HarnessConfig,
@@ -61,6 +66,7 @@ export type ValidationCiAdapterPorts = {
   configure?: typeof configureScopedValidation;
   executeNative?: typeof runNativeValidation;
   verifyNative?: typeof verifyNativeValidation;
+  readDiagnostics?: ReadDiagnostics;
 };
 
 /** Hosted adapter uses the module's trusted controller checkout for policy and
@@ -207,7 +213,7 @@ export async function createValidationCiRuntime(
   return {
     async healthInventory(defaultMainSha) {
       await assertRoot(baseRoot, defaultMainSha);
-      legacy = await (ports.loadLegacy ?? importHarnessConfig)(baseRoot);
+      legacy = await (ports.loadLegacy ?? loadHarnessBaseConfig)(baseRoot);
       if (legacy.scopedExecution)
         throw new Error(
           "Trusted controller must supply the legacy policy explicitly",
@@ -404,6 +410,19 @@ export async function createValidationCiRuntime(
         checks,
       };
       return structuredClone(verified);
+    },
+    async readDiagnostics(plan, binding) {
+      const current = requirePlan(plan);
+      requireExecution(plan, binding);
+      return collectValidationDiagnostics({
+        rootDir,
+        plan,
+        binding,
+        selection: current,
+        nativeInput,
+        result,
+        read: ports.readDiagnostics ?? readScopedCheckDiagnostics,
+      });
     },
     async readFailureObservations(plan, binding) {
       requirePlan(plan);

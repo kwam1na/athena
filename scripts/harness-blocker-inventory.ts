@@ -6,7 +6,7 @@ import {
   HARNESS_COMMAND_IDS,
   HARNESS_PREPARATION_SOURCE_IDS,
 } from "./harness-blockers";
-import harnessConfig, { ATHENA_PR_VALIDATION_GATE_ID } from "../harness.config";
+import harnessConfig, { ATHENA_PR_VALIDATION_GATE_ID } from "./harness-base-config";
 
 export type HarnessBlockerCliInventoryEntry = {
   file: `scripts/${string}.ts` | `scripts/${string}.mjs`;

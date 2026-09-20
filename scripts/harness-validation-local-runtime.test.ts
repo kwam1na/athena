@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { ATHENA_LEGACY_CONFIG } from "../harness.config.ts";
+import { ATHENA_LEGACY_CONFIG } from "./harness-base-config.ts";
 import { configureLocalScopedValidation } from "./harness-validation-local-runtime.ts";
 
 test("unavailable trusted authority refuses before source capture or environment publication", async () => {

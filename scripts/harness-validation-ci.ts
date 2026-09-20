@@ -1,3 +1,14 @@
+import {
+  diagnosticsDirectory,
+  unavailableDiagnostics,
+  writeValidationDiagnostics,
+  type ValidationDiagnostics,
+} from "./harness-validation-ci-diagnostics";
+import { loadHarnessBaseConfig } from "./harness-base-config-loader";
+import {
+  createHealthIncidentReport,
+  renderHealthIncidentReport,
+} from "./harness-validation-health-incidents";
 import { validationCheckHealthScope } from "./harness-validation-ci-policy";
 import {
   resolveHostedValidationBinding,
@@ -99,6 +110,10 @@ export type VerifiedHostedValidation = HostedValidationBinding & {
 /** U6 owns the implementation in harness-validation-runtime.ts. These are native
  * capabilities, not parsers for uploaded plans, synthetic receipts or log text. */
 export type ValidationCiRuntime = {
+  readDiagnostics?(
+    plan: ValidationPlan,
+    binding: HostedValidationBinding,
+  ): Promise<ValidationDiagnostics>;
   recomputePlan(
     binding: HostedValidationBinding,
     mode: "comparison" | "full-health",
@@ -191,8 +206,6 @@ export async function runValidationCiCli(
     const finalVerifier =
       options.finalVerifier ??
       (async (input) => {
-        const { importHarnessConfig } =
-          await import("../.agent-skills/current/runtime/cli-api.mjs");
         const modulePath = path.join(
           import.meta.dirname,
           "harness-validation-ci-final.ts",
@@ -202,7 +215,7 @@ export async function runValidationCiCli(
           throw new Error("Trusted final verifier unavailable");
         return module.verifyFinalHostedValidation({
           ...input,
-          legacyConfig: await importHarnessConfig(baseRoot),
+          legacyConfig: await loadHarnessBaseConfig(baseRoot),
         });
       });
     const final = await finalVerifier({
@@ -230,11 +243,9 @@ export async function runValidationCiCli(
     const verifyDeliveryTelemetry =
       options.verifyDeliveryTelemetry ??
       (async (candidateRoot, trustedRoot, baseSha) => {
-        const { importHarnessConfig } =
-          await import("../.agent-skills/current/runtime/cli-api.mjs");
         const { assertDeliveryRunTelemetryCheck } =
           await import("./delivery-run-telemetry");
-        const config = await importHarnessConfig(trustedRoot);
+        const config = await loadHarnessBaseConfig(trustedRoot);
         await assertDeliveryRunTelemetryCheck(candidateRoot, {
           baseRef: baseSha,
           ciMode: true,
@@ -268,14 +279,12 @@ export async function runValidationCiCli(
     const env = options.env ?? process.env;
     if (!env.GITHUB_OUTPUT) throw new Error("Hosted guard output is required");
     const baseRoot = path.resolve(import.meta.dirname, "..");
-    const { importHarnessConfig } =
-      await import("../.agent-skills/current/runtime/cli-api.mjs");
     const { runValidationGuardCli } =
       await import("./harness-validation-trust");
     await runValidationGuardCli(args, {
       baseRoot,
       env,
-      legacyConfig: await importHarnessConfig(baseRoot),
+      legacyConfig: await loadHarnessBaseConfig(baseRoot),
       requestJson: options.requestJson,
       writeOutput: (text) => appendFile(env.GITHUB_OUTPUT!, text),
     });
@@ -283,7 +292,7 @@ export async function runValidationCiCli(
   }
   if (args.length === 1 && ["--help", "-h"].includes(args[0])) {
     console.log(
-      "Usage: harness:validation-ci qualify | health [--bootstrap] [--recover-unknown-history]\n       harness:validation-ci guard --candidate-root <absolute-path>\n       harness:validation-ci verify-final\nverify-final requires trusted VALIDATION_PLAN_MODE and successful VALIDATION_EXECUTION_RESULT job outputs.\nHosted only: authenticates GitHub run/base/head, invokes the qualified native adapter and retains summary or health.json. Health requires a new default-branch run, never a GitHub rerun. Legacy PR authority is unchanged.",
+      "Usage: harness:validation-ci qualify | health [--bootstrap] [--recover-unknown-history]\n       harness:validation-ci guard --candidate-root <absolute-path>\n       harness:validation-ci verify-final\nverify-final requires trusted VALIDATION_PLAN_MODE and successful VALIDATION_EXECUTION_RESULT job outputs.\nHosted only: authenticates GitHub run/base/head, invokes the qualified native adapter and retains summary or health.json. Health requires a new default-branch run, never a GitHub rerun. Supports authenticated PRs and explicit dispatch; workflow routing selects when affected validation runs.",
     );
     return;
   }
@@ -291,12 +300,20 @@ export async function runValidationCiCli(
   const rootDir = options.rootDir ?? process.cwd();
   const env = options.env ?? process.env;
   const outputDir = path.join(rootDir, "artifacts/validation-ci");
+  if (request.command === "health") {
+    await diagnosticsDirectory(rootDir);
+    await rm(path.join(outputDir, "diagnostics.json"), { force: true });
+  }
   await mkdir(outputDir, { recursive: true });
   const outputFile = path.join(
     outputDir,
     request.command === "health" ? "health.json" : "summary.json",
   );
   await rm(outputFile, { force: true });
+  if (request.command === "health") {
+    for (const name of ["health-incidents.json", "health-incidents.md"])
+      await rm(path.join(outputDir, name), { force: true });
+  }
   const requestJson = options.requestJson ?? requestCiJson;
   const binding = await resolveHostedValidationBinding(
     request.command,
@@ -345,6 +362,31 @@ export async function runValidationCiCli(
     });
   } catch {
     executionFailed = true;
+  }
+  if (request.command === "health") {
+    let diagnostics = unavailableDiagnostics(
+      plan,
+      binding,
+      "runtime-unavailable",
+    );
+    try {
+      if (runtime.readDiagnostics)
+        diagnostics = await runtime.readDiagnostics(plan, binding);
+    } catch {
+      diagnostics = unavailableDiagnostics(
+        plan,
+        binding,
+        "diagnostic-read-unavailable",
+      );
+    }
+    // Retain before later health reads/admission can fail; never substitute for health.
+    try {
+      await writeValidationDiagnostics(rootDir, diagnostics);
+    } catch {
+      console.error(
+        "Validation diagnostics could not be retained; health authority is unchanged.",
+      );
+    }
   }
   const current = await readHealth(policy, {
     ...readOptions,
@@ -414,6 +456,15 @@ export async function runValidationCiCli(
     },
   });
   await writeFile(outputFile, JSON.stringify(digest, null, 2) + "\n");
+  const incidents = createHealthIncidentReport(digest, policy, current);
+  await writeFile(
+    path.join(outputDir, "health-incidents.json"),
+    JSON.stringify(incidents, null, 2) + "\n",
+  );
+  await writeFile(
+    path.join(outputDir, "health-incidents.md"),
+    renderHealthIncidentReport(incidents),
+  );
   if (!digest.complete || digest.checks.some((c) => c.outcome !== "success"))
     throw new Error(
       "Full-health observed failures or incomplete checks; health.json retained",

@@ -445,6 +445,53 @@ declare function readScopedCheckObservations(input: {
     readonly config: Pick<HarnessConfig, "gateId" | "storageNamespace" | "providers">;
 }): Promise<ScopedCheckObservations>;
 
+declare const phases: readonly ["snapshot-setup", "pre-command-verification", "command", "post-command-verification", "output-capture", "complete"];
+declare const failureCodes: readonly ["check_snapshot_interrupted", "check_snapshot_timeout", "check_snapshot_unavailable", "check_snapshot_escape", "check_snapshot_drift", "check_snapshot_cleanup_failed", "check_dependency_source_overlap", "check_dependency_failed", "check_command_failed", "check_output_missing", "check_attempt_superseded", "check_artifact_unavailable", "check_evidence_rejected"];
+declare const executionCodes: readonly ["ENOENT", "EACCES", "EPERM", "ABORT_ERR", "ERR_CHILD_PROCESS_STDIO_MAXBUFFER", "SIGKILL", "SIGTERM", "execution_failed"];
+type ScopedDiagnosticPhase = typeof phases[number];
+type ScopedDiagnosticFailureCode = typeof failureCodes[number];
+type ScopedDiagnosticExecutionCode = typeof executionCodes[number];
+type ScopedDiagnosticCommand = {
+    readonly exitCode: number | null;
+    readonly outputTail: string;
+    readonly truncated: boolean;
+} | {
+    readonly unavailable: "not-started" | "not-completed";
+};
+interface RecordedScopedAttemptDiagnostic {
+    readonly availability: "available";
+    readonly phase: ScopedDiagnosticPhase;
+    readonly failure: {
+        readonly code: ScopedDiagnosticFailureCode;
+        readonly executionErrorCode?: ScopedDiagnosticExecutionCode;
+    } | {
+        readonly unavailable: "not-failed" | "unclassified";
+    };
+    readonly command: ScopedDiagnosticCommand;
+}
+type ScopedAttemptDiagnostic = RecordedScopedAttemptDiagnostic | {
+    readonly availability: "unavailable";
+    readonly reason: "legacy" | "running";
+};
+interface ScopedCheckDiagnostics {
+    readonly version: "scoped-check-diagnostics/1";
+    readonly providers: readonly {
+        readonly providerId: string;
+        readonly attempts: readonly (ScopedCheckAttempt & {
+            readonly durationMs?: number;
+            readonly diagnostic: ScopedAttemptDiagnostic;
+        })[];
+    }[];
+    readonly unavailableAttemptIds: readonly string[];
+}
+/** Read at most 100 explicit attempts. No logs from legacy payloads, no writes,
+ * and no claim of applicability/admission. Unselected provider history is ignored. */
+declare function readScopedCheckDiagnostics(input: {
+    readonly rootDir: string;
+    readonly config: Pick<HarnessConfig, "gateId" | "storageNamespace" | "providers">;
+    readonly attemptIds: readonly string[];
+}): Promise<ScopedCheckDiagnostics>;
+
 declare const PACKAGE_NAME = "@agent-delivery-harness/cli";
 
 /**
@@ -463,5 +510,5 @@ declare const COMMANDS: readonly AnyCommandDescriptor[];
 /** Runs the CLI against a runtime and returns the process exit code. */
 declare function runCli(argv: readonly string[], runtime: CliRuntime): Promise<number>;
 
-export { COMMANDS, COMPLETION_WRAPPED_COMMANDS, CliInterruption, EXIT_INTERRUPTED, EXIT_OK, EXIT_POLICY, EXIT_USAGE, PACKAGE_NAME, admitCommand, buildRunExport, checkCommand, commandBlocker, emitCommand, emitReviewEvidenceCommand, gateCommand, importHarnessConfig, isConfigFreeCommand, maintainCommand, managedCommand, parseRunExport, prepareCommand, readScopedCheckObservations, recordCommand, resumeCommand, reviewContextCommand, runCli, runCliBoundary, runsCommand, saveContextCommand, submitEvidenceCommand, verifyCommand, wireRepo };
-export type { AnyCommandDescriptor, CliRuntime, CommandContext, CommandDescriptor, CommandResult, ConfigFreeCommandContext, ConfigFreeCommandDescriptor, DeliveryRunExport, RepoWiring, RunExportParseResult, ScopedCheckObservations };
+export { COMMANDS, COMPLETION_WRAPPED_COMMANDS, CliInterruption, EXIT_INTERRUPTED, EXIT_OK, EXIT_POLICY, EXIT_USAGE, PACKAGE_NAME, admitCommand, buildRunExport, checkCommand, commandBlocker, emitCommand, emitReviewEvidenceCommand, gateCommand, importHarnessConfig, isConfigFreeCommand, maintainCommand, managedCommand, parseRunExport, prepareCommand, readScopedCheckDiagnostics, readScopedCheckObservations, recordCommand, resumeCommand, reviewContextCommand, runCli, runCliBoundary, runsCommand, saveContextCommand, submitEvidenceCommand, verifyCommand, wireRepo };
+export type { AnyCommandDescriptor, CliRuntime, CommandContext, CommandDescriptor, CommandResult, ConfigFreeCommandContext, ConfigFreeCommandDescriptor, DeliveryRunExport, RecordedScopedAttemptDiagnostic, RepoWiring, RunExportParseResult, ScopedAttemptDiagnostic, ScopedCheckDiagnostics, ScopedCheckObservations, ScopedDiagnosticCommand, ScopedDiagnosticExecutionCode, ScopedDiagnosticFailureCode, ScopedDiagnosticPhase };

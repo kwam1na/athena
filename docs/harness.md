@@ -821,6 +821,28 @@ repository-wide finding; a fresh green run does not erase prior failures.
 Known findings and approved classifications remain cumulative. Global closure
 requires the protected approval and revalidation protocol, not an edited digest.
 
+Each health run publishes an incident summary and the separate
+`athena-validation-health-incidents` artifact. The Athena repository maintainer
+owns triage by the next working day, including scheduled failures without an
+active delivery owner. The Actions run is the initial incident: inspect the
+retained finding id/revision, originating commit/check and protected declared
+scope; classify it as assertion, infrastructure or selection, record the repair
+owner, and attach any repair ticket/PR references to that run or its tracker
+incident. Classification remains pending until triaged. Setup or producer
+failure without a digest reports unavailable health, not a fabricated finding.
+
+For a selection miss, keep the finding open, add a regression fixture, and prove
+the corrected selection against a full control before requesting closure.
+Intersecting open findings already force both local and hosted planning to
+full-health before the next delivery; unrelated changes can remain narrow. A
+passing repair candidate does not release another candidate from this check.
+A miss discovered only in qualification blocks affected activation or requires
+the reviewed full-policy rollback below; never manufacture hosted health history.
+Incident summaries and tracker annotations are presentation, not authority:
+localization or closure still requires the explicit maintainer approval verified
+from protected main and trusted successful main revalidation. Neither a merged
+candidate classification nor an edited incident report supplies that approval.
+
 The selection guard binds `ATHENA_VALIDATION_HEALTH_REVISION` into native
 evidence. Final admission cannot relabel an old proof with a later revision.
 Candidate repair requires matching candidate, profile, finding revision and
@@ -1138,3 +1160,22 @@ For repo-harness edits such as `scripts/harness-app-registry.ts`, keep
 `bun run harness:review --base origin/main` and
 `bun run harness:inferential-review` in the local ladder so a missing sibling
 test like `scripts/harness-app-registry.test.ts` fails before push.
+
+
+### Hosted health failure diagnostics
+
+The separate `athena-validation-health-diagnostics` artifact retains bounded
+structured execution diagnostics after the native attempt, before subsequent
+health reads or admission can fail. It maps the authenticated hosted run and
+canonical plan checks to newly observed product attempts, including typed failure
+codes and product-redacted command tails when available. Covered checks may share
+one actual execution. Old, mismatched, missing, preallocation and legacy attempts
+are explicitly unavailable; truncation and omitted rows are reported.
+
+This artifact is diagnostic only. The trusted health upload remains exactly
+`health.json`; diagnostics do not classify findings, close them, or establish
+successful validation. Raw exception messages, environment values and private
+attempt stores are not exported. If startup fails before authentication/planning,
+no current diagnostic artifact may exist; use the workflow setup logs and retain
+pending classification. A new diagnostic run cannot retroactively establish the
+cause of an earlier failure whose output was not retained.

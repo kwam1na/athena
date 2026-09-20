@@ -1,3 +1,5 @@
+import { spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -387,4 +389,27 @@ describe("collectRemediationLiterals", () => {
       "Prepare B.",
     ]);
   });
+});
+
+
+it("imports passive declarations without active mode, network or selection", async () => {
+  const cwd = await mkdtemp(path.join(tmpdir(), "base-inventory-import-"));
+  try {
+    const moduleUrl = pathToFileURL(path.join(import.meta.dirname, "harness-blocker-inventory.ts")).href;
+    const script = `import cp from 'node:child_process'; import mod from 'node:module';
+      for(const name of ['spawn','spawnSync','exec','execSync','execFile','execFileSync','fork'])cp[name]=()=>{throw Error('UNEXPECTED_PROCESS')};mod.syncBuiltinESMExports?.(); Bun.spawn=Bun.spawnSync=()=>{throw Error("UNEXPECTED_BUN_PROCESS")};
+      globalThis.fetch=()=>{throw Error('UNEXPECTED_NETWORK')};
+      await import(${JSON.stringify(moduleUrl)}); console.log('pure');`;
+    const child = spawnSync("bun", ["-e", script], {
+      cwd,
+      env: { ...process.env, ATHENA_VALIDATION_MODE: "invalid-sentinel" },
+      encoding: "utf8",
+      timeout: 5000,
+    });
+    expect(child.stderr).toBe("");
+    expect(child.status).toBe(0);
+    expect(child.stdout.trim()).toBe("pure");
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
 });

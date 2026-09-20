@@ -1,4 +1,4 @@
-import productConfig from "../harness.config";
+import productConfig from "./harness-base-config";
 import { spawn } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -444,7 +444,7 @@ describe("runHarnessInferentialReview", () => {
   it.each([true, false])("inspects actual product check wiring and required sensors (inference %s)", async inference => {
     const rootDir = await createFixtureRepo();
     await write("package.json", JSON.stringify({ scripts: { "pr:athena": "bun scripts/pr-athena-delivery-run.ts" } }), rootDir);
-    await write("harness.config.ts", `export default ${JSON.stringify({ ...productConfig, providers: productConfig.providers.map(provider => provider.id === "athena.validation" ? { ...provider, check: { command: ["bun", "run", "harness:review", "--base", "origin/main"], timeoutMs: 1000 } } : provider) })}`, rootDir);
+    await write("scripts/harness-base-config.ts", `export default ${JSON.stringify({ ...productConfig, providers: productConfig.providers.map(provider => provider.id === "athena.validation" ? { ...provider, check: { command: ["bun", "run", "harness:review", "--base", "origin/main"], timeoutMs: 1000 } } : provider) })}`, rootDir);
     await write("scripts/harness-review.ts", `export const ATHENA_ALWAYS_VALIDATION_COMMANDS = ${JSON.stringify(inference ? [{kind: "raw", command: "bun run harness:inferential-review"}] : [])};`, rootDir);
     const result = await runHarnessInferentialReview(rootDir, { getChangedFiles: async () => ["package.json"], nowIso: () => "2026-04-12T05:00:00.000Z" });
     expect(result.machine.findings.some(finding => finding.id === "missing-pr-athena-inferential-step"), JSON.stringify(result.machine.findings)).toBe(!inference);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { classifyExecutionContext } from "../.agent-skills/current/runtime/kernel.mjs";
-import harnessConfig from "../harness.config";
+import harnessConfig from "./harness-base-config";
 
 const target = { config: harnessConfig };
 

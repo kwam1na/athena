@@ -94,11 +94,52 @@ jobs:
           if [ "$RECOVER_UNKNOWN_HISTORY" = "true" ]; then args+=(--recover-unknown-history); fi
           bun run harness:validation-ci -- health "${args[@]}"
 
+      - name: Surface owned health triage
+        if: always()
+        env:
+          HEALTH_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}
+          HEALTH_HEAD: ${{ github.sha }}
+        shell: bash
+        run: |
+          if [ -f artifacts/validation-ci/health-incidents.md ]; then
+            cat artifacts/validation-ci/health-incidents.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            mkdir -p artifacts/validation-ci
+            {
+              echo '## Validation health unavailable'
+              echo 'Owner: Athena repository maintainer. Triage by the next working day.'
+              printf 'Run: %s. Commit: %s.\n' "$HEALTH_RUN_URL" "$HEALTH_HEAD"
+              echo 'No incident report was produced. Inspect setup/producer logs; classification is pending. Record repair ownership and optional ticket/PR references.'
+              echo 'No trusted finding or successful inventory is claimed. Keep affected admission conservative; do not fabricate or close health history.'
+            } > artifacts/validation-ci/health-incidents.md
+            cat artifacts/validation-ci/health-incidents.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Retain cumulative trusted health digest
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: athena-validation-health
           path: artifacts/validation-ci/health.json
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Retain health incident presentation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: athena-validation-health-incidents
+          path: |
+            artifacts/validation-ci/health-incidents.json
+            artifacts/validation-ci/health-incidents.md
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Retain nonauthoritative execution diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: athena-validation-health-diagnostics
+          path: artifacts/validation-ci/diagnostics.json
           retention-days: 90
           if-no-files-found: warn

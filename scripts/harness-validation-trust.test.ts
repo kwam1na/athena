@@ -11,7 +11,7 @@ import {
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { ATHENA_LEGACY_CONFIG } from "../harness.config";
+import { ATHENA_LEGACY_CONFIG } from "./harness-base-config";
 import {
   guardValidationCandidate,
   runValidationGuardCli,
@@ -50,8 +50,10 @@ async function fixture(
         name: "fixture",
         private: true,
         scripts: {
-          "landed-report:check": "bun scripts/landed-change-report-check.ts --base origin/main",
-          "harness:inferential-review": "bun scripts/harness-inferential-review.ts",
+          "landed-report:check":
+            "bun scripts/landed-change-report-check.ts --base origin/main",
+          "harness:inferential-review":
+            "bun scripts/harness-inferential-review.ts",
         },
       }),
     );
@@ -173,28 +175,31 @@ describe("base-owned candidate trust guard", () => {
         selection: null,
       });
     }, true));
-  it("requires legacy for committed authority changes without importing candidate code", async () =>
-    fixture(async (f) => {
-      await writeFile(
-        join(f.candidateRoot, "harness.config.ts"),
-        'throw new Error("NEVER_EXECUTE");',
-      );
-      f.git(f.candidateRoot, "add", ".");
-      f.git(f.candidateRoot, "commit", "-qm", "authority change");
-      f.env.GITHUB_SHA = f.git(f.candidateRoot, "rev-parse", "HEAD");
-      expect(
-        await guardValidationCandidate(
-          f.baseRoot,
-          f.candidateRoot,
-          f.env,
-          f.ports,
-        ),
-      ).toMatchObject({
-        readiness: "legacy",
-        selection: null,
-        changedControllerPaths: ["harness.config.ts"],
-      });
-    }));
+  it.each(["harness.config.ts", "scripts/harness-base-config.ts"])(
+    "requires legacy for committed authority change %s without importing candidate code",
+    async (authorityPath) =>
+      fixture(async (f) => {
+        await writeFile(
+          join(f.candidateRoot, authorityPath),
+          'throw new Error("NEVER_EXECUTE");',
+        );
+        f.git(f.candidateRoot, "add", ".");
+        f.git(f.candidateRoot, "commit", "-qm", "authority change");
+        f.env.GITHUB_SHA = f.git(f.candidateRoot, "rev-parse", "HEAD");
+        expect(
+          await guardValidationCandidate(
+            f.baseRoot,
+            f.candidateRoot,
+            f.env,
+            f.ports,
+          ),
+        ).toMatchObject({
+          readiness: "legacy",
+          selection: null,
+          changedControllerPaths: [authorityPath],
+        });
+      }),
+  );
   it.each([
     "dirty",
     "staged",
@@ -285,7 +290,7 @@ it("rejects a committed symlink base guard rather than historical absence", asyn
   fixture(async (f) => {
     await rm(join(f.baseRoot, "scripts/harness-validation-runtime.ts"));
     await symlink(
-      "../harness.config.ts",
+      "./harness-base-config.ts",
       join(f.baseRoot, "scripts/harness-validation-runtime.ts"),
     );
     f.git(f.baseRoot, "add", ".");
@@ -383,4 +388,65 @@ it("publishes no readiness after malformed arguments or failed authentication", 
       }),
     ).rejects.toThrow("API failed");
     expect(outputs).toEqual([]);
+  }));
+
+it("accepts authenticated PR head/base while rejecting a changed or foreign PR identity", async () =>
+  fixture(async (f) => {
+    const candidateSha = f.env.GITHUB_SHA;
+    const env = {
+      ...f.env,
+      GITHUB_EVENT_NAME: "pull_request",
+      GITHUB_SHA: "f".repeat(40),
+      VALIDATION_CANDIDATE_SHA: candidateSha,
+      VALIDATION_PR_NUMBER: "123",
+    };
+    const original = f.ports.requestJson;
+    const requestJson = async (endpoint: string) => {
+      if (endpoint.endsWith("/pulls/123"))
+        return {
+          base: {
+            sha: env.VALIDATION_GUARD_BASE_SHA,
+            ref: "main",
+            repo: { full_name: "owner/repo" },
+          },
+          head: { sha: candidateSha, repo: { full_name: "owner/repo" } },
+        };
+      const result = await original(endpoint);
+      return endpoint.endsWith("/actions/runs/10")
+        ? {
+            ...(result as Record<string, unknown>),
+            event: "pull_request",
+            head_sha: candidateSha,
+          }
+        : result;
+    };
+    const result = await guardValidationCandidate(
+      f.baseRoot,
+      f.candidateRoot,
+      env,
+      { legacyConfig: f.ports.legacyConfig, requestJson },
+    );
+    expect(result.readiness).toBe("scoped");
+    expect(result.selection?.candidate.headSha).toBe(candidateSha);
+    for (const head of [
+      { sha: "b".repeat(40), repo: { full_name: "owner/repo" } },
+      { sha: candidateSha, repo: { full_name: "foreign/repo" } },
+    ]) {
+      await expect(
+        guardValidationCandidate(f.baseRoot, f.candidateRoot, env, {
+          legacyConfig: f.ports.legacyConfig,
+          requestJson: async (endpoint) =>
+            endpoint.endsWith("/pulls/123")
+              ? {
+                  base: {
+                    sha: env.VALIDATION_GUARD_BASE_SHA,
+                    ref: "main",
+                    repo: { full_name: "owner/repo" },
+                  },
+                  head,
+                }
+              : requestJson(endpoint),
+        }),
+      ).rejects.toThrow("base or candidate changed");
+    }
   }));

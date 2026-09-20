@@ -10,7 +10,7 @@ import {
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { ATHENA_LEGACY_CONFIG } from "../harness.config";
+import { ATHENA_LEGACY_CONFIG } from "./harness-base-config";
 import { wireRepo } from "../.agent-skills/current/runtime/cli-api.mjs";
 import type { DeliveryRecord } from "../.agent-skills/current/runtime/kernel.mjs";
 import {

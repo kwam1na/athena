@@ -6,7 +6,7 @@ import {
   type HarnessAppName,
   type ValidationCommand,
 } from "./harness-app-registry";
-import { importHarnessConfig } from "../.agent-skills/current/runtime/cli-api.mjs";
+import { loadHarnessBaseConfig } from "./harness-base-config-loader";
 import { validateHarnessConfig } from "../.agent-skills/current/runtime/kernel.mjs";
 import {
   createHarnessBlocker,
@@ -52,7 +52,7 @@ export async function auditHarnessGateObligationContract(rootDir: string) {
   // A package-only audit has no root delivery contract.
   if (!(await fileExists(packagePath))) return findings;
   try {
-    const loaded = await importHarnessConfig(rootDir);
+    const loaded = await loadHarnessBaseConfig(rootDir);
     const validation = validateHarnessConfig(loaded);
     if (validation.ok === false) {
       findings.push(...validation.blockers.map((blocker) => blocker.summary));
@@ -116,6 +116,7 @@ export async function auditHarnessGateObligationContract(rootDir: string) {
   }
   for (const repoPath of [
     "harness.config.ts",
+    "scripts/harness-base-config.ts",
     "scripts/delivery-product.ts",
     ".agent-skills/current/runtime/kernel.mjs",
     ".agent-skills/current/runtime/cli-api.mjs",

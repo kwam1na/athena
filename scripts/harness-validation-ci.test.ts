@@ -707,6 +707,35 @@ describe("hosted CLI runtime wiring", () => {
     }
   });
 
+  test("retains diagnostics before postexecution health reread fails", async () => {
+    const f = await fixture();
+    let reads = 0;
+    try {
+      f.runtime.execute = async () => {
+        throw new Error("secret native error");
+      };
+      await expect(
+        runValidationCiCli(["health"], {
+          ...f,
+          readHealth: async () => {
+            if (reads++ > 0) throw new Error("health unavailable");
+            return { ...previous(), revision: "planning" };
+          },
+        }),
+      ).rejects.toThrow("health unavailable");
+      const text = await readFile(
+        path.join(f.rootDir, "artifacts/validation-ci/diagnostics.json"),
+        "utf8",
+      );
+      const artifact = JSON.parse(text);
+      expect(artifact.authority).toBe("diagnostic-only");
+      expect(artifact.binding.runId).toBe(20);
+      expect(artifact.unavailable).toBe("runtime-unavailable");
+      expect(text).not.toContain("secret native error");
+    } finally {
+      await rm(f.rootDir, { recursive: true, force: true });
+    }
+  });
   test("healthy producer uses native verification and final current health before publishing", async () => {
     const f = await fixture();
     try {
@@ -739,6 +768,9 @@ describe("hosted CLI runtime wiring", () => {
       const outputDir = path.join(f.rootDir, "artifacts/validation-ci");
       await mkdir(outputDir, { recursive: true });
       await writeFile(path.join(outputDir, "health.json"), "stale");
+      await writeFile(path.join(outputDir, "diagnostics.json"), "stale");
+      await writeFile(path.join(outputDir, "health-incidents.json"), "stale");
+      await writeFile(path.join(outputDir, "health-incidents.md"), "stale");
       await expect(
         runValidationCiCli(["health"], {
           ...f,
@@ -750,6 +782,12 @@ describe("hosted CLI runtime wiring", () => {
       await expect(
         readFile(path.join(outputDir, "health.json")),
       ).rejects.toThrow();
+      for (const name of [
+        "health-incidents.json",
+        "health-incidents.md",
+        "diagnostics.json",
+      ])
+        await expect(readFile(path.join(outputDir, name))).rejects.toThrow();
     } finally {
       await rm(f.rootDir, { recursive: true, force: true });
     }
@@ -777,6 +815,31 @@ describe("hosted CLI runtime wiring", () => {
       );
       expect(digest.checks[0].outcome).toBe("failure");
       expect(digest.findings).toHaveLength(2);
+      const incident = JSON.parse(
+        await readFile(
+          path.join(f.rootDir, "artifacts/validation-ci/health-incidents.json"),
+          "utf8",
+        ),
+      );
+      expect(incident.owner).toBe("Athena repository maintainer");
+      expect(incident.triageBy).toBe("next working day");
+      expect(incident.runUrl).toBe(
+        "https://github.com/kwam1na/athena/actions/runs/20/attempts/1",
+      );
+      expect(
+        incident.incidents.find(
+          (row: { finding: { runId: number } }) => row.finding.runId === 20,
+        ),
+      ).toMatchObject({
+        classification: "pending",
+        finding: { checkId: "unit", headSha: sha, scope: { kind: "repo" } },
+      });
+      expect(
+        await readFile(
+          path.join(f.rootDir, "artifacts/validation-ci/health-incidents.md"),
+          "utf8",
+        ),
+      ).toContain("selection miss");
     } finally {
       await rm(f.rootDir, { recursive: true, force: true });
     }

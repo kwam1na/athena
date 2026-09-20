@@ -187,6 +187,22 @@ describe("hosted consolidated validation ownership", () => {
         ),
       },
     ];
+    mutations.push(
+      {
+        pr,
+        health: health.replace(
+          "name: athena-validation-health-diagnostics",
+          "name: removed-diagnostics",
+        ),
+      },
+      {
+        pr,
+        health: health.replace(
+          "path: artifacts/validation-ci/diagnostics.json",
+          "path: artifacts/validation-ci/*.json",
+        ),
+      },
+    );
     for (const mutation of mutations) {
       expect(mutation.pr !== pr || mutation.health !== health).toBe(true);
       const root = await createFixtureRoot();

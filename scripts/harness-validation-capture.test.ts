@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import config from "../harness.config";
+import config from "./harness-base-config";
 import {
   candidateTreeEvidenceReader,
   runGitCommand,

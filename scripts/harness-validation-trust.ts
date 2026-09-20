@@ -56,8 +56,12 @@ export async function guardValidationCandidate(
 ) {
   if (!env.VALIDATION_GUARD_BASE_SHA)
     throw new Error("Authenticated pinned base is required");
-  if (env.GITHUB_EVENT_NAME !== "workflow_dispatch")
-    throw new Error("Scoped qualification remains manual only");
+  if (
+    !["pull_request", "workflow_dispatch"].includes(env.GITHUB_EVENT_NAME ?? "")
+  )
+    throw new Error(
+      "Affected validation requires a pull request or explicit dispatch",
+    );
   const binding = await resolveHostedValidationBinding(
     "qualify",
     env,

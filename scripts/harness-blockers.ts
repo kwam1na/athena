@@ -1,4 +1,4 @@
-import harnessConfig, { ATHENA_PR_VALIDATION_GATE_ID } from "../harness.config";
+import harnessConfig, { ATHENA_PR_VALIDATION_GATE_ID } from "./harness-base-config";
 
 type HarnessGateId = typeof ATHENA_PR_VALIDATION_GATE_ID;
 type HarnessObligationId = string;

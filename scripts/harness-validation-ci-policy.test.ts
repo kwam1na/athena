@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { ATHENA_LEGACY_CONFIG } from "../harness.config";
+import { ATHENA_LEGACY_CONFIG } from "./harness-base-config";
 import { projectValidationPolicy } from "./harness-validation-policy";
 import {
   createCiValidationConfiguration,
